@@ -1042,6 +1042,42 @@ export function createWispCanvas(size = 64): HTMLCanvasElement {
   return ctx.canvas;
 }
 
+/**
+ * Polen del claro feérico: mota dorada diminuta con núcleo brillante y cuatro
+ * destellos tenues. Se usa como `colorMap` de partículas aditivas, así que el
+ * borde alfa 0 suma solo el centro y se lee como un grano de polen flotando.
+ */
+export function createPollenCanvas(size = 32): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+
+  const glow = ctx.createRadialGradient(center, center, 0, center, center, center);
+  glow.addColorStop(0, 'rgba(255, 252, 230, 1)');
+  glow.addColorStop(0.28, 'rgba(255, 236, 180, 0.85)');
+  glow.addColorStop(0.62, 'rgba(255, 214, 130, 0.32)');
+  glow.addColorStop(1, 'rgba(255, 196, 110, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  // Cuatro brazos casi transparentes: sugieren un brillo de polen sin recargar
+  // la mota cuando se ve a tamaño de juego.
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255, 250, 230, 0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.03);
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.lineTo(
+      center + Math.cos(angle) * center * 0.66,
+      center + Math.sin(angle) * center * 0.66
+    );
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  return ctx.canvas;
+}
+
 export function createShadowCanvas(size = 128): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size / 2);

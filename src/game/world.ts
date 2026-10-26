@@ -8,6 +8,7 @@ import {
   createFrostCanvas,
   createGroundCanvas,
   createLeafCanvas,
+  createPollenCanvas,
   createRockCanvas,
   createShadowCanvas,
   createSkyCanvas,
@@ -190,6 +191,12 @@ export function buildWorld(app: pc.Application): World {
   });
   const wispTexture = textureFromCanvas(device, createWispCanvas(), {
     name: 'ghost-wisp',
+    mipmaps: false,
+    minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
+  const pollenTexture = textureFromCanvas(device, createPollenCanvas(), {
+    name: 'fairy-pollen',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
@@ -1664,6 +1671,174 @@ export function buildWorld(app: pc.Application): World {
     }
   });
 
+  // Polen del claro feérico: motas doradas diminutas que flotan entre las
+  // flores, derivan despacio y titilan. Aditivas y pequeñas, para que se lean
+  // como polen mágico y no como chispas ni como polvo.
+  fairyZones.forEach((zone, zoneIndex) => {
+    const pollen = new pc.Entity(`fairy-pollen-${zoneIndex}`);
+    pollen.setPosition(zone.x, 0.65, zone.z);
+    pollen.addComponent('particlesystem', {
+      numParticles: 64,
+      lifetime: 6.2,
+      rate: 0.09,
+      rate2: 0.15,
+      loop: true,
+      preWarm: true,
+      autoPlay: true,
+      emitterShape: pc.EMITTERSHAPE_BOX,
+      emitterExtents: new pc.Vec3(zone.radius * 1.7, 1.1, zone.radius * 1.7),
+      colorMap: pollenTexture,
+      colorGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 1, 0.92, 0.66],
+          [0, 1, 0.85, 0.55],
+          [0, 0.96, 0.78, 0.44]
+        ]
+      },
+      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.14, 0.8, 0.55, 0.42, 1, 0] },
+      scaleGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [0, 0.03, 0.3, 0.06, 0.7, 0.045, 1, 0.02]
+      },
+      velocityGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 0.05, 1, 0.12],
+          [0, 0.04, 1, 0.09],
+          [0, 0.05, 1, 0.12]
+        ]
+      },
+      blendType: pc.BLEND_ADDITIVE,
+      depthWrite: false,
+      useFog: true,
+      lighting: false,
+      intensity: 1,
+      orientation: pc.PARTICLEORIENTATION_SCREEN
+    });
+    app.root.addChild(pollen);
+    if (pollen.particlesystem) pollen.particlesystem.drawOrder = 2;
+    created.push(pollen);
+  });
+
+  // --- Mariposas del claro feérico ------------------------------------------
+  // Pequeñas mariposas 3D: un cuerpo fino y dos alas horizontales con color por
+  // vértice (más oscuras junto al cuerpo, casi blancas en la punta). Cada una
+  // vuela hacia un objetivo dentro del calvero y, al llegar, elige otro, de
+  // modo que revolotean sobre las flores sin salirse de la zona.
+  const butterflyBodyMaterial = standard({
+    diffuse: '#4a2f3c',
+    specular: '#0a0a0a',
+    gloss: 0.12
+  });
+  materials.push(butterflyBodyMaterial);
+
+  const butterflyWingMaterial = standard({
+    diffuse: '#f4b6cf',
+    specular: '#3a1f2e',
+    gloss: 0.3,
+    cull: pc.CULLFACE_NONE
+  });
+  butterflyWingMaterial.diffuseVertexColor = true;
+  butterflyWingMaterial.update();
+  materials.push(butterflyWingMaterial);
+
+  const buildButterflyWing = (side: number): pc.Mesh => {
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions([
+      0, 0, -0.13,
+      side * 0.36, 0, -0.15,
+      side * 0.3, 0, 0.16,
+      0, 0, 0.13
+    ]);
+    mesh.setNormals([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]);
+    mesh.setColors([
+      0.72, 0.42, 0.55, 1,
+      1, 0.86, 0.95, 1,
+      1, 0.86, 0.95, 1,
+      0.72, 0.42, 0.55, 1
+    ]);
+    mesh.setIndices([0, 1, 2, 0, 2, 3]);
+    mesh.update();
+    return mesh;
+  };
+  const butterflyWingRight = buildButterflyWing(1);
+  const butterflyWingLeft = buildButterflyWing(-1);
+
+  const butterflies: Array<{
+    root: pc.Entity;
+    right: pc.Entity;
+    left: pc.Entity;
+    target: pc.Vec3;
+    rand: () => number;
+    cx: number;
+    cz: number;
+    radius: number;
+    speed: number;
+    flapSpeed: number;
+    phase: number;
+    yaw: number;
+  }> = [];
+
+  fairyZones.forEach((zone, zoneIndex) => {
+    const rand = random(0x7e3a + zoneIndex * 3559);
+    const count = 8;
+    for (let i = 0; i < count; i++) {
+      const x = zone.x + (rand() * 2 - 1) * zone.radius * 0.8;
+      const z = zone.z + (rand() * 2 - 1) * zone.radius * 0.8;
+      const y = 0.5 + rand() * 1.0;
+
+      const root = new pc.Entity(`fairy-butterfly-${zoneIndex}-${i}`);
+      root.setLocalPosition(x, y, z);
+      // Pequeñas: la escala baja el cuerpo y las alas a la vez, sin tocar la
+      // amplitud del aleteo ni la velocidad de vuelo.
+      const butterflyScale = 0.5 + rand() * 0.2;
+      root.setLocalScale(butterflyScale, butterflyScale, butterflyScale);
+      app.root.addChild(root);
+      created.push(root);
+
+      const body = part(root, 'box', butterflyBodyMaterial, {
+        position: [0, 0, 0],
+        scale: [0.05, 0.05, 0.16]
+      });
+      body.render!.castShadows = false;
+      body.render!.receiveShadows = false;
+
+      const right = new pc.Entity('butterfly-wing-right');
+      right.addComponent('render');
+      right.render!.castShadows = false;
+      right.render!.receiveShadows = false;
+      right.render!.meshInstances = [
+        new pc.MeshInstance(butterflyWingRight, butterflyWingMaterial)
+      ];
+      root.addChild(right);
+
+      const left = new pc.Entity('butterfly-wing-left');
+      left.addComponent('render');
+      left.render!.castShadows = false;
+      left.render!.receiveShadows = false;
+      left.render!.meshInstances = [
+        new pc.MeshInstance(butterflyWingLeft, butterflyWingMaterial)
+      ];
+      root.addChild(left);
+
+      butterflies.push({
+        root,
+        right,
+        left,
+        target: new pc.Vec3(x, y, z),
+        rand: random(0x9c51 + zoneIndex * 4813 + i * 197),
+        cx: zone.x,
+        cz: zone.z,
+        radius: zone.radius,
+        speed: 0.5 + rand() * 0.5,
+        flapSpeed: 9 + rand() * 5,
+        phase: rand() * Math.PI * 2,
+        yaw: rand() * 360
+      });
+    }
+  });
+
   // --- Páramo: frailejones y hierba seca 3D --------------------------------
   // Misma idea que la hierba y las flores, pero con la silueta del frailejón
   // (tronco leñoso corto y roseta de hojas lanceoladas plateadas) y matas de
@@ -2769,6 +2944,46 @@ export function buildWorld(app: pc.Application): World {
         tree.entity.setLocalEulerAngles(0, tree.yaw, sway);
       }
 
+      // Mariposas: vuelan hacia su objetivo y aletean rápido. Cuando llegan,
+      // eligen otra mota del calvero, de modo que revolotean sin patrón fijo.
+      for (const butterfly of butterflies) {
+        const pos = butterfly.root.getPosition();
+        let dx = butterfly.target.x - pos.x;
+        let dy = butterfly.target.y - pos.y;
+        let dz = butterfly.target.z - pos.z;
+        const distance = Math.hypot(dx, dy, dz);
+        if (distance < 0.25) {
+          const angle = butterfly.rand() * Math.PI * 2;
+          const radius = Math.sqrt(butterfly.rand()) * butterfly.radius * 0.72;
+          butterfly.target.set(
+            butterfly.cx + Math.cos(angle) * radius,
+            0.5 + butterfly.rand() * 1.0,
+            butterfly.cz + Math.sin(angle) * radius
+          );
+        } else if (distance > 0.0001) {
+          const step = butterfly.speed * dt;
+          dx /= distance;
+          dy /= distance;
+          dz /= distance;
+          butterfly.root.setPosition(
+            pos.x + dx * step,
+            pos.y + dy * step,
+            pos.z + dz * step
+          );
+
+          const targetYaw = Math.atan2(dx, dz) * (180 / Math.PI);
+          let delta = targetYaw - butterfly.yaw;
+          while (delta > 180) delta -= 360;
+          while (delta < -180) delta += 360;
+          butterfly.yaw += delta * Math.min(1, dt * 6);
+        }
+        butterfly.phase += dt * butterfly.flapSpeed;
+        const flap = Math.sin(butterfly.phase) * 30;
+        butterfly.root.setLocalEulerAngles(0, butterfly.yaw, 0);
+        butterfly.right.setLocalEulerAngles(0, 0, flap);
+        butterfly.left.setLocalEulerAngles(0, 0, -flap);
+      }
+
       // La hierba de la ciénaga está medio sumergida: se mece despacio, como
       // si el agua frenara cada brizna.
       for (const tuft of darkGrassTufts) {
@@ -2790,6 +3005,7 @@ export function buildWorld(app: pc.Application): World {
       smokeTexture.destroy();
       emberTexture.destroy();
       wispTexture.destroy();
+      pollenTexture.destroy();
       skyTexture.destroy();
       barkTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
@@ -2802,6 +3018,8 @@ export function buildWorld(app: pc.Application): World {
       for (const mesh of iceClusterMeshes) mesh.destroy();
       for (const mesh of basaltMeshes) mesh.destroy();
       for (const mesh of ghostTreeMeshes) mesh.destroy();
+      butterflyWingRight.destroy();
+      butterflyWingLeft.destroy();
     }
   };
 }
