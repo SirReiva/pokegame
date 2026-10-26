@@ -1,9 +1,9 @@
 /**
  * Terrenos de la demo, cada uno asociado a un tipo Pokémon.
  *
- * El mapa tiene seis terrenos base (pradera, sendero, arena, aguas someras,
- * aguas profundas y plaza) y siete calveros repartidos por la isla, uno de
- * ellos de hierba alta.
+ * El mapa tiene siete terrenos base (pradera, sendero, carretera, arena, aguas
+ * someras, aguas profundas y plaza) y ocho calveros repartidos por la isla, uno
+ * de ellos repetido de hierba alta.
  * Este módulo solo contiene datos y consultas puras: no depende de PlayCanvas
  * ni de React.
  */
@@ -11,6 +11,7 @@
 export type TerrainId =
   | 'meadow'
   | 'path'
+  | 'road'
   | 'sand'
   | 'waterLow'
   | 'waterHigh'
@@ -33,6 +34,7 @@ export interface TerrainDefinition {
 export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
   meadow: { name: 'Pradera', type: 'Grass' },
   path: { name: 'Sendero', type: 'Ground' },
+  road: { name: 'Carretera', type: 'Normal' },
   sand: { name: 'Arena', type: 'Ground' },
   waterLow: { name: 'Aguas someras', type: 'Water' },
   waterHigh: { name: 'Aguas profundas', type: 'Water' },
@@ -63,12 +65,21 @@ export const POND = {
 export interface TerrainPath {
   width: number;
   points: Array<[number, number]>;
+  /**
+   * Ancho del asfalto. Si falta, el camino es de tierra. La carretera se pinta
+   * encima del camino, así que el ancho del camino queda como arcén.
+   */
+  asphalt?: number;
+  /** Pinta el eje discontinuo del centro de la calzada. */
+  centerLine?: boolean;
 }
 
 /** Caminos de tierra. `textures.ts` los pinta y `terrainAt` los consulta. */
 export const TERRAIN_PATHS: TerrainPath[] = [
   {
     width: 3.6,
+    asphalt: 2.5,
+    centerLine: true,
     points: [
       [-0.6, 20.4],
       [0.4, 16],
@@ -127,17 +138,51 @@ function distanceToSegment(
   return Math.hypot(x - (ax + dx * t), z - (az + dz * t));
 }
 
-function onPath(x: number, z: number): boolean {
-  for (const path of TERRAIN_PATHS) {
-    for (let i = 0; i < path.points.length - 1; i++) {
-      const [ax, az] = path.points[i];
-      const [bx, bz] = path.points[i + 1];
-      if (distanceToSegment(x, z, ax, az, bx, bz) <= path.width / 2 + 0.15) {
-        return true;
-      }
+/**
+ * Distancia al trazado suavizado que pinta `textures.ts`: Bézier cuadráticas
+ * entre cada punto y el punto medio del siguiente, igual que en el canvas. Así
+ * el terreno coincide con el borde visible del camino y del asfalto.
+ */
+function distanceToTrail(x: number, z: number, points: Array<[number, number]>): number {
+  if (points.length === 1) return Math.hypot(x - points[0][0], z - points[0][1]);
+  const steps = 8;
+  let best = Infinity;
+  let previous = points[0];
+  for (let i = 1; i < points.length - 1; i++) {
+    const control = points[i];
+    const next = points[i + 1];
+    const end: [number, number] = [(control[0] + next[0]) / 2, (control[1] + next[1]) / 2];
+    let ax = previous[0];
+    let az = previous[1];
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      const inv = 1 - t;
+      const bx = inv * inv * previous[0] + 2 * inv * t * control[0] + t * t * end[0];
+      const bz = inv * inv * previous[1] + 2 * inv * t * control[1] + t * t * end[1];
+      best = Math.min(best, distanceToSegment(x, z, ax, az, bx, bz));
+      ax = bx;
+      az = bz;
     }
+    previous = end;
   }
-  return false;
+  const last = points[points.length - 1];
+  return Math.min(best, distanceToSegment(x, z, previous[0], previous[1], last[0], last[1]));
+}
+
+function onPath(x: number, z: number): boolean {
+  return TERRAIN_PATHS.some(
+    (path) => distanceToTrail(x, z, path.points) <= path.width / 2 + 0.15
+  );
+}
+
+/**
+ * Asfalto de la carretera. Se consulta antes que el camino porque la calzada
+ * está pintada encima: los arcenes de tierra siguen siendo `path`.
+ */
+function onAsphalt(x: number, z: number): boolean {
+  return TERRAIN_PATHS.some(
+    (path) => path.asphalt !== undefined && distanceToTrail(x, z, path.points) <= path.asphalt / 2
+  );
 }
 
 /** Terreno bajo una posición del mundo. */
@@ -152,6 +197,7 @@ export function terrainAt(x: number, z: number): TerrainId {
   if (pondDistance <= POND.radius) return 'waterLow';
   if (pondDistance <= POND.shoreRadius) return 'sand';
 
+  if (onAsphalt(x, z)) return 'road';
   if (onPath(x, z)) return 'path';
   return 'meadow';
 }

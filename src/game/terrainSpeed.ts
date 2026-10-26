@@ -10,8 +10,9 @@
  * - Resto de combinaciones: ×1.
  *
  * Así la hierba alta frena a Squirtle, la arena frena a Pikachu, la ciénaga
- * favorece a Bulbasaur y Charmander corre en Brasas. El sistema es puro: no
- * depende de PlayCanvas y puede consultarse desde cualquier módulo.
+ * favorece a Bulbasaur, Charmander corre en Brasas y Eevee va cómodo por la
+ * carretera. El sistema es puro: no depende de PlayCanvas y puede consultarse
+ * desde cualquier módulo.
  */
 
 import { TERRAINS, type TerrainId } from './terrain';
@@ -30,6 +31,11 @@ export const TERRAIN_SPEED_FACTOR: Record<TerrainSpeedReason, number> = {
  * Solo se listan los valores distintos de 1; el resto se considera neutro.
  */
 const TYPE_CHART: Record<string, Record<string, number>> = {
+  Normal: {
+    Rock: 0.5,
+    Steel: 0.5,
+    Ghost: 0
+  },
   Grass: {
     Water: 2,
     Ground: 2,

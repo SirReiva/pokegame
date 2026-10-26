@@ -56,17 +56,18 @@ La pantalla inicial permite elegir entre **Bulbasaur, Charmander, Squirtle, Pika
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
 - **Pixel art nítido**: muestreo `NEAREST`, sin mipmaps en los sprites, UVs con medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
 - **Mapa generado por código**: isla, plaza, estanque, árboles, rocas, valla y cartel se construyen con primitivas y texturas procedurales; no hay assets de escenario externos.
-- **Terrenos tipados**: la isla tiene doce terrenos asociados a tipos Pokémon, desde la pradera base hasta calveros de Fuego, Hielo o Fantasma. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
+- **Terrenos tipados**: la isla tiene catorce terrenos asociados a tipos Pokémon, desde la pradera base hasta calveros de Fuego, Hielo o Fantasma, pasando por la carretera de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **UI en español** con selector, HUD de telemetría (FPS, dirección visible, rumbo propio, fila, velocidad, ángulo de cámara, entrada activa, terreno), controles y créditos.
 
 ## Terrenos y tipos Pokémon
 
-Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con `terrainAt(x, z)`. Los seis base cubren toda la isla y los siete calveros añaden variedad temática:
+Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con `terrainAt(x, z)`. Los siete base cubren toda la isla y los ocho calveros añaden variedad temática:
 
 | Terreno | Tipo | Dónde |
 | --- | --- | --- |
 | Pradera | Planta | césped base de la isla |
 | Sendero | Tierra | caminos de tierra |
+| Carretera | Normal | asfalto del camino principal, con arcenes de tierra |
 | Arena | Tierra | orilla de arena del estanque |
 | Aguas someras | Agua | anillo exterior del estanque, transitable por todos |
 | Aguas profundas | Agua | centro del estanque, solo Pokémon de tipo Agua |
@@ -79,7 +80,9 @@ Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con
 | Claro feérico | Hada | calvero al noroeste |
 | Hierba alta | Planta | dos manchas, al noreste y al oeste |
 
-`terrainAt` resuelve primero los calveros, después la plaza, el estanque (profundo → somero → arena), los caminos y, por defecto, la pradera. Los calveros se pintan con bloques de 4 px en la textura del suelo (borde irregular, grietas, chispas, flores…) y cada uno tiene una paleta propia. El lecho del estanque también está pintado en el suelo, sin cilindros elevados; encima se coloca una lámina de agua plana y translúcida.
+`terrainAt` resuelve primero los calveros, después la plaza, el estanque (profundo → somero → arena), la carretera, los caminos y, por defecto, la pradera. Los calveros se pintan con bloques de 4 px en la textura del suelo (borde irregular, grietas, chispas, flores…) y cada uno tiene una paleta propia. El lecho del estanque también está pintado en el suelo, sin cilindros elevados; encima se coloca una lámina de agua plana y translúcida.
+
+La **carretera** es el camino principal asfaltado: entra desde el borde sur, cruza la valla y termina en la plaza. El asfalto (`TerrainPath.asphalt`, 2,5 u de ancho) se pinta encima del camino de tierra (3,6 u), que queda como arcén; lleva borde claro, rodadas, grano de 3 px y eje discontinuo. El trazado se muestrea con la misma curva que el camino, así que el terreno cambia justo en el borde visible del asfalto: pisar el arcén sigue siendo Sendero y pisar la calzada es Carretera. La plaza tapa el arranque de la calzada, igual que ocurre con el resto de caminos.
 
 La **hierba alta** es el único calvero con volumen propio: además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de `TERRAIN_ZONES` (los de tipo `tallGrass`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
 
@@ -96,7 +99,7 @@ Cada terreno modula la velocidad del Pokémon que lo atraviesa. La relación se 
 | Terreno cómodo (lo resiste o es inmune a él) | ×1,08 |
 | Neutro | ×1,00 |
 
-Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en Sendero y Arena porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82); Charmander corre en Brasas (×1,18) y se frena en la Plaza y los caminos (×0,82); Bulbasaur agradece la Ciénaga (×1,18); Eevee, de tipo Normal, es el más estable y solo nota ventaja en el Bosque umbrío (×1,08). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
+Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en Sendero y Arena porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82); Charmander corre en Brasas (×1,18) y se frena en la Plaza y los caminos (×0,82); Bulbasaur agradece la Ciénaga (×1,18); Eevee va más rápido por la Carretera porque comparte el tipo Normal (×1,18) y nota una leve ventaja en el Bosque umbrío (×1,08); Lucario también agradece el asfalto, ya que el Acero resiste el tipo Normal (×1,08). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
 
 ### Sumergirse en el agua
 
@@ -188,7 +191,7 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
-- `TERRAINS`, `TERRAIN_ZONES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición, radios del estanque y tamaño de cada terreno.
+- `TERRAINS`, `TERRAIN_ZONES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición, radios del estanque y tamaño de cada terreno. El ancho del asfalto de la carretera se define con `asphalt` dentro de `TERRAIN_PATHS`.
 
 Los colores de acento, tipos y créditos vienen del manifiesto.
 

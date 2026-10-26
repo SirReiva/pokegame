@@ -399,6 +399,154 @@ function paintPond(
   }
 }
 
+/** Traza el trazado suavizado que comparten caminos y carretera. */
+function tracePath(
+  ctx: CanvasRenderingContext2D,
+  points: Array<[number, number]>,
+  toPx: (world: number) => number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
+  for (let i = 1; i < points.length - 1; i++) {
+    const [cx, cy] = points[i];
+    const [nx, ny] = points[i + 1];
+    ctx.quadraticCurveTo(toPx(cx), toPx(cy), toPx((cx + nx) / 2), toPx((cy + ny) / 2));
+  }
+  const last = points[points.length - 1];
+  ctx.lineTo(toPx(last[0]), toPx(last[1]));
+}
+
+interface RoadSample {
+  x: number;
+  y: number;
+  /** Normal unitaria en el plano de la textura. */
+  nx: number;
+  ny: number;
+}
+
+/** Muestrea el mismo trazado suavizado para colocar rodadas y grano. */
+function sampleRoadPath(
+  points: Array<[number, number]>,
+  toPx: (world: number) => number,
+  stepPx: number
+): RoadSample[] {
+  const pts = points.map(([x, z]) => ({ x: toPx(x), y: toPx(z) }));
+  const samples: RoadSample[] = [];
+  const push = (x: number, y: number, tx: number, ty: number) => {
+    const length = Math.hypot(tx, ty) || 1;
+    samples.push({ x, y, nx: -ty / length, ny: tx / length });
+  };
+
+  let previous = pts[0];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const control = pts[i];
+    const end = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
+    const span =
+      Math.hypot(control.x - previous.x, control.y - previous.y) +
+      Math.hypot(end.x - control.x, end.y - control.y);
+    const steps = Math.max(2, Math.ceil(span / stepPx));
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const inv = 1 - t;
+      push(
+        inv * inv * previous.x + 2 * inv * t * control.x + t * t * end.x,
+        inv * inv * previous.y + 2 * inv * t * control.y + t * t * end.y,
+        2 * inv * (control.x - previous.x) + 2 * t * (end.x - control.x),
+        2 * inv * (control.y - previous.y) + 2 * t * (end.y - control.y)
+      );
+    }
+    previous = end;
+  }
+
+  const last = pts[pts.length - 1];
+  const span = Math.hypot(last.x - previous.x, last.y - previous.y);
+  const steps = Math.max(2, Math.ceil(span / stepPx));
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    push(
+      previous.x + (last.x - previous.x) * t,
+      previous.y + (last.y - previous.y) * t,
+      last.x - previous.x,
+      last.y - previous.y
+    );
+  }
+  return samples;
+}
+
+/**
+ * Asfalto de la carretera: borde claro, calzada, rodadas, grano y eje
+ * discontinuo. Se pinta sobre el camino de tierra, que queda como arcén.
+ */
+function paintAsphalt(
+  ctx: CanvasRenderingContext2D,
+  path: TerrainPath,
+  toPx: (world: number) => number,
+  scale: number,
+  seed: number
+): void {
+  if (path.asphalt === undefined) return;
+  const width = path.asphalt * scale;
+  const random = mulberry32(seed);
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Borde claro: se pinta más ancho y el asfalto lo recorta por dentro.
+  ctx.strokeStyle = '#cfd6da';
+  ctx.lineWidth = width + 0.26 * scale;
+  tracePath(ctx, path.points, toPx);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#4c525b';
+  ctx.lineWidth = width;
+  tracePath(ctx, path.points, toPx);
+  ctx.stroke();
+
+  const samples = sampleRoadPath(path.points, toPx, 5);
+
+  // Rodadas: dos bandas algo más oscuras por donde pasarían las ruedas.
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    samples.forEach((sample, index) => {
+      const x = sample.x + sample.nx * side * 0.58 * scale;
+      const y = sample.y + sample.ny * side * 0.58 * scale;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#3d424a';
+    ctx.lineWidth = 0.36 * scale;
+    ctx.stroke();
+  }
+
+  // Grano de asfalto: motas de 3 px dentro de la calzada.
+  const inset = Math.max(2, width / 2 - 4);
+  for (const sample of samples) {
+    if (random() > 0.6) continue;
+    const lateral = (random() * 2 - 1) * inset;
+    ctx.globalAlpha = 0.35 + random() * 0.35;
+    ctx.fillStyle = random() > 0.5 ? '#5a616b' : '#42474f';
+    ctx.fillRect(
+      Math.round(sample.x + sample.nx * lateral) - 1,
+      Math.round(sample.y + sample.ny * lateral) - 1,
+      3,
+      3
+    );
+  }
+  ctx.globalAlpha = 1;
+
+  if (path.centerLine) {
+    ctx.strokeStyle = '#e7e0bd';
+    ctx.lineWidth = Math.max(1.5, 0.13 * scale);
+    ctx.lineCap = 'butt';
+    ctx.setLineDash([1.05 * scale, 1.2 * scale]);
+    tracePath(ctx, path.points, toPx);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineCap = 'round';
+  }
+}
+
 /** Césped del mapa con plaza, camino y flores pintados de forma procedural. */
 export function createGroundCanvas(size: number, options: GroundPaintOptions): HTMLCanvasElement {
   const { half, plaza, pond, paths, zones } = options;
@@ -464,15 +612,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
     ctx.lineWidth = width * scale;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
-    for (let i = 1; i < points.length - 1; i++) {
-      const [cx, cy] = points[i];
-      const [nx, ny] = points[i + 1];
-      ctx.quadraticCurveTo(toPx(cx), toPx(cy), toPx((cx + nx) / 2), toPx((cy + ny) / 2));
-    }
-    const last = points[points.length - 1];
-    ctx.lineTo(toPx(last[0]), toPx(last[1]));
+    tracePath(ctx, points, toPx);
     ctx.stroke();
   };
 
@@ -480,6 +620,12 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   for (const path of paths) {
     strokeWorldPath(path.points, path.width, '#c2a377');
   }
+
+  // Carretera: el asfalto va encima del camino, que asoma como arcén. Se pinta
+  // antes que la plaza, que tapa el arranque de la calzada.
+  paths.forEach((path, index) => {
+    paintAsphalt(ctx, path, toPx, scale, 0x9e37 + index * 7919);
+  });
 
   // Plaza central.
   const plazaPx = { x: toPx(plaza.x), y: toPx(plaza.z) };
