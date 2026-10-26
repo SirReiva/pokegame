@@ -1013,6 +1013,35 @@ export function createEmberCanvas(size = 48): HTMLCanvasElement {
   return ctx.canvas;
 }
 
+/**
+ * Fuego fatuo: orbe blanco con halo que se apaga y una pluma tenue hacia
+ * arriba. Está pensado para blending aditivo y para que el violeta lo ponga el
+ * `colorGraph`; la textura se queda neutra para no arrastrar naranjas.
+ */
+export function createWispCanvas(size = 64): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+
+  const glow = ctx.createRadialGradient(center, center, 0, center, center, center * 0.92);
+  glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  glow.addColorStop(0.18, 'rgba(238, 242, 255, 0.92)');
+  glow.addColorStop(0.46, 'rgba(204, 212, 255, 0.42)');
+  glow.addColorStop(1, 'rgba(170, 180, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.globalCompositeOperation = 'lighter';
+  const plume = ctx.createLinearGradient(center, center, center, 0);
+  plume.addColorStop(0, 'rgba(224, 230, 255, 0.5)');
+  plume.addColorStop(1, 'rgba(198, 208, 255, 0)');
+  ctx.fillStyle = plume;
+  ctx.beginPath();
+  ctx.ellipse(center, center * 0.5, size * 0.12, center * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  return ctx.canvas;
+}
+
 export function createShadowCanvas(size = 128): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size / 2);
