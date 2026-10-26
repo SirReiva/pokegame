@@ -4,6 +4,7 @@ import { CameraRig } from './camera';
 import { CONFIG, RAD } from './config';
 import { Input, type InputSnapshot } from './input';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
+import { POND, TERRAINS, terrainAt } from './terrain';
 import type { GameStats, LoadingProgress, SpriteManifest } from './types';
 import { buildWorld, type Collider, type World } from './world';
 
@@ -67,6 +68,10 @@ export class Game {
   private player: Actor | null = null;
   private npcs: Actor[] = [];
   private selectedId: string | null = null;
+  /** Tipos del Pokémon elegido; deciden si puede nadar en aguas profundas. */
+  private playerTypes: string[] = [];
+  /** Fracción de inmersión actual; se interpola para entrar/salir del agua. */
+  private playerSubmerge = 0;
 
   private velocity = new pc.Vec3();
   private playerFacing = 0;
@@ -176,6 +181,8 @@ export class Game {
       this.npcs.push(npc);
     });
 
+    this.playerTypes = selected.types;
+    this.playerSubmerge = 0;
     this.selectedId = selected.id;
   }
 
@@ -234,6 +241,22 @@ export class Game {
 
     if (player) {
       this.updateNpcs(frameDt);
+
+      // Inmersión progresiva: más profunda en el pozo central. La lámina de
+      // agua tapa la parte del sprite que queda por debajo, así que la
+      // transición se lee como entrar en el agua y no como caminar por encima.
+      const waterTerrain = terrainAt(player.position.x, player.position.z);
+      const targetSubmerge =
+        waterTerrain === 'waterHigh'
+          ? CONFIG.player.submergeDeep
+          : waterTerrain === 'waterLow'
+            ? CONFIG.player.submergeShallow
+            : 0;
+      this.playerSubmerge +=
+        (targetSubmerge - this.playerSubmerge) * (1 - Math.exp(-CONFIG.player.submergeLerp * frameDt));
+      if (this.playerSubmerge < 0.0005) this.playerSubmerge = 0;
+      player.setSubmerge(this.playerSubmerge, POND.surfaceHeight);
+
       player.update(frameDt, this.camera.position);
     }
 
@@ -251,6 +274,8 @@ export class Game {
     ) {
       this.statsTimer = 0;
       const row = player.billboard.currentRow;
+      const terrainId = terrainAt(player.position.x, player.position.z);
+      const terrain = TERRAINS[terrainId];
       const stats: GameStats = {
         fps: Math.round(this.fps),
         yaw: this.camera.yaw * RAD,
@@ -262,7 +287,10 @@ export class Game {
         x: player.position.x,
         z: player.position.z,
         gamepad: this.input.hasGamepad,
-        animation: player.billboard.currentAnimation
+        animation: player.billboard.currentAnimation,
+        terrain: terrainId,
+        terrainName: terrain.name,
+        terrainType: terrain.type
       };
       this.callbacks.onStats(stats);
     }
@@ -363,6 +391,24 @@ export class Game {
             }
             pushed = true;
           }
+        }
+      }
+
+      // Aguas profundas: solo los Pokémon de tipo Agua pueden entrar. Para el
+      // resto se comporta como un collider circular más.
+      if (!this.playerTypes.includes('Water')) {
+        const dx = px - POND.x;
+        const dz = pz - POND.z;
+        const distance = Math.hypot(dx, dz);
+        const minimum = POND.deepRadius + radius;
+        if (distance < minimum) {
+          if (distance < 0.0001) {
+            px += minimum;
+          } else {
+            px = POND.x + (dx / distance) * minimum;
+            pz = POND.z + (dz / distance) * minimum;
+          }
+          pushed = true;
         }
       }
 

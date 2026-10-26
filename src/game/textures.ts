@@ -1,11 +1,14 @@
 import * as pc from 'playcanvas';
+import type { TerrainId, TerrainPath, TerrainZone } from './terrain';
 
 /** Utilidades para generar las texturas de la demo (sin assets externos). */
 
 export interface GroundPaintOptions {
   half: number;
   plaza: { x: number; z: number; radius: number };
-  pond: { x: number; z: number; radius: number };
+  pond: { x: number; z: number; radius: number; deepRadius: number; shoreRadius: number };
+  paths: TerrainPath[];
+  zones: TerrainZone[];
 }
 
 function mulberry32(seed: number): () => number {
@@ -70,9 +73,335 @@ export function textureFromCanvas(
   return texture;
 }
 
+interface TerrainPalette {
+  base: string;
+  light: string;
+  dark: string;
+  accent: string;
+  accent2: string;
+}
+
+const TERRAIN_PALETTES: Partial<Record<TerrainId, TerrainPalette>> = {
+  fire: {
+    base: '#4a2a22',
+    light: '#5d3628',
+    dark: '#2c1a16',
+    accent: '#e2632b',
+    accent2: '#ffc35c'
+  },
+  electric: {
+    base: '#a39344',
+    light: '#b9a855',
+    dark: '#7f7133',
+    accent: '#fff3a6',
+    accent2: '#e0c95a'
+  },
+  ice: {
+    base: '#c3e2ea',
+    light: '#dcf1f5',
+    dark: '#93c5d3',
+    accent: '#ffffff',
+    accent2: '#7fb6c9'
+  },
+  poison: {
+    base: '#5b3967',
+    light: '#6f4a7c',
+    dark: '#3c2548',
+    accent: '#a6d96a',
+    accent2: '#c07ad6'
+  },
+  ghost: {
+    base: '#3d3a4c',
+    light: '#4d4960',
+    dark: '#282534',
+    accent: '#8f84ad',
+    accent2: '#6a5f86'
+  },
+  fairy: {
+    base: '#8fbf6b',
+    light: '#a3d07e',
+    dark: '#6f9c52',
+    accent: '#f2a7c3',
+    accent2: '#e6d2f2'
+  },
+  tallGrass: {
+    base: '#2f6a2b',
+    light: '#3f8234',
+    dark: '#224f20',
+    accent: '#5a9c3d',
+    accent2: '#9ccf6f'
+  }
+};
+
+/**
+ * Pinta un calvero temático con bloques de 4 px, borde irregular y detalles
+ * propios de su tipo Pokémon. La silueta y el ruido son deterministas.
+ */
+function paintTerrainZone(
+  ctx: CanvasRenderingContext2D,
+  zone: TerrainZone,
+  toPx: (world: number) => number,
+  scale: number
+): void {
+  const palette = TERRAIN_PALETTES[zone.terrain];
+  if (!palette) return;
+
+  const random = mulberry32(
+    (Math.round(zone.x * 811) * 73856093) ^ (Math.round(zone.z * 613) * 19349663)
+  );
+  const cx = toPx(zone.x);
+  const cy = toPx(zone.z);
+  const radius = zone.radius * scale;
+  const seed = zone.x * 1.31 + zone.z * 1.77;
+  const step = 4;
+
+  // Disco irregular de bloques con un borde más oscuro para despegarlo del
+  // césped.
+  for (let oy = -radius; oy <= radius; oy += step) {
+    for (let ox = -radius; ox <= radius; ox += step) {
+      const distance = Math.hypot(ox, oy);
+      const angle = Math.atan2(oy, ox);
+      const wobble =
+        1 + 0.05 * Math.sin(angle * 3 + seed) + 0.035 * Math.sin(angle * 7 - seed * 1.7);
+      if (distance > radius * wobble) continue;
+      let color = palette.base;
+      if (distance > radius * 0.86) color = palette.dark;
+      else if (random() < 0.16) color = palette.light;
+      else if (random() < 0.07) color = palette.dark;
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), step, step);
+    }
+  }
+
+  const mark = (ox: number, oy: number, w: number, h: number, color: string) => {
+    if (Math.hypot(ox, oy) > radius * 0.88) return;
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(cx + ox), Math.round(cy + oy), w, h);
+  };
+
+  switch (zone.terrain) {
+    case 'fire': {
+      // Grietas de lava y brasas.
+      for (let i = 0; i < 22; i++) {
+        let ox = (random() * 2 - 1) * radius * 0.72;
+        let oy = (random() * 2 - 1) * radius * 0.72;
+        const length = 3 + Math.floor(random() * 5);
+        const dir = random() < 0.5 ? -1 : 1;
+        for (let k = 0; k < length; k++) {
+          mark(ox, oy, 2, 2, random() < 0.6 ? palette.accent : palette.accent2);
+          ox += dir * (2 + Math.floor(random() * 3));
+          oy += (random() - 0.5) * 5;
+        }
+      }
+      for (let i = 0; i < 26; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.8,
+          (random() * 2 - 1) * radius * 0.8,
+          2,
+          2,
+          palette.accent2
+        );
+      }
+      break;
+    }
+    case 'electric': {
+      // Hierba seca y pequeñas chispas.
+      for (let i = 0; i < 34; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.8,
+          (random() * 2 - 1) * radius * 0.8,
+          2,
+          2 + Math.floor(random() * 3) * 2,
+          random() < 0.5 ? palette.accent2 : palette.light
+        );
+      }
+      for (let i = 0; i < 12; i++) {
+        let ox = (random() * 2 - 1) * radius * 0.7;
+        let oy = (random() * 2 - 1) * radius * 0.7;
+        for (let k = 0; k < 4; k++) {
+          mark(ox, oy, 2, 2, palette.accent);
+          ox += random() < 0.5 ? -2 : 2;
+          oy += 2;
+        }
+      }
+      break;
+    }
+    case 'ice': {
+      // Grietas heladas y destellos.
+      for (let i = 0; i < 16; i++) {
+        let ox = (random() * 2 - 1) * radius * 0.75;
+        let oy = (random() * 2 - 1) * radius * 0.75;
+        const length = 3 + Math.floor(random() * 5);
+        const dir = random() < 0.5 ? -1 : 1;
+        for (let k = 0; k < length; k++) {
+          mark(ox, oy, 2, 2, palette.accent2);
+          ox += dir * (2 + Math.floor(random() * 2));
+          oy += (random() - 0.3) * 3;
+        }
+      }
+      for (let i = 0; i < 30; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.82,
+          (random() * 2 - 1) * radius * 0.82,
+          2,
+          2,
+          palette.accent
+        );
+      }
+      break;
+    }
+    case 'poison': {
+      // Charcones de lodo y burbujas.
+      for (let i = 0; i < 12; i++) {
+        const ox = (random() * 2 - 1) * radius * 0.7;
+        const oy = (random() * 2 - 1) * radius * 0.7;
+        const size = 4 + Math.floor(random() * 3) * 2;
+        mark(ox, oy, size, size, palette.dark);
+        mark(ox + 2, oy + 2, Math.max(2, size - 4), Math.max(2, size - 4), palette.accent2);
+      }
+      for (let i = 0; i < 20; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.78,
+          (random() * 2 - 1) * radius * 0.78,
+          2,
+          2,
+          palette.accent
+        );
+      }
+      break;
+    }
+    case 'ghost': {
+      // Motas y jirones de niebla.
+      for (let i = 0; i < 26; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.8,
+          (random() * 2 - 1) * radius * 0.8,
+          2,
+          2,
+          random() < 0.5 ? palette.accent : palette.accent2
+        );
+      }
+      for (let i = 0; i < 9; i++) {
+        const ox = (random() * 2 - 1) * radius * 0.6;
+        const oy = (random() * 2 - 1) * radius * 0.6;
+        const length = 3 + Math.floor(random() * 4);
+        mark(ox, oy, length * 2, 2, palette.accent2);
+        mark(ox + 2, oy + 2, length * 2, 2, palette.accent);
+      }
+      break;
+    }
+    case 'fairy': {
+      // Ramilletes de flores y destellos.
+      for (let i = 0; i < 42; i++) {
+        const ox = (random() * 2 - 1) * radius * 0.8;
+        const oy = (random() * 2 - 1) * radius * 0.8;
+        const color = random() < 0.55 ? palette.accent : palette.accent2;
+        mark(ox, oy, 2, 2, color);
+        mark(ox + 2, oy, 2, 2, color);
+        mark(ox, oy + 2, 2, 2, color);
+        mark(ox + 2, oy + 2, 2, 2, palette.light);
+      }
+      break;
+    }
+    case 'tallGrass': {
+      // Briznas verticales con punta clara, más densas que en el resto de
+      // calveros: la mancha tiene que leerse como hierba crecida.
+      for (let i = 0; i < 280; i++) {
+        const ox = (random() * 2 - 1) * radius * 0.9;
+        const oy = (random() * 2 - 1) * radius * 0.9;
+        if (Math.hypot(ox, oy) > radius * 0.92) continue;
+        const height = 6 + Math.floor(random() * 5) * 2;
+        const lean = random() < 0.5 ? -2 : 2;
+        const color =
+          random() < 0.45 ? palette.light : random() < 0.72 ? palette.base : palette.dark;
+        let bx = Math.round(cx + ox);
+        const by = Math.round(cy + oy);
+        for (let k = 0; k < height; k += 2) {
+          ctx.fillStyle = k >= height - 2 ? palette.accent2 : color;
+          ctx.fillRect(bx, by - k, 2, 2);
+          if (k >= height * 0.5) bx += lean;
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+/**
+ * Estanque plano pintado en la propia textura del suelo: sin cilindros ni
+ * paredes, para que el agua quede a ras del terreno. El centro oscuro son las
+ * aguas profundas y el anillo claro las someras.
+ */
+function paintPond(
+  ctx: CanvasRenderingContext2D,
+  pond: GroundPaintOptions['pond'],
+  toPx: (world: number) => number,
+  scale: number
+): void {
+  const random = mulberry32(0x90ad);
+  const cx = toPx(pond.x);
+  const cy = toPx(pond.z);
+
+  const disc = (radiusWorld: number, colors: [string, string, string], edge: string) => {
+    const radius = radiusWorld * scale;
+    const step = 4;
+    for (let oy = -radius; oy <= radius; oy += step) {
+      for (let ox = -radius; ox <= radius; ox += step) {
+        const distance = Math.hypot(ox, oy);
+        const angle = Math.atan2(oy, ox);
+        const wobble =
+          1 + 0.022 * Math.sin(angle * 5 + 1.7) + 0.018 * Math.sin(angle * 9 - 0.6);
+        if (distance > radius * wobble) continue;
+        let color = colors[0];
+        if (distance > radius * 0.9) color = edge;
+        else if (random() < 0.16) color = colors[1];
+        else if (random() < 0.06) color = colors[2];
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), step, step);
+      }
+    }
+  };
+
+  disc(pond.radius, ['#67bad8', '#7fd0e8', '#58aecb'], '#4f9fbc');
+  disc(pond.deepRadius, ['#2f7fa8', '#3a8fb9', '#276b92'], '#1f5e84');
+
+  // Ondas cortas y destellos, con más luz en las aguas someras.
+  for (let i = 0; i < 160; i++) {
+    const angle = random() * Math.PI * 2;
+    const radius = Math.sqrt(random()) * pond.radius * 0.94;
+    const deep = radius < pond.deepRadius * 0.94;
+    const ox = Math.cos(angle) * radius * scale;
+    const oy = Math.sin(angle) * radius * scale;
+    const length = 2 + Math.floor(random() * 4) * 2;
+    if (deep) {
+      ctx.fillStyle = random() < 0.5 ? '#4b9cc4' : '#5fb4d6';
+    } else {
+      ctx.fillStyle = random() < 0.5 ? '#9adff2' : '#86d2e9';
+    }
+    ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), length, 2);
+    if (random() < 0.4) {
+      ctx.fillRect(Math.floor(cx + ox + 2), Math.floor(cy + oy + 2), Math.max(2, length - 2), 2);
+    }
+  }
+
+  for (let i = 0; i < 44; i++) {
+    const angle = random() * Math.PI * 2;
+    const radius = Math.sqrt(random()) * pond.radius * 0.9 * scale;
+    ctx.fillStyle = '#d9f5ff';
+    ctx.fillRect(
+      Math.floor(cx + Math.cos(angle) * radius),
+      Math.floor(cy + Math.sin(angle) * radius),
+      2,
+      2
+    );
+  }
+}
+
 /** Césped del mapa con plaza, camino y flores pintados de forma procedural. */
 export function createGroundCanvas(size: number, options: GroundPaintOptions): HTMLCanvasElement {
-  const { half, plaza, pond } = options;
+  const { half, plaza, pond, paths, zones } = options;
   const random = mulberry32(0x5eed);
   const ctx = canvas2d(size);
   const toPx = (world: number) => ((world + half) / (half * 2)) * size;
@@ -120,6 +449,12 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   }
   ctx.globalAlpha = 1;
 
+  // Calveros temáticos. Van antes que caminos y plaza para que estos conserven
+  // su prioridad visual.
+  for (const zone of zones) {
+    paintTerrainZone(ctx, zone, toPx, scale);
+  }
+
   const strokeWorldPath = (
     points: Array<[number, number]>,
     width: number,
@@ -141,29 +476,10 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
     ctx.stroke();
   };
 
-  // Camino principal desde el borde sur hasta la plaza.
-  strokeWorldPath(
-    [
-      [-0.6, half + 1],
-      [0.4, 16],
-      [-0.8, 12.5],
-      [0.5, 8.5],
-      [plaza.x, plaza.z + plaza.radius - 0.6]
-    ],
-    3.6,
-    '#c2a377'
-  );
-  // Sendero hacia el estanque.
-  strokeWorldPath(
-    [
-      [plaza.x + 2.2, plaza.z - 1.6],
-      [5.2, -2.6],
-      [6.4, -5.4],
-      [pond.x - 2.4, pond.z + 2.4]
-    ],
-    2.5,
-    '#c2a377'
-  );
+  // Caminos: el principal sube desde el borde sur y el otro lleva al estanque.
+  for (const path of paths) {
+    strokeWorldPath(path.points, path.width, '#c2a377');
+  }
 
   // Plaza central.
   const plazaPx = { x: toPx(plaza.x), y: toPx(plaza.z) };
@@ -176,11 +492,12 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   ctx.arc(plazaPx.x, plazaPx.y, (plaza.radius - 0.9) * scale, 0, Math.PI * 2);
   ctx.fill();
 
-  // Arena alrededor del estanque.
+  // Arena alrededor del estanque y agua plana encima, a ras de suelo.
   ctx.fillStyle = '#d8c79a';
   ctx.beginPath();
-  ctx.arc(toPx(pond.x), toPx(pond.z), (pond.radius + 0.9) * scale, 0, Math.PI * 2);
+  ctx.arc(toPx(pond.x), toPx(pond.z), pond.shoreRadius * scale, 0, Math.PI * 2);
   ctx.fill();
+  paintPond(ctx, pond, toPx, scale);
 
   // Piedrecillas y motas de tierra en plaza y caminos.
   for (let i = 0; i < 900; i++) {
@@ -198,8 +515,9 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   const petals = ['#f5f0df', '#f7d75c', '#ef7fa1', '#f2a65a', '#c9a0dc'];
   const nearPaths = (x: number, z: number) => {
     if (Math.hypot(x, z) < plaza.radius + 1.2) return true;
-    if (Math.hypot(x - pond.x, z - pond.z) < pond.radius + 1.6) return true;
+    if (Math.hypot(x - pond.x, z - pond.z) < pond.shoreRadius + 0.7) return true;
     if (Math.abs(x) < 2.6 && z > 0) return true;
+    if (zones.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.radius + 0.8)) return true;
     return false;
   };
   for (let i = 0; i < 140; i++) {
@@ -218,27 +536,110 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   return ctx.canvas;
 }
 
-/** Tile de agua con ondas suaves; se anima desplazando el offset del material. */
-export function createWaterCanvas(size = 96): HTMLCanvasElement {
-  const random = mulberry32(1234);
+/**
+ * Tile de ondas para la lámina de agua. `variant` cambia la semilla y la paleta
+ * para poder superponer dos capas que se mueven en direcciones distintas. Las
+ * ondas se dibujan repetidas en los bordes para que el tile sea continuo al
+ * desplazar las UVs y no aparezcan costuras.
+ */
+export function createWaterCanvas(size = 96, variant = 0): HTMLCanvasElement {
+  const random = mulberry32(variant === 0 ? 0x7e11 : 0x3ac5);
   const ctx = canvas2d(size);
-  ctx.fillStyle = '#4d9fd0';
+  ctx.fillStyle = variant === 0 ? '#6ec5e2' : '#63bcd9';
   ctx.fillRect(0, 0, size, size);
 
-  const bands = ['#63b3de', '#3f8dc0', '#74c3e8', '#357fae'];
-  for (let i = 0; i < 70; i++) {
-    ctx.strokeStyle = bands[Math.floor(random() * bands.length)];
-    ctx.globalAlpha = 0.45 + random() * 0.35;
-    ctx.lineWidth = 3;
-    const y = random() * size;
-    const x = random() * size;
-    const w = 12 + random() * 28;
+  const bands =
+    variant === 0
+      ? ['#a6e7f6', '#4aa6ca', '#c4f0fb', '#3189ad']
+      : ['#d6f7ff', '#3f9dc1', '#eafcff', '#2b7fa2'];
+
+  const stroke = (
+    x: number,
+    y: number,
+    w: number,
+    color: string,
+    alpha: number,
+    width = 2.6
+  ) => {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = width;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(x + w / 2, y - 4, x + w, y);
+    ctx.quadraticCurveTo(x + w / 2, y - 3.4, x + w, y);
     ctx.stroke();
+  };
+
+  for (let i = 0; i < 62; i++) {
+    const color = bands[Math.floor(random() * bands.length)];
+    const alpha = 0.4 + random() * 0.36;
+    const x = random() * size;
+    const y = random() * size;
+    const w = 10 + random() * 26;
+    // Nueve copias: cualquier onda que cruce un borde reaparece por el lado
+    // opuesto y el desplazamiento de UVs queda sin cortes.
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        stroke(x + dx * size, y + dy * size, w, color, alpha);
+      }
+    }
+  }
+
+  // La capa de brillos lleva además destellos cortos y muy claros: son los que
+  // hacen que el movimiento se lea de un vistazo sobre el agua.
+  if (variant === 1) {
+    for (let i = 0; i < 18; i++) {
+      const alpha = 0.55 + random() * 0.35;
+      const x = random() * size;
+      const y = random() * size;
+      const w = 6 + random() * 12;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          stroke(x + dx * size, y + dy * size, w, '#f4feff', alpha, 1.7);
+        }
+      }
+    }
+  }
+
+  ctx.globalAlpha = 1;
+  return ctx.canvas;
+}
+
+/**
+ * Máscara de opacidad de la lámina de agua: opaca en el centro y difuminada en
+ * el borde, con recortes irregulares. Así la superficie se funde con la orilla
+ * de arena sin dejar un borde circular duro.
+ */
+export function createWaterMaskCanvas(size = 256): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.72, 'rgba(255, 255, 255, 0.96)');
+  gradient.addColorStop(0.86, 'rgba(255, 255, 255, 0.7)');
+  gradient.addColorStop(0.95, 'rgba(255, 255, 255, 0.24)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  // La orilla no es un círculo perfecto: se come el borde con bloques
+  // deterministas para que la máscara tenga el mismo aire pixelado que el mapa.
+  const random = mulberry32(0x51a7);
+  ctx.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 260; i++) {
+    const angle = random() * Math.PI * 2;
+    const radius = center * (0.82 + random() * 0.18);
+    const block = 3 + Math.floor(random() * 5);
+    ctx.globalAlpha = 0.18 + random() * 0.45;
+    ctx.fillRect(
+      Math.floor(center + Math.cos(angle) * radius),
+      Math.floor(center + Math.sin(angle) * radius),
+      block,
+      block
+    );
   }
   ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
   return ctx.canvas;
 }
 

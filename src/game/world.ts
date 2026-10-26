@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
+import { POND, PLAZA, TERRAIN_PATHS, TERRAIN_ZONES } from './terrain';
 import {
   createBarkCanvas,
   createGroundCanvas,
@@ -9,6 +10,7 @@ import {
   createSkyCanvas,
   createSoilCanvas,
   createWaterCanvas,
+  createWaterMaskCanvas,
   textureFromCanvas
 } from './textures';
 
@@ -19,15 +21,13 @@ export type Collider =
 export interface World {
   colliders: Collider[];
   bounds: number;
-  pond: { x: number; z: number; radius: number };
+  pond: typeof POND;
   shadowMaterial: pc.StandardMaterial;
   update(dt: number): void;
   dispose(): void;
 }
 
 const HALF = CONFIG.world.groundSize / 2;
-const PLAZA = { x: 0, z: 0, radius: 4.8 };
-const POND = { x: 9.6, z: -8.4, radius: 3.3 };
 
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
@@ -106,10 +106,22 @@ export function buildWorld(app: pc.Application): World {
   const created: pc.Entity[] = [];
   const materials: pc.StandardMaterial[] = [];
 
+  // Orden transparente manual: primero las láminas de agua, después las
+  // sombras de contacto y al final el anillo del jugador. Así el anillo nunca
+  // queda teñido por el agua según desde donde mire la cámara.
+  const worldLayer = app.scene.layers.getLayerById(pc.LAYERID_WORLD);
+  if (worldLayer) worldLayer.transparentSortMode = pc.SORTMODE_MANUAL;
+
   // --- Texturas procedurales -------------------------------------------------
   const groundTexture = textureFromCanvas(
     device,
-    createGroundCanvas(1024, { half: HALF, plaza: PLAZA, pond: POND }),
+    createGroundCanvas(1024, {
+      half: HALF,
+      plaza: PLAZA,
+      pond: POND,
+      paths: TERRAIN_PATHS,
+      zones: TERRAIN_ZONES
+    }),
     { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST }
   );
   const soilTexture = textureFromCanvas(device, createSoilCanvas(), {
@@ -118,15 +130,28 @@ export function buildWorld(app: pc.Application): World {
     mipmaps: true,
     magFilter: pc.FILTER_NEAREST
   });
+  const shadowTexture = textureFromCanvas(device, createShadowCanvas(), {
+    name: 'blob-shadow',
+    mipmaps: false,
+    minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
   const waterTexture = textureFromCanvas(device, createWaterCanvas(), {
-    name: 'water',
+    name: 'water-surface',
     repeat: true,
     mipmaps: true,
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
-  const shadowTexture = textureFromCanvas(device, createShadowCanvas(), {
-    name: 'blob-shadow',
+  const waterGlintTexture = textureFromCanvas(device, createWaterCanvas(96, 1), {
+    name: 'water-glint',
+    repeat: true,
+    mipmaps: true,
+    minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
+  const waterMaskTexture = textureFromCanvas(device, createWaterMaskCanvas(), {
+    name: 'water-mask',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
@@ -229,49 +254,57 @@ export function buildWorld(app: pc.Application): World {
   created.push(ground);
 
   // --- Estanque ------------------------------------------------------------
-  const waterMaterial = standard({
-    diffuseMap: waterTexture,
-    diffuse: '#e8f8ff',
-    tiling: [2.5, 2.5],
-    specular: '#cfefff',
-    gloss: 0.9,
-    opacity: 0.9,
-    blend: pc.BLEND_NORMAL,
-    depthWrite: false,
-    emissive: '#123a4d'
-  });
-  const pondBedMaterial = standard({ diffuse: '#2c6c8f', specular: '#000000', gloss: 0.1 });
-  const lilyMaterial = standard({ diffuse: '#4f9a49', specular: '#000000', gloss: 0.3 });
-  materials.push(waterMaterial, pondBedMaterial, lilyMaterial);
-
-  const pondBed = part(app.root, 'cylinder', pondBedMaterial, {
-    position: [POND.x, 0.012, POND.z],
-    scale: [POND.radius * 2, 0.02, POND.radius * 2]
-  });
-  pondBed.render!.castShadows = false;
-  created.push(pondBed);
-
-  const water = part(app.root, 'cylinder', waterMaterial, {
-    position: [POND.x, 0.055, POND.z],
-    scale: [POND.radius * 2, 0.05, POND.radius * 2]
-  });
-  water.render!.castShadows = false;
-  created.push(water);
-
-  const lilySpots: Array<[number, number, number]> = [
-    [POND.x - 1.4, POND.z + 0.7, 0.55],
-    [POND.x + 1.5, POND.z - 0.9, 0.42],
-    [POND.x + 0.4, POND.z + 1.8, 0.34]
-  ];
-  for (const [x, z, size] of lilySpots) {
-    const pad = part(app.root, 'cylinder', lilyMaterial, {
-      position: [x, 0.085, z],
-      scale: [size * 2, 0.02, size * 2]
+  // El lecho está pintado en el suelo. Encima van dos láminas planas de agua
+  // translúcida, sin grosor ni paredes: una base y una capa de brillos que se
+  // desplazan en direcciones distintas. Juntas se leen como una superficie
+  // viva, no como una bandeja elevada. La máscara radial disuelve el borde.
+  const makeWaterMaterial = (
+    map: pc.Texture,
+    tiling: [number, number],
+    opacity: number
+  ): pc.StandardMaterial => {
+    const material = standard({
+      diffuse: '#d9f6ff',
+      diffuseMap: map,
+      tiling,
+      specular: '#ffffff',
+      gloss: 0.9,
+      opacity,
+      blend: pc.BLEND_NORMAL,
+      depthWrite: false,
+      cull: pc.CULLFACE_NONE
     });
-    pad.render!.castShadows = false;
-    created.push(pad);
+    material.opacityMap = waterMaskTexture;
+    material.opacityMapChannel = 'a';
+    material.emissive = hex('#0f3b4d');
+    material.update();
+    materials.push(material);
+    return material;
+  };
+
+  const waterSurfaceMaterial = makeWaterMaterial(waterTexture, [1.5, 1.5], 0.38);
+  const waterGlintMaterial = makeWaterMaterial(waterGlintTexture, [1.9, 1.7], 0.32);
+
+  const waterRadius = POND.radius + 0.35;
+  const waterSurface = part(app.root, 'plane', waterSurfaceMaterial, {
+    position: [POND.x, POND.surfaceHeight, POND.z],
+    scale: [waterRadius * 2, 1, waterRadius * 2]
+  });
+  const waterGlints = part(app.root, 'plane', waterGlintMaterial, {
+    position: [POND.x, POND.surfaceHeight + 0.004, POND.z],
+    scale: [waterRadius * 2, 1, waterRadius * 2],
+    rotation: [0, 62, 0]
+  });
+  for (const [index, surface] of [waterSurface, waterGlints].entries()) {
+    surface.render!.castShadows = false;
+    surface.render!.receiveShadows = false;
+    const instance = surface.render!.meshInstances[0];
+    if (instance) instance.drawOrder = index;
+    created.push(surface);
   }
-  colliders.push({ type: 'circle', x: POND.x, z: POND.z, radius: POND.radius + 0.25 });
+
+  // El agua profunda no es un collider fijo: depende del tipo del jugador y
+  // se resuelve en `Game.resolvePosition`.
 
   // --- Vegetación ----------------------------------------------------------
   const trunkMaterial = standard({
@@ -325,8 +358,8 @@ export function buildWorld(app: pc.Application): World {
     [8.4, 13.2, 0.86],
     [15.0, 12.4, 0.9],
     [7.8, -1.0, 0.7],
-    [15.2, -9.6, 0.76],
-    [9.4, -14.0, 0.8],
+    [16.0, -10.2, 0.76],
+    [9.2, -15.2, 0.8],
     [3.0, -8.6, 0.78],
     [6.0, -16.0, 0.8]
   ];
@@ -384,7 +417,7 @@ export function buildWorld(app: pc.Application): World {
     [-5.9, -4.4, 0.6],
     [13.4, -2.2, 0.85],
     [-8.6, 7.8, 0.55],
-    [6.6, -12.0, 0.62],
+    [5.6, -12.2, 0.62],
     [-13.6, -2.6, 0.8],
     [10.4, 3.4, 0.5]
   ];
@@ -396,6 +429,149 @@ export function buildWorld(app: pc.Application): World {
     });
     created.push(rock);
     colliders.push({ type: 'circle', x, z, radius: size * 0.8 });
+  });
+
+  // --- Hierba alta ----------------------------------------------------------
+  // Matas 3D de verdad: cada mata es una malla con varias briznas geométricas
+  // (dos tramos y punta) y color por vértice de la base a la punta. Sin
+  // texturas ni recortes: la hierba tiene volumen desde cualquier ángulo.
+  const tallGrassMaterial = standard({
+    diffuse: '#ffffff',
+    specular: '#0a1a0a',
+    gloss: 0.06,
+    cull: pc.CULLFACE_NONE
+  });
+  tallGrassMaterial.diffuseVertexColor = true;
+  tallGrassMaterial.update();
+  materials.push(tallGrassMaterial);
+
+  const buildGrassCluster = (seed: number, bladeCount: number): pc.Mesh => {
+    const rand = random(seed);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    const base: [number, number, number] = [0.08, 0.2, 0.07];
+    const mid: [number, number, number] = [0.14, 0.33, 0.11];
+    const tip: [number, number, number] = [0.31, 0.55, 0.2];
+
+    for (let b = 0; b < bladeCount; b++) {
+      const bx = (rand() - 0.5) * 0.58;
+      const bz = (rand() - 0.5) * 0.58;
+      const yaw = rand() * Math.PI * 2;
+      let height = 0.34 + rand() * 0.62;
+      if (rand() < 0.3) height += 0.18;
+      const halfWidth = 0.035 + rand() * 0.04;
+      const bend = (0.1 + rand() * 0.3) * (rand() < 0.5 ? -1 : 1);
+      const tint = 0.85 + rand() * 0.24;
+
+      const dx = Math.cos(yaw);
+      const dz = Math.sin(yaw);
+      // Normal casi vertical con algo de costado: se ilumina como el suelo
+      // pero mantiene un volumen sutil.
+      const nx = -dz * 0.45;
+      const nz = dx * 0.45;
+      const inv = 1 / Math.hypot(nx, 1, nz);
+      const n0 = nx * inv;
+      const n1 = inv;
+      const n2 = nz * inv;
+
+      const start = positions.length / 3;
+      const push = (x: number, y: number, z: number, color: [number, number, number]) => {
+        positions.push(x, y, z);
+        normals.push(n0, n1, n2);
+        // RGBA: `setColors` usa 4 componentes por vértice por defecto.
+        colors.push(color[0] * tint, color[1] * tint, color[2] * tint, 1);
+      };
+
+      push(bx - dx * halfWidth, 0, bz - dz * halfWidth, base);
+      push(bx + dx * halfWidth, 0, bz + dz * halfWidth, base);
+      push(
+        bx + dx * (bend * 0.4 - halfWidth * 0.78),
+        height * 0.55,
+        bz + dz * (bend * 0.4 - halfWidth * 0.78),
+        mid
+      );
+      push(
+        bx + dx * (bend * 0.4 + halfWidth * 0.78),
+        height * 0.55,
+        bz + dz * (bend * 0.4 + halfWidth * 0.78),
+        mid
+      );
+      push(bx + dx * bend, height, bz + dz * bend, tip);
+
+      indices.push(
+        start,
+        start + 1,
+        start + 2,
+        start + 1,
+        start + 3,
+        start + 2,
+        start + 2,
+        start + 3,
+        start + 4
+      );
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setColors(colors);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const grassClusterMeshes = [0, 1, 2, 3, 4].map((variant) =>
+    buildGrassCluster(0x51a7 + variant * 3571, 18)
+  );
+
+  const grassTufts: Array<{
+    entity: pc.Entity;
+    yaw: number;
+    phase: number;
+    strength: number;
+  }> = [];
+
+  const tallGrassZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'tallGrass');
+  tallGrassZones.forEach((zone, zoneIndex) => {
+    const rand = random(0x9a11 + zoneIndex * 7919);
+    const count = Math.round(Math.PI * zone.radius * zone.radius * 3.6);
+    for (let i = 0; i < count; i++) {
+      const angle = rand() * Math.PI * 2;
+      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
+      const x = zone.x + Math.cos(angle) * distance;
+      const z = zone.z + Math.sin(angle) * distance;
+      const yaw = rand() * 360;
+      const tuftScale = 0.9 + rand() * 0.55;
+
+      const tuft = new pc.Entity(`tall-grass-${zoneIndex}-${i}`);
+      tuft.setLocalPosition(x, 0.002, z);
+      tuft.setLocalEulerAngles(0, yaw, 0);
+      tuft.addComponent('render');
+      tuft.render!.castShadows = false;
+      tuft.render!.receiveShadows = false;
+      const instance = new pc.MeshInstance(
+        grassClusterMeshes[(i + zoneIndex) % grassClusterMeshes.length],
+        tallGrassMaterial
+      );
+      // Las banderas hay que fijarlas en la instancia: el componente las aplica
+      // a las instancias que ya existen al asignarlas, y aquí las creamos antes.
+      instance.castShadow = false;
+      instance.receiveShadow = false;
+      tuft.render!.meshInstances = [instance];
+      tuft.setLocalScale(tuftScale, tuftScale, tuftScale);
+      app.root.addChild(tuft);
+      created.push(tuft);
+
+      grassTufts.push({
+        entity: tuft,
+        yaw,
+        phase: x * 0.55 + z * 0.3 + rand() * 1.4,
+        strength: 0.7 + rand() * 0.6
+      });
+    }
   });
 
   // --- Valla al sur (deja un hueco para el camino) -------------------------
@@ -480,7 +656,7 @@ export function buildWorld(app: pc.Application): World {
   shadowMaterial.update();
   materials.push(shadowMaterial);
 
-  let waterTime = 0;
+  let time = 0;
 
   return {
     colliders,
@@ -488,20 +664,50 @@ export function buildWorld(app: pc.Application): World {
     pond: POND,
     shadowMaterial,
     update(dt: number) {
-      waterTime += dt;
-      waterMaterial.diffuseMapOffset = new pc.Vec2(waterTime * 0.012, waterTime * 0.02);
+      time += dt;
+
+      // Dos capas de ondas en sentidos opuestos: los brillos cambian de sitio
+      // y la superficie parece moverse sin desplazar la silueta del estanque.
+      // Hay que llamar a `update()` después de tocar los offsets: si no,
+      // PlayCanvas no sube las transformadas de UV al uniform buffer y el
+      // agua se queda congelada aunque los valores cambien en JS.
+      // Las velocidades están en unidades de UV: con el tiling actual la capa
+      // base recorre ~0,75 u/s y los brillos ~1 u/s, suficiente para que la
+      // corriente se lea sin parecer un río.
+      waterSurfaceMaterial.diffuseMapOffset = new pc.Vec2(time * 0.15, time * 0.22);
+      waterSurfaceMaterial.update();
+
+      waterGlintMaterial.diffuseMapOffset = new pc.Vec2(
+        -time * 0.26 + Math.sin(time * 0.6) * 0.05,
+        time * 0.11 + Math.cos(time * 0.45) * 0.03
+      );
+      // Los destellos laten un poco de opacidad y giran despacio: dos pistas de
+      // movimiento más, legibles incluso de reojo.
+      waterGlintMaterial.opacity = 0.32 + Math.sin(time * 1.15) * 0.05;
+      waterGlintMaterial.update();
+      waterGlints.setLocalEulerAngles(0, 62 + time * 5.5, 0);
+
+      // Viento sobre la hierba alta: cada mata se inclina sobre su base con
+      // una fase ligada a su posición, de modo que la onda recorre el calvero.
+      for (const tuft of grassTufts) {
+        const sway = Math.sin(time * 1.15 + tuft.phase) * 8 * tuft.strength;
+        tuft.entity.setLocalEulerAngles(0, tuft.yaw, sway);
+      }
     },
     dispose() {
       for (const entity of created) entity.destroy();
       for (const material of materials) material.destroy();
       groundTexture.destroy();
       soilTexture.destroy();
-      waterTexture.destroy();
       shadowTexture.destroy();
+      waterTexture.destroy();
+      waterGlintTexture.destroy();
+      waterMaskTexture.destroy();
       skyTexture.destroy();
       barkTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
       for (const texture of rockTextures) texture.destroy();
+      for (const mesh of grassClusterMeshes) mesh.destroy();
     }
   };
 }

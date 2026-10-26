@@ -62,7 +62,16 @@ export const CONFIG = {
     /** Altura del anillo sobre el suelo (por encima de la sombra de contacto). */
     markerHeight: 0.075,
     /** Opacidad del anillo: 1 = opaco, 0 = invisible. */
-    markerOpacity: 0.72
+    markerOpacity: 0.72,
+    /**
+     * Fracción de la altura visible del sprite que queda bajo la superficie al
+     * entrar en el agua. En someras moja las piernas; en profundas llega a la
+     * cintura. Así el efecto se mantiene en Pokémon de distintos tamaños.
+     */
+    submergeShallow: 0.34,
+    submergeDeep: 0.58,
+    /** Velocidad (1/s) con la que el sprite se hunde o emerge. */
+    submergeLerp: 7
   },
   world: {
     /** Mitad del lado del mapa jugable. */

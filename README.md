@@ -54,7 +54,38 @@ La pantalla inicial permite elegir entre **Bulbasaur, Charmander, Squirtle, Pika
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
 - **Pixel art nítido**: muestreo `NEAREST`, sin mipmaps en los sprites, UVs con medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
 - **Mapa generado por código**: isla, plaza, estanque, árboles, rocas, valla y cartel se construyen con primitivas y texturas procedurales; no hay assets de escenario externos.
-- **UI en español** con selector, HUD de telemetría (FPS, dirección visible, rumbo propio, fila, velocidad, ángulo de cámara, entrada activa), controles y créditos.
+- **Terrenos tipados**: la isla tiene doce terrenos asociados a tipos Pokémon, desde la pradera base hasta calveros de Fuego, Hielo o Fantasma. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
+- **UI en español** con selector, HUD de telemetría (FPS, dirección visible, rumbo propio, fila, velocidad, ángulo de cámara, entrada activa, terreno), controles y créditos.
+
+## Terrenos y tipos Pokémon
+
+Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con `terrainAt(x, z)`. Los seis base cubren toda la isla y los siete calveros añaden variedad temática:
+
+| Terreno | Tipo | Dónde |
+| --- | --- | --- |
+| Pradera | Planta | césped base de la isla |
+| Sendero | Tierra | caminos de tierra |
+| Arena | Tierra | orilla de arena del estanque |
+| Aguas someras | Agua | anillo exterior del estanque, transitable por todos |
+| Aguas profundas | Agua | centro del estanque, solo Pokémon de tipo Agua |
+| Plaza | Roca | explanada central |
+| Brasas | Fuego | calvero al este |
+| Páramo | Eléctrico | calvero al norte |
+| Escarcha | Hielo | calvero al oeste |
+| Ciénaga | Veneno | calvero al sur |
+| Bosque umbrío | Fantasma | calvero al suroeste |
+| Claro feérico | Hada | calvero al noroeste |
+| Hierba alta | Planta | dos manchas, al noreste y al oeste |
+
+`terrainAt` resuelve primero los calveros, después la plaza, el estanque (profundo → somero → arena), los caminos y, por defecto, la pradera. Los calveros se pintan con bloques de 4 px en la textura del suelo (borde irregular, grietas, chispas, flores…) y cada uno tiene una paleta propia. El lecho del estanque también está pintado en el suelo, sin cilindros elevados; encima se coloca una lámina de agua plana y translúcida.
+
+La **hierba alta** es el único calvero con volumen propio: además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de `TERRAIN_ZONES` (los de tipo `tallGrass`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
+
+Las **aguas profundas** (`POND.deepRadius`) actúan como collider circular solo para Pokémon que no sean de tipo Agua: el resto puede entrar en las someras y rodear el pozo, pero no cruzarlo. El HUD lo avisa cuando estás en aguas someras con un Pokémon no acuático. El HUD de telemetría muestra el nombre del terreno y una insignia con su tipo.
+
+### Sumergirse en el agua
+
+El estanque combina el lecho pintado en el suelo con dos láminas planas y translúcidas a `POND.surfaceHeight` (0,3 u), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un giro lento y un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La máscara radial (`createWaterMaskCanvas`) disuelve el borde contra la arena y el tile de ondas se genera repetido en los bordes para que el desplazamiento no muestre costuras. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
 
 ## Cómo funciona el pipeline de sprites
 
@@ -116,7 +147,8 @@ public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla
   types.ts                   tipos del manifiesto y del estado del juego
-  textures.ts                texturas procedurales (césped, agua, cielo, sombra, props)
+  terrain.ts                 terrenos, zonas, caminos y consulta por posición
+  textures.ts                texturas procedurales (césped, calveros, agua, cielo, sombra, props)
   world.ts                   isla, plaza, estanque, props, luces y colisiones
   camera.ts                  rig orbital a 45° con seguimiento suave
   input.ts                   mando, teclado y ratón (deadzone y ejes)
@@ -138,6 +170,8 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad.
 - `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión.
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
+- `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
+- `TERRAINS`, `TERRAIN_ZONES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición, radios del estanque y tamaño de cada terreno.
 
 Los colores de acento, tipos y créditos vienen del manifiesto.
 

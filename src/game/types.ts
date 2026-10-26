@@ -1,5 +1,7 @@
 /** Tipos compartidos entre el pipeline de assets y el motor. */
 
+import type { TerrainId } from './terrain';
+
 export type DirectionName = 'S' | 'SE' | 'E' | 'NE' | 'N' | 'NW' | 'W' | 'SW';
 export type AnimationName = 'idle' | 'walk';
 
@@ -72,6 +74,11 @@ export interface GameStats {
   z: number;
   gamepad: boolean;
   animation: AnimationName;
+  /** Terreno bajo los pies del jugador. */
+  terrain: TerrainId;
+  terrainName: string;
+  /** Tipo Pokémon asociado al terreno (clave del manifiesto). */
+  terrainType: string;
 }
 
 export interface LoadingProgress {

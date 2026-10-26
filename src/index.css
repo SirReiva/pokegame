@@ -941,6 +941,48 @@ code {
   white-space: nowrap;
 }
 
+.hud-terrain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(154, 190, 228, 0.1);
+}
+
+.terrain-swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.terrain-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.terrain-copy strong {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  letter-spacing: -0.01em;
+  color: #e4eef9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terrain-note {
+  margin: 8px 0 0;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #8fa2b8;
+}
+
 .hud-credit {
   margin-top: 10px;
   padding-top: 8px;

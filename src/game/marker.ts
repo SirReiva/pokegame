@@ -21,7 +21,7 @@ export class PlayerMarker {
   private readonly mesh: pc.Mesh;
   private readonly material: pc.StandardMaterial;
   private readonly texture: pc.Texture;
-  private readonly height: number;
+  private height: number;
 
   constructor(app: pc.Application, diameter: number, height: number, opacity: number) {
     const device = app.graphicsDevice;
@@ -75,6 +75,7 @@ export class PlayerMarker {
     render.castShadows = false;
     render.receiveShadows = false;
     render.meshInstances = [new pc.MeshInstance(this.mesh, this.material)];
+    render.meshInstances[0].drawOrder = 3;
     // `diameter` es el diámetro visible del anillo; el quad es mayor para que
     // la flecha que sale del círculo tenga sitio en la textura.
     const quad = (diameter * MARKER_TEXTURE_SIZE) / (MARKER_RING_OUTER * 2);
@@ -85,6 +86,12 @@ export class PlayerMarker {
 
   setPosition(x: number, z: number): void {
     this.root.setPosition(x, this.height, z);
+  }
+
+  /** Altura del anillo sobre el suelo (o sobre el agua cuando el actor nada). */
+  setHeight(height: number): void {
+    this.height = height;
+    this.root.setLocalPosition(0, height, 0);
   }
 
   setFacing(yaw: number): void {

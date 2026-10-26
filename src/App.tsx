@@ -474,6 +474,24 @@ function App() {
                   />
                   <Stat label="Entrada" value={stats?.gamepad ? 'Mando' : 'Teclado'} />
                 </div>
+                <div className="hud-terrain">
+                  <span
+                    className="terrain-swatch"
+                    style={{
+                      background: stats ? TYPE_COLORS[stats.terrainType] ?? '#8a93a6' : '#8a93a6'
+                    }}
+                  />
+                  <div className="terrain-copy">
+                    <span className="stat-label">Terreno</span>
+                    <strong>{stats?.terrainName ?? '—'}</strong>
+                  </div>
+                  {stats && <TypeBadge type={stats.terrainType} />}
+                </div>
+                {stats?.terrain === 'waterLow' && !selected.types.includes('Water') && (
+                  <p className="terrain-note">
+                    Solo los Pokémon de tipo Agua pueden entrar en aguas profundas.
+                  </p>
+                )}
                 <div className="hud-credit">Sprites: PMD Sprite Collab · CC BY-NC 4.0</div>
               </div>
 
