@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
+import { PlayerMarker } from './marker';
 import { SpriteBillboard, type SpriteAsset } from './sprite';
 import type { AnimationName } from './types';
 
@@ -15,6 +16,8 @@ export interface ActorTransform {
 export class Actor {
   readonly billboard: SpriteBillboard;
   private readonly shadow: pc.Entity;
+  /** Anillo de rumbo; solo lo lleva el jugador. */
+  private readonly marker: PlayerMarker | null;
   readonly asset: SpriteAsset;
   /** Rumbo de reposo; los NPC vuelven a él cuando el jugador se aleja. */
   readonly homeFacing: number;
@@ -26,7 +29,8 @@ export class Actor {
     asset: SpriteAsset,
     shadowMaterial: pc.StandardMaterial,
     position: ActorTransform,
-    facing: number
+    facing: number,
+    withMarker = false
   ) {
     this.asset = asset;
     this.position = { ...position };
@@ -51,6 +55,16 @@ export class Actor {
     this.shadow.setLocalScale(diameter, 1, diameter);
     app.root.addChild(this.shadow);
 
+    this.marker = withMarker
+      ? new PlayerMarker(
+          app,
+          CONFIG.player.markerDiameter,
+          CONFIG.player.markerHeight,
+          CONFIG.player.markerOpacity
+        )
+      : null;
+    this.marker?.setFacing(facing);
+
     this.setPosition(position.x, position.z);
   }
 
@@ -59,11 +73,13 @@ export class Actor {
     this.position.z = z;
     this.billboard.root.setPosition(x, 0.04, z);
     this.shadow.setPosition(x, 0.05, z);
+    this.marker?.setPosition(x, z);
   }
 
   setFacing(yaw: number): void {
     this.facing = yaw;
     this.billboard.setFacing(yaw);
+    this.marker?.setFacing(yaw);
   }
 
   play(name: AnimationName, restart = false): void {
@@ -81,10 +97,12 @@ export class Actor {
   setVisible(visible: boolean): void {
     this.billboard.setVisible(visible);
     this.shadow.enabled = visible;
+    this.marker?.setVisible(visible);
   }
 
   destroy(): void {
     this.billboard.destroy();
     this.shadow.destroy();
+    this.marker?.destroy();
   }
 }

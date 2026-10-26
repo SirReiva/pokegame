@@ -159,7 +159,8 @@ export class Game {
       playerAsset,
       this.world.shadowMaterial,
       CONFIG.world.spawn,
-      PLAYER_START_FACING
+      PLAYER_START_FACING,
+      true
     );
     this.player.play('idle');
     this.playerFacing = PLAYER_START_FACING;

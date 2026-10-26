@@ -254,6 +254,88 @@ export function createShadowCanvas(size = 128): HTMLCanvasElement {
   return ctx.canvas;
 }
 
+/** Resolución de la textura del anillo de jugador. */
+export const MARKER_TEXTURE_SIZE = 64;
+/** Radio exterior del anillo en píxeles de la textura; lo usa `marker.ts`. */
+export const MARKER_RING_OUTER = 18;
+
+/**
+ * Anillo de jugador con flecha de rumbo. Se dibuja píxel a píxel (sin
+ * antialiasing) para que combine con el resto del arte. La flecha apunta hacia
+ * arriba en la imagen, que es el eje +Z del mundo, y su base nace dentro del
+ * borde exterior del anillo para que ambos formen una sola silueta.
+ */
+export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const image = ctx.createImageData(size, size);
+  const data = image.data;
+  const scale = size / 64;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Un solo color: sin borde oscuro.
+  const accent = [255, 224, 102, 255];
+
+  const put = (x: number, y: number, color: number[]) => {
+    const index = (y * size + x) * 4;
+    data[index] = color[0];
+    data[index + 1] = color[1];
+    data[index + 2] = color[2];
+    data[index + 3] = color[3];
+  };
+
+  const inTriangle = (
+    px: number,
+    py: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    tx: number,
+    ty: number
+  ): boolean => {
+    const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+    const d2 = (px - tx) * (by - ty) - (bx - tx) * (py - ty);
+    const d3 = (px - ax) * (ty - ay) - (tx - ax) * (py - ay);
+    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+    const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(hasNeg && hasPos);
+  };
+
+  // Base de la flecha apoyada en el anillo: el triángulo arranca desde dentro
+  // del borde exterior y sale hacia arriba, sin quedar separado del círculo.
+  const arrow = {
+    tip: [32, 1] as const,
+    left: [23.5, 16.5] as const,
+    right: [40.5, 16.5] as const
+  };
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const px = (x + 0.5 - cx) / scale;
+      const py = (y + 0.5 - cy) / scale;
+      const radius = Math.hypot(px, py);
+
+      const inRing = radius >= 14 && radius < MARKER_RING_OUTER;
+      const inArrow = inTriangle(
+        x + 0.5,
+        y + 0.5,
+        arrow.tip[0] * scale,
+        arrow.tip[1] * scale,
+        arrow.left[0] * scale,
+        arrow.left[1] * scale,
+        arrow.right[0] * scale,
+        arrow.right[1] * scale
+      );
+
+      if (inRing || inArrow) put(x, y, accent);
+    }
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return ctx.canvas;
+}
+
 export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
   const ctx = canvas2d(width, height);
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
@@ -263,6 +345,180 @@ export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
   gradient.addColorStop(1, '#f2f7ec');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
+  return ctx.canvas;
+}
+
+/**
+ * Textura de corteza para los troncos. La hoja es 16x32 para que, con el
+ * aspect ratio del cilindro, los téxeles queden aproximadamente cuadrados.
+ * Todo se dibuja a píxel completo, sin antialiasing.
+ */
+export function createBarkCanvas(width = 16, height = 32): HTMLCanvasElement {
+  const random = mulberry32(0xba4c);
+  const ctx = canvas2d(width, height);
+  const palette = ['#3b2819', '#4d3420', '#5f4228', '#725031', '#89643d'];
+
+  const plot = (x: number, y: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+  };
+
+  ctx.fillStyle = palette[2];
+  ctx.fillRect(0, 0, width, height);
+
+  // Vetas verticales de un píxel.
+  for (let x = 0; x < width; x++) {
+    ctx.fillStyle = palette[1 + Math.floor(random() * 3)];
+    ctx.fillRect(x, 0, 1, height);
+  }
+
+  // Grietas y brillos cortos. Se dibujan con envoltura para que la costura
+  // horizontal del cilindro no quede marcada.
+  for (let i = 0; i < 24; i++) {
+    const x = Math.floor(random() * width);
+    const y = Math.floor(random() * height);
+    const length = 2 + Math.floor(random() * 7);
+    const dark = random() < 0.58;
+    for (let k = 0; k < length; k++) {
+      plot(x, y + k, dark ? palette[0] : palette[4]);
+    }
+  }
+
+  // Nudo de corteza.
+  const kx = 3;
+  const ky = 8;
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (Math.abs(dx) + Math.abs(dy) <= 2) plot(kx + dx, ky + dy, palette[0]);
+    }
+  }
+  for (let dy = -1; dy <= 1; dy++) plot(kx + 2, ky + dy, palette[3]);
+
+  return ctx.canvas;
+}
+
+const LEAF_PALETTES = [
+  ['#24491f', '#2f5f2c', '#3f7d3f', '#4d8f45', '#68a95a'],
+  ['#244d28', '#356b38', '#4d8f45', '#5aa04e', '#79b86b'],
+  ['#1f4527', '#2a5c30', '#3f7d3f', '#4a8a42', '#63a256']
+];
+
+/**
+ * Follaje pixel art para las bolas de las copas. La textura es 64x32 (2:1)
+ * porque es el aspect ratio de las coordenadas UV de una esfera.
+ */
+export function createLeafCanvas(variant = 0, width = 64, height = 32): HTMLCanvasElement {
+  const palette = LEAF_PALETTES[variant % LEAF_PALETTES.length];
+  const random = mulberry32(0x1eaf + variant * 977);
+  const ctx = canvas2d(width, height);
+
+  const plot = (x: number, y: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+  };
+
+  const clumps = (
+    count: number,
+    rxMin: number,
+    rxMax: number,
+    ryMin: number,
+    ryMax: number,
+    color: string
+  ) => {
+    for (let i = 0; i < count; i++) {
+      const cx = Math.floor(random() * width);
+      const cy = Math.floor(random() * height);
+      const rx = rxMin + Math.floor(random() * (rxMax - rxMin + 1));
+      const ry = ryMin + Math.floor(random() * (ryMax - ryMin + 1));
+      for (let dy = -ry; dy <= ry; dy++) {
+        for (let dx = -rx; dx <= rx; dx++) {
+          const nx = dx / (rx + 0.35);
+          const ny = dy / (ry + 0.35);
+          if (nx * nx + ny * ny <= 1 && random() > 0.12) {
+            plot(cx + dx, cy + dy, color);
+          }
+        }
+      }
+    }
+  };
+
+  ctx.fillStyle = palette[1];
+  ctx.fillRect(0, 0, width, height);
+
+  // Huecos oscuros entre hojas.
+  clumps(12, 1, 3, 1, 2, palette[0]);
+  // Manchas medias y luces.
+  clumps(20, 2, 4, 1, 2, palette[2]);
+  clumps(15, 1, 3, 1, 2, palette[3]);
+  clumps(8, 1, 2, 1, 1, palette[4]);
+
+  // Píxeles sueltos que rompen los grupos.
+  for (let i = 0; i < 24; i++) {
+    plot(
+      Math.floor(random() * width),
+      Math.floor(random() * height),
+      palette[1 + Math.floor(random() * 4)]
+    );
+  }
+
+  return ctx.canvas;
+}
+
+const ROCK_PALETTES = [
+  ['#3f454d', '#535a63', '#69717b', '#858d97', '#a2aab4'],
+  ['#4a474f', '#5e5b64', '#74717c', '#8e8b96', '#a8a5b0']
+];
+
+/** Piedra pixel art: parches angulosos, grietas y motas. Hoja 32x16. */
+export function createRockCanvas(variant = 0, width = 32, height = 16): HTMLCanvasElement {
+  const palette = ROCK_PALETTES[variant % ROCK_PALETTES.length];
+  const random = mulberry32(0x70c4 + variant * 613);
+  const ctx = canvas2d(width, height);
+
+  const plot = (x: number, y: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+  };
+
+  ctx.fillStyle = palette[2];
+  ctx.fillRect(0, 0, width, height);
+
+  // Parches de piedra con bordes rectos.
+  for (let i = 0; i < 16; i++) {
+    const x = Math.floor(random() * width);
+    const y = Math.floor(random() * height);
+    const w = 1 + Math.floor(random() * 4);
+    const h = 1 + Math.floor(random() * 3);
+    const color = palette[random() < 0.55 ? 1 : 3];
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        if (random() > 0.12) plot(x + dx, y + dy, color);
+      }
+    }
+  }
+
+  // Grietas: recorridos de un píxel con alguna luz al lado.
+  for (let i = 0; i < 4; i++) {
+    let x = Math.floor(random() * width);
+    let y = Math.floor(random() * height);
+    const length = 4 + Math.floor(random() * 7);
+    for (let k = 0; k < length; k++) {
+      plot(x, y, palette[0]);
+      if (random() < 0.3) plot(x + 1, y, palette[4]);
+      x += random() < 0.72 ? 1 : -1;
+      if (random() < 0.35) y += 1;
+    }
+  }
+
+  // Motas y pequeños pozos.
+  for (let i = 0; i < 22; i++) {
+    plot(
+      Math.floor(random() * width),
+      Math.floor(random() * height),
+      palette[random() < 0.6 ? 1 : random() < 0.7 ? 3 : 4]
+    );
+  }
+
   return ctx.canvas;
 }
 

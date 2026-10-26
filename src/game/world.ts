@@ -1,7 +1,10 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
 import {
+  createBarkCanvas,
   createGroundCanvas,
+  createLeafCanvas,
+  createRockCanvas,
   createShadowCanvas,
   createSkyCanvas,
   createSoilCanvas,
@@ -135,6 +138,31 @@ export function buildWorld(app: pc.Application): World {
     magFilter: pc.FILTER_LINEAR
   });
 
+  // Texturas pixel art de la vegetación y las rocas. Se generan a baja
+  // resolución y se muestrean con NEAREST para que los téxeles se vean como
+  // píxeles, no como una foto borrosa.
+  const pixelOptions = {
+    mipmaps: true,
+    minFilter: pc.FILTER_NEAREST_MIPMAP_NEAREST,
+    magFilter: pc.FILTER_NEAREST
+  } as const;
+  const barkTexture = textureFromCanvas(device, createBarkCanvas(), {
+    ...pixelOptions,
+    name: 'bark-pixel'
+  });
+  const leafTextures = [0, 1, 2].map((variant) =>
+    textureFromCanvas(device, createLeafCanvas(variant), {
+      ...pixelOptions,
+      name: `leaf-pixel-${variant}`
+    })
+  );
+  const rockTextures = [0, 1].map((variant) =>
+    textureFromCanvas(device, createRockCanvas(variant), {
+      ...pixelOptions,
+      name: `rock-pixel-${variant}`
+    })
+  );
+
   // --- Ajustes de escena -----------------------------------------------------
   app.scene.ambientLight = new pc.Color(0.46, 0.5, 0.55);
   const fog = app.scene.fog;
@@ -246,12 +274,18 @@ export function buildWorld(app: pc.Application): World {
   colliders.push({ type: 'circle', x: POND.x, z: POND.z, radius: POND.radius + 0.25 });
 
   // --- Vegetación ----------------------------------------------------------
-  const trunkMaterial = standard({ diffuse: '#6b4a30', specular: '#000000', gloss: 0.15 });
-  const leafMaterials = [
-    standard({ diffuse: '#3f7d3f', specular: '#0d1a0d', gloss: 0.25 }),
-    standard({ diffuse: '#4d8f45', specular: '#0d1a0d', gloss: 0.25 }),
-    standard({ diffuse: '#356b38', specular: '#0d1a0d', gloss: 0.25 })
-  ];
+  const trunkMaterial = standard({
+    diffuseMap: barkTexture,
+    specular: '#000000',
+    gloss: 0.05
+  });
+  const leafMaterials = leafTextures.map((texture) =>
+    standard({
+      diffuseMap: texture,
+      specular: '#0d1a0d',
+      gloss: 0.12
+    })
+  );
   materials.push(trunkMaterial, ...leafMaterials);
 
   const trees: Array<[number, number, number]> = [
@@ -313,10 +347,13 @@ export function buildWorld(app: pc.Application): World {
   });
 
   // Rocas.
-  const rockMaterials = [
-    standard({ diffuse: '#8b8f94', specular: '#22262a', gloss: 0.35 }),
-    standard({ diffuse: '#767b82', specular: '#22262a', gloss: 0.3 })
-  ];
+  const rockMaterials = rockTextures.map((texture) =>
+    standard({
+      diffuseMap: texture,
+      specular: '#20242a',
+      gloss: 0.18
+    })
+  );
   materials.push(...rockMaterials);
   const rocks: Array<[number, number, number]> = [
     [4.8, 6.9, 0.72],
@@ -438,6 +475,9 @@ export function buildWorld(app: pc.Application): World {
       waterTexture.destroy();
       shadowTexture.destroy();
       skyTexture.destroy();
+      barkTexture.destroy();
+      for (const texture of leafTextures) texture.destroy();
+      for (const texture of rockTextures) texture.destroy();
     }
   };
 }

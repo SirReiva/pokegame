@@ -50,6 +50,7 @@ La pantalla inicial permite elegir entre **Bulbasaur, Charmander, Squirtle, Pika
 - **Rumbos independientes**: el jugador empieza mirando al este y solo cambia de rumbo al moverse. Los NPC tienen una orientación de reposo propia y únicamente giran hacia el jugador cuando lo tienen cerca.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
+- **Anillo de rumbo**: el jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
 - **Pixel art nítido**: muestreo `NEAREST`, sin mipmaps en los sprites, UVs con medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
 - **Mapa generado por código**: isla, plaza, estanque, árboles, rocas, valla y cartel se construyen con primitivas y texturas procedurales; no hay assets de escenario externos.
@@ -115,11 +116,12 @@ public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla
   types.ts                   tipos del manifiesto y del estado del juego
-  textures.ts                texturas procedurales (césped, agua, cielo, sombra)
+  textures.ts                texturas procedurales (césped, agua, cielo, sombra, props)
   world.ts                   isla, plaza, estanque, props, luces y colisiones
   camera.ts                  rig orbital a 45° con seguimiento suave
   input.ts                   mando, teclado y ratón (deadzone y ejes)
   sprite.ts                  texturas, material, UVs, animación y billboard
+  marker.ts                  anillo de jugador con flecha de rumbo
   actor.ts                   sprite + sombra de contacto + posición
   game.ts                    orquestador, roster, movimiento y colisiones
 src/ui/SpritePreview.tsx     vista previa animada de las hojas con CSS
@@ -135,6 +137,7 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `PITCH_DEG` (45) y `VERTICAL_STRETCH`: inclinación y corrección de píxeles.
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad.
 - `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión.
+- `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 
 Los colores de acento, tipos y créditos vienen del manifiesto.
 

@@ -56,7 +56,13 @@ export const CONFIG = {
     deceleration: 20,
     turnLerp: 16,
     /** Por debajo de esta velocidad no se cambia la dirección a la que mira. */
-    minFacingSpeed: 0.25
+    minFacingSpeed: 0.25,
+    /** Anillo de rumbo bajo los pies del jugador, en unidades de mundo. */
+    markerDiameter: 1.18,
+    /** Altura del anillo sobre el suelo (por encima de la sombra de contacto). */
+    markerHeight: 0.075,
+    /** Opacidad del anillo: 1 = opaco, 0 = invisible. */
+    markerOpacity: 0.72
   },
   world: {
     /** Mitad del lado del mapa jugable. */
