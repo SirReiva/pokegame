@@ -27,7 +27,7 @@ export const CONFIG = {
     walkRateMin: 0.75,
     walkRateMax: 1.5,
     /** Velocidad (u/s) a la que la animación de andar va a ritmo 1. */
-    walkRateRefSpeed: 5
+    walkRateRefSpeed: 5,
   },
   camera: {
     fov: 42,
@@ -46,7 +46,7 @@ export const CONFIG = {
     wheelStep: 1.15,
     followLerp: 8,
     heightOffset: 0.9,
-    attractSpeed: 0.16
+    attractSpeed: 0.16,
   },
   player: {
     speed: 5.4,
@@ -62,7 +62,7 @@ export const CONFIG = {
     /** Altura del anillo sobre el suelo (por encima de la sombra de contacto). */
     markerHeight: 0.075,
     /** Opacidad del anillo: 1 = opaco, 0 = invisible. */
-    markerOpacity: 0.72,
+    markerOpacity: 0.55,
     /**
      * Fracción de la altura visible del sprite que queda bajo la superficie al
      * entrar en el agua. En someras moja las piernas; en profundas llega a la
@@ -71,17 +71,17 @@ export const CONFIG = {
     submergeShallow: 0.34,
     submergeDeep: 0.58,
     /** Velocidad (1/s) con la que el sprite se hunde o emerge. */
-    submergeLerp: 7
+    submergeLerp: 7,
   },
   world: {
     /** Mitad del lado del mapa jugable. */
     halfSize: 18.4,
     groundSize: 38,
-    spawn: { x: -11.6, z: 11.6 }
+    spawn: { x: -11.6, z: 11.6 },
   },
   fog: {
     color: [0.73, 0.87, 0.96] as [number, number, number],
     near: 34,
-    far: 96
-  }
+    far: 96,
+  },
 } as const;

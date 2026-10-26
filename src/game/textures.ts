@@ -1,12 +1,24 @@
-import * as pc from 'playcanvas';
-import { terrainAt, type BaseZone, type Lane, type TerrainId, type TerrainZone } from './terrain';
+import * as pc from "playcanvas";
+import {
+  terrainAt,
+  type BaseZone,
+  type Lane,
+  type TerrainId,
+  type TerrainZone,
+} from "./terrain";
 
 /** Utilidades para generar las texturas de la demo (sin assets externos). */
 
 export interface GroundPaintOptions {
   half: number;
   bases: BaseZone[];
-  pond: { x: number; z: number; radius: number; deepRadius: number; shoreRadius: number };
+  pond: {
+    x: number;
+    z: number;
+    radius: number;
+    deepRadius: number;
+    shoreRadius: number;
+  };
   lanes: Lane[];
   zones: TerrainZone[];
 }
@@ -21,12 +33,15 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-export function canvas2d(width: number, height = width): CanvasRenderingContext2D {
-  const canvas = document.createElement('canvas');
+export function canvas2d(
+  width: number,
+  height = width,
+): CanvasRenderingContext2D {
+  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('No se pudo crear el contexto 2D');
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No se pudo crear el contexto 2D");
   return ctx;
 }
 
@@ -44,7 +59,7 @@ export interface TextureOptions {
 export function textureFromCanvas(
   device: pc.GraphicsDevice,
   canvas: HTMLCanvasElement,
-  options: TextureOptions = {}
+  options: TextureOptions = {},
 ): pc.Texture {
   const {
     srgb = true,
@@ -53,7 +68,7 @@ export function textureFromCanvas(
     magFilter = pc.FILTER_NEAREST,
     minFilter = mipmaps ? pc.FILTER_LINEAR_MIPMAP_LINEAR : pc.FILTER_NEAREST,
     flipY = false,
-    name = 'procedural'
+    name = "procedural",
   } = options;
 
   const texture = new pc.Texture(device, {
@@ -67,7 +82,7 @@ export function textureFromCanvas(
     magFilter,
     addressU: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
     addressV: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
-    flipY
+    flipY,
   });
   texture.setSource(canvas);
   return texture;
@@ -83,61 +98,61 @@ interface TerrainPalette {
 
 const TERRAIN_PALETTES: Partial<Record<TerrainId, TerrainPalette>> = {
   fire: {
-    base: '#1f2329',
-    light: '#2d323a',
-    dark: '#0e1013',
-    accent: '#3b4149',
-    accent2: '#191c21'
+    base: "#1f2329",
+    light: "#2d323a",
+    dark: "#0e1013",
+    accent: "#3b4149",
+    accent2: "#191c21",
   },
   electric: {
-    base: '#a39344',
-    light: '#b9a855',
-    dark: '#7f7133',
-    accent: '#fff3a6',
-    accent2: '#e0c95a'
+    base: "#a39344",
+    light: "#b9a855",
+    dark: "#7f7133",
+    accent: "#fff3a6",
+    accent2: "#e0c95a",
   },
   ice: {
-    base: '#c3e2ea',
-    light: '#dcf1f5',
-    dark: '#93c5d3',
-    accent: '#ffffff',
-    accent2: '#7fb6c9'
+    base: "#c3e2ea",
+    light: "#dcf1f5",
+    dark: "#93c5d3",
+    accent: "#ffffff",
+    accent2: "#7fb6c9",
   },
   poison: {
-    base: '#5b3967',
-    light: '#6f4a7c',
-    dark: '#3c2548',
-    accent: '#a6d96a',
-    accent2: '#c07ad6'
+    base: "#5b3967",
+    light: "#6f4a7c",
+    dark: "#3c2548",
+    accent: "#a6d96a",
+    accent2: "#c07ad6",
   },
   ghost: {
-    base: '#3d3a4c',
-    light: '#4d4960',
-    dark: '#282534',
-    accent: '#8f84ad',
-    accent2: '#6a5f86'
+    base: "#3d3a4c",
+    light: "#4d4960",
+    dark: "#282534",
+    accent: "#8f84ad",
+    accent2: "#6a5f86",
   },
   fairy: {
-    base: '#8fbf6b',
-    light: '#a3d07e',
-    dark: '#6f9c52',
-    accent: '#f2a7c3',
-    accent2: '#e6d2f2'
+    base: "#8fbf6b",
+    light: "#a3d07e",
+    dark: "#6f9c52",
+    accent: "#f2a7c3",
+    accent2: "#e6d2f2",
   },
   desert: {
-    base: '#d9b66c',
-    light: '#eccf8d',
-    dark: '#b9924d',
-    accent: '#f6e3b0',
-    accent2: '#8d6a36'
+    base: "#d9b66c",
+    light: "#eccf8d",
+    dark: "#b9924d",
+    accent: "#f6e3b0",
+    accent2: "#8d6a36",
   },
   tallGrass: {
-    base: '#2f6a2b',
-    light: '#3f8234',
-    dark: '#224f20',
-    accent: '#5a9c3d',
-    accent2: '#9ccf6f'
-  }
+    base: "#2f6a2b",
+    light: "#3f8234",
+    dark: "#224f20",
+    accent: "#5a9c3d",
+    accent2: "#9ccf6f",
+  },
 };
 
 /**
@@ -148,13 +163,14 @@ function paintTerrainZone(
   ctx: CanvasRenderingContext2D,
   zone: TerrainZone,
   toPx: (world: number) => number,
-  scale: number
+  scale: number,
 ): void {
   const palette = TERRAIN_PALETTES[zone.terrain];
   if (!palette) return;
 
   const random = mulberry32(
-    (Math.round(zone.x * 811) * 73856093) ^ (Math.round(zone.z * 613) * 19349663)
+    (Math.round(zone.x * 811) * 73856093) ^
+      (Math.round(zone.z * 613) * 19349663),
   );
   const cx = toPx(zone.x);
   const cy = toPx(zone.z);
@@ -169,7 +185,9 @@ function paintTerrainZone(
       const distance = Math.hypot(ox, oy);
       const angle = Math.atan2(oy, ox);
       const wobble =
-        1 + 0.05 * Math.sin(angle * 3 + seed) + 0.035 * Math.sin(angle * 7 - seed * 1.7);
+        1 +
+        0.05 * Math.sin(angle * 3 + seed) +
+        0.035 * Math.sin(angle * 7 - seed * 1.7);
       if (distance > radius * wobble) continue;
       let color = palette.base;
       if (distance > radius * 0.86) color = palette.dark;
@@ -180,14 +198,20 @@ function paintTerrainZone(
     }
   }
 
-  const mark = (ox: number, oy: number, w: number, h: number, color: string) => {
+  const mark = (
+    ox: number,
+    oy: number,
+    w: number,
+    h: number,
+    color: string,
+  ) => {
     if (Math.hypot(ox, oy) > radius * 0.88) return;
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(cx + ox), Math.round(cy + oy), w, h);
   };
 
   switch (zone.terrain) {
-    case 'fire': {
+    case "fire": {
       // Basalto volcánico: placas oscuras separadas por una red de grietas.
       // El naranja y el amarillo no van en el suelo; viven en las coronas de
       // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
@@ -199,7 +223,7 @@ function paintTerrainZone(
         plates.push({
           x: Math.cos(angle) * distance,
           y: Math.sin(angle) * distance,
-          color: random() < 0.55 ? palette.base : palette.light
+          color: random() < 0.55 ? palette.base : palette.light,
         });
       }
 
@@ -208,7 +232,9 @@ function paintTerrainZone(
           const distance = Math.hypot(ox, oy);
           const angle = Math.atan2(oy, ox);
           const wobble =
-            1 + 0.05 * Math.sin(angle * 3 + seed) + 0.035 * Math.sin(angle * 7 - seed * 1.7);
+            1 +
+            0.05 * Math.sin(angle * 3 + seed) +
+            0.035 * Math.sin(angle * 7 - seed * 1.7);
           if (distance > radius * wobble) continue;
 
           let nearest = 0;
@@ -260,7 +286,7 @@ function paintTerrainZone(
 
       break;
     }
-    case 'electric': {
+    case "electric": {
       // Hierba seca y pequeñas chispas.
       for (let i = 0; i < 34; i++) {
         mark(
@@ -268,7 +294,7 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.8,
           2,
           2 + Math.floor(random() * 3) * 2,
-          random() < 0.5 ? palette.accent2 : palette.light
+          random() < 0.5 ? palette.accent2 : palette.light,
         );
       }
       for (let i = 0; i < 12; i++) {
@@ -282,7 +308,7 @@ function paintTerrainZone(
       }
       break;
     }
-    case 'ice': {
+    case "ice": {
       // Grietas heladas y destellos.
       for (let i = 0; i < 16; i++) {
         let ox = (random() * 2 - 1) * radius * 0.75;
@@ -301,28 +327,34 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.82,
           2,
           2,
-          palette.accent
+          palette.accent,
         );
       }
       break;
     }
-    case 'poison': {
+    case "poison": {
       // Charcones de lodo y burbujas.
       for (let i = 0; i < 12; i++) {
         const ox = (random() * 2 - 1) * radius * 0.7;
         const oy = (random() * 2 - 1) * radius * 0.7;
         const size = 4 + Math.floor(random() * 3) * 2;
         mark(ox, oy, size, size, palette.dark);
-        mark(ox + 2, oy + 2, Math.max(2, size - 4), Math.max(2, size - 4), palette.accent2);
+        mark(
+          ox + 2,
+          oy + 2,
+          Math.max(2, size - 4),
+          Math.max(2, size - 4),
+          palette.accent2,
+        );
       }
       // Hierba oscura: briznas cortas y dispersas que asoman entre el lodo.
       for (let i = 0; i < 22; i++) {
         const ox = (random() * 2 - 1) * radius * 0.8;
         const oy = (random() * 2 - 1) * radius * 0.8;
         const blade = 2 + Math.floor(random() * 3) * 2;
-        mark(ox, oy, 1, blade, random() < 0.6 ? '#26301a' : '#3a4525');
+        mark(ox, oy, 1, blade, random() < 0.6 ? "#26301a" : "#3a4525");
         if (random() < 0.35) {
-          mark(ox + 2, oy + 2, 1, Math.max(2, blade - 2), '#1d2614');
+          mark(ox + 2, oy + 2, 1, Math.max(2, blade - 2), "#1d2614");
         }
       }
       for (let i = 0; i < 20; i++) {
@@ -331,12 +363,12 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.78,
           2,
           2,
-          palette.accent
+          palette.accent,
         );
       }
       break;
     }
-    case 'ghost': {
+    case "ghost": {
       // Motas y jirones de niebla.
       for (let i = 0; i < 26; i++) {
         mark(
@@ -344,7 +376,7 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.8,
           2,
           2,
-          random() < 0.5 ? palette.accent : palette.accent2
+          random() < 0.5 ? palette.accent : palette.accent2,
         );
       }
       for (let i = 0; i < 9; i++) {
@@ -356,7 +388,7 @@ function paintTerrainZone(
       }
       break;
     }
-    case 'fairy': {
+    case "fairy": {
       // Ramilletes de flores y destellos.
       for (let i = 0; i < 42; i++) {
         const ox = (random() * 2 - 1) * radius * 0.8;
@@ -369,7 +401,7 @@ function paintTerrainZone(
       }
       break;
     }
-    case 'desert': {
+    case "desert": {
       // Dunas onduladas, rizos de arena y piedras sueltas.
       for (let i = 0; i < 14; i++) {
         const oy = (random() * 2 - 1) * radius * 0.72;
@@ -382,7 +414,7 @@ function paintTerrainZone(
             oy + wave,
             4,
             2,
-            random() < 0.5 ? palette.light : palette.base
+            random() < 0.5 ? palette.light : palette.base,
           );
           ox += 4;
         }
@@ -393,7 +425,7 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.84,
           1,
           1,
-          random() < 0.55 ? palette.accent : palette.dark
+          random() < 0.55 ? palette.accent : palette.dark,
         );
       }
       for (let i = 0; i < 10; i++) {
@@ -412,12 +444,12 @@ function paintTerrainZone(
           (random() * 2 - 1) * radius * 0.8,
           2,
           2,
-          palette.accent2
+          palette.accent2,
         );
       }
       break;
     }
-    case 'tallGrass': {
+    case "tallGrass": {
       // Briznas verticales con punta clara, más densas que en el resto de
       // calveros: la mancha tiene que leerse como hierba crecida.
       for (let i = 0; i < 280; i++) {
@@ -427,7 +459,11 @@ function paintTerrainZone(
         const height = 6 + Math.floor(random() * 5) * 2;
         const lean = random() < 0.5 ? -2 : 2;
         const color =
-          random() < 0.45 ? palette.light : random() < 0.72 ? palette.base : palette.dark;
+          random() < 0.45
+            ? palette.light
+            : random() < 0.72
+              ? palette.base
+              : palette.dark;
         let bx = Math.round(cx + ox);
         const by = Math.round(cy + oy);
         for (let k = 0; k < height; k += 2) {
@@ -450,15 +486,19 @@ function paintTerrainZone(
  */
 function paintPond(
   ctx: CanvasRenderingContext2D,
-  pond: GroundPaintOptions['pond'],
+  pond: GroundPaintOptions["pond"],
   toPx: (world: number) => number,
-  scale: number
+  scale: number,
 ): void {
   const random = mulberry32(0x90ad);
   const cx = toPx(pond.x);
   const cy = toPx(pond.z);
 
-  const disc = (radiusWorld: number, colors: [string, string, string], edge: string) => {
+  const disc = (
+    radiusWorld: number,
+    colors: [string, string, string],
+    edge: string,
+  ) => {
     const radius = radiusWorld * scale;
     const step = 4;
     for (let oy = -radius; oy <= radius; oy += step) {
@@ -466,7 +506,9 @@ function paintPond(
         const distance = Math.hypot(ox, oy);
         const angle = Math.atan2(oy, ox);
         const wobble =
-          1 + 0.022 * Math.sin(angle * 5 + 1.7) + 0.018 * Math.sin(angle * 9 - 0.6);
+          1 +
+          0.022 * Math.sin(angle * 5 + 1.7) +
+          0.018 * Math.sin(angle * 9 - 0.6);
         if (distance > radius * wobble) continue;
         let color = colors[0];
         if (distance > radius * 0.9) color = edge;
@@ -478,8 +520,8 @@ function paintPond(
     }
   };
 
-  disc(pond.radius, ['#67bad8', '#7fd0e8', '#58aecb'], '#4f9fbc');
-  disc(pond.deepRadius, ['#2f7fa8', '#3a8fb9', '#276b92'], '#1f5e84');
+  disc(pond.radius, ["#67bad8", "#7fd0e8", "#58aecb"], "#4f9fbc");
+  disc(pond.deepRadius, ["#2f7fa8", "#3a8fb9", "#276b92"], "#1f5e84");
 
   // Ondas cortas y destellos, con más luz en las aguas someras.
   for (let i = 0; i < 160; i++) {
@@ -490,25 +532,30 @@ function paintPond(
     const oy = Math.sin(angle) * radius * scale;
     const length = 2 + Math.floor(random() * 4) * 2;
     if (deep) {
-      ctx.fillStyle = random() < 0.5 ? '#4b9cc4' : '#5fb4d6';
+      ctx.fillStyle = random() < 0.5 ? "#4b9cc4" : "#5fb4d6";
     } else {
-      ctx.fillStyle = random() < 0.5 ? '#9adff2' : '#86d2e9';
+      ctx.fillStyle = random() < 0.5 ? "#9adff2" : "#86d2e9";
     }
     ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), length, 2);
     if (random() < 0.4) {
-      ctx.fillRect(Math.floor(cx + ox + 2), Math.floor(cy + oy + 2), Math.max(2, length - 2), 2);
+      ctx.fillRect(
+        Math.floor(cx + ox + 2),
+        Math.floor(cy + oy + 2),
+        Math.max(2, length - 2),
+        2,
+      );
     }
   }
 
   for (let i = 0; i < 44; i++) {
     const angle = random() * Math.PI * 2;
     const radius = Math.sqrt(random()) * pond.radius * 0.9 * scale;
-    ctx.fillStyle = '#d9f5ff';
+    ctx.fillStyle = "#d9f5ff";
     ctx.fillRect(
       Math.floor(cx + Math.cos(angle) * radius),
       Math.floor(cy + Math.sin(angle) * radius),
       2,
-      2
+      2,
     );
   }
 }
@@ -517,14 +564,19 @@ function paintPond(
 function tracePath(
   ctx: CanvasRenderingContext2D,
   points: Array<[number, number]>,
-  toPx: (world: number) => number
+  toPx: (world: number) => number,
 ): void {
   ctx.beginPath();
   ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
   for (let i = 1; i < points.length - 1; i++) {
     const [cx, cy] = points[i];
     const [nx, ny] = points[i + 1];
-    ctx.quadraticCurveTo(toPx(cx), toPx(cy), toPx((cx + nx) / 2), toPx((cy + ny) / 2));
+    ctx.quadraticCurveTo(
+      toPx(cx),
+      toPx(cy),
+      toPx((cx + nx) / 2),
+      toPx((cy + ny) / 2),
+    );
   }
   const last = points[points.length - 1];
   ctx.lineTo(toPx(last[0]), toPx(last[1]));
@@ -542,7 +594,7 @@ interface RoadSample {
 function sampleRoadPath(
   points: Array<[number, number]>,
   toPx: (world: number) => number,
-  stepPx: number
+  stepPx: number,
 ): RoadSample[] {
   const pts = points.map(([x, z]) => ({ x: toPx(x), y: toPx(z) }));
   const samples: RoadSample[] = [];
@@ -554,7 +606,10 @@ function sampleRoadPath(
   let previous = pts[0];
   for (let i = 1; i < pts.length - 1; i++) {
     const control = pts[i];
-    const end = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
+    const end = {
+      x: (pts[i].x + pts[i + 1].x) / 2,
+      y: (pts[i].y + pts[i + 1].y) / 2,
+    };
     const span =
       Math.hypot(control.x - previous.x, control.y - previous.y) +
       Math.hypot(end.x - control.x, end.y - control.y);
@@ -566,7 +621,7 @@ function sampleRoadPath(
         inv * inv * previous.x + 2 * inv * t * control.x + t * t * end.x,
         inv * inv * previous.y + 2 * inv * t * control.y + t * t * end.y,
         2 * inv * (control.x - previous.x) + 2 * t * (end.x - control.x),
-        2 * inv * (control.y - previous.y) + 2 * t * (end.y - control.y)
+        2 * inv * (control.y - previous.y) + 2 * t * (end.y - control.y),
       );
     }
     previous = end;
@@ -581,7 +636,7 @@ function sampleRoadPath(
       previous.x + (last.x - previous.x) * t,
       previous.y + (last.y - previous.y) * t,
       last.x - previous.x,
-      last.y - previous.y
+      last.y - previous.y,
     );
   }
   return samples;
@@ -596,22 +651,22 @@ function paintAsphalt(
   path: Lane,
   toPx: (world: number) => number,
   scale: number,
-  seed: number
+  seed: number,
 ): void {
   if (path.asphalt === undefined) return;
   const width = path.asphalt * scale;
   const random = mulberry32(seed);
 
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
   // Borde claro: se pinta más ancho y el asfalto lo recorta por dentro.
-  ctx.strokeStyle = '#cfd6da';
+  ctx.strokeStyle = "#cfd6da";
   ctx.lineWidth = width + 0.26 * scale;
   tracePath(ctx, path.points, toPx);
   ctx.stroke();
 
-  ctx.strokeStyle = '#4c525b';
+  ctx.strokeStyle = "#4c525b";
   ctx.lineWidth = width;
   tracePath(ctx, path.points, toPx);
   ctx.stroke();
@@ -628,7 +683,7 @@ function paintAsphalt(
       else ctx.lineTo(x, y);
     });
     ctx.globalAlpha = 0.4;
-    ctx.strokeStyle = '#3d424a';
+    ctx.strokeStyle = "#3d424a";
     ctx.lineWidth = 0.36 * scale;
     ctx.stroke();
   }
@@ -639,41 +694,44 @@ function paintAsphalt(
     if (random() > 0.6) continue;
     const lateral = (random() * 2 - 1) * inset;
     ctx.globalAlpha = 0.35 + random() * 0.35;
-    ctx.fillStyle = random() > 0.5 ? '#5a616b' : '#42474f';
+    ctx.fillStyle = random() > 0.5 ? "#5a616b" : "#42474f";
     ctx.fillRect(
       Math.round(sample.x + sample.nx * lateral) - 1,
       Math.round(sample.y + sample.ny * lateral) - 1,
       3,
-      3
+      3,
     );
   }
   ctx.globalAlpha = 1;
 
   if (path.centerLine) {
-    ctx.strokeStyle = '#e7e0bd';
+    ctx.strokeStyle = "#e7e0bd";
     ctx.lineWidth = Math.max(1.5, 0.13 * scale);
-    ctx.lineCap = 'butt';
+    ctx.lineCap = "butt";
     ctx.setLineDash([1.05 * scale, 1.2 * scale]);
     tracePath(ctx, path.points, toPx);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.lineCap = 'round';
+    ctx.lineCap = "round";
   }
 }
 
 /** Césped del mapa con carriles, bases, lago y flores pintados de forma procedural. */
-export function createGroundCanvas(size: number, options: GroundPaintOptions): HTMLCanvasElement {
+export function createGroundCanvas(
+  size: number,
+  options: GroundPaintOptions,
+): HTMLCanvasElement {
   const { half, bases, pond, lanes, zones } = options;
   const random = mulberry32(0x5eed);
   const ctx = canvas2d(size);
   const toPx = (world: number) => ((world + half) / (half * 2)) * size;
   const scale = size / (half * 2);
 
-  ctx.fillStyle = '#699f4b';
+  ctx.fillStyle = "#699f4b";
   ctx.fillRect(0, 0, size, size);
 
   // Parches grandes de tono para romper la uniformidad.
-  const patchColors = ['#5d9442', '#74ab55', '#639a46', '#7fb35e', '#578c3e'];
+  const patchColors = ["#5d9442", "#74ab55", "#639a46", "#7fb35e", "#578c3e"];
   for (let i = 0; i < 46; i++) {
     ctx.fillStyle = patchColors[Math.floor(random() * patchColors.length)];
     ctx.globalAlpha = 0.35 + random() * 0.3;
@@ -688,7 +746,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   ctx.globalAlpha = 1;
 
   // Grano fino tipo pixel art: bloques de 4 px.
-  const grain = ['#5e9642', '#70a851', '#78b058', '#548c3b', '#6ba34d'];
+  const grain = ["#5e9642", "#70a851", "#78b058", "#548c3b", "#6ba34d"];
   const step = 4;
   for (let y = 0; y < size; y += step) {
     for (let x = 0; x < size; x += step) {
@@ -704,7 +762,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   for (let i = 0; i < 2400; i++) {
     const x = Math.floor(random() * size);
     const y = Math.floor(random() * size);
-    ctx.fillStyle = random() > 0.5 ? '#4f8a39' : '#86bd64';
+    ctx.fillStyle = random() > 0.5 ? "#4f8a39" : "#86bd64";
     ctx.globalAlpha = 0.6;
     ctx.fillRect(x, y, 2, random() > 0.6 ? 4 : 2);
     if (random() > 0.5) ctx.fillRect(x + 2, y + 1, 2, 2);
@@ -717,11 +775,15 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
     paintTerrainZone(ctx, zone, toPx, scale);
   }
 
-  const strokeLane = (points: Array<[number, number]>, width: number, color: string) => {
+  const strokeLane = (
+    points: Array<[number, number]>,
+    width: number,
+    color: string,
+  ) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = width * scale;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     tracePath(ctx, points, toPx);
     ctx.stroke();
   };
@@ -729,7 +791,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   // Los tres carriles de tierra. Se pintan antes que las bases y el lago para
   // que ambos tapen los extremos.
   for (const lane of lanes) {
-    strokeLane(lane.points, lane.width, '#b99a70');
+    strokeLane(lane.points, lane.width, "#b99a70");
   }
 
   // El carril central va asfaltado: la calzada queda dentro del carril y el
@@ -742,12 +804,12 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   for (const base of bases) {
     const bx = toPx(base.x);
     const by = toPx(base.z);
-    const ring = base.team === 'blue' ? '#5b8fd9' : '#d96b5b';
-    ctx.fillStyle = '#8d8577';
+    const ring = base.team === "blue" ? "#5b8fd9" : "#d96b5b";
+    ctx.fillStyle = "#8d8577";
     ctx.beginPath();
     ctx.arc(bx, by, base.radius * scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#a89f8e';
+    ctx.fillStyle = "#a89f8e";
     ctx.beginPath();
     ctx.arc(bx, by, (base.radius - 0.55) * scale, 0, Math.PI * 2);
     ctx.fill();
@@ -767,7 +829,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   }
 
   // Arena alrededor del lago y agua plana encima, a ras de suelo.
-  ctx.fillStyle = '#d8c79a';
+  ctx.fillStyle = "#d8c79a";
   ctx.beginPath();
   ctx.arc(toPx(pond.x), toPx(pond.z), pond.shoreRadius * scale, 0, Math.PI * 2);
   ctx.fill();
@@ -780,7 +842,7 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
       const radius = Math.sqrt(random()) * (base.radius - 0.4);
       const x = toPx(base.x + Math.cos(angle) * radius);
       const y = toPx(base.z + Math.sin(angle) * radius);
-      ctx.fillStyle = random() > 0.5 ? '#8f8677' : '#c2b9a6';
+      ctx.fillStyle = random() > 0.5 ? "#8f8677" : "#c2b9a6";
       ctx.globalAlpha = 0.7;
       ctx.fillRect(x, y, 3, 3);
     }
@@ -788,16 +850,21 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   ctx.globalAlpha = 1;
 
   // Flores: ramilletes solo en la jungla, lejos de carriles, bases y lago.
-  const petals = ['#f5f0df', '#f7d75c', '#ef7fa1', '#f2a65a', '#c9a0dc'];
+  const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
   for (let i = 0; i < 220; i++) {
     const x = (random() * 2 - 1) * (half - 1.5);
     const z = (random() * 2 - 1) * (half - 1.5);
-    if (terrainAt(x, z) !== 'jungle') continue;
+    if (terrainAt(x, z) !== "jungle") continue;
     const color = petals[Math.floor(random() * petals.length)];
     for (let j = 0; j < 4; j++) {
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.9;
-      ctx.fillRect(toPx(x) + (random() * 6 - 3), toPx(z) + (random() * 6 - 3), 3, 3);
+      ctx.fillRect(
+        toPx(x) + (random() * 6 - 3),
+        toPx(z) + (random() * 6 - 3),
+        3,
+        3,
+      );
     }
   }
   ctx.globalAlpha = 1;
@@ -814,13 +881,13 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
 export function createWaterCanvas(size = 96, variant = 0): HTMLCanvasElement {
   const random = mulberry32(variant === 0 ? 0x7e11 : 0x3ac5);
   const ctx = canvas2d(size);
-  ctx.fillStyle = variant === 0 ? '#6ec5e2' : '#63bcd9';
+  ctx.fillStyle = variant === 0 ? "#6ec5e2" : "#63bcd9";
   ctx.fillRect(0, 0, size, size);
 
   const bands =
     variant === 0
-      ? ['#a6e7f6', '#4aa6ca', '#c4f0fb', '#3189ad']
-      : ['#d6f7ff', '#3f9dc1', '#eafcff', '#2b7fa2'];
+      ? ["#a6e7f6", "#4aa6ca", "#c4f0fb", "#3189ad"]
+      : ["#d6f7ff", "#3f9dc1", "#eafcff", "#2b7fa2"];
 
   const stroke = (
     x: number,
@@ -828,7 +895,7 @@ export function createWaterCanvas(size = 96, variant = 0): HTMLCanvasElement {
     w: number,
     color: string,
     alpha: number,
-    width = 2.6
+    width = 2.6,
   ) => {
     ctx.strokeStyle = color;
     ctx.globalAlpha = alpha;
@@ -864,7 +931,7 @@ export function createWaterCanvas(size = 96, variant = 0): HTMLCanvasElement {
       const w = 6 + random() * 12;
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
-          stroke(x + dx * size, y + dy * size, w, '#f4feff', alpha, 1.7);
+          stroke(x + dx * size, y + dy * size, w, "#f4feff", alpha, 1.7);
         }
       }
     }
@@ -882,19 +949,26 @@ export function createWaterCanvas(size = 96, variant = 0): HTMLCanvasElement {
 export function createWaterMaskCanvas(size = 256): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.72, 'rgba(255, 255, 255, 0.96)');
-  gradient.addColorStop(0.86, 'rgba(255, 255, 255, 0.7)');
-  gradient.addColorStop(0.95, 'rgba(255, 255, 255, 0.24)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  const gradient = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center,
+  );
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+  gradient.addColorStop(0.72, "rgba(255, 255, 255, 0.96)");
+  gradient.addColorStop(0.86, "rgba(255, 255, 255, 0.7)");
+  gradient.addColorStop(0.95, "rgba(255, 255, 255, 0.24)");
+  gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
 
   // La orilla no es un círculo perfecto: se come el borde con bloques
   // deterministas para que la máscara tenga el mismo aire pixelado que el mapa.
   const random = mulberry32(0x51a7);
-  ctx.globalCompositeOperation = 'destination-out';
+  ctx.globalCompositeOperation = "destination-out";
   for (let i = 0; i < 260; i++) {
     const angle = random() * Math.PI * 2;
     const radius = center * (0.82 + random() * 0.18);
@@ -904,11 +978,11 @@ export function createWaterMaskCanvas(size = 256): HTMLCanvasElement {
       Math.floor(center + Math.cos(angle) * radius),
       Math.floor(center + Math.sin(angle) * radius),
       block,
-      block
+      block,
     );
   }
   ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = "source-over";
   return ctx.canvas;
 }
 
@@ -920,19 +994,19 @@ export function createWaterMaskCanvas(size = 256): HTMLCanvasElement {
 export function createDustCanvas(size = 64): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const random = mulberry32(0xd057);
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalCompositeOperation = "lighter";
   for (let i = 0; i < 16; i++) {
     const cx = size / 2 + (random() - 0.5) * size * 0.42;
     const cy = size / 2 + (random() - 0.5) * size * 0.42;
     const radius = size * (0.12 + random() * 0.2);
     const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    gradient.addColorStop(0, 'rgba(255, 248, 224, 0.55)');
-    gradient.addColorStop(0.5, 'rgba(255, 244, 210, 0.26)');
-    gradient.addColorStop(1, 'rgba(255, 240, 200, 0)');
+    gradient.addColorStop(0, "rgba(255, 248, 224, 0.55)");
+    gradient.addColorStop(0.5, "rgba(255, 244, 210, 0.26)");
+    gradient.addColorStop(1, "rgba(255, 240, 200, 0)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
   }
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = "source-over";
   return ctx.canvas;
 }
 
@@ -945,18 +1019,25 @@ export function createFrostCanvas(size = 64): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const center = size / 2;
 
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.28, 'rgba(238, 251, 255, 0.9)');
-  gradient.addColorStop(0.62, 'rgba(202, 238, 250, 0.35)');
-  gradient.addColorStop(1, 'rgba(180, 224, 245, 0)');
+  const gradient = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center,
+  );
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+  gradient.addColorStop(0.28, "rgba(238, 251, 255, 0.9)");
+  gradient.addColorStop(0.62, "rgba(202, 238, 250, 0.35)");
+  gradient.addColorStop(1, "rgba(180, 224, 245, 0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
 
   // Cuatro brazos casi transparentes: sugieren un cristal de hielo sin
   // recargar el copo cuando se ve a tamaño de juego.
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
   ctx.lineWidth = Math.max(1, size * 0.02);
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2;
@@ -964,11 +1045,11 @@ export function createFrostCanvas(size = 64): HTMLCanvasElement {
     ctx.moveTo(center, center);
     ctx.lineTo(
       center + Math.cos(angle) * center * 0.7,
-      center + Math.sin(angle) * center * 0.7
+      center + Math.sin(angle) * center * 0.7,
     );
     ctx.stroke();
   }
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = "source-over";
   return ctx.canvas;
 }
 
@@ -985,9 +1066,9 @@ export function createSmokeCanvas(size = 96): HTMLCanvasElement {
     const cy = size / 2 + (random() - 0.5) * size * 0.34;
     const radius = size * (0.18 + random() * 0.22);
     const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-    gradient.addColorStop(0.55, 'rgba(244, 250, 240, 0.11)');
-    gradient.addColorStop(1, 'rgba(232, 244, 228, 0)');
+    gradient.addColorStop(0, "rgba(255, 255, 255, 0.2)");
+    gradient.addColorStop(0.55, "rgba(244, 250, 240, 0.11)");
+    gradient.addColorStop(1, "rgba(232, 244, 228, 0)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
   }
@@ -1002,12 +1083,19 @@ export function createSmokeCanvas(size = 96): HTMLCanvasElement {
 export function createEmberCanvas(size = 48): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const center = size / 2;
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-  gradient.addColorStop(0, 'rgba(255, 255, 230, 1)');
-  gradient.addColorStop(0.22, 'rgba(255, 220, 90, 0.95)');
-  gradient.addColorStop(0.5, 'rgba(255, 140, 30, 0.55)');
-  gradient.addColorStop(0.78, 'rgba(255, 70, 10, 0.18)');
-  gradient.addColorStop(1, 'rgba(255, 40, 0, 0)');
+  const gradient = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center,
+  );
+  gradient.addColorStop(0, "rgba(255, 255, 230, 1)");
+  gradient.addColorStop(0.22, "rgba(255, 220, 90, 0.95)");
+  gradient.addColorStop(0.5, "rgba(255, 140, 30, 0.55)");
+  gradient.addColorStop(0.78, "rgba(255, 70, 10, 0.18)");
+  gradient.addColorStop(1, "rgba(255, 40, 0, 0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
   return ctx.canvas;
@@ -1022,23 +1110,38 @@ export function createWispCanvas(size = 64): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const center = size / 2;
 
-  const glow = ctx.createRadialGradient(center, center, 0, center, center, center * 0.92);
-  glow.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  glow.addColorStop(0.18, 'rgba(238, 242, 255, 0.92)');
-  glow.addColorStop(0.46, 'rgba(204, 212, 255, 0.42)');
-  glow.addColorStop(1, 'rgba(170, 180, 255, 0)');
+  const glow = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center * 0.92,
+  );
+  glow.addColorStop(0, "rgba(255, 255, 255, 1)");
+  glow.addColorStop(0.18, "rgba(238, 242, 255, 0.92)");
+  glow.addColorStop(0.46, "rgba(204, 212, 255, 0.42)");
+  glow.addColorStop(1, "rgba(170, 180, 255, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalCompositeOperation = "lighter";
   const plume = ctx.createLinearGradient(center, center, center, 0);
-  plume.addColorStop(0, 'rgba(224, 230, 255, 0.5)');
-  plume.addColorStop(1, 'rgba(198, 208, 255, 0)');
+  plume.addColorStop(0, "rgba(224, 230, 255, 0.5)");
+  plume.addColorStop(1, "rgba(198, 208, 255, 0)");
   ctx.fillStyle = plume;
   ctx.beginPath();
-  ctx.ellipse(center, center * 0.5, size * 0.12, center * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    center,
+    center * 0.5,
+    size * 0.12,
+    center * 0.5,
+    0,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = "source-over";
   return ctx.canvas;
 }
 
@@ -1051,18 +1154,25 @@ export function createPollenCanvas(size = 32): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const center = size / 2;
 
-  const glow = ctx.createRadialGradient(center, center, 0, center, center, center);
-  glow.addColorStop(0, 'rgba(255, 252, 230, 1)');
-  glow.addColorStop(0.28, 'rgba(255, 236, 180, 0.85)');
-  glow.addColorStop(0.62, 'rgba(255, 214, 130, 0.32)');
-  glow.addColorStop(1, 'rgba(255, 196, 110, 0)');
+  const glow = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center,
+  );
+  glow.addColorStop(0, "rgba(255, 252, 230, 1)");
+  glow.addColorStop(0.28, "rgba(255, 236, 180, 0.85)");
+  glow.addColorStop(0.62, "rgba(255, 214, 130, 0.32)");
+  glow.addColorStop(1, "rgba(255, 196, 110, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, size, size);
 
   // Cuatro brazos casi transparentes: sugieren un brillo de polen sin recargar
   // la mota cuando se ve a tamaño de juego.
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = 'rgba(255, 250, 230, 0.4)';
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = "rgba(255, 250, 230, 0.4)";
   ctx.lineWidth = Math.max(1, size * 0.03);
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
@@ -1070,21 +1180,28 @@ export function createPollenCanvas(size = 32): HTMLCanvasElement {
     ctx.moveTo(center, center);
     ctx.lineTo(
       center + Math.cos(angle) * center * 0.66,
-      center + Math.sin(angle) * center * 0.66
+      center + Math.sin(angle) * center * 0.66,
     );
     ctx.stroke();
   }
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = "source-over";
   return ctx.canvas;
 }
 
 export function createShadowCanvas(size = 128): HTMLCanvasElement {
   const ctx = canvas2d(size);
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.05, size / 2, size / 2, size / 2);
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
-  gradient.addColorStop(0.55, 'rgba(0, 0, 0, 0.38)');
-  gradient.addColorStop(0.85, 'rgba(0, 0, 0, 0.12)');
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  const gradient = ctx.createRadialGradient(
+    size / 2,
+    size / 2,
+    size * 0.05,
+    size / 2,
+    size / 2,
+    size / 2,
+  );
+  gradient.addColorStop(0, "rgba(0, 0, 0, 0.55)");
+  gradient.addColorStop(0.55, "rgba(0, 0, 0, 0.38)");
+  gradient.addColorStop(0.85, "rgba(0, 0, 0, 0.12)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
   return ctx.canvas;
@@ -1093,7 +1210,7 @@ export function createShadowCanvas(size = 128): HTMLCanvasElement {
 /** Resolución de la textura del anillo de jugador. */
 export const MARKER_TEXTURE_SIZE = 64;
 /** Radio exterior del anillo en píxeles de la textura; lo usa `marker.ts`. */
-export const MARKER_RING_OUTER = 18;
+export const MARKER_RING_OUTER = 16;
 
 /**
  * Anillo de jugador con flecha de rumbo. Se dibuja píxel a píxel (sin
@@ -1101,7 +1218,9 @@ export const MARKER_RING_OUTER = 18;
  * arriba en la imagen, que es el eje +Z del mundo, y su base nace dentro del
  * borde exterior del anillo para que ambos formen una sola silueta.
  */
-export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElement {
+export function createMarkerCanvas(
+  size = MARKER_TEXTURE_SIZE,
+): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const image = ctx.createImageData(size, size);
   const data = image.data;
@@ -1128,7 +1247,7 @@ export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElemen
     bx: number,
     by: number,
     tx: number,
-    ty: number
+    ty: number,
   ): boolean => {
     const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
     const d2 = (px - tx) * (by - ty) - (bx - tx) * (py - ty);
@@ -1140,10 +1259,11 @@ export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElemen
 
   // Base de la flecha apoyada en el anillo: el triángulo arranca desde dentro
   // del borde exterior y sale hacia arriba, sin quedar separado del círculo.
+  // La flecha es más estrecha que el anillo para que se lea fina y no una cuña.
   const arrow = {
     tip: [32, 1] as const,
-    left: [23.5, 16.5] as const,
-    right: [40.5, 16.5] as const
+    left: [27, 16.5] as const,
+    right: [37, 16.5] as const,
   };
 
   for (let y = 0; y < size; y++) {
@@ -1161,7 +1281,7 @@ export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElemen
         arrow.left[0] * scale,
         arrow.left[1] * scale,
         arrow.right[0] * scale,
-        arrow.right[1] * scale
+        arrow.right[1] * scale,
       );
 
       if (inRing || inArrow) put(x, y, accent);
@@ -1175,10 +1295,10 @@ export function createMarkerCanvas(size = MARKER_TEXTURE_SIZE): HTMLCanvasElemen
 export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
   const ctx = canvas2d(width, height);
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, '#4f9ad4');
-  gradient.addColorStop(0.45, '#8cc4e8');
-  gradient.addColorStop(0.72, '#cfe8f6');
-  gradient.addColorStop(1, '#f2f7ec');
+  gradient.addColorStop(0, "#4f9ad4");
+  gradient.addColorStop(0.45, "#8cc4e8");
+  gradient.addColorStop(0.72, "#cfe8f6");
+  gradient.addColorStop(1, "#f2f7ec");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
   return ctx.canvas;
@@ -1192,11 +1312,16 @@ export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
 export function createBarkCanvas(width = 16, height = 32): HTMLCanvasElement {
   const random = mulberry32(0xba4c);
   const ctx = canvas2d(width, height);
-  const palette = ['#3b2819', '#4d3420', '#5f4228', '#725031', '#89643d'];
+  const palette = ["#3b2819", "#4d3420", "#5f4228", "#725031", "#89643d"];
 
   const plot = (x: number, y: number, color: string) => {
     ctx.fillStyle = color;
-    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+    ctx.fillRect(
+      ((x % width) + width) % width,
+      ((y % height) + height) % height,
+      1,
+      1,
+    );
   };
 
   ctx.fillStyle = palette[2];
@@ -1234,23 +1359,32 @@ export function createBarkCanvas(width = 16, height = 32): HTMLCanvasElement {
 }
 
 const LEAF_PALETTES = [
-  ['#24491f', '#2f5f2c', '#3f7d3f', '#4d8f45', '#68a95a'],
-  ['#244d28', '#356b38', '#4d8f45', '#5aa04e', '#79b86b'],
-  ['#1f4527', '#2a5c30', '#3f7d3f', '#4a8a42', '#63a256']
+  ["#24491f", "#2f5f2c", "#3f7d3f", "#4d8f45", "#68a95a"],
+  ["#244d28", "#356b38", "#4d8f45", "#5aa04e", "#79b86b"],
+  ["#1f4527", "#2a5c30", "#3f7d3f", "#4a8a42", "#63a256"],
 ];
 
 /**
  * Follaje pixel art para las bolas de las copas. La textura es 64x32 (2:1)
  * porque es el aspect ratio de las coordenadas UV de una esfera.
  */
-export function createLeafCanvas(variant = 0, width = 64, height = 32): HTMLCanvasElement {
+export function createLeafCanvas(
+  variant = 0,
+  width = 64,
+  height = 32,
+): HTMLCanvasElement {
   const palette = LEAF_PALETTES[variant % LEAF_PALETTES.length];
   const random = mulberry32(0x1eaf + variant * 977);
   const ctx = canvas2d(width, height);
 
   const plot = (x: number, y: number, color: string) => {
     ctx.fillStyle = color;
-    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+    ctx.fillRect(
+      ((x % width) + width) % width,
+      ((y % height) + height) % height,
+      1,
+      1,
+    );
   };
 
   const clumps = (
@@ -1259,7 +1393,7 @@ export function createLeafCanvas(variant = 0, width = 64, height = 32): HTMLCanv
     rxMax: number,
     ryMin: number,
     ryMax: number,
-    color: string
+    color: string,
   ) => {
     for (let i = 0; i < count; i++) {
       const cx = Math.floor(random() * width);
@@ -1293,7 +1427,7 @@ export function createLeafCanvas(variant = 0, width = 64, height = 32): HTMLCanv
     plot(
       Math.floor(random() * width),
       Math.floor(random() * height),
-      palette[1 + Math.floor(random() * 4)]
+      palette[1 + Math.floor(random() * 4)],
     );
   }
 
@@ -1301,19 +1435,28 @@ export function createLeafCanvas(variant = 0, width = 64, height = 32): HTMLCanv
 }
 
 const ROCK_PALETTES = [
-  ['#3f454d', '#535a63', '#69717b', '#858d97', '#a2aab4'],
-  ['#4a474f', '#5e5b64', '#74717c', '#8e8b96', '#a8a5b0']
+  ["#3f454d", "#535a63", "#69717b", "#858d97", "#a2aab4"],
+  ["#4a474f", "#5e5b64", "#74717c", "#8e8b96", "#a8a5b0"],
 ];
 
 /** Piedra pixel art: parches angulosos, grietas y motas. Hoja 32x16. */
-export function createRockCanvas(variant = 0, width = 32, height = 16): HTMLCanvasElement {
+export function createRockCanvas(
+  variant = 0,
+  width = 32,
+  height = 16,
+): HTMLCanvasElement {
   const palette = ROCK_PALETTES[variant % ROCK_PALETTES.length];
   const random = mulberry32(0x70c4 + variant * 613);
   const ctx = canvas2d(width, height);
 
   const plot = (x: number, y: number, color: string) => {
     ctx.fillStyle = color;
-    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
+    ctx.fillRect(
+      ((x % width) + width) % width,
+      ((y % height) + height) % height,
+      1,
+      1,
+    );
   };
 
   ctx.fillStyle = palette[2];
@@ -1351,7 +1494,7 @@ export function createRockCanvas(variant = 0, width = 32, height = 16): HTMLCanv
     plot(
       Math.floor(random() * width),
       Math.floor(random() * height),
-      palette[random() < 0.6 ? 1 : random() < 0.7 ? 3 : 4]
+      palette[random() < 0.6 ? 1 : random() < 0.7 ? 3 : 4],
     );
   }
 
@@ -1361,17 +1504,17 @@ export function createRockCanvas(variant = 0, width = 32, height = 16): HTMLCanv
 export function createSoilCanvas(size = 128): HTMLCanvasElement {
   const random = mulberry32(99);
   const ctx = canvas2d(size);
-  ctx.fillStyle = '#8a6644';
+  ctx.fillStyle = "#8a6644";
   ctx.fillRect(0, 0, size, size);
   for (let i = 0; i < 2600; i++) {
     const x = random() * size;
     const y = random() * size;
-    ctx.fillStyle = random() > 0.5 ? '#7a5a3b' : '#9c7852';
+    ctx.fillStyle = random() > 0.5 ? "#7a5a3b" : "#9c7852";
     ctx.globalAlpha = 0.5 + random() * 0.5;
     ctx.fillRect(x, y, 1 + random() * 3, 1 + random() * 3);
   }
   for (let i = 0; i < 90; i++) {
-    ctx.fillStyle = '#6b4e33';
+    ctx.fillStyle = "#6b4e33";
     ctx.globalAlpha = 0.5;
     ctx.beginPath();
     ctx.arc(random() * size, random() * size, 1 + random() * 5, 0, Math.PI * 2);
