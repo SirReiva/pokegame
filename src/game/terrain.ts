@@ -135,6 +135,52 @@ export const LANES: Lane[] = [
   }
 ];
 
+export interface MountainRange {
+  /** Ancho total de la cresta; el jugador no puede cruzarla. */
+  width: number;
+  points: Array<[number, number]>;
+}
+
+/**
+ * Cordilleras: barreras intransitables que separan regiones del mapa. Cada una
+ * es una polilínea (igual que los carriles); el trazado suavizado coincide con
+ * el que pinta el suelo y con la fila de picos 3D. No son terrenos: no tienen
+ * tipo ni modifican la velocidad, solo bloquean el paso (vía colliders).
+ *
+ * Se mantienen apartadas de carriles, bases, lago, calveros y del spawn para no
+ * cortar el recorrido del mapa; los huecos en sus extremos permiten rodearlas.
+ */
+export const MOUNTAINS: MountainRange[] = [
+  {
+    // Sierra suroeste: separa el carril central de la jungla interior.
+    width: 2.2,
+    points: [
+      [-9.5, 3.5],
+      [-7.5, 1.5],
+      [-5.5, -0.5]
+    ]
+  },
+  {
+    // Sierra este: separa la jungla del lago de la colada volcánica.
+    width: 2.2,
+    points: [
+      [6.0, 2.0],
+      [8.5, 2.0],
+      [11.0, 2.0]
+    ]
+  },
+  {
+    // Sierra norte: rompe la llanura del norte, entre la base azul y el claro
+    // feérico.
+    width: 2.2,
+    points: [
+      [-6.0, 11.0],
+      [-3.5, 11.0],
+      [-1.0, 11.0]
+    ]
+  }
+];
+
 export interface TerrainZone {
   terrain: TerrainId;
   x: number;
@@ -183,7 +229,7 @@ function distanceToSegment(
  * entre cada punto y el punto medio del siguiente, igual que en el canvas. Así
  * el terreno coincide con el borde visible del carril y del asfalto.
  */
-function distanceToLane(x: number, z: number, points: Array<[number, number]>): number {
+function distanceToPath(x: number, z: number, points: Array<[number, number]>): number {
   if (points.length === 1) return Math.hypot(x - points[0][0], z - points[0][1]);
   const steps = 8;
   let best = Infinity;
@@ -210,7 +256,7 @@ function distanceToLane(x: number, z: number, points: Array<[number, number]>): 
 }
 
 function onLane(x: number, z: number): boolean {
-  return LANES.some((lane) => distanceToLane(x, z, lane.points) <= lane.width / 2 + 0.15);
+  return LANES.some((lane) => distanceToPath(x, z, lane.points) <= lane.width / 2 + 0.15);
 }
 
 /**
@@ -219,8 +265,13 @@ function onLane(x: number, z: number): boolean {
  */
 function onAsphalt(x: number, z: number): boolean {
   return LANES.some(
-    (lane) => lane.asphalt !== undefined && distanceToLane(x, z, lane.points) <= lane.asphalt / 2
+    (lane) => lane.asphalt !== undefined && distanceToPath(x, z, lane.points) <= lane.asphalt / 2
   );
+}
+
+/** Verdadero si la posición cae dentro de una cordillera intransitable. */
+export function onMountain(x: number, z: number): boolean {
+  return MOUNTAINS.some((range) => distanceToPath(x, z, range.points) <= range.width / 2);
 }
 
 /** Terreno bajo una posición del mundo. */

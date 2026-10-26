@@ -1,6 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
-import { BASES, LANES, POND, TERRAIN_ZONES, terrainAt } from './terrain';
+import { BASES, LANES, MOUNTAINS, POND, TERRAIN_ZONES, onMountain, terrainAt } from './terrain';
 import {
   createBarkCanvas,
   createDustCanvas,
@@ -8,6 +8,7 @@ import {
   createFrostCanvas,
   createGroundCanvas,
   createLeafCanvas,
+  createMountainRockCanvas,
   createPollenCanvas,
   createRockCanvas,
   createShadowCanvas,
@@ -233,6 +234,13 @@ export function buildWorld(app: pc.Application): World {
     })
   );
 
+  // Piedra marrón de las cordilleras: tile repetible que envuelve los picos.
+  const mountainRockTexture = textureFromCanvas(device, createMountainRockCanvas(), {
+    name: 'mountain-rock',
+    repeat: true,
+    mipmaps: true
+  });
+
   // --- Ajustes de escena -----------------------------------------------------
   app.scene.ambientLight = new pc.Color(0.46, 0.5, 0.55);
   const fog = app.scene.fog;
@@ -422,6 +430,7 @@ export function buildWorld(app: pc.Application): World {
       const x = (rand() * 2 - 1) * (HALF - 1.4);
       const z = (rand() * 2 - 1) * (HALF - 1.4);
       if (terrainAt(x, z) !== 'jungle') continue;
+      if (onMountain(x, z)) continue;
       if (
         TERRAIN_ZONES.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.radius + 1.1)
       ) {
@@ -492,6 +501,245 @@ export function buildWorld(app: pc.Application): World {
     });
     created.push(rock);
     colliders.push({ type: 'circle', x, z, radius: size * 0.8 });
+  });
+
+  // --- Cordilleras ----------------------------------------------------------
+  // Picos de piedra que se alzan a lo largo de cada cresta. Cada pico es una
+  // malla facetada con color por vértice: gris rocoso en la base y nieve en la
+  // cima. Se reparten a lo largo del trazado suavizado y se solapan para leerse
+  // como una sierra continua. Cada tramo añade además un collider de tipo
+  // `segment`, de modo que la cresta entera es intransitable.
+  const mountainMaterial = standard({
+    diffuse: '#ffffff',
+    diffuseMap: mountainRockTexture,
+    tiling: [3, 2],
+    specular: '#2b1e16',
+    gloss: 0.12,
+    cull: pc.CULLFACE_NONE
+  });
+  mountainMaterial.diffuseVertexColor = true;
+  mountainMaterial.update();
+  materials.push(mountainMaterial);
+
+  const MOUNTAIN_DARK: [number, number, number] = [0.55, 0.47, 0.38];
+  const MOUNTAIN_LIGHT: [number, number, number] = [0.92, 0.86, 0.78];
+
+  const buildMountainPeak = (seed: number): pc.Mesh => {
+    const rand = random(seed);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    const sides = 6 + Math.floor(rand() * 3);
+    const bands = 4;
+    const height = 1.8 + rand() * 0.7;
+    const baseRadius = 0.7 + rand() * 0.3;
+    const tipRadius = baseRadius * (0.12 + rand() * 0.08);
+    const phase = rand() * Math.PI * 2;
+
+    const push = (
+      x: number,
+      y: number,
+      z: number,
+      nx: number,
+      ny: number,
+      nz: number,
+      color: [number, number, number],
+      u: number,
+      v: number
+    ) => {
+      positions.push(x, y, z);
+      normals.push(nx, ny, nz);
+      colors.push(color[0], color[1], color[2], 1);
+      uvs.push(u, v);
+    };
+
+    const colorAt = (t: number): [number, number, number] => {
+      // Sombreado suave de la base a la cima: más oscuro abajo y más claro
+      // arriba. La textura de piedra aporta el detalle; el color por vértice
+      // solo da volumen.
+      const jitter = (rand() - 0.5) * 0.1;
+      const s = Math.min(1, Math.max(0, t + jitter));
+      return [
+        MOUNTAIN_DARK[0] + (MOUNTAIN_LIGHT[0] - MOUNTAIN_DARK[0]) * s,
+        MOUNTAIN_DARK[1] + (MOUNTAIN_LIGHT[1] - MOUNTAIN_DARK[1]) * s,
+        MOUNTAIN_DARK[2] + (MOUNTAIN_LIGHT[2] - MOUNTAIN_DARK[2]) * s
+      ];
+    };
+
+    // Anillos de base a cima: la cima se queda roma (nunca llega a cero) y se
+    // tapa con un abanico, así que el pico no acaba en aguja.
+    const rings: Array<Array<[number, number, number]>> = [];
+    for (let b = 0; b <= bands; b++) {
+      const t = b / bands;
+      const radius = tipRadius + (baseRadius - tipRadius) * Math.pow(1 - t, 0.9);
+      const ring: Array<[number, number, number]> = [];
+      for (let s = 0; s < sides; s++) {
+        const angle = phase + (s / sides) * Math.PI * 2;
+        const wobble = 0.86 + rand() * 0.26;
+        ring.push([
+          Math.cos(angle) * radius * wobble,
+          height * t,
+          Math.sin(angle) * radius * wobble
+        ]);
+      }
+      rings.push(ring);
+    }
+
+    for (let b = 0; b < bands; b++) {
+      for (let s = 0; s < sides; s++) {
+        const next = (s + 1) % sides;
+        const a = rings[b][s];
+        const bpt = rings[b][next];
+        const c = rings[b + 1][next];
+        const d = rings[b + 1][s];
+
+        const ux = bpt[0] - a[0];
+        const uy = bpt[1] - a[1];
+        const uz = bpt[2] - a[2];
+        const vx = d[0] - a[0];
+        const vy = d[1] - a[1];
+        const vz = d[2] - a[2];
+        let nx = uy * vz - uz * vy;
+        let ny = uz * vx - ux * vz;
+        let nz = ux * vy - uy * vx;
+        const cx = (a[0] + bpt[0] + c[0] + d[0]) / 4;
+        const cz = (a[2] + bpt[2] + c[2] + d[2]) / 4;
+        if (nx * cx + nz * cz < 0) {
+          nx = -nx;
+          ny = -ny;
+          nz = -nz;
+        }
+        const normalLength = Math.hypot(nx, ny, nz) || 1;
+        nx /= normalLength;
+        ny /= normalLength;
+        nz /= normalLength;
+
+        const start = positions.length / 3;
+        const u0 = s / sides;
+        const u1 = next / sides;
+        const v0 = b / bands;
+        const v1 = (b + 1) / bands;
+        push(a[0], a[1], a[2], nx, ny, nz, colorAt(b / bands), u0, v0);
+        push(bpt[0], bpt[1], bpt[2], nx, ny, nz, colorAt(b / bands), u1, v0);
+        push(c[0], c[1], c[2], nx, ny, nz, colorAt((b + 1) / bands), u1, v1);
+        push(d[0], d[1], d[2], nx, ny, nz, colorAt((b + 1) / bands), u0, v1);
+        indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+      }
+    }
+
+    // Tapa de la cima: abanico plano que cierra el hueco romo del pico.
+    const topRing = rings[bands];
+    const topColor = colorAt(1);
+    for (let s = 0; s < sides; s++) {
+      const next = (s + 1) % sides;
+      const a = topRing[s];
+      const bpt = topRing[next];
+      const start = positions.length / 3;
+      push(0, height, 0, 0, 1, 0, topColor, 0.5, 1);
+      push(a[0], a[1], a[2], 0, 1, 0, topColor, s / sides, 1);
+      push(bpt[0], bpt[1], bpt[2], 0, 1, 0, topColor, next / sides, 1);
+      indices.push(start, start + 1, start + 2);
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setColors(colors);
+    mesh.setUvs(0, uvs);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const mountainPeakMeshes = [0, 1, 2, 3].map((variant) =>
+    buildMountainPeak(0x3a91 + variant * 4133)
+  );
+
+  /** Muestrea el trazado suavizado de una cresta (igual que `terrain.ts`). */
+  const sampleRange = (
+    points: Array<[number, number]>,
+    step: number
+  ): Array<[number, number]> => {
+    const out: Array<[number, number]> = [];
+    let previous = points[0];
+    out.push([previous[0], previous[1]]);
+    for (let i = 1; i < points.length - 1; i++) {
+      const control = points[i];
+      const next = points[i + 1];
+      const end: [number, number] = [(control[0] + next[0]) / 2, (control[1] + next[1]) / 2];
+      const span =
+        Math.hypot(control[0] - previous[0], control[1] - previous[1]) +
+        Math.hypot(end[0] - control[0], end[1] - control[1]);
+      const steps = Math.max(2, Math.ceil(span / step));
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        const inv = 1 - t;
+        out.push([
+          inv * inv * previous[0] + 2 * inv * t * control[0] + t * t * end[0],
+          inv * inv * previous[1] + 2 * inv * t * control[1] + t * t * end[1]
+        ]);
+      }
+      previous = end;
+    }
+    const last = points[points.length - 1];
+    const span = Math.hypot(last[0] - previous[0], last[1] - previous[1]);
+    const steps = Math.max(2, Math.ceil(span / step));
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      out.push([
+        previous[0] + (last[0] - previous[0]) * t,
+        previous[1] + (last[1] - previous[1]) * t
+      ]);
+    }
+    return out;
+  };
+
+  MOUNTAINS.forEach((range, rangeIndex) => {
+    const rand = random(0x7d31 + rangeIndex * 7919);
+    const samples = sampleRange(range.points, 0.8);
+
+    // Colliders de segmento: sellan toda la cresta para que no se pueda cruzar.
+    for (let i = 1; i < samples.length; i++) {
+      const a = samples[i - 1];
+      const b = samples[i];
+      colliders.push({
+        type: 'segment',
+        ax: a[0],
+        az: a[1],
+        bx: b[0],
+        bz: b[1],
+        radius: range.width / 2
+      });
+    }
+
+    // Picos: uno por muestra, con escalas y yaws variados. Se juntan lo
+    // bastante para que sus bases se solapen y la sierra quede continua, sin
+    // huecos que dejen ver la hierba entre picos.
+    samples.forEach(([x, z], i) => {
+      const jitterX = (rand() - 0.5) * 0.2;
+      const jitterZ = (rand() - 0.5) * 0.2;
+      const scale = 1.1 + rand() * 0.8;
+
+      const peak = new pc.Entity(`mountain-${rangeIndex}-${i}`);
+      peak.setLocalPosition(x + jitterX, 0.02, z + jitterZ);
+      peak.setLocalEulerAngles(0, rand() * 360, 0);
+      peak.setLocalScale(scale, scale * (0.9 + rand() * 0.45), scale);
+      peak.addComponent('render');
+      peak.render!.castShadows = true;
+      peak.render!.receiveShadows = true;
+      const instance = new pc.MeshInstance(
+        mountainPeakMeshes[i % mountainPeakMeshes.length],
+        mountainMaterial
+      );
+      instance.castShadow = true;
+      instance.receiveShadow = true;
+      peak.render!.meshInstances = [instance];
+      app.root.addChild(peak);
+      created.push(peak);
+    });
   });
 
   // Cactus del desierto: tronco y brazos con primitivas, repartidos dentro del
@@ -3008,6 +3256,7 @@ export function buildWorld(app: pc.Application): World {
       pollenTexture.destroy();
       skyTexture.destroy();
       barkTexture.destroy();
+      mountainRockTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
       for (const texture of rockTextures) texture.destroy();
       for (const mesh of grassClusterMeshes) mesh.destroy();
@@ -3018,6 +3267,7 @@ export function buildWorld(app: pc.Application): World {
       for (const mesh of iceClusterMeshes) mesh.destroy();
       for (const mesh of basaltMeshes) mesh.destroy();
       for (const mesh of ghostTreeMeshes) mesh.destroy();
+      for (const mesh of mountainPeakMeshes) mesh.destroy();
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
     }

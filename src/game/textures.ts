@@ -1,5 +1,6 @@
 import * as pc from "playcanvas";
 import {
+  onMountain,
   terrainAt,
   type BaseZone,
   type Lane,
@@ -849,12 +850,14 @@ export function createGroundCanvas(
   }
   ctx.globalAlpha = 1;
 
-  // Flores: ramilletes solo en la jungla, lejos de carriles, bases y lago.
+  // Flores: ramilletes solo en la jungla, lejos de carriles, bases, lago y
+  // cordilleras.
   const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
   for (let i = 0; i < 220; i++) {
     const x = (random() * 2 - 1) * (half - 1.5);
     const z = (random() * 2 - 1) * (half - 1.5);
     if (terrainAt(x, z) !== "jungle") continue;
+    if (onMountain(x, z)) continue;
     const color = petals[Math.floor(random() * petals.length)];
     for (let j = 0; j < 4; j++) {
       ctx.fillStyle = color;
@@ -1495,6 +1498,64 @@ export function createRockCanvas(
       Math.floor(random() * width),
       Math.floor(random() * height),
       palette[random() < 0.6 ? 1 : random() < 0.7 ? 3 : 4],
+    );
+  }
+
+  return ctx.canvas;
+}
+
+/**
+ * Piedra marrón para las cordilleras: parches angulosos, grietas y motas, con
+ * envoltura en los bordes para que el tile sea continuo al repetirse sobre los
+ * picos. Misma técnica pixel art que las rocas pequeñas, pero en tonos tierra.
+ */
+export function createMountainRockCanvas(size = 128): HTMLCanvasElement {
+  const palette = ["#4a3424", "#5f452f", "#7a5a3e", "#997652", "#b89572"];
+  const random = mulberry32(0x7b3a);
+  const ctx = canvas2d(size);
+
+  const plot = (x: number, y: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(((x % size) + size) % size, ((y % size) + size) % size, 1, 1);
+  };
+
+  ctx.fillStyle = palette[1];
+  ctx.fillRect(0, 0, size, size);
+
+  // Parches angulosos de piedra, con bordes rectos y tonos variados.
+  for (let i = 0; i < 260; i++) {
+    const x = Math.floor(random() * size);
+    const y = Math.floor(random() * size);
+    const w = 4 + Math.floor(random() * 13);
+    const h = 3 + Math.floor(random() * 9);
+    const color =
+      palette[random() < 0.4 ? 0 : random() < 0.5 ? 2 : random() < 0.5 ? 3 : 4];
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        if (random() > 0.32) plot(x + dx, y + dy, color);
+      }
+    }
+  }
+
+  // Grietas: recorridos de un píxel con alguna luz al lado.
+  for (let i = 0; i < 12; i++) {
+    let x = Math.floor(random() * size);
+    let y = Math.floor(random() * size);
+    const length = 14 + Math.floor(random() * 22);
+    for (let k = 0; k < length; k++) {
+      plot(x, y, palette[0]);
+      if (random() < 0.35) plot(x + 1, y, palette[4]);
+      x += random() < 0.7 ? 1 : -1;
+      if (random() < 0.4) y += 1;
+    }
+  }
+
+  // Motas y vetas claras.
+  for (let i = 0; i < 900; i++) {
+    plot(
+      Math.floor(random() * size),
+      Math.floor(random() * size),
+      palette[random() < 0.55 ? 1 : random() < 0.7 ? 3 : 4],
     );
   }
 
