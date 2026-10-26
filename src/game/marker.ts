@@ -20,6 +20,7 @@ export class PlayerMarker {
   private readonly root: pc.Entity;
   private readonly mesh: pc.Mesh;
   private readonly material: pc.StandardMaterial;
+  private readonly occlusionMaterial: pc.StandardMaterial;
   private readonly texture: pc.Texture;
   private height: number;
 
@@ -56,6 +57,29 @@ export class PlayerMarker {
     this.material.cull = pc.CULLFACE_NONE;
     this.material.update();
 
+    // Segunda pasada con la profundidad invertida: igual que la silueta del
+    // cuerpo, pinta el anillo y la flecha solo donde un obstáculo los tapa,
+    // para que el jugador no pierda su referencia al esconderse tras un árbol.
+    this.occlusionMaterial = new pc.StandardMaterial();
+    this.occlusionMaterial.name = 'player-marker-occlusion';
+    this.occlusionMaterial.useLighting = false;
+    this.occlusionMaterial.useSkybox = false;
+    this.occlusionMaterial.useFog = false;
+    this.occlusionMaterial.diffuse = new pc.Color(0, 0, 0);
+    this.occlusionMaterial.emissive = new pc.Color(1, 1, 1);
+    this.occlusionMaterial.emissiveIntensity = 1;
+    this.occlusionMaterial.emissiveMap = this.texture;
+    this.occlusionMaterial.opacityMap = this.texture;
+    this.occlusionMaterial.opacityMapChannel = 'a';
+    this.occlusionMaterial.alphaTest = 0.5;
+    this.occlusionMaterial.blendType = pc.BLEND_NORMAL;
+    this.occlusionMaterial.opacity = opacity;
+    this.occlusionMaterial.depthWrite = false;
+    this.occlusionMaterial.depthTest = true;
+    this.occlusionMaterial.depthFunc = pc.FUNC_GREATER;
+    this.occlusionMaterial.cull = pc.CULLFACE_NONE;
+    this.occlusionMaterial.update();
+
     // Quad horizontal en XZ. Las UVs están alineadas con el mundo: V=1 cae en
     // +Z, que es hacia donde apunta la flecha dibujada en la textura.
     this.mesh = new pc.Mesh(device);
@@ -74,8 +98,15 @@ export class PlayerMarker {
     const render = this.root.render!;
     render.castShadows = false;
     render.receiveShadows = false;
-    render.meshInstances = [new pc.MeshInstance(this.mesh, this.material)];
-    render.meshInstances[0].drawOrder = 3;
+    const normal = new pc.MeshInstance(this.mesh, this.material);
+    normal.castShadow = false;
+    normal.receiveShadow = false;
+    normal.drawOrder = 3;
+    const occlusion = new pc.MeshInstance(this.mesh, this.occlusionMaterial);
+    occlusion.castShadow = false;
+    occlusion.receiveShadow = false;
+    occlusion.drawOrder = 4;
+    render.meshInstances = [normal, occlusion];
     // `diameter` es el diámetro visible del anillo; el quad es mayor para que
     // la flecha que sale del círculo tenga sitio en la textura.
     const quad = (diameter * MARKER_TEXTURE_SIZE) / (MARKER_RING_OUTER * 2);
@@ -106,6 +137,7 @@ export class PlayerMarker {
     this.root.destroy();
     this.mesh.destroy();
     this.material.destroy();
+    this.occlusionMaterial.destroy();
     this.texture.destroy();
   }
 }

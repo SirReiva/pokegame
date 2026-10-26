@@ -9,6 +9,11 @@ export interface SpriteAsset {
 
 const ANIMATIONS: AnimationName[] = ['idle', 'walk'];
 
+/** Opacidad máxima de la silueta que se ve a través de los árboles. */
+const SILHOUETTE_OPACITY = 0.72;
+/** Por encima de las partículas y del agua, para que no la tapen. */
+const SILHOUETTE_DRAW_ORDER = 4;
+
 export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -70,6 +75,8 @@ interface BillboardOptions {
   pixelScale: number;
   verticalStretch: number;
   alphaTest: number;
+  /** Pinta la silueta del actor cuando un obstáculo lo tapa desde la cámara. */
+  silhouette?: boolean;
 }
 
 function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.StandardMaterial {
@@ -94,12 +101,47 @@ function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.Standa
   return material;
 }
 
+/**
+ * Silueta del sprite: misma malla y mismo recorte alfa, pero sin iluminación,
+ * sin niebla y con la prueba de profundidad invertida (`FUNC_GREATER`). Así
+ * solo se pinta en los píxeles donde ya hay algo más cerca que el Pokémon: el
+ * árbol que lo tapa. Donde el sprite se ve, la profundidad es idéntica y la
+ * silueta se descarta, de modo que el Pokémon nunca queda tapado por su propio
+ * contorno. Es oclusión por píxel, sin raycasts ni comprobaciones por frame.
+ */
+function createSilhouetteMaterial(
+  texture: pc.Texture,
+  alphaTest: number
+): pc.StandardMaterial {
+  const material = new pc.StandardMaterial();
+  material.name = `silhouette-${texture.name}`;
+  material.useLighting = false;
+  material.useSkybox = false;
+  material.useFog = false;
+  material.diffuse = new pc.Color(0, 0, 0);
+  material.emissive = new pc.Color(1, 0.95, 0.82);
+  material.emissiveIntensity = 1;
+  material.opacityMap = texture;
+  material.opacityMapChannel = 'a';
+  material.opacity = SILHOUETTE_OPACITY;
+  material.alphaTest = alphaTest;
+  material.blendType = pc.BLEND_NORMAL;
+  material.depthWrite = false;
+  material.depthTest = true;
+  material.depthFunc = pc.FUNC_GREATER;
+  material.cull = pc.CULLFACE_NONE;
+  material.update();
+  return material;
+}
+
 interface FrameLayer {
   entity: pc.Entity;
   material: pc.StandardMaterial;
   mesh: pc.Mesh;
   animation: SpriteAnimation;
   refAnchorY: number;
+  silhouette: pc.MeshInstance;
+  silhouetteMaterial: pc.StandardMaterial;
 }
 
 /**
@@ -166,15 +208,36 @@ export class SpriteBillboard {
     mesh.update();
 
     const material = createSpriteMaterial(asset.textures[name], this.options.alphaTest);
+    const silhouetteMaterial = createSilhouetteMaterial(
+      asset.textures[name],
+      this.options.alphaTest
+    );
     const entity = new pc.Entity(`sprite-${name}`);
     entity.addComponent('render');
     this.pivot.addChild(entity);
     const render = entity.render!;
     render.castShadows = false;
     render.receiveShadows = false;
-    render.meshInstances = [new pc.MeshInstance(mesh, material)];
+    const instance = new pc.MeshInstance(mesh, material);
+    const silhouette = new pc.MeshInstance(mesh, silhouetteMaterial);
+    silhouette.castShadow = false;
+    silhouette.receiveShadow = false;
+    silhouette.drawOrder = SILHOUETTE_DRAW_ORDER;
+    // La silueta se descarta sola donde el sprite está a la vista; basta con
+    // tenerla activa. Solo el jugador la lleva, para no llenar la base de
+    // contornos pálidos cuando los NPC quedan detrás de un árbol.
+    silhouette.visible = this.options.silhouette === true;
+    render.meshInstances = [instance, silhouette];
 
-    return { entity, material, mesh, animation, refAnchorY };
+    return {
+      entity,
+      material,
+      mesh,
+      animation,
+      refAnchorY,
+      silhouette,
+      silhouetteMaterial
+    };
   }
 
   get currentAnimation(): AnimationName {
@@ -283,10 +346,16 @@ export class SpriteBillboard {
     layer.material.opacityMapTiling = new pc.Vec2(du, dv);
     layer.material.opacityMapOffset = new pc.Vec2(u0, v0);
 
+    // La silueta reutiliza la misma celda de la hoja para que su recorte
+    // coincida píxel a píxel con el sprite visible.
+    layer.silhouetteMaterial.opacityMapTiling = new pc.Vec2(du, dv);
+    layer.silhouetteMaterial.opacityMapOffset = new pc.Vec2(u0, v0);
+
     // PlayCanvas solo recalcula uniforms y variantes de shader al llamar a
     // update(). Sin esta llamada, la celda visible se queda congelada en la
     // primera que se aplicó: la animación no avanza y la dirección nunca cambia.
     layer.material.update();
+    if (layer.silhouette.visible) layer.silhouetteMaterial.update();
   }
 
   update(dt: number, cameraPosition: pc.Vec3): void {
@@ -324,6 +393,7 @@ export class SpriteBillboard {
     for (const layer of this.layers.values()) {
       layer.mesh.destroy();
       layer.material.destroy();
+      layer.silhouetteMaterial.destroy();
     }
     this.layers.clear();
   }

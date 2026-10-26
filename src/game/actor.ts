@@ -61,7 +61,8 @@ export class Actor {
     this.billboard = new SpriteBillboard(app, asset, {
       pixelScale: CONFIG.sprite.pixelScale,
       verticalStretch: CONFIG.sprite.verticalStretch,
-      alphaTest: CONFIG.sprite.alphaTest
+      alphaTest: CONFIG.sprite.alphaTest,
+      silhouette: withMarker
     });
     this.billboard.setFacing(facing);
 
