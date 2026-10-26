@@ -49,6 +49,8 @@ La pantalla inicial permite elegir entre **Bulbasaur, Charmander, Squirtle, Pika
 - **8 direcciones según el rumbo**: cada actor conserva una dirección propia (`facing`). La fila visible se calcula con el ángulo entre ese rumbo y la cámara, usando el eje “derecha de pantalla”. Al orbitar, el sprite cambia de vista de forma continua sin dejar de mirar hacia donde mira de verdad.
 - **Rumbos independientes**: el jugador empieza mirando al este y solo cambia de rumbo al moverse. Los NPC tienen una orientación de reposo propia y únicamente giran hacia el jugador cuando lo tienen cerca.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
+- **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Bulbasaur 4,2 u/s, Charmander 5,4, Squirtle 4,8, Pikachu 6,9, Eevee 6,1, Lucario 6,5). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD muestra la velocidad actual y la máxima sobre el terreno actual (ya con el multiplicador aplicado), y el selector indica la base en cada tarjeta.
+- **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
 - **Anillo de rumbo**: el jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
@@ -82,6 +84,19 @@ Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con
 La **hierba alta** es el único calvero con volumen propio: además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de `TERRAIN_ZONES` (los de tipo `tallGrass`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
 
 Las **aguas profundas** (`POND.deepRadius`) actúan como collider circular solo para Pokémon que no sean de tipo Agua: el resto puede entrar en las someras y rodear el pozo, pero no cruzarlo. El HUD lo avisa cuando estás en aguas someras con un Pokémon no acuático. El HUD de telemetría muestra el nombre del terreno y una insignia con su tipo.
+
+### Velocidad según el terreno
+
+Cada terreno modula la velocidad del Pokémon que lo atraviesa. La relación se resuelve en `src/game/terrainSpeed.ts` con la tabla de tipos de Pokémon, usando el tipo del terreno como atacante:
+
+| Relación | Multiplicador |
+| --- | --- |
+| Terreno propio (el Pokémon comparte el tipo del terreno) | ×1,18 |
+| Terreno hostil (el tipo del terreno es súper eficaz contra el Pokémon) | ×0,82 |
+| Terreno cómodo (lo resiste o es inmune a él) | ×1,08 |
+| Neutro | ×1,00 |
+
+Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en Sendero y Arena porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82); Charmander corre en Brasas (×1,18) y se frena en la Plaza y los caminos (×0,82); Bulbasaur agradece la Ciénaga (×1,18); Eevee, de tipo Normal, es el más estable y solo nota ventaja en el Bosque umbrío (×1,08). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
 
 ### Sumergirse en el agua
 
@@ -152,6 +167,8 @@ src/game/
   world.ts                   isla, plaza, estanque, props, luces y colisiones
   camera.ts                  rig orbital a 45° con seguimiento suave
   input.ts                   mando, teclado y ratón (deadzone y ejes)
+  roster.ts                  velocidad punta de cada Pokémon
+  terrainSpeed.ts            multiplicadores de velocidad por terreno y tipo
   sprite.ts                  texturas, material, UVs, animación y billboard
   marker.ts                  anillo de jugador con flecha de rumbo
   actor.ts                   sprite + sombra de contacto + posición
@@ -168,7 +185,7 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `PIXEL_SCALE` (0.045): unidades de mundo por píxel de sprite. Es común a todo el roster para conservar tamaños relativos.
 - `PITCH_DEG` (45) y `VERTICAL_STRETCH`: inclinación y corrección de píxeles.
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad.
-- `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión.
+- `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
 - `TERRAINS`, `TERRAIN_ZONES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición, radios del estanque y tamaño de cada terreno.

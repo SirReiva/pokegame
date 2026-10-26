@@ -1,6 +1,7 @@
 /** Tipos compartidos entre el pipeline de assets y el motor. */
 
 import type { TerrainId } from './terrain';
+import type { TerrainSpeedReason } from './terrainSpeed';
 
 export type DirectionName = 'S' | 'SE' | 'E' | 'NE' | 'N' | 'NW' | 'W' | 'SW';
 export type AnimationName = 'idle' | 'walk';
@@ -79,6 +80,10 @@ export interface GameStats {
   terrainName: string;
   /** Tipo Pokémon asociado al terreno (clave del manifiesto). */
   terrainType: string;
+  /** Multiplicador de velocidad que aplica el terreno al Pokémon elegido. */
+  terrainSpeedMultiplier: number;
+  /** Motivo del multiplicador, para explicarlo en el HUD. */
+  terrainSpeedReason: TerrainSpeedReason;
 }
 
 export interface LoadingProgress {

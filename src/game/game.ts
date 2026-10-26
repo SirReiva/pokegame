@@ -3,8 +3,10 @@ import { Actor } from './actor';
 import { CameraRig } from './camera';
 import { CONFIG, RAD } from './config';
 import { Input, type InputSnapshot } from './input';
+import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import { POND, TERRAINS, terrainAt } from './terrain';
+import { terrainSpeedEffect, type TerrainSpeedReason } from './terrainSpeed';
 import type { GameStats, LoadingProgress, SpriteManifest } from './types';
 import { buildWorld, type Collider, type World } from './world';
 
@@ -72,6 +74,11 @@ export class Game {
   private playerTypes: string[] = [];
   /** Fracción de inmersión actual; se interpola para entrar/salir del agua. */
   private playerSubmerge = 0;
+  /** Velocidad punta del Pokémon elegido; cada uno tiene la suya. */
+  private maxSpeed: number = CONFIG.player.speed;
+  /** Multiplicador del terreno actual sobre la velocidad (1 = neutro). */
+  private terrainMultiplier = 1;
+  private terrainSpeedReason: TerrainSpeedReason = 'neutral';
 
   private velocity = new pc.Vec3();
   private playerFacing = 0;
@@ -182,6 +189,9 @@ export class Game {
     });
 
     this.playerTypes = selected.types;
+    // Cada Pokémon trae su propia velocidad punta: Pikachu corre, Bulbasaur
+    // camina. La animación de andar ya escala con la velocidad real.
+    this.maxSpeed = speedForPokemon(selected.id);
     this.playerSubmerge = 0;
     this.selectedId = selected.id;
   }
@@ -290,7 +300,9 @@ export class Game {
         animation: player.billboard.currentAnimation,
         terrain: terrainId,
         terrainName: terrain.name,
-        terrainType: terrain.type
+        terrainType: terrain.type,
+        terrainSpeedMultiplier: this.terrainMultiplier,
+        terrainSpeedReason: this.terrainSpeedReason
       };
       this.callbacks.onStats(stats);
     }
@@ -309,7 +321,16 @@ export class Game {
     const desiredX = rightX * input.moveX + forwardX * input.moveY;
     const desiredZ = rightZ * input.moveX + forwardZ * input.moveY;
     const magnitude = Math.hypot(desiredX, desiredZ);
-    const maxSpeed = CONFIG.player.speed * (input.run ? CONFIG.player.runMultiplier : 1);
+    // El terreno bajo los pies modula la velocidad según los tipos del
+    // Pokémon: propio, hostil, cómodo o neutro (ver `terrainSpeed.ts`).
+    const terrainEffect = terrainSpeedEffect(
+      terrainAt(player.position.x, player.position.z),
+      this.playerTypes
+    );
+    this.terrainMultiplier = terrainEffect.multiplier;
+    this.terrainSpeedReason = terrainEffect.reason;
+    const maxSpeed =
+      this.maxSpeed * terrainEffect.multiplier * (input.run ? CONFIG.player.runMultiplier : 1);
 
     const targetVX = magnitude > 0.001 ? (desiredX / Math.max(magnitude, 1)) * maxSpeed : 0;
     const targetVZ = magnitude > 0.001 ? (desiredZ / Math.max(magnitude, 1)) * maxSpeed : 0;

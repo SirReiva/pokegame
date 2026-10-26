@@ -532,6 +532,16 @@ code {
   justify-content: center;
 }
 
+.poke-speed {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8298ad;
+}
+
 .type-badge {
   font-family: var(--font-mono);
   font-size: 0.56rem;
@@ -974,6 +984,30 @@ code {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.terrain-speed {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(154, 190, 228, 0.22);
+  color: #a5b8cc;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.terrain-speed.is-fast {
+  color: #a8e58f;
+  border-color: rgba(130, 220, 140, 0.45);
+  background: rgba(90, 200, 110, 0.14);
+}
+
+.terrain-speed.is-slow {
+  color: #ffb59a;
+  border-color: rgba(255, 150, 110, 0.45);
+  background: rgba(255, 110, 80, 0.14);
 }
 
 .terrain-note {

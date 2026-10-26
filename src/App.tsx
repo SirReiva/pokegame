@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Game } from './game/game';
+import { speedForPokemon } from './game/roster';
+import type { TerrainSpeedReason } from './game/terrainSpeed';
 import type {
   AnimationName,
   GamePhase,
@@ -53,6 +55,20 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const LIGHT_TYPES = new Set(['Normal', 'Electric', 'Ice', 'Ground', 'Steel', 'Fairy']);
+
+const TERRAIN_SPEED_HINTS: Record<TerrainSpeedReason, string> = {
+  home: 'Terreno propio: el Pokémon comparte el tipo del terreno.',
+  comfortable: 'Terreno cómodo: el tipo del terreno no le hace daño.',
+  hostile: 'Terreno hostil: el tipo del terreno es súper eficaz contra él.',
+  neutral: 'Terreno neutro: sin cambios de velocidad.'
+};
+
+const TERRAIN_SPEED_NOTES: Record<TerrainSpeedReason, string> = {
+  home: 'Terreno propio: se mueve más rápido de lo normal.',
+  comfortable: 'El terreno no le afecta: ligera ventaja de velocidad.',
+  hostile: 'Terreno hostil: se mueve más lento de lo normal.',
+  neutral: ''
+};
 
 const COMPASS_POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 
@@ -323,6 +339,9 @@ function App() {
                             <TypeBadge key={type} type={type} />
                           ))}
                         </span>
+                        <span className="poke-speed">
+                          Vel. {speedForPokemon(entry.id).toFixed(1)} u/s
+                        </span>
                       </button>
                     );
                   })}
@@ -397,6 +416,7 @@ function App() {
                   <FeatureChip>8 direcciones</FeatureChip>
                   <FeatureChip>Cámara a 45°</FeatureChip>
                   <FeatureChip>Billboard con profundidad</FeatureChip>
+                  <FeatureChip>Velocidad {speedForPokemon(selected.id).toFixed(1)} u/s</FeatureChip>
                 </div>
 
                 <p className="preview-hint">
@@ -469,6 +489,12 @@ function App() {
                   <Stat label="Fila" value={stats ? String(stats.row) : '—'} />
                   <Stat label="Velocidad" value={stats ? `${stats.speed.toFixed(1)} u/s` : '—'} />
                   <Stat
+                    label="Vel. máx"
+                    value={`${(
+                      speedForPokemon(selected.id) * (stats?.terrainSpeedMultiplier ?? 1)
+                    ).toFixed(1)} u/s`}
+                  />
+                  <Stat
                     label="Cámara"
                     value={stats ? `${Math.round(((stats.yaw % 360) + 360) % 360)}°` : '—'}
                   />
@@ -486,11 +512,28 @@ function App() {
                     <strong>{stats?.terrainName ?? '—'}</strong>
                   </div>
                   {stats && <TypeBadge type={stats.terrainType} />}
+                  {stats && (
+                    <span
+                      className={`terrain-speed${
+                        stats.terrainSpeedMultiplier > 1
+                          ? ' is-fast'
+                          : stats.terrainSpeedMultiplier < 1
+                            ? ' is-slow'
+                            : ''
+                      }`}
+                      title={TERRAIN_SPEED_HINTS[stats.terrainSpeedReason]}
+                    >
+                      ×{stats.terrainSpeedMultiplier.toFixed(2)}
+                    </span>
+                  )}
                 </div>
                 {stats?.terrain === 'waterLow' && !selected.types.includes('Water') && (
                   <p className="terrain-note">
                     Solo los Pokémon de tipo Agua pueden entrar en aguas profundas.
                   </p>
+                )}
+                {stats && stats.terrainSpeedReason !== 'neutral' && (
+                  <p className="terrain-note">{TERRAIN_SPEED_NOTES[stats.terrainSpeedReason]}</p>
                 )}
                 <div className="hud-credit">Sprites: PMD Sprite Collab · CC BY-NC 4.0</div>
               </div>
