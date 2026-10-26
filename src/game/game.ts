@@ -31,15 +31,15 @@ const IDLE_INPUT: InputSnapshot = {
 };
 
 const NPC_SLOTS: Array<{ x: number; z: number }> = [
-  { x: 3.7, z: 0.2 },
-  { x: 2.5, z: 2.4 },
-  { x: 2.5, z: -2.6 },
-  { x: -2.6, z: -2.5 },
-  { x: -3.7, z: 0.1 }
+  { x: -11.2, z: 14.6 },
+  { x: -15.0, z: 13.6 },
+  { x: -13.6, z: 10.8 },
+  { x: -10.4, z: 12.6 },
+  { x: -12.4, z: 15.4 }
 ];
 
-/** El jugador empieza mirando al este: no de cara a la cámara inicial. */
-const PLAYER_START_FACING = Math.PI / 2;
+/** El jugador empieza mirando al carril central (noreste). */
+const PLAYER_START_FACING = (Math.PI * 3) / 4;
 
 /** Los NPC solo giran hacia el jugador cuando lo tienen cerca. */
 const NPC_NOTICE_RADIUS = 2.4;
@@ -252,14 +252,15 @@ export class Game {
     if (player) {
       this.updateNpcs(frameDt);
 
-      // Inmersión progresiva: más profunda en el pozo central. La lámina de
+      // Inmersión progresiva: más profunda en el centro del lago. La lámina de
       // agua tapa la parte del sprite que queda por debajo, así que la
       // transición se lee como entrar en el agua y no como caminar por encima.
+      // La ciénaga cuenta como agua somera: se cruza y moja igual que el lago.
       const waterTerrain = terrainAt(player.position.x, player.position.z);
       const targetSubmerge =
         waterTerrain === 'waterHigh'
           ? CONFIG.player.submergeDeep
-          : waterTerrain === 'waterLow'
+          : waterTerrain === 'waterLow' || waterTerrain === 'poison'
             ? CONFIG.player.submergeShallow
             : 0;
       this.playerSubmerge +=

@@ -77,7 +77,7 @@ export const CONFIG = {
     /** Mitad del lado del mapa jugable. */
     halfSize: 18.4,
     groundSize: 38,
-    spawn: { x: 0, z: 1.6 }
+    spawn: { x: -11.6, z: 11.6 }
   },
   fog: {
     color: [0.73, 0.87, 0.96] as [number, number, number],

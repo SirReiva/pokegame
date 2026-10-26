@@ -1,13 +1,13 @@
 import * as pc from 'playcanvas';
-import type { TerrainId, TerrainPath, TerrainZone } from './terrain';
+import { terrainAt, type BaseZone, type Lane, type TerrainId, type TerrainZone } from './terrain';
 
 /** Utilidades para generar las texturas de la demo (sin assets externos). */
 
 export interface GroundPaintOptions {
   half: number;
-  plaza: { x: number; z: number; radius: number };
+  bases: BaseZone[];
   pond: { x: number; z: number; radius: number; deepRadius: number; shoreRadius: number };
-  paths: TerrainPath[];
+  lanes: Lane[];
   zones: TerrainZone[];
 }
 
@@ -83,11 +83,11 @@ interface TerrainPalette {
 
 const TERRAIN_PALETTES: Partial<Record<TerrainId, TerrainPalette>> = {
   fire: {
-    base: '#4a2a22',
-    light: '#5d3628',
-    dark: '#2c1a16',
-    accent: '#e2632b',
-    accent2: '#ffc35c'
+    base: '#1f2329',
+    light: '#2d323a',
+    dark: '#0e1013',
+    accent: '#3b4149',
+    accent2: '#191c21'
   },
   electric: {
     base: '#a39344',
@@ -123,6 +123,13 @@ const TERRAIN_PALETTES: Partial<Record<TerrainId, TerrainPalette>> = {
     dark: '#6f9c52',
     accent: '#f2a7c3',
     accent2: '#e6d2f2'
+  },
+  desert: {
+    base: '#d9b66c',
+    light: '#eccf8d',
+    dark: '#b9924d',
+    accent: '#f6e3b0',
+    accent2: '#8d6a36'
   },
   tallGrass: {
     base: '#2f6a2b',
@@ -181,27 +188,76 @@ function paintTerrainZone(
 
   switch (zone.terrain) {
     case 'fire': {
-      // Grietas de lava y brasas.
-      for (let i = 0; i < 22; i++) {
-        let ox = (random() * 2 - 1) * radius * 0.72;
-        let oy = (random() * 2 - 1) * radius * 0.72;
-        const length = 3 + Math.floor(random() * 5);
-        const dir = random() < 0.5 ? -1 : 1;
-        for (let k = 0; k < length; k++) {
-          mark(ox, oy, 2, 2, random() < 0.6 ? palette.accent : palette.accent2);
-          ox += dir * (2 + Math.floor(random() * 3));
-          oy += (random() - 0.5) * 5;
+      // Basalto volcánico: placas oscuras separadas por una red de grietas.
+      // El naranja y el amarillo no van en el suelo; viven en las coronas de
+      // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
+      const plateCount = 9;
+      const plates: Array<{ x: number; y: number; color: string }> = [];
+      for (let i = 0; i < plateCount; i++) {
+        const angle = random() * Math.PI * 2;
+        const distance = Math.sqrt(random()) * radius * 0.82;
+        plates.push({
+          x: Math.cos(angle) * distance,
+          y: Math.sin(angle) * distance,
+          color: random() < 0.55 ? palette.base : palette.light
+        });
+      }
+
+      for (let oy = -radius; oy <= radius; oy += step) {
+        for (let ox = -radius; ox <= radius; ox += step) {
+          const distance = Math.hypot(ox, oy);
+          const angle = Math.atan2(oy, ox);
+          const wobble =
+            1 + 0.05 * Math.sin(angle * 3 + seed) + 0.035 * Math.sin(angle * 7 - seed * 1.7);
+          if (distance > radius * wobble) continue;
+
+          let nearest = 0;
+          let d1 = Infinity;
+          let d2 = Infinity;
+          for (let p = 0; p < plates.length; p++) {
+            const dx = ox - plates[p].x;
+            const dy = oy - plates[p].y;
+            const d = Math.hypot(dx, dy);
+            if (d < d1) {
+              d2 = d1;
+              d1 = d;
+              nearest = p;
+            } else if (d < d2) {
+              d2 = d;
+            }
+          }
+
+          const px = Math.floor(cx + ox);
+          const py = Math.floor(cy + oy);
+
+          if (distance > radius * 0.87) {
+            ctx.fillStyle = palette.dark;
+            ctx.fillRect(px, py, step, step);
+            continue;
+          }
+
+          if (d2 - d1 < 5) {
+            // Surco ancho y oscuro entre placas. La lava vive en las rocas 3D,
+            // no en el suelo, así que las grietas se quedan en basalto negro.
+            ctx.fillStyle = palette.dark;
+            ctx.fillRect(px, py, step, step);
+          } else {
+            // Interior de la placa: basalto con vetas y poros.
+            let color = plates[nearest].color;
+            if (random() < 0.08) color = palette.dark;
+            ctx.fillStyle = color;
+            ctx.fillRect(px, py, step, step);
+            if (random() < 0.14) {
+              ctx.fillStyle = palette.light;
+              ctx.fillRect(px + 1, py + 1, 2, 2);
+            } else if (random() < 0.08) {
+              ctx.fillStyle = palette.dark;
+              ctx.fillRect(px, py + 2, step, 2);
+            }
+          }
         }
       }
-      for (let i = 0; i < 26; i++) {
-        mark(
-          (random() * 2 - 1) * radius * 0.8,
-          (random() * 2 - 1) * radius * 0.8,
-          2,
-          2,
-          palette.accent2
-        );
-      }
+
       break;
     }
     case 'electric': {
@@ -259,6 +315,16 @@ function paintTerrainZone(
         mark(ox, oy, size, size, palette.dark);
         mark(ox + 2, oy + 2, Math.max(2, size - 4), Math.max(2, size - 4), palette.accent2);
       }
+      // Hierba oscura: briznas cortas y dispersas que asoman entre el lodo.
+      for (let i = 0; i < 22; i++) {
+        const ox = (random() * 2 - 1) * radius * 0.8;
+        const oy = (random() * 2 - 1) * radius * 0.8;
+        const blade = 2 + Math.floor(random() * 3) * 2;
+        mark(ox, oy, 1, blade, random() < 0.6 ? '#26301a' : '#3a4525');
+        if (random() < 0.35) {
+          mark(ox + 2, oy + 2, 1, Math.max(2, blade - 2), '#1d2614');
+        }
+      }
       for (let i = 0; i < 20; i++) {
         mark(
           (random() * 2 - 1) * radius * 0.78,
@@ -300,6 +366,54 @@ function paintTerrainZone(
         mark(ox + 2, oy, 2, 2, color);
         mark(ox, oy + 2, 2, 2, color);
         mark(ox + 2, oy + 2, 2, 2, palette.light);
+      }
+      break;
+    }
+    case 'desert': {
+      // Dunas onduladas, rizos de arena y piedras sueltas.
+      for (let i = 0; i < 14; i++) {
+        const oy = (random() * 2 - 1) * radius * 0.72;
+        const length = 10 + Math.floor(random() * 16);
+        let ox = -radius * 0.82 + random() * 6;
+        for (let k = 0; k < length; k += 4) {
+          const wave = Math.sin((ox / radius) * 3.1 + i * 0.9) * 3;
+          mark(
+            ox,
+            oy + wave,
+            4,
+            2,
+            random() < 0.5 ? palette.light : palette.base
+          );
+          ox += 4;
+        }
+      }
+      for (let i = 0; i < 90; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.84,
+          (random() * 2 - 1) * radius * 0.84,
+          1,
+          1,
+          random() < 0.55 ? palette.accent : palette.dark
+        );
+      }
+      for (let i = 0; i < 10; i++) {
+        let ox = (random() * 2 - 1) * radius * 0.7;
+        let oy = (random() * 2 - 1) * radius * 0.7;
+        const steps = 3 + Math.floor(random() * 3);
+        for (let k = 0; k < steps; k++) {
+          mark(ox, oy, 2, 2, palette.dark);
+          ox += random() < 0.5 ? -2 : 2;
+          oy += 2;
+        }
+      }
+      for (let i = 0; i < 16; i++) {
+        mark(
+          (random() * 2 - 1) * radius * 0.8,
+          (random() * 2 - 1) * radius * 0.8,
+          2,
+          2,
+          palette.accent2
+        );
       }
       break;
     }
@@ -479,7 +593,7 @@ function sampleRoadPath(
  */
 function paintAsphalt(
   ctx: CanvasRenderingContext2D,
-  path: TerrainPath,
+  path: Lane,
   toPx: (world: number) => number,
   scale: number,
   seed: number
@@ -547,9 +661,9 @@ function paintAsphalt(
   }
 }
 
-/** Césped del mapa con plaza, camino y flores pintados de forma procedural. */
+/** Césped del mapa con carriles, bases, lago y flores pintados de forma procedural. */
 export function createGroundCanvas(size: number, options: GroundPaintOptions): HTMLCanvasElement {
-  const { half, plaza, pond, paths, zones } = options;
+  const { half, bases, pond, lanes, zones } = options;
   const random = mulberry32(0x5eed);
   const ctx = canvas2d(size);
   const toPx = (world: number) => ((world + half) / (half * 2)) * size;
@@ -597,17 +711,13 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
   }
   ctx.globalAlpha = 1;
 
-  // Calveros temáticos. Van antes que caminos y plaza para que estos conserven
+  // Calveros temáticos. Van antes que carriles y bases para que estos conserven
   // su prioridad visual.
   for (const zone of zones) {
     paintTerrainZone(ctx, zone, toPx, scale);
   }
 
-  const strokeWorldPath = (
-    points: Array<[number, number]>,
-    width: number,
-    color: string
-  ) => {
+  const strokeLane = (points: Array<[number, number]>, width: number, color: string) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = width * scale;
     ctx.lineCap = 'round';
@@ -616,60 +726,73 @@ export function createGroundCanvas(size: number, options: GroundPaintOptions): H
     ctx.stroke();
   };
 
-  // Caminos: el principal sube desde el borde sur y el otro lleva al estanque.
-  for (const path of paths) {
-    strokeWorldPath(path.points, path.width, '#c2a377');
+  // Los tres carriles de tierra. Se pintan antes que las bases y el lago para
+  // que ambos tapen los extremos.
+  for (const lane of lanes) {
+    strokeLane(lane.points, lane.width, '#b99a70');
   }
 
-  // Carretera: el asfalto va encima del camino, que asoma como arcén. Se pinta
-  // antes que la plaza, que tapa el arranque de la calzada.
-  paths.forEach((path, index) => {
-    paintAsphalt(ctx, path, toPx, scale, 0x9e37 + index * 7919);
+  // El carril central va asfaltado: la calzada queda dentro del carril y el
+  // arcén de tierra asoma por los lados.
+  lanes.forEach((lane, index) => {
+    paintAsphalt(ctx, lane, toPx, scale, 0x9e37 + index * 7919);
   });
 
-  // Plaza central.
-  const plazaPx = { x: toPx(plaza.x), y: toPx(plaza.z) };
-  ctx.fillStyle = '#cbb083';
-  ctx.beginPath();
-  ctx.arc(plazaPx.x, plazaPx.y, plaza.radius * scale, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#d6bd93';
-  ctx.beginPath();
-  ctx.arc(plazaPx.x, plazaPx.y, (plaza.radius - 0.9) * scale, 0, Math.PI * 2);
-  ctx.fill();
+  // Bases: plataforma de piedra con el anillo del equipo.
+  for (const base of bases) {
+    const bx = toPx(base.x);
+    const by = toPx(base.z);
+    const ring = base.team === 'blue' ? '#5b8fd9' : '#d96b5b';
+    ctx.fillStyle = '#8d8577';
+    ctx.beginPath();
+    ctx.arc(bx, by, base.radius * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#a89f8e';
+    ctx.beginPath();
+    ctx.arc(bx, by, (base.radius - 0.55) * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = ring;
+    ctx.lineWidth = Math.max(2, 0.3 * scale);
+    ctx.beginPath();
+    ctx.arc(bx, by, (base.radius - 1.05) * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    // Cuatro losanges del emblema.
+    ctx.fillStyle = ring;
+    for (let i = 0; i < 4; i++) {
+      const angle = i * (Math.PI / 2) + Math.PI / 4;
+      const ox = Math.cos(angle) * (base.radius - 1.75) * scale;
+      const oy = Math.sin(angle) * (base.radius - 1.75) * scale;
+      ctx.fillRect(Math.round(bx + ox) - 3, Math.round(by + oy) - 3, 6, 6);
+    }
+  }
 
-  // Arena alrededor del estanque y agua plana encima, a ras de suelo.
+  // Arena alrededor del lago y agua plana encima, a ras de suelo.
   ctx.fillStyle = '#d8c79a';
   ctx.beginPath();
   ctx.arc(toPx(pond.x), toPx(pond.z), pond.shoreRadius * scale, 0, Math.PI * 2);
   ctx.fill();
   paintPond(ctx, pond, toPx, scale);
 
-  // Piedrecillas y motas de tierra en plaza y caminos.
-  for (let i = 0; i < 900; i++) {
-    const angle = random() * Math.PI * 2;
-    const radius = Math.sqrt(random()) * plaza.radius;
-    const x = toPx(plaza.x + Math.cos(angle) * radius);
-    const y = toPx(plaza.z + Math.sin(angle) * radius);
-    ctx.fillStyle = random() > 0.5 ? '#b7986c' : '#e2cda6';
-    ctx.globalAlpha = 0.7;
-    ctx.fillRect(x, y, 3, 3);
+  // Piedrecillas y motas de piedra en las bases.
+  for (const base of bases) {
+    for (let i = 0; i < 420; i++) {
+      const angle = random() * Math.PI * 2;
+      const radius = Math.sqrt(random()) * (base.radius - 0.4);
+      const x = toPx(base.x + Math.cos(angle) * radius);
+      const y = toPx(base.z + Math.sin(angle) * radius);
+      ctx.fillStyle = random() > 0.5 ? '#8f8677' : '#c2b9a6';
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(x, y, 3, 3);
+    }
   }
   ctx.globalAlpha = 1;
 
-  // Flores: ramilletes de puntos de color.
+  // Flores: ramilletes solo en la jungla, lejos de carriles, bases y lago.
   const petals = ['#f5f0df', '#f7d75c', '#ef7fa1', '#f2a65a', '#c9a0dc'];
-  const nearPaths = (x: number, z: number) => {
-    if (Math.hypot(x, z) < plaza.radius + 1.2) return true;
-    if (Math.hypot(x - pond.x, z - pond.z) < pond.shoreRadius + 0.7) return true;
-    if (Math.abs(x) < 2.6 && z > 0) return true;
-    if (zones.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.radius + 0.8)) return true;
-    return false;
-  };
-  for (let i = 0; i < 140; i++) {
+  for (let i = 0; i < 220; i++) {
     const x = (random() * 2 - 1) * (half - 1.5);
     const z = (random() * 2 - 1) * (half - 1.5);
-    if (nearPaths(x, z)) continue;
+    if (terrainAt(x, z) !== 'jungle') continue;
     const color = petals[Math.floor(random() * petals.length)];
     for (let j = 0; j < 4; j++) {
       ctx.fillStyle = color;
@@ -786,6 +909,107 @@ export function createWaterMaskCanvas(size = 256): HTMLCanvasElement {
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
+  return ctx.canvas;
+}
+
+/**
+ * Motas de polvo: varias manchas suaves superpuestas sobre fondo transparente.
+ * Se usa como `colorMap` de las partículas del desierto, así que el color sale
+ * blanco cálido y la forma queda difusa, sin un borde circular duro.
+ */
+export function createDustCanvas(size = 64): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const random = mulberry32(0xd057);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 16; i++) {
+    const cx = size / 2 + (random() - 0.5) * size * 0.42;
+    const cy = size / 2 + (random() - 0.5) * size * 0.42;
+    const radius = size * (0.12 + random() * 0.2);
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, 'rgba(255, 248, 224, 0.55)');
+    gradient.addColorStop(0.5, 'rgba(255, 244, 210, 0.26)');
+    gradient.addColorStop(1, 'rgba(255, 240, 200, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  return ctx.canvas;
+}
+
+/**
+ * Copos de escarcha: un punto blanco azulado con núcleo brillante y cuatro
+ * brazos tenues. Se usa como `colorMap` de la nieve del calvero helado; a
+ * tamaño pequeño se lee como un copo y no como una mancha.
+ */
+export function createFrostCanvas(size = 64): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.28, 'rgba(238, 251, 255, 0.9)');
+  gradient.addColorStop(0.62, 'rgba(202, 238, 250, 0.35)');
+  gradient.addColorStop(1, 'rgba(180, 224, 245, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  // Cuatro brazos casi transparentes: sugieren un cristal de hielo sin
+  // recargar el copo cuando se ve a tamaño de juego.
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = Math.max(1, size * 0.02);
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.lineTo(
+      center + Math.cos(angle) * center * 0.7,
+      center + Math.sin(angle) * center * 0.7
+    );
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  return ctx.canvas;
+}
+
+/**
+ * Humo de ciénaga: jirones suaves y redondeados, con más cuerpo y menos brillo
+ * que el polvo. Se usa como `colorMap` de las partículas de humo; el tono
+ * verdoso lo pone el `colorGraph` del sistema.
+ */
+export function createSmokeCanvas(size = 96): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const random = mulberry32(0x5a0c);
+  for (let i = 0; i < 12; i++) {
+    const cx = size / 2 + (random() - 0.5) * size * 0.34;
+    const cy = size / 2 + (random() - 0.5) * size * 0.34;
+    const radius = size * (0.18 + random() * 0.22);
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+    gradient.addColorStop(0.55, 'rgba(244, 250, 240, 0.11)');
+    gradient.addColorStop(1, 'rgba(232, 244, 228, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  return ctx.canvas;
+}
+
+/**
+ * Chispa de lava: núcleo blanco-amarillo que cae a naranja y rojo. Está
+ * pensada para blending aditivo, así que el borde es alfa 0 y el centro suma
+ * luz sobre el basalto.
+ */
+export function createEmberCanvas(size = 48): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, 'rgba(255, 255, 230, 1)');
+  gradient.addColorStop(0.22, 'rgba(255, 220, 90, 0.95)');
+  gradient.addColorStop(0.5, 'rgba(255, 140, 30, 0.55)');
+  gradient.addColorStop(0.78, 'rgba(255, 70, 10, 0.18)');
+  gradient.addColorStop(1, 'rgba(255, 40, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
   return ctx.canvas;
 }
 

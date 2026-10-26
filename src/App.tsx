@@ -311,7 +311,7 @@ function App() {
                 <span className="eyebrow">Paso 1 · Elige tu Pokémon</span>
                 <h2>Compañero de demo</h2>
                 <p className="lead">
-                  Seis Pokémon con sprites de 8 direcciones. Los demás te esperarán en la plaza.
+                  Seis Pokémon con sprites de 8 direcciones. Los demás te esperarán en la base.
                 </p>
 
                 <div className="roster-grid" role="listbox" aria-label="Elige un Pokémon">

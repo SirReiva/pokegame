@@ -10,9 +10,9 @@
  * - Resto de combinaciones: ×1.
  *
  * Así la hierba alta frena a Squirtle, la arena frena a Pikachu, la ciénaga
- * favorece a Bulbasaur, Charmander corre en Brasas y Eevee va cómodo por la
- * carretera. El sistema es puro: no depende de PlayCanvas y puede consultarse
- * desde cualquier módulo.
+ * favorece a Bulbasaur, Charmander corre por la Colada volcánica y Eevee va
+ * cómodo por los carriles y la carretera. El sistema es puro: no depende de PlayCanvas y puede
+ * consultarse desde cualquier módulo.
  */
 
 import { TERRAINS, type TerrainId } from './terrain';

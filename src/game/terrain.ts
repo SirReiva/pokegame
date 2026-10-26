@@ -1,28 +1,27 @@
 /**
- * Terrenos de la demo, cada uno asociado a un tipo Pokémon.
- *
- * El mapa tiene siete terrenos base (pradera, sendero, carretera, arena, aguas
- * someras, aguas profundas y plaza) y ocho calveros repartidos por la isla, uno
- * de ellos repetido de hierba alta.
+ * Mapa de la demo con aire de MOBA: arena cuadrada, dos bases en esquinas
+ * opuestas y tres carriles que las conectan (superior, central e inferior).
+ * El resto del mapa es jungla, con calveros temáticos y un lago.
  * Este módulo solo contiene datos y consultas puras: no depende de PlayCanvas
  * ni de React.
  */
 
 export type TerrainId =
-  | 'meadow'
-  | 'path'
+  | 'jungle'
+  | 'lane'
   | 'road'
   | 'sand'
   | 'waterLow'
   | 'waterHigh'
-  | 'plaza'
+  | 'base'
   | 'tallGrass'
   | 'fire'
   | 'electric'
   | 'ice'
   | 'poison'
   | 'ghost'
-  | 'fairy';
+  | 'fairy'
+  | 'desert';
 
 export interface TerrainDefinition {
   /** Nombre visible del terreno. */
@@ -32,69 +31,106 @@ export interface TerrainDefinition {
 }
 
 export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
-  meadow: { name: 'Pradera', type: 'Grass' },
-  path: { name: 'Sendero', type: 'Ground' },
+  jungle: { name: 'Jungla', type: 'Grass' },
+  lane: { name: 'Carril', type: 'Normal' },
   road: { name: 'Carretera', type: 'Normal' },
   sand: { name: 'Arena', type: 'Ground' },
   waterLow: { name: 'Aguas someras', type: 'Water' },
   waterHigh: { name: 'Aguas profundas', type: 'Water' },
-  plaza: { name: 'Plaza', type: 'Rock' },
+  base: { name: 'Base', type: 'Rock' },
   tallGrass: { name: 'Hierba alta', type: 'Grass' },
-  fire: { name: 'Brasas', type: 'Fire' },
+  fire: { name: 'Colada volcánica', type: 'Fire' },
   electric: { name: 'Páramo', type: 'Electric' },
   ice: { name: 'Escarcha', type: 'Ice' },
   poison: { name: 'Ciénaga', type: 'Poison' },
   ghost: { name: 'Bosque umbrío', type: 'Ghost' },
-  fairy: { name: 'Claro feérico', type: 'Fairy' }
+  fairy: { name: 'Claro feérico', type: 'Fairy' },
+  desert: { name: 'Desierto', type: 'Ground' }
 };
 
-export const PLAZA = { x: 0, z: 0, radius: 4.8 };
+export type Team = 'blue' | 'red';
+
+export interface BaseZone {
+  team: Team;
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** Las dos bases, en esquinas opuestas de la diagonal suroeste-noreste. */
+export const BASES: BaseZone[] = [
+  { team: 'blue', x: -13.2, z: 13.2, radius: 3.6 },
+  { team: 'red', x: 13.2, z: -13.2, radius: 3.6 }
+];
+
+/** Lago de la jungla sureste: única zona de aguas profundas del mapa. */
 export const POND = {
-  x: 9.6,
-  z: -8.4,
+  x: 7.5,
+  z: 7.5,
   /** Radio total del agua (aguas someras). */
-  radius: 4.6,
+  radius: 2.4,
   /** Radio del pozo profundo: solo Pokémon de tipo Agua pueden entrar. */
-  deepRadius: 2.9,
+  deepRadius: 1.4,
   /** Radio de la orilla de arena. */
-  shoreRadius: 5.6,
+  shoreRadius: 3.1,
   /** Altura de la lámina de agua sobre el suelo; sumerge las piernas. */
   surfaceHeight: 0.3
 };
 
-export interface TerrainPath {
+export interface Lane {
   width: number;
   points: Array<[number, number]>;
   /**
-   * Ancho del asfalto. Si falta, el camino es de tierra. La carretera se pinta
-   * encima del camino, así que el ancho del camino queda como arcén.
+   * Ancho del asfalto. Si falta, el carril es de tierra. La carretera se pinta
+   * encima del carril, así que el ancho del carril queda como arcén.
    */
   asphalt?: number;
   /** Pinta el eje discontinuo del centro de la calzada. */
   centerLine?: boolean;
 }
 
-/** Caminos de tierra. `textures.ts` los pinta y `terrainAt` los consulta. */
-export const TERRAIN_PATHS: TerrainPath[] = [
+/**
+ * Los tres carriles. El superior rodea la jungla noroeste, el inferior la
+ * sureste y el central cruza en diagonal de base a base. Ambos extremos quedan
+ * dentro de las bases, que se pintan encima.
+ */
+export const LANES: Lane[] = [
   {
-    width: 3.6,
-    asphalt: 2.5,
-    centerLine: true,
+    width: 3.4,
     points: [
-      [-0.6, 20.4],
-      [0.4, 16],
-      [-0.8, 12.5],
-      [0.5, 8.5],
-      [PLAZA.x, PLAZA.z + PLAZA.radius - 0.6]
+      [-11.8, 10.8],
+      [-15.8, 6.0],
+      [-15.8, -6.0],
+      [-11.5, -15.0],
+      [-6.0, -15.8],
+      [2.0, -15.8],
+      [9.0, -15.0],
+      [12.6, -14.2]
     ]
   },
   {
-    width: 2.5,
+    width: 3.4,
+    asphalt: 2.4,
+    centerLine: true,
     points: [
-      [PLAZA.x + 2.2, PLAZA.z - 1.6],
-      [5.2, -2.6],
-      [5.4, -4.4],
-      [POND.x - 3.7, POND.z + 3.4]
+      [-10.8, 10.8],
+      [-5.4, 5.4],
+      [0, 0],
+      [5.4, -5.4],
+      [10.8, -10.8]
+    ]
+  },
+  {
+    width: 3.4,
+    points: [
+      [11.8, -10.8],
+      [15.8, -6.0],
+      [15.8, 6.0],
+      [11.5, 15.0],
+      [6.0, 15.8],
+      [-2.0, 15.8],
+      [-9.0, 15.0],
+      [-12.6, 14.2]
     ]
   }
 ];
@@ -107,19 +143,23 @@ export interface TerrainZone {
 }
 
 /**
- * Calveros temáticos. Están lejos de la plaza, los caminos, el estanque y el
- * punto de aparición, pero pueden compartir sitio con rocas o árboles.
+ * Calveros temáticos repartidos por las dos junglas. Se mantienen apartados de
+ * carriles, bases y lago para no tapar la lectura del mapa.
  * La hierba alta se pinta distinto: además del lecho verde, genera matas 3D.
  */
 export const TERRAIN_ZONES: TerrainZone[] = [
-  { terrain: 'fire', x: 12.6, z: 1.6, radius: 2.5 },
-  { terrain: 'electric', x: -8.8, z: 12.2, radius: 2.5 },
-  { terrain: 'ice', x: -8.5, z: -0.6, radius: 2.5 },
-  { terrain: 'poison', x: 1.8, z: -13.0, radius: 2.4 },
-  { terrain: 'ghost', x: -13.8, z: -11.8, radius: 2.3 },
-  { terrain: 'fairy', x: -13.0, z: 12.3, radius: 2.4 },
-  { terrain: 'tallGrass', x: 13.8, z: 8.0, radius: 2.3 },
-  { terrain: 'tallGrass', x: -6.6, z: 6.2, radius: 2.0 }
+  // Jungla noroeste.
+  { terrain: 'electric', x: -9.0, z: -8.5, radius: 2.4 },
+  { terrain: 'ice', x: -4.0, z: -11.0, radius: 2.2 },
+  { terrain: 'poison', x: -11.0, z: -4.0, radius: 2.2 },
+  { terrain: 'tallGrass', x: -5.5, z: -4.5, radius: 2.0 },
+  // Jungla norte.
+  { terrain: 'desert', x: 1.0, z: -8.5, radius: 2.4 },
+  // Jungla sureste.
+  { terrain: 'fire', x: 10.5, z: -2.5, radius: 2.5 },
+  { terrain: 'ghost', x: 0.5, z: 7.5, radius: 2.3 },
+  { terrain: 'fairy', x: 3.5, z: 11.5, radius: 2.4 },
+  { terrain: 'tallGrass', x: 2.5, z: 3.5, radius: 2.0 }
 ];
 
 function distanceToSegment(
@@ -141,9 +181,9 @@ function distanceToSegment(
 /**
  * Distancia al trazado suavizado que pinta `textures.ts`: Bézier cuadráticas
  * entre cada punto y el punto medio del siguiente, igual que en el canvas. Así
- * el terreno coincide con el borde visible del camino y del asfalto.
+ * el terreno coincide con el borde visible del carril y del asfalto.
  */
-function distanceToTrail(x: number, z: number, points: Array<[number, number]>): number {
+function distanceToLane(x: number, z: number, points: Array<[number, number]>): number {
   if (points.length === 1) return Math.hypot(x - points[0][0], z - points[0][1]);
   const steps = 8;
   let best = Infinity;
@@ -169,19 +209,17 @@ function distanceToTrail(x: number, z: number, points: Array<[number, number]>):
   return Math.min(best, distanceToSegment(x, z, previous[0], previous[1], last[0], last[1]));
 }
 
-function onPath(x: number, z: number): boolean {
-  return TERRAIN_PATHS.some(
-    (path) => distanceToTrail(x, z, path.points) <= path.width / 2 + 0.15
-  );
+function onLane(x: number, z: number): boolean {
+  return LANES.some((lane) => distanceToLane(x, z, lane.points) <= lane.width / 2 + 0.15);
 }
 
 /**
- * Asfalto de la carretera. Se consulta antes que el camino porque la calzada
- * está pintada encima: los arcenes de tierra siguen siendo `path`.
+ * Asfalto del carril central. Se consulta antes que el carril porque la calzada
+ * está pintada encima: los arcenes de tierra siguen siendo `lane`.
  */
 function onAsphalt(x: number, z: number): boolean {
-  return TERRAIN_PATHS.some(
-    (path) => path.asphalt !== undefined && distanceToTrail(x, z, path.points) <= path.asphalt / 2
+  return LANES.some(
+    (lane) => lane.asphalt !== undefined && distanceToLane(x, z, lane.points) <= lane.asphalt / 2
   );
 }
 
@@ -190,7 +228,9 @@ export function terrainAt(x: number, z: number): TerrainId {
   for (const zone of TERRAIN_ZONES) {
     if (Math.hypot(x - zone.x, z - zone.z) <= zone.radius) return zone.terrain;
   }
-  if (Math.hypot(x - PLAZA.x, z - PLAZA.z) <= PLAZA.radius) return 'plaza';
+  for (const base of BASES) {
+    if (Math.hypot(x - base.x, z - base.z) <= base.radius) return 'base';
+  }
 
   const pondDistance = Math.hypot(x - POND.x, z - POND.z);
   if (pondDistance <= POND.deepRadius) return 'waterHigh';
@@ -198,6 +238,6 @@ export function terrainAt(x: number, z: number): TerrainId {
   if (pondDistance <= POND.shoreRadius) return 'sand';
 
   if (onAsphalt(x, z)) return 'road';
-  if (onPath(x, z)) return 'path';
-  return 'meadow';
+  if (onLane(x, z)) return 'lane';
+  return 'jungle';
 }
