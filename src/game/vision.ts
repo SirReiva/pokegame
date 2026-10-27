@@ -21,8 +21,8 @@ import type { Collider } from './world';
 
 /**
  * Rango de visión base de cada especie, en unidades de mundo. Los valores están
- * separados a propósito: Mewtwo, Greninja, Mew, Pikachu y Lucario detectan antes
- * por sus sentidos, mientras que Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
+ * separados a propósito: Mewtwo, Greninja, Mew, Pikachu, Scyther y Lucario detectan
+ * antes por sus sentidos, mientras que Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
  * y no en el manifiesto, porque `npm run sprites` lo regenera.
  */
 export const POKEMON_VISION: Record<string, number> = {
@@ -35,7 +35,8 @@ export const POKEMON_VISION: Record<string, number> = {
   '0658': 11.5, // Greninja: instinto de ninja, segundo alcance del grupo
   '0150': 12.0, // Mewtwo: poder psíquico, el que más lejos percibe
   '0151': 11.0, // Mew: sentidos psíquicos y curiosidad infinita
-  '0095': 8.8 // Onix: vive bajo tierra, poca luz y vista corta
+  '0095': 8.8, // Onix: vive bajo tierra, poca luz y vista corta
+  '0123': 10.8 // Scyther: ojos de depredador y reflejos de mantis
 };
 
 export const DEFAULT_VISION = 9.5;

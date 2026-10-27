@@ -86,3 +86,10 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/credits.txt
 
+## Scyther (#0123)
+
+- CHUNSOFT · Walk, Attack, Slice, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/credits.txt
+
