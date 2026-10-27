@@ -30,6 +30,7 @@ interface LobbyScreenProps {
   onContinue: () => void;
   onControls: () => void;
   onCredits: () => void;
+  onEditor: () => void;
 }
 
 const overlay =
@@ -168,7 +169,8 @@ export function LobbyScreen({
   onLeave,
   onContinue,
   onControls,
-  onCredits
+  onCredits,
+  onEditor
 }: LobbyScreenProps) {
   const counts = countTeams(players);
   const allReady = players.length > 0 && players.every((player) => player.teamReady);
@@ -188,6 +190,9 @@ export function LobbyScreen({
               <li className={stepIdle}>2 · Pokémon</li>
             </ol>
             <div className="flex gap-2">
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onEditor}>
+                Editor de mapas
+              </button>
               <button type="button" className={btnClass('ghost', 'small')} onClick={onControls}>
                 Controles
               </button>

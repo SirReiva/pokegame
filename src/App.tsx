@@ -19,6 +19,7 @@ import { Brand } from './ui/Brand';
 import { btnClass } from './ui/buttonStyles';
 import { KeyPill } from './ui/KeyPill';
 import { LobbyScreen } from './ui/LobbyScreen';
+import { MapEditorScreen } from './ui/MapEditorScreen';
 import { MatchHud } from './ui/MatchHud';
 import { RosterScreen } from './ui/RosterScreen';
 import { rosterColumns } from './ui/rosterGrid';
@@ -409,7 +410,24 @@ function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('map', activeMapId);
     window.history.replaceState(null, '', url);
+    const wantsEditor = new URLSearchParams(window.location.search).has('editor');
+    goPhase(wantsEditor ? 'editor' : 'lobby');
+  };
+
+  const openEditor = () => {
+    gameRef.current?.setPaused(true);
+    goPhase('editor');
+    const url = new URL(window.location.href);
+    url.searchParams.set('editor', '1');
+    window.history.replaceState(null, '', url);
+  };
+
+  const closeEditor = () => {
+    gameRef.current?.setPaused(false);
     goPhase('lobby');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('editor');
+    window.history.replaceState(null, '', url);
   };
 
   const changeMap = async (nextId: string) => {
@@ -584,7 +602,12 @@ function App() {
           onContinue={continueToRoster}
           onControls={() => setModal('controls')}
           onCredits={() => setModal('credits')}
+          onEditor={openEditor}
         />
+      )}
+
+      {!error && phase === 'editor' && (
+        <MapEditorScreen maps={maps} onExit={closeEditor} />
       )}
 
       {!error && phase === 'roster' && manifest && (

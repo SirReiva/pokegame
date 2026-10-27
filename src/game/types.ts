@@ -59,7 +59,7 @@ export interface SpriteManifest {
   pokemon: PokemonEntry[];
 }
 
-export type GamePhase = 'loading' | 'lobby' | 'roster' | 'playing';
+export type GamePhase = 'loading' | 'lobby' | 'roster' | 'playing' | 'editor';
 
 export interface LoadingProgress {
   loaded: number;
