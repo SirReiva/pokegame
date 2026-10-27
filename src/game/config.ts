@@ -93,12 +93,6 @@ export const CONFIG = {
     /** Velocidad (1/s) con la que el sprite se hunde o emerge. */
     submergeLerp: 7,
   },
-  world: {
-    /** Mitad del lado del mapa jugable. */
-    halfSize: 18.4,
-    groundSize: 38,
-    spawn: { x: -11.6, z: 11.6 },
-  },
   fog: {
     color: [0.73, 0.87, 0.96] as [number, number, number],
     near: 34,

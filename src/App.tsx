@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Game } from './game/game';
 import type { InputDeviceInfo, MenuAction } from './game/input';
+import type { MapIndexEntry } from './game/map';
 import {
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
@@ -29,7 +30,7 @@ const DEFAULT_PROGRESS: LoadingProgress = {
 type ModalKind = 'controls' | 'credits' | null;
 
 interface Handlers {
-  onReady: (manifest: SpriteManifest) => void;
+  onReady: (manifest: SpriteManifest, maps: MapIndexEntry[], activeMapId: string) => void;
   onMenuInput: (event: { deviceId: string; action: MenuAction }) => void;
   onPauseRequest: () => void;
   onDevicesChanged: (devices: InputDeviceInfo[]) => void;
@@ -52,6 +53,10 @@ function App() {
   const [manifest, setManifest] = useState<SpriteManifest | null>(null);
   const [progress, setProgress] = useState<LoadingProgress>(DEFAULT_PROGRESS);
   const [error, setError] = useState<string | null>(null);
+  const [maps, setMaps] = useState<MapIndexEntry[]>([]);
+  const [mapId, setMapId] = useState('');
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [matchStats, setMatchStats] = useState<PlayerMatchStats[]>([]);
@@ -376,10 +381,41 @@ function App() {
     gameRef.current?.setPaused(true);
   };
 
-  const handleReady = (loaded: SpriteManifest) => {
+  const handleReady = (
+    loaded: SpriteManifest,
+    mapList: MapIndexEntry[],
+    activeMapId: string
+  ) => {
     manifestRef.current = loaded;
     setManifest(loaded);
+    setMaps(mapList);
+    setMapId(activeMapId);
+    const url = new URL(window.location.href);
+    url.searchParams.set('map', activeMapId);
+    window.history.replaceState(null, '', url);
     goPhase('lobby');
+  };
+
+  const changeMap = async (nextId: string) => {
+    if (nextId === mapId || mapLoading) return;
+    const game = gameRef.current;
+    if (!game) return;
+
+    setMapLoading(true);
+    setMapError(null);
+    try {
+      const changed = await game.selectMap(nextId);
+      if (changed) {
+        setMapId(nextId);
+        const url = new URL(window.location.href);
+        url.searchParams.set('map', nextId);
+        window.history.replaceState(null, '', url);
+      }
+    } catch (cause) {
+      setMapError(cause instanceof Error ? cause.message : 'No se pudo cargar el mapa');
+    } finally {
+      setMapLoading(false);
+    }
   };
 
   // El motor se crea una sola vez; los handlers se refrescan en cada render
@@ -409,7 +445,8 @@ function App() {
     if (!canvas) return;
 
     const game = new Game(canvas, {
-      onReady: (loaded) => handlersRef.current?.onReady(loaded),
+      onReady: (loaded, mapList, activeMapId) =>
+        handlersRef.current?.onReady(loaded, mapList, activeMapId),
       onProgress: (next) => setProgress(next),
       onError: (message) => setError(message),
       onDevicesChanged: (next) => handlersRef.current?.onDevicesChanged(next),
@@ -505,6 +542,11 @@ function App() {
         <LobbyScreen
           players={players}
           devices={devices}
+          maps={maps}
+          mapId={mapId}
+          mapLoading={mapLoading}
+          mapError={mapError}
+          onChangeMap={changeMap}
           onJoin={joinDevice}
           onTeam={setPlayerTeam}
           onReady={toggleTeamReady}

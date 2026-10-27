@@ -11,6 +11,7 @@ import {
   type InputFrame,
   type MenuAction
 } from './input';
+import { loadMap, loadMapIndex, type MapIndexEntry } from './map';
 import {
   MAX_PLAYERS,
   TEAM_INFO,
@@ -18,13 +19,24 @@ import {
   computeSplitLayout,
   facingToCenter,
   spawnForTeam,
+  syncTeamsWithMap,
   type MatchPlayerConfig,
   type PlayerMatchStats,
   type SplitRect
 } from './multiplayer';
 import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
-import { POND, TERRAINS, terrainAt, type Team, type TerrainId } from './terrain';
+import {
+  TERRAINS,
+  firstRespawnForTeam,
+  getActiveMap,
+  resolveDeepWater,
+  setActiveMap,
+  terrainAt,
+  type GameMap,
+  type Team,
+  type TerrainId
+} from './terrain';
 import { terrainSpeedEffect, type TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
@@ -37,7 +49,7 @@ import {
 import { buildWorld, type Collider, type World } from './world';
 
 export interface GameCallbacks {
-  onReady(manifest: SpriteManifest): void;
+  onReady(manifest: SpriteManifest, maps: MapIndexEntry[], activeMapId: string): void;
   onProgress(progress: LoadingProgress): void;
   onError(message: string): void;
   onDevicesChanged(devices: InputDeviceInfo[]): void;
@@ -45,20 +57,6 @@ export interface GameCallbacks {
   onPauseRequest(): void;
   onMatchStats(stats: PlayerMatchStats[]): void;
 }
-
-const NPC_SLOTS: Array<{ x: number; z: number }> = [
-  { x: -11.2, z: 14.6 },
-  { x: -15.0, z: 13.6 },
-  { x: -13.6, z: 10.8 },
-  { x: -10.4, z: 12.6 },
-  { x: -12.4, z: 15.4 },
-  { x: -15.6, z: 11.2 },
-  { x: -11.4, z: 10.9 },
-  { x: -15.2, z: 15.2 },
-  { x: -13.8, z: 16.0 },
-  { x: -9.9, z: 14.2 },
-  { x: -16.2, z: 12.6 }
-];
 
 /** Los NPC del menú solo giran hacia la cámara cuando esta se acerca. */
 const NPC_NOTICE_RADIUS = 2.4;
@@ -112,9 +110,16 @@ function clamp(value: number, min: number, max: number): number {
 export class Game {
   private readonly callbacks: GameCallbacks;
   private readonly app: pc.Application;
-  private readonly world: World;
   private readonly input: Input;
-  private readonly menuCamera: CameraRig;
+
+  /**
+   * El mundo y la cámara de menú se crean en `init`, después de cargar el JSON
+   * del mapa, y se reconstruyen al cambiar de mapa.
+   */
+  private world!: World;
+  private menuCamera!: CameraRig;
+  private mapIndex: MapIndexEntry[] = [];
+  private activeMapId = '';
 
   private readonly baseCameraLayers: number[];
 
@@ -158,31 +163,7 @@ export class Game {
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
 
-    this.world = buildWorld(this.app);
-    this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
-      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
-      return [
-        {
-          x: (collider.ax + collider.bx) / 2,
-          z: (collider.az + collider.bz) / 2,
-          // Un poco más ancho que el radio de colisión del tramo para cubrir
-          // el volumen visible de los picos, sin abrir la cuña de más.
-          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
-          ax: collider.ax,
-          az: collider.az,
-          bx: collider.bx,
-          bz: collider.bz
-        }
-      ];
-    });
-    this.menuCamera = new CameraRig(this.app, CONFIG.world.spawn);
     this.input = new Input(canvas);
-
-    // Las sombras del mundo son estáticas (los actores no proyectan sombra
-    // direccional). Renderizarlas una sola vez evita repetir el pase por cada
-    // viewport del splitscreen.
-    const sun = this.app.root.findByName('sun') as pc.Entity | null;
-    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
 
     this.baseCameraLayers = ['World', 'Depth', 'Skybox', 'UI', 'Immediate']
       .map((name) => this.app.scene.layers.getLayerByName(name)?.id)
@@ -194,7 +175,19 @@ export class Game {
 
   async init(): Promise<void> {
     try {
-      this.callbacks.onProgress({ loaded: 0, total: 12, label: 'Leyendo el manifiesto de sprites' });
+      this.callbacks.onProgress({ loaded: 0, total: 13, label: 'Cargando mapas' });
+      this.mapIndex = await loadMapIndex();
+      const requested = new URLSearchParams(window.location.search).get('map');
+      const entry =
+        this.mapIndex.find((candidate) => candidate.id === requested) ?? this.mapIndex[0];
+      const map = await loadMap(entry);
+      this.applyMap(map);
+
+      this.callbacks.onProgress({
+        loaded: 0,
+        total: 12,
+        label: 'Leyendo el manifiesto de sprites'
+      });
       const response = await fetch(`${import.meta.env.BASE_URL}sprites/manifest.json`);
       if (!response.ok) {
         throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
@@ -225,11 +218,82 @@ export class Game {
       this.ready = true;
       this.mode = 'menu';
       this.menuCamera.setEnabled(true);
-      this.callbacks.onReady(manifest);
+      this.callbacks.onReady(manifest, this.mapIndex, this.activeMapId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido al cargar';
       this.callbacks.onError(message);
     }
+  }
+
+  /** Cambia el mapa activo. Solo se permite desde el menú. */
+  async selectMap(id: string): Promise<boolean> {
+    if (!this.ready || this.mode !== 'menu' || id === this.activeMapId) return false;
+    const entry = this.mapIndex.find((candidate) => candidate.id === id);
+    if (!entry) throw new Error(`No existe el mapa "${id}"`);
+    const map = await loadMap(entry);
+    this.applyMap(map);
+    this.buildMenuCast();
+    this.menuCamera.setEnabled(true);
+    return true;
+  }
+
+  /**
+   * Reemplaza el mundo actual por el mapa indicado. Se usa al arrancar y al
+   * cambiar de mapa; destruye la partida y los NPC del menú para no dejar
+   * entidades ni materiales del mapa anterior.
+   */
+  private applyMap(map: GameMap): void {
+    this.clearMatch();
+    for (const npc of this.menuNpcs) npc.destroy();
+    this.menuNpcs = [];
+    this.menuCamera?.dispose();
+    this.world?.dispose();
+
+    setActiveMap(map);
+    syncTeamsWithMap();
+    this.world = buildWorld(this.app);
+    this.activeMapId = map.id;
+    this.rebuildSightOccluders();
+    this.menuCamera = new CameraRig(this.app, map.spawn);
+
+    // Las sombras del mundo son estáticas (los actores no proyectan sombra
+    // direccional). Renderizarlas una sola vez evita repetir el pase por cada
+    // viewport del splitscreen.
+    const sun = this.app.root.findByName('sun') as pc.Entity | null;
+    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+  }
+
+  private rebuildSightOccluders(): void {
+    this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
+      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
+      return [
+        {
+          x: (collider.ax + collider.bx) / 2,
+          z: (collider.az + collider.bz) / 2,
+          // Un poco más ancho que el radio de colisión del tramo para cubrir
+          // el volumen visible de los picos, sin abrir la cuña de más.
+          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
+          ax: collider.ax,
+          az: collider.az,
+          bx: collider.bx,
+          bz: collider.bz
+        }
+      ];
+    });
+  }
+
+  /** Huecos de los Pokémon de exposición, en anillo alrededor de la base azul. */
+  private npcSlots(): Array<{ x: number; z: number }> {
+    const base = firstRespawnForTeam('blue');
+    const radius = Math.max(1.7, base.radius * 0.65);
+    const count = 11;
+    return Array.from({ length: count }, (_, index) => {
+      const angle = (index / count) * Math.PI * 2 + Math.PI * 0.15;
+      return {
+        x: base.x + Math.cos(angle) * radius,
+        z: base.z + Math.sin(angle) * radius
+      };
+    });
   }
 
   private buildMenuCast(): void {
@@ -239,10 +303,11 @@ export class Game {
     for (const npc of this.menuNpcs) npc.destroy();
     this.menuNpcs = [];
 
+    const slots = this.npcSlots();
     manifest.pokemon.forEach((entry, index) => {
       const asset = this.assets.get(entry.id);
       if (!asset) return;
-      const slot = NPC_SLOTS[index % NPC_SLOTS.length];
+      const slot = slots[index % slots.length];
       const homeFacing = Math.atan2(-slot.x, -slot.z);
       const npc = new Actor(this.app, asset, this.world.shadowMaterial, slot, homeFacing);
       npc.play('idle');
@@ -430,7 +495,7 @@ export class Game {
   }
 
   private onUpdate = (dt: number): void => {
-    if (this.disposed) return;
+    if (this.disposed || !this.world) return;
     const frameDt = Math.min(dt, 0.05);
     const frame = this.input.poll();
 
@@ -476,7 +541,7 @@ export class Game {
 
   private updateMenu(dt: number): void {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
-    this.menuCamera.update(dt, CONFIG.world.spawn, 0, 0);
+    this.menuCamera.update(dt, getActiveMap().spawn, 0, 0);
 
     for (const npc of this.menuNpcs) {
       const dx = this.menuCamera.position.x - npc.position.x;
@@ -524,7 +589,7 @@ export class Game {
         copy.setFacing(player.facing);
         copy.play(player.animation);
         copy.setPlayback(player.playback);
-        copy.setSubmerge(player.submerge, POND.surfaceHeight);
+        copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.update(dt, cameraPosition);
       });
     });
@@ -756,17 +821,10 @@ export class Game {
 
       // Aguas profundas: solo los Pokémon de tipo Agua pueden entrar.
       if (!self.types.includes('Water')) {
-        const dx = px - POND.x;
-        const dz = pz - POND.z;
-        const distance = Math.hypot(dx, dz);
-        const minimum = POND.deepRadius + radius;
-        if (distance < minimum) {
-          if (distance < 0.0001) {
-            px += minimum;
-          } else {
-            px = POND.x + (dx / distance) * minimum;
-            pz = POND.z + (dz / distance) * minimum;
-          }
+        const resolved = resolveDeepWater(px, pz, radius);
+        if (resolved[0] !== px || resolved[1] !== pz) {
+          px = resolved[0];
+          pz = resolved[1];
           pushed = true;
         }
       }
@@ -811,10 +869,10 @@ export class Game {
     this.fogDecalMesh = null;
     for (const npc of this.menuNpcs) npc.destroy();
     this.menuNpcs = [];
-    this.menuCamera.dispose();
+    this.menuCamera?.dispose();
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();
-    this.world.dispose();
+    this.world?.dispose();
     this.app.destroy();
   }
 }

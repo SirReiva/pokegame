@@ -1,9 +1,11 @@
 /**
- * Mapa de la demo con aire de MOBA: arena cuadrada, dos bases en esquinas
- * opuestas y tres carriles que las conectan (superior, central e inferior).
- * El resto del mapa es jungla, con calveros temáticos y un lago.
- * Este módulo solo contiene datos y consultas puras: no depende de PlayCanvas
- * ni de React.
+ * Terreno del mapa.
+ *
+ * La forma del mapa vive en `public/maps/*.json` como una rejilla: cada celda
+ * declara su `TerrainId`. Este módulo carga esa rejilla en memoria, responde
+ * consultas puras (`terrainAt`, `onMountain`…) y deriva de ella las zonas
+ * poligonales que usan la decoración y el agua. No depende de PlayCanvas ni de
+ * React.
  */
 
 export type TerrainId =
@@ -48,6 +50,16 @@ export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
   desert: { name: 'Desierto', type: 'Ground' }
 };
 
+export const TERRAIN_IDS = Object.keys(TERRAINS) as TerrainId[];
+
+const TERRAIN_INDEX = new Map<TerrainId, number>(
+  TERRAIN_IDS.map((terrain, index) => [terrain, index])
+);
+
+export function isTerrainId(value: unknown): value is TerrainId {
+  return typeof value === 'string' && TERRAIN_INDEX.has(value as TerrainId);
+}
+
 export type Team = 'blue' | 'red';
 
 export interface BaseZone {
@@ -57,83 +69,8 @@ export interface BaseZone {
   radius: number;
 }
 
-/** Las dos bases, en esquinas opuestas de la diagonal suroeste-noreste. */
-export const BASES: BaseZone[] = [
-  { team: 'blue', x: -13.2, z: 13.2, radius: 3.6 },
-  { team: 'red', x: 13.2, z: -13.2, radius: 3.6 }
-];
-
-/** Lago de la jungla sureste: única zona de aguas profundas del mapa. */
-export const POND = {
-  x: 7.5,
-  z: 7.5,
-  /** Radio total del agua (aguas someras). */
-  radius: 2.4,
-  /** Radio del pozo profundo: solo Pokémon de tipo Agua pueden entrar. */
-  deepRadius: 1.4,
-  /** Radio de la orilla de arena. */
-  shoreRadius: 3.1,
-  /** Altura de la lámina de agua sobre el suelo; sumerge las piernas. */
-  surfaceHeight: 0.3
-};
-
-export interface Lane {
-  width: number;
-  points: Array<[number, number]>;
-  /**
-   * Ancho del asfalto. Si falta, el carril es de tierra. La carretera se pinta
-   * encima del carril, así que el ancho del carril queda como arcén.
-   */
-  asphalt?: number;
-  /** Pinta el eje discontinuo del centro de la calzada. */
-  centerLine?: boolean;
-}
-
-/**
- * Los tres carriles. El superior rodea la jungla noroeste, el inferior la
- * sureste y el central cruza en diagonal de base a base. Ambos extremos quedan
- * dentro de las bases, que se pintan encima.
- */
-export const LANES: Lane[] = [
-  {
-    width: 3.4,
-    points: [
-      [-11.8, 10.8],
-      [-15.8, 6.0],
-      [-15.8, -6.0],
-      [-11.5, -15.0],
-      [-6.0, -15.8],
-      [2.0, -15.8],
-      [9.0, -15.0],
-      [12.6, -14.2]
-    ]
-  },
-  {
-    width: 3.4,
-    asphalt: 2.4,
-    centerLine: true,
-    points: [
-      [-10.8, 10.8],
-      [-5.4, 5.4],
-      [0, 0],
-      [5.4, -5.4],
-      [10.8, -10.8]
-    ]
-  },
-  {
-    width: 3.4,
-    points: [
-      [11.8, -10.8],
-      [15.8, -6.0],
-      [15.8, 6.0],
-      [11.5, 15.0],
-      [6.0, 15.8],
-      [-2.0, 15.8],
-      [-9.0, 15.0],
-      [-12.6, 14.2]
-    ]
-  }
-];
+/** Punto de aparición de un equipo. También marca el centro de su base. */
+export interface RespawnPoint extends BaseZone {}
 
 export interface MountainRange {
   /** Ancho total de la cresta; el jugador no puede cruzarla. */
@@ -142,44 +79,23 @@ export interface MountainRange {
 }
 
 /**
- * Cordilleras: barreras intransitables que separan regiones del mapa. Cada una
- * es una polilínea (igual que los carriles); el trazado suavizado coincide con
- * el que pinta el suelo y con la fila de picos 3D. No son terrenos: no tienen
- * tipo ni modifican la velocidad, solo bloquean el paso (vía colliders).
- *
- * Se mantienen apartadas de carriles, bases, lago, calveros y del spawn para no
- * cortar el recorrido del mapa; los huecos en sus extremos permiten rodearlas.
+ * Mapa ya normalizado. `tiles[0][0]` es la esquina noroeste: las filas avanzan
+ * de norte a sur (eje Z) y las columnas de oeste a este (eje X).
  */
-export const MOUNTAINS: MountainRange[] = [
-  {
-    // Sierra suroeste: separa el carril central de la jungla interior.
-    width: 2.2,
-    points: [
-      [-9.5, 3.5],
-      [-7.5, 1.5],
-      [-5.5, -0.5]
-    ]
-  },
-  {
-    // Sierra este: separa la jungla del lago de la colada volcánica.
-    width: 2.2,
-    points: [
-      [6.0, 2.0],
-      [8.5, 2.0],
-      [11.0, 2.0]
-    ]
-  },
-  {
-    // Sierra norte: rompe la llanura del norte, entre la base azul y el claro
-    // feérico.
-    width: 2.2,
-    points: [
-      [-6.0, 11.0],
-      [-3.5, 11.0],
-      [-1.0, 11.0]
-    ]
-  }
-];
+export interface GameMap {
+  id: string;
+  name: string;
+  /** Lado de cada celda en unidades de mundo. */
+  tileSize: number;
+  /** Rejilla cuadrada de tipos de terreno. */
+  tiles: TerrainId[][];
+  respawns: RespawnPoint[];
+  mountains: MountainRange[];
+  /** Punto al que mira la cámara del menú. */
+  spawn: { x: number; z: number };
+  /** Altura de la lámina de agua sobre el suelo. */
+  waterHeight: number;
+}
 
 export type Point2 = [number, number];
 
@@ -198,34 +114,398 @@ export interface PolygonZoneShape {
 /** Forma que ocupa una zona del mapa. */
 export type ZoneShape = CircleZoneShape | PolygonZoneShape;
 
-/**
- * Calvero temático. Acepta las dos formas:
- * - Círculo: `{ terrain: 'ice', x: -4, z: -11, radius: 2.2 }`.
- * - Polígono: `{ terrain: 'ice', points: [[x, z], [x, z], ...] }`.
- * Los vértices pueden ir en cualquier sentido; el interior se resuelve con la
- * regla par-impar, así que también se admiten polígonos cóncavos.
- */
+/** Calvero temático derivado de la rejilla. */
 export type TerrainZone = { terrain: TerrainId } & ZoneShape;
 
-/**
- * Calveros temáticos repartidos por las dos junglas. Se mantienen apartados de
- * carriles, bases y lago para no tapar la lectura del mapa.
- * La hierba alta se pinta distinto: además del lecho verde, genera matas 3D.
- */
-export const TERRAIN_ZONES: TerrainZone[] = [
-  // Jungla noroeste.
-  { terrain: 'electric', x: -9.0, z: -8.5, radius: 2.4 },
-  { terrain: 'ice', x: -4.0, z: -11.0, radius: 2.2 },
-  { terrain: 'poison', x: -11.0, z: -4.0, radius: 2.2 },
-  { terrain: 'tallGrass', x: -5.5, z: -4.5, radius: 2.0 },
-  // Jungla norte.
-  { terrain: 'desert', x: 1.0, z: -8.5, radius: 2.4 },
-  // Jungla sureste.
-  { terrain: 'fire', x: 10.5, z: -2.5, radius: 2.5 },
-  { terrain: 'ghost', x: 0.5, z: 7.5, radius: 2.3 },
-  { terrain: 'fairy', x: 3.5, z: 11.5, radius: 2.4 },
-  { terrain: 'tallGrass', x: 2.5, z: 3.5, radius: 2.0 }
+/** Terrenos que generan decoración 3D propia. */
+const DECORATIVE_TERRAINS: TerrainId[] = [
+  'tallGrass',
+  'fire',
+  'electric',
+  'ice',
+  'poison',
+  'ghost',
+  'fairy',
+  'desert'
 ];
+
+// --- Estado del mapa activo -------------------------------------------------
+
+let activeMap: GameMap | null = null;
+let activeRows = 0;
+let activeCols = 0;
+let activeTileSize = 1;
+let activeHalf = 0;
+let flatTerrain = new Uint8Array(0);
+
+/** Bases del mapa activo, derivadas de sus respawns. */
+export const BASES: BaseZone[] = [];
+/** Cordilleras del mapa activo. */
+export const MOUNTAINS: MountainRange[] = [];
+/** Regiones de terrenos decorativos, para colocar props y pintar detalles. */
+export const TERRAIN_ZONES: TerrainZone[] = [];
+/** Regiones de agua (someras + profundas) unidas por cuerpo de agua. */
+export const WATER_ZONES: TerrainZone[] = [];
+
+export function setActiveMap(map: GameMap): void {
+  activeMap = map;
+  activeRows = map.tiles.length;
+  activeCols = map.tiles[0]?.length ?? 0;
+  activeTileSize = map.tileSize;
+  activeHalf = (Math.max(activeRows, activeCols) * activeTileSize) / 2;
+
+  flatTerrain = new Uint8Array(activeRows * activeCols);
+  for (let row = 0; row < activeRows; row++) {
+    for (let col = 0; col < activeCols; col++) {
+      flatTerrain[row * activeCols + col] = TERRAIN_INDEX.get(map.tiles[row][col]) ?? 0;
+    }
+  }
+
+  BASES.length = 0;
+  for (const respawn of map.respawns) {
+    BASES.push({
+      team: respawn.team,
+      x: respawn.x,
+      z: respawn.z,
+      radius: respawn.radius
+    });
+  }
+
+  MOUNTAINS.length = 0;
+  MOUNTAINS.push(...map.mountains);
+
+  TERRAIN_ZONES.length = 0;
+  for (const terrain of DECORATIVE_TERRAINS) {
+    for (const points of regionsForTerrain(terrain)) {
+      TERRAIN_ZONES.push({ terrain, points });
+    }
+  }
+
+  WATER_ZONES.length = 0;
+  for (const points of regionsForMask((index) => {
+    const terrain = TERRAIN_IDS[index];
+    return terrain === 'waterLow' || terrain === 'waterHigh';
+  })) {
+    WATER_ZONES.push({ terrain: 'waterLow', points });
+  }
+}
+
+export function getActiveMap(): GameMap {
+  if (!activeMap) throw new Error('Todavía no hay ningún mapa activo');
+  return activeMap;
+}
+
+export function mapHalfSize(): number {
+  return activeHalf;
+}
+
+export function mapWorldSize(): number {
+  return activeHalf * 2;
+}
+
+export function mapTileSize(): number {
+  return activeTileSize;
+}
+
+export function mapRows(): number {
+  return activeRows;
+}
+
+export function mapCols(): number {
+  return activeCols;
+}
+
+export function respawnsForTeam(team: Team): RespawnPoint[] {
+  return activeMap?.respawns.filter((respawn) => respawn.team === team) ?? [];
+}
+
+/** Primera base de un equipo; sirve para cámara, orientación y decoración. */
+export function firstRespawnForTeam(team: Team): RespawnPoint {
+  return respawnsForTeam(team)[0] ?? { team, x: 0, z: 0, radius: 3.6 };
+}
+
+// --- Consultas de la rejilla -------------------------------------------------
+
+function clampCell(value: number, max: number): number {
+  if (value < 0) return 0;
+  if (value >= max) return max - 1;
+  return value;
+}
+
+/** Terreno bajo una posición del mundo. */
+export function terrainAt(x: number, z: number): TerrainId {
+  if (!activeMap || activeCols === 0 || activeRows === 0) return 'jungle';
+  const col = clampCell(Math.floor((x + activeHalf) / activeTileSize), activeCols);
+  const row = clampCell(Math.floor((z + activeHalf) / activeTileSize), activeRows);
+  return TERRAIN_IDS[flatTerrain[row * activeCols + col]] ?? 'jungle';
+}
+
+/** Índice de la celda que contiene la posición, o null fuera del mapa. */
+export function cellAt(x: number, z: number): { row: number; col: number } | null {
+  if (!activeMap) return null;
+  const col = Math.floor((x + activeHalf) / activeTileSize);
+  const row = Math.floor((z + activeHalf) / activeTileSize);
+  if (col < 0 || col >= activeCols || row < 0 || row >= activeRows) return null;
+  return { row, col };
+}
+
+/** Verdadero si la posición cae dentro de una cordillera intransitable. */
+export function onMountain(x: number, z: number): boolean {
+  return MOUNTAINS.some((range) => distanceToPath(x, z, range.points) <= range.width / 2);
+}
+
+/**
+ * Empuja un círculo fuera de las celdas de agua profunda. Devuelve la posición
+ * corregida; el llamador decide si el Pokémon puede cruzarla según su tipo.
+ */
+export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
+  if (!activeMap) return [x, z];
+  let px = x;
+  let pz = z;
+
+  for (let iteration = 0; iteration < 4; iteration++) {
+    let pushed = false;
+    const minCol = clampCell(
+      Math.floor((px - radius + activeHalf) / activeTileSize),
+      activeCols
+    );
+    const maxCol = clampCell(
+      Math.floor((px + radius + activeHalf) / activeTileSize),
+      activeCols
+    );
+    const minRow = clampCell(
+      Math.floor((pz - radius + activeHalf) / activeTileSize),
+      activeRows
+    );
+    const maxRow = clampCell(
+      Math.floor((pz + radius + activeHalf) / activeTileSize),
+      activeRows
+    );
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        if (terrainAtCell(row, col) !== 'waterHigh') continue;
+
+        const cellMinX = col * activeTileSize - activeHalf;
+        const cellMaxX = cellMinX + activeTileSize;
+        const cellMinZ = row * activeTileSize - activeHalf;
+        const cellMaxZ = cellMinZ + activeTileSize;
+        const closestX = Math.min(cellMaxX, Math.max(cellMinX, px));
+        const closestZ = Math.min(cellMaxZ, Math.max(cellMinZ, pz));
+        const dx = px - closestX;
+        const dz = pz - closestZ;
+        const distance = Math.hypot(dx, dz);
+        if (distance >= radius) continue;
+
+        if (distance < 0.0001) {
+          // Centro dentro de la celda: sale por la cara más cercana.
+          const toLeft = px - cellMinX;
+          const toRight = cellMaxX - px;
+          const toTop = pz - cellMinZ;
+          const toBottom = cellMaxZ - pz;
+          const nearest = Math.min(toLeft, toRight, toTop, toBottom);
+          if (nearest === toLeft) px = cellMinX - radius;
+          else if (nearest === toRight) px = cellMaxX + radius;
+          else if (nearest === toTop) pz = cellMinZ - radius;
+          else pz = cellMaxZ + radius;
+        } else {
+          px = closestX + (dx / distance) * radius;
+          pz = closestZ + (dz / distance) * radius;
+        }
+        pushed = true;
+      }
+    }
+
+    if (!pushed) break;
+  }
+
+  return [px, pz];
+}
+
+export function terrainAtCell(row: number, col: number): TerrainId {
+  if (row < 0 || row >= activeRows || col < 0 || col >= activeCols) return 'jungle';
+  return TERRAIN_IDS[flatTerrain[row * activeCols + col]] ?? 'jungle';
+}
+
+// --- Regiones derivadas de la rejilla ---------------------------------------
+
+interface BoundaryEdge {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+}
+
+function regionsForTerrain(terrain: TerrainId): Point2[][] {
+  return regionsForMask((index) => TERRAIN_IDS[index] === terrain);
+}
+
+/**
+ * Convierte cada componente conexa de una máscara (4 vecinos) en un polígono
+ * con los bordes de sus celdas. Si el componente tuviera huecos se conserva el
+ * contorno exterior; las regiones decorativas no los usan y el agua ya se
+ * agrupa como un único cuerpo.
+ */
+function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
+  if (activeRows === 0 || activeCols === 0) return [];
+  const mask = new Uint8Array(activeRows * activeCols);
+  for (let row = 0; row < activeRows; row++) {
+    for (let col = 0; col < activeCols; col++) {
+      const index = flatTerrain[row * activeCols + col];
+      if (predicate(index)) mask[row * activeCols + col] = 1;
+    }
+  }
+
+  const visited = new Uint8Array(mask.length);
+  const stack: number[] = [];
+  const polygons: Point2[][] = [];
+
+  for (let start = 0; start < mask.length; start++) {
+    if (mask[start] === 0 || visited[start] === 1) continue;
+
+    // 1. Recolectar la componente conexa.
+    visited[start] = 1;
+    stack.length = 0;
+    stack.push(start);
+    const cells: number[] = [];
+    while (stack.length > 0) {
+      const cell = stack.pop()!;
+      cells.push(cell);
+      const row = Math.floor(cell / activeCols);
+      const col = cell - row * activeCols;
+      const neighbours: Array<[number, number]> = [
+        [row - 1, col],
+        [row + 1, col],
+        [row, col - 1],
+        [row, col + 1]
+      ];
+      for (const [nr, nc] of neighbours) {
+        if (nr < 0 || nr >= activeRows || nc < 0 || nc >= activeCols) continue;
+        const next = nr * activeCols + nc;
+        if (mask[next] === 0 || visited[next] === 1) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+
+    // 2. Bordes dirigidos de sus celdas (interior a la derecha).
+    const inside = (row: number, col: number) =>
+      row >= 0 &&
+      row < activeRows &&
+      col >= 0 &&
+      col < activeCols &&
+      mask[row * activeCols + col] === 1;
+
+    const edges: BoundaryEdge[] = [];
+    const outgoing = new Map<number, BoundaryEdge[]>();
+    const vertexKey = (ax: number, ay: number) => ay * (activeCols + 1) + ax;
+    const addEdge = (ax: number, ay: number, bx: number, by: number) => {
+      const edge = { ax, ay, bx, by };
+      edges.push(edge);
+      const key = vertexKey(ax, ay);
+      const list = outgoing.get(key);
+      if (list) list.push(edge);
+      else outgoing.set(key, [edge]);
+    };
+
+    for (const cell of cells) {
+      const row = Math.floor(cell / activeCols);
+      const col = cell - row * activeCols;
+      if (!inside(row - 1, col)) addEdge(col, row, col + 1, row);
+      if (!inside(row, col + 1)) addEdge(col + 1, row, col + 1, row + 1);
+      if (!inside(row + 1, col)) addEdge(col + 1, row + 1, col, row + 1);
+      if (!inside(row, col - 1)) addEdge(col, row + 1, col, row);
+    }
+
+    // 3. Encadenar los bordes en uno o varios bucles y quedarse con el mayor.
+    const used = new Uint8Array(edges.length);
+    let best: Array<[number, number]> = [];
+    let bestArea = 0;
+
+    for (let first = 0; first < edges.length; first++) {
+      if (used[first] === 1) continue;
+      const edge = edges[first];
+      used[first] = 1;
+      const loop: Array<[number, number]> = [[edge.ax, edge.ay]];
+      let endX = edge.bx;
+      let endY = edge.by;
+      let dirX = edge.bx - edge.ax;
+      let dirZ = edge.by - edge.ay;
+
+      // Guarda de seguridad: un bucle no puede tener más aristas que el doble
+      // del perímetro posible de la componente.
+      let guard = cells.length * 8 + 8;
+      while ((endX !== edge.ax || endY !== edge.ay) && guard-- > 0) {
+        loop.push([endX, endY]);
+        const candidates = outgoing.get(vertexKey(endX, endY));
+        if (!candidates) break;
+
+        let next: BoundaryEdge | null = null;
+        let bestScore = -Infinity;
+        for (const candidate of candidates) {
+          const index = edges.indexOf(candidate);
+          if (index < 0 || used[index] === 1) continue;
+          const cdx = candidate.bx - candidate.ax;
+          const cdz = candidate.by - candidate.ay;
+          const cross = dirX * cdz - dirZ * cdx;
+          const dot = dirX * cdx + dirZ * cdz;
+          const score = Math.atan2(cross, dot);
+          if (score > bestScore) {
+            bestScore = score;
+            next = candidate;
+          }
+        }
+        if (!next) break;
+        used[edges.indexOf(next)] = 1;
+        dirX = next.bx - next.ax;
+        dirZ = next.by - next.ay;
+        endX = next.bx;
+        endY = next.by;
+      }
+
+      // 4. Quitar vértices colineales.
+      const simplified: Array<[number, number]> = [];
+      for (let i = 0; i < loop.length; i++) {
+        const prev = simplified[simplified.length - 1];
+        const current = loop[i];
+        const next = loop[(i + 1) % loop.length];
+        if (!prev) {
+          simplified.push(current);
+          continue;
+        }
+        const cross =
+          (current[0] - prev[0]) * (next[1] - current[1]) -
+          (current[1] - prev[1]) * (next[0] - current[0]);
+        if (cross !== 0) simplified.push(current);
+      }
+
+      let area = 0;
+      for (let i = 0; i < simplified.length; i++) {
+        const [x0, z0] = simplified[i];
+        const [x1, z1] = simplified[(i + 1) % simplified.length];
+        area += x0 * z1 - x1 * z0;
+      }
+      area = Math.abs(area) / 2;
+      if (area > bestArea) {
+        bestArea = area;
+        best = simplified;
+      }
+    }
+
+    if (best.length >= 3) {
+      polygons.push(
+        best.map(([cx, cz]) => [
+          cx * activeTileSize - activeHalf,
+          cz * activeTileSize - activeHalf
+        ])
+      );
+    }
+  }
+
+  return polygons;
+}
+
+// --- Geometría compartida ---------------------------------------------------
 
 export function isPolygonZone(shape: ZoneShape): shape is PolygonZoneShape {
   return 'points' in shape;
@@ -381,8 +661,6 @@ export function zoneArea(zone: ZoneShape): number {
 /**
  * Punto aleatorio uniforme dentro de la zona. `inset` deja margen respecto al
  * borde y `minCenterDistance` evita el centro (útil para rocas y árboles).
- * En círculos consume los mismos números aleatorios que el muestreo radial de
- * siempre, así que las posiciones del mapa actual no cambian.
  */
 export function randomPointInZone(
   zone: ZoneShape,
@@ -403,7 +681,7 @@ export function randomPointInZone(
   const margin = Math.max(0, inset);
   const usableWidth = Math.max(0, bounds.width - margin * 2);
   const usableDepth = Math.max(0, bounds.depth - margin * 2);
-  for (let attempt = 0; attempt < 64; attempt++) {
+  for (let attempt = 0; attempt < 96; attempt++) {
     const x = bounds.minX + margin + random() * usableWidth;
     const z = bounds.minZ + margin + random() * usableDepth;
     if (!zoneContainsInset(zone, x, z, margin)) continue;
@@ -528,9 +806,8 @@ function distanceToSegment(
 }
 
 /**
- * Distancia al trazado suavizado que pinta `textures.ts`: Bézier cuadráticas
- * entre cada punto y el punto medio del siguiente, igual que en el canvas. Así
- * el terreno coincide con el borde visible del carril y del asfalto.
+ * Distancia al trazado suavizado que usan las cordilleras: Bézier cuadráticas
+ * entre cada punto y el punto medio del siguiente.
  */
 function distanceToPath(x: number, z: number, points: Array<[number, number]>): number {
   if (points.length === 1) return Math.hypot(x - points[0][0], z - points[0][1]);
@@ -556,42 +833,4 @@ function distanceToPath(x: number, z: number, points: Array<[number, number]>): 
   }
   const last = points[points.length - 1];
   return Math.min(best, distanceToSegment(x, z, previous[0], previous[1], last[0], last[1]));
-}
-
-function onLane(x: number, z: number): boolean {
-  return LANES.some((lane) => distanceToPath(x, z, lane.points) <= lane.width / 2 + 0.15);
-}
-
-/**
- * Asfalto del carril central. Se consulta antes que el carril porque la calzada
- * está pintada encima: los arcenes de tierra siguen siendo `lane`.
- */
-function onAsphalt(x: number, z: number): boolean {
-  return LANES.some(
-    (lane) => lane.asphalt !== undefined && distanceToPath(x, z, lane.points) <= lane.asphalt / 2
-  );
-}
-
-/** Verdadero si la posición cae dentro de una cordillera intransitable. */
-export function onMountain(x: number, z: number): boolean {
-  return MOUNTAINS.some((range) => distanceToPath(x, z, range.points) <= range.width / 2);
-}
-
-/** Terreno bajo una posición del mundo. */
-export function terrainAt(x: number, z: number): TerrainId {
-  for (const zone of TERRAIN_ZONES) {
-    if (zoneContains(zone, x, z)) return zone.terrain;
-  }
-  for (const base of BASES) {
-    if (Math.hypot(x - base.x, z - base.z) <= base.radius) return 'base';
-  }
-
-  const pondDistance = Math.hypot(x - POND.x, z - POND.z);
-  if (pondDistance <= POND.deepRadius) return 'waterHigh';
-  if (pondDistance <= POND.radius) return 'waterLow';
-  if (pondDistance <= POND.shoreRadius) return 'sand';
-
-  if (onAsphalt(x, z)) return 'road';
-  if (onLane(x, z)) return 'lane';
-  return 'jungle';
 }

@@ -1,6 +1,7 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
 import type { SplitRect } from './multiplayer';
+import { mapHalfSize } from './terrain';
 
 /**
  * Niebla de guerra dibujada por el motor.
@@ -433,7 +434,7 @@ export class FogDecal {
     this.material.setParameter('uFogMask', this.maskTexture);
     this.material.setParameter('uPlayer', this.player);
     this.material.setParameter('uVisionRange', 0);
-    this.material.setParameter('uMapHalfSize', CONFIG.world.halfSize);
+    this.material.setParameter('uMapHalfSize', mapHalfSize());
     this.material.setParameter('uScreenCenter', this.screenCenter);
     this.material.setParameter('uScreenRadius', this.screenRadius);
     this.material.setParameter('uScreenFeather', this.screenFeather);
@@ -448,7 +449,8 @@ export class FogDecal {
 
     this.entity = new pc.Entity(`fog-decal-${index + 1}`);
     this.entity.setPosition(0, 0.02, 0);
-    this.entity.setLocalScale(CONFIG.world.halfSize, 1, CONFIG.world.halfSize);
+    const half = mapHalfSize();
+    this.entity.setLocalScale(half, 1, half);
     this.entity.addComponent('render');
     const render = this.entity.render!;
     render.meshInstances = [instance];
@@ -512,7 +514,7 @@ export class FogDecal {
     context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
     context.fillStyle = '#000';
 
-    const half = CONFIG.world.halfSize;
+    const half = mapHalfSize();
     const toCanvasX = (x: number) => ((x + half) / (half * 2)) * MASK_SIZE;
     const toCanvasY = (z: number) => ((z + half) / (half * 2)) * MASK_SIZE;
 

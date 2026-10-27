@@ -1,0 +1,14 @@
+{
+  "maps": [
+    {
+      "id": "arena",
+      "name": "Arena MOBA",
+      "file": "arena.json"
+    },
+    {
+      "id": "lago",
+      "name": "Lago central",
+      "file": "lago.json"
+    }
+  ]
+}

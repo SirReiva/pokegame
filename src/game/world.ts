@@ -2,10 +2,11 @@ import * as pc from 'playcanvas';
 import { CONFIG } from './config';
 import {
   BASES,
-  LANES,
   MOUNTAINS,
-  POND,
   TERRAIN_ZONES,
+  WATER_ZONES,
+  getActiveMap,
+  mapHalfSize,
   onMountain,
   randomPointInZone,
   terrainAt,
@@ -30,7 +31,6 @@ import {
   createSmokeCanvas,
   createSoilCanvas,
   createWaterCanvas,
-  createWaterMaskCanvas,
   createWispCanvas,
   textureFromCanvas
 } from './textures';
@@ -50,13 +50,11 @@ export type Collider =
 export interface World {
   colliders: Collider[];
   bounds: number;
-  pond: typeof POND;
+  waterHeight: number;
   shadowMaterial: pc.StandardMaterial;
   update(dt: number): void;
   dispose(): void;
 }
-
-const HALF = CONFIG.world.groundSize / 2;
 
 /** Extensión de una caja de emisión ajustada a la forma de la zona. */
 function zoneEmitterExtents(
@@ -148,9 +146,12 @@ function part(
 
 export function buildWorld(app: pc.Application): World {
   const device = app.graphicsDevice;
+  const map = getActiveMap();
+  const HALF = mapHalfSize();
   const colliders: Collider[] = [];
   const created: pc.Entity[] = [];
   const materials: pc.StandardMaterial[] = [];
+  const surfaceMeshes: pc.Mesh[] = [];
 
   // Orden transparente manual: primero las láminas de agua, después las
   // sombras de contacto y al final el anillo del jugador. Así el anillo nunca
@@ -162,10 +163,7 @@ export function buildWorld(app: pc.Application): World {
   const groundTexture = textureFromCanvas(
     device,
     createGroundCanvas(1024, {
-      half: HALF,
-      bases: BASES,
-      pond: POND,
-      lanes: LANES,
+      map,
       zones: TERRAIN_ZONES
     }),
     { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST }
@@ -194,12 +192,6 @@ export function buildWorld(app: pc.Application): World {
     repeat: true,
     mipmaps: true,
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
-    magFilter: pc.FILTER_LINEAR
-  });
-  const waterMaskTexture = textureFromCanvas(device, createWaterMaskCanvas(), {
-    name: 'water-mask',
-    mipmaps: false,
-    minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
   const dustTexture = textureFromCanvas(device, createDustCanvas(), {
@@ -336,14 +328,29 @@ export function buildWorld(app: pc.Application): World {
   ground.render!.receiveShadows = true;
   created.push(ground);
 
-  // --- Estanque ------------------------------------------------------------
-  // El lecho está pintado en el suelo. Encima van dos láminas planas de agua
-  // translúcida, sin grosor ni paredes: una base y una capa de brillos que se
-  // desplazan en direcciones distintas. Juntas se leen como una superficie
-  // viva, no como una bandeja elevada. La máscara radial disuelve el borde.
+  // Falda exterior: la cámara puede salir de los límites del mapa al mirar
+  // desde una base. Un plano grande bajo el suelo evita que se vea el vacío y
+  // deja que la niebla de la escena lo funda con el horizonte.
+  const outerGroundMaterial = standard({
+    diffuse: '#7fbf5b',
+    specular: '#000000',
+    gloss: 0.02
+  });
+  materials.push(outerGroundMaterial);
+  const outerGround = part(app.root, 'plane', outerGroundMaterial, {
+    position: [0, -0.04, 0],
+    scale: [HALF * 2 + 140, 1, HALF * 2 + 140]
+  });
+  outerGround.render!.castShadows = false;
+  outerGround.render!.receiveShadows = false;
+  created.push(outerGround);
+
+  // --- Agua ----------------------------------------------------------------
+  // Cada cuerpo de agua se construye con una malla plana triangulada a partir
+  // de las celdas waterLow/waterHigh. Encima van dos capas translúcidas con
+  // las UVs animadas en direcciones distintas.
   const makeWaterMaterial = (
     map: pc.Texture,
-    tiling: [number, number],
     opacity: number,
     tint = '#d9f6ff',
     glow = '#0f3b4d'
@@ -351,7 +358,6 @@ export function buildWorld(app: pc.Application): World {
     const material = standard({
       diffuse: tint,
       diffuseMap: map,
-      tiling,
       specular: '#ffffff',
       gloss: 0.9,
       opacity,
@@ -359,61 +365,74 @@ export function buildWorld(app: pc.Application): World {
       depthWrite: false,
       cull: pc.CULLFACE_NONE
     });
-    material.opacityMap = waterMaskTexture;
-    material.opacityMapChannel = 'a';
     material.emissive = hex(glow);
     material.update();
     materials.push(material);
     return material;
   };
 
-  const waterSurfaceMaterial = makeWaterMaterial(waterTexture, [1.5, 1.5], 0.38);
-  const waterGlintMaterial = makeWaterMaterial(waterGlintTexture, [1.9, 1.7], 0.32);
+  const waterSurfaceMaterial = makeWaterMaterial(waterTexture, 0.42);
+  const waterGlintMaterial = makeWaterMaterial(waterGlintTexture, 0.3);
+  const waterHeight = map.waterHeight;
 
-  const waterRadius = POND.radius + 0.35;
-  const waterSurface = part(app.root, 'plane', waterSurfaceMaterial, {
-    position: [POND.x, POND.surfaceHeight, POND.z],
-    scale: [waterRadius * 2, 1, waterRadius * 2]
-  });
-  const waterGlints = part(app.root, 'plane', waterGlintMaterial, {
-    position: [POND.x, POND.surfaceHeight + 0.004, POND.z],
-    scale: [waterRadius * 2, 1, waterRadius * 2],
-    rotation: [0, 62, 0]
-  });
-  for (const [index, surface] of [waterSurface, waterGlints].entries()) {
-    surface.render!.castShadows = false;
-    surface.render!.receiveShadows = false;
-    const instance = surface.render!.meshInstances[0];
-    if (instance) instance.drawOrder = index;
-    created.push(surface);
+  const buildSurfaceMesh = (
+    points: Array<[number, number]>,
+    y: number,
+    uvScale: number
+  ): pc.Mesh | null => {
+    const indices = triangulatePolygon(points);
+    if (indices.length === 0) return null;
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    for (const [x, z] of points) {
+      positions.push(x, y, z);
+      normals.push(0, 1, 0);
+      uvs.push(x / uvScale, z / uvScale);
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setUvs(0, uvs);
+    mesh.setIndices(indices);
+    mesh.update();
+    surfaceMeshes.push(mesh);
+    return mesh;
+  };
+
+  const addSurface = (
+    mesh: pc.Mesh,
+    material: pc.StandardMaterial,
+    drawOrder: number,
+    name: string
+  ) => {
+    const entity = new pc.Entity(name);
+    entity.addComponent('render');
+    entity.render!.castShadows = false;
+    entity.render!.receiveShadows = false;
+    const instance = new pc.MeshInstance(mesh, material);
+    instance.castShadow = false;
+    instance.receiveShadow = false;
+    instance.drawOrder = drawOrder;
+    entity.render!.meshInstances = [instance];
+    app.root.addChild(entity);
+    created.push(entity);
+  };
+
+  for (const zone of WATER_ZONES) {
+    if (!('points' in zone)) continue;
+    const base = buildSurfaceMesh(zone.points, waterHeight, 3.4);
+    if (!base) continue;
+    const glint = buildSurfaceMesh(zone.points, waterHeight + 0.004, 3.0);
+    addSurface(base, waterSurfaceMaterial, 0, 'water-surface');
+    if (glint) addSurface(glint, waterGlintMaterial, 1, 'water-glint');
   }
 
   // --- Ciénaga -------------------------------------------------------------
-  // El calvero venenoso se comporta como agua somera: la hierba oscura queda
-  // dentro y encima va una lámina de agua turbia. En círculos se usa la misma
-  // máscara radial que el lago; en polígonos la propia malla recorta la lámina.
-  // Es mate, sin brillo especular, para que se lea como agua estancada y no
-  // como un espejo. No hay agua profunda: cualquier Pokémon puede cruzar.
+  // La ciénaga comparte la superficie plana, pero es mate y se mueve despacio.
   const swampZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'poison');
   const swampSurfaceMaterial = standard({
-    diffuse: '#4c5a3c',
-    diffuseMap: waterTexture,
-    tiling: [1.15, 1.05],
-    specular: '#000000',
-    gloss: 0,
-    opacity: 0.42,
-    blend: pc.BLEND_NORMAL,
-    depthWrite: false,
-    cull: pc.CULLFACE_NONE
-  });
-  swampSurfaceMaterial.opacityMap = waterMaskTexture;
-  swampSurfaceMaterial.opacityMapChannel = 'a';
-  swampSurfaceMaterial.emissive = hex('#0a1007');
-  swampSurfaceMaterial.update();
-  materials.push(swampSurfaceMaterial);
-
-  // Variante sin máscara radial: en un polígono la silueta ya la marca la malla.
-  const swampPolygonMaterial = standard({
     diffuse: '#4c5a3c',
     diffuseMap: waterTexture,
     tiling: [1.15, 1.05],
@@ -425,65 +444,16 @@ export function buildWorld(app: pc.Application): World {
     cull: pc.CULLFACE_NONE,
     emissive: '#0a1007'
   });
-  materials.push(swampPolygonMaterial);
+  materials.push(swampSurfaceMaterial);
 
-  /** Lámina plana triangulada a partir de los vértices de una zona poligonal. */
-  const buildPolygonSurface = (zone: TerrainZone, material: pc.StandardMaterial) => {
-    if (!('points' in zone)) return;
-    const bounds = zoneBounds(zone);
-    const indices = triangulatePolygon(zone.points);
-    if (indices.length === 0) return;
+  for (const zone of swampZones) {
+    if (!('points' in zone)) continue;
+    const mesh = buildSurfaceMesh(zone.points, waterHeight, 2.8);
+    if (mesh) addSurface(mesh, swampSurfaceMaterial, 0, 'swamp-surface');
+  }
 
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const width = Math.max(0.001, bounds.width);
-    const depth = Math.max(0.001, bounds.depth);
-    for (const [x, z] of zone.points) {
-      positions.push(x, POND.surfaceHeight, z);
-      normals.push(0, 1, 0);
-      uvs.push((x - bounds.minX) / width, (z - bounds.minZ) / depth);
-    }
-
-    const mesh = new pc.Mesh(device);
-    mesh.setPositions(positions);
-    mesh.setNormals(normals);
-    mesh.setUvs(0, uvs);
-    mesh.setIndices(indices);
-    mesh.update();
-
-    const entity = new pc.Entity('polygon-surface');
-    entity.addComponent('render');
-    entity.render!.castShadows = false;
-    entity.render!.receiveShadows = false;
-    const instance = new pc.MeshInstance(mesh, material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
-    instance.drawOrder = 0;
-    entity.render!.meshInstances = [instance];
-    app.root.addChild(entity);
-    created.push(entity);
-  };
-
-  swampZones.forEach((zone) => {
-    if ('points' in zone) {
-      buildPolygonSurface(zone, swampPolygonMaterial);
-      return;
-    }
-    const radius = zone.radius + 0.2;
-    const surface = part(app.root, 'plane', swampSurfaceMaterial, {
-      position: [zone.x, POND.surfaceHeight, zone.z],
-      scale: [radius * 2, 1, radius * 2]
-    });
-    surface.render!.castShadows = false;
-    surface.render!.receiveShadows = false;
-    const instance = surface.render!.meshInstances[0];
-    if (instance) instance.drawOrder = 0;
-    created.push(surface);
-  });
-
-  // El agua profunda no es un collider fijo: depende del tipo del jugador y
-  // se resuelve en `Game.resolvePosition`.
+  // El agua profunda no es un collider fijo: depende del tipo del jugador y se
+  // resuelve en `Game.resolvePosition` consultando las celdas de la rejilla.
 
   // --- Vegetación ----------------------------------------------------------
   const trunkMaterial = standard({
@@ -3135,8 +3105,8 @@ export function buildWorld(app: pc.Application): World {
 
   return {
     colliders,
-    bounds: CONFIG.world.halfSize,
-    pond: POND,
+    bounds: HALF,
+    waterHeight,
     shadowMaterial,
     update(dt: number) {
       time += dt;
@@ -3168,9 +3138,9 @@ export function buildWorld(app: pc.Application): World {
       // Hay que llamar a `update()` después de tocar los offsets: si no,
       // PlayCanvas no sube las transformadas de UV al uniform buffer y el
       // agua se queda congelada aunque los valores cambien en JS.
-      // Las velocidades están en unidades de UV: con el tiling actual la capa
-      // base recorre ~0,75 u/s y los brillos ~1 u/s, suficiente para que la
-      // corriente se lea sin parecer un río.
+      // Las velocidades están en unidades de UV y las UVs de cada cuerpo de
+      // agua se escalan por su tamaño en el mundo, así que la corriente se lee
+      // igual en lagos grandes y pequeños.
       waterSurfaceMaterial.diffuseMapOffset = new pc.Vec2(time * 0.15, time * 0.22);
       waterSurfaceMaterial.update();
 
@@ -3178,11 +3148,10 @@ export function buildWorld(app: pc.Application): World {
         -time * 0.26 + Math.sin(time * 0.6) * 0.05,
         time * 0.11 + Math.cos(time * 0.45) * 0.03
       );
-      // Los destellos laten un poco de opacidad y giran despacio: dos pistas de
-      // movimiento más, legibles incluso de reojo.
-      waterGlintMaterial.opacity = 0.32 + Math.sin(time * 1.15) * 0.05;
+      // Los destellos laten un poco de opacidad: una pista de movimiento más,
+      // legible incluso de reojo.
+      waterGlintMaterial.opacity = 0.3 + Math.sin(time * 1.15) * 0.05;
       waterGlintMaterial.update();
-      waterGlints.setLocalEulerAngles(0, 62 + time * 5.5, 0);
 
       // La ciénaga se mueve aún más despacio: el agua estancada no corre y su
       // superficie es mate, así que solo cambia el dibujo de las ondas.
@@ -3274,7 +3243,7 @@ export function buildWorld(app: pc.Application): World {
       shadowTexture.destroy();
       waterTexture.destroy();
       waterGlintTexture.destroy();
-      waterMaskTexture.destroy();
+      for (const mesh of surfaceMeshes) mesh.destroy();
       dustTexture.destroy();
       frostTexture.destroy();
       smokeTexture.destroy();

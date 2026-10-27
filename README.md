@@ -53,6 +53,54 @@ La configuración tiene dos pantallas:
 
 Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo.
 
+## Mapas definidos por JSON
+
+Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la pantalla de equipos permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
+
+Un mapa es una **rejilla cuadrada de tipos de terreno** más sus respawns, cordilleras y ajustes de cámara:
+
+```json
+{
+  "id": "mi-mapa",
+  "name": "Mi mapa",
+  "tileSize": 1,
+  "waterHeight": 0.3,
+  "spawn": { "x": -4, "z": 4 },
+  "respawns": [
+    { "team": "blue", "x": -6, "z": 6, "radius": 3.2 },
+    { "team": "red", "x": 6, "z": -6, "radius": 3.2 }
+  ],
+  "mountains": [
+    { "width": 2.2, "points": [[-2, 0], [0, 1], [2, 0]] }
+  ],
+  "tiles": [
+    ["jungle", "jungle", "lane", "jungle"],
+    ["jungle", "waterLow", "waterLow", "jungle"],
+    ["jungle", "waterHigh", "waterLow", "jungle"],
+    ["jungle", "jungle", "lane", "jungle"]
+  ]
+}
+```
+
+- La fila 0 es el **norte** (Z negativa) y la columna 0 el **oeste** (X negativa). Cada fila de `tiles` debe tener el mismo número de columnas y la rejilla debe ser cuadrada.
+- `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua.
+- Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
+- `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
+- `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra.
+- `spawn` es el punto al que mira la cámara del menú. Si falta, se usa el respawn azul.
+- Los calveros, el agua y su decoración 3D se derivan de las celdas: cada grupo conexo de un terreno decorativo se convierte en una región poligonal, y cada cuerpo de agua se triangula para colocar la lámina superficial.
+- `public/maps/map.schema.json` describe el formato para que el editor valide los archivos. Los mapas existentes lo referencian con `"$schema": "./map.schema.json"`.
+
+Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public/maps/index.json`:
+
+```json
+{
+  "maps": [
+    { "id": "mi-mapa", "name": "Mi mapa", "file": "mi-mapa.json" }
+  ]
+}
+```
+
 ## Multijugador local
 
 - **Sala de equipos en la misma pantalla**: la lista de mandos se refresca con el Gamepad API. Cada dispositivo tiene identidad propia (`kbd`, `pad-0`, `pad-1`…), así que un jugador puede unirse, cambiar de equipo, marcar listo o salir sin afectar a los demás.
@@ -80,7 +128,7 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
 - **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores y los Pokémon del menú no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
 - **Pixel art configurable**: `CONFIG.sprite.filter` elige el muestreo. `'nearest'` deja los bloques duros; `'smooth'` precarga la hoja con NEAREST a `smoothScale` y luego filtra con LINEAR, de modo que el contorno se antialiasea 1-2 px sin emborronar el interior; `'linear'` interpola directamente sobre la hoja original (el más suave y borroso). `CONFIG.sprite.alphaToCoverage` delega el recorte alfa en las muestras del MSAA, y las UVs mantienen medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
-- **Mapa generado por código**: arena de estilo MOBA con dos bases, tres carriles, jungla, lago, árboles y vegetación construidos con primitivas y texturas procedurales; no hay assets de escenario externos.
+- **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y cordilleras declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando.
 - **Terrenos tipados**: la arena tiene quince terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios; la partida es exploración libre, sin combate.
@@ -88,9 +136,9 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 
 ## Terrenos y tipos Pokémon
 
-El mapa es una **arena cuadrada de estilo MOBA** de 38 × 38 u (18,4 u jugables por semieje). Dos bases ocupan esquinas opuestas de la diagonal suroeste-noreste: la azul en `(-13,2, 13,2)` y la roja en `(13,2, -13,2)`, ambas con radio 3,6 u. Tres carriles las conectan y el resto del terreno es jungla, con nueve calveros temáticos y un lago en la jungla sureste.
+El mapa por defecto (`public/maps/arena.json`) es una **arena cuadrada de estilo MOBA** de 38 × 38 celdas de 1 u. Dos bases ocupan esquinas opuestas de la diagonal suroeste-noreste: la azul en `(-13,2, 13,2)` y la roja en `(13,2, -13,2)`, ambas con radio 3,6 u. Tres carriles las conectan y el resto del terreno es jungla, con nueve calveros temáticos y un lago en la jungla sureste.
 
-Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con `terrainAt(x, z)`. Los siete terrenos base cubren toda la arena y los nueve calveros añaden variedad temática:
+Los nombres y tipos Pokémon de cada terreno se definen en `src/game/terrain.ts` (`TERRAINS`) y la rejilla se consulta con `terrainAt(x, z)`. Los siete terrenos base cubren toda la arena y los nueve calveros añaden variedad temática:
 
 | Terreno | Tipo | Dónde |
 | --- | --- | --- |
@@ -110,19 +158,15 @@ Los terrenos se definen en `src/game/terrain.ts` (`TERRAINS`) y se consultan con
 | Claro feérico | Hada | calvero de flores 3D en la jungla sureste |
 | Hierba alta | Planta | dos manchas, una en cada jungla |
 
-`terrainAt` resuelve primero los calveros, después las bases, el lago (profundo → somero → arena), el asfalto, los carriles y, por defecto, la jungla. Los calveros se pintan con bloques de 4 px en la textura del suelo (borde irregular, grietas, chispas, flores…) y cada uno tiene una paleta propia. El lecho del lago también está pintado en el suelo, sin cilindros elevados; encima se coloca una lámina de agua plana y translúcida.
+`terrainAt` consulta directamente la celda de la rejilla que contiene la posición. Las celdas se pintan con bloques de 4 px en la textura del suelo y cada terreno tiene una paleta propia; los calveros reciben encima el detalle procedural de su tipo. El lecho del agua también está pintado en el suelo, sin cilindros elevados; encima se coloca una lámina plana y translúcida.
 
-Cada calvero de `TERRAIN_ZONES` puede ser **circular** (`{ terrain, x, z, radius }`) o **poligonal** (`{ terrain, points }`). En el segundo caso, `points` es un array de vértices `[x, z]` en orden (el último no necesita repetir el primero); se admiten polígonos cóncavos y cualquier sentido de giro. La misma forma se usa para `terrainAt`, para pintar el suelo y para repartir la decoración 3D, así que el borde visible y el terreno jugable coinciden:
+Los calveros ya no se declaran a mano: al cargar el mapa, cada **grupo conexo de celdas** de un terreno decorativo se convierte en una región poligonal (`TERRAIN_ZONES`). Esa misma forma se usa para pintar el detalle, repartir la decoración 3D y colocar el agua de la ciénaga, así que el borde visible y el terreno jugable coinciden. El agua se agrupa por cuerpos (someras + profundas juntas) y se triangula para construir su malla.
 
-```ts
-{ terrain: 'ice', points: [[-5.5, -10], [-3.2, -12.4], [-1.8, -10.2], [-3.8, -8.6]] }
-```
-
-Los **tres carriles** (`LANES`) tienen 3,4 u de ancho y se trazan con curvas suavizadas, igual que la textura. El superior rodea la jungla noroeste, el inferior la sureste y el central cruza en diagonal de base a base; ambos extremos quedan dentro de las bases, que se pintan encima. Todo el carril es de tipo **Normal**, también sus arcenes, aunque se pinte como tierra. La **carretera** es el carril central asfaltado: el asfalto (`Lane.asphalt`, 2,4 u) se pinta sobre el carril de tierra, que queda como arcén; lleva borde claro, rodadas, grano de 3 px y eje discontinuo. El trazado se muestrea con la misma curva que el carril, así que el terreno cambia justo en el borde visible del asfalto: pisar el arcén sigue siendo Carril y pisar la calzada es Carretera.
+Los **carriles** y la **carretera** son celdas de tipo `lane` y `road` en la rejilla: el carril de tierra se pinta con su paleta y la calzada con asfalto, grano y tono más oscuro. En el mapa por defecto el superior rodea la jungla noroeste, el inferior la sureste y el central cruza en diagonal de base a base. Todo carril es de tipo **Normal**, así que la velocidad cambia al pisar exactamente sus celdas.
 
 La **colada volcánica** (`fire`, tipo Fuego) sustituye el antiguo calvero de brasas por un campo de basalto. El suelo se pinta con nueve placas oscuras de tonos azul-gris generadas con un Voronoi aproximado por bloques, separadas por surcos negros: el suelo no lleva naranja ni amarillo, solo roca fría. Encima hay **placas de basalto 3D**: cinco racimos por zona, cada uno con tres o cuatro bloques facetados de base irregular y corona inclinada. El color va por vértice: la base y los laterales caen a un gris azulado casi negro, mientras la cara superior y los vértices de la corona se encienden en naranja, amarillo y rojo, como lava solidificada. Son bajos y no colisionan. De las grietas suben **44 brasas aditivas** que se encienden, derivan y se apagan, y una luz omni naranja de corto alcance tiñe las rocas con un parpadeo lento. Además, **cada racimo de basalto emite su propia columna de humo**: cinco por calvero, con 24 bocanadas cada una que nacen del centro de la roca, suben en vertical, se ensanchan y se desvanecen, con un tono cálido en la base que pasa a gris. El tipo sigue siendo Fuego: Charmander corre por ella, Squirtle la resiste y Bulbasaur y Lucario se frenan.
 
-La **ciénaga** (`poison`) conserva la hierba oscura pintada en el suelo, con briznas de 1–2 px entre el lodo, y añade encima una lámina de agua turbia con la misma máscara radial que el lago, pero más opaca, más lenta y **mate**: sin brillo especular, para que se lea como agua estancada y no como un espejo. También genera matas 3D de hierba oscura, ahora **dispersas**: 11 briznas por mata, más bajas y repartidas con poca densidad para que la ciénaga parezca un lodazal y no un prado frondoso. Son casi negras en la base y verde apagado en la punta, sobresalen del agua y se mecen despacio. Del suelo sube además un **humo bajo y verdoso**: 65 bocanadas suaves que nacen a ras del agua, ascienden lentamente, se ensanchan y se desvanecen, con textura de jirones y opacidad baja. Se comporta como **aguas someras**: cualquier Pokémon puede cruzarla y el sprite se hunde hasta `submergeShallow`, con el anillo de rumbo flotando sobre la superficie. No tiene zona profunda ni collider, y el terreno sigue siendo de tipo Veneno para la velocidad.
+La **ciénaga** (`poison`) conserva la hierba oscura pintada en el suelo, con briznas de 1–2 px entre el lodo, y añade encima una lámina de agua turbia recortada por el contorno de sus celdas, más opaca, más lenta y **mate**: sin brillo especular, para que se lea como agua estancada y no como un espejo. También genera matas 3D de hierba oscura, ahora **dispersas**: 11 briznas por mata, más bajas y repartidas con poca densidad para que la ciénaga parezca un lodazal y no un prado frondoso. Son casi negras en la base y verde apagado en la punta, sobresalen del agua y se mecen despacio. Del suelo sube además un **humo bajo y verdoso**: 65 bocanadas suaves que nacen a ras del agua, ascienden lentamente, se ensanchan y se desvanecen, con textura de jirones y opacidad baja. Se comporta como **aguas someras**: cualquier Pokémon puede cruzarla y el sprite se hunde hasta `submergeShallow`, con el anillo de rumbo flotando sobre la superficie. No tiene zona profunda ni collider, y el terreno sigue siendo de tipo Veneno para la velocidad.
 
 El **desierto** (`desert`, tipo Tierra) es una mancha de arena en la jungla norte, pintada con bandas de dunas, rizos, grietas y piedras sueltas. Dentro del calvero crecen cuatro cactus 3D por zona: tronco y brazos de cilindros con un verde apagado, alturas y giros variados, y collider circular como los árboles. Sobre la zona flota una capa de **polvo en suspensión**: 90 partículas suaves repartidas en una caja amplia que derivan con el viento, crecen y se desvanecen, con textura de manchas difusas para que se lean como polvo y no como chispas. El terreno es de tipo Tierra, así que frena a Pikachu, Charmander y Lucario, mientras Bulbasaur queda neutro porque su tipo Planta resiste Tierra pero su tipo Veneno la recibe.
 
@@ -130,15 +174,15 @@ La **escarcha** (`ice`, tipo Hielo) suma al suelo helado un efecto 3D propio. El
 
 El **bosque umbrío** (`ghost`, tipo Fantasma) pasa de ser solo suelo pintado a tener volumen propio. En cada calvero se levantan **cinco árboles secos y retorcidos** con tres variantes de malla: raíces cortas, tronco en dos tramos inclinados y tres o cuatro ramas quebradas en dos segmentos, todo con prismas facetados y color por vértice, del casi negro de la base al gris violeta de las puntas. Son los únicos árboles del mapa que proyectan sombra real y tienen collider circular. Entre ellos flotan **18 fuegos fatuos** aditivos: orbes pequeños que nacen en una caja baja, derivan muy despacio y parpadean con una textura neutra teñida de violeta por el `colorGraph`. Una luz omni violeta de corto alcance respira con un pulso lento y tiñe troncos y suelo. Por último, una **niebla rastrera** de 130 partículas cubre el calvero con una capa continua: caja ancha y casi plana, vida larga, opacidad media-alta y deriva horizontal, para que se lea como un bosque húmedo y no como el humo vertical de la ciénaga. Los árboles se mecen muy poco y muy despacio en `world.update`.
 
-Las **bases** son plataformas de piedra pintadas en el suelo con un anillo y cuatro losanges del color del equipo (azul o rojo). En el centro hay un nexo 3D: pedestal de dos tambores de piedra, cristal emisivo del color del equipo y una luz omni corta que tiñe la plataforma. El cristal y el pedestal son colliders circulares. La base azul acoge al equipo azul y a los Pokémon de exposición del menú (`NPC_SLOTS`); la roja es el punto de aparición del otro equipo.
+Las **bases** son plataformas de piedra pintadas en el suelo con un anillo y cuatro losanges del color del equipo (azul o rojo). En el centro hay un nexo 3D: pedestal de dos tambores de piedra, cristal emisivo del color del equipo y una luz omni corta que tiñe la plataforma. El cristal y el pedestal son colliders circulares. La base azul acoge al equipo azul y a los Pokémon de exposición del menú, colocados en un anillo derivado de su respawn; la roja es el punto de aparición del otro equipo.
 
-La **hierba alta**, la **hierba oscura de la ciénaga**, el **claro feérico** y el **páramo** son los calveros con volumen propio. La hierba alta, además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de `TERRAIN_ZONES` (los de tipo `tallGrass`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
+La **hierba alta**, la **hierba oscura de la ciénaga**, el **claro feérico** y el **páramo** son los calveros con volumen propio. La hierba alta, además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de las regiones derivadas de las celdas `tallGrass` (`TERRAIN_ZONES`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
 
 El **claro feérico** usa la misma técnica con flores en vez de briznas. Cada mata 3D es una malla de siete flores con tallo de dos cintas cruzadas, tres hojas a media altura y una corola de cinco o seis pétalos alrededor de un corazón amarillo. Los pétalos salen en rosa, lila, blanco, amarillo pálido y azul cielo, con una ligera variación de tono por pétalo, y todo el color va por vértice: sin texturas ni recortes, con volumen desde cualquier ángulo. Las matas se reparten de forma determinista por el calvero (tipo `fairy`) con densidad alta, no colisionan y se mecen con el viento algo más despacio que la hierba, porque el tallo es más rígido que una brizna. Sobre las flores flota **polen dorado**: 64 motas aditivas diminutas con un núcleo brillante y cuatro destellos que derivan despacio, titilan y se apagan, para que el calvero se lea como un lugar encantado y no como un prado cualquiera. Y entre el polen revolotean **ocho mariposas 3D**: un cuerpo fino y dos alas horizontales con color por vértice (más oscuras junto al cuerpo y casi blancas en la punta) que aletean rápido y vuelan hacia objetivos aleatorios dentro del calvero, eligiendo otro al llegar.
 
 El **páramo** cambia las briznas verdes por frailejones y hierba seca. Cada mata de frailejón es uno o dos ejemplares de 0,3–0,64 u: un tronco leñoso oscuro de siete caras y tres bandas con sombreado plano y ligera inclinación, rematado por una roseta de hojas lanceoladas. La roseta lleva una corona exterior casi horizontal, otra interior más erguida, un brote central y un faldón de hojas secas hacia abajo; las hojas van de verde grisáceo en la base a blanco plateado en la punta, todo por color de vértice y sin texturas, así que la planta se lee como frailejón desde cualquier ángulo. Entre los frailejones crece hierba seca: matas de 14 briznas con la misma geometría y volumen que la hierba alta, pero más cortas y en tonos pajizos, de marrón oscuro en la base a ocre claro en la punta. Todo se reparte de forma determinista por el calvero (tipo `electric`), no colisiona y se mece con el viento: apenas los frailejones y algo más la hierba seca.
 
-Las **aguas profundas** (`POND.deepRadius`) actúan como collider circular solo para Pokémon que no sean de tipo Agua: el resto puede entrar en las someras y rodear el centro, pero no cruzarlo. El HUD lo avisa cuando estás en aguas someras con un Pokémon no acuático. El HUD de telemetría muestra el nombre del terreno y una insignia con su tipo.
+Las **aguas profundas** (`waterHigh`) bloquean el paso solo a los Pokémon que no sean de tipo Agua: el resto puede entrar en las someras y rodear el centro, pero no cruzar las celdas profundas. La colisión se resuelve empujando el círculo del jugador fuera de cada celda profunda. El HUD lo avisa cuando estás en aguas someras con un Pokémon no acuático. El HUD de telemetría muestra el nombre del terreno y una insignia con su tipo.
 
 ### Velocidad según el terreno
 
@@ -207,7 +251,7 @@ Las **cordilleras** proyectan además una cuña de sombra como **decal en el sue
 
 ### Sumergirse en el agua
 
-El lago de la jungla sureste combina el lecho pintado en el suelo con dos láminas planas y translúcidas a `POND.surfaceHeight` (0,3 u), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un giro lento y un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La máscara radial (`createWaterMaskCanvas`) disuelve el borde contra la arena y el tile de ondas se genera repetido en los bordes para que el desplazamiento no muestre costuras. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
+Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas y translúcidas a `waterHeight` (0,3 u por defecto), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La malla se construye triangulando el contorno de las celdas de agua y las UVs se escalan por el tamaño del cuerpo, así que el oleaje se lee igual en lagos grandes y pequeños. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
 
 ## Cómo funciona el pipeline de sprites
 
@@ -267,13 +311,19 @@ lift = max(0, bottom - anchor.y)
 ```
 scripts/import-sprites.mjs   descarga, validación, anclas y manifiesto
 public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS.md
+public/maps/
+  index.json                 lista de mapas disponibles
+  map.schema.json            esquema JSON para validar los mapas
+  arena.json                 mapa por defecto en rejilla + respawns + cordilleras
+  lago.json                  segundo mapa de ejemplo
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla y visión
   types.ts                   tipos del manifiesto y del estado del juego
+  map.ts                     carga y validación de los mapas JSON
   multiplayer.ts             equipos, spawns, reparto de viewports y tipos compartidos
-  terrain.ts                 terrenos, bases, carriles, zonas y consulta por posición
-  textures.ts                texturas procedurales (césped, calveros, asfalto, agua, cielo, sombra, props)
-  world.ts                   arena MOBA, bases, nexo, árboles, luces y colisiones
+  terrain.ts                 rejilla, consultas, regiones derivadas y agua
+  textures.ts                texturas procedurales (suelo por celdas, calveros, agua, cielo, sombra, props)
+  world.ts                   mundo, bases, nexo, árboles, luces y colisiones
   camera.ts                  rig orbital a 45° con viewport y capas por jugador
   input.ts                   1 teclado + mandos, snapshots por dispositivo y acciones de menú
   roster.ts                  velocidad punta de cada Pokémon
@@ -309,7 +359,7 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `MASK_SIZE`, `MAX_OCCLUDERS`, `SHADOW_LENGTH` e `INSIDE_EDGE_EXTENSION` en `src/game/fog.ts`: resolución de la máscara del decal de sombra, número máximo de tramos de cordillera que proyectan, alcance de cada cuña y extensión del caso pegado a la cresta. `MOUNTAIN_SHADOW_RADIUS` en `src/game/game.ts` controla el ancho de las cuñas respecto al radio de colisión del tramo; `mountainOverlap` en `CONFIG.vision` controla cuánto se oscurece la cuña donde coincide con la niebla circular (0 la oculta del todo).
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
-- `TERRAINS`, `TERRAIN_ZONES`, `BASES`, `LANES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición y radio de las bases, trazado y ancho de los carriles, radios del lago y forma de cada calvero. Un calvero puede definirse con `x`/`z`/`radius` o con un array `points` de vértices `[x, z]` que forma su polígono. El ancho del asfalto del carril central se define con `asphalt` dentro de `LANES`.
+- `public/maps/*.json`: rejilla de terrenos, `tileSize`, `waterHeight`, respawns de cada equipo, cordilleras y punto de cámara del menú. `public/maps/index.json` decide qué mapas aparecen en el selector. `TERRAINS` en `src/game/terrain.ts` mantiene los nombres y tipos Pokémon de cada `TerrainId`.
 - `MAX_PLAYERS`, `MAX_TEAM_SIZE`, `TEAM_INFO`, `spawnForTeam` y `computeSplitLayout` en `src/game/multiplayer.ts`: límite de jugadores, tope por equipo, colores/coordenadas de base y rejilla del splitscreen.
 - `NPC_SLOTS` (`src/game/game.ts`): Pokémon de exposición que acompañan al menú de equipos en la base azul.
 

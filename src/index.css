@@ -1722,6 +1722,31 @@ code {
   font-size: 1.2rem;
 }
 
+.map-picker {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.map-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.map-note {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: #8b9db2;
+}
+
+.map-note.map-error {
+  color: #ff8b8f;
+}
+
 .device-list {
   display: flex;
   flex-direction: column;

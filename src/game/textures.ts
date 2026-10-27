@@ -7,8 +7,7 @@ import {
   zoneContains,
   zoneContainsInset,
   zoneSignedDistance,
-  type BaseZone,
-  type Lane,
+  type GameMap,
   type TerrainId,
   type TerrainZone,
   type ZoneShape,
@@ -17,16 +16,8 @@ import {
 /** Utilidades para generar las texturas de la demo (sin assets externos). */
 
 export interface GroundPaintOptions {
-  half: number;
-  bases: BaseZone[];
-  pond: {
-    x: number;
-    z: number;
-    radius: number;
-    deepRadius: number;
-    shoreRadius: number;
-  };
-  lanes: Lane[];
+  map: GameMap;
+  /** Regiones decorativas derivadas de la rejilla del mapa. */
   zones: TerrainZone[];
 }
 
@@ -103,7 +94,56 @@ interface TerrainPalette {
   accent2: string;
 }
 
-const TERRAIN_PALETTES: Partial<Record<TerrainId, TerrainPalette>> = {
+const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
+  jungle: {
+    base: "#699f4b",
+    light: "#74ab55",
+    dark: "#5d9442",
+    accent: "#86bd64",
+    accent2: "#4f8a39",
+  },
+  lane: {
+    base: "#b99a70",
+    light: "#c9ab82",
+    dark: "#a58a63",
+    accent: "#d7bd96",
+    accent2: "#8f744f",
+  },
+  road: {
+    base: "#4c525b",
+    light: "#5a616b",
+    dark: "#3d424a",
+    accent: "#cfd6da",
+    accent2: "#42474f",
+  },
+  sand: {
+    base: "#d8c79a",
+    light: "#e5d6ad",
+    dark: "#c2ad7e",
+    accent: "#f0e4c0",
+    accent2: "#ab9468",
+  },
+  waterLow: {
+    base: "#67bad8",
+    light: "#7fd0e8",
+    dark: "#58aecb",
+    accent: "#b9edfa",
+    accent2: "#4f9fbc",
+  },
+  waterHigh: {
+    base: "#2f7fa8",
+    light: "#3a8fb9",
+    dark: "#276b92",
+    accent: "#57b4d9",
+    accent2: "#1f5e84",
+  },
+  base: {
+    base: "#8d8577",
+    light: "#a89f8e",
+    dark: "#766e61",
+    accent: "#c2b9a6",
+    accent2: "#5f584d",
+  },
   fire: {
     base: "#1f2329",
     light: "#2d323a",
@@ -542,329 +582,134 @@ function paintTerrainZone(
   ctx.restore();
 }
 
-/**
- * Estanque plano pintado en la propia textura del suelo: sin cilindros ni
- * paredes, para que el agua quede a ras del terreno. El centro oscuro son las
- * aguas profundas y el anillo claro las someras.
- */
-function paintPond(
+/** Pinta la rejilla base del mapa, celda a celda. */
+function paintGridTiles(
   ctx: CanvasRenderingContext2D,
-  pond: GroundPaintOptions["pond"],
-  toPx: (world: number) => number,
-  scale: number,
+  map: GameMap,
+  size: number,
 ): void {
-  const random = mulberry32(0x90ad);
-  const cx = toPx(pond.x);
-  const cy = toPx(pond.z);
+  const rows = map.tiles.length;
+  const cols = map.tiles[0]?.length ?? 0;
+  const half = (Math.max(rows, cols) * map.tileSize) / 2;
+  const scale = size / (half * 2);
+  const cellPx = map.tileSize * scale;
+  const step = 4;
 
-  const disc = (
-    radiusWorld: number,
-    colors: [string, string, string],
-    edge: string,
-  ) => {
-    const radius = radiusWorld * scale;
-    const step = 4;
-    for (let oy = -radius; oy <= radius; oy += step) {
-      for (let ox = -radius; ox <= radius; ox += step) {
-        const distance = Math.hypot(ox, oy);
-        const angle = Math.atan2(oy, ox);
-        const wobble =
-          1 +
-          0.022 * Math.sin(angle * 5 + 1.7) +
-          0.018 * Math.sin(angle * 9 - 0.6);
-        if (distance > radius * wobble) continue;
-        let color = colors[0];
-        if (distance > radius * 0.9) color = edge;
-        else if (random() < 0.16) color = colors[1];
-        else if (random() < 0.06) color = colors[2];
-        ctx.fillStyle = color;
-        ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), step, step);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const terrain = map.tiles[row][col];
+      const palette = TERRAIN_PALETTES[terrain];
+      const x0 = Math.round(col * cellPx);
+      const y0 = Math.round(row * cellPx);
+      const x1 = Math.round((col + 1) * cellPx);
+      const y1 = Math.round((row + 1) * cellPx);
+      const random = mulberry32(
+        (row * 73856093) ^ (col * 19349663) ^ 0x5eed,
+      );
+
+      ctx.fillStyle = palette.base;
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+
+      // Grano de 4 px con semilla por bloque de pantalla, no por celda: así
+      // dos celdas vecinas del mismo terreno comparten el ruido y no aparece
+      // una costura de tablero en cada borde.
+      for (let py = y0; py < y1; py += step) {
+        for (let px = x0; px < x1; px += step) {
+          const grain = mulberry32(
+            ((Math.floor(py / step) + 1) * 92837111) ^
+              ((Math.floor(px / step) + 1) * 689287499),
+          );
+          if (grain() < 0.62) continue;
+          ctx.fillStyle =
+            grain() < 0.45
+              ? palette.light
+              : grain() < 0.5
+                ? palette.dark
+                : palette.accent2;
+          ctx.globalAlpha = 0.14 + grain() * 0.22;
+          ctx.fillRect(px, py, Math.min(step, x1 - px), Math.min(step, y1 - py));
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      switch (terrain) {
+        case "waterLow":
+        case "waterHigh": {
+          const streaks = 2 + Math.floor(random() * 2);
+          ctx.fillStyle =
+            terrain === "waterHigh" ? palette.accent : "#c4f0fb";
+          ctx.globalAlpha = 0.55;
+          for (let i = 0; i < streaks; i++) {
+            const sx = x0 + 3 + random() * Math.max(1, x1 - x0 - 8);
+            const sy = y0 + 3 + random() * Math.max(1, y1 - y0 - 6);
+            ctx.fillRect(
+              Math.round(sx),
+              Math.round(sy),
+              4 + Math.floor(random() * 4),
+              2,
+            );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case "road": {
+          ctx.fillStyle = palette.accent2;
+          ctx.globalAlpha = 0.6;
+          for (let i = 0; i < 5; i++) {
+            ctx.fillRect(
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 2)),
+              2,
+              2,
+            );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case "lane":
+        case "sand": {
+          ctx.fillStyle = palette.accent;
+          ctx.globalAlpha = 0.55;
+          for (let i = 0; i < 4; i++) {
+            ctx.fillRect(
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 2)),
+              2,
+              2,
+            );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case "jungle": {
+          ctx.fillStyle = palette.accent;
+          ctx.globalAlpha = 0.5;
+          for (let i = 0; i < 3; i++) {
+            ctx.fillRect(
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 3)),
+              2,
+              3,
+            );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        default:
+          break;
       }
     }
-  };
-
-  disc(pond.radius, ["#67bad8", "#7fd0e8", "#58aecb"], "#4f9fbc");
-  disc(pond.deepRadius, ["#2f7fa8", "#3a8fb9", "#276b92"], "#1f5e84");
-
-  // Ondas cortas y destellos, con más luz en las aguas someras.
-  for (let i = 0; i < 160; i++) {
-    const angle = random() * Math.PI * 2;
-    const radius = Math.sqrt(random()) * pond.radius * 0.94;
-    const deep = radius < pond.deepRadius * 0.94;
-    const ox = Math.cos(angle) * radius * scale;
-    const oy = Math.sin(angle) * radius * scale;
-    const length = 2 + Math.floor(random() * 4) * 2;
-    if (deep) {
-      ctx.fillStyle = random() < 0.5 ? "#4b9cc4" : "#5fb4d6";
-    } else {
-      ctx.fillStyle = random() < 0.5 ? "#9adff2" : "#86d2e9";
-    }
-    ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), length, 2);
-    if (random() < 0.4) {
-      ctx.fillRect(
-        Math.floor(cx + ox + 2),
-        Math.floor(cy + oy + 2),
-        Math.max(2, length - 2),
-        2,
-      );
-    }
-  }
-
-  for (let i = 0; i < 44; i++) {
-    const angle = random() * Math.PI * 2;
-    const radius = Math.sqrt(random()) * pond.radius * 0.9 * scale;
-    ctx.fillStyle = "#d9f5ff";
-    ctx.fillRect(
-      Math.floor(cx + Math.cos(angle) * radius),
-      Math.floor(cy + Math.sin(angle) * radius),
-      2,
-      2,
-    );
   }
 }
 
-/** Traza el trazado suavizado que comparten caminos y carretera. */
-function tracePath(
+/** Plataforma de piedra de cada respawn, con el anillo y el emblema del equipo. */
+function paintBases(
   ctx: CanvasRenderingContext2D,
-  points: Array<[number, number]>,
-  toPx: (world: number) => number,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
-  for (let i = 1; i < points.length - 1; i++) {
-    const [cx, cy] = points[i];
-    const [nx, ny] = points[i + 1];
-    ctx.quadraticCurveTo(
-      toPx(cx),
-      toPx(cy),
-      toPx((cx + nx) / 2),
-      toPx((cy + ny) / 2),
-    );
-  }
-  const last = points[points.length - 1];
-  ctx.lineTo(toPx(last[0]), toPx(last[1]));
-}
-
-interface RoadSample {
-  x: number;
-  y: number;
-  /** Normal unitaria en el plano de la textura. */
-  nx: number;
-  ny: number;
-}
-
-/** Muestrea el mismo trazado suavizado para colocar rodadas y grano. */
-function sampleRoadPath(
-  points: Array<[number, number]>,
-  toPx: (world: number) => number,
-  stepPx: number,
-): RoadSample[] {
-  const pts = points.map(([x, z]) => ({ x: toPx(x), y: toPx(z) }));
-  const samples: RoadSample[] = [];
-  const push = (x: number, y: number, tx: number, ty: number) => {
-    const length = Math.hypot(tx, ty) || 1;
-    samples.push({ x, y, nx: -ty / length, ny: tx / length });
-  };
-
-  let previous = pts[0];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const control = pts[i];
-    const end = {
-      x: (pts[i].x + pts[i + 1].x) / 2,
-      y: (pts[i].y + pts[i + 1].y) / 2,
-    };
-    const span =
-      Math.hypot(control.x - previous.x, control.y - previous.y) +
-      Math.hypot(end.x - control.x, end.y - control.y);
-    const steps = Math.max(2, Math.ceil(span / stepPx));
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      const inv = 1 - t;
-      push(
-        inv * inv * previous.x + 2 * inv * t * control.x + t * t * end.x,
-        inv * inv * previous.y + 2 * inv * t * control.y + t * t * end.y,
-        2 * inv * (control.x - previous.x) + 2 * t * (end.x - control.x),
-        2 * inv * (control.y - previous.y) + 2 * t * (end.y - control.y),
-      );
-    }
-    previous = end;
-  }
-
-  const last = pts[pts.length - 1];
-  const span = Math.hypot(last.x - previous.x, last.y - previous.y);
-  const steps = Math.max(2, Math.ceil(span / stepPx));
-  for (let s = 1; s <= steps; s++) {
-    const t = s / steps;
-    push(
-      previous.x + (last.x - previous.x) * t,
-      previous.y + (last.y - previous.y) * t,
-      last.x - previous.x,
-      last.y - previous.y,
-    );
-  }
-  return samples;
-}
-
-/**
- * Asfalto de la carretera: borde claro, calzada, rodadas, grano y eje
- * discontinuo. Se pinta sobre el camino de tierra, que queda como arcén.
- */
-function paintAsphalt(
-  ctx: CanvasRenderingContext2D,
-  path: Lane,
+  map: GameMap,
   toPx: (world: number) => number,
   scale: number,
-  seed: number,
 ): void {
-  if (path.asphalt === undefined) return;
-  const width = path.asphalt * scale;
-  const random = mulberry32(seed);
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  // Borde claro: se pinta más ancho y el asfalto lo recorta por dentro.
-  ctx.strokeStyle = "#cfd6da";
-  ctx.lineWidth = width + 0.26 * scale;
-  tracePath(ctx, path.points, toPx);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#4c525b";
-  ctx.lineWidth = width;
-  tracePath(ctx, path.points, toPx);
-  ctx.stroke();
-
-  const samples = sampleRoadPath(path.points, toPx, 5);
-
-  // Rodadas: dos bandas algo más oscuras por donde pasarían las ruedas.
-  for (const side of [-1, 1]) {
-    ctx.beginPath();
-    samples.forEach((sample, index) => {
-      const x = sample.x + sample.nx * side * 0.58 * scale;
-      const y = sample.y + sample.ny * side * 0.58 * scale;
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.globalAlpha = 0.4;
-    ctx.strokeStyle = "#3d424a";
-    ctx.lineWidth = 0.36 * scale;
-    ctx.stroke();
-  }
-
-  // Grano de asfalto: motas de 3 px dentro de la calzada.
-  const inset = Math.max(2, width / 2 - 4);
-  for (const sample of samples) {
-    if (random() > 0.6) continue;
-    const lateral = (random() * 2 - 1) * inset;
-    ctx.globalAlpha = 0.35 + random() * 0.35;
-    ctx.fillStyle = random() > 0.5 ? "#5a616b" : "#42474f";
-    ctx.fillRect(
-      Math.round(sample.x + sample.nx * lateral) - 1,
-      Math.round(sample.y + sample.ny * lateral) - 1,
-      3,
-      3,
-    );
-  }
-  ctx.globalAlpha = 1;
-
-  if (path.centerLine) {
-    ctx.strokeStyle = "#e7e0bd";
-    ctx.lineWidth = Math.max(1.5, 0.13 * scale);
-    ctx.lineCap = "butt";
-    ctx.setLineDash([1.05 * scale, 1.2 * scale]);
-    tracePath(ctx, path.points, toPx);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineCap = "round";
-  }
-}
-
-/** Césped del mapa con carriles, bases, lago y flores pintados de forma procedural. */
-export function createGroundCanvas(
-  size: number,
-  options: GroundPaintOptions,
-): HTMLCanvasElement {
-  const { half, bases, pond, lanes, zones } = options;
-  const random = mulberry32(0x5eed);
-  const ctx = canvas2d(size);
-  const toPx = (world: number) => ((world + half) / (half * 2)) * size;
-  const scale = size / (half * 2);
-
-  ctx.fillStyle = "#699f4b";
-  ctx.fillRect(0, 0, size, size);
-
-  // Parches grandes de tono para romper la uniformidad.
-  const patchColors = ["#5d9442", "#74ab55", "#639a46", "#7fb35e", "#578c3e"];
-  for (let i = 0; i < 46; i++) {
-    ctx.fillStyle = patchColors[Math.floor(random() * patchColors.length)];
-    ctx.globalAlpha = 0.35 + random() * 0.3;
-    const x = random() * size;
-    const y = random() * size;
-    const rx = (1.5 + random() * 4.5) * scale;
-    const ry = (1 + random() * 3.5) * scale;
-    ctx.beginPath();
-    ctx.ellipse(x, y, rx, ry, random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  // Grano fino tipo pixel art: bloques de 4 px.
-  const grain = ["#5e9642", "#70a851", "#78b058", "#548c3b", "#6ba34d"];
-  const step = 4;
-  for (let y = 0; y < size; y += step) {
-    for (let x = 0; x < size; x += step) {
-      if (random() < 0.55) continue;
-      ctx.fillStyle = grain[Math.floor(random() * grain.length)];
-      ctx.globalAlpha = 0.35 + random() * 0.4;
-      ctx.fillRect(x, y, step, step);
-    }
-  }
-  ctx.globalAlpha = 1;
-
-  // Matujos: pequeñas briznas.
-  for (let i = 0; i < 2400; i++) {
-    const x = Math.floor(random() * size);
-    const y = Math.floor(random() * size);
-    ctx.fillStyle = random() > 0.5 ? "#4f8a39" : "#86bd64";
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(x, y, 2, random() > 0.6 ? 4 : 2);
-    if (random() > 0.5) ctx.fillRect(x + 2, y + 1, 2, 2);
-  }
-  ctx.globalAlpha = 1;
-
-  // Calveros temáticos. Van antes que carriles y bases para que estos conserven
-  // su prioridad visual.
-  for (const zone of zones) {
-    paintTerrainZone(ctx, zone, toPx, scale);
-  }
-
-  const strokeLane = (
-    points: Array<[number, number]>,
-    width: number,
-    color: string,
-  ) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width * scale;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    tracePath(ctx, points, toPx);
-    ctx.stroke();
-  };
-
-  // Los tres carriles de tierra. Se pintan antes que las bases y el lago para
-  // que ambos tapen los extremos.
-  for (const lane of lanes) {
-    strokeLane(lane.points, lane.width, "#b99a70");
-  }
-
-  // El carril central va asfaltado: la calzada queda dentro del carril y el
-  // arcén de tierra asoma por los lados.
-  lanes.forEach((lane, index) => {
-    paintAsphalt(ctx, lane, toPx, scale, 0x9e37 + index * 7919);
-  });
-
-  // Bases: plataforma de piedra con el anillo del equipo.
-  for (const base of bases) {
+  for (const base of map.respawns) {
     const bx = toPx(base.x);
     const by = toPx(base.z);
     const ring = base.team === "blue" ? "#5b8fd9" : "#d96b5b";
@@ -890,30 +735,37 @@ export function createGroundCanvas(
       ctx.fillRect(Math.round(bx + ox) - 3, Math.round(by + oy) - 3, 6, 6);
     }
   }
+}
 
-  // Arena alrededor del lago y agua plana encima, a ras de suelo.
-  ctx.fillStyle = "#d8c79a";
-  ctx.beginPath();
-  ctx.arc(toPx(pond.x), toPx(pond.z), pond.shoreRadius * scale, 0, Math.PI * 2);
-  ctx.fill();
-  paintPond(ctx, pond, toPx, scale);
+/**
+ * Suelo del mapa: cada celda pinta su terreno y encima se añaden los detalles
+ * de los calveros, las plataformas de las bases y las flores de la jungla.
+ */
+export function createGroundCanvas(
+  size: number,
+  options: GroundPaintOptions,
+): HTMLCanvasElement {
+  const { map, zones } = options;
+  const rows = map.tiles.length;
+  const half = (rows * map.tileSize) / 2;
+  const toPx = (world: number) => ((world + half) / (half * 2)) * size;
+  const scale = size / (half * 2);
+  const random = mulberry32(0x5eed);
+  const ctx = canvas2d(size);
 
-  // Piedrecillas y motas de piedra en las bases.
-  for (const base of bases) {
-    for (let i = 0; i < 420; i++) {
-      const angle = random() * Math.PI * 2;
-      const radius = Math.sqrt(random()) * (base.radius - 0.4);
-      const x = toPx(base.x + Math.cos(angle) * radius);
-      const y = toPx(base.z + Math.sin(angle) * radius);
-      ctx.fillStyle = random() > 0.5 ? "#8f8677" : "#c2b9a6";
-      ctx.globalAlpha = 0.7;
-      ctx.fillRect(x, y, 3, 3);
-    }
+  ctx.fillStyle = TERRAIN_PALETTES.jungle.base;
+  ctx.fillRect(0, 0, size, size);
+
+  paintGridTiles(ctx, map, size);
+
+  // Detalle procedural de los calveros temáticos.
+  for (const zone of zones) {
+    paintTerrainZone(ctx, zone, toPx, scale);
   }
-  ctx.globalAlpha = 1;
 
-  // Flores: ramilletes solo en la jungla, lejos de carriles, bases, lago y
-  // cordilleras.
+  paintBases(ctx, map, toPx, scale);
+
+  // Flores: ramilletes solo en la jungla, lejos de cordilleras.
   const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
   for (let i = 0; i < 220; i++) {
     const x = (random() * 2 - 1) * (half - 1.5);

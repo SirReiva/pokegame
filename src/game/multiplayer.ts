@@ -7,7 +7,7 @@
  */
 
 import type { InputDeviceInfo } from './input';
-import type { Team, TerrainId } from './terrain';
+import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, DirectionName } from './types';
 
@@ -55,6 +55,21 @@ export const TEAM_INFO: Record<Team, TeamInfo> = {
 
 export const TEAM_ORDER: Team[] = ['blue', 'red'];
 
+/**
+ * Copia al `TEAM_INFO` compartido la base del equipo en el mapa activo. La UI
+ * usa estas coordenadas antes de que exista una partida, así que se sincroniza
+ * al cargar o cambiar de mapa.
+ */
+export function syncTeamsWithMap(): void {
+  for (const team of TEAM_ORDER) {
+    const base = respawnsForTeam(team)[0];
+    if (!base) continue;
+    TEAM_INFO[team].x = base.x;
+    TEAM_INFO[team].z = base.z;
+    TEAM_INFO[team].radius = base.radius;
+  }
+}
+
 /** Huecos alrededor del nexo: cuatro por equipo, separados del pedestal. */
 const SPAWN_OFFSETS: ReadonlyArray<{ x: number; z: number }> = [
   { x: 0, z: 2.05 },
@@ -63,17 +78,30 @@ const SPAWN_OFFSETS: ReadonlyArray<{ x: number; z: number }> = [
   { x: -2.05, z: 0 }
 ];
 
-/** Posición de aparición de un jugador dentro de la base de su equipo. */
+/**
+ * Posición de aparición de un jugador dentro de las bases de su equipo. Si un
+ * equipo declara varios respawns, los jugadores se reparten entre ellos y
+ * después rotan por los cuatro huecos de cada base.
+ */
 export function spawnForTeam(team: Team, indexInTeam: number): { x: number; z: number } {
-  const info = TEAM_INFO[team];
-  const offset = SPAWN_OFFSETS[indexInTeam % SPAWN_OFFSETS.length];
-  return { x: info.x + offset.x, z: info.z + offset.z };
+  const bases = respawnsForTeam(team);
+  if (bases.length === 0) {
+    const info = TEAM_INFO[team];
+    const offset = SPAWN_OFFSETS[indexInTeam % SPAWN_OFFSETS.length];
+    return { x: info.x + offset.x, z: info.z + offset.z };
+  }
+  const base = bases[indexInTeam % bases.length];
+  const slot = Math.floor(indexInTeam / bases.length) % SPAWN_OFFSETS.length;
+  const offset = SPAWN_OFFSETS[slot];
+  return { x: base.x + offset.x, z: base.z + offset.z };
 }
 
 /** Rumbo inicial hacia el centro del mapa (0 = sur, 90° = este). */
 export function facingToCenter(team: Team): number {
-  const info = TEAM_INFO[team];
-  return Math.atan2(-info.x, -info.z);
+  const base = respawnsForTeam(team)[0];
+  const x = base?.x ?? TEAM_INFO[team].x;
+  const z = base?.z ?? TEAM_INFO[team].z;
+  return Math.atan2(-x, -z);
 }
 
 /** Cámara detrás del jugador, mirando hacia el centro. */

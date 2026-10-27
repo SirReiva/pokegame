@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { InputDeviceInfo } from '../game/input';
+import type { MapIndexEntry } from '../game/map';
 import {
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
@@ -13,6 +14,11 @@ import type { Team } from '../game/terrain';
 interface LobbyScreenProps {
   players: LobbyPlayer[];
   devices: InputDeviceInfo[];
+  maps: MapIndexEntry[];
+  mapId: string;
+  mapLoading: boolean;
+  mapError: string | null;
+  onChangeMap: (mapId: string) => void;
   onJoin: (deviceId: string) => void;
   onTeam: (slot: number, team: Team) => void;
   onReady: (slot: number) => void;
@@ -111,6 +117,11 @@ function TeamColumn({
 export function LobbyScreen({
   players,
   devices,
+  maps,
+  mapId,
+  mapLoading,
+  mapError,
+  onChangeMap,
   onJoin,
   onTeam,
   onReady,
@@ -194,6 +205,28 @@ export function LobbyScreen({
           </div>
 
           <aside className="join-panel">
+            {maps.length > 0 && (
+              <div className="map-picker">
+                <span className="eyebrow">Mapa</span>
+                <div className="map-options">
+                  {maps.map((map) => (
+                    <button
+                      key={map.id}
+                      type="button"
+                      className={`btn btn-tiny${map.id === mapId ? ' btn-accent' : ' btn-ghost'}`}
+                      disabled={mapLoading || map.id === mapId}
+                      title={map.description}
+                      onClick={() => onChangeMap(map.id)}
+                    >
+                      {map.name}
+                    </button>
+                  ))}
+                </div>
+                {mapLoading && <p className="map-note">Cargando mapa…</p>}
+                {mapError && <p className="map-note map-error">{mapError}</p>}
+              </div>
+            )}
+
             <span className="eyebrow">Dispositivos detectados</span>
             <h3>Unirse</h3>
             {full ? (
