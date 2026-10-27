@@ -74,7 +74,7 @@ export function RosterScreen({
             <h2>Elige tu Pokémon</h2>
             <p className="lead">
               Muévete por la rejilla con el stick o las flechas y confirma con{' '}
-              <strong>A / Espacio</strong>. Se permiten repetidos: hay 7 especies para hasta 8
+              <strong>A / Espacio</strong>. Se permiten repetidos: hay 9 especies para hasta 8
               jugadores.
             </p>
           </div>

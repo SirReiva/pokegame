@@ -63,3 +63,19 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/credits.txt
 
+## Mewtwo (#0150)
+
+- CHUNSOFT · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
+- <@!702275233125630042> — PMDCollab_1 · Attack, Charge, Cringe, DeepBreath, Double, Eat, EventSleep, Faint, Float, Head, HitGround, Hop, Hover, Hurt, Idle, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Punch, Rotate, Shoot, Sink, Sit, Sleep, Swing, Trip, Tumble, TumbleBack, Wake, Walk
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0150/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150/credits.txt
+
+## Mew (#0151)
+
+- CHUNSOFT · Walk, Attack, Strike, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!702275233125630042> — CC_BY-NC_4 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/credits.txt
+

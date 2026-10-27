@@ -53,7 +53,9 @@ const NPC_SLOTS: Array<{ x: number; z: number }> = [
   { x: -10.4, z: 12.6 },
   { x: -12.4, z: 15.4 },
   { x: -15.6, z: 11.2 },
-  { x: -11.4, z: 10.9 }
+  { x: -11.4, z: 10.9 },
+  { x: -15.2, z: 15.2 },
+  { x: -13.8, z: 16.0 }
 ];
 
 /** Los NPC del menú solo giran hacia la cámara cuando esta se acerca. */

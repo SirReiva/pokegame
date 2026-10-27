@@ -49,7 +49,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cad
 La configuración tiene dos pantallas:
 
 1. **Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
-2. **Pokémon**: cada jugador mueve su cursor por las siete especies y confirma con `A`. Se permiten repetidos porque hay más jugadores que especies. Cuando todos están listos, `A` inicia la partida.
+2. **Pokémon**: cada jugador mueve su cursor por las nueve especies y confirma con `A`. Se permiten repetidos porque hay más jugadores que especies. Cuando todos están listos, `A` inicia la partida.
 
 Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo.
 
@@ -72,7 +72,7 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 - **8 direcciones según el rumbo**: cada actor conserva una dirección propia (`facing`). La fila visible se calcula con el ángulo entre ese rumbo y la cámara, usando el eje “derecha de pantalla”. Al orbitar, el sprite cambia de vista de forma continua sin dejar de mirar hacia donde mira de verdad.
 - **Rumbos independientes**: cada jugador empieza mirando al centro desde su base y solo cambia de rumbo al moverse. Los Pokémon del menú tienen una orientación de reposo propia y únicamente giran hacia la cámara cuando esta se acerca.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
-- **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Bulbasaur 4,2 u/s, Charmander 5,4, Squirtle 4,8, Pikachu 6,9, Eevee 6,1, Lucario 6,5, Greninja 7,4). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
+- **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Bulbasaur 4,2 u/s, Charmander 5,4, Squirtle 4,8, Pikachu 6,9, Eevee 6,1, Lucario 6,5, Greninja 7,4, Mewtwo 7,8, Mew 7,0). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
 - **Niebla de guerra por jugador**: cada vista sombrea el mundo fuera de su radio de visión y oculta a los Pokémon que no se ven. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y las cordilleras y los árboles bloquean la línea de visión. El sombreado exterior es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, y las cordilleras añaden un decal de sombra fijo en el mundo que oscurece lo que queda detrás; el HUD de cada vista resume el rango, la ocultación y el radio de detección.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
@@ -145,7 +145,7 @@ Cada terreno modula la velocidad del Pokémon que lo atraviesa. La relación se 
 | Terreno cómodo (lo resiste o es inmune a él) | ×1,08 |
 | Neutro | ×1,00 |
 
-Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en la Arena y el Desierto porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82) y va neutro por los carriles; Charmander corre por la Colada volcánica (×1,18) y se frena en las bases y el Desierto (×0,82); Bulbasaur agradece la Ciénaga y la jungla (×1,18); Eevee va más rápido por los carriles y la Carretera porque comparte el tipo Normal (×1,18) y nota una leve ventaja en el Bosque umbrío (×1,08); Lucario también agradece los carriles y el asfalto, ya que el Acero resiste el tipo Normal (×1,08), pero el Desierto le cuesta (×0,82). Greninja se mueve como pez en el agua (×1,18 en aguas someras y profundas), resiste la Colada volcánica y la Escarcha (×1,08) y el Bosque umbrío (×1,08 por su tipo Siniestro), pero la jungla y la hierba alta lo frenan (×0,82) y el Páramo eléctrico y el Claro feérico lo castigan (×0,82). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
+Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en la Arena y el Desierto porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82) y va neutro por los carriles; Charmander corre por la Colada volcánica (×1,18) y se frena en las bases y el Desierto (×0,82); Bulbasaur agradece la Ciénaga y la jungla (×1,18); Eevee va más rápido por los carriles y la Carretera porque comparte el tipo Normal (×1,18) y nota una leve ventaja en el Bosque umbrío (×1,08); Lucario también agradece los carriles y el asfalto, ya que el Acero resiste el tipo Normal (×1,08), pero el Desierto le cuesta (×0,82). Greninja se mueve como pez en el agua (×1,18 en aguas someras y profundas), resiste la Colada volcánica y la Escarcha (×1,08) y el Bosque umbrío (×1,08 por su tipo Siniestro), pero la jungla y la hierba alta lo frenan (×0,82) y el Páramo eléctrico y el Claro feérico lo castigan (×0,82). Mewtwo y Mew, Psíquicos puros, se mueven neutros por casi toda la arena (×1,00); solo el Bosque umbrío los frena (×0,82, porque Fantasma es súper eficaz contra Psíquico). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
 
 ### Niebla de guerra y visión
 
@@ -161,7 +161,9 @@ Los rangos base viven en `POKEMON_VISION` (`src/game/vision.ts`):
 | Eevee | 9,5 u | Olfato y oído finos |
 | Lucario | 10,5 u | Percibe el aura |
 | Pikachu | 11,0 u | El más alerta por sus sentidos eléctricos |
-| Greninja | 11,5 u | Instinto de ninja, el que más lejos ve |
+| Mew | 11,0 u | Sentidos psíquicos y curiosidad infinita |
+| Greninja | 11,5 u | Instinto de ninja, segundo alcance del grupo |
+| Mewtwo | 12,0 u | Poder psíquico: percibe a distancia, el que más lejos ve |
 
 La **ocultación base** depende del terreno que pisa el Pokémon al que se intenta ver (`TERRAIN_CONCEALMENT`). Los tipos del Pokémon la mejoran o empeoran con la misma relación que la velocidad (`terrainSpeed.ts`): comparte tipo con el terreno ×1,5; el terreno es súper eficaz contra él ×0,5; lo resiste o es inmune ×1,15; neutro ×1. La ocultación final se limita al 85% para que nunca sea imposible ver a alguien pegado.
 
@@ -179,7 +181,7 @@ La **ocultación base** depende del terreno que pisa el Pokémon al que se inten
 | Arena | 8% |
 | Carril / Carretera / Base | 0% |
 
-Ejemplos con el roster actual: Bulbasaur en hierba alta llega al 67,5% de ocultación (45% × 1,5 por compartir Planta), Squirtle baja al 22,5% (Grass es súper eficaz contra Water) y Charmander se queda en el 51,75% (Grass no es eficaz contra Fire). Pikachu pasa del 45% de la hierba alta al 7% del desierto, donde Ground lo delata. Greninja también se esconde mal en la hierba alta (22,5%, porque Grass es súper eficaz contra su tipo Agua), pero en el Bosque umbrío sube al 46% (40% × 1,15 porque su tipo Siniestro resiste Fantasma).
+Ejemplos con el roster actual: Bulbasaur en hierba alta llega al 67,5% de ocultación (45% × 1,5 por compartir Planta), Squirtle baja al 22,5% (Grass es súper eficaz contra Water) y Charmander se queda en el 51,75% (Grass no es eficaz contra Fire). Pikachu pasa del 45% de la hierba alta al 7% del desierto, donde Ground lo delata. Greninja también se esconde mal en la hierba alta (22,5%, porque Grass es súper eficaz contra su tipo Agua), pero en el Bosque umbrío sube al 46% (40% × 1,15 porque su tipo Siniestro resiste Fantasma). Mewtwo y Mew no comparten tipo con ningún terreno, así que conservan la ocultación base (45% en la hierba alta), pero en el Bosque umbrío bajan al 20% (40% × 0,5, porque Fantasma es súper eficaz contra Psíquico).
 
 La fórmula de visibilidad es:
 
@@ -309,7 +311,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 
 - Solo se importan **Idle** y **Walk**; no hay ataque, daño, captura ni combate.
 - El multijugador local es **exploración libre por equipos**: no hay objetivo, marcador ni condición de victoria.
-- La selección de Pokémon permite repetir especie porque hay 7 especies para hasta 8 jugadores.
+- La selección de Pokémon permite repetir especie porque hay 9 especies para hasta 8 jugadores.
 - Los NPC del menú son estáticos: giran hacia la cámara, pero no patrullan.
 - La niebla exterior es un círculo de pantalla por vista; las cordilleras añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
