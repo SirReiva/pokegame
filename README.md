@@ -137,7 +137,7 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
 
 ## Terrenos y tipos Pokémon
 
-El mapa por defecto (`public/maps/arena.json`) es una **arena cuadrada de estilo MOBA** de 38 × 38 celdas de 1 u. Dos bases ocupan esquinas opuestas de la diagonal suroeste-noreste: la azul en `(-13,2, 13,2)` y la roja en `(13,2, -13,2)`, ambas con radio 3,6 u. Tres carriles las conectan y el resto del terreno es jungla, con nueve calveros temáticos y un lago en la jungla sureste.
+El mapa por defecto (`public/maps/arena.json`) es una **arena cuadrada de estilo MOBA** de 76 × 76 celdas de 0,5 u (38 u de lado, con el doble de resolución de edición que antes). Dos bases ocupan esquinas opuestas de la diagonal suroeste-noreste: la azul en `(-13,2, 13,2)` y la roja en `(13,2, -13,2)`, ambas con radio 3,6 u. Tres carriles las conectan y el resto del terreno es jungla, con nueve calveros temáticos y un lago en la jungla sureste.
 
 Los nombres y tipos Pokémon de cada terreno se definen en `src/game/terrain.ts` (`TERRAINS`) y la rejilla se consulta con `terrainAt(x, z)`. Los siete terrenos base cubren toda la arena y los nueve calveros añaden variedad temática:
 
