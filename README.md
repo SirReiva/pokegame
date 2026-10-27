@@ -204,11 +204,12 @@ El lago de la jungla sureste combina el lecho pintado en el suelo con dos lámin
 `scripts/import-sprites.mjs`:
 
 1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk}-Anim.png` y `{Idle,Walk}-Shadow.png` desde el repositorio de PMD Sprite Collab.
-2. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
-3. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
-4. Decodifica también la hoja de animación para guardar el píxel inferior con contenido visible de cada frame (`bottoms`), que evita que el suelo recorte el dibujo.
-5. Escribe `public/sprites/manifest.json` con frames, duraciones en ticks de 1/60 s, anclas y bordes inferiores por frame, créditos y metadatos de licencia.
-5. Genera `public/sprites/CREDITS.md`.
+2. Descarga el retrato `portrait/<id>/Normal.png` de cada Pokémon y lo guarda como `portrait.png`; las interfaces HTML usan ese retrato en lugar de las hojas animadas.
+3. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
+4. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
+5. Decodifica también la hoja de animación para guardar el píxel inferior con contenido visible de cada frame (`bottoms`), que evita que el suelo recorte el dibujo.
+6. Escribe `public/sprites/manifest.json` con frames, duraciones en ticks de 1/60 s, anclas, bordes inferiores y ruta del retrato por Pokémon, créditos y metadatos de licencia.
+7. Genera `public/sprites/CREDITS.md`.
 
 Orden de las filas: `S, SE, E, NE, N, NW, W, SW` (0–7).
 
@@ -274,7 +275,7 @@ src/game/
   actor.ts                   sprite + sombra de contacto + posición + capa de render
   game.ts                    orquestador: menú, equipos, partida, cámaras y colisiones
 src/ui/
-  SpritePreview.tsx          vista previa animada de las hojas con CSS
+  PokemonPortrait.tsx        retrato normal para las interfaces HTML
   LobbyScreen.tsx            sala de equipos y detección de mandos
   RosterScreen.tsx           selección simultánea de Pokémon
   MatchHud.tsx               etiquetas, telemetría y bordes del splitscreen

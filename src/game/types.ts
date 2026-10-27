@@ -43,6 +43,8 @@ export interface PokemonEntry {
   shadowSize: number;
   source: string;
   credits: SpriteCredits[];
+  /** Retrato normal de PMD Sprite Collab para las interfaces HTML. */
+  portrait: string;
   animations: Record<AnimationName, SpriteAnimation>;
 }
 

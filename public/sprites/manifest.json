@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-27T19:16:16.346Z",
+  "generatedAt": "2026-10-27T20:09:25.899Z",
   "source": "https://sprites.pmdcollab.org/",
   "license": "CC BY-NC 4.0",
   "licenseUrl": "https://creativecommons.org/licenses/by-nc/4.0/",
@@ -71,6 +71,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0001/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0001/idle.png",
@@ -522,6 +523,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0004/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0004/idle.png",
@@ -932,6 +934,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0007/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0007/idle.png",
@@ -1506,6 +1509,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0025/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0025/idle.png",
@@ -1999,6 +2003,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0133/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0133/idle.png",
@@ -2470,6 +2475,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0448/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0448/idle.png",
@@ -2992,6 +2998,7 @@
           ]
         }
       ],
+      "portrait": "/sprites/0658/portrait.png",
       "animations": {
         "idle": {
           "sheet": "/sprites/0658/idle.png",

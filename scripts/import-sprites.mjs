@@ -10,6 +10,8 @@
  * manifiesto el "ancla de suelo" de cada frame: el píxel blanco de la sombra,
  * que marca el centro del personaje a nivel del suelo. Ese punto se usa en el
  * motor para apoyar el billboard en el terreno sin que las animaciones tiemblen.
+ * También descarga el retrato `Normal.png` de cada Pokémon para las interfaces
+ * HTML, que no usan las hojas animadas.
  *
  * Los sprites son obra de la comunidad de PMD Sprite Collab y se distribuyen
  * bajo CC BY-NC 4.0. No se usan con fines comerciales. Ver public/sprites/CREDITS.md.
@@ -23,6 +25,7 @@ import { inflateSync } from 'node:zlib';
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, 'public', 'sprites');
 const RAW_BASE = 'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite';
+const PORTRAIT_BASE = 'https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait';
 const SOURCE = 'https://sprites.pmdcollab.org/';
 const LICENSE = 'CC BY-NC 4.0';
 const LICENSE_URL = 'https://creativecommons.org/licenses/by-nc/4.0/';
@@ -289,6 +292,7 @@ function creditMarkdown(pokemon, credits) {
   }
   lines.push(
     `- Fuente: ${RAW_BASE}/${pokemon.id}`,
+    `- Retrato: ${PORTRAIT_BASE}/${pokemon.id}/Normal.png`,
     `- Hoja de créditos original: ${RAW_BASE}/${pokemon.id}/credits.txt`,
     ''
   );
@@ -308,6 +312,14 @@ async function importPokemon(pokemon) {
 
   const creditsText = await fetchText(`${folderUrl}/credits.txt`);
   await writeFile(creditsPath, creditsText);
+
+  // Retrato normal para las interfaces HTML. Los sprites animados solo se usan
+  // en el mundo 3D de PlayCanvas.
+  const portraitFile = 'portrait.png';
+  const portraitPath = path.join(dir, portraitFile);
+  if (!existsSync(portraitPath) || force) {
+    await download(`${PORTRAIT_BASE}/${pokemon.id}/Normal.png`, portraitPath);
+  }
 
   const anims = parseAnims(animDataXml);
   const credits = parseCredits(creditsText);
@@ -392,6 +404,7 @@ async function importPokemon(pokemon) {
       shadowSize,
       source: `${SOURCE}#/${pokemon.id}`,
       credits,
+      portrait: `/sprites/${pokemon.id}/${portraitFile}`,
       animations
     }
   };

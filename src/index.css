@@ -175,14 +175,15 @@ code {
   border-radius: 14px;
 }
 
-/* ------------------------------------------------------------------ sprites */
+/* ---------------------------------------------------------------- retratos */
 
-.sprite-preview {
+.pokemon-portrait {
   display: block;
-  background-repeat: no-repeat;
+  object-fit: contain;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+  user-select: none;
 }
 
 /* ----------------------------------------------------------------- overlays */
@@ -507,7 +508,7 @@ code {
   padding: 2px 6px;
 }
 
-.poke-card-sprite {
+.poke-card-portrait {
   position: relative;
   z-index: 1;
   margin: 2px 0;
@@ -844,7 +845,7 @@ code {
   background: radial-gradient(circle at 50% 58%, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.16));
 }
 
-.hud-avatar .sprite-preview {
+.hud-avatar .pokemon-portrait {
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
 }
 
@@ -1835,7 +1836,7 @@ code {
   padding: 10px 8px 12px;
 }
 
-.mp-poke .poke-card-sprite {
+.mp-poke .poke-card-portrait {
   margin: 0;
 }
 

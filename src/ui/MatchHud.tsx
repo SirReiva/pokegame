@@ -8,7 +8,7 @@ import {
 } from '../game/multiplayer';
 import type { SpriteManifest } from '../game/types';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
-import { SpritePreview } from './SpritePreview';
+import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
 
 interface MatchHudProps {
@@ -70,7 +70,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
           >
             <div className="split-tag">
               <span className="split-slot">{player.slot}</span>
-              {entry && <SpritePreview entry={entry} height={compact ? 26 : 34} />}
+              {entry && <PokemonPortrait entry={entry} height={compact ? 26 : 34} />}
               <span className="split-copy">
                 <strong>{player.name}</strong>
                 <span>{entry?.name ?? '—'}</span>

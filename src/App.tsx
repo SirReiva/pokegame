@@ -17,7 +17,7 @@ import type { GamePhase, LoadingProgress, SpriteManifest } from './game/types';
 import { LobbyScreen } from './ui/LobbyScreen';
 import { MatchHud } from './ui/MatchHud';
 import { RosterScreen } from './ui/RosterScreen';
-import { SpritePreview } from './ui/SpritePreview';
+import { PokemonPortrait } from './ui/PokemonPortrait';
 
 const DEFAULT_PROGRESS: LoadingProgress = {
   loaded: 0,
@@ -601,7 +601,7 @@ function App() {
                       }
                     >
                       <span className="pause-avatar">
-                        {entry ? <SpritePreview entry={entry} height={36} /> : '—'}
+                        {entry ? <PokemonPortrait entry={entry} height={36} /> : '—'}
                       </span>
                       <span className="pause-player-copy">
                         <strong>{player.name}</strong>

@@ -6,7 +6,7 @@ import {
   type LobbyPlayer
 } from '../game/multiplayer';
 import type { PokemonEntry, SpriteManifest } from '../game/types';
-import { SpritePreview } from './SpritePreview';
+import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
 
 interface RosterScreenProps {
@@ -126,7 +126,7 @@ export function RosterScreen({
                         ))}
                       </span>
                     </span>
-                    <SpritePreview entry={entry} height={68} className="poke-card-sprite" />
+                    <PokemonPortrait entry={entry} height={68} className="poke-card-portrait" />
                     <span className="poke-name">{entry.name}</span>
                     <span className="poke-types">
                       {entry.types.map((type) => (
@@ -143,7 +143,7 @@ export function RosterScreen({
 
             <div className="asset-note">
               <span className="asset-dot" />
-              Sprites de <strong>PMD Sprite Collab</strong> · CC BY-NC 4.0 · uso no comercial
+              Retratos de <strong>PMD Sprite Collab</strong> · CC BY-NC 4.0 · uso no comercial
             </div>
           </section>
 
@@ -167,7 +167,7 @@ export function RosterScreen({
                     }
                   >
                     <span className="roster-avatar">
-                      {entry ? <SpritePreview entry={entry} height={38} /> : '—'}
+                      {entry ? <PokemonPortrait entry={entry} height={38} /> : '—'}
                     </span>
                     <div className="roster-player-copy">
                       <span className="roster-player-top">
