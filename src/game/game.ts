@@ -673,7 +673,10 @@ export class Game {
       }
 
       const decal = this.fogDecals[viewIndex];
-      if (decal) decal.update(observer.x, observer.z, observer.visionRange);
+      if (decal) {
+        const screenFog = fog && camera ? fog.screenFog : null;
+        decal.update(observer.x, observer.z, observer.visionRange, screenFog);
+      }
 
       for (const target of this.matchPlayers) {
         const copy = target.copies[viewIndex];

@@ -24,6 +24,26 @@ void main(void) {
 }
 `;
 
+/**
+ * Variante para el decal: además de la UV del plano, pasa la posición en clip
+ * space para reconstruir en el fragment el óvalo de pantalla de la vista.
+ */
+const DECAL_VERTEX_SHADER = `
+attribute vec3 aPosition;
+attribute vec2 aUv0;
+uniform mat4 matrix_model;
+uniform mat4 matrix_viewProjection;
+varying vec2 vUv;
+varying vec4 vClip;
+
+void main(void) {
+  vUv = aUv0;
+  vec4 clip = matrix_viewProjection * matrix_model * vec4(aPosition, 1.0);
+  vClip = clip;
+  gl_Position = clip;
+}
+`;
+
 const FRAGMENT_SHADER = `
 varying vec2 vUv;
 uniform vec3 uFogColor;
@@ -41,18 +61,40 @@ void main(void) {
 
 const DECAL_FRAGMENT_SHADER = `
 varying vec2 vUv;
+varying vec4 vClip;
 uniform vec3 uFogColor;
 uniform float uFogOpacity;
 uniform sampler2D uFogMask;
 uniform vec2 uPlayer;
 uniform float uVisionRange;
 uniform float uMapHalfSize;
+uniform vec2 uScreenCenter;
+uniform vec2 uScreenRadius;
+uniform float uScreenFeather;
+uniform float uScreenOpacity;
+uniform float uOverlap;
 
 void main(void) {
   float mask = texture2D(uFogMask, vUv).r;
   vec2 world = (vUv * 2.0 - 1.0) * uMapHalfSize;
   float inside = 1.0 - smoothstep(uVisionRange - 0.5, uVisionRange + 0.5, distance(world, uPlayer));
-  float alpha = (1.0 - mask) * inside * uFogOpacity;
+  float shadow = (1.0 - mask) * inside * uFogOpacity;
+
+  // Mismo óvalo de pantalla que dibuja FogView. Al resolverlo aquí, el decal
+  // puede compensar la niebla circular y las dos capas se funden por máximo en
+  // vez de sumarse (que era lo que oscurecía los bordes).
+  vec2 clipUv = vClip.xy / vClip.w * 0.5 + 0.5;
+  vec2 offset = (clipUv - uScreenCenter) / max(uScreenRadius, vec2(0.0001));
+  float circle = smoothstep(1.0 - uScreenFeather, 1.0, length(offset)) * uScreenOpacity;
+  // El solape se resuelve por máximo para no sumar dos veces el mismo color,
+  // con un extra pequeño y proporcional para que la cuña siga leyéndose.
+  float target = max(circle, shadow) + uOverlap * min(circle, shadow);
+  float alpha = clamp(
+    (target - circle) / max(1.0 - circle, 0.001),
+    0.0,
+    1.0
+  );
+
   gl_FragColor = vec4(uFogColor, alpha);
 }
 `;
@@ -67,6 +109,17 @@ export interface SightOccluder {
   az: number;
   bx: number;
   bz: number;
+}
+
+/**
+ * Óvalo de visión ya proyectado a UV de la vista. Lo calcula `FogView` y lo
+ * consume `FogDecal` para que ambas capas de niebla compartan el mismo borde.
+ */
+export interface ScreenFog {
+  center: Float32Array;
+  radius: Float32Array;
+  feather: number;
+  opacity: number;
 }
 
 const MASK_SIZE = 192;
@@ -112,10 +165,16 @@ export function createFogDecalMesh(device: pc.GraphicsDevice): pc.Mesh {
 export class FogView {
   readonly entity: pc.Entity;
 
+  /** Óvalo de visión en UV de la vista; lo comparte el decal de cordillera. */
+  readonly screenFog: ScreenFog = {
+    center: new Float32Array(2),
+    radius: new Float32Array(2),
+    feather: CONFIG.vision.fogFeather,
+    opacity: 0
+  };
+
   private readonly device: pc.GraphicsDevice;
   private readonly material: pc.ShaderMaterial;
-  private readonly center = new Float32Array(2);
-  private readonly radius = new Float32Array(2);
 
   /** Vectores reutilizados para proyectar el círculo de visión a pantalla. */
   private readonly worldPoints = {
@@ -156,10 +215,10 @@ export class FogView {
     this.material.depthWrite = false;
     this.material.cull = pc.CULLFACE_NONE;
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
-    this.material.setParameter('uFogOpacity', 0);
-    this.material.setParameter('uFogFeather', CONFIG.vision.fogFeather);
-    this.material.setParameter('uFogCenter', this.center);
-    this.material.setParameter('uFogRadius', this.radius);
+    this.material.setParameter('uFogOpacity', this.screenFog.opacity);
+    this.material.setParameter('uFogFeather', this.screenFog.feather);
+    this.material.setParameter('uFogCenter', this.screenFog.center);
+    this.material.setParameter('uFogRadius', this.screenFog.radius);
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
@@ -196,7 +255,7 @@ export class FogView {
     const rectWidth = viewport.w * canvasWidth;
     const rectHeight = viewport.h * canvasHeight;
     if (rectWidth <= 0 || rectHeight <= 0) {
-      this.material.setParameter('uFogOpacity', 0);
+      this.setOpacity(0);
       return;
     }
 
@@ -273,20 +332,25 @@ export class FogView {
       !Number.isFinite(radiusY) ||
       !Number.isFinite(gradientY)
     ) {
-      this.material.setParameter('uFogOpacity', 0);
+      this.setOpacity(0);
       return;
     }
 
     // La UV del quad tiene el origen abajo; el centro calculado viene del
     // origen superior de la pantalla.
-    this.center[0] = centerX / 100;
-    this.center[1] = 1 - gradientY / 100;
-    this.radius[0] = radiusX / 100;
-    this.radius[1] = radiusY / 100;
+    this.screenFog.center[0] = centerX / 100;
+    this.screenFog.center[1] = 1 - gradientY / 100;
+    this.screenFog.radius[0] = radiusX / 100;
+    this.screenFog.radius[1] = radiusY / 100;
 
-    this.material.setParameter('uFogCenter', this.center);
-    this.material.setParameter('uFogRadius', this.radius);
-    this.material.setParameter('uFogOpacity', CONFIG.vision.fogOpacity);
+    this.material.setParameter('uFogCenter', this.screenFog.center);
+    this.material.setParameter('uFogRadius', this.screenFog.radius);
+    this.setOpacity(CONFIG.vision.fogOpacity);
+  }
+
+  private setOpacity(value: number): void {
+    this.screenFog.opacity = value;
+    this.material.setParameter('uFogOpacity', value);
   }
 
   destroy(): void {
@@ -310,6 +374,10 @@ export class FogDecal {
   private readonly maskContext: CanvasRenderingContext2D;
   private readonly maskTexture: pc.Texture;
   private readonly player = new Float32Array(2);
+  private readonly screenCenter = new Float32Array(2);
+  private readonly screenRadius = new Float32Array(2);
+  private screenFeather: number = CONFIG.vision.fogFeather;
+  private screenOpacity = 0;
   private lastX = Number.NaN;
   private lastZ = Number.NaN;
   private lastVision = Number.NaN;
@@ -349,7 +417,7 @@ export class FogDecal {
 
     this.material = new pc.ShaderMaterial({
       uniqueName: 'fog-of-war-decal',
-      vertexGLSL: VERTEX_SHADER,
+      vertexGLSL: DECAL_VERTEX_SHADER,
       fragmentGLSL: DECAL_FRAGMENT_SHADER,
       attributes: {
         aPosition: pc.SEMANTIC_POSITION,
@@ -366,6 +434,11 @@ export class FogDecal {
     this.material.setParameter('uPlayer', this.player);
     this.material.setParameter('uVisionRange', 0);
     this.material.setParameter('uMapHalfSize', CONFIG.world.halfSize);
+    this.material.setParameter('uScreenCenter', this.screenCenter);
+    this.material.setParameter('uScreenRadius', this.screenRadius);
+    this.material.setParameter('uScreenFeather', this.screenFeather);
+    this.material.setParameter('uScreenOpacity', this.screenOpacity);
+    this.material.setParameter('uOverlap', CONFIG.vision.mountainOverlap);
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
@@ -385,8 +458,19 @@ export class FogDecal {
     root.addChild(this.entity);
   }
 
-  update(playerX: number, playerZ: number, visionRange: number): void {
-    // La sombra solo cambia cuando cambia el jugador, no cuando gira la cámara.
+  /**
+   * @param screen Óvalo de la niebla circular de esta vista. Se sincroniza en
+   * cada frame porque depende de la cámara; la máscara de la sombra, en cambio,
+   * solo se redibuja cuando cambia el jugador o su rango.
+   */
+  update(
+    playerX: number,
+    playerZ: number,
+    visionRange: number,
+    screen: ScreenFog | null
+  ): void {
+    this.syncScreenFog(screen);
+
     if (
       playerX === this.lastX &&
       playerZ === this.lastZ &&
@@ -403,6 +487,23 @@ export class FogDecal {
     this.material.setParameter('uPlayer', this.player);
     this.material.setParameter('uVisionRange', visionRange);
     this.updateMask(playerX, playerZ, visionRange);
+  }
+
+  private syncScreenFog(screen: ScreenFog | null): void {
+    if (screen) {
+      this.screenCenter[0] = screen.center[0];
+      this.screenCenter[1] = screen.center[1];
+      this.screenRadius[0] = screen.radius[0];
+      this.screenRadius[1] = screen.radius[1];
+      this.screenFeather = screen.feather;
+      this.screenOpacity = screen.opacity;
+    } else {
+      this.screenOpacity = 0;
+    }
+    this.material.setParameter('uScreenCenter', this.screenCenter);
+    this.material.setParameter('uScreenRadius', this.screenRadius);
+    this.material.setParameter('uScreenFeather', this.screenFeather);
+    this.material.setParameter('uScreenOpacity', this.screenOpacity);
   }
 
   private updateMask(playerX: number, playerZ: number, visionRange: number): void {
