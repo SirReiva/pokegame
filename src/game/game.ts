@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import { Actor } from './actor';
 import { CameraRig } from './camera';
 import { CONFIG, RAD } from './config';
+import { FogView, createFogMesh } from './fog';
 import {
   IDLE_INPUT,
   Input,
@@ -18,13 +19,21 @@ import {
   facingToCenter,
   spawnForTeam,
   type MatchPlayerConfig,
-  type PlayerMatchStats
+  type PlayerMatchStats,
+  type SplitRect
 } from './multiplayer';
 import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
-import { POND, TERRAINS, terrainAt, type Team } from './terrain';
+import { POND, TERRAINS, terrainAt, type Team, type TerrainId } from './terrain';
 import { terrainSpeedEffect, type TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
+import {
+  effectiveVisionRange,
+  isTargetVisible,
+  terrainConcealment,
+  visionForPokemon,
+  type Concealment
+} from './vision';
 import { buildWorld, type Collider, type World } from './world';
 
 export interface GameCallbacks {
@@ -60,11 +69,16 @@ interface MatchPlayerState extends MatchPlayerConfig {
   submerge: number;
   animation: AnimationName;
   playback: number;
+  terrain: TerrainId;
   terrainMultiplier: number;
   terrainSpeedReason: TerrainSpeedReason;
+  visionRange: number;
+  concealment: Concealment;
   camera: CameraRig;
   /** Una copia del actor por viewport, indexada por jugador/vista. */
   copies: Actor[];
+  /** Rectángulo normalizado de esta vista, para proyectar la niebla. */
+  viewport: SplitRect;
 }
 
 function angleLerp(current: number, target: number, t: number): number {
@@ -104,6 +118,10 @@ export class Game {
 
   private matchPlayers: MatchPlayerState[] = [];
   private viewLayers: pc.Layer[] = [];
+  /** Quads de niebla, uno por vista. */
+  private fogViews: FogView[] = [];
+  /** Malla compartida por todas las vistas; se crea en la primera partida. */
+  private fogMesh: pc.Mesh | null = null;
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -233,6 +251,7 @@ export class Game {
 
       const spawn = spawnForTeam(config.team, teamIndex[config.team]++);
       const facing = facingToCenter(config.team);
+      const terrain = terrainAt(spawn.x, spawn.z);
 
       const layer = new pc.Layer({ name: `match-view-${index + 1}` });
       const layerComposition = this.app.scene.layers;
@@ -268,11 +287,19 @@ export class Game {
         submerge: 0,
         animation: 'idle',
         playback: 1,
+        terrain,
         terrainMultiplier: 1,
         terrainSpeedReason: 'neutral',
+        visionRange: visionForPokemon(config.pokemonId),
+        concealment: terrainConcealment(terrain, asset.entry.types),
         camera,
-        copies: []
+        copies: [],
+        viewport: layout[index]
       });
+
+      this.fogViews.push(
+        new FogView(this.app.graphicsDevice, this.ensureFogMesh(), camera.entity, layer.id, index)
+      );
     });
 
     // Rejilla N x N: cada jugador tiene una copia visible en cada viewport.
@@ -321,6 +348,9 @@ export class Game {
   }
 
   private clearMatch(): void {
+    for (const fog of this.fogViews) fog.destroy();
+    this.fogViews = [];
+
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
       player.copies = [];
@@ -329,6 +359,15 @@ export class Game {
     for (const layer of this.viewLayers) this.app.scene.layers.remove(layer);
     this.matchPlayers = [];
     this.viewLayers = [];
+  }
+
+  /**
+   * Quad unitario compartido por todas las vistas. Cada `FogView` crea su
+   * propia instancia y su propio material; lo único compartido es la malla.
+   */
+  private ensureFogMesh(): pc.Mesh {
+    if (!this.fogMesh) this.fogMesh = createFogMesh(this.app.graphicsDevice);
+    return this.fogMesh;
   }
 
   setPaused(paused: boolean): void {
@@ -443,6 +482,10 @@ export class Game {
       });
     });
 
+    // La niebla se resuelve después de mover a todos: cada copia se oculta en
+    // las vistas que no la ven y cada cámara recibe su círculo de visión.
+    this.updateVision();
+
     this.world.update(dt);
 
     this.statsTimer += dt;
@@ -451,8 +494,7 @@ export class Game {
       const stats: PlayerMatchStats[] = this.matchPlayers.map((player, index) => {
         const own = player.copies[index] ?? player.copies[0];
         const row = own?.billboard.currentRow ?? 0;
-        const terrainId = terrainAt(player.x, player.z);
-        const terrain = TERRAINS[terrainId];
+        const terrain = TERRAINS[player.terrain];
         return {
           slot: player.slot,
           name: player.name,
@@ -468,11 +510,17 @@ export class Game {
           z: player.z,
           gamepad: player.deviceKind === 'gamepad',
           animation: player.animation,
-          terrain: terrainId,
+          terrain: player.terrain,
           terrainName: terrain.name,
           terrainType: terrain.type,
           terrainSpeedMultiplier: player.terrainMultiplier,
-          terrainSpeedReason: player.terrainSpeedReason
+          terrainSpeedReason: player.terrainSpeedReason,
+          visionRange: player.visionRange,
+          detectionRange: effectiveVisionRange(player.visionRange, player.concealment.value),
+          concealment: player.concealment.value,
+          concealmentBase: player.concealment.base,
+          concealmentMultiplier: player.concealment.multiplier,
+          concealmentReason: player.concealment.reason
         };
       });
       this.callbacks.onMatchStats(stats);
@@ -490,7 +538,10 @@ export class Game {
     const desiredZ = rightZ * input.moveX + forwardZ * input.moveY;
     const magnitude = Math.hypot(desiredX, desiredZ);
 
-    const terrainEffect = terrainSpeedEffect(terrainAt(player.x, player.z), player.types);
+    const terrainEffect = terrainSpeedEffect(
+      terrainAt(player.x, player.z),
+      player.types
+    );
     player.terrainMultiplier = terrainEffect.multiplier;
     player.terrainSpeedReason = terrainEffect.reason;
     const maxSpeed =
@@ -536,11 +587,13 @@ export class Game {
       player.playback = 1;
     }
 
-    const waterTerrain = terrainAt(player.x, player.z);
+    const terrain = terrainAt(player.x, player.z);
+    player.terrain = terrain;
+    player.concealment = terrainConcealment(terrain, player.types);
     const targetSubmerge =
-      waterTerrain === 'waterHigh'
+      terrain === 'waterHigh'
         ? CONFIG.player.submergeDeep
-        : waterTerrain === 'waterLow' || waterTerrain === 'poison'
+        : terrain === 'waterLow' || terrain === 'poison'
           ? CONFIG.player.submergeShallow
           : 0;
     player.submerge +=
@@ -552,6 +605,48 @@ export class Game {
       player.camera.addZoom(-input.wheel * CONFIG.camera.wheelStep);
     }
     player.camera.update(dt, player, input.cameraX, input.zoom);
+  }
+
+  /**
+   * Resuelve la niebla de cada vista: oculta las copias que no se ven y coloca
+   * el degradado fuera del círculo de visión. La ocultación del objetivo se
+   * calcula con el terreno que pisa, no con el del observador.
+   */
+  private updateVision(): void {
+    const colliders = this.world.colliders;
+
+    this.matchPlayers.forEach((observer, viewIndex) => {
+      const fog = this.fogViews[viewIndex];
+      const camera = observer.camera.entity.camera;
+      if (fog && camera) {
+        fog.update(
+          camera,
+          observer.viewport,
+          observer.camera.yaw,
+          observer.x,
+          observer.z,
+          observer.visionRange
+        );
+      }
+
+      for (const target of this.matchPlayers) {
+        const copy = target.copies[viewIndex];
+        if (!copy) continue;
+        if (target === observer) {
+          copy.setVisible(true);
+          continue;
+        }
+        copy.setVisible(
+          isTargetVisible(
+            observer,
+            target,
+            target.concealment.value,
+            colliders,
+            copy.isVisible
+          )
+        );
+      }
+    });
   }
 
   private resolvePosition(
@@ -657,6 +752,8 @@ export class Game {
     this.app.off('update', this.onUpdate);
     this.input.dispose();
     this.clearMatch();
+    this.fogMesh?.destroy();
+    this.fogMesh = null;
     for (const npc of this.menuNpcs) npc.destroy();
     this.menuNpcs = [];
     this.menuCamera.dispose();

@@ -159,6 +159,11 @@ export class Actor {
     this.marker?.setVisible(visible);
   }
 
+  /** Estado actual, para la histéresis de la niebla de guerra. */
+  get isVisible(): boolean {
+    return this.visible;
+  }
+
   /** Capa de render exclusiva del viewport que debe ver esta copia. */
   setLayer(layerId: number): void {
     this.billboard.setLayer(layerId);

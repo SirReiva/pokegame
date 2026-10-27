@@ -8,7 +8,7 @@
 
 import type { InputDeviceInfo } from './input';
 import type { Team, TerrainId } from './terrain';
-import type { TerrainSpeedReason } from './terrainSpeed';
+import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, DirectionName } from './types';
 
 /** 1 teclado + 7 mandos, u 8 mandos. */
@@ -180,6 +180,17 @@ export interface PlayerMatchStats {
   terrainType: string;
   terrainSpeedMultiplier: number;
   terrainSpeedReason: TerrainSpeedReason;
+  /** Rango de visión base de la especie (u). */
+  visionRange: number;
+  /** Radio al que otros jugadores con el mismo rango base te detectan (u). */
+  detectionRange: number;
+  /** Ocultación final que ofrece el terreno bajo los pies (0-1). */
+  concealment: number;
+  /** Ocultación base del terreno, antes de aplicar los tipos (0-1). */
+  concealmentBase: number;
+  /** Multiplicador de ocultación por la relación tipo-terreno. */
+  concealmentMultiplier: number;
+  concealmentReason: TerrainRelationReason;
 }
 
 export function countTeams(players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>): Record<Team, number> {

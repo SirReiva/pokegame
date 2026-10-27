@@ -2042,6 +2042,44 @@ code {
   color: #aabccf;
 }
 
+.split-vision {
+  position: absolute;
+  left: 10px;
+  bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(5, 10, 16, 0.62);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: #9fb1c4;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.split-vision-range {
+  color: #d7e6f4;
+}
+
+.split-vision-detect {
+  color: #7f92a7;
+}
+
+.split-conceal {
+  color: #aabccf;
+}
+
+.split-conceal.is-good {
+  color: #bff39d;
+}
+
+.split-conceal.is-bad {
+  color: #ffb2b5;
+}
+
 .split-terrain-name {
   white-space: nowrap;
 }
@@ -2081,6 +2119,14 @@ code {
   bottom: 6px;
   font-size: 0.52rem;
   padding: 3px 6px;
+}
+
+.split-panel.is-compact .split-vision {
+  left: 6px;
+  bottom: 33px;
+  gap: 4px;
+  font-size: 0.5rem;
+  padding: 2px 5px;
 }
 
 .split-pause {
@@ -2248,7 +2294,8 @@ code {
 
   .split-team,
   .split-pause-key,
-  .split-terrain-name {
+  .split-terrain-name,
+  .split-vision-detect {
     display: none;
   }
 

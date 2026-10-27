@@ -84,4 +84,22 @@ export const CONFIG = {
     near: 34,
     far: 96,
   },
+  vision: {
+    /**
+     * Margen extra (u) al pasar de oculto a visible. Evita el parpadeo justo en
+     * el borde del radio sin introducir un tercer estado de render.
+     */
+    hysteresis: 0.2,
+    /** Tope de ocultación: nunca se vuelve imposible ver a alguien pegado. */
+    maxConcealment: 0.85,
+    /**
+     * Opacidad del sombreado fuera de la visión, por vista. Se aplica como
+     * uniforme del material de niebla.
+     */
+    fogOpacity: 0.64,
+    /** Color del sombreado, en 0-1 (sRGB). */
+    fogColor: [0.016, 0.039, 0.086] as [number, number, number],
+    /** Ancho del borde suave, como fracción del radio de visión. */
+    fogFeather: 0.06,
+  },
 } as const;

@@ -22,8 +22,16 @@ import {
 } from './textures';
 
 export type Collider =
-  | { type: 'circle'; x: number; z: number; radius: number }
-  | { type: 'segment'; ax: number; az: number; bx: number; bz: number; radius: number };
+  | { type: 'circle'; x: number; z: number; radius: number; sightRadius?: number }
+  | {
+      type: 'segment';
+      ax: number;
+      az: number;
+      bx: number;
+      bz: number;
+      radius: number;
+      sightRadius?: number;
+    };
 
 export interface World {
   colliders: Collider[];
@@ -478,7 +486,7 @@ export function buildWorld(app: pc.Application): World {
       });
     });
 
-    colliders.push({ type: 'circle', x, z, radius: 0.55 * scale });
+    colliders.push({ type: 'circle', x, z, radius: 0.55 * scale, sightRadius: 1.25 * scale });
   });
 
   // Rocas.
@@ -711,7 +719,8 @@ export function buildWorld(app: pc.Application): World {
         az: a[1],
         bx: b[0],
         bz: b[1],
-        radius: range.width / 2
+        radius: range.width / 2,
+        sightRadius: range.width * 0.65
       });
     }
 
@@ -2872,7 +2881,7 @@ export function buildWorld(app: pc.Application): World {
       app.root.addChild(tree);
       created.push(tree);
 
-      colliders.push({ type: 'circle', x, z, radius: 0.22 * scale });
+      colliders.push({ type: 'circle', x, z, radius: 0.22 * scale, sightRadius: 0.7 * scale });
       ghostTrees.push({
         entity: tree,
         yaw,

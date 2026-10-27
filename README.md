@@ -74,6 +74,7 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
 - **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Bulbasaur 4,2 u/s, Charmander 5,4, Squirtle 4,8, Pikachu 6,9, Eevee 6,1, Lucario 6,5). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
+- **Niebla de guerra por jugador**: cada vista sombrea el mundo fuera de su radio de visión y oculta a los Pokémon que no se ven. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y las cordilleras y los árboles bloquean la línea de visión. El sombreado es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, y el HUD de cada vista resume el rango, la ocultación y el radio de detección.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
 - **Anillo de rumbo**: cada jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real, tintado con el color de su equipo. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
@@ -146,6 +147,51 @@ Cada terreno modula la velocidad del Pokémon que lo atraviesa. La relación se 
 
 Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas someras (×1,18) pero se frena en la hierba alta (×0,82); Pikachu sufre en la Arena y el Desierto porque el tipo Tierra es súper eficaz contra Eléctrico (×0,82) y va neutro por los carriles; Charmander corre por la Colada volcánica (×1,18) y se frena en las bases y el Desierto (×0,82); Bulbasaur agradece la Ciénaga y la jungla (×1,18); Eevee va más rápido por los carriles y la Carretera porque comparte el tipo Normal (×1,18) y nota una leve ventaja en el Bosque umbrío (×1,08); Lucario también agradece los carriles y el asfalto, ya que el Acero resiste el tipo Normal (×1,08), pero el Desierto le cuesta (×0,82). El HUD muestra el multiplicador activo junto al terreno, con una nota explicando el motivo, y la velocidad punta final combina la del Pokémon con la del terreno.
 
+### Niebla de guerra y visión
+
+Cada vista del splitscreen tiene su propia niebla. No es un estado global del mapa: es lo que ve el Pokémon de ese jugador. Dentro de su radio de visión el mundo se dibuja normal; fuera, un degradado oscurece el terreno y los Pokémon que no se ven se ocultan. La visibilidad de cada Pokémon es binaria (visible u oculto); el degradado es solo la lectura visual del borde, no una tercera transición de juego.
+
+Los rangos base viven en `POKEMON_VISION` (`src/game/vision.ts`):
+
+| Pokémon | Rango | Motivo |
+| --- | --- | --- |
+| Bulbasaur | 8,0 u | Bajo, pesado y con poca altura de ojos |
+| Squirtle | 8,5 u | Vista corta pero constante |
+| Charmander | 9,5 u | La llama de la cola ilumina el entorno cercano |
+| Eevee | 9,5 u | Olfato y oído finos |
+| Lucario | 10,5 u | Percibe el aura |
+| Pikachu | 11,0 u | El más alerta por sus sentidos eléctricos |
+
+La **ocultación base** depende del terreno que pisa el Pokémon al que se intenta ver (`TERRAIN_CONCEALMENT`). Los tipos del Pokémon la mejoran o empeoran con la misma relación que la velocidad (`terrainSpeed.ts`): comparte tipo con el terreno ×1,5; el terreno es súper eficaz contra él ×0,5; lo resiste o es inmune ×1,15; neutro ×1. La ocultación final se limita al 85% para que nunca sea imposible ver a alguien pegado.
+
+| Terreno | Ocultación base |
+| --- | --- |
+| Hierba alta | 45% |
+| Bosque umbrío | 40% |
+| Ciénaga | 30% |
+| Claro feérico | 26% |
+| Jungla / Páramo | 22% |
+| Aguas profundas | 20% |
+| Escarcha / Desierto | 14% |
+| Colada volcánica | 12% |
+| Aguas someras | 10% |
+| Arena | 8% |
+| Carril / Carretera / Base | 0% |
+
+Ejemplos con el roster actual: Bulbasaur en hierba alta llega al 67,5% de ocultación (45% × 1,5 por compartir Planta), Squirtle baja al 22,5% (Grass es súper eficaz contra Water) y Charmander se queda en el 51,75% (Grass no es eficaz contra Fire). Pikachu pasa del 45% de la hierba alta al 7% del desierto, donde Ground lo delata.
+
+La fórmula de visibilidad es:
+
+```
+visible = distancia ≤ rangoVisión × (1 − ocultación)  &&  línea de visión libre
+```
+
+La ocultación se evalúa en el terreno del **objetivo**, no en el del observador. El jugador siempre se ve a sí mismo. La **histéresis** de 0,2 u evita que un Pokémon parpadee justo en el borde del radio. La visión es **individual**: cada jugador ve solo con su Pokémon, así que un aliado que sale de su radio también se oculta.
+
+La línea de visión la bloquean las **cordilleras** y los **árboles** (incluidos los árboles secos del bosque umbrío). Para ello, sus colliders llevan un `sightRadius` mayor que el radio de colisión de los árboles, de modo que la copa tapa aunque el tronco sea fino. Las rocas, los cactus y los adornos de las bases no bloquean. El chequeo es una distancia segmento-segmento/círculo en `vision.ts`, sin raycasts contra mallas.
+
+El HUD de cada vista muestra el rango base de la especie, la ocultación actual y el radio al que te detectaría un observador con tu mismo rango; el motivo y el desglose (base × multiplicador) aparecen en el `title` del bloque de visión. El sombreado se resuelve en el motor: cada vista monta un quad pegado a su cámara, en su propia capa de render, con un `ShaderMaterial` que recibe por uniformes el centro y los radios del círculo de visión (`src/game/fog.ts`). Se dibuja al final de las transparencias y sin `depthTest`, así que cubre el mundo de esa vista pero no el HUD de React. No hay capa HTML de niebla.
+
 ### Sumergirse en el agua
 
 El lago de la jungla sureste combina el lecho pintado en el suelo con dos láminas planas y translúcidas a `POND.surfaceHeight` (0,3 u), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un giro lento y un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La máscara radial (`createWaterMaskCanvas`) disuelve el borde contra la arena y el tile de ondas se genera repetido en los bordes para que el desplazamiento no muestre costuras. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
@@ -208,7 +254,7 @@ lift = max(0, bottom - anchor.y)
 scripts/import-sprites.mjs   descarga, validación, anclas y manifiesto
 public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS.md
 src/game/
-  config.ts                  escala de píxel, cámara, jugador, niebla
+  config.ts                  escala de píxel, cámara, jugador, niebla y visión
   types.ts                   tipos del manifiesto y del estado del juego
   multiplayer.ts             equipos, spawns, reparto de viewports y tipos compartidos
   terrain.ts                 terrenos, bases, carriles, zonas y consulta por posición
@@ -218,6 +264,8 @@ src/game/
   input.ts                   1 teclado + mandos, snapshots por dispositivo y acciones de menú
   roster.ts                  velocidad punta de cada Pokémon
   terrainSpeed.ts            multiplicadores de velocidad por terreno y tipo
+  vision.ts                  rangos de visión, ocultación, tipos y línea de visión
+  fog.ts                     quad y shader de niebla por cámara
   sprite.ts                  texturas, material, UVs, animación y billboard
   marker.ts                  anillo de jugador con flecha de rumbo y color de equipo
   actor.ts                   sprite + sombra de contacto + posición + capa de render
@@ -226,7 +274,7 @@ src/ui/
   SpritePreview.tsx          vista previa animada de las hojas con CSS
   LobbyScreen.tsx            sala de equipos y detección de mandos
   RosterScreen.tsx           selección simultánea de Pokémon
-  MatchHud.tsx               etiquetas y bordes del splitscreen
+  MatchHud.tsx               etiquetas, telemetría y bordes del splitscreen
   TypeBadge.tsx              insignia de tipo
   typeInfo.ts                colores y etiquetas de tipos
 src/App.tsx                  flujo de pantallas, estado de jugadores y modales
@@ -241,6 +289,8 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `PITCH_DEG` (45) y `VERTICAL_STRETCH`: inclinación y corrección de píxeles.
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad. En partidas de 3-8 jugadores cada cámara arranca un 12 % más lejos para compensar el viewport estrecho.
 - `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
+- `POKEMON_VISION`, `TERRAIN_CONCEALMENT` y `CONCEALMENT_TYPE_FACTOR` en `src/game/vision.ts`: rango base por especie, ocultación de cada terreno y cuánto la modulan los tipos. La fórmula y la oclusión están en el mismo módulo.
+- `CONFIG.vision` (`src/game/config.ts`): histéresis de visibilidad, tope de ocultación, opacidad, color y suavizado del borde del sombreado. El `sightRadius` de árboles y cordilleras se define al crear sus colliders en `src/game/world.ts`.
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
 - `TERRAINS`, `TERRAIN_ZONES`, `BASES`, `LANES` y `POND` en `src/game/terrain.ts`: nombres, tipos Pokémon, posición y radio de las bases, trazado y ancho de los carriles, radios del lago y tamaño de cada calvero. El ancho del asfalto del carril central se define con `asphalt` dentro de `LANES`.
@@ -255,6 +305,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - El multijugador local es **exploración libre por equipos**: no hay objetivo, marcador ni condición de victoria.
 - La selección de Pokémon permite repetir especie porque hay 6 especies para hasta 8 jugadores.
 - Los NPC del menú son estáticos: giran hacia la cámara, pero no patrullan.
+- La niebla sombreada es un círculo por vista: montañas y árboles ocultan Pokémon, pero no recortan el área sombreada con un polígono de visibilidad completo.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
 - En splitscreen, el mundo se dibuja una vez por vista. Con 7-8 jugadores el rendimiento baja de forma notable, sobre todo en equipos modestos.

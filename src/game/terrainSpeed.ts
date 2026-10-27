@@ -17,9 +17,19 @@
 
 import { TERRAINS, type TerrainId } from './terrain';
 
-export type TerrainSpeedReason = 'home' | 'hostile' | 'comfortable' | 'neutral';
+/**
+ * Relación entre el tipo del terreno y los tipos del Pokémon. La comparten la
+ * velocidad (`terrainSpeed.ts`) y la ocultación (`vision.ts`) para que ambas
+ * reglas cuenten la misma historia: el Pokémon que comparte tipo con el terreno
+ * está en casa, el que es débil a ese tipo lo pasa mal y el que lo resiste está
+ * cómodo.
+ */
+export type TerrainRelationReason = 'home' | 'hostile' | 'comfortable' | 'neutral';
 
-export const TERRAIN_SPEED_FACTOR: Record<TerrainSpeedReason, number> = {
+/** Alias histórico: la velocidad fue la primera en usar esta relación. */
+export type TerrainSpeedReason = TerrainRelationReason;
+
+export const TERRAIN_SPEED_FACTOR: Record<TerrainRelationReason, number> = {
   home: 1.18,
   hostile: 0.82,
   comfortable: 1.08,
@@ -128,6 +138,40 @@ const TYPE_CHART: Record<string, Record<string, number>> = {
   }
 };
 
+export interface TerrainRelation {
+  /** Tipo Pokémon asociado al terreno, para poder explicarlo en la UI. */
+  terrainType: string;
+  reason: TerrainRelationReason;
+}
+
+/**
+ * Resuelve la relación tipo-terreno usando el tipo del terreno como atacante y
+ * los tipos del Pokémon como defensores:
+ *
+ * - `home`: el Pokémon comparte el tipo del terreno.
+ * - `hostile`: el terreno es súper eficaz contra el Pokémon (×2 o más).
+ * - `comfortable`: el Pokémon lo resiste o es inmune (×0,5, ×0,25 o ×0).
+ * - `neutral`: cualquier otra combinación.
+ */
+export function terrainTypeRelation(
+  terrain: TerrainId,
+  pokemonTypes: readonly string[]
+): TerrainRelation {
+  const terrainType = TERRAINS[terrain].type;
+  if (pokemonTypes.includes(terrainType)) {
+    return { terrainType, reason: 'home' };
+  }
+
+  let effectiveness = 1;
+  for (const type of pokemonTypes) {
+    effectiveness *= TYPE_CHART[terrainType]?.[type] ?? 1;
+  }
+
+  if (effectiveness >= 2) return { terrainType, reason: 'hostile' };
+  if (effectiveness < 1) return { terrainType, reason: 'comfortable' };
+  return { terrainType, reason: 'neutral' };
+}
+
 export interface TerrainSpeedEffect {
   multiplier: number;
   reason: TerrainSpeedReason;
@@ -139,21 +183,10 @@ export function terrainSpeedEffect(
   terrain: TerrainId,
   pokemonTypes: readonly string[]
 ): TerrainSpeedEffect {
-  const terrainType = TERRAINS[terrain].type;
-  if (pokemonTypes.includes(terrainType)) {
-    return { multiplier: TERRAIN_SPEED_FACTOR.home, reason: 'home', terrainType };
-  }
-
-  let effectiveness = 1;
-  for (const type of pokemonTypes) {
-    effectiveness *= TYPE_CHART[terrainType]?.[type] ?? 1;
-  }
-
-  if (effectiveness >= 2) {
-    return { multiplier: TERRAIN_SPEED_FACTOR.hostile, reason: 'hostile', terrainType };
-  }
-  if (effectiveness < 1) {
-    return { multiplier: TERRAIN_SPEED_FACTOR.comfortable, reason: 'comfortable', terrainType };
-  }
-  return { multiplier: TERRAIN_SPEED_FACTOR.neutral, reason: 'neutral', terrainType };
+  const relation = terrainTypeRelation(terrain, pokemonTypes);
+  return {
+    multiplier: TERRAIN_SPEED_FACTOR[relation.reason],
+    reason: relation.reason,
+    terrainType: relation.terrainType
+  };
 }
