@@ -23,6 +23,26 @@ export const CONFIG = {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,
     alphaTest: 0.5,
+    /**
+     * Muestreo de la textura del sprite:
+     * - 'nearest': píxel art original, cada téxel se ve como un bloque.
+     * - 'smooth': precarga la hoja con NEAREST a `smoothScale` y la muestrea
+     *   con LINEAR. Antialiasa el contorno 1-2 px sin emborronar el interior.
+     * - 'linear': bilineal directo sobre la hoja original; el más borroso.
+     */
+    filter: 'smooth' as 'nearest' | 'smooth' | 'linear',
+    /**
+     * Factor de precarga del modo 'smooth'. Más alto = contorno más nítido
+     * (menos radio de suavizado) y más memoria de textura.
+     * 2 = suave, 3 = equilibrado, 4 = casi nítido.
+     */
+    smoothScale: 3,
+    /**
+     * Suaviza el recorte alfa usando las muestras del MSAA (`antialias`). En
+     * modo 'smooth' el borde ya tiene alfa parcial, así que redondea el
+     * contorno; en 'nearest' apenas se nota (alfa de 1 bit).
+     */
+    alphaToCoverage: true,
     /** Escala de reproducción de la animación de andar según la velocidad. */
     walkRateMin: 0.75,
     walkRateMax: 1.5,

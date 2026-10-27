@@ -1,5 +1,5 @@
 import * as pc from 'playcanvas';
-import { DEG, RAD } from './config';
+import { CONFIG, DEG, RAD } from './config';
 import type { AnimationName, PokemonEntry, SpriteAnimation } from './types';
 
 export interface SpriteAsset {
@@ -16,6 +16,15 @@ const SILHOUETTE_COLOR: readonly [number, number, number] = [255, 242, 209];
 /** Por encima de las partículas y del agua, para que no la tapen. */
 const SILHOUETTE_DRAW_ORDER = 4;
 
+/**
+ * Resolución de las texturas de sprite respecto a las celdas del manifiesto.
+ * En modo 'smooth' la hoja se precarga a más resolución para que el filtrado
+ * lineal posterior tenga un radio de suavizado de ~1 téxel, no de 1 píxel del
+ * arte original.
+ */
+export const SPRITE_TEXTURE_SCALE =
+  CONFIG.sprite.filter === 'smooth' ? CONFIG.sprite.smoothScale : 1;
+
 export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -26,26 +35,50 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * Amplía la hoja duplicando téxeles (sin interpolar). El LINEAR posterior
+ * solo suaviza las fronteras entre téxeles distintos, así que el contorno
+ * queda antialiaseado pero el interior conserva los bloques del píxel art.
+ */
+function upscaleSheet(
+  image: HTMLImageElement,
+  factor: number
+): HTMLCanvasElement | HTMLImageElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(image.width * factor);
+  canvas.height = Math.round(image.height * factor);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return image;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 function createSpriteTexture(
   device: pc.GraphicsDevice,
   image: HTMLImageElement,
   name: string
 ): pc.Texture {
+  const mode = CONFIG.sprite.filter;
+  const source = mode === 'smooth' ? upscaleSheet(image, CONFIG.sprite.smoothScale) : image;
+  // NEAREST mantiene los bloques del píxel art. 'smooth' y 'linear' interpolan;
+  // la diferencia es que 'smooth' lo hace sobre una textura de más resolución.
+  const filter = mode === 'nearest' ? pc.FILTER_NEAREST : pc.FILTER_LINEAR;
   const texture = new pc.Texture(device, {
     name,
-    width: image.width,
-    height: image.height,
+    width: source.width,
+    height: source.height,
     format: pc.PIXELFORMAT_RGBA8,
     srgb: true,
     mipmaps: false,
-    minFilter: pc.FILTER_NEAREST,
-    magFilter: pc.FILTER_NEAREST,
+    minFilter: filter,
+    magFilter: filter,
     addressU: pc.ADDRESS_CLAMP_TO_EDGE,
     addressV: pc.ADDRESS_CLAMP_TO_EDGE,
     // El arte se sube del revés para que la fila 0 de la hoja quede en V=1.
     flipY: true
   });
-  texture.setSource(image);
+  texture.setSource(source);
   return texture;
 }
 
@@ -97,6 +130,9 @@ function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.Standa
   material.opacityMapChannel = 'a';
   material.opacity = 1;
   material.alphaTest = alphaTest;
+  // Con MSAA activo, alpha-to-coverage reparte la cobertura del contorno entre
+  // las muestras del píxel en lugar de recortarlo en seco.
+  material.alphaToCoverage = CONFIG.sprite.alphaToCoverage;
   material.blendType = pc.BLEND_NONE;
   material.depthWrite = true;
   material.depthTest = true;
@@ -343,17 +379,22 @@ export class SpriteBillboard {
     const offsetY = (anchor.y - layer.refAnchorY + lift) * sy;
     layer.entity.setLocalPosition(offsetX, offsetY, 0);
 
-    // UVs con medio téxel de margen para no sangrar frames vecinos.
-    const sheetWidth = animation.frameWidth * animation.columns;
-    const sheetHeight = animation.frameHeight * animation.rows;
-    const u0 = (this.frame * animation.frameWidth + 0.5) / sheetWidth;
+    // UVs con medio téxel de margen para no sangrar frames vecinos. En modo
+    // 'smooth' la textura está precargada a más resolución, así que el margen
+    // y el tamaño de celda se miden en téxeles de la textura.
+    const scale = SPRITE_TEXTURE_SCALE;
+    const frameWidth = animation.frameWidth * scale;
+    const frameHeight = animation.frameHeight * scale;
+    const sheetWidth = frameWidth * animation.columns;
+    const sheetHeight = frameHeight * animation.rows;
+    const u0 = (this.frame * frameWidth + 0.5) / sheetWidth;
     // PlayCanvas mide el offset V desde la parte superior de la textura, no
     // desde abajo. Por eso la fila se compensa con `1 - tiling - offset` dentro
     // del shader. Si usáramos la V "clásica" (1 - fila) veríamos la fila
     // espejada de la hoja.
-    const v0 = (this.row * animation.frameHeight + 0.5) / sheetHeight;
-    const du = (animation.frameWidth - 1) / sheetWidth;
-    const dv = (animation.frameHeight - 1) / sheetHeight;
+    const v0 = (this.row * frameHeight + 0.5) / sheetHeight;
+    const du = (frameWidth - 1) / sheetWidth;
+    const dv = (frameHeight - 1) / sheetHeight;
 
     layer.material.emissiveMapTiling = new pc.Vec2(du, dv);
     layer.material.emissiveMapOffset = new pc.Vec2(u0, v0);
