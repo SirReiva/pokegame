@@ -16,7 +16,8 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0448': 6.5, // Lucario: zancada larga, casi tan rápido como Pikachu
   '0658': 7.4, // Greninja: un ninja acuático, el más rápido hasta ahora
   '0150': 7.8, // Mewtwo: levita y se impulsa con poder psíquico, el más rápido
-  '0151': 7.0 // Mew: pequeño y flotante, casi tan rápido como Greninja
+  '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
+  '0095': 4.6 // Onix: una serpiente de piedra enorme, avanza pesada
 };
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */

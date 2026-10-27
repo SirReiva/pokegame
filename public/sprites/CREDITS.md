@@ -79,3 +79,10 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/credits.txt
 
+## Onix (#0095)
+
+- CHUNSOFT · Walk, Attack, Slam, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/credits.txt
+

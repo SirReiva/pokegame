@@ -41,7 +41,8 @@ const ROSTER = [
   { id: '0448', name: 'Lucario', types: ['Fighting', 'Steel'], accent: '#c22e28' },
   { id: '0658', name: 'Greninja', types: ['Water', 'Dark'], accent: '#3f6f9f' },
   { id: '0150', name: 'Mewtwo', types: ['Psychic'], accent: '#f95587' },
-  { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' }
+  { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' },
+  { id: '0095', name: 'Onix', types: ['Rock', 'Ground'], accent: '#b6a136' }
 ];
 
 const ACTIONS = ['Idle', 'Walk'];
