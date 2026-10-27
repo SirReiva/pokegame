@@ -1,76 +1,23 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Game } from './game/game';
-import { speedForPokemon } from './game/roster';
-import type { TerrainSpeedReason } from './game/terrainSpeed';
-import type {
-  AnimationName,
-  GamePhase,
-  GameStats,
-  LoadingProgress,
-  PokemonEntry,
-  SpriteManifest
-} from './game/types';
+import type { InputDeviceInfo, MenuAction } from './game/input';
+import {
+  MAX_PLAYERS,
+  MAX_TEAM_SIZE,
+  TEAM_INFO,
+  countTeams,
+  nextFreeSlot,
+  otherTeam,
+  type LobbyPlayer,
+  type MatchPlayerConfig,
+  type PlayerMatchStats
+} from './game/multiplayer';
+import type { Team } from './game/terrain';
+import type { GamePhase, LoadingProgress, SpriteManifest } from './game/types';
+import { LobbyScreen } from './ui/LobbyScreen';
+import { MatchHud } from './ui/MatchHud';
+import { RosterScreen } from './ui/RosterScreen';
 import { SpritePreview } from './ui/SpritePreview';
-
-const TYPE_COLORS: Record<string, string> = {
-  Normal: '#a8a77a',
-  Fire: '#ee8130',
-  Water: '#6390f0',
-  Electric: '#f7d02c',
-  Grass: '#7ac74c',
-  Ice: '#96d9d6',
-  Fighting: '#c22e28',
-  Poison: '#a33ea1',
-  Ground: '#e2bf65',
-  Flying: '#a98ff3',
-  Psychic: '#f95587',
-  Bug: '#a6b91a',
-  Rock: '#b6a136',
-  Ghost: '#735797',
-  Dragon: '#6f35fc',
-  Dark: '#705746',
-  Steel: '#b7b7ce',
-  Fairy: '#d685ad'
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  Normal: 'Normal',
-  Fire: 'Fuego',
-  Water: 'Agua',
-  Electric: 'Eléctrico',
-  Grass: 'Planta',
-  Ice: 'Hielo',
-  Fighting: 'Lucha',
-  Poison: 'Veneno',
-  Ground: 'Tierra',
-  Flying: 'Volador',
-  Psychic: 'Psíquico',
-  Bug: 'Bicho',
-  Rock: 'Roca',
-  Ghost: 'Fantasma',
-  Dragon: 'Dragón',
-  Dark: 'Siniestro',
-  Steel: 'Acero',
-  Fairy: 'Hada'
-};
-
-const LIGHT_TYPES = new Set(['Normal', 'Electric', 'Ice', 'Ground', 'Steel', 'Fairy']);
-
-const TERRAIN_SPEED_HINTS: Record<TerrainSpeedReason, string> = {
-  home: 'Terreno propio: el Pokémon comparte el tipo del terreno.',
-  comfortable: 'Terreno cómodo: el tipo del terreno no le hace daño.',
-  hostile: 'Terreno hostil: el tipo del terreno es súper eficaz contra él.',
-  neutral: 'Terreno neutro: sin cambios de velocidad.'
-};
-
-const TERRAIN_SPEED_NOTES: Record<TerrainSpeedReason, string> = {
-  home: 'Terreno propio: se mueve más rápido de lo normal.',
-  comfortable: 'El terreno no le afecta: ligera ventaja de velocidad.',
-  hostile: 'Terreno hostil: se mueve más lento de lo normal.',
-  neutral: ''
-};
-
-const COMPASS_POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 
 const DEFAULT_PROGRESS: LoadingProgress = {
   loaded: 0,
@@ -78,97 +25,396 @@ const DEFAULT_PROGRESS: LoadingProgress = {
   label: 'Iniciando el motor'
 };
 
-function typeStyle(type: string): CSSProperties {
-  const color = TYPE_COLORS[type] ?? '#8a93a6';
-  return {
-    background: color,
-    color: LIGHT_TYPES.has(type) ? '#161a22' : '#ffffff'
-  };
-}
+type ModalKind = 'controls' | 'credits' | null;
 
-function TypeBadge({ type }: { type: string }) {
-  return (
-    <span className="type-badge" style={typeStyle(type)}>
-      {TYPE_LABELS[type] ?? type}
-    </span>
-  );
-}
-
-function Compass({ direction }: { direction: string }) {
-  return (
-    <div className="compass" aria-label={`Dirección visible del sprite: ${direction}`}>
-      {COMPASS_POINTS.map((point) => (
-        <span
-          key={point}
-          className={`compass-dir compass-${point.toLowerCase()}${
-            point === direction ? ' is-active' : ''
-          }`}
-        >
-          {point}
-        </span>
-      ))}
-      <span className="compass-ring" />
-    </div>
-  );
-}
-
-function FeatureChip({ children }: { children: ReactNode }) {
-  return <span className="feature-chip">{children}</span>;
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <span className="stat-label">{label}</span>
-      <span className="stat-value">{value}</span>
-    </div>
-  );
+interface Handlers {
+  onReady: (manifest: SpriteManifest) => void;
+  onMenuInput: (event: { deviceId: string; action: MenuAction }) => void;
+  onPauseRequest: () => void;
+  onDevicesChanged: (devices: InputDeviceInfo[]) => void;
+  onMatchStats: (stats: PlayerMatchStats[]) => void;
 }
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<Game | null>(null);
+
   const phaseRef = useRef<GamePhase>('loading');
-  const modalRef = useRef<'controls' | 'credits' | null>(null);
+  const playersRef = useRef<LobbyPlayer[]>([]);
+  const devicesRef = useRef<InputDeviceInfo[]>([]);
+  const manifestRef = useRef<SpriteManifest | null>(null);
+  const pausedRef = useRef(false);
+  const modalRef = useRef<ModalKind>(null);
+  const handlersRef = useRef<Handlers | null>(null);
 
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [manifest, setManifest] = useState<SpriteManifest | null>(null);
   const [progress, setProgress] = useState<LoadingProgress>(DEFAULT_PROGRESS);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previewRow, setPreviewRow] = useState(0);
-  const [previewAnimation, setPreviewAnimation] = useState<AnimationName>('idle');
-  const [stats, setStats] = useState<GameStats | null>(null);
-  const [modal, setModal] = useState<'controls' | 'credits' | null>(null);
+  const [devices, setDevices] = useState<InputDeviceInfo[]>([]);
+  const [players, setPlayers] = useState<LobbyPlayer[]>([]);
+  const [matchStats, setMatchStats] = useState<PlayerMatchStats[]>([]);
+  const [paused, setPaused] = useState(false);
+  const [modal, setModal] = useState<ModalKind>(null);
   const [hudVisible, setHudVisible] = useState(true);
+
+  // --- Helpers que mantienen estado y ref sincronizados ---------------------
+
+  const commitPlayers = (next: LobbyPlayer[]) => {
+    playersRef.current = next;
+    setPlayers(next);
+  };
+
+  const goPhase = (next: GamePhase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  };
+
+  const setPausedSafe = (next: boolean) => {
+    pausedRef.current = next;
+    setPaused(next);
+  };
+
+  const updateDevices = (next: InputDeviceInfo[]) => {
+    devicesRef.current = next;
+    setDevices(next);
+  };
+
+  const deviceFor = (deviceId: string): InputDeviceInfo =>
+    devicesRef.current.find((device) => device.id === deviceId) ?? {
+      id: deviceId,
+      kind: deviceId === 'kbd' ? 'keyboard' : 'gamepad',
+      label: deviceId === 'kbd' ? 'Teclado' : 'Mando',
+      index: null
+    };
+
+  // --- Acciones de la sala de espera ---------------------------------------
+
+  const joinDevice = (deviceId: string) => {
+    const current = playersRef.current;
+    if (current.length >= MAX_PLAYERS) return;
+    if (current.some((player) => player.deviceId === deviceId)) return;
+
+    const device = deviceFor(deviceId);
+    const counts = countTeams(current);
+    let team: Team = 'blue';
+    if (counts.blue <= counts.red && counts.blue < MAX_TEAM_SIZE) {
+      team = 'blue';
+    } else if (counts.red < MAX_TEAM_SIZE) {
+      team = 'red';
+    }
+
+    const slot = nextFreeSlot(current);
+    if (slot === null) return;
+
+    const firstPokemon = manifestRef.current?.pokemon[0]?.id ?? '';
+    commitPlayers([
+      ...current,
+      {
+        slot,
+        name: `J${slot}`,
+        deviceId,
+        deviceKind: device.kind,
+        deviceLabel: device.label,
+        team,
+        teamReady: false,
+        pokemonId: firstPokemon,
+        rosterReady: false
+      }
+    ]);
+  };
+
+  const setPlayerTeam = (slot: number, team: Team) => {
+    const current = playersRef.current;
+    const player = current.find((entry) => entry.slot === slot);
+    if (!player) return;
+    const counts = countTeams(current);
+    if (team !== player.team && counts[team] >= MAX_TEAM_SIZE) return;
+    commitPlayers(
+      current.map((entry) =>
+        entry.slot === slot && entry.team !== team
+          ? { ...entry, team, teamReady: false }
+          : entry
+      )
+    );
+  };
+
+  const toggleTeamReady = (slot: number) => {
+    commitPlayers(
+      playersRef.current.map((entry) =>
+        entry.slot === slot ? { ...entry, teamReady: !entry.teamReady } : entry
+      )
+    );
+  };
+
+  const leavePlayer = (slot: number) => {
+    const next = playersRef.current.filter((entry) => entry.slot !== slot);
+    commitPlayers(next);
+    if (next.length === 0 && phaseRef.current === 'roster') goPhase('lobby');
+  };
+
+  const continueToRoster = () => {
+    const current = playersRef.current;
+    if (current.length === 0 || !current.every((player) => player.teamReady)) return;
+    const firstPokemon = manifestRef.current?.pokemon[0]?.id ?? '';
+    commitPlayers(
+      current.map((player) => ({
+        ...player,
+        pokemonId: player.pokemonId || firstPokemon,
+        rosterReady: false
+      }))
+    );
+    goPhase('roster');
+  };
+
+  // --- Acciones de la selección de Pokémon ---------------------------------
+
+  const moveCursor = (slot: number, action: MenuAction) => {
+    const current = playersRef.current;
+    const player = current.find((entry) => entry.slot === slot);
+    const list = manifestRef.current?.pokemon ?? [];
+    if (!player || player.rosterReady || list.length === 0) return;
+
+    const columns = 3;
+    const index = Math.max(
+      0,
+      list.findIndex((entry) => entry.id === player.pokemonId)
+    );
+    const column = index % columns;
+    let nextIndex = index;
+
+    if (action === 'left' && column > 0) nextIndex = index - 1;
+    else if (action === 'right' && column < columns - 1 && index + 1 < list.length) {
+      nextIndex = index + 1;
+    } else if (action === 'up' && index - columns >= 0) {
+      nextIndex = index - columns;
+    } else if (action === 'down' && index + columns < list.length) {
+      nextIndex = index + columns;
+    }
+
+    if (nextIndex === index) return;
+    commitPlayers(
+      current.map((entry) =>
+        entry.slot === slot
+          ? { ...entry, pokemonId: list[nextIndex].id, rosterReady: false }
+          : entry
+      )
+    );
+  };
+
+  const setRosterReady = (slot: number, ready: boolean) => {
+    commitPlayers(
+      playersRef.current.map((entry) =>
+        entry.slot === slot ? { ...entry, rosterReady: ready } : entry
+      )
+    );
+  };
+
+  const toggleRosterReady = (slot: number) => {
+    const current = playersRef.current;
+    const player = current.find((entry) => entry.slot === slot);
+    if (!player) return;
+    setRosterReady(slot, !player.rosterReady);
+  };
+
+  const startMatch = () => {
+    const current = playersRef.current;
+    if (current.length === 0) return;
+    if (!current.every((player) => player.rosterReady && player.pokemonId)) return;
+
+    const configs: MatchPlayerConfig[] = current.map((player) => ({
+      slot: player.slot,
+      name: player.name,
+      deviceId: player.deviceId,
+      deviceKind: player.deviceKind,
+      team: player.team,
+      pokemonId: player.pokemonId
+    }));
+
+    setModal(null);
+    setPausedSafe(false);
+    setMatchStats([]);
+    setHudVisible(true);
+    gameRef.current?.startMatch(configs);
+    goPhase('playing');
+  };
+
+  const connectedPlayers = (): LobbyPlayer[] => {
+    const connected = new Set(devicesRef.current.map((device) => device.id));
+    return playersRef.current.filter((player) => connected.has(player.deviceId));
+  };
+
+  const backToTeams = () => {
+    gameRef.current?.endMatch();
+    const kept = connectedPlayers().map((player) => ({
+      ...player,
+      rosterReady: false
+    }));
+    commitPlayers(kept);
+    setModal(null);
+    setPausedSafe(false);
+    setMatchStats([]);
+    goPhase('lobby');
+  };
+
+  const backToRoster = () => {
+    gameRef.current?.endMatch();
+    const kept = connectedPlayers().map((player) => ({
+      ...player,
+      rosterReady: false
+    }));
+    commitPlayers(kept);
+    setModal(null);
+    setPausedSafe(false);
+    setMatchStats([]);
+    goPhase(kept.length > 0 ? 'roster' : 'lobby');
+  };
+
+  const pauseGame = () => {
+    if (phaseRef.current !== 'playing' || modalRef.current !== null) return;
+    setPausedSafe(true);
+    gameRef.current?.setPaused(true);
+  };
+
+  const resumeGame = () => {
+    setPausedSafe(false);
+    gameRef.current?.setPaused(false);
+  };
+
+  // --- Entrada de menús -----------------------------------------------------
+
+  const handleLobbyAction = (deviceId: string, action: MenuAction) => {
+    const current = playersRef.current;
+    const player = current.find((entry) => entry.deviceId === deviceId);
+
+    if (!player) {
+      if (action === 'confirm') joinDevice(deviceId);
+      return;
+    }
+
+    if (!player.teamReady) {
+      if (action === 'left' || action === 'right') {
+        setPlayerTeam(player.slot, otherTeam(player.team));
+      } else if (action === 'confirm') {
+        toggleTeamReady(player.slot);
+      } else if (action === 'cancel') {
+        leavePlayer(player.slot);
+      }
+      return;
+    }
+
+    if (action === 'cancel') {
+      toggleTeamReady(player.slot);
+      return;
+    }
+
+    if (action === 'confirm') {
+      const latest = playersRef.current;
+      if (latest.length > 0 && latest.every((entry) => entry.teamReady)) {
+        continueToRoster();
+      }
+    }
+  };
+
+  const handleRosterAction = (deviceId: string, action: MenuAction) => {
+    const player = playersRef.current.find((entry) => entry.deviceId === deviceId);
+    if (!player) return;
+
+    if (action === 'cancel') {
+      if (player.rosterReady) setRosterReady(player.slot, false);
+      else backToTeams();
+      return;
+    }
+
+    if (action === 'confirm') {
+      if (!player.rosterReady) {
+        setRosterReady(player.slot, true);
+        return;
+      }
+      const latest = playersRef.current;
+      if (latest.length > 0 && latest.every((entry) => entry.rosterReady)) {
+        startMatch();
+      }
+      return;
+    }
+
+    moveCursor(player.slot, action);
+  };
+
+  const handleMenuInput = (event: { deviceId: string; action: MenuAction }) => {
+    if (modalRef.current !== null) {
+      if (event.action === 'cancel') setModal(null);
+      return;
+    }
+
+    if (pausedRef.current) {
+      if (event.action === 'confirm' || event.action === 'cancel') resumeGame();
+      return;
+    }
+
+    if (phaseRef.current === 'lobby') {
+      handleLobbyAction(event.deviceId, event.action);
+    } else if (phaseRef.current === 'roster') {
+      handleRosterAction(event.deviceId, event.action);
+    }
+  };
+
+  const handleDevicesChanged = (next: InputDeviceInfo[]) => {
+    updateDevices(next);
+    if (phaseRef.current !== 'lobby' && phaseRef.current !== 'roster') return;
+    const connected = new Set(next.map((device) => device.id));
+    const kept = playersRef.current.filter((player) => connected.has(player.deviceId));
+    if (kept.length === playersRef.current.length) return;
+    commitPlayers(kept);
+    if (phaseRef.current === 'roster' && kept.length === 0) goPhase('lobby');
+  };
+
+  const handlePauseRequest = () => {
+    if (phaseRef.current !== 'playing' || modalRef.current !== null) return;
+    setPausedSafe(true);
+    gameRef.current?.setPaused(true);
+  };
+
+  const handleReady = (loaded: SpriteManifest) => {
+    manifestRef.current = loaded;
+    setManifest(loaded);
+    goPhase('lobby');
+  };
+
+  // El motor se crea una sola vez; los handlers se refrescan en cada render
+  // para que vean el estado más reciente de React.
+  useEffect(() => {
+    handlersRef.current = {
+      onReady: handleReady,
+      onMenuInput: handleMenuInput,
+      onPauseRequest: handlePauseRequest,
+      onDevicesChanged: handleDevicesChanged,
+      onMatchStats: (next) => setMatchStats(next)
+    };
+  });
 
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
   useEffect(() => {
+    pausedRef.current = paused;
     modalRef.current = modal;
-    gameRef.current?.setPaused(modal !== null);
-  }, [modal]);
+    gameRef.current?.setPaused(paused || modal !== null);
+  }, [paused, modal]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const game = new Game(canvas, {
-      onReady: (loadedManifest) => {
-        setManifest(loadedManifest);
-        setSelectedId((current) => current ?? loadedManifest.pokemon[0]?.id ?? null);
-        setPhase('ready');
-      },
+      onReady: (loaded) => handlersRef.current?.onReady(loaded),
       onProgress: (next) => setProgress(next),
-      onStats: (next) => setStats(next),
       onError: (message) => setError(message),
-      onMenuRequest: () => {
-        if (phaseRef.current !== 'playing' || modalRef.current !== null) return;
-        gameRef.current?.setMenuOpen(true);
-        setPhase('ready');
-      }
+      onDevicesChanged: (next) => handlersRef.current?.onDevicesChanged(next),
+      onMenuInput: (event) => handlersRef.current?.onMenuInput(event),
+      onPauseRequest: () => handlersRef.current?.onPauseRequest(),
+      onMatchStats: (next) => handlersRef.current?.onMatchStats(next)
     });
 
     gameRef.current = game;
@@ -180,51 +426,24 @@ function App() {
     };
   }, []);
 
-  const selected = manifest?.pokemon.find((entry) => entry.id === selectedId) ?? null;
-
-  const openMenu = () => {
-    gameRef.current?.setMenuOpen(true);
-    setPreviewRow(0);
-    setPhase('ready');
-  };
-
-  const startGame = (id?: string) => {
-    const target = id ?? selectedId;
-    if (!target) return;
-    setModal(null);
-    setSelectedId(target);
-    gameRef.current?.selectPokemon(target);
-    setPreviewRow(0);
-    setPhase('playing');
-  };
-
-  const selectPokemon = (entry: PokemonEntry) => {
-    setSelectedId(entry.id);
-    setPreviewRow(0);
-  };
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (modal !== null) {
-          setModal(null);
-          return;
-        }
-        if (phaseRef.current === 'playing') {
-          gameRef.current?.setMenuOpen(true);
-          setPhase('ready');
-        }
-        return;
-      }
-      if (event.key.toLowerCase() === 'h' && !event.repeat && phaseRef.current === 'playing') {
+      if (
+        event.key.toLowerCase() === 'h' &&
+        !event.repeat &&
+        phaseRef.current === 'playing' &&
+        modalRef.current === null
+      ) {
         setHudVisible((visible) => !visible);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [modal]);
+  }, []);
 
   const percent = Math.min(100, Math.round((progress.loaded / Math.max(progress.total, 1)) * 100));
+  const selectedEntryFor = (pokemonId: string) =>
+    manifest?.pokemon.find((entry) => entry.id === pokemonId) ?? null;
 
   return (
     <div className="app">
@@ -257,7 +476,7 @@ function App() {
               <h1>
                 New<span>Poke</span>
               </h1>
-              <p>Demo técnica de sprites y cámara</p>
+              <p>Multijugador local · 1-8 jugadores</p>
             </div>
           </div>
 
@@ -277,296 +496,151 @@ function App() {
             </p>
           </div>
 
-          <p className="boot-note">Sprites 2D · mundo 3D · cámara orbital a 45°</p>
+          <p className="boot-note">Sprites 2D · mundo 3D · splitscreen de 1 a 8 mandos</p>
         </div>
       )}
 
-      {!error && phase === 'ready' && manifest && selected && (
-        <div className="overlay selector-overlay">
-          <div className="selector-shell">
-            <header className="selector-head">
-              <div className="brand brand-compact">
-                <span className="brand-mark" aria-hidden="true">
-                  <span className="brand-pixel" />
-                </span>
-                <div>
-                  <h1>
-                    New<span>Poke</span>
-                  </h1>
-                  <p>Demo técnica · sprites y cámara</p>
-                </div>
-              </div>
-              <div className="head-actions">
-                <button type="button" className="btn btn-ghost" onClick={() => setModal('controls')}>
-                  Controles
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={() => setModal('credits')}>
-                  Créditos
-                </button>
-              </div>
-            </header>
-
-            <div className="selector-grid">
-              <section className="roster-column">
-                <span className="eyebrow">Paso 1 · Elige tu Pokémon</span>
-                <h2>Compañero de demo</h2>
-                <p className="lead">
-                  Seis Pokémon con sprites de 8 direcciones. Los demás te esperarán en la base.
-                </p>
-
-                <div className="roster-grid" role="listbox" aria-label="Elige un Pokémon">
-                  {manifest.pokemon.map((entry) => {
-                    const isSelected = entry.id === selected.id;
-                    return (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        role="option"
-                        aria-selected={isSelected}
-                        className={`poke-card${isSelected ? ' is-selected' : ''}`}
-                        style={{ '--accent': entry.accent } as CSSProperties}
-                        onClick={() => selectPokemon(entry)}
-                        onDoubleClick={() => startGame(entry.id)}
-                      >
-                        <span className="poke-card-top">
-                          <span className="poke-dex">#{String(entry.dex).padStart(3, '0')}</span>
-                          {isSelected && <span className="poke-check">Elegido</span>}
-                        </span>
-                        <SpritePreview entry={entry} height={78} className="poke-card-sprite" />
-                        <span className="poke-name">{entry.name}</span>
-                        <span className="poke-types">
-                          {entry.types.map((type) => (
-                            <TypeBadge key={type} type={type} />
-                          ))}
-                        </span>
-                        <span className="poke-speed">
-                          Vel. {speedForPokemon(entry.id).toFixed(1)} u/s
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="asset-note">
-                  <span className="asset-dot" />
-                  Sprites de <strong>PMD Sprite Collab</strong> · CC BY-NC 4.0 · uso no comercial
-                </div>
-              </section>
-
-              <section
-                className="preview-column"
-                style={{ '--accent': selected.accent } as CSSProperties}
-              >
-                <span className="eyebrow">Paso 2 · Revisa el sprite</span>
-                <div className="preview-heading">
-                  <div>
-                    <h2>{selected.name}</h2>
-                    <div className="preview-types">
-                      <span className="preview-dex">
-                        #{String(selected.dex).padStart(3, '0')}
-                      </span>
-                      {selected.types.map((type) => (
-                        <TypeBadge key={type} type={type} />
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-tiny"
-                    onClick={() =>
-                      setPreviewAnimation((current) => (current === 'idle' ? 'walk' : 'idle'))
-                    }
-                  >
-                    {previewAnimation === 'idle' ? 'Ver andar' : 'Ver reposo'}
-                  </button>
-                </div>
-
-                <div className="stage">
-                  <span className="stage-glow" />
-                  <span className="stage-grid" />
-                  <SpritePreview
-                    key={previewAnimation}
-                    entry={selected}
-                    height={216}
-                    row={previewRow}
-                    animation={previewAnimation}
-                    className="stage-sprite"
-                  />
-                  <span className="stage-floor" />
-                </div>
-
-                <div className="direction-picker">
-                  <span className="direction-label">Dirección</span>
-                  <div className="direction-buttons">
-                    {manifest.directions.map((direction, index) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        className={`direction-btn${index === previewRow ? ' is-active' : ''}`}
-                        onClick={() => setPreviewRow(index)}
-                        aria-pressed={index === previewRow}
-                      >
-                        {direction}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="feature-row">
-                  <FeatureChip>8 direcciones</FeatureChip>
-                  <FeatureChip>Cámara a 45°</FeatureChip>
-                  <FeatureChip>Billboard con profundidad</FeatureChip>
-                  <FeatureChip>Velocidad {speedForPokemon(selected.id).toFixed(1)} u/s</FeatureChip>
-                </div>
-
-                <p className="preview-hint">
-                  Cada Pokémon conserva su propio rumbo. El billboard solo mantiene el plano de
-                  pie: la vista mostrada se elige entre sus 8 filas según el ángulo entre ese rumbo
-                  y la cámara, no según dónde esté mirando la cámara.
-                </p>
-
-                <div className="cta-row">
-                  <button type="button" className="btn btn-primary btn-play" onClick={() => startGame()}>
-                    Explorar el mapa
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setModal('controls')}>
-                    Cómo jugar
-                  </button>
-                </div>
-                <p className="gamepad-hint">
-                  Mando recomendado · stick izquierdo para moverte · stick derecho para girar la
-                  cámara
-                </p>
-              </section>
-            </div>
-          </div>
-        </div>
+      {!error && phase === 'lobby' && manifest && (
+        <LobbyScreen
+          players={players}
+          devices={devices}
+          onJoin={joinDevice}
+          onTeam={setPlayerTeam}
+          onReady={toggleTeamReady}
+          onLeave={leavePlayer}
+          onContinue={continueToRoster}
+          onControls={() => setModal('controls')}
+          onCredits={() => setModal('credits')}
+        />
       )}
 
-      {!error && phase === 'playing' && manifest && selected && (
+      {!error && phase === 'roster' && manifest && (
+        <RosterScreen
+          manifest={manifest}
+          players={players}
+          onPick={(slot, pokemonId) => {
+            if (players.length !== 1) return;
+            commitPlayers(
+              playersRef.current.map((player) =>
+                player.slot === slot ? { ...player, pokemonId, rosterReady: false } : player
+              )
+            );
+          }}
+          onToggleReady={toggleRosterReady}
+          onStart={startMatch}
+          onBack={backToTeams}
+          onControls={() => setModal('controls')}
+          onCredits={() => setModal('credits')}
+        />
+      )}
+
+      {!error && phase === 'playing' && manifest && (
         <>
           {hudVisible && (
-            <div className="hud">
-              <div
-                className="hud-card hud-player"
-                style={{ '--accent': selected.accent } as CSSProperties}
-              >
-                <div className="hud-avatar">
-                  <SpritePreview
-                    entry={selected}
-                    height={46}
-                    row={stats?.row ?? 0}
-                    animation={stats?.animation ?? 'idle'}
-                  />
-                </div>
-                <div className="hud-player-info">
-                  <strong>{selected.name}</strong>
-                  <span className="hud-sub">
-                    {stats?.animation === 'walk' ? 'Caminando' : 'En reposo'} ·{' '}
-                    {selected.types.map((type) => TYPE_LABELS[type] ?? type).join(' / ')}
-                  </span>
-                  <div className="hud-types">
-                    {selected.types.map((type) => (
-                      <TypeBadge key={type} type={type} />
-                    ))}
-                  </div>
-                </div>
-                <Compass direction={stats?.direction ?? 'S'} />
-              </div>
-
-              <div className="hud-card hud-stats">
-                <div className="hud-stats-head">
-                  <span className="eyebrow">Telemetría</span>
-                  <span className="live-dot">En vivo</span>
-                </div>
-                <div className="stat-grid">
-                  <Stat label="FPS" value={stats ? String(stats.fps) : '—'} />
-                  <Stat label="Dirección" value={stats?.direction ?? 'S'} />
-                  <Stat
-                    label="Rumbo"
-                    value={stats ? `${Math.round(stats.facing)}°` : '—'}
-                  />
-                  <Stat label="Fila" value={stats ? String(stats.row) : '—'} />
-                  <Stat label="Velocidad" value={stats ? `${stats.speed.toFixed(1)} u/s` : '—'} />
-                  <Stat
-                    label="Vel. máx"
-                    value={`${(
-                      speedForPokemon(selected.id) * (stats?.terrainSpeedMultiplier ?? 1)
-                    ).toFixed(1)} u/s`}
-                  />
-                  <Stat
-                    label="Cámara"
-                    value={stats ? `${Math.round(((stats.yaw % 360) + 360) % 360)}°` : '—'}
-                  />
-                  <Stat label="Entrada" value={stats?.gamepad ? 'Mando' : 'Teclado'} />
-                </div>
-                <div className="hud-terrain">
-                  <span
-                    className="terrain-swatch"
-                    style={{
-                      background: stats ? TYPE_COLORS[stats.terrainType] ?? '#8a93a6' : '#8a93a6'
-                    }}
-                  />
-                  <div className="terrain-copy">
-                    <span className="stat-label">Terreno</span>
-                    <strong>{stats?.terrainName ?? '—'}</strong>
-                  </div>
-                  {stats && <TypeBadge type={stats.terrainType} />}
-                  {stats && (
-                    <span
-                      className={`terrain-speed${
-                        stats.terrainSpeedMultiplier > 1
-                          ? ' is-fast'
-                          : stats.terrainSpeedMultiplier < 1
-                            ? ' is-slow'
-                            : ''
-                      }`}
-                      title={TERRAIN_SPEED_HINTS[stats.terrainSpeedReason]}
-                    >
-                      ×{stats.terrainSpeedMultiplier.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-                {stats?.terrain === 'waterLow' && !selected.types.includes('Water') && (
-                  <p className="terrain-note">
-                    Solo los Pokémon de tipo Agua pueden entrar en aguas profundas.
-                  </p>
-                )}
-                {stats && stats.terrainSpeedReason !== 'neutral' && (
-                  <p className="terrain-note">{TERRAIN_SPEED_NOTES[stats.terrainSpeedReason]}</p>
-                )}
-                <div className="hud-credit">Sprites: PMD Sprite Collab · CC BY-NC 4.0</div>
-              </div>
-
-              <div className="hud-hint">
-                <kbd>WASD</kbd> mover · <kbd>Q</kbd>/<kbd>E</kbd> cámara · ratón arrastrar ·{' '}
-                <kbd>H</kbd> ocultar HUD
-              </div>
-            </div>
+            <MatchHud
+              manifest={manifest}
+              players={players}
+              stats={matchStats}
+              onPause={pauseGame}
+            />
           )}
 
-          <div className="hud-actions">
+          <div className="match-actions">
+            <button type="button" className="btn btn-ghost btn-small" onClick={pauseGame}>
+              Pausa
+            </button>
             <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('controls')}>
               Controles
             </button>
             <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('credits')}>
               Créditos
             </button>
-            <button type="button" className="btn btn-accent btn-small" onClick={openMenu}>
-              Cambiar
-            </button>
-          </div>
-
-          {!hudVisible && (
             <button
               type="button"
-              className="btn btn-ghost btn-small hud-toggle"
-              onClick={() => setHudVisible(true)}
+              className="btn btn-ghost btn-small"
+              onClick={() => setHudVisible((visible) => !visible)}
             >
-              Mostrar HUD (H)
+              {hudVisible ? 'Ocultar HUD (H)' : 'Mostrar HUD (H)'}
             </button>
-          )}
+          </div>
         </>
+      )}
+
+      {!error && phase === 'playing' && paused && !modal && (
+        <div className="overlay pause-overlay">
+          <div className="panel pause-panel">
+            <header className="modal-head">
+              <div>
+                <span className="eyebrow">Partida en pausa</span>
+                <h2>Pausa</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={resumeGame}
+                aria-label="Continuar"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="pause-body">
+              <div className="pause-roster">
+                {players.map((player) => {
+                  const entry = selectedEntryFor(player.pokemonId);
+                  const info = TEAM_INFO[player.team];
+                  return (
+                    <div
+                      key={player.slot}
+                      className="pause-player"
+                      style={
+                        {
+                          '--team': info.color,
+                          '--team-dark': info.dark
+                        } as CSSProperties
+                      }
+                    >
+                      <span className="pause-avatar">
+                        {entry ? <SpritePreview entry={entry} height={36} /> : '—'}
+                      </span>
+                      <span className="pause-player-copy">
+                        <strong>{player.name}</strong>
+                        <span>{entry?.name ?? '—'}</span>
+                      </span>
+                      <span className="pause-team">{info.short}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pause-actions">
+                <button type="button" className="btn btn-primary btn-play" onClick={resumeGame}>
+                  Continuar
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={backToRoster}>
+                  Cambiar Pokémon
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={backToTeams}>
+                  Cambiar equipos
+                </button>
+                <div className="pause-actions-row">
+                  <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('controls')}>
+                    Controles
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('credits')}>
+                    Créditos
+                  </button>
+                </div>
+              </div>
+
+              <p className="pause-hint">
+                <span className="key-pill">A</span> continuar ·{' '}
+                <span className="key-pill">B</span> continuar ·{' '}
+                <span className="key-pill">Start / Esc</span> pausa
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {modal && (
@@ -592,30 +666,39 @@ function App() {
             {modal === 'controls' ? (
               <div className="modal-body controls-body">
                 <section>
-                  <h3>Mando</h3>
+                  <h3>Mando (1-8 jugadores)</h3>
                   <ul className="control-list">
                     <li>
-                      <span className="key-pill">Stick izquierdo</span> mover en cualquier ángulo
+                      <span className="key-pill">A</span> unirse / confirmar
                     </li>
                     <li>
-                      <span className="key-pill">Stick derecho</span> girar la cámara 360°
+                      <span className="key-pill">B</span> volver / desmarcar
+                    </li>
+                    <li>
+                      <span className="key-pill">Stick izquierdo</span> moverte y navegar por los menús
+                    </li>
+                    <li>
+                      <span className="key-pill">Stick derecho</span> girar tu cámara
                     </li>
                     <li>
                       <span className="key-pill">L2 / R2</span> alejar / acercar
                     </li>
                     <li>
-                      <span className="key-pill">Start</span> abrir el selector de Pokémon
+                      <span className="key-pill">Start</span> pausar la partida
                     </li>
                   </ul>
                 </section>
                 <section>
-                  <h3>Teclado y ratón</h3>
+                  <h3>Teclado (1 jugador)</h3>
                   <ul className="control-list">
                     <li>
-                      <span className="key-pill">WASD / flechas</span> mover
+                      <span className="key-pill">Espacio / Enter</span> unirse / confirmar
                     </li>
                     <li>
-                      <span className="key-pill">Q / E</span> girar la cámara
+                      <span className="key-pill">WASD / flechas</span> moverte y navegar por los menús
+                    </li>
+                    <li>
+                      <span className="key-pill">Q / E</span> girar tu cámara
                     </li>
                     <li>
                       <span className="key-pill">Arrastrar</span> orbitar con el ratón
@@ -627,16 +710,17 @@ function App() {
                       <span className="key-pill">Shift</span> correr
                     </li>
                     <li>
-                      <span className="key-pill">H</span> ocultar o mostrar el HUD
+                      <span className="key-pill">Esc</span> pausa / volver
                     </li>
                     <li>
-                      <span className="key-pill">Esc</span> volver al selector
+                      <span className="key-pill">H</span> ocultar o mostrar el HUD
                     </li>
                   </ul>
                 </section>
                 <p className="modal-note">
-                  El movimiento es analógico y relativo a la cámara. El sprite elige una de sus 8
-                  vistas según el ángulo entre su dirección y la cámara.
+                  La pantalla se reparte en una vista por jugador. Cada equipo aparece en su base
+                  (azul o roja) y se mueve libremente. Los mandos se detectan automáticamente al
+                  pulsar un botón.
                 </p>
               </div>
             ) : (

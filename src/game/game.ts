@@ -2,47 +2,70 @@ import * as pc from 'playcanvas';
 import { Actor } from './actor';
 import { CameraRig } from './camera';
 import { CONFIG, RAD } from './config';
-import { Input, type InputSnapshot } from './input';
+import {
+  IDLE_INPUT,
+  Input,
+  type DeviceInputSnapshot,
+  type InputDeviceInfo,
+  type InputFrame,
+  type MenuAction
+} from './input';
+import {
+  MAX_PLAYERS,
+  TEAM_INFO,
+  cameraYawForTeam,
+  computeSplitLayout,
+  facingToCenter,
+  spawnForTeam,
+  type MatchPlayerConfig,
+  type PlayerMatchStats
+} from './multiplayer';
 import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
-import { POND, TERRAINS, terrainAt } from './terrain';
+import { POND, TERRAINS, terrainAt, type Team } from './terrain';
 import { terrainSpeedEffect, type TerrainSpeedReason } from './terrainSpeed';
-import type { GameStats, LoadingProgress, SpriteManifest } from './types';
+import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import { buildWorld, type Collider, type World } from './world';
 
 export interface GameCallbacks {
   onReady(manifest: SpriteManifest): void;
   onProgress(progress: LoadingProgress): void;
-  onStats(stats: GameStats): void;
   onError(message: string): void;
-  onMenuRequest(): void;
+  onDevicesChanged(devices: InputDeviceInfo[]): void;
+  onMenuInput(event: { deviceId: string; action: MenuAction }): void;
+  onPauseRequest(): void;
+  onMatchStats(stats: PlayerMatchStats[]): void;
 }
-
-const IDLE_INPUT: InputSnapshot = {
-  moveX: 0,
-  moveY: 0,
-  cameraX: 0,
-  zoom: 0,
-  wheel: 0,
-  run: false,
-  pointerYaw: 0,
-  gamepad: false,
-  startPressed: false
-};
 
 const NPC_SLOTS: Array<{ x: number; z: number }> = [
   { x: -11.2, z: 14.6 },
   { x: -15.0, z: 13.6 },
   { x: -13.6, z: 10.8 },
   { x: -10.4, z: 12.6 },
-  { x: -12.4, z: 15.4 }
+  { x: -12.4, z: 15.4 },
+  { x: -15.6, z: 11.2 }
 ];
 
-/** El jugador empieza mirando al carril central (noreste). */
-const PLAYER_START_FACING = (Math.PI * 3) / 4;
-
-/** Los NPC solo giran hacia el jugador cuando lo tienen cerca. */
+/** Los NPC del menú solo giran hacia la cámara cuando esta se acerca. */
 const NPC_NOTICE_RADIUS = 2.4;
+
+interface MatchPlayerState extends MatchPlayerConfig {
+  types: string[];
+  maxSpeed: number;
+  x: number;
+  z: number;
+  facing: number;
+  vx: number;
+  vz: number;
+  submerge: number;
+  animation: AnimationName;
+  playback: number;
+  terrainMultiplier: number;
+  terrainSpeedReason: TerrainSpeedReason;
+  camera: CameraRig;
+  /** Una copia del actor por viewport, indexada por jugador/vista. */
+  copies: Actor[];
+}
 
 function angleLerp(current: number, target: number, t: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
@@ -54,36 +77,36 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Orquestador del motor. React solo habla con esta clase: crear, elegir
- * Pokémon, abrir/cerrar menú y recibir estadísticas.
+ * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
+ * partida y recibe eventos de entrada y telemetría por callbacks.
+ *
+ * Multijugador local:
+ * - 1-8 jugadores, un teclado y varios mandos.
+ * - Dos equipos con base propia.
+ * - Una cámara por jugador y una copia de cada actor por viewport: el billboard
+ *   y la fila de 8 direcciones dependen de la cámara, así que compartir actores
+ *   entre vistas haría que mirasen mal desde los otros ángulos.
  */
 export class Game {
   private readonly callbacks: GameCallbacks;
   private readonly app: pc.Application;
   private readonly world: World;
-  private readonly camera: CameraRig;
   private readonly input: Input;
+  private readonly menuCamera: CameraRig;
+
+  private readonly baseCameraLayers: number[];
 
   private manifest: SpriteManifest | null = null;
   private readonly assets = new Map<string, SpriteAsset>();
 
-  private player: Actor | null = null;
-  private npcs: Actor[] = [];
-  private selectedId: string | null = null;
-  /** Tipos del Pokémon elegido; deciden si puede nadar en aguas profundas. */
-  private playerTypes: string[] = [];
-  /** Fracción de inmersión actual; se interpola para entrar/salir del agua. */
-  private playerSubmerge = 0;
-  /** Velocidad punta del Pokémon elegido; cada uno tiene la suya. */
-  private maxSpeed: number = CONFIG.player.speed;
-  /** Multiplicador del terreno actual sobre la velocidad (1 = neutro). */
-  private terrainMultiplier = 1;
-  private terrainSpeedReason: TerrainSpeedReason = 'neutral';
+  /** Pokémon de exposición en la base azul mientras se eligen equipos. */
+  private menuNpcs: Actor[] = [];
 
-  private velocity = new pc.Vec3();
-  private playerFacing = 0;
-  private phase: 'loading' | 'ready' | 'playing' = 'loading';
-  private menuOpen = true;
+  private matchPlayers: MatchPlayerState[] = [];
+  private viewLayers: pc.Layer[] = [];
+
+  private ready = false;
+  private mode: 'menu' | 'match' = 'menu';
   private paused = false;
   private disposed = false;
 
@@ -105,8 +128,18 @@ export class Game {
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
 
     this.world = buildWorld(this.app);
-    this.camera = new CameraRig(this.app, CONFIG.world.spawn);
+    this.menuCamera = new CameraRig(this.app, CONFIG.world.spawn);
     this.input = new Input(canvas);
+
+    // Las sombras del mundo son estáticas (los actores no proyectan sombra
+    // direccional). Renderizarlas una sola vez evita repetir el pase por cada
+    // viewport del splitscreen.
+    const sun = this.app.root.findByName('sun') as pc.Entity | null;
+    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+
+    this.baseCameraLayers = ['World', 'Depth', 'Skybox', 'UI', 'Immediate']
+      .map((name) => this.app.scene.layers.getLayerByName(name)?.id)
+      .filter((id): id is number => id !== undefined);
 
     this.app.on('update', this.onUpdate);
     this.app.start();
@@ -141,9 +174,10 @@ export class Game {
 
       if (this.disposed) return;
 
-      this.applyRoster(manifest.pokemon[0].id);
-      this.phase = 'ready';
-      this.menuOpen = true;
+      this.buildMenuCast();
+      this.ready = true;
+      this.mode = 'menu';
+      this.menuCamera.setEnabled(true);
       this.callbacks.onReady(manifest);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido al cargar';
@@ -151,169 +185,302 @@ export class Game {
     }
   }
 
-  private applyRoster(selectedId: string): void {
+  private buildMenuCast(): void {
     const manifest = this.manifest;
     if (!manifest) return;
 
-    this.player?.destroy();
-    this.player = null;
-    for (const npc of this.npcs) npc.destroy();
-    this.npcs = [];
+    for (const npc of this.menuNpcs) npc.destroy();
+    this.menuNpcs = [];
 
-    const selected = manifest.pokemon.find((entry) => entry.id === selectedId) ?? manifest.pokemon[0];
-    const others = manifest.pokemon.filter((entry) => entry.id !== selected.id);
-
-    const playerAsset = this.assets.get(selected.id);
-    if (!playerAsset) return;
-
-    this.player = new Actor(
-      this.app,
-      playerAsset,
-      this.world.shadowMaterial,
-      CONFIG.world.spawn,
-      PLAYER_START_FACING,
-      true
-    );
-    this.player.play('idle');
-    this.playerFacing = PLAYER_START_FACING;
-    this.velocity.set(0, 0, 0);
-
-    others.forEach((entry, index) => {
+    manifest.pokemon.forEach((entry, index) => {
       const asset = this.assets.get(entry.id);
       if (!asset) return;
       const slot = NPC_SLOTS[index % NPC_SLOTS.length];
       const homeFacing = Math.atan2(-slot.x, -slot.z);
       const npc = new Actor(this.app, asset, this.world.shadowMaterial, slot, homeFacing);
       npc.play('idle');
-      this.npcs.push(npc);
+      this.menuNpcs.push(npc);
+    });
+  }
+
+  /** Empieza una partida con los jugadores ya elegidos en React. */
+  startMatch(configs: MatchPlayerConfig[]): void {
+    if (!this.ready || configs.length === 0) return;
+    this.clearMatch();
+
+    const valid = configs
+      .filter((config) => this.assets.has(config.pokemonId))
+      .slice(0, MAX_PLAYERS);
+    if (valid.length === 0) return;
+
+    this.mode = 'match';
+    this.paused = false;
+    this.statsTimer = 0;
+    this.fps = 0;
+    this.menuCamera.setEnabled(false);
+    for (const npc of this.menuNpcs) npc.setVisible(false);
+    this.app.graphicsDevice.maxPixelRatio = Math.min(
+      window.devicePixelRatio || 1,
+      valid.length > 4 ? 1.2 : 1.5
+    );
+
+    const layout = computeSplitLayout(valid.length);
+    const teamIndex: Record<Team, number> = { blue: 0, red: 0 };
+
+    valid.forEach((config, index) => {
+      const asset = this.assets.get(config.pokemonId);
+      if (!asset) return;
+
+      const spawn = spawnForTeam(config.team, teamIndex[config.team]++);
+      const facing = facingToCenter(config.team);
+
+      const layer = new pc.Layer({ name: `match-view-${index + 1}` });
+      const layerComposition = this.app.scene.layers;
+      const worldLayer = layerComposition.getLayerByName('World');
+      // El cuerpo del sprite es opaco (alphaTest): debe ir antes de las
+      // transparencias del mundo (agua, partículas) para que el agua pueda
+      // taparle las piernas al sumergirse. El anillo y la sombra son
+      // transparentes y van al final, por encima del agua.
+      const worldTransparent = worldLayer ? layerComposition.getTransparentIndex(worldLayer) : -1;
+      layerComposition.insertOpaque(
+        layer,
+        worldTransparent >= 0 ? worldTransparent : layerComposition.layerList.length
+      );
+      layerComposition.pushTransparent(layer);
+      this.viewLayers.push(layer);
+
+      const camera = new CameraRig(this.app, spawn);
+      camera.setViewport(layout[index]);
+      camera.setLayers([...this.baseCameraLayers, layer.id]);
+      camera.yaw = cameraYawForTeam(config.team);
+      camera.distance = CONFIG.camera.distance * (valid.length > 2 ? 1.12 : 1);
+      camera.setEnabled(true);
+
+      this.matchPlayers.push({
+        ...config,
+        types: asset.entry.types,
+        maxSpeed: speedForPokemon(config.pokemonId),
+        x: spawn.x,
+        z: spawn.z,
+        facing,
+        vx: 0,
+        vz: 0,
+        submerge: 0,
+        animation: 'idle',
+        playback: 1,
+        terrainMultiplier: 1,
+        terrainSpeedReason: 'neutral',
+        camera,
+        copies: []
+      });
     });
 
-    this.playerTypes = selected.types;
-    // Cada Pokémon trae su propia velocidad punta: Pikachu corre, Bulbasaur
-    // camina. La animación de andar ya escala con la velocidad real.
-    this.maxSpeed = speedForPokemon(selected.id);
-    this.playerSubmerge = 0;
-    this.selectedId = selected.id;
+    // Rejilla N x N: cada jugador tiene una copia visible en cada viewport.
+    this.matchPlayers.forEach((player, playerIndex) => {
+      const asset = this.assets.get(player.pokemonId);
+      if (!asset) return;
+      this.matchPlayers.forEach((_, viewIndex) => {
+        const copy = new Actor(
+          this.app,
+          asset,
+          this.world.shadowMaterial,
+          { x: player.x, z: player.z },
+          player.facing,
+          true,
+          viewIndex === playerIndex,
+          TEAM_INFO[player.team].accent
+        );
+        const layer = this.viewLayers[viewIndex];
+        if (layer) copy.setLayer(layer.id);
+        copy.play('idle');
+        player.copies.push(copy);
+      });
+    });
+
+    // El mapa es estático, pero el encuadre de las sombras depende de la
+    // cámara. Rehorneamos una vez al empezar para que las bases de ambos
+    // equipos queden cubiertas por el mapa de sombras del primer viewport.
+    const sun = this.app.root.findByName('sun') as pc.Entity | null;
+    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+
+    this.callbacks.onMatchStats([]);
   }
 
-  selectPokemon(id: string): void {
-    if (id !== this.selectedId) {
-      this.applyRoster(id);
+  /** Vuelve al menú de selección y destruye la partida actual. */
+  endMatch(): void {
+    this.clearMatch();
+    this.mode = 'menu';
+    this.paused = false;
+    this.statsTimer = 0;
+    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    this.menuCamera.setEnabled(true);
+    for (const npc of this.menuNpcs) npc.setVisible(true);
+    const sun = this.app.root.findByName('sun') as pc.Entity | null;
+    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+    this.callbacks.onMatchStats([]);
+  }
+
+  private clearMatch(): void {
+    for (const player of this.matchPlayers) {
+      for (const copy of player.copies) copy.destroy();
+      player.copies = [];
+      player.camera.dispose();
     }
-    this.phase = 'playing';
-    this.menuOpen = false;
+    for (const layer of this.viewLayers) this.app.scene.layers.remove(layer);
+    this.matchPlayers = [];
+    this.viewLayers = [];
   }
 
-  setMenuOpen(open: boolean): void {
-    this.menuOpen = open;
-    if (open) {
-      this.velocity.set(0, 0, 0);
-      this.player?.play('idle');
-    }
-  }
-
-  /** Congela la entrada mientras hay un modal abierto, sin mover la cámara. */
   setPaused(paused: boolean): void {
     this.paused = paused;
-    if (paused) {
-      this.velocity.set(0, 0, 0);
-      this.player?.play('idle');
+    if (!paused) return;
+    for (const player of this.matchPlayers) {
+      player.vx = 0;
+      player.vz = 0;
+      player.animation = 'idle';
+      player.playback = 1;
+      for (const copy of player.copies) copy.play('idle');
     }
   }
 
   private onUpdate = (dt: number): void => {
     if (this.disposed) return;
     const frameDt = Math.min(dt, 0.05);
-    const snapshot = this.input.sample();
+    const frame = this.input.poll();
 
-    if (snapshot.startPressed) {
-      this.callbacks.onMenuRequest();
+    if (frame.changed) this.callbacks.onDevicesChanged(frame.devices);
+
+    this.fps =
+      this.fps === 0
+        ? 1 / Math.max(frameDt, 0.0001)
+        : this.fps * 0.92 + (1 / Math.max(frameDt, 0.0001)) * 0.08;
+
+    if (!this.ready) {
+      this.world.update(frameDt);
+      return;
     }
 
-    const input = this.menuOpen || this.paused ? IDLE_INPUT : snapshot;
-    const player = this.player;
-    const target = player ? player.position : CONFIG.world.spawn;
+    const wasPaused = this.paused;
 
-    // La cámara se actualiza antes que los sprites para que el billboard y la
-    // fila de dirección usen la posición actual.
-    if (this.menuOpen || this.phase !== 'playing') {
-      this.camera.yaw += CONFIG.camera.attractSpeed * frameDt;
-    }
-    this.camera.addYaw(input.pointerYaw);
-    if (input.wheel !== 0) {
-      this.camera.addZoom(-input.wheel * CONFIG.camera.wheelStep);
-    }
-    this.camera.update(frameDt, target, input.cameraX, input.zoom);
-
-    if (this.phase === 'playing' && !this.menuOpen && !this.paused) {
-      this.updatePlayer(frameDt, input);
+    // En menús y en pausa, React recibe las acciones de borde. Durante la
+    // partida activa el motor las consume para pausar/movernos.
+    if (this.mode === 'menu' || this.paused) {
+      for (const event of frame.actions) this.callbacks.onMenuInput(event);
     }
 
-    if (player) {
-      this.updateNpcs(frameDt);
-
-      // Inmersión progresiva: más profunda en el centro del lago. La lámina de
-      // agua tapa la parte del sprite que queda por debajo, así que la
-      // transición se lee como entrar en el agua y no como caminar por encima.
-      // La ciénaga cuenta como agua somera: se cruza y moja igual que el lago.
-      const waterTerrain = terrainAt(player.position.x, player.position.z);
-      const targetSubmerge =
-        waterTerrain === 'waterHigh'
-          ? CONFIG.player.submergeDeep
-          : waterTerrain === 'waterLow' || waterTerrain === 'poison'
-            ? CONFIG.player.submergeShallow
-            : 0;
-      this.playerSubmerge +=
-        (targetSubmerge - this.playerSubmerge) * (1 - Math.exp(-CONFIG.player.submergeLerp * frameDt));
-      if (this.playerSubmerge < 0.0005) this.playerSubmerge = 0;
-      player.setSubmerge(this.playerSubmerge, POND.surfaceHeight);
-
-      player.update(frameDt, this.camera.position);
+    if (this.mode === 'menu') {
+      this.updateMenu(frameDt);
+      return;
     }
 
-    this.world.update(frameDt);
-
-    this.fps = this.fps === 0 ? 1 / Math.max(frameDt, 0.0001) : this.fps * 0.92 + (1 / Math.max(frameDt, 0.0001)) * 0.08;
-    this.statsTimer += frameDt;
-    if (
-      this.statsTimer >= 0.2 &&
-      this.manifest &&
-      player &&
-      this.phase === 'playing' &&
-      !this.menuOpen &&
-      !this.paused
-    ) {
-      this.statsTimer = 0;
-      const row = player.billboard.currentRow;
-      const terrainId = terrainAt(player.position.x, player.position.z);
-      const terrain = TERRAINS[terrainId];
-      const stats: GameStats = {
-        fps: Math.round(this.fps),
-        yaw: this.camera.yaw * RAD,
-        distance: this.camera.distance,
-        row,
-        direction: this.manifest.directions[row] ?? 'S',
-        facing: ((player.facing * RAD) % 360 + 360) % 360,
-        speed: Math.hypot(this.velocity.x, this.velocity.z),
-        x: player.position.x,
-        z: player.position.z,
-        gamepad: this.input.hasGamepad,
-        animation: player.billboard.currentAnimation,
-        terrain: terrainId,
-        terrainName: terrain.name,
-        terrainType: terrain.type,
-        terrainSpeedMultiplier: this.terrainMultiplier,
-        terrainSpeedReason: this.terrainSpeedReason
-      };
-      this.callbacks.onStats(stats);
+    if (this.paused) {
+      this.world.update(frameDt);
+      return;
     }
+
+    // Si se acaba de reanudar con B/Esc, el mismo frame conserva el borde de
+    // cancelar y volvería a pausar. Saltamos un frame de simulación.
+    if (wasPaused) {
+      this.world.update(frameDt);
+      return;
+    }
+
+    this.updateMatch(frameDt, frame);
   };
 
-  private updatePlayer(dt: number, input: InputSnapshot): void {
-    const player = this.player;
-    if (!player) return;
+  private updateMenu(dt: number): void {
+    this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
+    this.menuCamera.update(dt, CONFIG.world.spawn, 0, 0);
 
-    const yaw = this.camera.yaw;
+    for (const npc of this.menuNpcs) {
+      const dx = this.menuCamera.position.x - npc.position.x;
+      const dz = this.menuCamera.position.z - npc.position.z;
+      const distance = Math.hypot(dx, dz);
+      const targetFacing =
+        distance < NPC_NOTICE_RADIUS ? Math.atan2(dx, dz) : npc.homeFacing;
+      const turn = distance < NPC_NOTICE_RADIUS ? 4.5 : 1.2;
+      npc.setFacing(angleLerp(npc.facing, targetFacing, 1 - Math.exp(-turn * dt)));
+      npc.play('idle');
+      npc.update(dt, this.menuCamera.position);
+    }
+
+    this.world.update(dt);
+  }
+
+  private updateMatch(dt: number, frame: InputFrame): void {
+    // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
+    // es despreciable y evita un frame de movimiento fantasma.
+    for (const player of this.matchPlayers) {
+      const snapshot = frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
+      if (snapshot.startPressed || snapshot.cancel) {
+        this.setPaused(true);
+        this.callbacks.onPauseRequest();
+        return;
+      }
+    }
+
+    for (const player of this.matchPlayers) {
+      this.stepPlayer(
+        player,
+        frame.snapshots.get(player.deviceId) ?? IDLE_INPUT,
+        dt
+      );
+    }
+
+    // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
+    // la cámara del viewport que la va a dibujar.
+    this.matchPlayers.forEach((cameraOwner, viewIndex) => {
+      const cameraPosition = cameraOwner.camera.position;
+      this.matchPlayers.forEach((player) => {
+        const copy = player.copies[viewIndex];
+        if (!copy) return;
+        copy.setPosition(player.x, player.z);
+        copy.setFacing(player.facing);
+        copy.play(player.animation);
+        copy.setPlayback(player.playback);
+        copy.setSubmerge(player.submerge, POND.surfaceHeight);
+        copy.update(dt, cameraPosition);
+      });
+    });
+
+    this.world.update(dt);
+
+    this.statsTimer += dt;
+    if (this.statsTimer >= 0.25) {
+      this.statsTimer = 0;
+      const stats: PlayerMatchStats[] = this.matchPlayers.map((player, index) => {
+        const own = player.copies[index] ?? player.copies[0];
+        const row = own?.billboard.currentRow ?? 0;
+        const terrainId = terrainAt(player.x, player.z);
+        const terrain = TERRAINS[terrainId];
+        return {
+          slot: player.slot,
+          name: player.name,
+          team: player.team,
+          pokemonId: player.pokemonId,
+          fps: Math.round(this.fps),
+          yaw: player.camera.yaw * RAD,
+          row,
+          direction: this.manifest?.directions[row] ?? 'S',
+          facing: ((player.facing * RAD) % 360 + 360) % 360,
+          speed: Math.hypot(player.vx, player.vz),
+          x: player.x,
+          z: player.z,
+          gamepad: player.deviceKind === 'gamepad',
+          animation: player.animation,
+          terrain: terrainId,
+          terrainName: terrain.name,
+          terrainType: terrain.type,
+          terrainSpeedMultiplier: player.terrainMultiplier,
+          terrainSpeedReason: player.terrainSpeedReason
+        };
+      });
+      this.callbacks.onMatchStats(stats);
+    }
+  }
+
+  private stepPlayer(player: MatchPlayerState, input: DeviceInputSnapshot, dt: number): void {
+    const yaw = player.camera.yaw;
     const forwardX = -Math.sin(yaw);
     const forwardZ = -Math.cos(yaw);
     const rightX = Math.cos(yaw);
@@ -322,57 +489,80 @@ export class Game {
     const desiredX = rightX * input.moveX + forwardX * input.moveY;
     const desiredZ = rightZ * input.moveX + forwardZ * input.moveY;
     const magnitude = Math.hypot(desiredX, desiredZ);
-    // El terreno bajo los pies modula la velocidad según los tipos del
-    // Pokémon: propio, hostil, cómodo o neutro (ver `terrainSpeed.ts`).
-    const terrainEffect = terrainSpeedEffect(
-      terrainAt(player.position.x, player.position.z),
-      this.playerTypes
-    );
-    this.terrainMultiplier = terrainEffect.multiplier;
-    this.terrainSpeedReason = terrainEffect.reason;
+
+    const terrainEffect = terrainSpeedEffect(terrainAt(player.x, player.z), player.types);
+    player.terrainMultiplier = terrainEffect.multiplier;
+    player.terrainSpeedReason = terrainEffect.reason;
     const maxSpeed =
-      this.maxSpeed * terrainEffect.multiplier * (input.run ? CONFIG.player.runMultiplier : 1);
+      player.maxSpeed *
+      terrainEffect.multiplier *
+      (input.run ? CONFIG.player.runMultiplier : 1);
 
     const targetVX = magnitude > 0.001 ? (desiredX / Math.max(magnitude, 1)) * maxSpeed : 0;
     const targetVZ = magnitude > 0.001 ? (desiredZ / Math.max(magnitude, 1)) * maxSpeed : 0;
 
-    const rate = (magnitude > 0.01 ? CONFIG.player.acceleration : CONFIG.player.deceleration) * dt;
-    this.velocity.x += clamp(targetVX - this.velocity.x, -rate, rate);
-    this.velocity.z += clamp(targetVZ - this.velocity.z, -rate, rate);
+    const rate =
+      (magnitude > 0.01 ? CONFIG.player.acceleration : CONFIG.player.deceleration) * dt;
+    player.vx += clamp(targetVX - player.vx, -rate, rate);
+    player.vz += clamp(targetVZ - player.vz, -rate, rate);
 
     const resolved = this.resolvePosition(
-      player.position.x + this.velocity.x * dt,
-      player.position.z + this.velocity.z * dt
+      player,
+      player.x + player.vx * dt,
+      player.z + player.vz * dt
     );
-    player.setPosition(resolved.x, resolved.z);
+    player.x = resolved.x;
+    player.z = resolved.z;
 
-    const speed = Math.hypot(this.velocity.x, this.velocity.z);
+    const speed = Math.hypot(player.vx, player.vz);
     if (speed > CONFIG.player.minFacingSpeed) {
-      const targetFacing = Math.atan2(this.velocity.x, this.velocity.z);
-      this.playerFacing = angleLerp(this.playerFacing, targetFacing, 1 - Math.exp(-CONFIG.player.turnLerp * dt));
+      const targetFacing = Math.atan2(player.vx, player.vz);
+      player.facing = angleLerp(
+        player.facing,
+        targetFacing,
+        1 - Math.exp(-CONFIG.player.turnLerp * dt)
+      );
     }
-    player.setFacing(this.playerFacing);
 
     if (speed > CONFIG.player.minFacingSpeed) {
-      player.play('walk');
-      player.setPlayback(
-        clamp(
-          speed / CONFIG.sprite.walkRateRefSpeed,
-          CONFIG.sprite.walkRateMin,
-          CONFIG.sprite.walkRateMax
-        )
+      player.animation = 'walk';
+      player.playback = clamp(
+        speed / CONFIG.sprite.walkRateRefSpeed,
+        CONFIG.sprite.walkRateMin,
+        CONFIG.sprite.walkRateMax
       );
     } else {
-      player.play('idle');
+      player.animation = 'idle';
+      player.playback = 1;
     }
+
+    const waterTerrain = terrainAt(player.x, player.z);
+    const targetSubmerge =
+      waterTerrain === 'waterHigh'
+        ? CONFIG.player.submergeDeep
+        : waterTerrain === 'waterLow' || waterTerrain === 'poison'
+          ? CONFIG.player.submergeShallow
+          : 0;
+    player.submerge +=
+      (targetSubmerge - player.submerge) * (1 - Math.exp(-CONFIG.player.submergeLerp * dt));
+    if (player.submerge < 0.0005) player.submerge = 0;
+
+    player.camera.addYaw(input.pointerYaw);
+    if (input.wheel !== 0) {
+      player.camera.addZoom(-input.wheel * CONFIG.camera.wheelStep);
+    }
+    player.camera.update(dt, player, input.cameraX, input.zoom);
   }
 
-  private resolvePosition(x: number, z: number): { x: number; z: number } {
+  private resolvePosition(
+    self: MatchPlayerState,
+    x: number,
+    z: number
+  ): { x: number; z: number } {
     const radius = CONFIG.player.radius;
     const colliders: Collider[] = this.world.colliders;
     let px = x;
     let pz = z;
-    let collided = false;
 
     for (let iteration = 0; iteration < 4; iteration++) {
       let pushed = false;
@@ -416,9 +606,8 @@ export class Game {
         }
       }
 
-      // Aguas profundas: solo los Pokémon de tipo Agua pueden entrar. Para el
-      // resto se comporta como un collider circular más.
-      if (!this.playerTypes.includes('Water')) {
+      // Aguas profundas: solo los Pokémon de tipo Agua pueden entrar.
+      if (!self.types.includes('Water')) {
         const dx = px - POND.x;
         const dz = pz - POND.z;
         const distance = Math.hypot(dx, dz);
@@ -434,23 +623,24 @@ export class Game {
         }
       }
 
-      for (const npc of this.npcs) {
-        const dx = px - npc.position.x;
-        const dz = pz - npc.position.z;
+      // Colisión entre jugadores (los NPC del menú están ocultos en partida).
+      for (const other of this.matchPlayers) {
+        if (other === self) continue;
+        const dx = px - other.x;
+        const dz = pz - other.z;
         const distance = Math.hypot(dx, dz);
-        const minimum = 0.5 + radius;
+        const minimum = radius * 2;
         if (distance < minimum) {
           if (distance < 0.0001) {
             px += minimum;
           } else {
-            px = npc.position.x + (dx / distance) * minimum;
-            pz = npc.position.z + (dz / distance) * minimum;
+            px = other.x + (dx / distance) * minimum;
+            pz = other.z + (dz / distance) * minimum;
           }
           pushed = true;
         }
       }
 
-      collided = collided || pushed;
       if (!pushed) break;
     }
 
@@ -461,34 +651,15 @@ export class Game {
     };
   }
 
-  private updateNpcs(dt: number): void {
-    const player = this.player;
-    if (!player) return;
-    for (const npc of this.npcs) {
-      const dx = player.position.x - npc.position.x;
-      const dz = player.position.z - npc.position.z;
-      const distance = Math.hypot(dx, dz);
-
-      // Cada NPC conserva su rumbo de reposo. Solo se gira hacia el jugador
-      // cuando lo tiene cerca, y vuelve a su orientación al alejarse.
-      const targetFacing =
-        distance < NPC_NOTICE_RADIUS ? Math.atan2(dx, dz) : npc.homeFacing;
-      const turn = distance < NPC_NOTICE_RADIUS ? 4.5 : 1.2;
-      npc.setFacing(angleLerp(npc.facing, targetFacing, 1 - Math.exp(-turn * dt)));
-      npc.play('idle');
-      npc.update(dt, this.camera.position);
-    }
-  }
-
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.app.off('update', this.onUpdate);
     this.input.dispose();
-    this.player?.destroy();
-    for (const npc of this.npcs) npc.destroy();
-    this.player = null;
-    this.npcs = [];
+    this.clearMatch();
+    for (const npc of this.menuNpcs) npc.destroy();
+    this.menuNpcs = [];
+    this.menuCamera.dispose();
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();
     this.world.dispose();

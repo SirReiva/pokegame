@@ -252,6 +252,14 @@ export class SpriteBillboard {
     this.root.enabled = visible;
   }
 
+  /** Mueve todas las capas del billboard a una capa de render de viewport. */
+  setLayer(layerId: number): void {
+    for (const layer of this.layers.values()) {
+      const render = layer.entity.render;
+      if (render) render.layers = [layerId];
+    }
+  }
+
   setFacing(yaw: number): void {
     this.facingYaw = yaw;
   }

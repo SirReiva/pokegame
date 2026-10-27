@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
+import type { SplitRect } from './multiplayer';
 
 /** Cámara orbital a 45º con seguimiento suave del objetivo. */
 export class CameraRig {
@@ -17,6 +18,7 @@ export class CameraRig {
     this.entity = new pc.Entity('camera');
     this.entity.addComponent('camera', {
       clearColor: new pc.Color(CONFIG.fog.color[0], CONFIG.fog.color[1], CONFIG.fog.color[2]),
+      clearColorBuffer: true,
       fov: CONFIG.camera.fov,
       nearClip: CONFIG.camera.near,
       farClip: CONFIG.camera.far,
@@ -26,6 +28,31 @@ export class CameraRig {
     this.desired.set(start.x, CONFIG.camera.heightOffset, start.z);
     this.lookAt.copy(this.desired);
     this.apply();
+  }
+
+  /** Viewport normalizado (origen abajo-izquierda, como PlayCanvas). */
+  setViewport(rect: SplitRect): void {
+    const camera = this.entity.camera;
+    if (!camera) return;
+    camera.rect = new pc.Vec4(rect.x, rect.y, rect.w, rect.h);
+    // El aspect ratio se recalcula con el rect para que cada vista no se deforme.
+    camera.aspectRatioMode = pc.ASPECT_AUTO;
+  }
+
+  /** Capas que renderiza esta cámara (mundo + capa propia del jugador). */
+  setLayers(layerIds: number[]): void {
+    const camera = this.entity.camera;
+    if (camera) camera.layers = layerIds;
+  }
+
+  setEnabled(enabled: boolean): void {
+    const camera = this.entity.camera;
+    if (camera) camera.enabled = enabled;
+  }
+
+  setFarClip(far: number): void {
+    const camera = this.entity.camera;
+    if (camera) camera.farClip = far;
   }
 
   /** Giro directo (ratón) en radianes. */
@@ -73,5 +100,9 @@ export class CameraRig {
 
   get position(): pc.Vec3 {
     return this.entity.getPosition();
+  }
+
+  dispose(): void {
+    this.entity.destroy();
   }
 }

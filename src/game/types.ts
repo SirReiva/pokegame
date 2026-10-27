@@ -1,8 +1,5 @@
 /** Tipos compartidos entre el pipeline de assets y el motor. */
 
-import type { TerrainId } from './terrain';
-import type { TerrainSpeedReason } from './terrainSpeed';
-
 export type DirectionName = 'S' | 'SE' | 'E' | 'NE' | 'N' | 'NW' | 'W' | 'SW';
 export type AnimationName = 'idle' | 'walk';
 
@@ -60,31 +57,7 @@ export interface SpriteManifest {
   pokemon: PokemonEntry[];
 }
 
-export type GamePhase = 'loading' | 'ready' | 'playing';
-
-export interface GameStats {
-  fps: number;
-  yaw: number;
-  distance: number;
-  row: number;
-  direction: DirectionName;
-  /** Rumbo propio del personaje en grados (0 = sur, 90 = este). */
-  facing: number;
-  speed: number;
-  x: number;
-  z: number;
-  gamepad: boolean;
-  animation: AnimationName;
-  /** Terreno bajo los pies del jugador. */
-  terrain: TerrainId;
-  terrainName: string;
-  /** Tipo Pokémon asociado al terreno (clave del manifiesto). */
-  terrainType: string;
-  /** Multiplicador de velocidad que aplica el terreno al Pokémon elegido. */
-  terrainSpeedMultiplier: number;
-  /** Motivo del multiplicador, para explicarlo en el HUD. */
-  terrainSpeedReason: TerrainSpeedReason;
-}
+export type GamePhase = 'loading' | 'lobby' | 'roster' | 'playing';
 
 export interface LoadingProgress {
   loaded: number;

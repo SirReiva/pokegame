@@ -45,7 +45,9 @@ export class Actor {
     shadowMaterial: pc.StandardMaterial,
     position: ActorTransform,
     facing: number,
-    withMarker = false
+    withMarker = false,
+    silhouette = false,
+    markerAccent: readonly [number, number, number] = [255, 224, 102]
   ) {
     this.asset = asset;
     this.position = { ...position };
@@ -62,7 +64,7 @@ export class Actor {
       pixelScale: CONFIG.sprite.pixelScale,
       verticalStretch: CONFIG.sprite.verticalStretch,
       alphaTest: CONFIG.sprite.alphaTest,
-      silhouette: withMarker
+      silhouette
     });
     this.billboard.setFacing(facing);
 
@@ -83,7 +85,8 @@ export class Actor {
           app,
           CONFIG.player.markerDiameter,
           CONFIG.player.markerHeight,
-          CONFIG.player.markerOpacity
+          CONFIG.player.markerOpacity,
+          markerAccent
         )
       : null;
     this.marker?.setFacing(facing);
@@ -154,6 +157,14 @@ export class Actor {
     this.billboard.setVisible(visible);
     this.shadow.enabled = visible && this.sink <= 0.001;
     this.marker?.setVisible(visible);
+  }
+
+  /** Capa de render exclusiva del viewport que debe ver esta copia. */
+  setLayer(layerId: number): void {
+    this.billboard.setLayer(layerId);
+    const shadowRender = this.shadow.render;
+    if (shadowRender) shadowRender.layers = [layerId];
+    this.marker?.setLayer(layerId);
   }
 
   destroy(): void {

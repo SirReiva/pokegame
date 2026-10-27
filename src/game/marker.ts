@@ -24,11 +24,17 @@ export class PlayerMarker {
   private readonly texture: pc.Texture;
   private height: number;
 
-  constructor(app: pc.Application, diameter: number, height: number, opacity: number) {
+  constructor(
+    app: pc.Application,
+    diameter: number,
+    height: number,
+    opacity: number,
+    accent: readonly [number, number, number] = [255, 224, 102]
+  ) {
     const device = app.graphicsDevice;
     this.height = height;
 
-    this.texture = textureFromCanvas(device, createMarkerCanvas(), {
+    this.texture = textureFromCanvas(device, createMarkerCanvas(MARKER_TEXTURE_SIZE, accent), {
       name: 'player-marker',
       mipmaps: false,
       minFilter: pc.FILTER_NEAREST,
@@ -131,6 +137,12 @@ export class PlayerMarker {
 
   setVisible(visible: boolean): void {
     this.root.enabled = visible;
+  }
+
+  /** Asigna el anillo a una capa de render propia del viewport. */
+  setLayer(layerId: number): void {
+    const render = this.root.render;
+    if (render) render.layers = [layerId];
   }
 
   destroy(): void {

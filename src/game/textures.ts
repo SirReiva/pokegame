@@ -1223,6 +1223,7 @@ export const MARKER_RING_OUTER = 16;
  */
 export function createMarkerCanvas(
   size = MARKER_TEXTURE_SIZE,
+  accent: readonly [number, number, number] = [255, 224, 102]
 ): HTMLCanvasElement {
   const ctx = canvas2d(size);
   const image = ctx.createImageData(size, size);
@@ -1231,15 +1232,15 @@ export function createMarkerCanvas(
   const cx = size / 2;
   const cy = size / 2;
 
-  // Un solo color: sin borde oscuro.
-  const accent = [255, 224, 102, 255];
+  // Un solo color: sin borde oscuro. El color llega del equipo del jugador.
+  const color = [accent[0], accent[1], accent[2], 255];
 
-  const put = (x: number, y: number, color: number[]) => {
+  const put = (x: number, y: number, value: readonly number[]) => {
     const index = (y * size + x) * 4;
-    data[index] = color[0];
-    data[index + 1] = color[1];
-    data[index + 2] = color[2];
-    data[index + 3] = color[3];
+    data[index] = value[0];
+    data[index + 1] = value[1];
+    data[index + 2] = value[2];
+    data[index + 3] = value[3];
   };
 
   const inTriangle = (
@@ -1287,7 +1288,7 @@ export function createMarkerCanvas(
         arrow.right[1] * scale,
       );
 
-      if (inRing || inArrow) put(x, y, accent);
+      if (inRing || inArrow) put(x, y, color);
     }
   }
 
