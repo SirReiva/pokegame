@@ -5,15 +5,10 @@ import type { SplitRect } from './multiplayer';
 /**
  * Niebla de guerra dibujada por el motor.
  *
- * Cada vista monta un quad pegado a su cámara, en su propia capa de render. El
- * quad ocupa justo el frustum (se recalcula con el aspect del viewport) y su
- * material es un `ShaderMaterial` que pinta un degradado radial con centro y
- * radios elípticos: dentro del círculo el alfa es 0 y fuera llega a
- * `fogOpacity`. Se dibuja al final de las transparencias y sin `depthTest`, así
- * que cubre el mundo de esa vista pero no el HUD de React.
- *
- * El shader trabaja en UV de pantalla (0-1). El motor le pasa el centro y los
- * radios ya normalizados desde el círculo de visión del jugador.
+ * Hay dos piezas:
+ * - `FogView`: quad pegado a la cámara que sombrea fuera del círculo de visión.
+ * - `FogDecal`: plano horizontal en el mundo con la sombra que proyectan las
+ *   cordilleras. Al estar fijo en el mapa, esa sombra no depende de la cámara.
  */
 
 const VERTEX_SHADER = `
@@ -39,11 +34,46 @@ uniform float uFogFeather;
 
 void main(void) {
   vec2 offset = (vUv - uFogCenter) / max(uFogRadius, vec2(0.0001));
-  float distanceToCenter = length(offset);
-  float alpha = smoothstep(1.0 - uFogFeather, 1.0, distanceToCenter) * uFogOpacity;
+  float alpha = smoothstep(1.0 - uFogFeather, 1.0, length(offset)) * uFogOpacity;
   gl_FragColor = vec4(uFogColor, alpha);
 }
 `;
+
+const DECAL_FRAGMENT_SHADER = `
+varying vec2 vUv;
+uniform vec3 uFogColor;
+uniform float uFogOpacity;
+uniform sampler2D uFogMask;
+uniform vec2 uPlayer;
+uniform float uVisionRange;
+uniform float uMapHalfSize;
+
+void main(void) {
+  float mask = texture2D(uFogMask, vUv).r;
+  vec2 world = (vUv * 2.0 - 1.0) * uMapHalfSize;
+  float inside = 1.0 - smoothstep(uVisionRange - 0.5, uVisionRange + 0.5, distance(world, uPlayer));
+  float alpha = (1.0 - mask) * inside * uFogOpacity;
+  gl_FragColor = vec4(uFogColor, alpha);
+}
+`;
+
+/** Oclusor de visión que proyecta sombra sobre el terreno. */
+export interface SightOccluder {
+  x: number;
+  z: number;
+  radius: number;
+  /** Extremos del tramo de cresta, para el caso de jugador pegado. */
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+}
+
+const MASK_SIZE = 192;
+const MAX_OCCLUDERS = 24;
+const SHADOW_LENGTH = 40;
+/** Extensión de la banda cuando el jugador está pegado a la cresta. */
+const INSIDE_EDGE_EXTENSION = 0.05;
 
 /**
  * El quad se dibuja un 2 % más grande que el frustum para no dejar una costura
@@ -68,6 +98,17 @@ export function createFogMesh(device: pc.GraphicsDevice): pc.Mesh {
   return mesh;
 }
 
+/** Plano horizontal de mapa completo para el decal de sombra. */
+export function createFogDecalMesh(device: pc.GraphicsDevice): pc.Mesh {
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1]);
+  mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
+  mesh.setIndices([0, 1, 2, 0, 2, 3]);
+  mesh.update();
+  return mesh;
+}
+
+/** Niebla de pantalla de una vista: círculo de visión y sombreado exterior. */
 export class FogView {
   readonly entity: pc.Entity;
 
@@ -251,5 +292,216 @@ export class FogView {
   destroy(): void {
     this.entity.destroy();
     this.material.destroy();
+  }
+}
+
+/**
+ * Sombra de cordillera fija en el mundo. La máscara se dibuja en coordenadas
+ * XZ del mapa y el plano vive en la capa de la vista; la cámara solo lo mira,
+ * no lo deforma. Al estar sobre el suelo y con depth test, la propia montaña,
+ * los árboles y los actores lo tapan y conservan su iluminación.
+ */
+export class FogDecal {
+  readonly entity: pc.Entity;
+
+  private readonly material: pc.ShaderMaterial;
+  private readonly occluders: readonly SightOccluder[];
+  private readonly maskCanvas: HTMLCanvasElement;
+  private readonly maskContext: CanvasRenderingContext2D;
+  private readonly maskTexture: pc.Texture;
+  private readonly player = new Float32Array(2);
+  private lastX = Number.NaN;
+  private lastZ = Number.NaN;
+  private lastVision = Number.NaN;
+
+  constructor(
+    device: pc.GraphicsDevice,
+    root: pc.Entity,
+    mesh: pc.Mesh,
+    layerId: number,
+    index: number,
+    occluders: readonly SightOccluder[]
+  ) {
+    this.occluders = occluders;
+
+    this.maskCanvas = document.createElement('canvas');
+    this.maskCanvas.width = MASK_SIZE;
+    this.maskCanvas.height = MASK_SIZE;
+    const context = this.maskCanvas.getContext('2d');
+    if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
+    this.maskContext = context;
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
+
+    this.maskTexture = new pc.Texture(device, {
+      name: `fog-decal-mask-${index + 1}`,
+      width: MASK_SIZE,
+      height: MASK_SIZE,
+      format: pc.PIXELFORMAT_RGBA8,
+      mipmaps: false,
+      minFilter: pc.FILTER_LINEAR,
+      magFilter: pc.FILTER_LINEAR,
+      addressU: pc.ADDRESS_CLAMP_TO_EDGE,
+      addressV: pc.ADDRESS_CLAMP_TO_EDGE,
+      srgb: false
+    });
+    this.maskTexture.setSource(this.maskCanvas);
+
+    this.material = new pc.ShaderMaterial({
+      uniqueName: 'fog-of-war-decal',
+      vertexGLSL: VERTEX_SHADER,
+      fragmentGLSL: DECAL_FRAGMENT_SHADER,
+      attributes: {
+        aPosition: pc.SEMANTIC_POSITION,
+        aUv0: pc.SEMANTIC_TEXCOORD0
+      }
+    });
+    this.material.blendType = pc.BLEND_NORMAL;
+    this.material.depthTest = true;
+    this.material.depthWrite = false;
+    this.material.cull = pc.CULLFACE_NONE;
+    this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
+    this.material.setParameter('uFogOpacity', CONFIG.vision.fogOpacity);
+    this.material.setParameter('uFogMask', this.maskTexture);
+    this.material.setParameter('uPlayer', this.player);
+    this.material.setParameter('uVisionRange', 0);
+    this.material.setParameter('uMapHalfSize', CONFIG.world.halfSize);
+    this.material.update();
+
+    const instance = new pc.MeshInstance(mesh, this.material);
+    instance.castShadow = false;
+    instance.receiveShadow = false;
+    instance.drawOrder = 1;
+
+    this.entity = new pc.Entity(`fog-decal-${index + 1}`);
+    this.entity.setPosition(0, 0.02, 0);
+    this.entity.setLocalScale(CONFIG.world.halfSize, 1, CONFIG.world.halfSize);
+    this.entity.addComponent('render');
+    const render = this.entity.render!;
+    render.meshInstances = [instance];
+    render.castShadows = false;
+    render.receiveShadows = false;
+    render.layers = [layerId];
+    root.addChild(this.entity);
+  }
+
+  update(playerX: number, playerZ: number, visionRange: number): void {
+    // La sombra solo cambia cuando cambia el jugador, no cuando gira la cámara.
+    if (
+      playerX === this.lastX &&
+      playerZ === this.lastZ &&
+      visionRange === this.lastVision
+    ) {
+      return;
+    }
+    this.lastX = playerX;
+    this.lastZ = playerZ;
+    this.lastVision = visionRange;
+
+    this.player[0] = playerX;
+    this.player[1] = playerZ;
+    this.material.setParameter('uPlayer', this.player);
+    this.material.setParameter('uVisionRange', visionRange);
+    this.updateMask(playerX, playerZ, visionRange);
+  }
+
+  private updateMask(playerX: number, playerZ: number, visionRange: number): void {
+    const context = this.maskContext;
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
+    context.fillStyle = '#000';
+
+    const half = CONFIG.world.halfSize;
+    const toCanvasX = (x: number) => ((x + half) / (half * 2)) * MASK_SIZE;
+    const toCanvasY = (z: number) => ((z + half) / (half * 2)) * MASK_SIZE;
+
+    const candidates: Array<SightOccluder & { distance: number }> = [];
+    for (const occluder of this.occluders) {
+      const distance = Math.hypot(occluder.x - playerX, occluder.z - playerZ);
+      if (distance > visionRange + occluder.radius + 2) continue;
+      candidates.push({ ...occluder, distance });
+    }
+
+    candidates.sort((a, b) => a.distance - b.distance);
+    const selected = candidates.slice(0, MAX_OCCLUDERS);
+
+    for (const occluder of selected) {
+      if (occluder.distance <= occluder.radius + 0.01) {
+        // Jugador pegado a la cresta: banda sobre el lado opuesto del tramo.
+        const segmentX = occluder.bx - occluder.ax;
+        const segmentZ = occluder.bz - occluder.az;
+        const segmentLength = Math.hypot(segmentX, segmentZ);
+        if (segmentLength < 0.0001) continue;
+
+        const dirX = segmentX / segmentLength;
+        const dirZ = segmentZ / segmentLength;
+        let normalX = -dirZ;
+        let normalZ = dirX;
+        if (
+          (playerX - occluder.ax) * normalX + (playerZ - occluder.az) * normalZ >
+          0
+        ) {
+          normalX = -normalX;
+          normalZ = -normalZ;
+        }
+
+        // Extensión corta en los extremos: la justa para cubrir el tramo sin
+        // que la sombra se escape por delante del final de la cresta.
+        const ext = INSIDE_EDGE_EXTENSION;
+        const farX = normalX * SHADOW_LENGTH;
+        const farZ = normalZ * SHADOW_LENGTH;
+        const ax = occluder.ax - dirX * ext;
+        const az = occluder.az - dirZ * ext;
+        const bx = occluder.bx + dirX * ext;
+        const bz = occluder.bz + dirZ * ext;
+
+        context.beginPath();
+        context.moveTo(toCanvasX(ax), toCanvasY(az));
+        context.lineTo(toCanvasX(bx), toCanvasY(bz));
+        context.lineTo(toCanvasX(bx + farX), toCanvasY(bz + farZ));
+        context.lineTo(toCanvasX(ax + farX), toCanvasY(az + farZ));
+        context.closePath();
+        context.fill();
+        continue;
+      }
+
+      const dx = occluder.x - playerX;
+      const dz = occluder.z - playerZ;
+      const angle = Math.atan2(dz, dx);
+      const halfAngle = Math.asin(Math.min(1, occluder.radius / occluder.distance));
+      const tangentDistance = Math.sqrt(
+        occluder.distance * occluder.distance - occluder.radius * occluder.radius
+      );
+
+      const a1 = angle - halfAngle;
+      const a2 = angle + halfAngle;
+      const c1 = Math.cos(a1);
+      const s1 = Math.sin(a1);
+      const c2 = Math.cos(a2);
+      const s2 = Math.sin(a2);
+
+      // Cuña tangente: arranca en los puntos de tangencia y se abre hacia el
+      // lado opuesto al jugador. La montaña tapa el borde de arranque.
+      const t1x = playerX + c1 * tangentDistance;
+      const t1z = playerZ + s1 * tangentDistance;
+      const t2x = playerX + c2 * tangentDistance;
+      const t2z = playerZ + s2 * tangentDistance;
+
+      context.beginPath();
+      context.moveTo(toCanvasX(t1x), toCanvasY(t1z));
+      context.lineTo(toCanvasX(t1x + c1 * SHADOW_LENGTH), toCanvasY(t1z + s1 * SHADOW_LENGTH));
+      context.lineTo(toCanvasX(t2x + c2 * SHADOW_LENGTH), toCanvasY(t2z + s2 * SHADOW_LENGTH));
+      context.lineTo(toCanvasX(t2x), toCanvasY(t2z));
+      context.closePath();
+      context.fill();
+    }
+
+    this.maskTexture.upload();
+  }
+
+  destroy(): void {
+    this.entity.destroy();
+    this.material.destroy();
+    this.maskTexture.destroy();
   }
 }

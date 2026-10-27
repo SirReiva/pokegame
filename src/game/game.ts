@@ -2,7 +2,7 @@ import * as pc from 'playcanvas';
 import { Actor } from './actor';
 import { CameraRig } from './camera';
 import { CONFIG, RAD } from './config';
-import { FogView, createFogMesh } from './fog';
+import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder } from './fog';
 import {
   IDLE_INPUT,
   Input,
@@ -57,6 +57,9 @@ const NPC_SLOTS: Array<{ x: number; z: number }> = [
 
 /** Los NPC del menú solo giran hacia la cámara cuando esta se acerca. */
 const NPC_NOTICE_RADIUS = 2.4;
+
+/** Cuánto se ensancha el radio de colisión de las cuñas de sombra. */
+const MOUNTAIN_SHADOW_RADIUS = 1.05;
 
 interface MatchPlayerState extends MatchPlayerConfig {
   types: string[];
@@ -122,6 +125,11 @@ export class Game {
   private fogViews: FogView[] = [];
   /** Malla compartida por todas las vistas; se crea en la primera partida. */
   private fogMesh: pc.Mesh | null = null;
+  /** Decals de sombra de cordillera en el suelo, uno por vista. */
+  private fogDecals: FogDecal[] = [];
+  private fogDecalMesh: pc.Mesh | null = null;
+  /** Tramos de cordillera que proyectan sombra dentro de la niebla. */
+  private sightOccluders: SightOccluder[] = [];
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -146,6 +154,22 @@ export class Game {
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
 
     this.world = buildWorld(this.app);
+    this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
+      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
+      return [
+        {
+          x: (collider.ax + collider.bx) / 2,
+          z: (collider.az + collider.bz) / 2,
+          // Un poco más ancho que el radio de colisión del tramo para cubrir
+          // el volumen visible de los picos, sin abrir la cuña de más.
+          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
+          ax: collider.ax,
+          az: collider.az,
+          bx: collider.bx,
+          bz: collider.bz
+        }
+      ];
+    });
     this.menuCamera = new CameraRig(this.app, CONFIG.world.spawn);
     this.input = new Input(canvas);
 
@@ -300,6 +324,16 @@ export class Game {
       this.fogViews.push(
         new FogView(this.app.graphicsDevice, this.ensureFogMesh(), camera.entity, layer.id, index)
       );
+      this.fogDecals.push(
+        new FogDecal(
+          this.app.graphicsDevice,
+          this.app.root,
+          this.ensureFogDecalMesh(),
+          layer.id,
+          index,
+          this.sightOccluders
+        )
+      );
     });
 
     // Rejilla N x N: cada jugador tiene una copia visible en cada viewport.
@@ -350,6 +384,8 @@ export class Game {
   private clearMatch(): void {
     for (const fog of this.fogViews) fog.destroy();
     this.fogViews = [];
+    for (const decal of this.fogDecals) decal.destroy();
+    this.fogDecals = [];
 
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
@@ -368,6 +404,12 @@ export class Game {
   private ensureFogMesh(): pc.Mesh {
     if (!this.fogMesh) this.fogMesh = createFogMesh(this.app.graphicsDevice);
     return this.fogMesh;
+  }
+
+  /** Plano horizontal compartido por los decals de sombra. */
+  private ensureFogDecalMesh(): pc.Mesh {
+    if (!this.fogDecalMesh) this.fogDecalMesh = createFogDecalMesh(this.app.graphicsDevice);
+    return this.fogDecalMesh;
   }
 
   setPaused(paused: boolean): void {
@@ -629,6 +671,9 @@ export class Game {
         );
       }
 
+      const decal = this.fogDecals[viewIndex];
+      if (decal) decal.update(observer.x, observer.z, observer.visionRange);
+
       for (const target of this.matchPlayers) {
         const copy = target.copies[viewIndex];
         if (!copy) continue;
@@ -754,6 +799,8 @@ export class Game {
     this.clearMatch();
     this.fogMesh?.destroy();
     this.fogMesh = null;
+    this.fogDecalMesh?.destroy();
+    this.fogDecalMesh = null;
     for (const npc of this.menuNpcs) npc.destroy();
     this.menuNpcs = [];
     this.menuCamera.dispose();

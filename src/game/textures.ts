@@ -1438,77 +1438,10 @@ export function createLeafCanvas(
   return ctx.canvas;
 }
 
-const ROCK_PALETTES = [
-  ["#3f454d", "#535a63", "#69717b", "#858d97", "#a2aab4"],
-  ["#4a474f", "#5e5b64", "#74717c", "#8e8b96", "#a8a5b0"],
-];
-
-/** Piedra pixel art: parches angulosos, grietas y motas. Hoja 32x16. */
-export function createRockCanvas(
-  variant = 0,
-  width = 32,
-  height = 16,
-): HTMLCanvasElement {
-  const palette = ROCK_PALETTES[variant % ROCK_PALETTES.length];
-  const random = mulberry32(0x70c4 + variant * 613);
-  const ctx = canvas2d(width, height);
-
-  const plot = (x: number, y: number, color: string) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(
-      ((x % width) + width) % width,
-      ((y % height) + height) % height,
-      1,
-      1,
-    );
-  };
-
-  ctx.fillStyle = palette[2];
-  ctx.fillRect(0, 0, width, height);
-
-  // Parches de piedra con bordes rectos.
-  for (let i = 0; i < 16; i++) {
-    const x = Math.floor(random() * width);
-    const y = Math.floor(random() * height);
-    const w = 1 + Math.floor(random() * 4);
-    const h = 1 + Math.floor(random() * 3);
-    const color = palette[random() < 0.55 ? 1 : 3];
-    for (let dy = 0; dy < h; dy++) {
-      for (let dx = 0; dx < w; dx++) {
-        if (random() > 0.12) plot(x + dx, y + dy, color);
-      }
-    }
-  }
-
-  // Grietas: recorridos de un píxel con alguna luz al lado.
-  for (let i = 0; i < 4; i++) {
-    let x = Math.floor(random() * width);
-    let y = Math.floor(random() * height);
-    const length = 4 + Math.floor(random() * 7);
-    for (let k = 0; k < length; k++) {
-      plot(x, y, palette[0]);
-      if (random() < 0.3) plot(x + 1, y, palette[4]);
-      x += random() < 0.72 ? 1 : -1;
-      if (random() < 0.35) y += 1;
-    }
-  }
-
-  // Motas y pequeños pozos.
-  for (let i = 0; i < 22; i++) {
-    plot(
-      Math.floor(random() * width),
-      Math.floor(random() * height),
-      palette[random() < 0.6 ? 1 : random() < 0.7 ? 3 : 4],
-    );
-  }
-
-  return ctx.canvas;
-}
-
 /**
  * Piedra marrón para las cordilleras: parches angulosos, grietas y motas, con
  * envoltura en los bordes para que el tile sea continuo al repetirse sobre los
- * picos. Misma técnica pixel art que las rocas pequeñas, pero en tonos tierra.
+ * picos. Misma técnica pixel art de parches y grietas, en tonos tierra.
  */
 export function createMountainRockCanvas(size = 128): HTMLCanvasElement {
   const palette = ["#4a3424", "#5f452f", "#7a5a3e", "#997652", "#b89572"];

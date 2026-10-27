@@ -10,7 +10,6 @@ import {
   createLeafCanvas,
   createMountainRockCanvas,
   createPollenCanvas,
-  createRockCanvas,
   createShadowCanvas,
   createSkyCanvas,
   createSmokeCanvas,
@@ -43,9 +42,6 @@ export interface World {
 }
 
 const HALF = CONFIG.world.groundSize / 2;
-
-/** Cartel de la base azul. Se reserva su hueco al repartir la vegetación. */
-const SIGN_POSITION = { x: -8.6, z: 11.8 };
 
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
@@ -233,12 +229,6 @@ export function buildWorld(app: pc.Application): World {
     textureFromCanvas(device, createLeafCanvas(variant), {
       ...pixelOptions,
       name: `leaf-pixel-${variant}`
-    })
-  );
-  const rockTextures = [0, 1].map((variant) =>
-    textureFromCanvas(device, createRockCanvas(variant), {
-      ...pixelOptions,
-      name: `rock-pixel-${variant}`
     })
   );
 
@@ -444,7 +434,6 @@ export function buildWorld(app: pc.Application): World {
       ) {
         continue;
       }
-      if (Math.hypot(x - SIGN_POSITION.x, z - SIGN_POSITION.z) < 2.4) continue;
       if (spots.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < minGap)) continue;
       spots.push([x, z]);
     }
@@ -487,28 +476,6 @@ export function buildWorld(app: pc.Application): World {
     });
 
     colliders.push({ type: 'circle', x, z, radius: 0.55 * scale, sightRadius: 1.25 * scale });
-  });
-
-  // Rocas.
-  const rockMaterials = rockTextures.map((texture) =>
-    standard({
-      diffuseMap: texture,
-      specular: '#20242a',
-      gloss: 0.18
-    })
-  );
-  materials.push(...rockMaterials);
-  const rocks: Array<[number, number, number]> = scatter(7, 0x2b19, 2.6).map(
-    ([x, z], index) => [x, z, 0.5 + random(index * 613 + 29)() * 0.34]
-  );
-  rocks.forEach(([x, z, size], index) => {
-    const rock = part(app.root, 'sphere', rockMaterials[index % rockMaterials.length], {
-      position: [x, size * 0.35, z],
-      scale: [size * 2.1, size * 1.25, size * 1.9],
-      rotation: [0, index * 61, 0]
-    });
-    created.push(rock);
-    colliders.push({ type: 'circle', x, z, radius: size * 0.8 });
   });
 
   // --- Cordilleras ----------------------------------------------------------
@@ -3003,23 +2970,6 @@ export function buildWorld(app: pc.Application): World {
     ghostLights.push({ entity: glow, phase: zoneIndex * 1.9 + zone.z * 0.27 });
   });
 
-  // --- Cartel y nexo de la base azul ---------------------------------------
-  const woodMaterial = standard({ diffuse: '#a97a4d', specular: '#2b1c10', gloss: 0.2 });
-  materials.push(woodMaterial);
-
-  const sign = new pc.Entity('sign');
-  sign.setPosition(SIGN_POSITION.x, 0, SIGN_POSITION.z);
-  sign.setLocalEulerAngles(0, -48, 0);
-  app.root.addChild(sign);
-  created.push(sign);
-  part(sign, 'box', woodMaterial, { position: [0, 0.65, 0], scale: [0.14, 1.3, 0.14] });
-  part(sign, 'box', woodMaterial, {
-    position: [0, 1.32, 0],
-    scale: [1.15, 0.62, 0.12],
-    rotation: [0, 0, 2]
-  });
-  colliders.push({ type: 'circle', x: SIGN_POSITION.x, z: SIGN_POSITION.z, radius: 0.35 });
-
   // --- Nexos de las bases ---------------------------------------------------
   // Pedestal de piedra con un cristal emisivo del color del equipo y una luz
   // corta que tiñe la plataforma. Marcan el centro de cada base.
@@ -3267,7 +3217,6 @@ export function buildWorld(app: pc.Application): World {
       barkTexture.destroy();
       mountainRockTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
-      for (const texture of rockTextures) texture.destroy();
       for (const mesh of grassClusterMeshes) mesh.destroy();
       for (const mesh of flowerClusterMeshes) mesh.destroy();
       for (const mesh of shrubClusterMeshes) mesh.destroy();
