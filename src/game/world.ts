@@ -1,6 +1,21 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
-import { BASES, LANES, MOUNTAINS, POND, TERRAIN_ZONES, onMountain, terrainAt } from './terrain';
+import {
+  BASES,
+  LANES,
+  MOUNTAINS,
+  POND,
+  TERRAIN_ZONES,
+  onMountain,
+  randomPointInZone,
+  terrainAt,
+  triangulatePolygon,
+  zoneArea,
+  zoneBounds,
+  zoneCenter,
+  zoneContainsInset,
+  type TerrainZone
+} from './terrain';
 import {
   createBarkCanvas,
   createDustCanvas,
@@ -42,6 +57,16 @@ export interface World {
 }
 
 const HALF = CONFIG.world.groundSize / 2;
+
+/** Extensión de una caja de emisión ajustada a la forma de la zona. */
+function zoneEmitterExtents(
+  zone: TerrainZone,
+  factor: number,
+  height: number
+): pc.Vec3 {
+  const bounds = zoneBounds(zone);
+  return new pc.Vec3((bounds.width * factor) / 2, height, (bounds.depth * factor) / 2);
+}
 
 /**
  * Interruptor temporal de árboles: con `false` no se genera ninguno (ni los de
@@ -365,10 +390,10 @@ export function buildWorld(app: pc.Application): World {
 
   // --- Ciénaga -------------------------------------------------------------
   // El calvero venenoso se comporta como agua somera: la hierba oscura queda
-  // dentro y encima va una lámina de agua turbia con la misma máscara radial
-  // que el lago. Es mate, sin brillo especular, para que se lea como agua
-  // estancada y no como un espejo. No hay agua profunda: cualquier Pokémon
-  // puede cruzar.
+  // dentro y encima va una lámina de agua turbia. En círculos se usa la misma
+  // máscara radial que el lago; en polígonos la propia malla recorta la lámina.
+  // Es mate, sin brillo especular, para que se lea como agua estancada y no
+  // como un espejo. No hay agua profunda: cualquier Pokémon puede cruzar.
   const swampZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'poison');
   const swampSurfaceMaterial = standard({
     diffuse: '#4c5a3c',
@@ -387,7 +412,64 @@ export function buildWorld(app: pc.Application): World {
   swampSurfaceMaterial.update();
   materials.push(swampSurfaceMaterial);
 
+  // Variante sin máscara radial: en un polígono la silueta ya la marca la malla.
+  const swampPolygonMaterial = standard({
+    diffuse: '#4c5a3c',
+    diffuseMap: waterTexture,
+    tiling: [1.15, 1.05],
+    specular: '#000000',
+    gloss: 0,
+    opacity: 0.42,
+    blend: pc.BLEND_NORMAL,
+    depthWrite: false,
+    cull: pc.CULLFACE_NONE,
+    emissive: '#0a1007'
+  });
+  materials.push(swampPolygonMaterial);
+
+  /** Lámina plana triangulada a partir de los vértices de una zona poligonal. */
+  const buildPolygonSurface = (zone: TerrainZone, material: pc.StandardMaterial) => {
+    if (!('points' in zone)) return;
+    const bounds = zoneBounds(zone);
+    const indices = triangulatePolygon(zone.points);
+    if (indices.length === 0) return;
+
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const uvs: number[] = [];
+    const width = Math.max(0.001, bounds.width);
+    const depth = Math.max(0.001, bounds.depth);
+    for (const [x, z] of zone.points) {
+      positions.push(x, POND.surfaceHeight, z);
+      normals.push(0, 1, 0);
+      uvs.push((x - bounds.minX) / width, (z - bounds.minZ) / depth);
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setUvs(0, uvs);
+    mesh.setIndices(indices);
+    mesh.update();
+
+    const entity = new pc.Entity('polygon-surface');
+    entity.addComponent('render');
+    entity.render!.castShadows = false;
+    entity.render!.receiveShadows = false;
+    const instance = new pc.MeshInstance(mesh, material);
+    instance.castShadow = false;
+    instance.receiveShadow = false;
+    instance.drawOrder = 0;
+    entity.render!.meshInstances = [instance];
+    app.root.addChild(entity);
+    created.push(entity);
+  };
+
   swampZones.forEach((zone) => {
+    if ('points' in zone) {
+      buildPolygonSurface(zone, swampPolygonMaterial);
+      return;
+    }
     const radius = zone.radius + 0.2;
     const surface = part(app.root, 'plane', swampSurfaceMaterial, {
       position: [zone.x, POND.surfaceHeight, zone.z],
@@ -437,7 +519,7 @@ export function buildWorld(app: pc.Application): World {
       if (terrainAt(x, z) !== 'jungle') continue;
       if (onMountain(x, z)) continue;
       if (
-        TERRAIN_ZONES.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.radius + 1.1)
+        TERRAIN_ZONES.some((zone) => zoneContainsInset(zone, x, z, -1.1))
       ) {
         continue;
       }
@@ -740,14 +822,14 @@ export function buildWorld(app: pc.Application): World {
     const count = 4;
     const spots: Array<[number, number]> = [];
     for (let i = 0; i < count; i++) {
-      let x = zone.x;
-      let z = zone.z;
+      let [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
       for (let attempt = 0; attempt < 20; attempt++) {
-        const angle = rand() * Math.PI * 2;
-        const distance = 0.7 + Math.sqrt(rand()) * (zone.radius - 1.0);
-        x = zone.x + Math.cos(angle) * distance;
-        z = zone.z + Math.sin(angle) * distance;
-        if (spots.every(([sx, sz]) => Math.hypot(x - sx, z - sz) > 1.1)) break;
+        const [nx, nz] = randomPointInZone(zone, rand, 1.0, 0.7);
+        if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 1.1)) {
+          x = nx;
+          z = nz;
+          break;
+        }
       }
       spots.push([x, z]);
 
@@ -792,8 +874,9 @@ export function buildWorld(app: pc.Application): World {
   // polvo y no como chispas. La densidad y el tamaño son altos para que la
   // bruma se note desde la cámara a 45º.
   desertZones.forEach((zone, zoneIndex) => {
+    const [dustX, dustZ] = zoneCenter(zone);
     const dust = new pc.Entity(`desert-dust-${zoneIndex}`);
-    dust.setPosition(zone.x, 0.8, zone.z);
+    dust.setPosition(dustX, 0.8, dustZ);
     dust.addComponent('particlesystem', {
       numParticles: 90,
       lifetime: 5.5,
@@ -803,7 +886,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 2.0, 1.5, zone.radius * 2.0),
+      emitterExtents: zoneEmitterExtents(zone, 2.0, 1.5),
       colorMap: dustTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -1061,12 +1144,9 @@ export function buildWorld(app: pc.Application): World {
   const iceZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'ice');
   iceZones.forEach((zone, zoneIndex) => {
     const rand = random(0x71f3 + zoneIndex * 6701);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 1.5);
+    const count = Math.round(zoneArea(zone) * 1.5);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.35);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.35);
       const scale = 0.75 + rand() * 0.5;
 
       const cluster = new pc.Entity(`ice-crystal-${zoneIndex}-${i}`);
@@ -1092,8 +1172,9 @@ export function buildWorld(app: pc.Application): World {
   // con el viento. La caja de emisión es alta, así que hay copos a distintas
   // alturas y el efecto se lee desde la cámara a 45º sin tapar el suelo.
   iceZones.forEach((zone, zoneIndex) => {
+    const [snowX, snowZ] = zoneCenter(zone);
     const snow = new pc.Entity(`ice-snow-${zoneIndex}`);
-    snow.setPosition(zone.x, 1.5, zone.z);
+    snow.setPosition(snowX, 1.5, snowZ);
     snow.addComponent('particlesystem', {
       numParticles: 70,
       lifetime: 5.2,
@@ -1103,7 +1184,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.9, 1.6, zone.radius * 1.9),
+      emitterExtents: zoneEmitterExtents(zone, 1.9, 1.6),
       colorMap: frostTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -1359,14 +1440,14 @@ export function buildWorld(app: pc.Application): World {
     const count = 5;
     const spots: Array<[number, number]> = [];
     for (let i = 0; i < count; i++) {
-      let x = zone.x;
-      let z = zone.z;
+      let [x, z] = randomPointInZone(zone, rand, 1.0, 0.55);
       for (let attempt = 0; attempt < 16; attempt++) {
-        const angle = rand() * Math.PI * 2;
-        const distance = 0.55 + Math.sqrt(rand()) * (zone.radius - 1.0);
-        x = zone.x + Math.cos(angle) * distance;
-        z = zone.z + Math.sin(angle) * distance;
-        if (spots.every(([sx, sz]) => Math.hypot(x - sx, z - sz) > 1.0)) break;
+        const [nx, nz] = randomPointInZone(zone, rand, 1.0, 0.55);
+        if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 1.0)) {
+          x = nx;
+          z = nz;
+          break;
+        }
       }
       spots.push([x, z]);
 
@@ -1394,9 +1475,10 @@ export function buildWorld(app: pc.Application): World {
   const emberLights: Array<{ entity: pc.Entity; phase: number }> = [];
 
   fireZones.forEach((zone, zoneIndex) => {
+    const [fireX, fireZ] = zoneCenter(zone);
     // Brasas que suben de la costra: pequeñas, aditivas y con deriva corta.
     const embers = new pc.Entity(`fire-embers-${zoneIndex}`);
-    embers.setPosition(zone.x, 0.22, zone.z);
+    embers.setPosition(fireX, 0.22, fireZ);
     embers.addComponent('particlesystem', {
       numParticles: 44,
       lifetime: 3.4,
@@ -1406,7 +1488,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.55, 0.35, zone.radius * 1.55),
+      emitterExtents: zoneEmitterExtents(zone, 1.55, 0.35),
       colorMap: emberTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -1449,10 +1531,10 @@ export function buildWorld(app: pc.Application): World {
       range: 3.6,
       castShadows: false
     });
-    glow.setPosition(zone.x, 0.75, zone.z);
+    glow.setPosition(fireX, 0.75, fireZ);
     app.root.addChild(glow);
     created.push(glow);
-    emberLights.push({ entity: glow, phase: zoneIndex * 2.1 + zone.x * 0.3 });
+    emberLights.push({ entity: glow, phase: zoneIndex * 2.1 + fireX * 0.3 });
   });
 
   // Columnas de humo: una por cada racimo de basalto. La emisión es estrecha y
@@ -1632,12 +1714,9 @@ export function buildWorld(app: pc.Application): World {
   const tallGrassZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'tallGrass');
   tallGrassZones.forEach((zone, zoneIndex) => {
     const rand = random(0x9a11 + zoneIndex * 7919);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 3.6);
+    const count = Math.round(zoneArea(zone) * 3.6);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const yaw = rand() * 360;
       const tuftScale = 0.9 + rand() * 0.55;
 
@@ -1867,12 +1946,9 @@ export function buildWorld(app: pc.Application): World {
   const fairyZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'fairy');
   fairyZones.forEach((zone, zoneIndex) => {
     const rand = random(0x4f1e + zoneIndex * 8117);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 2.6);
+    const count = Math.round(zoneArea(zone) * 2.6);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const yaw = rand() * 360;
       const clusterScale = 0.95 + rand() * 0.55;
 
@@ -1906,8 +1982,9 @@ export function buildWorld(app: pc.Application): World {
   // flores, derivan despacio y titilan. Aditivas y pequeñas, para que se lean
   // como polen mágico y no como chispas ni como polvo.
   fairyZones.forEach((zone, zoneIndex) => {
+    const [pollenX, pollenZ] = zoneCenter(zone);
     const pollen = new pc.Entity(`fairy-pollen-${zoneIndex}`);
-    pollen.setPosition(zone.x, 0.65, zone.z);
+    pollen.setPosition(pollenX, 0.65, pollenZ);
     pollen.addComponent('particlesystem', {
       numParticles: 64,
       lifetime: 6.2,
@@ -1917,7 +1994,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.7, 1.1, zone.radius * 1.7),
+      emitterExtents: zoneEmitterExtents(zone, 1.7, 1.1),
       colorMap: pollenTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -2002,9 +2079,7 @@ export function buildWorld(app: pc.Application): World {
     left: pc.Entity;
     target: pc.Vec3;
     rand: () => number;
-    cx: number;
-    cz: number;
-    radius: number;
+    zone: TerrainZone;
     speed: number;
     flapSpeed: number;
     phase: number;
@@ -2015,8 +2090,7 @@ export function buildWorld(app: pc.Application): World {
     const rand = random(0x7e3a + zoneIndex * 3559);
     const count = 8;
     for (let i = 0; i < count; i++) {
-      const x = zone.x + (rand() * 2 - 1) * zone.radius * 0.8;
-      const z = zone.z + (rand() * 2 - 1) * zone.radius * 0.8;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const y = 0.5 + rand() * 1.0;
 
       const root = new pc.Entity(`fairy-butterfly-${zoneIndex}-${i}`);
@@ -2059,9 +2133,7 @@ export function buildWorld(app: pc.Application): World {
         left,
         target: new pc.Vec3(x, y, z),
         rand: random(0x9c51 + zoneIndex * 4813 + i * 197),
-        cx: zone.x,
-        cz: zone.z,
-        radius: zone.radius,
+        zone,
         speed: 0.5 + rand() * 0.5,
         flapSpeed: 9 + rand() * 5,
         phase: rand() * Math.PI * 2,
@@ -2390,12 +2462,9 @@ export function buildWorld(app: pc.Application): World {
   const paramoZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'electric');
   paramoZones.forEach((zone, zoneIndex) => {
     const rand = random(0xd0b5 + zoneIndex * 6421);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 1.2);
+    const count = Math.round(zoneArea(zone) * 1.2);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const yaw = rand() * 360;
       const clusterScale = 0.9 + rand() * 0.25;
 
@@ -2441,12 +2510,9 @@ export function buildWorld(app: pc.Application): World {
 
   paramoZones.forEach((zone, zoneIndex) => {
     const rand = random(0xb17c + zoneIndex * 4391);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 2.6);
+    const count = Math.round(zoneArea(zone) * 2.6);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const yaw = rand() * 360;
       const tuftScale = 0.85 + rand() * 0.45;
 
@@ -2493,12 +2559,9 @@ export function buildWorld(app: pc.Application): World {
 
   swampZones.forEach((zone, zoneIndex) => {
     const rand = random(0x7a31 + zoneIndex * 6203);
-    const count = Math.round(Math.PI * zone.radius * zone.radius * 1.8);
+    const count = Math.round(zoneArea(zone) * 1.8);
     for (let i = 0; i < count; i++) {
-      const angle = rand() * Math.PI * 2;
-      const distance = Math.sqrt(rand()) * (zone.radius - 0.3);
-      const x = zone.x + Math.cos(angle) * distance;
-      const z = zone.z + Math.sin(angle) * distance;
+      const [x, z] = randomPointInZone(zone, rand, 0.3);
       const yaw = rand() * 360;
       const tuftScale = 0.85 + rand() * 0.4;
 
@@ -2533,8 +2596,9 @@ export function buildWorld(app: pc.Application): World {
   // baja lo separan del polvo del desierto: aquí interesa que parezca vapor
   // estancado, no una nube.
   swampZones.forEach((zone, zoneIndex) => {
+    const [smokeX, smokeZ] = zoneCenter(zone);
     const smoke = new pc.Entity(`swamp-smoke-${zoneIndex}`);
-    smoke.setPosition(zone.x, 0.3, zone.z);
+    smoke.setPosition(smokeX, 0.3, smokeZ);
     smoke.addComponent('particlesystem', {
       numParticles: 65,
       lifetime: 7,
@@ -2544,7 +2608,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.75, 0.5, zone.radius * 1.75),
+      emitterExtents: zoneEmitterExtents(zone, 1.75, 0.5),
       colorMap: smokeTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -2826,14 +2890,14 @@ export function buildWorld(app: pc.Application): World {
     const count = 5;
     const spots: Array<[number, number]> = [];
     for (let i = 0; i < count; i++) {
-      let x = zone.x;
-      let z = zone.z;
+      let [x, z] = randomPointInZone(zone, rand, 0.8, 0.6);
       for (let attempt = 0; attempt < 20; attempt++) {
-        const angle = rand() * Math.PI * 2;
-        const distance = 0.6 + Math.sqrt(rand()) * (zone.radius - 0.8);
-        x = zone.x + Math.cos(angle) * distance;
-        z = zone.z + Math.sin(angle) * distance;
-        if (spots.every(([sx, sz]) => Math.hypot(x - sx, z - sz) > 0.95)) break;
+        const [nx, nz] = randomPointInZone(zone, rand, 0.8, 0.6);
+        if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 0.95)) {
+          x = nx;
+          z = nz;
+          break;
+        }
       }
       spots.push([x, z]);
 
@@ -2869,11 +2933,12 @@ export function buildWorld(app: pc.Application): World {
   const ghostLights: Array<{ entity: pc.Entity; phase: number }> = [];
 
   ghostZones.forEach((zone, zoneIndex) => {
+    const [ghostX, ghostZ] = zoneCenter(zone);
     // Fuegos fatuos: orbes aditivos que flotan entre 0,4 y 1,3 m, derivan muy
     // despacio y parpadean. El violeta lo pone el colorGraph sobre una textura
     // neutra, así que no arrastran el naranja de las brasas.
     const wisps = new pc.Entity(`ghost-wisps-${zoneIndex}`);
-    wisps.setPosition(zone.x, 0.85, zone.z);
+    wisps.setPosition(ghostX, 0.85, ghostZ);
     wisps.addComponent('particlesystem', {
       numParticles: 18,
       lifetime: 6.4,
@@ -2883,7 +2948,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.5, 0.9, zone.radius * 1.5),
+      emitterExtents: zoneEmitterExtents(zone, 1.5, 0.9),
       colorMap: wispTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -2922,7 +2987,7 @@ export function buildWorld(app: pc.Application): World {
     // La densidad la marca `numParticles`: con 130 bocanadas y una vida larga
     // el calvero queda cubierto por una capa continua, no por jirones sueltos.
     const mist = new pc.Entity(`ghost-mist-${zoneIndex}`);
-    mist.setPosition(zone.x, 0.45, zone.z);
+    mist.setPosition(ghostX, 0.45, ghostZ);
     mist.addComponent('particlesystem', {
       numParticles: 130,
       lifetime: 10.5,
@@ -2932,7 +2997,7 @@ export function buildWorld(app: pc.Application): World {
       preWarm: true,
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(zone.radius * 1.9, 0.6, zone.radius * 1.9),
+      emitterExtents: zoneEmitterExtents(zone, 1.9, 0.6),
       colorMap: smokeTexture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
@@ -2972,10 +3037,10 @@ export function buildWorld(app: pc.Application): World {
       range: 5.4,
       castShadows: false
     });
-    glow.setPosition(zone.x, 1.15, zone.z);
+    glow.setPosition(ghostX, 1.15, ghostZ);
     app.root.addChild(glow);
     created.push(glow);
-    ghostLights.push({ entity: glow, phase: zoneIndex * 1.9 + zone.z * 0.27 });
+    ghostLights.push({ entity: glow, phase: zoneIndex * 1.9 + ghostZ * 0.27 });
   });
 
   // --- Nexos de las bases ---------------------------------------------------
@@ -3168,13 +3233,8 @@ export function buildWorld(app: pc.Application): World {
         let dz = butterfly.target.z - pos.z;
         const distance = Math.hypot(dx, dy, dz);
         if (distance < 0.25) {
-          const angle = butterfly.rand() * Math.PI * 2;
-          const radius = Math.sqrt(butterfly.rand()) * butterfly.radius * 0.72;
-          butterfly.target.set(
-            butterfly.cx + Math.cos(angle) * radius,
-            0.5 + butterfly.rand() * 1.0,
-            butterfly.cz + Math.sin(angle) * radius
-          );
+          const [tx, tz] = randomPointInZone(butterfly.zone, butterfly.rand, 0.4);
+          butterfly.target.set(tx, 0.5 + butterfly.rand() * 1.0, tz);
         } else if (distance > 0.0001) {
           const step = butterfly.speed * dt;
           dx /= distance;

@@ -2,10 +2,16 @@ import * as pc from "playcanvas";
 import {
   onMountain,
   terrainAt,
+  zoneBounds,
+  zoneCenter,
+  zoneContains,
+  zoneContainsInset,
+  zoneSignedDistance,
   type BaseZone,
   type Lane,
   type TerrainId,
   type TerrainZone,
+  type ZoneShape,
 } from "./terrain";
 
 /** Utilidades para generar las texturas de la demo (sin assets externos). */
@@ -169,33 +175,73 @@ function paintTerrainZone(
   const palette = TERRAIN_PALETTES[zone.terrain];
   if (!palette) return;
 
+  const bounds = zoneBounds(zone);
+  const [centerX, centerZ] = zoneCenter(zone);
   const random = mulberry32(
-    (Math.round(zone.x * 811) * 73856093) ^
-      (Math.round(zone.z * 613) * 19349663),
+    (Math.round(centerX * 811) * 73856093) ^
+      (Math.round(centerZ * 613) * 19349663),
   );
-  const cx = toPx(zone.x);
-  const cy = toPx(zone.z);
-  const radius = zone.radius * scale;
-  const seed = zone.x * 1.31 + zone.z * 1.77;
+  const cx = toPx(centerX);
+  const cy = toPx(centerZ);
+  // Radio del cuadrado que envuelve la forma: sirve para repartir detalles.
+  const radius = (Math.max(bounds.width, bounds.depth) / 2) * scale;
+  const seed = centerX * 1.31 + centerZ * 1.77;
   const step = 4;
+  const shape: ZoneShape = zone;
+  const edgeWorld = Math.min(
+    0.42,
+    Math.max(0.16, Math.max(bounds.width, bounds.depth) * 0.07),
+  );
+  const detailInset = edgeWorld * 0.75;
 
-  // Disco irregular de bloques con un borde más oscuro para despegarlo del
-  // césped.
-  for (let oy = -radius; oy <= radius; oy += step) {
-    for (let ox = -radius; ox <= radius; ox += step) {
-      const distance = Math.hypot(ox, oy);
-      const angle = Math.atan2(oy, ox);
-      const wobble =
-        1 +
-        0.05 * Math.sin(angle * 3 + seed) +
-        0.035 * Math.sin(angle * 7 - seed * 1.7);
-      if (distance > radius * wobble) continue;
+  const traceShape = () => {
+    ctx.beginPath();
+    if ("points" in zone) {
+      const points = zone.points;
+      if (points.length === 0) return;
+      ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(toPx(points[i][0]), toPx(points[i][1]));
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(cx, cy, zone.radius * scale, 0, Math.PI * 2);
+    }
+  };
+
+  // En círculos se conserva el borde irregular de siempre. En polígonos la
+  // silueta se pinta tal cual para que coincida con la de `terrainAt`.
+  const insideForPaint = (x: number, z: number): boolean => {
+    if ("points" in zone) return zoneContains(shape, x, z);
+    const distance = Math.hypot(x - zone.x, z - zone.z);
+    const angle = Math.atan2(z - zone.z, x - zone.x);
+    const wobble =
+      1 +
+      0.05 * Math.sin(angle * 3 + seed) +
+      0.035 * Math.sin(angle * 7 - seed * 1.7);
+    return distance <= zone.radius * wobble;
+  };
+
+  // Bloque de suelo: se recorre el rectángulo envolvente en coordenadas de
+  // mundo para que círculos y polígonos compartan el mismo grano de 4 px.
+  const worldPerPixel = 1 / scale;
+  const startX = Math.floor(toPx(bounds.minX) / step) * step;
+  const startY = Math.floor(toPx(bounds.minZ) / step) * step;
+  const endX = Math.ceil(toPx(bounds.maxX) / step) * step;
+  const endY = Math.ceil(toPx(bounds.maxZ) / step) * step;
+  for (let py = startY; py <= endY; py += step) {
+    for (let px = startX; px <= endX; px += step) {
+      const wx = centerX + (px + step / 2 - cx) * worldPerPixel;
+      const wz = centerZ + (py + step / 2 - cy) * worldPerPixel;
+      if (!insideForPaint(wx, wz)) continue;
+
+      const signed = zoneSignedDistance(shape, wx, wz);
       let color = palette.base;
-      if (distance > radius * 0.86) color = palette.dark;
+      if (signed <= edgeWorld) color = palette.dark;
       else if (random() < 0.16) color = palette.light;
       else if (random() < 0.07) color = palette.dark;
       ctx.fillStyle = color;
-      ctx.fillRect(Math.floor(cx + ox), Math.floor(cy + oy), step, step);
+      ctx.fillRect(px, py, step, step);
     }
   }
 
@@ -206,10 +252,18 @@ function paintTerrainZone(
     h: number,
     color: string,
   ) => {
-    if (Math.hypot(ox, oy) > radius * 0.88) return;
+    const wx = centerX + ox / scale;
+    const wz = centerZ + oy / scale;
+    if (!zoneContainsInset(shape, wx, wz, detailInset)) return;
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(cx + ox), Math.round(cy + oy), w, h);
   };
+
+  // Los detalles se recortan contra la silueta: un polígono puede ser
+  // estrecho o cóncavo y ninguna marca debe salirse de su terreno.
+  ctx.save();
+  traceShape();
+  ctx.clip();
 
   switch (zone.terrain) {
     case "fire": {
@@ -230,13 +284,10 @@ function paintTerrainZone(
 
       for (let oy = -radius; oy <= radius; oy += step) {
         for (let ox = -radius; ox <= radius; ox += step) {
-          const distance = Math.hypot(ox, oy);
-          const angle = Math.atan2(oy, ox);
-          const wobble =
-            1 +
-            0.05 * Math.sin(angle * 3 + seed) +
-            0.035 * Math.sin(angle * 7 - seed * 1.7);
-          if (distance > radius * wobble) continue;
+          const wx = centerX + ox / scale;
+          const wz = centerZ + oy / scale;
+          if (!insideForPaint(wx, wz)) continue;
+          const signed = zoneSignedDistance(shape, wx, wz);
 
           let nearest = 0;
           let d1 = Infinity;
@@ -257,7 +308,7 @@ function paintTerrainZone(
           const px = Math.floor(cx + ox);
           const py = Math.floor(cy + oy);
 
-          if (distance > radius * 0.87) {
+          if (signed <= edgeWorld) {
             ctx.fillStyle = palette.dark;
             ctx.fillRect(px, py, step, step);
             continue;
@@ -456,7 +507,16 @@ function paintTerrainZone(
       for (let i = 0; i < 280; i++) {
         const ox = (random() * 2 - 1) * radius * 0.9;
         const oy = (random() * 2 - 1) * radius * 0.9;
-        if (Math.hypot(ox, oy) > radius * 0.92) continue;
+        if (
+          !zoneContainsInset(
+            shape,
+            centerX + ox / scale,
+            centerZ + oy / scale,
+            detailInset,
+          )
+        ) {
+          continue;
+        }
         const height = 6 + Math.floor(random() * 5) * 2;
         const lean = random() < 0.5 ? -2 : 2;
         const color =
@@ -478,6 +538,8 @@ function paintTerrainZone(
     default:
       break;
   }
+
+  ctx.restore();
 }
 
 /**

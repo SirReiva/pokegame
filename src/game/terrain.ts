@@ -181,12 +181,31 @@ export const MOUNTAINS: MountainRange[] = [
   }
 ];
 
-export interface TerrainZone {
-  terrain: TerrainId;
+export type Point2 = [number, number];
+
+/** Forma circular: centro y radio. */
+export interface CircleZoneShape {
   x: number;
   z: number;
   radius: number;
 }
+
+/** Forma poligonal: vértices en orden, sin repetir el primero al final. */
+export interface PolygonZoneShape {
+  points: Point2[];
+}
+
+/** Forma que ocupa una zona del mapa. */
+export type ZoneShape = CircleZoneShape | PolygonZoneShape;
+
+/**
+ * Calvero temático. Acepta las dos formas:
+ * - Círculo: `{ terrain: 'ice', x: -4, z: -11, radius: 2.2 }`.
+ * - Polígono: `{ terrain: 'ice', points: [[x, z], [x, z], ...] }`.
+ * Los vértices pueden ir en cualquier sentido; el interior se resuelve con la
+ * regla par-impar, así que también se admiten polígonos cóncavos.
+ */
+export type TerrainZone = { terrain: TerrainId } & ZoneShape;
 
 /**
  * Calveros temáticos repartidos por las dos junglas. Se mantienen apartados de
@@ -207,6 +226,290 @@ export const TERRAIN_ZONES: TerrainZone[] = [
   { terrain: 'fairy', x: 3.5, z: 11.5, radius: 2.4 },
   { terrain: 'tallGrass', x: 2.5, z: 3.5, radius: 2.0 }
 ];
+
+export function isPolygonZone(shape: ZoneShape): shape is PolygonZoneShape {
+  return 'points' in shape;
+}
+
+/** Verdadero si el punto cae dentro del polígono (regla par-impar). */
+export function pointInPolygon(points: Point2[], x: number, z: number): boolean {
+  if (points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, zi] = points[i];
+    const [xj, zj] = points[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Centro de la zona: el del círculo o el centroide del polígono. */
+export function zoneCenter(zone: ZoneShape): Point2 {
+  if (!isPolygonZone(zone)) return [zone.x, zone.z];
+
+  // Centroide por área; si el polígono es degenerado, media de los vértices.
+  let twiceArea = 0;
+  let cx = 0;
+  let cz = 0;
+  const points = zone.points;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i];
+    const [x1, z1] = points[(i + 1) % points.length];
+    const cross = x0 * z1 - x1 * z0;
+    twiceArea += cross;
+    cx += (x0 + x1) * cross;
+    cz += (z0 + z1) * cross;
+  }
+  if (Math.abs(twiceArea) > 1e-6) {
+    return [cx / (3 * twiceArea), cz / (3 * twiceArea)];
+  }
+  if (points.length === 0) return [0, 0];
+  let sx = 0;
+  let sz = 0;
+  for (const [x, z] of points) {
+    sx += x;
+    sz += z;
+  }
+  return [sx / points.length, sz / points.length];
+}
+
+export interface ZoneBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  width: number;
+  depth: number;
+  /** Centro del rectángulo que envuelve la forma. */
+  cx: number;
+  cz: number;
+}
+
+/** Rectángulo mínimo que contiene la zona. */
+export function zoneBounds(zone: ZoneShape): ZoneBounds {
+  let minX: number;
+  let maxX: number;
+  let minZ: number;
+  let maxZ: number;
+  if (isPolygonZone(zone)) {
+    minX = Infinity;
+    maxX = -Infinity;
+    minZ = Infinity;
+    maxZ = -Infinity;
+    for (const [x, z] of zone.points) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    if (!Number.isFinite(minX)) {
+      minX = 0;
+      maxX = 0;
+      minZ = 0;
+      maxZ = 0;
+    }
+  } else {
+    minX = zone.x - zone.radius;
+    maxX = zone.x + zone.radius;
+    minZ = zone.z - zone.radius;
+    maxZ = zone.z + zone.radius;
+  }
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    width: maxX - minX,
+    depth: maxZ - minZ,
+    cx: (minX + maxX) / 2,
+    cz: (minZ + maxZ) / 2
+  };
+}
+
+/**
+ * Distancia firmada al borde de la zona: positiva dentro, negativa fuera.
+ * Sirve tanto para consultar pertenencia como para muestrear con margen.
+ */
+export function zoneSignedDistance(zone: ZoneShape, x: number, z: number): number {
+  if (!isPolygonZone(zone)) {
+    return zone.radius - Math.hypot(x - zone.x, z - zone.z);
+  }
+  const points = zone.points;
+  if (points.length < 3) return -Infinity;
+  let best = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const [ax, az] = points[i];
+    const [bx, bz] = points[(i + 1) % points.length];
+    best = Math.min(best, distanceToSegment(x, z, ax, az, bx, bz));
+  }
+  return pointInPolygon(points, x, z) ? best : -best;
+}
+
+/** Verdadero si el punto cae dentro de la zona. */
+export function zoneContains(zone: ZoneShape, x: number, z: number): boolean {
+  return zoneSignedDistance(zone, x, z) >= 0;
+}
+
+/**
+ * Verdadero si el punto cae dentro de la zona dejando `inset` unidades hasta
+ * el borde. Un `inset` negativo expande la forma, útil para exclusiones.
+ */
+export function zoneContainsInset(
+  zone: ZoneShape,
+  x: number,
+  z: number,
+  inset: number
+): boolean {
+  return zoneSignedDistance(zone, x, z) >= inset;
+}
+
+/** Área de la zona, para escalar densidades de decoración. */
+export function zoneArea(zone: ZoneShape): number {
+  if (!isPolygonZone(zone)) return Math.PI * zone.radius * zone.radius;
+  const points = zone.points;
+  let twiceArea = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i];
+    const [x1, z1] = points[(i + 1) % points.length];
+    twiceArea += x0 * z1 - x1 * z0;
+  }
+  return Math.abs(twiceArea) / 2;
+}
+
+/**
+ * Punto aleatorio uniforme dentro de la zona. `inset` deja margen respecto al
+ * borde y `minCenterDistance` evita el centro (útil para rocas y árboles).
+ * En círculos consume los mismos números aleatorios que el muestreo radial de
+ * siempre, así que las posiciones del mapa actual no cambian.
+ */
+export function randomPointInZone(
+  zone: ZoneShape,
+  random: () => number,
+  inset = 0,
+  minCenterDistance = 0
+): Point2 {
+  if (!isPolygonZone(zone)) {
+    const angle = random() * Math.PI * 2;
+    const maxDistance = Math.max(0, zone.radius - inset);
+    const inner = Math.min(minCenterDistance, maxDistance);
+    const distance = inner + Math.sqrt(random()) * (maxDistance - inner);
+    return [zone.x + Math.cos(angle) * distance, zone.z + Math.sin(angle) * distance];
+  }
+
+  const [centerX, centerZ] = zoneCenter(zone);
+  const bounds = zoneBounds(zone);
+  const margin = Math.max(0, inset);
+  const usableWidth = Math.max(0, bounds.width - margin * 2);
+  const usableDepth = Math.max(0, bounds.depth - margin * 2);
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const x = bounds.minX + margin + random() * usableWidth;
+    const z = bounds.minZ + margin + random() * usableDepth;
+    if (!zoneContainsInset(zone, x, z, margin)) continue;
+    if (minCenterDistance > 0 && Math.hypot(x - centerX, z - centerZ) < minCenterDistance) {
+      continue;
+    }
+    return [x, z];
+  }
+  if (zoneContainsInset(zone, centerX, centerZ, margin)) return [centerX, centerZ];
+  return zone.points[0] ?? [centerX, centerZ];
+}
+
+/** Área firmada del polígono: positiva si los vértices van en sentido antihorario. */
+function signedPolygonArea(points: Point2[]): number {
+  let twiceArea = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i];
+    const [x1, z1] = points[(i + 1) % points.length];
+    twiceArea += x0 * z1 - x1 * z0;
+  }
+  return twiceArea / 2;
+}
+
+function pointInTriangle(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  cx: number,
+  cz: number
+): boolean {
+  const d1 = (px - bx) * (az - bz) - (ax - bx) * (pz - bz);
+  const d2 = (px - cx) * (bz - cz) - (bx - cx) * (pz - cz);
+  const d3 = (px - ax) * (cz - az) - (cx - ax) * (pz - az);
+  const hasNegative = d1 < 0 || d2 < 0 || d3 < 0;
+  const hasPositive = d1 > 0 || d2 > 0 || d3 > 0;
+  return !(hasNegative && hasPositive);
+}
+
+/**
+ * Triangula un polígono simple por recorte de orejas. Devuelve índices en
+ * grupos de tres, en sentido antihorario. Sirve para construir mallas planas
+ * (por ejemplo, la lámina de agua de una ciénaga poligonal).
+ */
+export function triangulatePolygon(points: Point2[]): number[] {
+  // Se toleran vértices repetidos (incluido el primero al final).
+  const cleaned: number[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const previous = cleaned[cleaned.length - 1];
+    if (previous !== undefined) {
+      const [px, pz] = points[previous];
+      const [x, z] = points[i];
+      if (Math.hypot(x - px, z - pz) < 1e-9) continue;
+    }
+    cleaned.push(i);
+  }
+  while (cleaned.length > 1) {
+    const [fx, fz] = points[cleaned[0]];
+    const [lx, lz] = points[cleaned[cleaned.length - 1]];
+    if (Math.hypot(fx - lx, fz - lz) < 1e-9) cleaned.pop();
+    else break;
+  }
+  if (cleaned.length < 3) return [];
+
+  const indices = [...cleaned];
+  const ordered = cleaned.map((index) => points[index]);
+  if (signedPolygonArea(ordered) < 0) indices.reverse();
+
+  const triangles: number[] = [];
+  let guard = points.length * points.length;
+  while (indices.length > 3 && guard-- > 0) {
+    let earFound = false;
+    for (let i = 0; i < indices.length; i++) {
+      const ia = indices[(i - 1 + indices.length) % indices.length];
+      const ib = indices[i];
+      const ic = indices[(i + 1) % indices.length];
+      const [ax, az] = points[ia];
+      const [bx, bz] = points[ib];
+      const [cx, cz] = points[ic];
+
+      // Un vértice reflex o colineal no puede formar oreja.
+      if ((bx - ax) * (cz - az) - (bz - az) * (cx - ax) <= 0) continue;
+
+      let containsVertex = false;
+      for (const j of indices) {
+        if (j === ia || j === ib || j === ic) continue;
+        const [px, pz] = points[j];
+        if (pointInTriangle(px, pz, ax, az, bx, bz, cx, cz)) {
+          containsVertex = true;
+          break;
+        }
+      }
+      if (containsVertex) continue;
+
+      triangles.push(ia, ib, ic);
+      indices.splice(i, 1);
+      earFound = true;
+      break;
+    }
+    if (!earFound) break;
+  }
+  if (indices.length === 3) triangles.push(indices[0], indices[1], indices[2]);
+  return triangles;
+}
 
 function distanceToSegment(
   x: number,
@@ -277,7 +580,7 @@ export function onMountain(x: number, z: number): boolean {
 /** Terreno bajo una posición del mundo. */
 export function terrainAt(x: number, z: number): TerrainId {
   for (const zone of TERRAIN_ZONES) {
-    if (Math.hypot(x - zone.x, z - zone.z) <= zone.radius) return zone.terrain;
+    if (zoneContains(zone, x, z)) return zone.terrain;
   }
   for (const base of BASES) {
     if (Math.hypot(x - base.x, z - base.z) <= base.radius) return 'base';
