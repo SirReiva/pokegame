@@ -11,6 +11,8 @@ const ANIMATIONS: AnimationName[] = ['idle', 'walk'];
 
 /** Opacidad máxima de la silueta que se ve a través de los árboles. */
 const SILHOUETTE_OPACITY = 0.72;
+/** Color por defecto de la silueta cuando no se indica el del equipo (0-255). */
+const SILHOUETTE_COLOR: readonly [number, number, number] = [255, 242, 209];
 /** Por encima de las partículas y del agua, para que no la tapen. */
 const SILHOUETTE_DRAW_ORDER = 4;
 
@@ -77,6 +79,8 @@ interface BillboardOptions {
   alphaTest: number;
   /** Pinta la silueta del actor cuando un obstáculo lo tapa desde la cámara. */
   silhouette?: boolean;
+  /** Color de esa silueta, en 0-255. Por defecto, el tono cálido de siempre. */
+  silhouetteColor?: readonly [number, number, number];
 }
 
 function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.StandardMaterial {
@@ -111,7 +115,8 @@ function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.Standa
  */
 function createSilhouetteMaterial(
   texture: pc.Texture,
-  alphaTest: number
+  alphaTest: number,
+  color: readonly [number, number, number]
 ): pc.StandardMaterial {
   const material = new pc.StandardMaterial();
   material.name = `silhouette-${texture.name}`;
@@ -119,7 +124,7 @@ function createSilhouetteMaterial(
   material.useSkybox = false;
   material.useFog = false;
   material.diffuse = new pc.Color(0, 0, 0);
-  material.emissive = new pc.Color(1, 0.95, 0.82);
+  material.emissive = new pc.Color(color[0] / 255, color[1] / 255, color[2] / 255);
   material.emissiveIntensity = 1;
   material.opacityMap = texture;
   material.opacityMapChannel = 'a';
@@ -210,7 +215,8 @@ export class SpriteBillboard {
     const material = createSpriteMaterial(asset.textures[name], this.options.alphaTest);
     const silhouetteMaterial = createSilhouetteMaterial(
       asset.textures[name],
-      this.options.alphaTest
+      this.options.alphaTest,
+      this.options.silhouetteColor ?? SILHOUETTE_COLOR
     );
     const entity = new pc.Entity(`sprite-${name}`);
     entity.addComponent('render');

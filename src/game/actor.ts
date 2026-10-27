@@ -47,7 +47,7 @@ export class Actor {
     facing: number,
     withMarker = false,
     silhouette = false,
-    markerAccent: readonly [number, number, number] = [255, 224, 102]
+    accent: readonly [number, number, number] = [255, 224, 102]
   ) {
     this.asset = asset;
     this.position = { ...position };
@@ -64,7 +64,10 @@ export class Actor {
       pixelScale: CONFIG.sprite.pixelScale,
       verticalStretch: CONFIG.sprite.verticalStretch,
       alphaTest: CONFIG.sprite.alphaTest,
-      silhouette
+      silhouette,
+      // La silueta que asoma tras los árboles usa el color del equipo, igual
+      // que el anillo de rumbo.
+      silhouetteColor: accent
     });
     this.billboard.setFacing(facing);
 
@@ -86,7 +89,7 @@ export class Actor {
           CONFIG.player.markerDiameter,
           CONFIG.player.markerHeight,
           CONFIG.player.markerOpacity,
-          markerAccent
+          accent
         )
       : null;
     this.marker?.setFacing(facing);
