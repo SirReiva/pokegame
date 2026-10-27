@@ -6,7 +6,8 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 
 ## Stack
 
-- **React 19** + **TypeScript** + **Vite**: HUD, menús y pantallas.
+- **React 19** + **TypeScript 7** + **Vite**: HUD, menús y pantallas.
+- **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
 - **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
 - **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle y Walk).
 - Sin framework de UI 3D: React nunca toca la escena; habla con `Game` mediante callbacks.
@@ -336,13 +337,18 @@ src/game/
   game.ts                    orquestador: menú, equipos, partida, cámaras y colisiones
 src/ui/
   PokemonPortrait.tsx        retrato normal para las interfaces HTML
+  Brand.tsx                  logotipo compartido (versión normal y compacta)
+  KeyPill.tsx                tecla/botón de los textos de ayuda
   LobbyScreen.tsx            sala de equipos y detección de mandos
   RosterScreen.tsx           selección simultánea de Pokémon
   MatchHud.tsx               etiquetas, telemetría y bordes del splitscreen
   TypeBadge.tsx              insignia de tipo
   typeInfo.ts                colores y etiquetas de tipos
+  buttonStyles.ts            variantes y tamaños de los botones en Tailwind
+  styles.ts                  clases compartidas (eyebrow, pasos del asistente)
+  rosterGrid.ts              columnas de la rejilla según el viewport
 src/App.tsx                  flujo de pantallas, estado de jugadores y modales
-src/index.css                estilos de la interfaz
+src/index.css                Tailwind: tokens del tema y estilos base
 ```
 
 ## Ajustes rápidos

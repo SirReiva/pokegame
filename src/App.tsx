@@ -15,17 +15,33 @@ import {
 } from './game/multiplayer';
 import type { Team } from './game/terrain';
 import type { GamePhase, LoadingProgress, SpriteManifest } from './game/types';
+import { Brand } from './ui/Brand';
+import { btnClass } from './ui/buttonStyles';
+import { KeyPill } from './ui/KeyPill';
 import { LobbyScreen } from './ui/LobbyScreen';
 import { MatchHud } from './ui/MatchHud';
 import { RosterScreen } from './ui/RosterScreen';
 import { rosterColumns } from './ui/rosterGrid';
 import { PokemonPortrait } from './ui/PokemonPortrait';
+import { eyebrow } from './ui/styles';
 
 const DEFAULT_PROGRESS: LoadingProgress = {
   loaded: 0,
   total: 12,
   label: 'Iniciando el motor'
 };
+
+const code =
+  'rounded-[5px] border border-[#92b2d6]/[0.16] bg-[#92b2d6]/[0.13] px-[5px] py-px font-mono text-[0.85em]';
+const overlaySolid =
+  'fixed inset-0 z-10 flex items-center justify-center bg-[image:radial-gradient(circle_at_22%_18%,#152436_0%,#0a1119_46%,#05080d_100%)]';
+const panel =
+  'rounded-[20px] border border-line bg-panel-strong shadow-[0_34px_80px_rgb(0_0_0/0.55)]';
+const modalHead = 'flex items-center justify-between gap-4 border-b border-line px-6 py-[18px]';
+const modalClose =
+  'size-[34px] cursor-pointer rounded-[9px] border border-transparent bg-transparent text-[1.7rem] leading-none text-muted transition-colors duration-[120ms] hover:bg-white/[0.07] hover:text-ink';
+const modalBody = 'overflow-y-auto px-6 pt-5 pb-6';
+const modalNote = 'col-span-full border-t border-line pt-3.5 text-[0.77rem] leading-[1.6] text-muted';
 
 type ModalKind = 'controls' | 'credits' | null;
 
@@ -480,24 +496,43 @@ function App() {
   }, []);
 
   const percent = Math.min(100, Math.round((progress.loaded / Math.max(progress.total, 1)) * 100));
+  // El motor comparte el FPS global en cada entrada de `matchStats` (~4 Hz).
+  const fps = matchStats[0]?.fps ?? 0;
+  const fpsTone =
+    fps === 0
+      ? 'text-[#8fa3b8]'
+      : fps >= 55
+        ? 'text-[#bff39d]'
+        : fps >= 30
+          ? 'text-[#ffd479]'
+          : 'text-[#ffb2b5]';
   const selectedEntryFor = (pokemonId: string) =>
     manifest?.pokemon.find((entry) => entry.id === pokemonId) ?? null;
 
   return (
-    <div className="app">
-      <canvas ref={canvasRef} className="game-canvas" />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        className="fixed inset-0 block h-full w-full cursor-grab touch-none outline-none active:cursor-grabbing"
+      />
 
       {error && (
-        <div className="overlay overlay-solid">
-          <div className="panel error-panel">
-            <span className="eyebrow">Error de carga</span>
-            <h2>No se pudo preparar la demo</h2>
-            <p className="error-message">{error}</p>
-            <p className="muted">
-              Comprueba que has ejecutado <code>npm run sprites</code> y que el servidor de
-              desarrollo está activo.
+        <div className={`${overlaySolid} animate-fade-in`}>
+          <div className="flex w-[min(560px,92vw)] animate-rise-in flex-col gap-3 rounded-panel border border-line bg-panel-strong px-7 py-[26px]">
+            <span className={eyebrow}>Error de carga</span>
+            <h2 className="text-[1.6rem]">No se pudo preparar la demo</h2>
+            <p className="break-words rounded-[10px] border border-[#ff5c5c]/25 bg-[#ff5c5c]/[0.09] px-3 py-2.5 font-mono text-[0.8rem] text-[#ff9b9b]">
+              {error}
             </p>
-            <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+            <p className="text-muted">
+              Comprueba que has ejecutado <code className={code}>npm run sprites</code> y que el
+              servidor de desarrollo está activo.
+            </p>
+            <button
+              type="button"
+              className={`${btnClass('primary')} mt-1 self-start`}
+              onClick={() => window.location.reload()}
+            >
               Reintentar
             </button>
           </div>
@@ -505,36 +540,31 @@ function App() {
       )}
 
       {!error && phase === 'loading' && (
-        <div className="overlay overlay-solid loading-screen">
-          <div className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              <span className="brand-pixel" />
-            </span>
-            <div>
-              <h1>
-                New<span>Poke</span>
-              </h1>
-              <p>Multijugador local · 1-8 jugadores</p>
-            </div>
-          </div>
+        <div className={`${overlaySolid} animate-fade-in flex-col gap-[clamp(24px,5vh,54px)] p-8`}>
+          <Brand />
 
-          <div className="loading-card">
-            <div className="loading-copy">
-              <span className="eyebrow">Cargando assets</span>
-              <strong>{progress.label}</strong>
-              <span className="loading-count">
+          <div className="w-[min(520px,92vw)] animate-rise-in rounded-panel border border-line bg-panel px-6 py-[22px] shadow-[0_24px_60px_rgb(0_0_0/0.45)] backdrop-blur-[12px]">
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+              <span className={eyebrow}>Cargando assets</span>
+              <strong className="text-[0.95rem]">{progress.label}</strong>
+              <span className="ml-auto font-mono text-[0.72rem] text-muted">
                 {progress.loaded} / {progress.total}
               </span>
             </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${percent}%` }} />
+            <div className="h-2 overflow-hidden rounded-full border border-white/[0.06] bg-white/[0.07]">
+              <div
+                className="h-full rounded-[inherit] bg-[image:linear-gradient(90deg,color-mix(in_srgb,var(--color-accent)_70%,#2bb3a3),var(--color-accent))] shadow-[0_0_18px_color-mix(in_srgb,var(--color-accent)_60%,transparent)] transition-[width] duration-[220ms] ease-out"
+                style={{ width: `${percent}%` }}
+              />
             </div>
-            <p className="muted small">
+            <p className="mt-3 text-[0.78rem] leading-[1.5] text-muted">
               Descargando hojas de animación y calculando las anclas de suelo de cada frame.
             </p>
           </div>
 
-          <p className="boot-note">Sprites 2D · mundo 3D · splitscreen de 1 a 8 mandos</p>
+          <p className="font-mono text-[0.7rem] tracking-[0.14em] uppercase text-[#5f7288]">
+            Sprites 2D · mundo 3D · splitscreen de 1 a 8 mandos
+          </p>
         </div>
       )}
 
@@ -588,98 +618,126 @@ function App() {
             />
           )}
 
-          <div className="match-actions">
-            <button type="button" className="btn btn-ghost btn-small" onClick={pauseGame}>
+          <div className="fixed top-2.5 right-2.5 z-[7] flex animate-fade-in flex-wrap justify-end gap-1.5">
+            <button type="button" className={btnClass('ghost', 'small')} onClick={pauseGame}>
               Pausa
             </button>
-            <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('controls')}>
+            <button
+              type="button"
+              className={btnClass('ghost', 'small')}
+              onClick={() => setModal('controls')}
+            >
               Controles
             </button>
-            <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('credits')}>
+            <button
+              type="button"
+              className={btnClass('ghost', 'small')}
+              onClick={() => setModal('credits')}
+            >
               Créditos
             </button>
             <button
               type="button"
-              className="btn btn-ghost btn-small"
+              className={btnClass('ghost', 'small')}
               onClick={() => setHudVisible((visible) => !visible)}
             >
               {hudVisible ? 'Ocultar HUD (H)' : 'Mostrar HUD (H)'}
             </button>
+            <span
+              className="flex items-baseline gap-1 rounded-xl border border-line bg-[#050a10]/80 px-2.5 py-[7px] font-mono text-[0.7rem] tabular-nums text-[#8fa3b8] backdrop-blur-[8px]"
+              title="Fotogramas por segundo"
+            >
+              <strong className={`font-semibold transition-colors duration-300 ${fpsTone}`}>
+                {fps > 0 ? fps : '—'}
+              </strong>{' '}
+              FPS
+            </span>
           </div>
         </>
       )}
 
       {!error && phase === 'playing' && paused && !modal && (
-        <div className="overlay pause-overlay">
-          <div className="panel pause-panel">
-            <header className="modal-head">
+        <div className="fixed inset-0 z-[12] flex animate-fade-in items-center justify-center bg-[#03070c]/[0.72] backdrop-blur-[7px]">
+          <div className={`${panel} w-[min(620px,100%)] animate-rise-in p-[clamp(18px,3vw,28px)]`}>
+            <header className={modalHead}>
               <div>
-                <span className="eyebrow">Partida en pausa</span>
-                <h2>Pausa</h2>
+                <span className={eyebrow}>Partida en pausa</span>
+                <h2 className="mt-[3px] text-[clamp(1.7rem,3vw,2.3rem)]">Pausa</h2>
               </div>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={resumeGame}
-                aria-label="Continuar"
-              >
+              <button type="button" className={modalClose} onClick={resumeGame} aria-label="Continuar">
                 ×
               </button>
             </header>
 
-            <div className="pause-body">
-              <div className="pause-roster">
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-2 max-[760px]:grid-cols-1">
                 {players.map((player) => {
                   const entry = selectedEntryFor(player.pokemonId);
                   const info = TEAM_INFO[player.team];
                   return (
                     <div
                       key={player.slot}
-                      className="pause-player"
+                      className="flex items-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--team)_38%,var(--color-line))] border-l-[3px] border-l-(--team) bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_10%,rgb(8_13_21/0.9)),rgb(8_13_21/0.9))] px-[9px] py-[7px]"
                       style={
                         {
-                          '--team': info.color,
-                          '--team-dark': info.dark
+                          '--team': info.color
                         } as CSSProperties
                       }
                     >
-                      <span className="pause-avatar">
+                      <span className="grid size-9 place-items-center">
                         {entry ? <PokemonPortrait entry={entry} height={36} /> : '—'}
                       </span>
-                      <span className="pause-player-copy">
-                        <strong>{player.name}</strong>
-                        <span>{entry?.name ?? '—'}</span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <strong className="font-mono text-[0.62rem] tracking-[0.06em]">
+                          {player.name}
+                        </strong>
+                        <span className="text-[0.7rem] text-[#9db0c4]">
+                          {entry?.name ?? '—'}
+                        </span>
                       </span>
-                      <span className="pause-team">{info.short}</span>
+                      <span className="font-mono text-[0.52rem] uppercase text-(--team)">
+                        {info.short}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="pause-actions">
-                <button type="button" className="btn btn-primary btn-play" onClick={resumeGame}>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`${btnClass('primary', 'play')} col-span-2`}
+                  onClick={resumeGame}
+                >
                   Continuar
                 </button>
-                <button type="button" className="btn btn-ghost" onClick={backToRoster}>
+                <button type="button" className={btnClass('ghost')} onClick={backToRoster}>
                   Cambiar Pokémon
                 </button>
-                <button type="button" className="btn btn-ghost" onClick={backToTeams}>
+                <button type="button" className={btnClass('ghost')} onClick={backToTeams}>
                   Cambiar equipos
                 </button>
-                <div className="pause-actions-row">
-                  <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('controls')}>
+                <div className="col-span-2 flex gap-2">
+                  <button
+                    type="button"
+                    className={`${btnClass('ghost', 'small')} flex-1`}
+                    onClick={() => setModal('controls')}
+                  >
                     Controles
                   </button>
-                  <button type="button" className="btn btn-ghost btn-small" onClick={() => setModal('credits')}>
+                  <button
+                    type="button"
+                    className={`${btnClass('ghost', 'small')} flex-1`}
+                    onClick={() => setModal('credits')}
+                  >
                     Créditos
                   </button>
                 </div>
               </div>
 
-              <p className="pause-hint">
-                <span className="key-pill">A</span> continuar ·{' '}
-                <span className="key-pill">B</span> continuar ·{' '}
-                <span className="key-pill">Start / Esc</span> pausa
+              <p className="text-center font-mono text-[0.64rem] text-[#7f92a7]">
+                <KeyPill>A</KeyPill> continuar · <KeyPill>B</KeyPill> continuar ·{' '}
+                <KeyPill>Start / Esc</KeyPill> pausa
               </p>
             </div>
           </div>
@@ -687,18 +745,23 @@ function App() {
       )}
 
       {modal && (
-        <div className="overlay modal-overlay" onClick={() => setModal(null)}>
+        <div
+          className="fixed inset-0 z-40 flex animate-fade-in items-center justify-center bg-[#04070c]/70 p-[22px] backdrop-blur-[6px]"
+          onClick={() => setModal(null)}
+        >
           <div
-            className="panel modal"
+            className={`${panel} flex max-h-[min(84vh,780px)] w-[min(760px,100%)] animate-pop-in flex-col overflow-hidden`}
             role="dialog"
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="modal-head">
-              <h2>{modal === 'controls' ? 'Controles' : 'Créditos y licencia'}</h2>
+            <header className={modalHead}>
+              <h2 className="text-[1.35rem]">
+                {modal === 'controls' ? 'Controles' : 'Créditos y licencia'}
+              </h2>
               <button
                 type="button"
-                className="modal-close"
+                className={modalClose}
                 onClick={() => setModal(null)}
                 aria-label="Cerrar"
               >
@@ -707,74 +770,86 @@ function App() {
             </header>
 
             {modal === 'controls' ? (
-              <div className="modal-body controls-body">
+              <div
+                className={`${modalBody} grid grid-cols-2 gap-x-8 gap-y-6 max-[640px]:grid-cols-1`}
+              >
                 <section>
-                  <h3>Mando (1-8 jugadores)</h3>
-                  <ul className="control-list">
-                    <li>
-                      <span className="key-pill">A</span> unirse / confirmar
+                  <h3 className="mb-2.5 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-muted">
+                    Mando (1-8 jugadores)
+                  </h3>
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[0.83rem] text-[#c2d0de]">
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>A</KeyPill> unirse / confirmar
                     </li>
-                    <li>
-                      <span className="key-pill">B</span> volver / desmarcar
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>B</KeyPill> volver / desmarcar
                     </li>
-                    <li>
-                      <span className="key-pill">Stick izquierdo</span> moverte y navegar por los menús
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Stick izquierdo</KeyPill> moverte y navegar por los menús
                     </li>
-                    <li>
-                      <span className="key-pill">Stick derecho</span> girar tu cámara
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Stick derecho</KeyPill> girar tu cámara
                     </li>
-                    <li>
-                      <span className="key-pill">L2 / R2</span> alejar / acercar
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>L2 / R2</KeyPill> alejar / acercar
                     </li>
-                    <li>
-                      <span className="key-pill">Start</span> pausar la partida
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Start</KeyPill> pausar la partida
                     </li>
                   </ul>
                 </section>
                 <section>
-                  <h3>Teclado (1 jugador)</h3>
-                  <ul className="control-list">
-                    <li>
-                      <span className="key-pill">Espacio / Enter</span> unirse / confirmar
+                  <h3 className="mb-2.5 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-muted">
+                    Teclado (1 jugador)
+                  </h3>
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[0.83rem] text-[#c2d0de]">
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Espacio / Enter</KeyPill> unirse / confirmar
                     </li>
-                    <li>
-                      <span className="key-pill">WASD / flechas</span> moverte y navegar por los menús
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>WASD / flechas</KeyPill> moverte y navegar por los menús
                     </li>
-                    <li>
-                      <span className="key-pill">Q / E</span> girar tu cámara
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Q / E</KeyPill> girar tu cámara
                     </li>
-                    <li>
-                      <span className="key-pill">Arrastrar</span> orbitar con el ratón
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Arrastrar</KeyPill> orbitar con el ratón
                     </li>
-                    <li>
-                      <span className="key-pill">Rueda</span> zoom
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Rueda</KeyPill> zoom
                     </li>
-                    <li>
-                      <span className="key-pill">Shift</span> correr
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Shift</KeyPill> correr
                     </li>
-                    <li>
-                      <span className="key-pill">Esc</span> pausa / volver
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>Esc</KeyPill> pausa / volver
                     </li>
-                    <li>
-                      <span className="key-pill">H</span> ocultar o mostrar el HUD
+                    <li className="flex flex-wrap items-center gap-2">
+                      <KeyPill>H</KeyPill> ocultar o mostrar el HUD
                     </li>
                   </ul>
                 </section>
-                <p className="modal-note">
+                <p className={modalNote}>
                   La pantalla se reparte en una vista por jugador. Cada equipo aparece en su base
                   (azul o roja) y se mueve libremente. Los mandos se detectan automáticamente al
                   pulsar un botón.
                 </p>
               </div>
             ) : (
-              <div className="modal-body credits-body">
-                <p>
+              <div className={modalBody}>
+                <p className="text-[0.84rem] leading-[1.6] text-[#c2d0de]">
                   Los sprites proceden de{' '}
-                  <a href={manifest?.source ?? 'https://sprites.pmdcollab.org/'} target="_blank" rel="noreferrer">
+                  <a
+                    className="text-[#8fd1ff] underline underline-offset-2"
+                    href={manifest?.source ?? 'https://sprites.pmdcollab.org/'}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     PMD Sprite Collab
                   </a>{' '}
                   y se distribuyen bajo licencia{' '}
                   <a
+                    className="text-[#8fd1ff] underline underline-offset-2"
                     href={manifest?.licenseUrl ?? 'https://creativecommons.org/licenses/by-nc/4.0/'}
                     target="_blank"
                     rel="noreferrer"
@@ -783,20 +858,27 @@ function App() {
                   </a>
                   . Esta demo no tiene fines comerciales.
                 </p>
-                <div className="credit-list">
+                <div className="my-4 flex flex-col gap-0.5">
                   {manifest?.pokemon.map((entry) => {
                     const artists = [...new Set(entry.credits.map((credit) => credit.artist))];
                     const actions = entry.credits.flatMap((credit) => credit.actions);
                     return (
-                      <div className="credit-row" key={entry.id}>
-                        <div className="credit-name">
+                      <div
+                        className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-[#9abee4]/[0.08] py-[9px] text-[0.8rem] last:border-b-0 max-[640px]:grid-cols-1 max-[640px]:gap-1"
+                        key={entry.id}
+                      >
+                        <div className="flex items-baseline gap-[7px]">
                           <strong>{entry.name}</strong>
-                          <span>#{String(entry.dex).padStart(3, '0')}</span>
+                          <span className="font-mono text-[0.62rem] text-[#71859b]">
+                            #{String(entry.dex).padStart(3, '0')}
+                          </span>
                         </div>
-                        <div className="credit-meta">
-                          <span>{artists.length > 0 ? artists.join(' · ') : 'Créditos no disponibles'}</span>
+                        <div className="flex min-w-0 flex-col gap-0.5 break-words text-[#c2d0de]">
+                          <span>
+                            {artists.length > 0 ? artists.join(' · ') : 'Créditos no disponibles'}
+                          </span>
                           {actions.length > 0 && (
-                            <span className="muted small">
+                            <span className="text-[0.78rem] leading-[1.5] text-muted">
                               Animaciones: {[...new Set(actions)].join(', ')}
                             </span>
                           )}
@@ -805,9 +887,9 @@ function App() {
                     );
                   })}
                 </div>
-                <p className="modal-note">
-                  Las hojas originales, sus ficheros <code>credits.txt</code> y el detalle completo
-                  están en <code>public/sprites/CREDITS.md</code>.
+                <p className="col-span-full text-[0.77rem] leading-[1.6] text-muted">
+                  Las hojas originales, sus ficheros <code className={code}>credits.txt</code> y el
+                  detalle completo están en <code className={code}>public/sprites/CREDITS.md</code>.
                 </p>
               </div>
             )}

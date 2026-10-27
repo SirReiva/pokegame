@@ -10,6 +10,10 @@ import {
   type LobbyPlayer
 } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
+import { Brand } from './Brand';
+import { btnClass } from './buttonStyles';
+import { KeyPill } from './KeyPill';
+import { eyebrow, stepActive, stepIdle } from './styles';
 
 interface LobbyScreenProps {
   players: LobbyPlayer[];
@@ -28,6 +32,13 @@ interface LobbyScreenProps {
   onCredits: () => void;
 }
 
+const overlay =
+  'fixed inset-0 z-10 flex animate-fade-in items-start justify-center overflow-y-auto bg-[image:radial-gradient(circle_at_16%_10%,rgb(22_48_78/0.9),transparent_55%),linear-gradient(112deg,rgb(4_8_14/0.96),rgb(4_8_14/0.84)_55%,rgb(4_8_14/0.55))] p-[clamp(16px,2.4vw,32px)] backdrop-blur-[3px]';
+const shell =
+  'm-auto flex w-[min(1360px,100%)] animate-rise-in flex-col gap-[clamp(14px,2vh,24px)]';
+const emptyTeam =
+  'rounded-[14px] border border-dashed border-[color:color-mix(in_srgb,var(--team,#4b9cff)_28%,var(--color-line))] px-3 py-[18px] text-center text-[0.78rem] leading-[1.45] text-[#6f8298]';
+
 function TeamColumn({
   team,
   players,
@@ -45,25 +56,28 @@ function TeamColumn({
 }) {
   const info = TEAM_INFO[team];
   const roster = players.filter((player) => player.team === team);
-  const style = {
-    '--team': info.color,
-    '--team-dark': info.dark
-  } as CSSProperties;
+  const style = { '--team': info.color } as CSSProperties;
 
   return (
-    <section className="team-column" style={style}>
-      <header className="team-column-head">
+    <section
+      className="rounded-[20px] border border-[color:color-mix(in_srgb,var(--team)_34%,var(--color-line))] bg-[image:radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--team)_16%,transparent),transparent_60%),linear-gradient(170deg,rgb(17_26_40/0.92),rgb(8_13_21/0.92))] p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]"
+      style={style}
+    >
+      <header className="flex items-start justify-between gap-2.5">
         <div>
-          <span className="eyebrow">Equipo</span>
-          <h3>{info.label}</h3>
+          <span className={eyebrow}>Equipo</span>
+          <h3 className="mt-0.5 text-[1.25rem] text-(--team)">{info.label}</h3>
         </div>
-        <span className="team-count">
+        <span
+          key={roster.length}
+          className="animate-pop-in rounded-full border border-line px-2 py-1 font-mono text-[0.68rem] text-[#8799ae]"
+        >
           {roster.length} / {MAX_TEAM_SIZE}
         </span>
       </header>
 
-      <div className="team-players">
-        {roster.length === 0 && <p className="team-empty">Nadie en este equipo todavía.</p>}
+      <div className="mt-3.5 flex flex-col gap-2.5">
+        {roster.length === 0 && <p className={emptyTeam}>Nadie en este equipo todavía.</p>}
         {roster.map((player) => {
           const switchBlocked = (target: Team) =>
             target !== player.team && counts[target] >= MAX_TEAM_SIZE;
@@ -71,20 +85,42 @@ function TeamColumn({
           return (
             <article
               key={player.slot}
-              className={`lobby-player${player.teamReady ? ' is-ready' : ''}`}
+              className={`relative animate-pop-in rounded-[14px] border border-[color:color-mix(in_srgb,var(--team)_34%,var(--color-line))] border-l-[3px] border-l-(--team) px-3 py-2.5 transition-colors duration-200 ${
+                player.teamReady
+                  ? 'border-[color:color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]'
+                  : 'bg-[#070c13]/65'
+              }`}
             >
-              <div className="lobby-player-head">
-                <span className="lobby-slot">{player.name}</span>
-                <span className="lobby-device">{player.deviceLabel}</span>
-                <span className="lobby-state">{player.teamReady ? 'Listo' : 'Eligiendo'}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[1.05rem] font-extrabold text-(--team)">
+                  {player.name}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[0.7rem] text-[#8b9db2]">
+                  {player.deviceLabel}
+                </span>
+                <span
+                  className={`font-mono text-[0.56rem] tracking-[0.08em] uppercase ${
+                    player.teamReady ? 'text-[#bff39d]' : 'text-[#7f92a7]'
+                  }`}
+                >
+                  {player.teamReady ? 'Listo' : 'Eligiendo'}
+                </span>
               </div>
 
-              <div className="team-switch" role="group" aria-label={`Equipo de ${player.name}`}>
+              <div
+                className="mt-2 inline-flex overflow-hidden rounded-full border border-line bg-white/[0.03]"
+                role="group"
+                aria-label={`Equipo de ${player.name}`}
+              >
                 {TEAM_ORDER.map((target) => (
                   <button
                     key={target}
                     type="button"
-                    className={target === player.team ? 'is-active' : ''}
+                    className={`cursor-pointer border-0 px-2.5 py-[5px] font-mono text-[0.62rem] tracking-[0.06em] uppercase transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-30 ${
+                      target === player.team
+                        ? 'bg-(--team) font-bold text-[#06101a]'
+                        : 'bg-transparent text-[#8b9db2]'
+                    }`}
                     style={{ '--team': TEAM_INFO[target].color } as CSSProperties}
                     disabled={switchBlocked(target)}
                     onClick={() => onTeam(player.slot, target)}
@@ -94,15 +130,19 @@ function TeamColumn({
                 ))}
               </div>
 
-              <div className="lobby-player-actions">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  className={`btn btn-tiny${player.teamReady ? ' btn-accent' : ''}`}
+                  className={btnClass(player.teamReady ? 'accent' : 'neutral', 'tiny')}
                   onClick={() => onReady(player.slot)}
                 >
                   {player.teamReady ? '✓ Listo' : 'Marcar listo'}
                 </button>
-                <button type="button" className="btn btn-tiny btn-ghost" onClick={() => onLeave(player.slot)}>
+                <button
+                  type="button"
+                  className={btnClass('ghost', 'tiny')}
+                  onClick={() => onLeave(player.slot)}
+                >
                   Salir
                 </button>
               </div>
@@ -137,60 +177,62 @@ export function LobbyScreen({
   const full = players.length >= MAX_PLAYERS;
 
   return (
-    <div className="overlay mp-overlay">
-      <div className="mp-shell">
-        <header className="mp-head">
-          <div className="brand brand-compact">
-            <span className="brand-mark" aria-hidden="true">
-              <span className="brand-pixel" />
-            </span>
-            <div>
-              <h1>
-                New<span>Poke</span>
-              </h1>
-              <p>Multijugador local · 1-8 jugadores</p>
-            </div>
-          </div>
+    <div className={overlay}>
+      <div className={shell}>
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <Brand compact />
 
-          <div className="mp-head-right">
-            <ol className="mp-steps" aria-label="Pasos de la configuración">
-              <li className="is-active">1 · Equipos</li>
-              <li>2 · Pokémon</li>
+          <div className="flex flex-wrap items-center gap-3">
+            <ol className="m-0 flex list-none gap-1.5 p-0" aria-label="Pasos de la configuración">
+              <li className={stepActive}>1 · Equipos</li>
+              <li className={stepIdle}>2 · Pokémon</li>
             </ol>
-            <div className="head-actions">
-              <button type="button" className="btn btn-ghost btn-small" onClick={onControls}>
+            <div className="flex gap-2">
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onControls}>
                 Controles
               </button>
-              <button type="button" className="btn btn-ghost btn-small" onClick={onCredits}>
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onCredits}>
                 Créditos
               </button>
             </div>
           </div>
         </header>
 
-        <div className="mp-intro">
+        <div className="flex flex-wrap items-end justify-between gap-[18px]">
           <div>
-            <span className="eyebrow">Paso 1 de 2</span>
-            <h2>Elige los equipos</h2>
-            <p className="lead">
+            <span className={eyebrow}>Paso 1 de 2</span>
+            <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">Elige los equipos</h2>
+            <p className="mt-2 max-w-[46ch] text-[0.9rem] leading-[1.55] text-muted">
               Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
               <strong>Espacio</strong> en el teclado) para unirte. Después elige lado y marca
               listo. Hasta 4 jugadores por equipo.
             </p>
           </div>
-          <div className="mp-score">
-            <span className="mp-score-item mp-score-blue">
-              <strong>{counts.blue}</strong> azul
+          <div className="flex items-center gap-3 rounded-2xl border border-line bg-[#090f18]/[0.72] px-4 py-2.5 max-[760px]:hidden">
+            <span className="flex items-baseline gap-1.5 font-mono text-[0.7rem] tracking-[0.08em] uppercase">
+              <strong
+                key={counts.blue}
+                className="animate-pop-in font-display text-[1.5rem] leading-none text-team-blue"
+              >
+                {counts.blue}
+              </strong>{' '}
+              azul
             </span>
-            <span className="mp-score-vs">vs</span>
-            <span className="mp-score-item mp-score-red">
-              <strong>{counts.red}</strong> rojo
+            <span className="font-mono text-[0.7rem] text-[#55677d]">vs</span>
+            <span className="flex items-baseline gap-1.5 font-mono text-[0.7rem] tracking-[0.08em] uppercase">
+              <strong
+                key={counts.red}
+                className="animate-pop-in font-display text-[1.5rem] leading-none text-team-red"
+              >
+                {counts.red}
+              </strong>{' '}
+              rojo
             </span>
           </div>
         </div>
 
-        <div className="mp-grid">
-          <div className="team-board">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,340px)] items-start gap-[18px] max-[1050px]:grid-cols-1">
+          <div className="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1">
             {TEAM_ORDER.map((team) => (
               <TeamColumn
                 key={team}
@@ -204,16 +246,16 @@ export function LobbyScreen({
             ))}
           </div>
 
-          <aside className="join-panel">
+          <aside className="rounded-[20px] border border-line bg-[image:linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-4 max-[1050px]:order-first">
             {maps.length > 0 && (
-              <div className="map-picker">
-                <span className="eyebrow">Mapa</span>
-                <div className="map-options">
+              <div className="mb-4 border-b border-dashed border-line pb-3.5">
+                <span className={eyebrow}>Mapa</span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {maps.map((map) => (
                     <button
                       key={map.id}
                       type="button"
-                      className={`btn btn-tiny${map.id === mapId ? ' btn-accent' : ' btn-ghost'}`}
+                      className={btnClass(map.id === mapId ? 'accent' : 'ghost', 'tiny')}
                       disabled={mapLoading || map.id === mapId}
                       title={map.description}
                       onClick={() => onChangeMap(map.id)}
@@ -222,29 +264,48 @@ export function LobbyScreen({
                     </button>
                   ))}
                 </div>
-                {mapLoading && <p className="map-note">Cargando mapa…</p>}
-                {mapError && <p className="map-note map-error">{mapError}</p>}
+                {mapLoading && (
+                  <p className="mt-2 animate-pulse font-mono text-[0.62rem] tracking-[0.04em] text-[#8b9db2]">
+                    Cargando mapa…
+                  </p>
+                )}
+                {mapError && (
+                  <p className="mt-2 font-mono text-[0.62rem] tracking-[0.04em] text-[#ff8b8f]">
+                    {mapError}
+                  </p>
+                )}
               </div>
             )}
 
-            <span className="eyebrow">Dispositivos detectados</span>
-            <h3>Unirse</h3>
+            <span className={eyebrow}>Dispositivos detectados</span>
+            <h3 className="mt-0.5 text-[1.2rem]">Unirse</h3>
             {full ? (
-              <p className="team-empty">La partida está completa (8 jugadores).</p>
+              <p className={emptyTeam}>La partida está completa (8 jugadores).</p>
             ) : available.length === 0 ? (
-              <p className="team-empty">Todos los dispositivos ya están jugando.</p>
+              <p className={emptyTeam}>Todos los dispositivos ya están jugando.</p>
             ) : (
-              <div className="device-list">
+              <div className="mt-3 flex flex-col gap-2">
                 {available.map((device) => (
-                  <div className="device-row" key={device.id}>
-                    <span className={`device-dot device-${device.kind}`} />
-                    <div className="device-copy">
-                      <strong>{device.label}</strong>
-                      <span>{device.kind === 'keyboard' ? 'Espacio / Enter' : 'Botón A'}</span>
+                  <div
+                    className="flex items-center gap-2.5 rounded-xl border border-line bg-white/[0.025] px-2.5 py-[9px]"
+                    key={device.id}
+                  >
+                    <span
+                      className={`size-2 flex-none rounded-full ${
+                        device.kind === 'keyboard'
+                          ? 'bg-[#7ac74c] shadow-[0_0_8px_rgb(122_199_76/0.8)]'
+                          : 'bg-team-blue shadow-[0_0_8px_rgb(75_156_255/0.8)]'
+                      }`}
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <strong className="text-[0.8rem]">{device.label}</strong>
+                      <span className="font-mono text-[0.58rem] tracking-[0.06em] uppercase text-[#7f92a7]">
+                        {device.kind === 'keyboard' ? 'Espacio / Enter' : 'Botón A'}
+                      </span>
                     </div>
                     <button
                       type="button"
-                      className="btn btn-tiny btn-accent"
+                      className={btnClass('accent', 'tiny')}
                       onClick={() => onJoin(device.id)}
                     >
                       Unirse
@@ -254,34 +315,39 @@ export function LobbyScreen({
               </div>
             )}
 
-            <div className="mp-tips">
-              <p>
-                <span className="key-pill">A</span> unirse / confirmar
+            <div className="mt-3.5 flex flex-col gap-1.5 border-t border-dashed border-line pt-3 text-[0.74rem] text-[#8b9db2]">
+              <p className="flex items-center gap-2">
+                <KeyPill>A</KeyPill> unirse / confirmar
               </p>
-              <p>
-                <span className="key-pill">← →</span> cambiar de equipo
+              <p className="flex items-center gap-2">
+                <KeyPill>← →</KeyPill> cambiar de equipo
               </p>
-              <p>
-                <span className="key-pill">B</span> salir del equipo
+              <p className="flex items-center gap-2">
+                <KeyPill>B</KeyPill> salir del equipo
               </p>
-              <p>
-                <span className="key-pill">1 teclado</span> + hasta 8 mandos
+              <p className="flex items-center gap-2">
+                <KeyPill>1 teclado</KeyPill> + hasta 8 mandos
               </p>
             </div>
           </aside>
         </div>
 
-        <footer className="mp-footer">
-          <div className="mp-footer-copy">
+        <footer className="flex flex-wrap items-center justify-between gap-3.5 border-t border-line px-0 pt-3.5 pb-1">
+          <div className="text-[0.82rem] text-[#9db0c4]">
             <strong>{players.length}</strong> / {MAX_PLAYERS} jugadores
             {players.length > 0 && !allReady && (
-              <span className="muted"> · marca listo a todos para continuar</span>
+              <span className="text-muted"> · marca listo a todos para continuar</span>
             )}
-            {allReady && <span className="mp-ready-msg"> · todos listos, pulsa A</span>}
+            {allReady && (
+              <span className="animate-fade-in font-semibold text-[#bff39d]">
+                {' '}
+                · todos listos, pulsa A
+              </span>
+            )}
           </div>
           <button
             type="button"
-            className="btn btn-primary btn-play"
+            className={btnClass('primary', 'play')}
             disabled={!allReady}
             onClick={onContinue}
           >

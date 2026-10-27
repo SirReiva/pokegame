@@ -4,7 +4,7 @@ interface PokemonPortraitProps {
   entry: PokemonEntry;
   height?: number;
   className?: string;
-  /** Deja que el CSS controle el tamaño (útil para layouts fluidos). */
+  /** Deja que las clases de Tailwind controlen el tamaño (layouts fluidos). */
   fluid?: boolean;
 }
 
@@ -15,7 +15,7 @@ interface PokemonPortraitProps {
 export function PokemonPortrait({
   entry,
   height = 64,
-  className,
+  className = '',
   fluid = false
 }: PokemonPortraitProps) {
   return (
@@ -27,7 +27,7 @@ export function PokemonPortrait({
       loading="lazy"
       decoding="async"
       draggable={false}
-      className={className ? `pokemon-portrait ${className}` : 'pokemon-portrait'}
+      className={`block object-contain select-none [image-rendering:pixelated] drop-shadow-[0_10px_14px_rgb(0_0_0/0.45)] ${className}`}
       style={fluid ? undefined : { width: height, height }}
     />
   );

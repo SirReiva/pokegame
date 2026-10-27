@@ -18,12 +18,15 @@ interface MatchHudProps {
   onPause: () => void;
 }
 
+const splitPause =
+  'pointer-events-auto fixed top-2.5 left-1/2 z-[7] inline-flex -translate-x-1/2 animate-fade-in cursor-pointer items-center justify-center gap-2 rounded-xl border border-line-strong bg-[#050a10]/80 px-[13px] py-[7px] text-[0.76rem] font-[650] text-ink backdrop-blur-[8px] transition-colors duration-[120ms] ease-out hover:bg-white/10';
+
 /** Color del porcentaje de ocultación: verde si el tipo ayuda, rojo si delata. */
 function concealmentClassFor(stats: PlayerMatchStats | undefined): string {
   if (!stats || stats.concealment <= 0) return '';
-  if (stats.concealmentReason === 'hostile') return ' is-bad';
+  if (stats.concealmentReason === 'hostile') return 'text-[#ffb2b5]';
   if (stats.concealmentReason === 'home' || stats.concealmentReason === 'comfortable') {
-    return ' is-good';
+    return 'text-[#bff39d]';
   }
   return '';
 }
@@ -38,7 +41,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
   const statsBySlot = new Map(stats.map((entry) => [entry.slot, entry]));
 
   return (
-    <div className="split-hud" aria-hidden="false">
+    <div className="pointer-events-none fixed inset-0 z-[6]" aria-hidden="false">
       {players.map((player, index) => {
         const rect = layout[index];
         if (!rect) return null;
@@ -60,35 +63,60 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
         return (
           <section
             key={player.slot}
-            className={`split-panel${compact ? ' is-compact' : ''}`}
+            className="absolute animate-fade-in bg-[image:linear-gradient(180deg,color-mix(in_srgb,var(--team)_9%,transparent),transparent_16%)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--team)_58%,transparent)] after:pointer-events-none after:absolute after:inset-0 after:shadow-[inset_0_0_26px_rgb(0_0_0/0.22)]"
             style={
               {
                 ...splitRectToStyle(rect),
-                '--team': info.color
+                '--team': info.color,
+                animationDelay: `${index * 40}ms`
               } as CSSProperties
             }
           >
-            <div className="split-tag">
-              <span className="split-slot">{player.slot}</span>
-              {entry && <PokemonPortrait entry={entry} height={compact ? 26 : 34} />}
-              <span className="split-copy">
-                <strong>{player.name}</strong>
-                <span>{entry?.name ?? '—'}</span>
+            <div
+              className={`absolute flex items-center rounded-[11px] border border-[color:color-mix(in_srgb,var(--team)_45%,var(--color-line))] bg-[#050a10]/[0.74] backdrop-blur-[6px] ${
+                compact ? 'top-1.5 left-1.5 gap-[5px] py-[3px] pr-1.5 pl-1' : 'top-2.5 left-2.5 gap-2 py-[5px] pr-[9px] pl-1.5'
+              }`}
+            >
+              <span
+                className={`grid place-items-center rounded-[7px] bg-(--team) font-display font-extrabold text-[#06101a] ${
+                  compact ? 'size-5 text-[0.72rem]' : 'size-6 text-[0.85rem]'
+                }`}
+              >
+                {player.slot}
               </span>
-              <span className="split-team">{info.short}</span>
+              {entry && <PokemonPortrait entry={entry} height={compact ? 26 : 34} />}
+              <span className="flex flex-col leading-[1.1]">
+                <strong className="font-mono text-[0.62rem] tracking-[0.08em] uppercase">
+                  {player.name}
+                </strong>
+                <span className={`text-[#c6d4e2] ${compact ? 'text-[0.64rem]' : 'text-[0.72rem]'}`}>
+                  {entry?.name ?? '—'}
+                </span>
+              </span>
+              <span className="border-l border-line pl-[7px] font-mono text-[0.52rem] tracking-[0.08em] uppercase text-(--team) max-[760px]:hidden">
+                {info.short}
+              </span>
             </div>
 
             {playerStats && (
-              <div className="split-terrain">
+              <div
+                className={`absolute flex items-center rounded-[9px] border border-line bg-[#050a10]/[0.68] font-mono text-[#aabccf] ${
+                  compact
+                    ? 'bottom-1.5 left-1.5 gap-[7px] px-1.5 py-[3px] text-[0.52rem]'
+                    : 'bottom-2.5 left-2.5 gap-[7px] px-2 py-1 text-[0.58rem]'
+                }`}
+              >
                 <TypeBadge type={playerStats.terrainType} />
-                <span className="split-terrain-name">{playerStats.terrainName}</span>
+                <span className="whitespace-nowrap max-[760px]:hidden">
+                  {playerStats.terrainName}
+                </span>
                 <span
-                  className={`split-speed${
+                  className={`whitespace-nowrap ${
                     playerStats.terrainSpeedMultiplier > 1
-                      ? ' is-fast'
+                      ? 'text-[#bff39d]'
                       : playerStats.terrainSpeedMultiplier < 1
-                        ? ' is-slow'
-                        : ''
+                        ? 'text-[#ffb2b5]'
+                        : 'text-[#8fa3b8]'
                   }`}
                 >
                   {playerStats.speed.toFixed(1)} u/s · ×
@@ -98,15 +126,22 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
             )}
 
             {playerStats && (
-              <div className="split-vision" title={concealmentTitle}>
-                <span className="split-vision-range">
+              <div
+                className={`pointer-events-auto absolute flex items-center whitespace-nowrap rounded-[9px] border border-line bg-[#050a10]/[0.62] font-mono text-[#9fb1c4] ${
+                  compact
+                    ? 'bottom-[33px] left-1.5 gap-1 px-[5px] py-0.5 text-[0.5rem]'
+                    : 'bottom-10 left-2.5 gap-[7px] px-2 py-[3px] text-[0.55rem]'
+                }`}
+                title={concealmentTitle}
+              >
+                <span className="text-[#d7e6f4]">
                   {compact ? 'V' : 'Visión'} {playerStats.visionRange.toFixed(1)} u
                 </span>
-                <span className={`split-conceal${concealmentClass}`}>
+                <span className={concealmentClass || 'text-[#aabccf]'}>
                   {compact ? 'O' : 'Oculto'} {concealmentPct}%
                 </span>
                 {!compact && (
-                  <span className="split-vision-detect">
+                  <span className="text-[#7f92a7] max-[760px]:hidden">
                     te ven a {playerStats.detectionRange.toFixed(1)} u
                   </span>
                 )}
@@ -116,8 +151,11 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
         );
       })}
 
-      <button type="button" className="btn btn-ghost btn-small split-pause" onClick={onPause}>
-        Pausa <span className="split-pause-key">Start / Esc</span>
+      <button type="button" className={splitPause} onClick={onPause}>
+        Pausa{' '}
+        <span className="ml-1.5 font-mono text-[0.55rem] text-[#7f92a7] max-[760px]:hidden">
+          Start / Esc
+        </span>
       </button>
     </div>
   );
