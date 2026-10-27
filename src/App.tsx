@@ -17,6 +17,7 @@ import type { GamePhase, LoadingProgress, SpriteManifest } from './game/types';
 import { LobbyScreen } from './ui/LobbyScreen';
 import { MatchHud } from './ui/MatchHud';
 import { RosterScreen } from './ui/RosterScreen';
+import { rosterColumns } from './ui/rosterGrid';
 import { PokemonPortrait } from './ui/PokemonPortrait';
 
 const DEFAULT_PROGRESS: LoadingProgress = {
@@ -175,7 +176,7 @@ function App() {
     const list = manifestRef.current?.pokemon ?? [];
     if (!player || player.rosterReady || list.length === 0) return;
 
-    const columns = 3;
+    const columns = rosterColumns();
     const index = Math.max(
       0,
       list.findIndex((entry) => entry.id === player.pokemonId)

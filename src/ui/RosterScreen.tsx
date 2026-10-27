@@ -37,8 +37,8 @@ export function RosterScreen({
   const singlePlayer = players.length === 1;
 
   return (
-    <div className="overlay mp-overlay">
-      <div className="mp-shell">
+    <div className="overlay mp-overlay roster-screen">
+      <div className="mp-shell roster-shell">
         <header className="mp-head">
           <div className="brand brand-compact">
             <span className="brand-mark" aria-hidden="true">
@@ -126,7 +126,12 @@ export function RosterScreen({
                         ))}
                       </span>
                     </span>
-                    <PokemonPortrait entry={entry} height={68} className="poke-card-portrait" />
+                    <PokemonPortrait
+                      entry={entry}
+                      height={52}
+                      fluid
+                      className="poke-card-portrait"
+                    />
                     <span className="poke-name">{entry.name}</span>
                     <span className="poke-types">
                       {entry.types.map((type) => (

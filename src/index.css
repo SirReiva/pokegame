@@ -1837,7 +1837,163 @@ code {
 }
 
 .mp-poke .poke-card-portrait {
+  width: 56px;
+  height: 56px;
   margin: 0;
+}
+
+/*
+ * Selector de Pokémon a pantalla completa: 4 columnas (11 especies = 3 filas)
+ * y sin scroll vertical en escritorio. Las cards se reparten la altura libre.
+ */
+@media (min-width: 1051px) {
+  .roster-screen {
+    align-items: stretch;
+    overflow: hidden;
+    padding: clamp(12px, 1.8vh, 22px) clamp(16px, 2.2vw, 30px);
+  }
+
+  .roster-shell {
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    gap: clamp(8px, 1.4vh, 16px);
+  }
+
+  .roster-shell .mp-head,
+  .roster-shell .mp-intro,
+  .roster-shell .mp-footer {
+    flex: none;
+  }
+
+  .roster-screen .mp-intro {
+    align-items: center;
+    gap: 14px;
+  }
+
+  .roster-screen .mp-intro h2 {
+    font-size: clamp(1.3rem, 2.2vw, 1.9rem);
+  }
+
+  .roster-screen .mp-intro .lead {
+    margin-top: 4px;
+    max-width: 92ch;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .roster-screen .mp-score {
+    padding: 6px 14px;
+  }
+
+  .roster-screen .mp-score-item strong {
+    font-size: 1.25rem;
+  }
+
+  .roster-layout {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 330px);
+    gap: 14px;
+  }
+
+  .roster-left {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 8px;
+  }
+
+  .mp-cards {
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .mp-poke {
+    min-height: 0;
+    padding: clamp(6px, 1vh, 10px) 8px;
+    gap: 2px;
+    justify-content: center;
+    border-radius: 14px;
+  }
+
+  .roster-screen .poke-card-portrait {
+    width: clamp(44px, 9vh, 96px);
+    height: clamp(44px, 9vh, 96px);
+  }
+
+  .roster-screen .poke-name {
+    font-size: clamp(0.82rem, 1.05vw, 0.98rem);
+    line-height: 1.15;
+  }
+
+  .roster-screen .type-badge {
+    font-size: 0.5rem;
+    padding: 1px 5px;
+  }
+
+  .roster-right {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .roster-players {
+    flex: 1;
+    min-height: 0;
+    gap: 6px;
+    overflow-y: auto;
+  }
+
+  .roster-player {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    padding: 6px 8px;
+  }
+
+  .roster-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .roster-right .mp-tips {
+    flex: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    gap: 4px;
+  }
+
+  .roster-screen .asset-note {
+    flex: none;
+    margin-top: 0;
+    font-size: 0.68rem;
+  }
+
+  .roster-screen .mp-footer {
+    padding-top: 8px;
+  }
+}
+
+@media (min-width: 1051px) and (max-height: 800px) {
+  .roster-screen .asset-note,
+  .roster-right .mp-tips {
+    display: none;
+  }
+}
+
+@media (min-width: 1051px) and (max-height: 700px) {
+  .roster-screen .poke-speed {
+    display: none;
+  }
+
+  .roster-screen .mp-intro .lead {
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
 }
 
 .cursor-stack {
