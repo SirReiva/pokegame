@@ -43,6 +43,13 @@ export interface World {
 
 const HALF = CONFIG.world.groundSize / 2;
 
+/**
+ * Interruptor temporal de árboles: con `false` no se genera ninguno (ni los de
+ * la jungla ni los secos del bosque umbrío) y tampoco sus colliders, así que
+ * dejan de tapar la visión. Ponlo a `true` para recuperar el bosque tal cual.
+ */
+const SPAWN_TREES = false;
+
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
   return new pc.Color(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
@@ -440,12 +447,12 @@ export function buildWorld(app: pc.Application): World {
     return spots;
   };
 
-  const trees: Array<[number, number, number]> = scatter(46, 0x7a11, 1.9).map(
-    ([x, z], index) => {
-      const rand = random(index * 977 + 13);
-      return [x, z, 0.72 + rand() * 0.38];
-    }
-  );
+  const trees: Array<[number, number, number]> = SPAWN_TREES
+    ? scatter(46, 0x7a11, 1.9).map(([x, z], index) => {
+        const rand = random(index * 977 + 13);
+        return [x, z, 0.72 + rand() * 0.38];
+      })
+    : [];
 
   trees.forEach(([x, z, scale], index) => {
     const tree = new pc.Entity(`tree-${index}`);
@@ -2814,6 +2821,7 @@ export function buildWorld(app: pc.Application): World {
   }> = [];
 
   ghostZones.forEach((zone, zoneIndex) => {
+    if (!SPAWN_TREES) return;
     const rand = random(0x3a47 + zoneIndex * 5309);
     const count = 5;
     const spots: Array<[number, number]> = [];

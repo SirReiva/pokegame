@@ -11,9 +11,10 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0001': 4.2, // Bulbasaur: el más lento del grupo
   '0004': 5.4, // Charmander: el ritmo de referencia
   '0007': 4.8, // Squirtle: algo más lento, pero constante
-  '0025': 6.9, // Pikachu: el más rápido del grupo
+  '0025': 6.9, // Pikachu: muy rápido por sus sentidos eléctricos
   '0133': 6.1, // Eevee: ágil y equilibrado
-  '0448': 6.5 // Lucario: zancada larga, casi tan rápido como Pikachu
+  '0448': 6.5, // Lucario: zancada larga, casi tan rápido como Pikachu
+  '0658': 7.4 // Greninja: el más rápido, un ninja acuático
 };
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */

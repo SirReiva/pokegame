@@ -47,3 +47,12 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448/credits.txt
 
+## Greninja (#0658)
+
+- JHONY_REX — PMDCollab_1 · Idle, Walk, Hurt, Attack, Charge, Swing, Double, QuickStrike
+- <@!215638650434617345> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Swing, Double, Rotate, Hop, QuickStrike
+- JHONY_REX — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, RearUp, Swing, Double, Rotate, Hop, QuickStrike
+- <@!229131140903075840> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/credits.txt
+

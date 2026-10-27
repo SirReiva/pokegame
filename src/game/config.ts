@@ -6,7 +6,7 @@ export const DEG = Math.PI / 180;
 export const RAD = 180 / Math.PI;
 
 /**
- * Un píxel de sprite mide esto en unidades de mundo. Igual para los 6 Pokémon
+ * Un píxel de sprite mide esto en unidades de mundo. Igual para los 7 Pokémon
  * para conservar sus tamaños relativos.
  */
 export const PIXEL_SCALE = 0.045;

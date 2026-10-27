@@ -21,9 +21,9 @@ import type { Collider } from './world';
 
 /**
  * Rango de visión base de cada especie, en unidades de mundo. Los valores están
- * separados a propósito: Pikachu y Lucario detectan antes por sus sentidos,
- * mientras que Bulbasaur y Squirtle ven menos. Se ajustan aquí y no en el
- * manifiesto, porque `npm run sprites` lo regenera.
+ * separados a propósito: Greninja, Pikachu y Lucario detectan antes por sus
+ * sentidos, mientras que Bulbasaur y Squirtle ven menos. Se ajustan aquí y no en
+ * el manifiesto, porque `npm run sprites` lo regenera.
  */
 export const POKEMON_VISION: Record<string, number> = {
   '0001': 8.0, // Bulbasaur: bajo, pesado, poca altura de ojos
@@ -31,7 +31,8 @@ export const POKEMON_VISION: Record<string, number> = {
   '0007': 8.5, // Squirtle: vista corta pero constante
   '0025': 11.0, // Pikachu: el más alerta, sentidos eléctricos
   '0133': 9.5, // Eevee: olfato y oído finos
-  '0448': 10.5 // Lucario: percibe el aura
+  '0448': 10.5, // Lucario: percibe el aura
+  '0658': 11.5 // Greninja: instinto de ninja, el que más lejos ve
 };
 
 export const DEFAULT_VISION = 9.5;
