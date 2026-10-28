@@ -94,7 +94,7 @@ const MOUNTAIN_HEIGHT_SCALE = 0.7;
  * Altura de los muros. La colisión y la visión usan el mismo ancho que en las
  * cordilleras; solo cambia la malla, así que esta altura es puramente visual.
  */
-const WALL_HEIGHT = 1.15;
+const WALL_HEIGHT = 2.3;
 
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
@@ -740,7 +740,9 @@ export function buildWorld(app: pc.Application): World {
   const wallMaterial = standard({
     diffuse: '#ffffff',
     diffuseMap: wallStoneTexture,
-    tiling: [2, 1],
+    // El doble de altura que antes, así que también el doble de hiladas para
+    // que los bloques de sillería conserven su tamaño aparente.
+    tiling: [2, 2],
     specular: '#2b3036',
     gloss: 0.16,
     cull: pc.CULLFACE_NONE
