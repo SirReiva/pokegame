@@ -778,7 +778,8 @@ export function buildWorld(app: pc.Application): World {
   });
 
   // Cactus del desierto: tronco y brazos con primitivas, repartidos dentro del
-  // calvero. Son obstáculos sólidos, como los árboles y las rocas.
+  // calvero. Son puramente decorativos: no llevan collider, así que no frenan
+  // ni bloquean el paso.
   const cactusMaterial = standard({
     diffuse: '#4f8b47',
     specular: '#1d2b16',
@@ -833,7 +834,6 @@ export function buildWorld(app: pc.Application): World {
         position: [0.32, 1.3, 0],
         scale: [0.085, 0.44, 0.085]
       });
-      colliders.push({ type: 'circle', x, z, radius: 0.3 * scale });
     }
   });
 
