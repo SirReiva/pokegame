@@ -1462,6 +1462,59 @@ export function createMountainRockCanvas(size = 128): HTMLCanvasElement {
   return ctx.canvas;
 }
 
+/**
+ * Sillería gris para los muros: hiladas de bloques con junta oscura, tono
+ * variable por bloque y un filo claro arriba. Las piezas que cruzan el borde se
+ * dibujan también desplazadas un ancho para que el tile sea continuo.
+ */
+export function createWallStoneCanvas(size = 128): HTMLCanvasElement {
+  const palette = ["#343940", "#474d55", "#5c636d", "#737b86", "#8f98a3"];
+  const random = mulberry32(0x51a7);
+  const ctx = canvas2d(size);
+
+  ctx.fillStyle = palette[0];
+  ctx.fillRect(0, 0, size, size);
+
+  const rowHeight = 16;
+  const blockWidth = 32;
+  const rows = Math.ceil(size / rowHeight);
+
+  for (let row = 0; row < rows; row++) {
+    const y = row * rowHeight;
+    const offset = (row % 2) * (blockWidth / 2);
+    for (let x = 0; x < size; x += blockWidth) {
+      const bx = x + offset + 1;
+      const by = y + 1;
+      const bw = blockWidth - 2;
+      const bh = rowHeight - 2;
+      const color = palette[2 + Math.floor(random() * 3)];
+
+      const drawBlock = (drawX: number) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(drawX, by, bw, bh);
+        ctx.fillStyle = palette[4];
+        ctx.fillRect(drawX, by, bw, 1);
+        ctx.fillStyle = palette[1];
+        ctx.fillRect(drawX, by + bh - 1, bw, 1);
+      };
+
+      drawBlock(bx);
+      // Repite la pieza al otro lado para que la textura envuelva sin costura.
+      if (bx + bw > size) drawBlock(bx - size);
+    }
+  }
+
+  // Motas y desgaste: pequeños puntos claros y oscuros sobre los bloques.
+  for (let i = 0; i < 700; i++) {
+    const x = Math.floor(random() * size);
+    const y = Math.floor(random() * size);
+    ctx.fillStyle = palette[random() < 0.55 ? 1 : random() < 0.75 ? 4 : 0];
+    ctx.fillRect(x, y, 1, 1);
+  }
+
+  return ctx.canvas;
+}
+
 export function createSoilCanvas(size = 128): HTMLCanvasElement {
   const random = mulberry32(99);
   const ctx = canvas2d(size);

@@ -2,7 +2,7 @@
  * Carga y validación de mapas definidos en JSON.
  *
  * `public/maps/index.json` lista los mapas disponibles y cada archivo declara
- * una rejilla de terrenos, los respawns de los equipos y las cordilleras. Los
+ * una rejilla de terrenos, los respawns de los equipos y los separadores. Los
  * mapas se cargan por `fetch`, así que se pueden editar sin recompilar la demo.
  */
 
@@ -107,17 +107,17 @@ function parseMountains(raw: unknown): MountainRange[] {
 
   return raw.map((entry, index) => {
     if (!entry || typeof entry !== 'object') {
-      throw new Error(`La cordillera ${index + 1} no es un objeto`);
+      throw new Error(`El separador ${index + 1} no es un objeto`);
     }
     const value = entry as Record<string, unknown>;
     const points = value.points;
     if (!Array.isArray(points) || points.length < 2) {
-      throw new Error(`La cordillera ${index + 1} necesita al menos dos puntos`);
+      throw new Error(`El separador ${index + 1} necesita al menos dos puntos`);
     }
     const parsedPoints = points.map((point, pointIndex): [number, number] => {
       if (!Array.isArray(point) || point.length < 2) {
         throw new Error(
-          `El punto ${pointIndex + 1} de la cordillera ${index + 1} debe ser [x, z]`
+          `El punto ${pointIndex + 1} del separador ${index + 1} debe ser [x, z]`
         );
       }
       return [
@@ -125,7 +125,15 @@ function parseMountains(raw: unknown): MountainRange[] {
         number(point[1], `mountains[${index}].points[${pointIndex}][1]`)
       ];
     });
+    const kind = value.kind;
+    if (kind !== undefined && kind !== 'mountain' && kind !== 'wall') {
+      throw new Error(
+        `El separador ${index + 1} tiene un "kind" desconocido: "${String(kind)}". ` +
+          'Disponibles: mountain, wall'
+      );
+    }
     return {
+      kind: kind === 'wall' ? 'wall' : 'mountain',
       width: number(value.width, `mountains[${index}].width`),
       points: parsedPoints
     };

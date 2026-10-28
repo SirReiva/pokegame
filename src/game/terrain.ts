@@ -72,7 +72,15 @@ export interface BaseZone {
 /** Punto de aparición de un equipo. También marca el centro de su base. */
 export interface RespawnPoint extends BaseZone {}
 
+/** Aspecto de un separador. La colisión y la visión son idénticas en ambos. */
+export type BarrierKind = 'mountain' | 'wall';
+
 export interface MountainRange {
+  /**
+   * Tipo de separador. Si falta se asume `mountain`, para que los mapas y
+   * borradores antiguos sigan funcionando sin cambios.
+   */
+  kind?: BarrierKind;
   /** Ancho total de la cresta; el jugador no puede cruzarla. */
   width: number;
   points: Array<[number, number]>;
@@ -141,7 +149,7 @@ let flatTerrain = new Uint8Array(0);
 
 /** Bases del mapa activo, derivadas de sus respawns. */
 export const BASES: BaseZone[] = [];
-/** Cordilleras del mapa activo. */
+/** Separadores del mapa activo (cordilleras y muros). */
 export const MOUNTAINS: MountainRange[] = [];
 /** Regiones de terrenos decorativos, para colocar props y pintar detalles. */
 export const TERRAIN_ZONES: TerrainZone[] = [];
@@ -259,7 +267,7 @@ export function cellAt(x: number, z: number): { row: number; col: number } | nul
   return { row, col };
 }
 
-/** Verdadero si la posición cae dentro de una cordillera intransitable. */
+/** Verdadero si la posición cae dentro de un separador intransitable. */
 export function onMountain(x: number, z: number): boolean {
   return MOUNTAINS.some((range) => distanceToPath(x, z, range.points) <= range.width / 2);
 }

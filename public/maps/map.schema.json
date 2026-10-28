@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "NewPoke map",
-  "description": "Mapa de NewPoke: rejilla de terrenos, respawns y cordilleras.",
+  "description": "Mapa de NewPoke: rejilla de terrenos, respawns y separadores (cordilleras y muros).",
   "type": "object",
   "required": ["tiles", "respawns"],
   "properties": {
@@ -32,6 +32,10 @@
         "type": "object",
         "required": ["width", "points"],
         "properties": {
+          "kind": {
+            "enum": ["mountain", "wall"],
+            "description": "Aspecto del separador. La colisión y la visión son idénticas. Por defecto, mountain."
+          },
           "width": { "type": "number", "exclusiveMinimum": 0 },
           "points": {
             "type": "array",

@@ -58,7 +58,7 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 
 Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la pantalla de equipos permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
 
-Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, cordilleras y ajustes de cámara:
+Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, separadores (cordilleras y muros) y ajustes de cámara:
 
 ```json
 {
@@ -72,7 +72,8 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, co
     { "team": "red", "x": 6, "z": -6, "radius": 3.2 }
   ],
   "mountains": [
-    { "width": 2.2, "points": [[-2, 0], [0, 1], [2, 0]] }
+    { "kind": "mountain", "width": 2.2, "points": [[-2, 0], [0, 1], [2, 0]] },
+    { "kind": "wall", "width": 1.2, "points": [[-3, -3], [3, -3]] }
   ],
   "tiles": [
     ["jungle", "jungle", "lane", "jungle"],
@@ -87,7 +88,7 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, co
 - `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua.
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
 - `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
-- `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra.
+- `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra. `kind` elige el aspecto: `mountain` (picos de piedra, por defecto) o `wall` (sillería con almenas). La colisión y la visión son idénticas en ambos.
 - `spawn` es el punto al que mira la cámara del menú. Si falta, se usa el respawn azul.
 - Los calveros, el agua y su decoración 3D se derivan de las celdas: cada grupo conexo de un terreno decorativo se convierte en una región poligonal, y cada cuerpo de agua se triangula para colocar la lámina superficial.
 - `public/maps/map.schema.json` describe el formato para que el editor valide los archivos. Los mapas existentes lo referencian con `"$schema": "./map.schema.json"`.
@@ -109,12 +110,12 @@ La pantalla de equipos incluye el botón **Editor de mapas**; también se abre d
 1. **Dimensiones**: al entrar sin borrador pide id, nombre, ancho y alto de la rejilla (8–128 cada uno), `tileSize`, `waterHeight` y terreno de fondo. También puede cargar un mapa existente de `public/maps/` o importar un archivo `.json`.
 2. **Dibujo**: rejilla 2D con los quince terrenos. Herramientas de lápiz (interpola al arrastrar para no dejar huecos), relleno, rectángulo y borrador. El clic derecho borra. `Ctrl+Z` / `Ctrl+Y` deshacen y rehacen.
 3. **Bases**: las herramientas de base azul y roja (teclas `1` y `2`) colocan cada respawn en el centro de una celda. El radio se ajusta en el panel derecho y se aplica a ambas bases.
-4. **Cordilleras**: la herramienta Cordillera (`M`) traza una polilínea haciendo clic en las celdas. El doble clic o `Enter` cierra el trazado y el clic derecho quita el último punto. Los puntos se pueden arrastrar y las líneas admiten nuevos vértices con doble clic; el clic derecho sobre un punto lo elimina. El ancho se ajusta por cordillera en el panel derecho y `Supr` borra la seleccionada.
-5. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre, sin las dos bases o con cordilleras incompletas.
+4. **Separadores**: la herramienta Separador (`M`) traza una polilínea haciendo clic en las celdas. En el panel derecho eliges si es cordillera o muro, y también puedes cambiar el tipo de uno ya existente. El doble clic o `Enter` cierra el trazado y el clic derecho quita el último punto. Los puntos se pueden arrastrar y las líneas admiten nuevos vértices con doble clic; el clic derecho sobre un punto lo elimina. El ancho se ajusta por separador en el panel derecho y `Supr` borra el seleccionado.
+5. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre, sin las dos bases o con separadores incompletos.
 
 El borrador se guarda en `localStorage` (`newpoke.map-editor.draft.v1`) y se recupera al volver a abrir el editor. Para jugar el mapa, guarda el archivo en `public/maps/<id>.json` y añade su entrada a `public/maps/index.json`.
 
-El editor dibuja y edita cordilleras (`mountains`), pero no cambia el `spawn` de cámara, que conserva al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos; al redimensionar, las cordilleras se desplazan con el terreno. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
+El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de cámara, que conserva al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos; al redimensionar, los separadores se desplazan con el terreno. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
 
 ## Multijugador local
 
@@ -137,13 +138,13 @@ El editor dibuja y edita cordilleras (`mountains`), pero no cambia el `spawn` de
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
 - **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Mewtwo 7,8 u/s, Raikou 7,7, Zapdos 7,6, Lugia 7,5, Greninja 7,4, Entei 7,2, Scyther 7,2, Celebi 7,1, Moltres 7,0, Mew 7,0, Suicune 7,0, Ho-Oh 6,9, Pikachu 6,9, Articuno 6,8, Lucario 6,5, Eevee 6,1, Charmander 5,4, Squirtle 4,8, Onix 4,6, Bulbasaur 4,2). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
-- **Niebla de guerra por jugador**: cada vista sombrea el mundo fuera de su radio de visión y oculta a los Pokémon que no se ven. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y las cordilleras y los árboles bloquean la línea de visión. El sombreado exterior es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, y las cordilleras añaden un decal de sombra fijo en el mundo que oscurece lo que queda detrás; el HUD de cada vista resume el rango, la ocultación y el radio de detección.
+- **Niebla de guerra por jugador**: cada vista sombrea el mundo fuera de su radio de visión y oculta a los Pokémon que no se ven. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y los separadores (cordilleras y muros) y los árboles bloquean la línea de visión. El sombreado exterior es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, y los separadores añaden un decal de sombra fijo en el mundo que oscurece lo que queda detrás; el HUD de cada vista resume el rango, la ocultación y el radio de detección.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
 - **Anillo de rumbo**: cada jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real, tintado con el color de su equipo. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
 - **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores y los Pokémon del menú no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
 - **Pixel art configurable**: `CONFIG.sprite.filter` elige el muestreo. `'nearest'` deja los bloques duros; `'smooth'` precarga la hoja con NEAREST a `smoothScale` y luego filtra con LINEAR, de modo que el contorno se antialiasea 1-2 px sin emborronar el interior; `'linear'` interpola directamente sobre la hoja original (el más suave y borroso). `CONFIG.sprite.alphaToCoverage` delega el recorte alfa en las muestras del MSAA, y las UVs mantienen medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
-- **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y cordilleras declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
+- **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y separadores declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando. El páramo añade rayos con luz azul y chispas crepitando entre la hierba seca.
 - **Terrenos tipados**: la arena tiene quince terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios; la partida es exploración libre, sin combate.
@@ -267,11 +268,11 @@ visible = distancia ≤ rangoVisión × (1 − ocultación)  &&  línea de visi�
 
 La ocultación se evalúa en el terreno del **objetivo**, no en el del observador. El jugador siempre se ve a sí mismo. La **histéresis** de 0,2 u evita que un Pokémon parpadee justo en el borde del radio. La visión es **individual**: cada jugador ve solo con su Pokémon, así que un aliado que sale de su radio también se oculta.
 
-La línea de visión la bloquean las **cordilleras** y los **árboles** (incluidos los árboles secos del bosque umbrío). Para ello, sus colliders llevan un `sightRadius` mayor que el radio de colisión de los árboles, de modo que la copa tapa aunque el tronco sea fino. Los cactus y los adornos de las bases no bloquean. El chequeo es una distancia segmento-segmento/círculo en `vision.ts`, sin raycasts contra mallas.
+La línea de visión la bloquean los **separadores** (cordilleras y muros) y los **árboles** (incluidos los árboles secos del bosque umbrío). Para ello, sus colliders llevan un `sightRadius` mayor que el radio de colisión de los árboles, de modo que la copa tapa aunque el tronco sea fino. Los cactus y los adornos de las bases no bloquean. El chequeo es una distancia segmento-segmento/círculo en `vision.ts`, sin raycasts contra mallas.
 
 El HUD de cada vista muestra el rango base de la especie, la ocultación actual y el radio al que te detectaría un observador con tu mismo rango; el motivo y el desglose (base × multiplicador) aparecen en el `title` del bloque de visión. El sombreado se resuelve en el motor: cada vista monta un quad pegado a su cámara, en su propia capa de render, con un `ShaderMaterial` que recibe por uniformes el centro y los radios del círculo de visión (`src/game/fog.ts`). Se dibuja al final de las transparencias y sin `depthTest`, así que cubre el mundo de esa vista pero no el HUD de React. No hay capa HTML de niebla.
 
-Las **cordilleras** proyectan además una cuña de sombra como **decal en el suelo**. La máscara se dibuja en coordenadas XZ del mapa y el plano vive en la capa de esa vista; la cámara solo lo mira, no lo deforma. Al estar sobre el suelo y usar `depthTest`, la propia montaña, los árboles y los actores lo tapan y conservan su iluminación. El shader del decal recibe también el óvalo de pantalla de la niebla circular y funde ambas capas por máximo (con `CONFIG.vision.mountainOverlap` de diferencia extra), de modo que donde coinciden no se suman dos veces ni dejan un borde casi negro, pero la cuña sigue leyéndose. Los árboles siguen bloqueando la línea de visión de los actores, pero de momento solo las cordilleras sombrean el terreno.
+Los **separadores** proyectan además una cuña de sombra como **decal en el suelo**. La máscara se dibuja en coordenadas XZ del mapa y el plano vive en la capa de esa vista; la cámara solo lo mira, no lo deforma. Al estar sobre el suelo y usar `depthTest`, el propio pico o muro, los árboles y los actores lo tapan y conservan su iluminación. El shader del decal recibe también el óvalo de pantalla de la niebla circular y funde ambas capas por máximo (con `CONFIG.vision.mountainOverlap` de diferencia extra), de modo que donde coinciden no se suman dos veces ni dejan un borde casi negro, pero la cuña sigue leyéndose. Los árboles siguen bloqueando la línea de visión de los actores, pero de momento solo los separadores sombrean el terreno.
 
 ### Sumergirse en el agua
 
@@ -338,7 +339,7 @@ public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS
 public/maps/
   index.json                 lista de mapas disponibles
   map.schema.json            esquema JSON para validar los mapas
-  arena.json                 mapa por defecto en rejilla + respawns + cordilleras
+  arena.json                 mapa por defecto en rejilla + respawns + separadores
   lago.json                  segundo mapa de ejemplo
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla y visión
@@ -386,11 +387,11 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad. En partidas de 3-8 jugadores cada cámara arranca un 12 % más lejos para compensar el viewport estrecho.
 - `player.speed`, `acceleration`, `radius`: sensación de movimiento y colisión. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
 - `POKEMON_VISION`, `TERRAIN_CONCEALMENT` y `CONCEALMENT_TYPE_FACTOR` en `src/game/vision.ts`: rango base por especie, ocultación de cada terreno y cuánto la modulan los tipos. La fórmula y la oclusión están en el mismo módulo.
-- `CONFIG.vision` (`src/game/config.ts`): histéresis de visibilidad, tope de ocultación, opacidad, color y suavizado del borde del sombreado. El `sightRadius` de árboles y cordilleras se define al crear sus colliders en `src/game/world.ts`.
-- `MASK_SIZE`, `MAX_OCCLUDERS`, `SHADOW_LENGTH` e `INSIDE_EDGE_EXTENSION` en `src/game/fog.ts`: resolución de la máscara del decal de sombra, número máximo de tramos de cordillera que proyectan, alcance de cada cuña y extensión del caso pegado a la cresta. `MOUNTAIN_SHADOW_RADIUS` en `src/game/game.ts` controla el ancho de las cuñas respecto al radio de colisión del tramo; `mountainOverlap` en `CONFIG.vision` controla cuánto se oscurece la cuña donde coincide con la niebla circular (0 la oculta del todo).
+- `CONFIG.vision` (`src/game/config.ts`): histéresis de visibilidad, tope de ocultación, opacidad, color y suavizado del borde del sombreado. El `sightRadius` de árboles y separadores se define al crear sus colliders en `src/game/world.ts`.
+- `MASK_SIZE`, `MAX_OCCLUDERS`, `SHADOW_LENGTH` e `INSIDE_EDGE_EXTENSION` en `src/game/fog.ts`: resolución de la máscara del decal de sombra, número máximo de tramos de separador que proyectan, alcance de cada cuña y extensión del caso pegado a la cresta. `MOUNTAIN_SHADOW_RADIUS` en `src/game/game.ts` controla el ancho de las cuñas respecto al radio de colisión del tramo; `mountainOverlap` en `CONFIG.vision` controla cuánto se oscurece la cuña donde coincide con la niebla circular (0 la oculta del todo).
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
-- `public/maps/*.json`: rejilla de terrenos, `tileSize`, `waterHeight`, respawns de cada equipo, cordilleras y punto de cámara del menú. `public/maps/index.json` decide qué mapas aparecen en el selector. `TERRAINS` en `src/game/terrain.ts` mantiene los nombres y tipos Pokémon de cada `TerrainId`.
+- `public/maps/*.json`: rejilla de terrenos, `tileSize`, `waterHeight`, respawns de cada equipo, separadores y punto de cámara del menú. `public/maps/index.json` decide qué mapas aparecen en el selector. `TERRAINS` en `src/game/terrain.ts` mantiene los nombres y tipos Pokémon de cada `TerrainId`.
 - `MAX_PLAYERS`, `MAX_TEAM_SIZE`, `TEAM_INFO`, `spawnForTeam` y `computeSplitLayout` en `src/game/multiplayer.ts`: límite de jugadores, tope por equipo, colores/coordenadas de base y rejilla del splitscreen.
 - `NPC_SLOTS` (`src/game/game.ts`): Pokémon de exposición que acompañan al menú de equipos en la base azul.
 
@@ -402,11 +403,11 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - El multijugador local es **exploración libre por equipos**: no hay objetivo, marcador ni condición de victoria.
 - La selección de Pokémon permite repetir especie aunque hay 11 especies para hasta 8 jugadores.
 - Los NPC del menú son estáticos: giran hacia la cámara, pero no patrullan.
-- La niebla exterior es un círculo de pantalla por vista; las cordilleras añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
+- La niebla exterior es un círculo de pantalla por vista; los separadores añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
 - En splitscreen, el mundo se dibuja una vez por vista. Con 7-8 jugadores el rendimiento baja de forma notable, sobre todo en equipos modestos.
-- El editor de mapas edita celdas, bases, cordilleras y metadatos; el `spawn` de cámara sigue siendo manual en el JSON.
+- El editor de mapas edita celdas, bases, separadores y metadatos; el `spawn` de cámara sigue siendo manual en el JSON.
 
 ## Créditos y licencia
 

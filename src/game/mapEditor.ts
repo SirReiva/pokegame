@@ -73,7 +73,7 @@ export interface EditorMap {
   background: TerrainId;
   tiles: TerrainId[][];
   bases: EditorBases;
-  /** Cordilleras del mapa, en coordenadas de mundo. */
+  /** Separadores del mapa (cordilleras y muros), en coordenadas de mundo. */
   mountains: MountainRange[];
   /** Punto de cámara del menú importado. Si falta, se exporta la base azul. */
   spawn?: { x: number; z: number };
@@ -122,6 +122,7 @@ export function cloneBases(bases: EditorBases): EditorBases {
 
 export function cloneMountains(mountains: MountainRange[] | undefined): MountainRange[] {
   return (mountains ?? []).map((range) => ({
+    ...(range.kind ? { kind: range.kind } : {}),
     width: range.width,
     points: range.points.map(([x, z]) => [x, z] as [number, number])
   }));
@@ -232,6 +233,7 @@ export function resizeEditorMap(map: EditorMap, cols: number, rows: number): Edi
   const shiftX = ((nextCols - map.cols) * map.meta.tileSize) / 2;
   const shiftZ = ((nextRows - map.rows) * map.meta.tileSize) / 2;
   const mountains: MountainRange[] = map.mountains.map((range) => ({
+    ...(range.kind ? { kind: range.kind } : {}),
     width: range.width,
     points: range.points.map(
       ([x, z]) => [round(x - shiftX), round(z - shiftZ)] as [number, number]
@@ -497,14 +499,17 @@ export function validateEditorMap(map: EditorMap): string[] {
   if (!map.bases.blue) issues.push('Falta la base azul.');
   if (!map.bases.red) issues.push('Falta la base roja.');
   map.mountains.forEach((range, index) => {
+    if (range.kind !== undefined && range.kind !== 'mountain' && range.kind !== 'wall') {
+      issues.push(`El separador ${index + 1} tiene un tipo desconocido.`);
+    }
     if (!(range.width > 0)) {
-      issues.push(`El ancho de la cordillera ${index + 1} debe ser mayor que cero.`);
+      issues.push(`El ancho del separador ${index + 1} debe ser mayor que cero.`);
     }
     if (range.points.length < 2) {
-      issues.push(`La cordillera ${index + 1} necesita al menos dos puntos.`);
+      issues.push(`El separador ${index + 1} necesita al menos dos puntos.`);
     }
     if (range.points.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z))) {
-      issues.push(`La cordillera ${index + 1} tiene un punto no válido.`);
+      issues.push(`El separador ${index + 1} tiene un punto no válido.`);
     }
   });
   if (
@@ -543,6 +548,7 @@ export function isEditorMap(value: unknown): value is EditorMap {
     const validMountains = map.mountains.every(
       (range) =>
         range &&
+        (range.kind === undefined || range.kind === 'mountain' || range.kind === 'wall') &&
         typeof range.width === 'number' &&
         Array.isArray(range.points) &&
         range.points.length >= 2 &&

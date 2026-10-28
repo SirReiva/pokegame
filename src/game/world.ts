@@ -32,6 +32,7 @@ import {
   createSmokeCanvas,
   createSparkCanvas,
   createSoilCanvas,
+  createWallStoneCanvas,
   createWaterCanvas,
   createWispCanvas,
   textureFromCanvas
@@ -82,6 +83,12 @@ const SPAWN_TREES = false;
  * anchura del trazado siguen igual).
  */
 const MOUNTAIN_HEIGHT_SCALE = 0.7;
+
+/**
+ * Altura de los muros. La colisión y la visión usan el mismo ancho que en las
+ * cordilleras; solo cambia la malla, así que esta altura es puramente visual.
+ */
+const WALL_HEIGHT = 1.15;
 
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
@@ -276,6 +283,13 @@ export function buildWorld(app: pc.Application): World {
   // Piedra marrón de las cordilleras: tile repetible que envuelve los picos.
   const mountainRockTexture = textureFromCanvas(device, createMountainRockCanvas(), {
     name: 'mountain-rock',
+    repeat: true,
+    mipmaps: true
+  });
+
+  // Sillería gris de los muros: misma técnica de tile repetible.
+  const wallStoneTexture = textureFromCanvas(device, createWallStoneCanvas(), {
+    name: 'wall-stone',
     repeat: true,
     mipmaps: true
   });
@@ -554,7 +568,7 @@ export function buildWorld(app: pc.Application): World {
     colliders.push({ type: 'circle', x, z, radius: 0.55 * scale, sightRadius: 1.25 * scale });
   });
 
-  // --- Cordilleras ----------------------------------------------------------
+  // --- Separadores: cordilleras ---------------------------------------------
   // Picos de piedra que se alzan a lo largo de cada cresta. Cada pico es una
   // malla facetada con color por vértice: gris rocoso en la base y nieve en la
   // cima. Se reparten a lo largo del trazado suavizado y se solapan para leerse
@@ -709,6 +723,116 @@ export function buildWorld(app: pc.Application): World {
     buildMountainPeak(0x3a91 + variant * 4133)
   );
 
+  // --- Muros ----------------------------------------------------------------
+  // La sillería comparte collider y visión con la cordillera; solo cambia la
+  // malla. Cada tramo es un prisma alineado con el trazado, con almenas en los
+  // dos bordes y el hueco central de paso superior.
+  const wallMaterial = standard({
+    diffuse: '#ffffff',
+    diffuseMap: wallStoneTexture,
+    tiling: [2, 1],
+    specular: '#2b3036',
+    gloss: 0.16,
+    cull: pc.CULLFACE_NONE
+  });
+  wallMaterial.diffuseVertexColor = true;
+  wallMaterial.update();
+  materials.push(wallMaterial);
+
+  const WALL_DARK: [number, number, number] = [0.42, 0.44, 0.47];
+  const WALL_LIGHT: [number, number, number] = [0.82, 0.84, 0.87];
+
+  const buildWallSegment = (seed: number): pc.Mesh => {
+    const rand = random(seed);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    const addBox = (
+      cx: number,
+      cy: number,
+      cz: number,
+      sx: number,
+      sy: number,
+      sz: number,
+      color: [number, number, number]
+    ) => {
+      const x0 = cx - sx / 2;
+      const x1 = cx + sx / 2;
+      const y0 = cy - sy / 2;
+      const y1 = cy + sy / 2;
+      const z0 = cz - sz / 2;
+      const z1 = cz + sz / 2;
+
+      const faces: Array<{
+        normal: [number, number, number];
+        corners: Array<[number, number, number]>;
+      }> = [
+        { normal: [0, 0, 1], corners: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]] },
+        { normal: [0, 0, -1], corners: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]] },
+        { normal: [1, 0, 0], corners: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]] },
+        { normal: [-1, 0, 0], corners: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]] },
+        { normal: [0, 1, 0], corners: [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]] },
+        { normal: [0, -1, 0], corners: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]] }
+      ];
+      const faceUvs: Array<[number, number]> = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+      for (const face of faces) {
+        const start = positions.length / 3;
+        face.corners.forEach(([x, y, z], corner) => {
+          positions.push(x, y, z);
+          normals.push(face.normal[0], face.normal[1], face.normal[2]);
+          colors.push(color[0], color[1], color[2], 1);
+          uvs.push(faceUvs[corner][0], faceUvs[corner][1]);
+        });
+        indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+      }
+    };
+
+    const shade = (t: number): [number, number, number] => [
+      WALL_DARK[0] + (WALL_LIGHT[0] - WALL_DARK[0]) * t,
+      WALL_DARK[1] + (WALL_LIGHT[1] - WALL_DARK[1]) * t,
+      WALL_DARK[2] + (WALL_LIGHT[2] - WALL_DARK[2]) * t
+    ];
+
+    // Lienzo continuo de la base: el 78% inferior del muro.
+    addBox(0, 0.39, 0, 1, 0.78, 1, shade(0.55));
+
+    // Almenas en los dos bordes, con huecos entre ellas. Las de cada lado van
+    // a distinta altura para que la silueta no parezca una valla perfecta.
+    const merlons = 5;
+    for (let i = 0; i < merlons; i++) {
+      const x = -0.4 + (i / (merlons - 1)) * 0.8;
+      for (const side of [-1, 1]) {
+        const height = 0.18 + rand() * 0.07;
+        addBox(
+          x + (rand() - 0.5) * 0.03,
+          0.78 + height / 2,
+          side * 0.31,
+          0.12,
+          height,
+          0.36,
+          shade(0.7 + rand() * 0.3)
+        );
+      }
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setColors(colors);
+    mesh.setUvs(0, uvs);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const wallSegmentMeshes = [0, 1, 2, 3].map((variant) =>
+    buildWallSegment(0x5c21 + variant * 3571)
+  );
+
   /** Muestrea el trazado suavizado de una cresta (igual que `terrain.ts`). */
   const sampleRange = (
     points: Array<[number, number]>,
@@ -765,6 +889,56 @@ export function buildWorld(app: pc.Application): World {
         radius: range.width / 2,
         sightRadius: range.width * 0.65
       });
+    }
+
+    if (range.kind === 'wall') {
+      // Muros: un prisma por tramo, orientado con el trazado. Se alarga un poco
+      // para que los codos no dejen rendijas entre segmentos. Además, la
+      // colisión de cada tramo es una cápsula de radio `width / 2`, así que en
+      // los dos extremos del trazado sobresale media anchura: el primer y el
+      // último tramo se alargan lo mismo hacia fuera para tapar ese hueco.
+      const capExtension = range.width / 2;
+      const lastIndex = samples.length - 1;
+      for (let i = 1; i < samples.length; i++) {
+        const a = samples[i - 1];
+        const b = samples[i];
+        const dx = b[0] - a[0];
+        const dz = b[1] - a[1];
+        const length = Math.hypot(dx, dz);
+        if (length < 0.001) continue;
+
+        const extendStart = i === 1 ? capExtension : 0;
+        const extendEnd = i === lastIndex ? capExtension : 0;
+        const centerShift = (extendEnd - extendStart) / 2;
+        const unitX = dx / length;
+        const unitZ = dz / length;
+
+        const wall = new pc.Entity(`wall-${rangeIndex}-${i}`);
+        wall.setLocalPosition(
+          (a[0] + b[0]) / 2 + unitX * centerShift,
+          0.02,
+          (a[1] + b[1]) / 2 + unitZ * centerShift
+        );
+        wall.setLocalEulerAngles(0, (Math.atan2(-dz, dx) * 180) / Math.PI, 0);
+        wall.setLocalScale(
+          length + 0.3 + extendStart + extendEnd,
+          WALL_HEIGHT,
+          range.width
+        );
+        wall.addComponent('render');
+        wall.render!.castShadows = true;
+        wall.render!.receiveShadows = true;
+        const instance = new pc.MeshInstance(
+          wallSegmentMeshes[i % wallSegmentMeshes.length],
+          wallMaterial
+        );
+        instance.castShadow = true;
+        instance.receiveShadow = true;
+        wall.render!.meshInstances = [instance];
+        app.root.addChild(wall);
+        created.push(wall);
+      }
+      return;
     }
 
     // Picos: uno por muestra, con escalas y yaws variados. Se juntan lo
@@ -3555,6 +3729,7 @@ export function buildWorld(app: pc.Application): World {
       skyTexture.destroy();
       barkTexture.destroy();
       mountainRockTexture.destroy();
+      wallStoneTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
       for (const mesh of grassClusterMeshes) mesh.destroy();
       for (const mesh of flowerClusterMeshes) mesh.destroy();
@@ -3565,6 +3740,7 @@ export function buildWorld(app: pc.Application): World {
       for (const mesh of basaltMeshes) mesh.destroy();
       for (const mesh of ghostTreeMeshes) mesh.destroy();
       for (const mesh of mountainPeakMeshes) mesh.destroy();
+      for (const mesh of wallSegmentMeshes) mesh.destroy();
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
       for (const mesh of lightningMeshes) mesh.destroy();

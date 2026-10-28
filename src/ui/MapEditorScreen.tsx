@@ -42,6 +42,7 @@ import {
 import {
   TERRAIN_IDS,
   TERRAINS,
+  type BarrierKind,
   type MountainRange,
   type Team,
   type TerrainId
@@ -84,7 +85,13 @@ const DRAFT_KEY = 'newpoke.map-editor.draft.v1';
 const SIZE_PRESETS = [16, 24, 32, 48, 64, 76];
 const DEFAULT_MOUNTAIN_WIDTH = 2.2;
 const MOUNTAIN_COLOR = 'rgba(216, 199, 170, 0.9)';
+const WALL_COLOR = 'rgba(184, 196, 210, 0.92)';
 const MOUNTAIN_SELECTED_COLOR = '#7ac74c';
+
+/** Etiqueta visible de un tipo de separador. */
+function barrierLabel(kind: BarrierKind | undefined): string {
+  return kind === 'wall' ? 'Muro' : 'Cordillera';
+}
 
 const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
   { id: 'pencil', label: 'Lápiz', key: 'B', title: 'Pinta celdas al arrastrar' },
@@ -93,9 +100,9 @@ const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
   { id: 'eraser', label: 'Borrador', key: 'E', title: 'Pinta con el terreno de fondo' },
   {
     id: 'mountain',
-    label: 'Cordillera',
+    label: 'Separador',
     key: 'M',
-    title: 'Haz clic para añadir puntos; doble clic o Enter para cerrar'
+    title: 'Cordilleras y muros: haz clic para añadir puntos; doble clic o Enter para cerrar'
   },
   { id: 'base-blue', label: 'Base azul', key: '1', title: 'Coloca o mueve la base del equipo azul' },
   { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' }
@@ -176,6 +183,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const [toast, setToast] = useState<string | null>(null);
   const [viewport, setViewport] = useState({ width: 900, height: 640 });
   const [mountainWidth, setMountainWidth] = useState(DEFAULT_MOUNTAIN_WIDTH);
+  const [barrierKind, setBarrierKind] = useState<BarrierKind>('mountain');
   const [selectedMountain, setSelectedMountain] = useState<number | null>(null);
   const [draftPoints, setDraftPoints] = useState<Array<[number, number]>>([]);
 
@@ -484,8 +492,24 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     if (!current || !range) return;
     setSelectedMountain(index);
     setMountainWidth(range.width);
+    setBarrierKind(range.kind ?? 'mountain');
     setDraftPoints([]);
     setTool('mountain');
+  };
+
+  /**
+   * Cambia el tipo del separador seleccionado o, si no hay ninguno, el tipo
+   * con el que se trazará el siguiente. La colisión no cambia.
+   */
+  const changeBarrierKind = (kind: BarrierKind) => {
+    setBarrierKind(kind);
+    if (selectedMountain === null) return;
+    mutateMountains((mountains) => {
+      const range = mountains[selectedMountain];
+      if (!range || (range.kind ?? 'mountain') === kind) return false;
+      range.kind = kind;
+      return true;
+    }, true);
   };
 
   const startMountainDraft = () => {
@@ -498,30 +522,34 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     const current = stateRef.current.map;
     if (!current) return;
     if (!(mountainWidth > 0)) {
-      setToast('El ancho de la cordillera debe ser mayor que cero.');
+      setToast('El ancho del separador debe ser mayor que cero.');
       return;
     }
     if (draftPoints.length < 2) {
-      setToast('Añade al menos dos puntos para crear una cordillera.');
+      setToast('Añade al menos dos puntos para crear un separador.');
       return;
     }
     const points = draftPoints.map(([x, z]) => [x, z] as [number, number]);
-    const mountains = [...cloneMountains(current.mountains), { width: mountainWidth, points }];
+    const mountains = [
+      ...cloneMountains(current.mountains),
+      { kind: barrierKind, width: mountainWidth, points }
+    ];
     updateMap({ ...current, mountains }, true);
     setSelectedMountain(mountains.length - 1);
     setDraftPoints([]);
-    setToast('Cordillera añadida. Arrastra uno de sus puntos para moverlo.');
+    setToast(`${barrierLabel(barrierKind)} añadido. Arrastra uno de sus puntos para moverlo.`);
   };
 
   const removeMountain = (index: number) => {
     const current = stateRef.current.map;
     if (!current || !current.mountains[index]) return;
+    const removed = current.mountains[index];
     const mountains = cloneMountains(current.mountains);
     mountains.splice(index, 1);
     updateMap({ ...current, mountains }, true);
     setSelectedMountain(null);
     setDraftPoints([]);
-    setToast('Cordillera eliminada.');
+    setToast(`${barrierLabel(removed.kind)} eliminado.`);
   };
 
   const updateMountainWidth = (width: number) => {
@@ -555,13 +583,13 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         if (pointHit) {
           const range = current.mountains[pointHit.rangeIndex];
           if (range && range.points.length <= 2) {
-            setToast('Una cordillera necesita al menos dos puntos.');
+            setToast('Un separador necesita al menos dos puntos.');
           } else if (range) {
             const mountains = cloneMountains(current.mountains);
             mountains[pointHit.rangeIndex].points.splice(pointHit.pointIndex, 1);
             updateMap({ ...current, mountains }, true);
             setSelectedMountain(pointHit.rangeIndex);
-            setToast('Punto de la cordillera eliminado.');
+            setToast('Punto del separador eliminado.');
           }
         } else {
           setSelectedMountain(null);
@@ -734,7 +762,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     mountains[segment.rangeIndex].points.splice(segment.insertIndex, 0, segment.point);
     updateMap({ ...current, mountains }, true);
     setSelectedMountain(segment.rangeIndex);
-    setToast('Punto añadido a la cordillera.');
+    setToast('Punto añadido al separador.');
   };
 
   const selectTerrain = (next: TerrainId) => {
@@ -790,6 +818,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     setSelectedMountain(null);
     setDraftPoints([]);
     setMountainWidth(imported.mountains[0]?.width ?? DEFAULT_MOUNTAIN_WIDTH);
+    setBarrierKind(imported.mountains[0]?.kind ?? 'mountain');
     syncSizeInputs(imported.cols, imported.rows);
     setSetupOpen(false);
     setFormError(null);
@@ -1107,7 +1136,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       context.stroke();
     }
 
-    // --- Cordilleras ---------------------------------------------------------
+    // --- Separadores ---------------------------------------------------------
     const halfX = (map.cols * map.meta.tileSize) / 2;
     const halfZ = (map.rows * map.meta.tileSize) / 2;
     const toCanvas = (x: number, z: number) => ({
@@ -1130,15 +1159,24 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     map.mountains.forEach((range, index) => {
       if (range.points.length === 0) return;
       const selected = showMountainHandles && selectedMountain === index;
+      const isWall = range.kind === 'wall';
       const bandWidth = Math.max(3, (range.width / map.meta.tileSize) * cellSize);
       context.save();
       context.lineCap = 'round';
       context.lineJoin = 'round';
       tracePoints(range.points);
-      context.strokeStyle = selected ? 'rgba(122, 199, 76, 0.4)' : 'rgba(196, 180, 158, 0.36)';
+      context.strokeStyle = selected
+        ? 'rgba(122, 199, 76, 0.4)'
+        : isWall
+          ? 'rgba(142, 158, 176, 0.38)'
+          : 'rgba(196, 180, 158, 0.36)';
       context.lineWidth = bandWidth;
       context.stroke();
-      context.strokeStyle = selected ? MOUNTAIN_SELECTED_COLOR : MOUNTAIN_COLOR;
+      context.strokeStyle = selected
+        ? MOUNTAIN_SELECTED_COLOR
+        : isWall
+          ? WALL_COLOR
+          : MOUNTAIN_COLOR;
       context.lineWidth = Math.max(1, Math.min(2, cellSize * 0.14));
       context.stroke();
       context.restore();
@@ -1179,7 +1217,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           const point = toCanvas(x, z);
           context.beginPath();
           context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-          context.fillStyle = selected ? MOUNTAIN_SELECTED_COLOR : 'rgba(235, 226, 209, 0.88)';
+          context.fillStyle = selected
+            ? MOUNTAIN_SELECTED_COLOR
+            : range.kind === 'wall'
+              ? 'rgba(214, 223, 234, 0.9)'
+              : 'rgba(235, 226, 209, 0.88)';
           context.fill();
           context.lineWidth = Math.max(1, radius * 0.35);
           context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
@@ -1202,7 +1244,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       context.lineJoin = 'round';
       if (draftPoints.length >= 2 && mountainWidth > 0) {
         tracePoints(draftPoints);
-        context.strokeStyle = 'rgba(122, 199, 76, 0.24)';
+        context.strokeStyle =
+          barrierKind === 'wall' ? 'rgba(142, 158, 176, 0.28)' : 'rgba(122, 199, 76, 0.24)';
         context.lineWidth = Math.max(3, (mountainWidth / map.meta.tileSize) * cellSize);
         context.stroke();
       }
@@ -1274,12 +1317,14 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     tool,
     selectedMountain,
     draftPoints,
-    mountainWidth
+    mountainWidth,
+    barrierKind
   ]);
 
   const activeTool = TOOLS.find((entry) => entry.id === tool);
   const selectedRange =
     map && selectedMountain !== null ? map.mountains[selectedMountain] : undefined;
+  const selectedKind = selectedRange ? (selectedRange.kind ?? 'mountain') : barrierKind;
   const mountainWidthValue = selectedRange?.width ?? mountainWidth;
   const canExport = map !== null && issues.length === 0;
 
@@ -1496,7 +1541,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             </span>
             <span className="ml-auto">
               <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno · <KeyPill>R</KeyPill>{' '}
-              rectángulo · <KeyPill>E</KeyPill> borrador · <KeyPill>M</KeyPill> cordillera ·{' '}
+              rectángulo · <KeyPill>E</KeyPill> borrador · <KeyPill>M</KeyPill> separador ·{' '}
               <KeyPill>Ctrl+Z</KeyPill> deshacer
             </span>
           </footer>
@@ -1596,7 +1641,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             </button>
             <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
               Redimensionar conserva la esquina noroeste, rellena lo nuevo con el terreno de fondo y
-              desplaza las cordilleras con la rejilla.
+              desplaza los separadores con la rejilla.
             </p>
           </section>
 
@@ -1641,14 +1686,15 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           </section>
 
           <section>
-            <h2 className={sectionTitle}>Cordilleras</h2>
+            <h2 className={sectionTitle}>Separadores</h2>
             <div className="flex flex-col gap-1.5">
               {map && map.mountains.length > 0 ? (
                 map.mountains.map((range, index) => {
                   const selected = tool === 'mountain' && selectedMountain === index;
+                  const label = barrierLabel(range.kind);
                   return (
                     <div
-                      key={`mountain-${index}`}
+                      key={`barrier-${index}`}
                       className={`flex items-center gap-1.5 rounded-[9px] border px-2 py-1.5 ${
                         selected
                           ? 'border-accent/60 bg-accent/10'
@@ -1659,10 +1705,10 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                         type="button"
                         className="min-w-0 flex-1 cursor-pointer text-left"
                         onClick={() => selectMountain(index)}
-                        title="Seleccionar la cordillera para mover sus puntos"
+                        title={`Seleccionar ${label.toLowerCase()} para mover sus puntos`}
                       >
                         <span className="block truncate text-[0.74rem] text-[#d7e2ee]">
-                          Cordillera {index + 1}
+                          {label} {index + 1}
                         </span>
                         <span className="block font-mono text-[0.6rem] text-[#8fa3b8]">
                           {range.points.length}{' '}
@@ -1674,8 +1720,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                         type="button"
                         className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-[0.85rem] text-muted transition-colors hover:border-[#ff5c5c]/40 hover:bg-[#ff5c5c]/10 hover:text-[#ffb2b5]"
                         onClick={() => removeMountain(index)}
-                        title="Eliminar cordillera"
-                        aria-label={`Eliminar cordillera ${index + 1}`}
+                        title={`Eliminar ${label.toLowerCase()}`}
+                        aria-label={`Eliminar ${label.toLowerCase()} ${index + 1}`}
                       >
                         ×
                       </button>
@@ -1684,17 +1730,44 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 })
               ) : (
                 <p className="rounded-[9px] border border-line bg-white/[0.03] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-muted">
-                  Sin cordilleras. Usa «Dibujar cordillera» y haz clic en la rejilla para trazar
-                  una.
+                  Sin separadores. Usa «Dibujar separador» y haz clic en la rejilla para trazar uno.
                 </p>
               )}
+            </div>
+
+            <div className={`${fieldClass} mt-2`}>
+              <span>
+                {selectedMountain !== null
+                  ? 'Tipo del separador seleccionado'
+                  : 'Tipo del nuevo separador'}
+              </span>
+              <div className="flex gap-1.5">
+                {(['mountain', 'wall'] as const).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={`${btnClass(selectedKind === kind ? 'primary' : 'ghost', 'tiny')} flex-1`}
+                    onClick={() => changeBarrierKind(kind)}
+                    disabled={!map}
+                    title={
+                      kind === 'wall'
+                        ? 'Muro de piedra con almenas: misma colisión y visión'
+                        : 'Cordillera de picos: misma colisión y visión'
+                    }
+                  >
+                    {kind === 'wall' ? 'Muro' : 'Cordillera'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <label className={`${fieldClass} mt-2`}>
               <span>
                 {selectedMountain !== null
-                  ? `Ancho de la cordillera ${selectedMountain + 1}`
-                  : 'Ancho de la nueva cordillera'}
+                  ? `Ancho del ${selectedKind === 'wall' ? 'muro' : 'cordillera'} ${
+                      selectedMountain + 1
+                    }`
+                  : 'Ancho del nuevo separador'}
               </span>
               <input
                 className={inputClass}
@@ -1714,7 +1787,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 onClick={startMountainDraft}
                 disabled={!map}
               >
-                Dibujar cordillera
+                Dibujar separador
               </button>
               {selectedMountain !== null && (
                 <button
@@ -1729,7 +1802,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
             {draftPoints.length > 0 && (
               <div className="mt-2 rounded-[9px] border border-accent/40 bg-accent/[0.08] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-[#d7e2ee]">
-                Trazando cordillera · {draftPoints.length}{' '}
+                Trazando {barrierKind === 'wall' ? 'muro' : 'cordillera'} · {draftPoints.length}{' '}
                 {draftPoints.length === 1 ? 'punto' : 'puntos'}
                 <div className="mt-1.5 flex gap-1.5">
                   <button
@@ -1752,9 +1825,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             )}
 
             <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
-              Haz clic para añadir puntos y doble clic o <KeyPill>Enter</KeyPill> para cerrar.
-              Arrastra un punto para moverlo; doble clic sobre la línea añade uno y el clic derecho
-              sobre un punto lo quita.
+              Elige arriba si el trazado es cordillera o muro. Haz clic para añadir puntos y doble
+              clic o <KeyPill>Enter</KeyPill> para cerrar. Arrastra un punto para moverlo; doble
+              clic sobre la línea añade uno y el clic derecho sobre un punto lo quita.
             </p>
           </section>
 
@@ -1791,7 +1864,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 <KeyPill>1</KeyPill> base azul · <KeyPill>2</KeyPill> base roja
               </li>
               <li className="flex items-center gap-2">
-                <KeyPill>M</KeyPill> cordillera · <KeyPill>Enter</KeyPill> cerrar trazado
+                <KeyPill>M</KeyPill> separador · <KeyPill>Enter</KeyPill> cerrar trazado
               </li>
               <li className="flex items-center gap-2">
                 <KeyPill>Ctrl+Z</KeyPill> deshacer · <KeyPill>Ctrl+Y</KeyPill> rehacer
@@ -1800,7 +1873,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 <KeyPill>+ / −</KeyPill> zoom · <KeyPill>0</KeyPill> ajustar
               </li>
               <li className="text-[0.68rem] leading-[1.45] text-muted">
-                Clic derecho pinta con el terreno de fondo. Con la herramienta Cordillera, quita
+                Clic derecho pinta con el terreno de fondo. Con la herramienta Separador, quita
                 el último punto del trazado o el punto bajo el cursor.
               </li>
             </ul>
