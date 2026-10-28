@@ -8,8 +8,36 @@ export interface InputDeviceInfo {
   id: string;
   kind: 'keyboard' | 'gamepad';
   label: string;
+  /** Familia del mando, deducida de su `id`; `null` en el teclado. */
+  family: GamepadFamily | null;
   /** Índice del Gamepad API cuando es un mando. */
   index: number | null;
+}
+
+/** Familias de mando con distribución de botones conocida. */
+export type GamepadFamily = 'xbox' | 'playstation' | 'nintendo' | 'generic';
+
+/**
+ * Deduce la familia a partir del identificador que expone la Gamepad API.
+ * Los formatos varían por navegador, así que se aceptan tanto nombres
+ * ("DualSense", "Xbox Wireless Controller") como ids de fabricante
+ * ("Vendor: 054c", "045e-0b13-...").
+ */
+export function detectGamepadFamily(id: string): GamepadFamily {
+  const name = id.toLowerCase();
+  if (
+    /dualsense|dualshock|playstation|sony/.test(name) ||
+    /\b054c\b/.test(name)
+  ) {
+    return 'playstation';
+  }
+  if (/xbox|xinput|microsoft/.test(name) || /\b045e\b/.test(name)) {
+    return 'xbox';
+  }
+  if (/nintendo|switch|joy-?con|pro controller/.test(name) || /\b057e\b/.test(name)) {
+    return 'nintendo';
+  }
+  return 'generic';
 }
 
 export interface DeviceInputSnapshot {
@@ -169,7 +197,7 @@ export class Input {
 
   private collectDevices(): { devices: InputDeviceInfo[]; pads: Map<number, Gamepad> } {
     const devices: InputDeviceInfo[] = [
-      { id: KEYBOARD_ID, kind: 'keyboard', label: 'Teclado', index: null }
+      { id: KEYBOARD_ID, kind: 'keyboard', label: 'Teclado', family: null, index: null }
     ];
     const pads = new Map<number, Gamepad>();
 
@@ -181,6 +209,7 @@ export class Input {
           id: `pad-${pad.index}`,
           kind: 'gamepad',
           label: `Mando ${pad.index + 1}`,
+          family: detectGamepadFamily(pad.id),
           index: pad.index
         });
       }
@@ -348,7 +377,9 @@ export class Input {
       if (result.action) actions.push({ deviceId: `pad-${index}`, action: result.action });
     }
 
-    const ids = devices.map((device) => device.id).join('|');
+    const ids = devices
+      .map((device) => `${device.id}:${device.family ?? 'none'}`)
+      .join('|');
     const changed = ids !== this.lastDeviceIds;
     this.lastDeviceIds = ids;
 

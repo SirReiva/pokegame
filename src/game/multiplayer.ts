@@ -172,6 +172,7 @@ export interface LobbyPlayer {
   name: string;
   deviceId: string;
   deviceKind: InputDeviceInfo['kind'];
+  deviceFamily: InputDeviceInfo['family'];
   deviceLabel: string;
   team: Team;
   teamReady: boolean;

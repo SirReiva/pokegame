@@ -136,6 +136,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           name: `J${slot}`,
           deviceId: device.id,
           deviceKind: device.kind,
+          deviceFamily: device.family,
           deviceLabel: device.label,
           team,
           teamReady: false,

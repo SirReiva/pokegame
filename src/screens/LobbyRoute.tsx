@@ -13,6 +13,7 @@ function fallbackDevice(deviceId: string): InputDeviceInfo {
     id: deviceId,
     kind: keyboard ? 'keyboard' : 'gamepad',
     label: keyboard ? 'Teclado' : 'Mando',
+    family: keyboard ? null : 'generic',
     index: null
   };
 }
@@ -79,7 +80,6 @@ function LobbyContent() {
       mapId={session.mapId}
       onChangeMap={session.setMapId}
       onJoin={session.joinDevice}
-      onTeam={session.setPlayerTeam}
       onReady={session.toggleTeamReady}
       onLeave={session.leavePlayer}
       onContinue={() => {

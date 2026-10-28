@@ -12,6 +12,8 @@ import {
 import type { Team } from '../game/terrain';
 import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
+import { confirmHint } from './deviceInfo';
+import { DeviceIcon } from './DeviceIcon';
 import { KeyPill } from './KeyPill';
 import { eyebrow, stepActive, stepIdle } from './styles';
 
@@ -22,7 +24,6 @@ interface LobbyScreenProps {
   mapId: string;
   onChangeMap: (mapId: string) => void;
   onJoin: (device: InputDeviceInfo) => void;
-  onTeam: (slot: number, team: Team) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
   onContinue: () => void;
@@ -41,15 +42,11 @@ const emptyTeam =
 function TeamColumn({
   team,
   players,
-  counts,
-  onTeam,
   onReady,
   onLeave
 }: {
   team: Team;
   players: LobbyPlayer[];
-  counts: Record<Team, number>;
-  onTeam: (slot: number, team: Team) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
 }) {
@@ -77,77 +74,54 @@ function TeamColumn({
 
       <div className="mt-3.5 flex flex-col gap-2.5">
         {roster.length === 0 && <p className={emptyTeam}>Nadie en este equipo todavía.</p>}
-        {roster.map((player) => {
-          const switchBlocked = (target: Team) =>
-            target !== player.team && counts[target] >= MAX_TEAM_SIZE;
-
-          return (
-            <article
-              key={player.slot}
-              className={`relative animate-pop-in rounded-[14px] border border-[color:color-mix(in_srgb,var(--team)_34%,var(--color-line))] border-l-[3px] border-l-(--team) px-3 py-2.5 transition-colors duration-200 ${
-                player.teamReady
-                  ? 'border-[color:color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]'
-                  : 'bg-[#070c13]/65'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-display text-[1.05rem] font-extrabold text-(--team)">
-                  {player.name}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[0.7rem] text-[#8b9db2]">
-                  {player.deviceLabel}
-                </span>
-                <span
-                  className={`font-mono text-[0.56rem] tracking-[0.08em] uppercase ${
-                    player.teamReady ? 'text-[#bff39d]' : 'text-[#7f92a7]'
-                  }`}
-                >
-                  {player.teamReady ? 'Listo' : 'Eligiendo'}
-                </span>
-              </div>
-
-              <div
-                className="mt-2 inline-flex overflow-hidden rounded-full border border-line bg-white/[0.03]"
-                role="group"
-                aria-label={`Equipo de ${player.name}`}
+        {roster.map((player) => (
+          <article
+            key={player.slot}
+            className={`relative animate-pop-in rounded-[14px] border border-[color:color-mix(in_srgb,var(--team)_34%,var(--color-line))] border-l-[3px] border-l-(--team) px-3 py-2.5 transition-colors duration-200 ${
+              player.teamReady
+                ? 'border-[color:color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]'
+                : 'bg-[#070c13]/65'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className="font-display text-[1.05rem] font-extrabold text-(--team)">
+                {player.name}
+              </span>
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[0.7rem] text-[#8b9db2]">
+                <DeviceIcon
+                  kind={player.deviceKind}
+                  family={player.deviceFamily}
+                  className="size-3.5 flex-none"
+                />
+                <span className="truncate">{player.deviceLabel}</span>
+              </span>
+              <span
+                className={`font-mono text-[0.56rem] tracking-[0.08em] uppercase ${
+                  player.teamReady ? 'text-[#bff39d]' : 'text-[#7f92a7]'
+                }`}
               >
-                {TEAM_ORDER.map((target) => (
-                  <button
-                    key={target}
-                    type="button"
-                    className={`cursor-pointer border-0 px-2.5 py-[5px] font-mono text-[0.62rem] tracking-[0.06em] uppercase transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-30 ${
-                      target === player.team
-                        ? 'bg-(--team) font-bold text-[#06101a]'
-                        : 'bg-transparent text-[#8b9db2]'
-                    }`}
-                    style={{ '--team': TEAM_INFO[target].color } as CSSProperties}
-                    disabled={switchBlocked(target)}
-                    onClick={() => onTeam(player.slot, target)}
-                  >
-                    {TEAM_INFO[target].short}
-                  </button>
-                ))}
-              </div>
+                {player.teamReady ? 'Listo' : 'Eligiendo'}
+              </span>
+            </div>
 
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  className={btnClass(player.teamReady ? 'accent' : 'neutral', 'tiny')}
-                  onClick={() => onReady(player.slot)}
-                >
-                  {player.teamReady ? '✓ Listo' : 'Marcar listo'}
-                </button>
-                <button
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  onClick={() => onLeave(player.slot)}
-                >
-                  Salir
-                </button>
-              </div>
-            </article>
-          );
-        })}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                className={btnClass(player.teamReady ? 'accent' : 'neutral', 'tiny')}
+                onClick={() => onReady(player.slot)}
+              >
+                {player.teamReady ? '✓ Listo' : 'Marcar listo'}
+              </button>
+              <button
+                type="button"
+                className={btnClass('ghost', 'tiny')}
+                onClick={() => onLeave(player.slot)}
+              >
+                Salir
+              </button>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -160,7 +134,6 @@ export function LobbyScreen({
   mapId,
   onChangeMap,
   onJoin,
-  onTeam,
   onReady,
   onLeave,
   onContinue,
@@ -205,8 +178,8 @@ export function LobbyScreen({
             <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">Elige los equipos</h2>
             <p className="mt-2 max-w-[46ch] text-[0.9rem] leading-[1.55] text-muted">
               Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
-              <strong>Espacio</strong> en el teclado) para unirte. Después elige lado y marca
-              listo. Hasta 4 jugadores por equipo.
+              <strong>Espacio</strong> en el teclado) para unirte. Después cambia de lado con{' '}
+              <strong>← →</strong> y marca listo. Hasta 4 jugadores por equipo.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-[#090f18]/[0.72] px-4 py-2.5 max-[760px]:hidden">
@@ -239,8 +212,6 @@ export function LobbyScreen({
                 key={team}
                 team={team}
                 players={players}
-                counts={counts}
-                onTeam={onTeam}
                 onReady={onReady}
                 onLeave={onLeave}
               />
@@ -284,17 +255,15 @@ export function LobbyScreen({
                     className="flex items-center gap-2.5 rounded-xl border border-line bg-white/[0.025] px-2.5 py-[9px]"
                     key={device.id}
                   >
-                    <span
-                      className={`size-2 flex-none rounded-full ${
-                        device.kind === 'keyboard'
-                          ? 'bg-[#7ac74c] shadow-[0_0_8px_rgb(122_199_76/0.8)]'
-                          : 'bg-team-blue shadow-[0_0_8px_rgb(75_156_255/0.8)]'
-                      }`}
+                    <DeviceIcon
+                      kind={device.kind}
+                      family={device.family}
+                      className="size-[18px] flex-none"
                     />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <strong className="text-[0.8rem]">{device.label}</strong>
-                      <span className="font-mono text-[0.58rem] tracking-[0.06em] uppercase text-[#7f92a7]">
-                        {device.kind === 'keyboard' ? 'Espacio / Enter' : 'Botón A'}
+                      <span className="truncate font-mono text-[0.58rem] tracking-[0.06em] uppercase text-[#7f92a7]">
+                        {confirmHint(device.kind, device.family)}
                       </span>
                     </div>
                     <button
