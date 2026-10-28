@@ -1,7 +1,7 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
 import type { SplitRect } from './multiplayer';
-import { mapHalfSize } from './terrain';
+import { mapHalfDepth, mapHalfWidth } from './terrain';
 
 /**
  * Niebla de guerra dibujada por el motor.
@@ -68,7 +68,7 @@ uniform float uFogOpacity;
 uniform sampler2D uFogMask;
 uniform vec2 uPlayer;
 uniform float uVisionRange;
-uniform float uMapHalfSize;
+uniform vec2 uMapHalfSize;
 uniform vec2 uScreenCenter;
 uniform vec2 uScreenRadius;
 uniform float uScreenFeather;
@@ -434,7 +434,7 @@ export class FogDecal {
     this.material.setParameter('uFogMask', this.maskTexture);
     this.material.setParameter('uPlayer', this.player);
     this.material.setParameter('uVisionRange', 0);
-    this.material.setParameter('uMapHalfSize', mapHalfSize());
+    this.material.setParameter('uMapHalfSize', new Float32Array([mapHalfWidth(), mapHalfDepth()]));
     this.material.setParameter('uScreenCenter', this.screenCenter);
     this.material.setParameter('uScreenRadius', this.screenRadius);
     this.material.setParameter('uScreenFeather', this.screenFeather);
@@ -449,8 +449,9 @@ export class FogDecal {
 
     this.entity = new pc.Entity(`fog-decal-${index + 1}`);
     this.entity.setPosition(0, 0.02, 0);
-    const half = mapHalfSize();
-    this.entity.setLocalScale(half, 1, half);
+    const halfX = mapHalfWidth();
+    const halfZ = mapHalfDepth();
+    this.entity.setLocalScale(halfX, 1, halfZ);
     this.entity.addComponent('render');
     const render = this.entity.render!;
     render.meshInstances = [instance];
@@ -514,9 +515,10 @@ export class FogDecal {
     context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
     context.fillStyle = '#000';
 
-    const half = mapHalfSize();
-    const toCanvasX = (x: number) => ((x + half) / (half * 2)) * MASK_SIZE;
-    const toCanvasY = (z: number) => ((z + half) / (half * 2)) * MASK_SIZE;
+    const halfX = mapHalfWidth();
+    const halfZ = mapHalfDepth();
+    const toCanvasX = (x: number) => ((x + halfX) / (halfX * 2)) * MASK_SIZE;
+    const toCanvasY = (z: number) => ((z + halfZ) / (halfZ * 2)) * MASK_SIZE;
 
     const candidates: Array<SightOccluder & { distance: number }> = [];
     for (const occluder of this.occluders) {

@@ -209,7 +209,8 @@ const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
 function paintTerrainZone(
   ctx: CanvasRenderingContext2D,
   zone: TerrainZone,
-  toPx: (world: number) => number,
+  toPxX: (world: number) => number,
+  toPxY: (world: number) => number,
   scale: number,
 ): void {
   const palette = TERRAIN_PALETTES[zone.terrain];
@@ -221,8 +222,8 @@ function paintTerrainZone(
     (Math.round(centerX * 811) * 73856093) ^
       (Math.round(centerZ * 613) * 19349663),
   );
-  const cx = toPx(centerX);
-  const cy = toPx(centerZ);
+  const cx = toPxX(centerX);
+  const cy = toPxY(centerZ);
   // Radio del cuadrado que envuelve la forma: sirve para repartir detalles.
   const radius = (Math.max(bounds.width, bounds.depth) / 2) * scale;
   const seed = centerX * 1.31 + centerZ * 1.77;
@@ -239,9 +240,9 @@ function paintTerrainZone(
     if ("points" in zone) {
       const points = zone.points;
       if (points.length === 0) return;
-      ctx.moveTo(toPx(points[0][0]), toPx(points[0][1]));
+      ctx.moveTo(toPxX(points[0][0]), toPxY(points[0][1]));
       for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(toPx(points[i][0]), toPx(points[i][1]));
+        ctx.lineTo(toPxX(points[i][0]), toPxY(points[i][1]));
       }
       ctx.closePath();
     } else {
@@ -265,10 +266,10 @@ function paintTerrainZone(
   // Bloque de suelo: se recorre el rectángulo envolvente en coordenadas de
   // mundo para que círculos y polígonos compartan el mismo grano de 4 px.
   const worldPerPixel = 1 / scale;
-  const startX = Math.floor(toPx(bounds.minX) / step) * step;
-  const startY = Math.floor(toPx(bounds.minZ) / step) * step;
-  const endX = Math.ceil(toPx(bounds.maxX) / step) * step;
-  const endY = Math.ceil(toPx(bounds.maxZ) / step) * step;
+  const startX = Math.floor(toPxX(bounds.minX) / step) * step;
+  const startY = Math.floor(toPxY(bounds.minZ) / step) * step;
+  const endX = Math.ceil(toPxX(bounds.maxX) / step) * step;
+  const endY = Math.ceil(toPxY(bounds.maxZ) / step) * step;
   for (let py = startY; py <= endY; py += step) {
     for (let px = startX; px <= endX; px += step) {
       const wx = centerX + (px + step / 2 - cx) * worldPerPixel;
@@ -583,26 +584,21 @@ function paintTerrainZone(
 }
 
 /** Pinta la rejilla base del mapa, celda a celda. */
-function paintGridTiles(
-  ctx: CanvasRenderingContext2D,
-  map: GameMap,
-  size: number,
-): void {
+function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
   const rows = map.tiles.length;
   const cols = map.tiles[0]?.length ?? 0;
-  const half = (Math.max(rows, cols) * map.tileSize) / 2;
-  const scale = size / (half * 2);
-  const cellPx = map.tileSize * scale;
+  const cellPxX = ctx.canvas.width / cols;
+  const cellPxY = ctx.canvas.height / rows;
   const step = 4;
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const terrain = map.tiles[row][col];
       const palette = TERRAIN_PALETTES[terrain];
-      const x0 = Math.round(col * cellPx);
-      const y0 = Math.round(row * cellPx);
-      const x1 = Math.round((col + 1) * cellPx);
-      const y1 = Math.round((row + 1) * cellPx);
+      const x0 = Math.round(col * cellPxX);
+      const y0 = Math.round(row * cellPxY);
+      const x1 = Math.round((col + 1) * cellPxX);
+      const y1 = Math.round((row + 1) * cellPxY);
       const random = mulberry32(
         (row * 73856093) ^ (col * 19349663) ^ 0x5eed,
       );
@@ -706,12 +702,13 @@ function paintGridTiles(
 function paintBases(
   ctx: CanvasRenderingContext2D,
   map: GameMap,
-  toPx: (world: number) => number,
+  toPxX: (world: number) => number,
+  toPxY: (world: number) => number,
   scale: number,
 ): void {
   for (const base of map.respawns) {
-    const bx = toPx(base.x);
-    const by = toPx(base.z);
+    const bx = toPxX(base.x);
+    const by = toPxY(base.z);
     const ring = base.team === "blue" ? "#5b8fd9" : "#d96b5b";
     ctx.fillStyle = "#8d8577";
     ctx.beginPath();
@@ -740,6 +737,8 @@ function paintBases(
 /**
  * Suelo del mapa: cada celda pinta su terreno y encima se añaden los detalles
  * de los calveros, las plataformas de las bases y las flores de la jungla.
+ * `size` es el lado mayor de la textura; el otro se deriva del aspecto del
+ * mapa para que un mapa rectangular no se deforme.
  */
 export function createGroundCanvas(
   size: number,
@@ -747,29 +746,36 @@ export function createGroundCanvas(
 ): HTMLCanvasElement {
   const { map, zones } = options;
   const rows = map.tiles.length;
-  const half = (rows * map.tileSize) / 2;
-  const toPx = (world: number) => ((world + half) / (half * 2)) * size;
-  const scale = size / (half * 2);
+  const cols = map.tiles[0]?.length ?? 0;
+  const worldWidth = cols * map.tileSize;
+  const worldDepth = rows * map.tileSize;
+  const scale = size / Math.max(worldWidth, worldDepth);
+  const width = Math.max(1, Math.round(worldWidth * scale));
+  const height = Math.max(1, Math.round(worldDepth * scale));
+  const halfX = worldWidth / 2;
+  const halfZ = worldDepth / 2;
+  const toPxX = (world: number) => ((world + halfX) / worldWidth) * width;
+  const toPxY = (world: number) => ((world + halfZ) / worldDepth) * height;
   const random = mulberry32(0x5eed);
-  const ctx = canvas2d(size);
+  const ctx = canvas2d(width, height);
 
   ctx.fillStyle = TERRAIN_PALETTES.jungle.base;
-  ctx.fillRect(0, 0, size, size);
+  ctx.fillRect(0, 0, width, height);
 
-  paintGridTiles(ctx, map, size);
+  paintGridTiles(ctx, map);
 
   // Detalle procedural de los calveros temáticos.
   for (const zone of zones) {
-    paintTerrainZone(ctx, zone, toPx, scale);
+    paintTerrainZone(ctx, zone, toPxX, toPxY, scale);
   }
 
-  paintBases(ctx, map, toPx, scale);
+  paintBases(ctx, map, toPxX, toPxY, scale);
 
   // Flores: ramilletes solo en la jungla, lejos de cordilleras.
   const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
   for (let i = 0; i < 220; i++) {
-    const x = (random() * 2 - 1) * (half - 1.5);
-    const z = (random() * 2 - 1) * (half - 1.5);
+    const x = (random() * 2 - 1) * (halfX - 1.5);
+    const z = (random() * 2 - 1) * (halfZ - 1.5);
     if (terrainAt(x, z) !== "jungle") continue;
     if (onMountain(x, z)) continue;
     const color = petals[Math.floor(random() * petals.length)];
@@ -777,8 +783,8 @@ export function createGroundCanvas(
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.9;
       ctx.fillRect(
-        toPx(x) + (random() * 6 - 3),
-        toPx(z) + (random() * 6 - 3),
+        toPxX(x) + (random() * 6 - 3),
+        toPxY(z) + (random() * 6 - 3),
         3,
         3,
       );

@@ -45,7 +45,7 @@
     "tiles": {
       "type": "array",
       "minItems": 1,
-      "description": "Filas de norte a sur; cada fila va de oeste a este. La rejilla debe ser cuadrada.",
+      "description": "Filas de norte a sur; cada fila va de oeste a este. Todas las filas deben tener el mismo número de columnas; el ancho y el alto pueden ser distintos.",
       "items": {
         "type": "array",
         "minItems": 1,

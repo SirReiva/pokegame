@@ -2,9 +2,8 @@
  * Carga y validación de mapas definidos en JSON.
  *
  * `public/maps/index.json` lista los mapas disponibles y cada archivo declara
- * una rejilla cuadrada de terrenos, los respawns de los equipos y las
- * cordilleras. Los mapas se cargan por `fetch`, así que se pueden editar sin
- * recompilar la demo.
+ * una rejilla de terrenos, los respawns de los equipos y las cordilleras. Los
+ * mapas se cargan por `fetch`, así que se pueden editar sin recompilar la demo.
  */
 
 import {
@@ -162,11 +161,6 @@ function parseTiles(raw: unknown): TerrainId[][] {
     tiles.push(parsedRow);
   }
 
-  if (rows !== cols) {
-    throw new Error(
-      `La rejilla debe ser cuadrada; ahora tiene ${rows} filas y ${cols} columnas`
-    );
-  }
   return tiles;
 }
 

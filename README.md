@@ -58,7 +58,7 @@ Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pa
 
 Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la pantalla de equipos permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
 
-Un mapa es una **rejilla cuadrada de tipos de terreno** más sus respawns, cordilleras y ajustes de cámara:
+Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, cordilleras y ajustes de cámara:
 
 ```json
 {
@@ -83,7 +83,7 @@ Un mapa es una **rejilla cuadrada de tipos de terreno** más sus respawns, cordi
 }
 ```
 
-- La fila 0 es el **norte** (Z negativa) y la columna 0 el **oeste** (X negativa). Cada fila de `tiles` debe tener el mismo número de columnas y la rejilla debe ser cuadrada.
+- La fila 0 es el **norte** (Z negativa) y la columna 0 el **oeste** (X negativa). Todas las filas de `tiles` deben tener el mismo número de columnas; el ancho y el alto pueden ser distintos.
 - `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua.
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
 - `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
@@ -106,14 +106,14 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
 
 La pantalla de equipos incluye el botón **Editor de mapas**; también se abre directo con `?editor`. Permite crear un mapa jugable sin editar el JSON a mano:
 
-1. **Dimensiones**: al entrar sin borrador pide id, nombre, lado de la rejilla (8–128, siempre cuadrada), `tileSize`, `waterHeight` y terreno de fondo. También puede cargar un mapa existente de `public/maps/` o importar un archivo `.json`.
+1. **Dimensiones**: al entrar sin borrador pide id, nombre, ancho y alto de la rejilla (8–128 cada uno), `tileSize`, `waterHeight` y terreno de fondo. También puede cargar un mapa existente de `public/maps/` o importar un archivo `.json`.
 2. **Dibujo**: rejilla 2D con los quince terrenos. Herramientas de lápiz (interpola al arrastrar para no dejar huecos), relleno, rectángulo y borrador. El clic derecho borra. `Ctrl+Z` / `Ctrl+Y` deshacen y rehacen.
 3. **Bases**: las herramientas de base azul y roja (teclas `1` y `2`) colocan cada respawn en el centro de una celda. El radio se ajusta en el panel derecho y se aplica a ambas bases.
 4. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre o sin las dos bases.
 
 El borrador se guarda en `localStorage` (`newpoke.map-editor.draft.v1`) y se recupera al volver a abrir el editor. Para jugar el mapa, guarda el archivo en `public/maps/<id>.json` y añade su entrada a `public/maps/index.json`.
 
-El editor no dibuja cordilleras (`mountains`) ni cambia el `spawn` de cámara, pero conserva ambos al importar y exportar. La rejilla debe ser cuadrada porque el motor la exige. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
+El editor no dibuja cordilleras (`mountains`) ni cambia el `spawn` de cámara, pero conserva ambos al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
 
 ## Multijugador local
 
@@ -405,7 +405,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
 - En splitscreen, el mundo se dibuja una vez por vista. Con 7-8 jugadores el rendimiento baja de forma notable, sobre todo en equipos modestos.
-- El editor de mapas solo edita celdas, bases y metadatos; las cordilleras y el `spawn` de cámara siguen siendo manuales en el JSON. La rejilla debe ser cuadrada.
+- El editor de mapas solo edita celdas, bases y metadatos; las cordilleras y el `spawn` de cámara siguen siendo manuales en el JSON.
 
 ## Créditos y licencia
 

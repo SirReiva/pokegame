@@ -87,7 +87,7 @@ export interface GameMap {
   name: string;
   /** Lado de cada celda en unidades de mundo. */
   tileSize: number;
-  /** Rejilla cuadrada de tipos de terreno. */
+  /** Rejilla de tipos de terreno: filas (Z) × columnas (X). */
   tiles: TerrainId[][];
   respawns: RespawnPoint[];
   mountains: MountainRange[];
@@ -135,7 +135,8 @@ let activeMap: GameMap | null = null;
 let activeRows = 0;
 let activeCols = 0;
 let activeTileSize = 1;
-let activeHalf = 0;
+let activeHalfX = 0;
+let activeHalfZ = 0;
 let flatTerrain = new Uint8Array(0);
 
 /** Bases del mapa activo, derivadas de sus respawns. */
@@ -152,7 +153,8 @@ export function setActiveMap(map: GameMap): void {
   activeRows = map.tiles.length;
   activeCols = map.tiles[0]?.length ?? 0;
   activeTileSize = map.tileSize;
-  activeHalf = (Math.max(activeRows, activeCols) * activeTileSize) / 2;
+  activeHalfX = (activeCols * activeTileSize) / 2;
+  activeHalfZ = (activeRows * activeTileSize) / 2;
 
   flatTerrain = new Uint8Array(activeRows * activeCols);
   for (let row = 0; row < activeRows; row++) {
@@ -195,12 +197,20 @@ export function getActiveMap(): GameMap {
   return activeMap;
 }
 
-export function mapHalfSize(): number {
-  return activeHalf;
+export function mapHalfWidth(): number {
+  return activeHalfX;
 }
 
-export function mapWorldSize(): number {
-  return activeHalf * 2;
+export function mapHalfDepth(): number {
+  return activeHalfZ;
+}
+
+export function mapWorldWidth(): number {
+  return activeHalfX * 2;
+}
+
+export function mapWorldDepth(): number {
+  return activeHalfZ * 2;
 }
 
 export function mapTileSize(): number {
@@ -235,16 +245,16 @@ function clampCell(value: number, max: number): number {
 /** Terreno bajo una posición del mundo. */
 export function terrainAt(x: number, z: number): TerrainId {
   if (!activeMap || activeCols === 0 || activeRows === 0) return 'jungle';
-  const col = clampCell(Math.floor((x + activeHalf) / activeTileSize), activeCols);
-  const row = clampCell(Math.floor((z + activeHalf) / activeTileSize), activeRows);
+  const col = clampCell(Math.floor((x + activeHalfX) / activeTileSize), activeCols);
+  const row = clampCell(Math.floor((z + activeHalfZ) / activeTileSize), activeRows);
   return TERRAIN_IDS[flatTerrain[row * activeCols + col]] ?? 'jungle';
 }
 
 /** Índice de la celda que contiene la posición, o null fuera del mapa. */
 export function cellAt(x: number, z: number): { row: number; col: number } | null {
   if (!activeMap) return null;
-  const col = Math.floor((x + activeHalf) / activeTileSize);
-  const row = Math.floor((z + activeHalf) / activeTileSize);
+  const col = Math.floor((x + activeHalfX) / activeTileSize);
+  const row = Math.floor((z + activeHalfZ) / activeTileSize);
   if (col < 0 || col >= activeCols || row < 0 || row >= activeRows) return null;
   return { row, col };
 }
@@ -266,19 +276,19 @@ export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
   for (let iteration = 0; iteration < 4; iteration++) {
     let pushed = false;
     const minCol = clampCell(
-      Math.floor((px - radius + activeHalf) / activeTileSize),
+      Math.floor((px - radius + activeHalfX) / activeTileSize),
       activeCols
     );
     const maxCol = clampCell(
-      Math.floor((px + radius + activeHalf) / activeTileSize),
+      Math.floor((px + radius + activeHalfX) / activeTileSize),
       activeCols
     );
     const minRow = clampCell(
-      Math.floor((pz - radius + activeHalf) / activeTileSize),
+      Math.floor((pz - radius + activeHalfZ) / activeTileSize),
       activeRows
     );
     const maxRow = clampCell(
-      Math.floor((pz + radius + activeHalf) / activeTileSize),
+      Math.floor((pz + radius + activeHalfZ) / activeTileSize),
       activeRows
     );
 
@@ -286,9 +296,9 @@ export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
       for (let col = minCol; col <= maxCol; col++) {
         if (terrainAtCell(row, col) !== 'waterHigh') continue;
 
-        const cellMinX = col * activeTileSize - activeHalf;
+        const cellMinX = col * activeTileSize - activeHalfX;
         const cellMaxX = cellMinX + activeTileSize;
-        const cellMinZ = row * activeTileSize - activeHalf;
+        const cellMinZ = row * activeTileSize - activeHalfZ;
         const cellMaxZ = cellMinZ + activeTileSize;
         const closestX = Math.min(cellMaxX, Math.max(cellMinX, px));
         const closestZ = Math.min(cellMaxZ, Math.max(cellMinZ, pz));
@@ -495,8 +505,8 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
     if (best.length >= 3) {
       polygons.push(
         best.map(([cx, cz]) => [
-          cx * activeTileSize - activeHalf,
-          cz * activeTileSize - activeHalf
+          cx * activeTileSize - activeHalfX,
+          cz * activeTileSize - activeHalfZ
         ])
       );
     }

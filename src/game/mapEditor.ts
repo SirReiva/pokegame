@@ -1,10 +1,10 @@
 /**
  * Lógica pura del editor de mapas.
  *
- * El editor trabaja sobre una rejilla cuadrada de `TerrainId` y guarda las
- * bases por celda (fila/columna) para que redimensionar el mapa no las mueva
- * de sitio. Al exportar se convierten a coordenadas de mundo, que es lo que
- * entiende `src/game/map.ts`.
+ * El editor trabaja sobre una rejilla rectangular de `TerrainId` (`cols` ×
+ * `rows`) y guarda las bases por celda (fila/columna) para que redimensionar
+ * el mapa no las mueva de sitio. Al exportar se convierten a coordenadas de
+ * mundo, que es lo que entiende `src/game/map.ts`.
  */
 
 import { parseMap } from './map';
@@ -65,7 +65,10 @@ export interface EditorMeta {
 
 export interface EditorMap {
   meta: EditorMeta;
-  size: number;
+  /** Número de columnas (eje X). */
+  cols: number;
+  /** Número de filas (eje Z). */
+  rows: number;
   /** Terreno que pinta el borrador y rellena las celdas nuevas. */
   background: TerrainId;
   tiles: TerrainId[][];
@@ -78,7 +81,8 @@ export interface EditorMap {
 
 /** Parte del mapa que entra en el historial de deshacer. */
 export interface EditorSnapshot {
-  size: number;
+  cols: number;
+  rows: number;
   tiles: TerrainId[][];
   bases: EditorBases;
 }
@@ -125,7 +129,8 @@ function cloneMountains(mountains: MountainRange[] | undefined): MountainRange[]
 export function cloneEditorMap(map: EditorMap): EditorMap {
   return {
     meta: { ...map.meta },
-    size: map.size,
+    cols: map.cols,
+    rows: map.rows,
     background: map.background,
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases),
@@ -136,7 +141,8 @@ export function cloneEditorMap(map: EditorMap): EditorMap {
 
 export function snapshotOf(map: EditorMap): EditorSnapshot {
   return {
-    size: map.size,
+    cols: map.cols,
+    rows: map.rows,
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases)
   };
@@ -145,7 +151,8 @@ export function snapshotOf(map: EditorMap): EditorSnapshot {
 export function applySnapshot(map: EditorMap, snapshot: EditorSnapshot): EditorMap {
   return {
     ...map,
-    size: snapshot.size,
+    cols: snapshot.cols,
+    rows: snapshot.rows,
     tiles: cloneTiles(snapshot.tiles),
     bases: cloneBases(snapshot.bases)
   };
@@ -154,18 +161,20 @@ export function applySnapshot(map: EditorMap, snapshot: EditorSnapshot): EditorM
 export function createEditorMap(options: {
   id: string;
   name: string;
-  size: number;
+  cols: number;
+  rows: number;
   tileSize?: number;
   waterHeight?: number;
   fill?: TerrainId;
 }): EditorMap {
-  const size = clamp(Math.round(options.size), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
+  const cols = clamp(Math.round(options.cols), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
+  const rows = clamp(Math.round(options.rows), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
   const fill = options.fill ?? 'jungle';
-  const tiles = Array.from({ length: size }, () => Array<TerrainId>(size).fill(fill));
-  const blueRow = clamp(Math.floor(size * 0.75), 0, size - 1);
-  const blueCol = clamp(Math.floor(size * 0.25), 0, size - 1);
-  const redRow = clamp(Math.floor(size * 0.25), 0, size - 1);
-  const redCol = clamp(Math.floor(size * 0.75), 0, size - 1);
+  const tiles = Array.from({ length: rows }, () => Array<TerrainId>(cols).fill(fill));
+  const blueRow = clamp(Math.floor(rows * 0.75), 0, rows - 1);
+  const blueCol = clamp(Math.floor(cols * 0.25), 0, cols - 1);
+  const redRow = clamp(Math.floor(rows * 0.25), 0, rows - 1);
+  const redCol = clamp(Math.floor(cols * 0.75), 0, cols - 1);
   const baseRadius = EDITOR_DEFAULT_BASE_RADIUS;
 
   return {
@@ -176,7 +185,8 @@ export function createEditorMap(options: {
       waterHeight: options.waterHeight ?? EDITOR_DEFAULT_WATER_HEIGHT,
       baseRadius
     },
-    size,
+    cols,
+    rows,
     background: fill,
     tiles,
     bases: {
@@ -188,31 +198,32 @@ export function createEditorMap(options: {
 }
 
 /** Redimensiona conservando la esquina noroeste. Devuelve `null` si no cambia. */
-export function resizeEditorMap(map: EditorMap, size: number): EditorMap | null {
-  const nextSize = clamp(Math.round(size), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
-  if (nextSize === map.size) return null;
+export function resizeEditorMap(map: EditorMap, cols: number, rows: number): EditorMap | null {
+  const nextCols = clamp(Math.round(cols), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
+  const nextRows = clamp(Math.round(rows), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
+  if (nextCols === map.cols && nextRows === map.rows) return null;
 
-  const tiles = Array.from({ length: nextSize }, (_, row) =>
-    Array.from({ length: nextSize }, (_, col) => map.tiles[row]?.[col] ?? map.background)
+  const tiles = Array.from({ length: nextRows }, (_, row) =>
+    Array.from({ length: nextCols }, (_, col) => map.tiles[row]?.[col] ?? map.background)
   );
 
   const bases: EditorBases = {};
   if (map.bases.blue) {
     bases.blue = {
       ...map.bases.blue,
-      row: clamp(map.bases.blue.row, 0, nextSize - 1),
-      col: clamp(map.bases.blue.col, 0, nextSize - 1)
+      row: clamp(map.bases.blue.row, 0, nextRows - 1),
+      col: clamp(map.bases.blue.col, 0, nextCols - 1)
     };
   }
   if (map.bases.red) {
     bases.red = {
       ...map.bases.red,
-      row: clamp(map.bases.red.row, 0, nextSize - 1),
-      col: clamp(map.bases.red.col, 0, nextSize - 1)
+      row: clamp(map.bases.red.row, 0, nextRows - 1),
+      col: clamp(map.bases.red.col, 0, nextCols - 1)
     };
   }
 
-  return { ...map, size: nextSize, tiles, bases };
+  return { ...map, cols: nextCols, rows: nextRows, tiles, bases };
 }
 
 export function paintCellInPlace(
@@ -332,15 +343,17 @@ export function setBaseInPlace(
 
 /** Centro de la celda en coordenadas de mundo. */
 export function cellCenter(
-  size: number,
+  cols: number,
+  rows: number,
   tileSize: number,
   row: number,
   col: number
 ): { x: number; z: number } {
-  const half = (size * tileSize) / 2;
+  const halfX = (cols * tileSize) / 2;
+  const halfZ = (rows * tileSize) / 2;
   return {
-    x: round((col + 0.5) * tileSize - half),
-    z: round((row + 0.5) * tileSize - half)
+    x: round((col + 0.5) * tileSize - halfX),
+    z: round((row + 0.5) * tileSize - halfZ)
   };
 }
 
@@ -349,7 +362,7 @@ export function editorMapToJson(map: EditorMap): EditorMapJson {
   for (const team of ['blue', 'red'] as const) {
     const base = map.bases[team];
     if (!base) continue;
-    const center = cellCenter(map.size, map.meta.tileSize, base.row, base.col);
+    const center = cellCenter(map.cols, map.rows, map.meta.tileSize, base.row, base.col);
     respawns.push({
       team,
       x: center.x,
@@ -385,18 +398,22 @@ export function editorMapFromJson(raw: unknown): EditorMap {
   const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : id;
   const parsed = parseMap(raw, { id, name, file: `${id}.json` });
 
-  const size = parsed.tiles.length;
-  const half = (size * parsed.tileSize) / 2;
-  const toCell = (coordinate: number): number =>
-    clamp(Math.floor((coordinate + half) / parsed.tileSize), 0, size - 1);
+  const cols = parsed.tiles[0]?.length ?? 0;
+  const rows = parsed.tiles.length;
+  const halfX = (cols * parsed.tileSize) / 2;
+  const halfZ = (rows * parsed.tileSize) / 2;
+  const toCol = (coordinate: number): number =>
+    clamp(Math.floor((coordinate + halfX) / parsed.tileSize), 0, cols - 1);
+  const toRow = (coordinate: number): number =>
+    clamp(Math.floor((coordinate + halfZ) / parsed.tileSize), 0, rows - 1);
 
   const bases: EditorBases = {};
   for (const respawn of parsed.respawns) {
     if (bases[respawn.team]) continue;
     bases[respawn.team] = {
       team: respawn.team,
-      row: toCell(respawn.z),
-      col: toCell(respawn.x),
+      row: toRow(respawn.z),
+      col: toCol(respawn.x),
       radius: respawn.radius
     };
   }
@@ -425,7 +442,8 @@ export function editorMapFromJson(raw: unknown): EditorMap {
       waterHeight: parsed.waterHeight,
       baseRadius: bases.blue?.radius ?? bases.red?.radius ?? EDITOR_DEFAULT_BASE_RADIUS
     },
-    size,
+    cols,
+    rows,
     background,
     tiles: cloneTiles(parsed.tiles),
     bases,
@@ -455,16 +473,21 @@ export function validateEditorMap(map: EditorMap): string[] {
       issues.push(`El radio de la base ${base.team === 'blue' ? 'azul' : 'roja'} debe ser mayor que cero.`);
     }
   }
-  if (map.size < EDITOR_MIN_SIZE || map.size > EDITOR_MAX_SIZE) {
-    issues.push(`El lado de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+  if (map.cols < EDITOR_MIN_SIZE || map.cols > EDITOR_MAX_SIZE) {
+    issues.push(`El ancho de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+  }
+  if (map.rows < EDITOR_MIN_SIZE || map.rows > EDITOR_MAX_SIZE) {
+    issues.push(`El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
   }
   if (!map.bases.blue) issues.push('Falta la base azul.');
   if (!map.bases.red) issues.push('Falta la base roja.');
   if (
-    map.tiles.length !== map.size ||
-    map.tiles.some((row) => row.length !== map.size || row.some((terrain) => !isTerrainId(terrain)))
+    map.tiles.length !== map.rows ||
+    map.tiles.some(
+      (row) => row.length !== map.cols || row.some((terrain) => !isTerrainId(terrain))
+    )
   ) {
-    issues.push('La rejilla no es cuadrada o contiene un terreno desconocido.');
+    issues.push('La rejilla no coincide con el ancho y el alto, o contiene un terreno desconocido.');
   }
   return issues;
 }
@@ -477,10 +500,16 @@ export function isEditorMap(value: unknown): value is EditorMap {
   if (typeof map.meta.id !== 'string' || typeof map.meta.name !== 'string') return false;
   if (typeof map.meta.tileSize !== 'number' || typeof map.meta.waterHeight !== 'number') return false;
   if (typeof map.meta.baseRadius !== 'number') return false;
-  if (typeof map.size !== 'number' || typeof map.background !== 'string') return false;
+  if (
+    typeof map.cols !== 'number' ||
+    typeof map.rows !== 'number' ||
+    typeof map.background !== 'string'
+  ) {
+    return false;
+  }
   if (!isTerrainId(map.background)) return false;
-  if (!Array.isArray(map.tiles) || map.tiles.length !== map.size) return false;
-  if (!map.tiles.every((row) => Array.isArray(row) && row.length === map.size)) return false;
+  if (!Array.isArray(map.tiles) || map.tiles.length !== map.rows) return false;
+  if (!map.tiles.every((row) => Array.isArray(row) && row.length === map.cols)) return false;
   if (!map.tiles.every((row) => row.every((terrain) => isTerrainId(terrain)))) return false;
   if (!map.bases || typeof map.bases !== 'object') return false;
   if (map.mountains !== undefined) {
@@ -510,4 +539,17 @@ export function isEditorMap(value: unknown): value is EditorMap {
     return false;
   }
   return true;
+}
+
+/**
+ * Normaliza un borrador guardado en localStorage. Los borradores antiguos
+ * guardaban un único `size` cuadrado; ahora se usan `cols` y `rows`.
+ */
+export function readEditorDraft(value: unknown): EditorMap | null {
+  if (isEditorMap(value)) return value;
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.size !== 'number') return null;
+  const migrated = { ...raw, cols: raw.size, rows: raw.size };
+  return isEditorMap(migrated) ? migrated : null;
 }

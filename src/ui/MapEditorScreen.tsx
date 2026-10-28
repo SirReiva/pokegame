@@ -22,10 +22,10 @@ import {
   editorMapFromJson,
   editorMapToJson,
   floodFillInPlace,
-  isEditorMap,
   paintCellInPlace,
   paintLineInPlace,
   paintRectInPlace,
+  readEditorDraft,
   resizeEditorMap,
   setBaseInPlace,
   snapshotOf,
@@ -59,7 +59,8 @@ interface EditorState {
 interface SetupForm {
   id: string;
   name: string;
-  size: string;
+  cols: string;
+  rows: string;
   tileSize: string;
   waterHeight: string;
   fill: TerrainId;
@@ -93,9 +94,10 @@ function loadDraft(): EditorState {
     const raw = window.localStorage.getItem(DRAFT_KEY);
     if (raw) {
       const parsed: unknown = JSON.parse(raw);
-      if (isEditorMap(parsed)) {
+      const draft = readEditorDraft(parsed);
+      if (draft) {
         return {
-          map: { ...parsed, mountains: parsed.mountains ?? [] },
+          map: { ...draft, mountains: draft.mountains ?? [] },
           undo: [],
           redo: []
         };
@@ -112,7 +114,8 @@ function setupFormFrom(map: EditorMap | null): SetupForm {
     return {
       id: map.meta.id,
       name: map.meta.name,
-      size: String(map.size),
+      cols: String(map.cols),
+      rows: String(map.rows),
       tileSize: String(map.meta.tileSize),
       waterHeight: String(map.meta.waterHeight),
       fill: map.background
@@ -121,7 +124,8 @@ function setupFormFrom(map: EditorMap | null): SetupForm {
   return {
     id: 'mi-mapa',
     name: 'Mi mapa',
-    size: String(EDITOR_DEFAULT_SIZE),
+    cols: String(EDITOR_DEFAULT_SIZE),
+    rows: String(EDITOR_DEFAULT_SIZE),
     tileSize: String(EDITOR_DEFAULT_TILE_SIZE),
     waterHeight: String(EDITOR_DEFAULT_WATER_HEIGHT),
     fill: 'jungle'
@@ -157,7 +161,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridAreaRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const sizeInputRef = useRef<HTMLInputElement | null>(null);
+  const colsInputRef = useRef<HTMLInputElement | null>(null);
+  const rowsInputRef = useRef<HTMLInputElement | null>(null);
   const dragRef = useRef<{
     tool: Tool;
     lastRow: number;
@@ -167,7 +172,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   } | null>(null);
 
   const map = state.map;
-  const mapSize = map?.size;
+  const mapCols = map?.cols;
+  const mapRows = map?.rows;
 
   const commit = (next: EditorState) => {
     stateRef.current = next;
@@ -189,8 +195,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     onExit();
   };
 
-  const syncSizeInput = (size: number) => {
-    if (sizeInputRef.current) sizeInputRef.current.value = String(size);
+  const syncSizeInputs = (cols: number, rows: number) => {
+    if (colsInputRef.current) colsInputRef.current.value = String(cols);
+    if (rowsInputRef.current) rowsInputRef.current.value = String(rows);
   };
 
   const updateMap = (nextMap: EditorMap, pushHistory = true) => {
@@ -288,9 +295,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     if (!current) return null;
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return null;
-    const col = Math.floor(((event.clientX - bounds.left) / bounds.width) * current.size);
-    const row = Math.floor(((event.clientY - bounds.top) / bounds.height) * current.size);
-    if (row < 0 || col < 0 || row >= current.size || col >= current.size) return null;
+    const col = Math.floor(((event.clientX - bounds.left) / bounds.width) * current.cols);
+    const row = Math.floor(((event.clientY - bounds.top) / bounds.height) * current.rows);
+    if (row < 0 || col < 0 || row >= current.rows || col >= current.cols) return null;
     return { row, col };
   };
 
@@ -430,7 +437,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     commit({ map: imported, undo: [], redo: [] });
     setTerrain(imported.background);
     setZoom(1);
-    syncSizeInput(imported.size);
+    syncSizeInputs(imported.cols, imported.rows);
     setSetupOpen(false);
     setFormError(null);
     setToast(`Mapa "${imported.meta.name}" importado.`);
@@ -471,12 +478,17 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const createFromForm = () => {
-    const size = Number(form.size);
+    const cols = Number(form.cols);
+    const rows = Number(form.rows);
     const tileSize = Number(form.tileSize);
     const waterHeight = Number(form.waterHeight);
 
-    if (!Number.isFinite(size) || size < EDITOR_MIN_SIZE || size > EDITOR_MAX_SIZE) {
-      setFormError(`El lado de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+    if (!Number.isFinite(cols) || cols < EDITOR_MIN_SIZE || cols > EDITOR_MAX_SIZE) {
+      setFormError(`El ancho debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+      return;
+    }
+    if (!Number.isFinite(rows) || rows < EDITOR_MIN_SIZE || rows > EDITOR_MAX_SIZE) {
+      setFormError(`El alto debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
       return;
     }
     if (!Number.isFinite(tileSize) || tileSize <= 0) {
@@ -491,7 +503,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     const next = createEditorMap({
       id: form.id.trim() || 'mi-mapa',
       name: form.name.trim() || 'Mi mapa',
-      size,
+      cols,
+      rows,
       tileSize,
       waterHeight,
       fill: form.fill
@@ -499,28 +512,33 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     commit({ map: next, undo: [], redo: [] });
     setTerrain(next.background);
     setZoom(1);
-    syncSizeInput(next.size);
+    syncSizeInputs(next.cols, next.rows);
     setSetupOpen(false);
     setFormError(null);
-    setToast(`Mapa ${next.size} × ${next.size} creado.`);
+    setToast(`Mapa ${next.cols} × ${next.rows} creado.`);
   };
 
   const applyResize = () => {
     const current = stateRef.current.map;
     if (!current) return;
-    const size = Number(sizeInputRef.current?.value ?? '');
-    if (!Number.isFinite(size) || size < EDITOR_MIN_SIZE || size > EDITOR_MAX_SIZE) {
-      setToast(`El lado debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+    const cols = Number(colsInputRef.current?.value ?? '');
+    const rows = Number(rowsInputRef.current?.value ?? '');
+    if (!Number.isFinite(cols) || cols < EDITOR_MIN_SIZE || cols > EDITOR_MAX_SIZE) {
+      setToast(`El ancho debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
       return;
     }
-    const next = resizeEditorMap(current, size);
+    if (!Number.isFinite(rows) || rows < EDITOR_MIN_SIZE || rows > EDITOR_MAX_SIZE) {
+      setToast(`El alto debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+      return;
+    }
+    const next = resizeEditorMap(current, cols, rows);
     if (!next) {
       setToast('El mapa ya tiene ese tamaño.');
       return;
     }
     updateMap(next, true);
-    syncSizeInput(next.size);
-    setToast(`Rejilla redimensionada a ${next.size} × ${next.size}.`);
+    syncSizeInputs(next.cols, next.rows);
+    setToast(`Rejilla redimensionada a ${next.cols} × ${next.rows}.`);
   };
 
   // --- Atajos de teclado -----------------------------------------------------
@@ -604,7 +622,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     if (!map) return 12;
     const width = Math.max(120, viewport.width);
     const height = Math.max(120, viewport.height);
-    const fit = Math.min(width / map.size, height / map.size);
+    const fit = Math.min(width / map.cols, height / map.rows);
     return Math.max(2, Math.floor(fit * zoom));
   }, [map, viewport, zoom]);
 
@@ -631,24 +649,25 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     const canvas = canvasRef.current;
     if (!canvas || !map) return;
 
-    const cssSize = cellSize * map.size;
+    const cssWidth = cellSize * map.cols;
+    const cssHeight = cellSize * map.rows;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const pixelWidth = Math.max(1, Math.round(cssSize * ratio));
-    const pixelHeight = Math.max(1, Math.round(cssSize * ratio));
+    const pixelWidth = Math.max(1, Math.round(cssWidth * ratio));
+    const pixelHeight = Math.max(1, Math.round(cssHeight * ratio));
     if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
     if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-    canvas.style.width = `${cssSize}px`;
-    canvas.style.height = `${cssSize}px`;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
 
     const context = canvas.getContext('2d');
     if (!context) return;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, cssSize, cssSize);
+    context.clearRect(0, 0, cssWidth, cssHeight);
 
-    for (let row = 0; row < map.size; row++) {
+    for (let row = 0; row < map.rows; row++) {
       const tiles = map.tiles[row];
-      for (let col = 0; col < map.size; col++) {
+      for (let col = 0; col < map.cols; col++) {
         context.fillStyle = TERRAIN_SWATCHES[tiles[col]];
         context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
       }
@@ -658,12 +677,15 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       context.strokeStyle = 'rgba(0, 0, 0, 0.22)';
       context.lineWidth = 1;
       context.beginPath();
-      for (let index = 1; index < map.size; index++) {
-        const offset = index * cellSize + 0.5;
+      for (let col = 1; col < map.cols; col++) {
+        const offset = col * cellSize + 0.5;
         context.moveTo(offset, 0);
-        context.lineTo(offset, cssSize);
+        context.lineTo(offset, cssHeight);
+      }
+      for (let row = 1; row < map.rows; row++) {
+        const offset = row * cellSize + 0.5;
         context.moveTo(0, offset);
-        context.lineTo(cssSize, offset);
+        context.lineTo(cssWidth, offset);
       }
       context.stroke();
     }
@@ -936,8 +958,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
           <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 font-mono text-[0.63rem] text-[#7f92a7]">
             <span>
-              Rejilla {map ? `${map.size} × ${map.size}` : '—'} · {map ? map.size * map.size : 0}{' '}
-              celdas
+              Rejilla {map ? `${map.cols} × ${map.rows}` : '—'} ·{' '}
+              {map ? map.cols * map.rows : 0} celdas
             </span>
             <span>
               Fondo: <strong className="text-[#a9bccf]">{TERRAINS[map?.background ?? 'jungle'].name}</strong>
@@ -1007,15 +1029,28 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 />
               </label>
               <label className={fieldClass}>
-                <span>Lado de rejilla</span>
+                <span>Ancho (columnas)</span>
                 <input
-                  key={mapSize ?? 'sin-mapa'}
-                  ref={sizeInputRef}
+                  key={`cols-${mapCols ?? 'sin-mapa'}`}
+                  ref={colsInputRef}
                   className={inputClass}
                   type="number"
                   min={EDITOR_MIN_SIZE}
                   max={EDITOR_MAX_SIZE}
-                  defaultValue={map?.size ?? ''}
+                  defaultValue={map?.cols ?? ''}
+                  disabled={!map}
+                />
+              </label>
+              <label className={fieldClass}>
+                <span>Alto (filas)</span>
+                <input
+                  key={`rows-${mapRows ?? 'sin-mapa'}`}
+                  ref={rowsInputRef}
+                  className={inputClass}
+                  type="number"
+                  min={EDITOR_MIN_SIZE}
+                  max={EDITOR_MAX_SIZE}
+                  defaultValue={map?.rows ?? ''}
                   disabled={!map}
                 />
               </label>
@@ -1132,7 +1167,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             <span className={eyebrow}>Nuevo mapa</span>
             <h2 className="mt-1 text-[1.5rem]">Elige las dimensiones</h2>
             <p className="mt-1.5 text-[0.8rem] leading-[1.55] text-muted">
-              La rejilla es cuadrada porque el motor de NewPoke lo exige. Después podrás pintar
+              Elige el ancho y el alto de la rejilla; pueden ser distintos. Después podrás pintar
               celda a celda y colocar las dos bases.
             </p>
 
@@ -1154,32 +1189,41 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 />
               </label>
               <label className={fieldClass}>
-                <span>Lado de la rejilla</span>
+                <span>Ancho (columnas)</span>
                 <input
                   className={inputClass}
                   type="number"
                   min={EDITOR_MIN_SIZE}
                   max={EDITOR_MAX_SIZE}
-                  value={form.size}
-                  onChange={(event) => setForm({ ...form, size: event.target.value })}
+                  step={2}
+                  value={form.cols}
+                  onChange={(event) => setForm({ ...form, cols: event.target.value })}
                 />
               </label>
               <label className={fieldClass}>
-                <span>Terreno de fondo</span>
-                <select
+                <span>Alto (filas)</span>
+                <input
                   className={inputClass}
-                  value={form.fill}
-                  onChange={(event) =>
-                    setForm({ ...form, fill: event.target.value as TerrainId })
-                  }
-                >
-                  {TERRAIN_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {TERRAINS[id].name}
-                    </option>
-                  ))}
-                </select>
+                  type="number"
+                  min={EDITOR_MIN_SIZE}
+                  max={EDITOR_MAX_SIZE}
+                  step={2}
+                  value={form.rows}
+                  onChange={(event) => setForm({ ...form, rows: event.target.value })}
+                />
               </label>
+              <div className="col-span-2 flex flex-wrap gap-1.5">
+                {SIZE_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={btnClass('ghost', 'tiny')}
+                    onClick={() => setForm({ ...form, cols: String(preset), rows: String(preset) })}
+                  >
+                    {preset} × {preset}
+                  </button>
+                ))}
+              </div>
               <label className={fieldClass}>
                 <span>Tamaño de celda</span>
                 <input
@@ -1201,19 +1245,22 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                   onChange={(event) => setForm({ ...form, waterHeight: event.target.value })}
                 />
               </label>
-            </div>
-
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {SIZE_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  onClick={() => setForm({ ...form, size: String(preset) })}
+              <label className={`${fieldClass} col-span-2`}>
+                <span>Terreno de fondo</span>
+                <select
+                  className={inputClass}
+                  value={form.fill}
+                  onChange={(event) =>
+                    setForm({ ...form, fill: event.target.value as TerrainId })
+                  }
                 >
-                  {preset} × {preset}
-                </button>
-              ))}
+                  {TERRAIN_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {TERRAINS[id].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {formError && (

@@ -852,8 +852,8 @@ export class Game {
 
     const bounds = this.world.bounds;
     return {
-      x: clamp(px, -bounds, bounds),
-      z: clamp(pz, -bounds, bounds)
+      x: clamp(px, -bounds.x, bounds.x),
+      z: clamp(pz, -bounds.z, bounds.z)
     };
   }
 

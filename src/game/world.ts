@@ -6,7 +6,8 @@ import {
   TERRAIN_ZONES,
   WATER_ZONES,
   getActiveMap,
-  mapHalfSize,
+  mapHalfDepth,
+  mapHalfWidth,
   onMountain,
   randomPointInZone,
   terrainAt,
@@ -49,7 +50,8 @@ export type Collider =
 
 export interface World {
   colliders: Collider[];
-  bounds: number;
+  /** Límites de movimiento: media anchura y media profundidad del mapa. */
+  bounds: { x: number; z: number };
   waterHeight: number;
   shadowMaterial: pc.StandardMaterial;
   update(dt: number): void;
@@ -147,7 +149,8 @@ function part(
 export function buildWorld(app: pc.Application): World {
   const device = app.graphicsDevice;
   const map = getActiveMap();
-  const HALF = mapHalfSize();
+  const HALF_X = mapHalfWidth();
+  const HALF_Z = mapHalfDepth();
   const colliders: Collider[] = [];
   const created: pc.Entity[] = [];
   const materials: pc.StandardMaterial[] = [];
@@ -315,14 +318,14 @@ export function buildWorld(app: pc.Application): World {
 
   const slab = part(app.root, 'box', soilMaterial, {
     position: [0, -0.55, 0],
-    scale: [HALF * 2, 1.1, HALF * 2]
+    scale: [HALF_X * 2, 1.1, HALF_Z * 2]
   });
   slab.render!.castShadows = false;
   created.push(slab);
 
   const ground = part(app.root, 'plane', grassMaterial, {
     position: [0, 0.001, 0],
-    scale: [HALF * 2, 1, HALF * 2]
+    scale: [HALF_X * 2, 1, HALF_Z * 2]
   });
   ground.render!.castShadows = false;
   ground.render!.receiveShadows = true;
@@ -339,7 +342,7 @@ export function buildWorld(app: pc.Application): World {
   materials.push(outerGroundMaterial);
   const outerGround = part(app.root, 'plane', outerGroundMaterial, {
     position: [0, -0.04, 0],
-    scale: [HALF * 2 + 140, 1, HALF * 2 + 140]
+    scale: [HALF_X * 2 + 140, 1, HALF_Z * 2 + 140]
   });
   outerGround.render!.castShadows = false;
   outerGround.render!.receiveShadows = false;
@@ -484,8 +487,8 @@ export function buildWorld(app: pc.Application): World {
     const rand = random(seed);
     const spots: Array<[number, number]> = [];
     for (let attempt = 0; attempt < count * 24 && spots.length < count; attempt++) {
-      const x = (rand() * 2 - 1) * (HALF - 1.4);
-      const z = (rand() * 2 - 1) * (HALF - 1.4);
+      const x = (rand() * 2 - 1) * (HALF_X - 1.4);
+      const z = (rand() * 2 - 1) * (HALF_Z - 1.4);
       if (terrainAt(x, z) !== 'jungle') continue;
       if (onMountain(x, z)) continue;
       if (
@@ -3105,7 +3108,7 @@ export function buildWorld(app: pc.Application): World {
 
   return {
     colliders,
-    bounds: HALF,
+    bounds: { x: HALF_X, z: HALF_Z },
     waterHeight,
     shadowMaterial,
     update(dt: number) {
