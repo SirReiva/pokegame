@@ -356,8 +356,9 @@ export class FogView {
 /**
  * Sombra de cordillera fija en el mundo. La máscara se dibuja en coordenadas
  * XZ del mapa y el plano vive en la capa de la vista; la cámara solo lo mira,
- * no lo deforma. Al estar sobre el suelo y con depth test, la propia montaña,
- * los árboles y los actores lo tapan y conservan su iluminación.
+ * no lo deforma. Se dibuja sin test de profundidad para que la cuña tiña también
+ * la vegetación y las decoraciones, y usa una máscara de esténcil para excluir
+ * a los separadores y no sombrear su cara visible.
  */
 export class FogDecal {
   readonly entity: pc.Entity;
@@ -418,7 +419,12 @@ export class FogDecal {
       }
     });
     this.material.blendType = pc.BLEND_NORMAL;
-    this.material.depthTest = true;
+    // Sin test de profundidad: la cuña de sombra también tiñe la vegetación y
+    // las decoraciones que sobresalen del suelo, no solo la losa del terreno.
+    // La máscara de esténcil (ver `world.ts`) deja fuera a los separadores para
+    // que su cara visible no se oscurezca cuando la cámara los alinea con la
+    // zona de sombra.
+    this.material.depthTest = false;
     this.material.depthWrite = false;
     this.material.cull = pc.CULLFACE_NONE;
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
@@ -434,6 +440,22 @@ export class FogDecal {
     instance.castShadow = false;
     instance.receiveShadow = false;
     instance.drawOrder = 1;
+    // Solo donde el mundo escribió esténcil 1 (terreno, decoraciones y props);
+    // los separadores escriben 0 para no recibir sombra en su cara visible.
+    // Sin esténcil en el dispositivo, el decal se dibuja como antes.
+    if (device.supportsStencil) {
+      const stencil = new pc.StencilParameters({
+        func: pc.FUNC_EQUAL,
+        ref: 1,
+        readMask: 0xff,
+        writeMask: 0x00,
+        fail: pc.STENCILOP_KEEP,
+        zfail: pc.STENCILOP_KEEP,
+        zpass: pc.STENCILOP_KEEP
+      });
+      instance.stencilFront = stencil;
+      instance.stencilBack = stencil;
+    }
 
     this.entity = new pc.Entity(`fog-decal-${index + 1}`);
     this.entity.setPosition(0, 0.02, 0);

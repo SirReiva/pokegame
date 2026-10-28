@@ -9,6 +9,11 @@
       "id": "lago",
       "name": "Lago central",
       "file": "lago.json"
+    },
+    {
+      "id": "mi-mapa",
+      "name": "Test",
+      "file": "mi-mapa.json"
     }
   ]
 }

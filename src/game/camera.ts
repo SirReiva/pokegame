@@ -19,6 +19,7 @@ export class CameraRig {
     this.entity.addComponent('camera', {
       clearColor: new pc.Color(CONFIG.fog.color[0], CONFIG.fog.color[1], CONFIG.fog.color[2]),
       clearColorBuffer: true,
+      clearStencilBuffer: true,
       fov: CONFIG.camera.fov,
       nearClip: CONFIG.camera.near,
       farClip: CONFIG.camera.far,
