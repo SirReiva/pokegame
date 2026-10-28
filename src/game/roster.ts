@@ -18,7 +18,16 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0150': 7.8, // Mewtwo: levita y se impulsa con poder psíquico, el más rápido
   '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
   '0095': 4.6, // Onix: una serpiente de piedra enorme, avanza pesada
-  '0123': 7.2 // Scyther: guadañas al viento, casi tan rápido como Greninja
+  '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
+  '0144': 6.8, // Articuno: planea con calma gélida, sin prisa pero sin pausa
+  '0145': 7.6, // Zapdos: alas de tormenta, el ave legendaria más veloz
+  '0146': 7.0, // Moltres: vuelo ardiente y constante
+  '0243': 7.7, // Raikou: corre como un rayo, el más veloz de las bestias
+  '0244': 7.2, // Entei: zancada poderosa de león volcánico
+  '0245': 7.0, // Suicune: se desliza ligero, con la elegancia del agua
+  '0249': 7.5, // Lugia: guardián de los mares, se impulsa con poder psíquico
+  '0250': 6.9, // Ho-Oh: envergadura inmensa, arranque pausado
+  '0251': 7.1 // Celebi: viaja en el tiempo con un vuelo juguetón
 };
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */

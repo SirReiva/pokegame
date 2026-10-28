@@ -21,8 +21,9 @@ import type { Collider } from './world';
 
 /**
  * Rango de visión base de cada especie, en unidades de mundo. Los valores están
- * separados a propósito: Mewtwo, Greninja, Mew, Pikachu, Scyther y Lucario detectan
- * antes por sus sentidos, mientras que Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
+ * separados a propósito: las aves y bestias legendarias, Mewtwo, Mew, Greninja,
+ * Pikachu, Scyther y Lucario detectan antes por sus sentidos, mientras que
+ * Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
  * y no en el manifiesto, porque `npm run sprites` lo regenera.
  */
 export const POKEMON_VISION: Record<string, number> = {
@@ -32,11 +33,20 @@ export const POKEMON_VISION: Record<string, number> = {
   '0025': 11.0, // Pikachu: el más alerta, sentidos eléctricos
   '0133': 9.5, // Eevee: olfato y oído finos
   '0448': 10.5, // Lucario: percibe el aura
-  '0658': 11.5, // Greninja: instinto de ninja, segundo alcance del grupo
-  '0150': 12.0, // Mewtwo: poder psíquico, el que más lejos percibe
+  '0658': 11.5, // Greninja: instinto de ninja, alcance notable
+  '0150': 12.0, // Mewtwo: poder psíquico, alcance excepcional
   '0151': 11.0, // Mew: sentidos psíquicos y curiosidad infinita
   '0095': 8.8, // Onix: vive bajo tierra, poca luz y vista corta
-  '0123': 10.8 // Scyther: ojos de depredador y reflejos de mantis
+  '0123': 10.8, // Scyther: ojos de depredador y reflejos de mantis
+  '0144': 11.6, // Articuno: ojo de ave rapaz sobre el hielo
+  '0145': 11.8, // Zapdos: percibe la electricidad del aire a distancia
+  '0146': 11.5, // Moltres: la luz de sus llamas le abre el horizonte
+  '0243': 11.9, // Raikou: percibe las tormentas antes de que lleguen
+  '0244': 11.4, // Entei: su fuego ilumina y atemoriza a distancia
+  '0245': 11.6, // Suicune: vigila y purifica las aguas a su paso
+  '0249': 12.4, // Lugia: guardián de los mares, el que más lejos percibe
+  '0250': 11.9, // Ho-Oh: vista larga desde las alturas
+  '0251': 11.7 // Celebi: siente el bosque y el tiempo a su alrededor
 };
 
 export const DEFAULT_VISION = 9.5;

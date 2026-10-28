@@ -43,7 +43,16 @@ const ROSTER = [
   { id: '0150', name: 'Mewtwo', types: ['Psychic'], accent: '#f95587' },
   { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' },
   { id: '0095', name: 'Onix', types: ['Rock', 'Ground'], accent: '#b6a136' },
-  { id: '0123', name: 'Scyther', types: ['Bug', 'Flying'], accent: '#a6b91a' }
+  { id: '0123', name: 'Scyther', types: ['Bug', 'Flying'], accent: '#a6b91a' },
+  { id: '0144', name: 'Articuno', types: ['Ice', 'Flying'], accent: '#7fc4dc' },
+  { id: '0145', name: 'Zapdos', types: ['Electric', 'Flying'], accent: '#f2c53d' },
+  { id: '0146', name: 'Moltres', types: ['Fire', 'Flying'], accent: '#e8663c' },
+  { id: '0243', name: 'Raikou', types: ['Electric'], accent: '#f0b429' },
+  { id: '0244', name: 'Entei', types: ['Fire'], accent: '#d45a32' },
+  { id: '0245', name: 'Suicune', types: ['Water'], accent: '#4f9fd4' },
+  { id: '0249', name: 'Lugia', types: ['Psychic', 'Flying'], accent: '#8aa9e8' },
+  { id: '0250', name: 'Ho-Oh', types: ['Fire', 'Flying'], accent: '#d9a441' },
+  { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' }
 ];
 
 const ACTIONS = ['Idle', 'Walk'];

@@ -29,7 +29,7 @@ const teamCard =
 const teamCardReady =
   'border-[color:color-mix(in_srgb,var(--team)_60%,white_8%)] bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_13%,rgb(8_13_21/0.8)),rgb(8_13_21/0.72))]';
 const pokeCard =
-  'group relative flex min-h-[166px] animate-pop-in cursor-pointer flex-col items-center gap-[3px] overflow-hidden rounded-2xl border p-[10px_8px_12px] text-center text-inherit transition-[transform,border-color,box-shadow,background] duration-[140ms] ease-out before:pointer-events-none before:absolute before:inset-x-[-20%] before:-top-[40%] before:h-[90px] before:bg-[image:radial-gradient(ellipse_at_50%_100%,color-mix(in_srgb,var(--accent)_26%,transparent),transparent_70%)] before:transition-opacity before:duration-[160ms] min-[1051px]:min-h-0 min-[1051px]:justify-center min-[1051px]:gap-0.5 min-[1051px]:rounded-[14px] min-[1051px]:p-[clamp(6px,1vh,10px)_8px]';
+  'group relative flex min-h-[166px] animate-pop-in cursor-pointer flex-col items-center gap-[3px] overflow-hidden rounded-2xl border p-[10px_8px_12px] text-center text-inherit transition-[transform,border-color,box-shadow,background] duration-[140ms] ease-out before:pointer-events-none before:absolute before:inset-x-[-20%] before:-top-[40%] before:h-[90px] before:bg-[image:radial-gradient(ellipse_at_50%_100%,color-mix(in_srgb,var(--accent)_26%,transparent),transparent_70%)] before:transition-opacity before:duration-[160ms] min-[1051px]:min-h-0 min-[1051px]:justify-center min-[1051px]:gap-0.5 min-[1051px]:rounded-[14px] min-[1051px]:p-[clamp(6px,0.9vh,8px)_8px]';
 const pokeCardIdle =
   'border-line bg-[image:linear-gradient(168deg,rgb(23_33_48/0.92),rgb(10_16_25/0.9))] before:opacity-55 hover:-translate-y-[3px] hover:border-[color:color-mix(in_srgb,var(--accent)_48%,var(--color-line))] hover:shadow-[0_16px_34px_rgb(0_0_0/0.36)] hover:before:opacity-100';
 const pokeCardSelected =
@@ -81,8 +81,8 @@ export function RosterScreen({
             </h2>
             <p className="mt-2 max-w-[46ch] text-[0.9rem] leading-[1.55] text-muted min-[1051px]:mt-1 min-[1051px]:max-w-[92ch] min-[1051px]:text-[0.82rem] min-[1051px]:leading-[1.45]">
               Muévete por la rejilla con el stick o las flechas y confirma con{' '}
-              <strong>A / Espacio</strong>. Se permiten repetidos: hay 11 especies para hasta 8
-              jugadores.
+              <strong>A / Espacio</strong>. Se permiten repetidos: hay {manifest.pokemon.length} especies
+              para hasta 8 jugadores.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-[#090f18]/[0.72] px-4 py-2.5 max-[760px]:hidden min-[1051px]:px-3.5 min-[1051px]:py-1.5">
@@ -111,7 +111,7 @@ export function RosterScreen({
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(300px,370px)] items-start gap-[18px] max-[1050px]:grid-cols-1 min-[1051px]:min-h-0 min-[1051px]:flex-1 min-[1051px]:grid-cols-[minmax(0,1fr)_minmax(270px,330px)] min-[1051px]:items-stretch min-[1051px]:gap-3.5">
           <section className="min-w-0 min-[1051px]:flex min-[1051px]:min-h-0 min-[1051px]:flex-col min-[1051px]:gap-2">
             <div
-              className="grid grid-cols-3 gap-2.5 max-[760px]:grid-cols-2 min-[1051px]:min-h-0 min-[1051px]:flex-1 min-[1051px]:auto-rows-[minmax(0,1fr)] min-[1051px]:grid-cols-4 min-[1051px]:gap-2"
+              className="grid grid-cols-3 gap-2.5 max-[760px]:grid-cols-2 min-[1051px]:min-h-0 min-[1051px]:flex-1 min-[1051px]:auto-rows-[minmax(min-content,1fr)] min-[1051px]:grid-cols-5 min-[1051px]:gap-2 min-[1051px]:overflow-y-auto min-[1051px]:pr-1"
               role="listbox"
               aria-label="Pokémon disponibles"
             >
@@ -164,7 +164,7 @@ export function RosterScreen({
                       entry={entry}
                       height={52}
                       fluid
-                      className="relative z-[1] size-14 min-[1051px]:size-[clamp(44px,9vh,96px)]"
+                      className="relative z-[1] size-14 min-[1051px]:size-[clamp(44px,8vh,80px)]"
                     />
                     <span className="relative z-[1] font-display text-[0.98rem] font-bold min-[1051px]:text-[clamp(0.82rem,1.05vw,0.98rem)] min-[1051px]:leading-[1.15]">
                       {entry.name}

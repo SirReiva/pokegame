@@ -2,7 +2,7 @@
  * Número de columnas de la rejilla del selector de Pokémon.
  *
  * Debe coincidir con los breakpoints de la rejilla en `RosterScreen.tsx`:
- * - ≥ 1051px → 4 columnas (layout a pantalla completa sin scroll)
+ * - ≥ 1051px → 5 columnas (4 filas con el roster completo)
  * - 761px - 1050px → 3 columnas (layout apilado)
  * - ≤ 760px → 2 columnas
  *
@@ -11,7 +11,7 @@
  */
 export function rosterColumns(): number {
   if (typeof window === 'undefined') return 3;
-  if (window.matchMedia('(min-width: 1051px)').matches) return 4;
+  if (window.matchMedia('(min-width: 1051px)').matches) return 5;
   if (window.matchMedia('(min-width: 761px)').matches) return 3;
   return 2;
 }

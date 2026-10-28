@@ -286,7 +286,7 @@ export class Game {
   private npcSlots(): Array<{ x: number; z: number }> {
     const base = firstRespawnForTeam('blue');
     const radius = Math.max(1.7, base.radius * 0.65);
-    const count = 11;
+    const count = this.manifest?.pokemon.length ?? 11;
     return Array.from({ length: count }, (_, index) => {
       const angle = (index / count) * Math.PI * 2 + Math.PI * 0.15;
       return {

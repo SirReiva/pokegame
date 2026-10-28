@@ -93,3 +93,68 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/credits.txt
 
+## Articuno (#0144)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0144/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144/credits.txt
+
+## Zapdos (#0145)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/credits.txt
+
+## Moltres (#0146)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0146/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146/credits.txt
+
+## Raikou (#0243)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shock, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0243/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243/credits.txt
+
+## Entei (#0244)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/credits.txt
+
+## Suicune (#0245)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/credits.txt
+
+## Lugia (#0249)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0249/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249/credits.txt
+
+## Ho-Oh (#0250)
+
+- CHUNSOFT · Walk, Attack, Jab, Shoot, Hover, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0250/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250/credits.txt
+
+## Celebi (#0251)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
+- <@!177074597315870720> — PMDCollab_1 · EventSleep, Wake, Eat, Pose, Pull, Pain, Float, DeepBreath, Nod, Sink, Trip, Laying, LeapForth, Cringe, LostBalance, HitGround, Faint
+- <@!356635814668664832> — PMDCollab_1 · EventSleep, Wake, Tumble, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Laying, LeapForth, Head, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/credits.txt
+
