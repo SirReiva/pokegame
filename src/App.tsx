@@ -543,7 +543,7 @@ function App() {
               {error}
             </p>
             <p className="text-muted">
-              Comprueba que has ejecutado <code className={code}>npm run sprites</code> y que el
+              Comprueba que has ejecutado <code className={code}>pnpm sprites</code> y que el
               servidor de desarrollo está activo.
             </p>
             <button

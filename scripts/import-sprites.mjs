@@ -3,8 +3,8 @@
  * Descarga los sprites de PMD Sprite Collab y genera el manifiesto que consume el juego.
  *
  * Uso:
- *   npm run sprites            # descarga/actualiza los assets del roster
- *   npm run sprites -- --force # fuerza la descarga aunque los ficheros existan
+ *   pnpm sprites            # descarga/actualiza los assets del roster
+ *   pnpm sprites --force    # fuerza la descarga aunque los ficheros existan
  *
  * Además de las hojas de animación, el script lee `-Shadow.png` y guarda en el
  * manifiesto el "ancla de suelo" de cada frame: el píxel blanco de la sombra,

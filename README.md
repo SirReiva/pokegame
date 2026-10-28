@@ -15,17 +15,17 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 ## Arranque
 
 ```bash
-npm install
-npm run dev        # servidor de desarrollo
-npm run build      # comprobación de tipos + build de producción
-npm run preview    # servir el build
+pnpm install
+pnpm dev           # servidor de desarrollo
+pnpm build         # comprobación de tipos + build de producción
+pnpm preview       # servir el build
 ```
 
 Los sprites ya están incluidos en `public/sprites/`. Para volver a descargarlos y regenerar el manifiesto:
 
 ```bash
-npm run sprites            # usa la caché local
-npm run sprites -- --force # fuerza la descarga
+pnpm sprites            # usa la caché local
+pnpm sprites --force    # fuerza la descarga
 ```
 
 Requiere Node 18+ (el importador usa `fetch` y `zlib`).

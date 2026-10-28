@@ -5,7 +5,7 @@
  * para que el cambio se note al elegir Pokémon, sin que ninguno se sienta roto.
  *
  * Vive fuera del manifiesto (`public/sprites/manifest.json`) porque ese archivo
- * lo regenera `npm run sprites` desde PMD Sprite Collab y perdería los ajustes.
+ * lo regenera `pnpm sprites` desde PMD Sprite Collab y perdería los ajustes.
  */
 export const POKEMON_SPEEDS: Record<string, number> = {
   '0001': 4.2, // Bulbasaur: el más lento del grupo
