@@ -115,12 +115,5 @@ export const CONFIG = {
     fogColor: [0.016, 0.039, 0.086] as [number, number, number],
     /** Ancho del borde suave, como fracción del radio de visión. */
     fogFeather: 0.06,
-    /**
-     * Oscurecimiento extra (alfa) que conserva la cuña de cordillera donde se
-     * solapa con la niebla circular. Sin él, ambas capas se funden por máximo y
-     * la cuña deja de distinguirse del exterior; con el valor anterior se
-     * sumaban (0.64 + 0.64) y el borde quedaba casi negro.
-     */
-    mountainOverlap: 0.15,
   },
 } as const;

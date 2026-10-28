@@ -66,30 +66,23 @@ varying vec4 vClip;
 uniform vec3 uFogColor;
 uniform float uFogOpacity;
 uniform sampler2D uFogMask;
-uniform vec2 uPlayer;
-uniform float uVisionRange;
-uniform vec2 uMapHalfSize;
 uniform vec2 uScreenCenter;
 uniform vec2 uScreenRadius;
 uniform float uScreenFeather;
 uniform float uScreenOpacity;
-uniform float uOverlap;
 
 void main(void) {
-  float mask = texture2D(uFogMask, vUv).r;
-  vec2 world = (vUv * 2.0 - 1.0) * uMapHalfSize;
-  float inside = 1.0 - smoothstep(uVisionRange - 0.5, uVisionRange + 0.5, distance(world, uPlayer));
-  float shadow = (1.0 - mask) * inside * uFogOpacity;
+  float shadow = (1.0 - texture2D(uFogMask, vUv).r) * uFogOpacity;
 
   // Mismo óvalo de pantalla que dibuja FogView. Al resolverlo aquí, el decal
-  // puede compensar la niebla circular y las dos capas se funden por máximo en
-  // vez de sumarse (que era lo que oscurecía los bordes).
+  // compensa la niebla circular que se dibuja encima: la suma de las dos capas
+  // queda exactamente en max(circle, shadow). Fuera del radio de visión ambas
+  // valen lo mismo (uFogOpacity), así que la cuña se funde con la niebla sin
+  // costura y sin oscurecer dos veces la zona de solape.
   vec2 clipUv = vClip.xy / vClip.w * 0.5 + 0.5;
   vec2 offset = (clipUv - uScreenCenter) / max(uScreenRadius, vec2(0.0001));
   float circle = smoothstep(1.0 - uScreenFeather, 1.0, length(offset)) * uScreenOpacity;
-  // El solape se resuelve por máximo para no sumar dos veces el mismo color,
-  // con un extra pequeño y proporcional para que la cuña siga leyéndose.
-  float target = max(circle, shadow) + uOverlap * min(circle, shadow);
+  float target = max(circle, shadow);
   float alpha = clamp(
     (target - circle) / max(1.0 - circle, 0.001),
     0.0,
@@ -374,7 +367,6 @@ export class FogDecal {
   private readonly maskCanvas: HTMLCanvasElement;
   private readonly maskContext: CanvasRenderingContext2D;
   private readonly maskTexture: pc.Texture;
-  private readonly player = new Float32Array(2);
   private readonly screenCenter = new Float32Array(2);
   private readonly screenRadius = new Float32Array(2);
   private screenFeather: number = CONFIG.vision.fogFeather;
@@ -432,14 +424,10 @@ export class FogDecal {
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
     this.material.setParameter('uFogOpacity', CONFIG.vision.fogOpacity);
     this.material.setParameter('uFogMask', this.maskTexture);
-    this.material.setParameter('uPlayer', this.player);
-    this.material.setParameter('uVisionRange', 0);
-    this.material.setParameter('uMapHalfSize', new Float32Array([mapHalfWidth(), mapHalfDepth()]));
     this.material.setParameter('uScreenCenter', this.screenCenter);
     this.material.setParameter('uScreenRadius', this.screenRadius);
     this.material.setParameter('uScreenFeather', this.screenFeather);
     this.material.setParameter('uScreenOpacity', this.screenOpacity);
-    this.material.setParameter('uOverlap', CONFIG.vision.mountainOverlap);
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
@@ -485,10 +473,6 @@ export class FogDecal {
     this.lastZ = playerZ;
     this.lastVision = visionRange;
 
-    this.player[0] = playerX;
-    this.player[1] = playerZ;
-    this.material.setParameter('uPlayer', this.player);
-    this.material.setParameter('uVisionRange', visionRange);
     this.updateMask(playerX, playerZ, visionRange);
   }
 

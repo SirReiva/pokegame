@@ -7,18 +7,18 @@
  * mundo, que es lo que entiende `src/game/map.ts`.
  */
 
-import { parseMap } from './map';
+import { parseMap } from "./map";
 import {
   TERRAIN_IDS,
   isTerrainId,
   type MountainRange,
   type RespawnPoint,
   type Team,
-  type TerrainId
-} from './terrain';
+  type TerrainId,
+} from "./terrain";
 
-export const EDITOR_MIN_SIZE = 8;
-export const EDITOR_MAX_SIZE = 128;
+export const EDITOR_MIN_SIZE = 64;
+export const EDITOR_MAX_SIZE = 4096;
 export const EDITOR_DEFAULT_SIZE = 32;
 export const EDITOR_DEFAULT_TILE_SIZE = 0.5;
 export const EDITOR_DEFAULT_WATER_HEIGHT = 0.3;
@@ -27,21 +27,21 @@ export const EDITOR_HISTORY_LIMIT = 60;
 
 /** Color de cada terreno en la rejilla. Copia la paleta base de `textures.ts`. */
 export const TERRAIN_SWATCHES: Record<TerrainId, string> = {
-  jungle: '#699f4b',
-  lane: '#b99a70',
-  road: '#4c525b',
-  sand: '#d8c79a',
-  waterLow: '#67bad8',
-  waterHigh: '#2f7fa8',
-  base: '#8d8577',
-  tallGrass: '#2f6a2b',
-  fire: '#1f2329',
-  electric: '#a39344',
-  ice: '#c3e2ea',
-  poison: '#5b3967',
-  ghost: '#3d3a4c',
-  fairy: '#8fbf6b',
-  desert: '#d9b66c'
+  jungle: "#699f4b",
+  lane: "#b99a70",
+  road: "#4c525b",
+  sand: "#d8c79a",
+  waterLow: "#67bad8",
+  waterHigh: "#2f7fa8",
+  base: "#8d8577",
+  tallGrass: "#2f6a2b",
+  fire: "#1f2329",
+  electric: "#a39344",
+  ice: "#c3e2ea",
+  poison: "#5b3967",
+  ghost: "#3d3a4c",
+  fairy: "#8fbf6b",
+  desert: "#d9b66c",
 };
 
 export interface EditorBase {
@@ -120,11 +120,13 @@ export function cloneBases(bases: EditorBases): EditorBases {
   return next;
 }
 
-export function cloneMountains(mountains: MountainRange[] | undefined): MountainRange[] {
+export function cloneMountains(
+  mountains: MountainRange[] | undefined,
+): MountainRange[] {
   return (mountains ?? []).map((range) => ({
     ...(range.kind ? { kind: range.kind } : {}),
     width: range.width,
-    points: range.points.map(([x, z]) => [x, z] as [number, number])
+    points: range.points.map(([x, z]) => [x, z] as [number, number]),
   }));
 }
 
@@ -137,7 +139,7 @@ export function cloneEditorMap(map: EditorMap): EditorMap {
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases),
     mountains: cloneMountains(map.mountains),
-    spawn: map.spawn ? { ...map.spawn } : undefined
+    spawn: map.spawn ? { ...map.spawn } : undefined,
   };
 }
 
@@ -147,18 +149,21 @@ export function snapshotOf(map: EditorMap): EditorSnapshot {
     rows: map.rows,
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases),
-    mountains: cloneMountains(map.mountains)
+    mountains: cloneMountains(map.mountains),
   };
 }
 
-export function applySnapshot(map: EditorMap, snapshot: EditorSnapshot): EditorMap {
+export function applySnapshot(
+  map: EditorMap,
+  snapshot: EditorSnapshot,
+): EditorMap {
   return {
     ...map,
     cols: snapshot.cols,
     rows: snapshot.rows,
     tiles: cloneTiles(snapshot.tiles),
     bases: cloneBases(snapshot.bases),
-    mountains: cloneMountains(snapshot.mountains)
+    mountains: cloneMountains(snapshot.mountains),
   };
 }
 
@@ -171,10 +176,20 @@ export function createEditorMap(options: {
   waterHeight?: number;
   fill?: TerrainId;
 }): EditorMap {
-  const cols = clamp(Math.round(options.cols), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
-  const rows = clamp(Math.round(options.rows), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
-  const fill = options.fill ?? 'jungle';
-  const tiles = Array.from({ length: rows }, () => Array<TerrainId>(cols).fill(fill));
+  const cols = clamp(
+    Math.round(options.cols),
+    EDITOR_MIN_SIZE,
+    EDITOR_MAX_SIZE,
+  );
+  const rows = clamp(
+    Math.round(options.rows),
+    EDITOR_MIN_SIZE,
+    EDITOR_MAX_SIZE,
+  );
+  const fill = options.fill ?? "jungle";
+  const tiles = Array.from({ length: rows }, () =>
+    Array<TerrainId>(cols).fill(fill),
+  );
   const blueRow = clamp(Math.floor(rows * 0.75), 0, rows - 1);
   const blueCol = clamp(Math.floor(cols * 0.25), 0, cols - 1);
   const redRow = clamp(Math.floor(rows * 0.25), 0, rows - 1);
@@ -187,28 +202,35 @@ export function createEditorMap(options: {
       name: options.name,
       tileSize: options.tileSize ?? EDITOR_DEFAULT_TILE_SIZE,
       waterHeight: options.waterHeight ?? EDITOR_DEFAULT_WATER_HEIGHT,
-      baseRadius
+      baseRadius,
     },
     cols,
     rows,
     background: fill,
     tiles,
     bases: {
-      blue: { team: 'blue', row: blueRow, col: blueCol, radius: baseRadius },
-      red: { team: 'red', row: redRow, col: redCol, radius: baseRadius }
+      blue: { team: "blue", row: blueRow, col: blueCol, radius: baseRadius },
+      red: { team: "red", row: redRow, col: redCol, radius: baseRadius },
     },
-    mountains: []
+    mountains: [],
   };
 }
 
 /** Redimensiona conservando la esquina noroeste. Devuelve `null` si no cambia. */
-export function resizeEditorMap(map: EditorMap, cols: number, rows: number): EditorMap | null {
+export function resizeEditorMap(
+  map: EditorMap,
+  cols: number,
+  rows: number,
+): EditorMap | null {
   const nextCols = clamp(Math.round(cols), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
   const nextRows = clamp(Math.round(rows), EDITOR_MIN_SIZE, EDITOR_MAX_SIZE);
   if (nextCols === map.cols && nextRows === map.rows) return null;
 
   const tiles = Array.from({ length: nextRows }, (_, row) =>
-    Array.from({ length: nextCols }, (_, col) => map.tiles[row]?.[col] ?? map.background)
+    Array.from(
+      { length: nextCols },
+      (_, col) => map.tiles[row]?.[col] ?? map.background,
+    ),
   );
 
   const bases: EditorBases = {};
@@ -216,14 +238,14 @@ export function resizeEditorMap(map: EditorMap, cols: number, rows: number): Edi
     bases.blue = {
       ...map.bases.blue,
       row: clamp(map.bases.blue.row, 0, nextRows - 1),
-      col: clamp(map.bases.blue.col, 0, nextCols - 1)
+      col: clamp(map.bases.blue.col, 0, nextCols - 1),
     };
   }
   if (map.bases.red) {
     bases.red = {
       ...map.bases.red,
       row: clamp(map.bases.red.row, 0, nextRows - 1),
-      col: clamp(map.bases.red.col, 0, nextCols - 1)
+      col: clamp(map.bases.red.col, 0, nextCols - 1),
     };
   }
 
@@ -236,8 +258,8 @@ export function resizeEditorMap(map: EditorMap, cols: number, rows: number): Edi
     ...(range.kind ? { kind: range.kind } : {}),
     width: range.width,
     points: range.points.map(
-      ([x, z]) => [round(x - shiftX), round(z - shiftZ)] as [number, number]
-    )
+      ([x, z]) => [round(x - shiftX), round(z - shiftZ)] as [number, number],
+    ),
   }));
 
   return { ...map, cols: nextCols, rows: nextRows, tiles, bases, mountains };
@@ -247,9 +269,15 @@ export function paintCellInPlace(
   tiles: TerrainId[][],
   row: number,
   col: number,
-  terrain: TerrainId
+  terrain: TerrainId,
 ): boolean {
-  if (row < 0 || col < 0 || row >= tiles.length || col >= (tiles[row]?.length ?? 0)) return false;
+  if (
+    row < 0 ||
+    col < 0 ||
+    row >= tiles.length ||
+    col >= (tiles[row]?.length ?? 0)
+  )
+    return false;
   if (tiles[row][col] === terrain) return false;
   tiles[row][col] = terrain;
   return true;
@@ -262,7 +290,7 @@ export function paintLineInPlace(
   colA: number,
   rowB: number,
   colB: number,
-  terrain: TerrainId
+  terrain: TerrainId,
 ): boolean {
   let x0 = colA;
   let y0 = rowA;
@@ -296,7 +324,7 @@ export function floodFillInPlace(
   tiles: TerrainId[][],
   row: number,
   col: number,
-  terrain: TerrainId
+  terrain: TerrainId,
 ): boolean {
   const rows = tiles.length;
   const cols = tiles[0]?.length ?? 0;
@@ -323,7 +351,7 @@ export function paintRectInPlace(
   colA: number,
   rowB: number,
   colB: number,
-  terrain: TerrainId
+  terrain: TerrainId,
 ): boolean {
   const rows = tiles.length;
   const cols = tiles[0]?.length ?? 0;
@@ -348,10 +376,15 @@ export function setBaseInPlace(
   team: Team,
   row: number,
   col: number,
-  radius: number
+  radius: number,
 ): boolean {
   const current = bases[team];
-  if (current && current.row === row && current.col === col && current.radius === radius) {
+  if (
+    current &&
+    current.row === row &&
+    current.col === col &&
+    current.radius === radius
+  ) {
     return false;
   }
   bases[team] = { team, row, col, radius };
@@ -364,44 +397,50 @@ export function cellCenter(
   rows: number,
   tileSize: number,
   row: number,
-  col: number
+  col: number,
 ): { x: number; z: number } {
   const halfX = (cols * tileSize) / 2;
   const halfZ = (rows * tileSize) / 2;
   return {
     x: round((col + 0.5) * tileSize - halfX),
-    z: round((row + 0.5) * tileSize - halfZ)
+    z: round((row + 0.5) * tileSize - halfZ),
   };
 }
 
 export function editorMapToJson(map: EditorMap): EditorMapJson {
   const respawns: RespawnPoint[] = [];
-  for (const team of ['blue', 'red'] as const) {
+  for (const team of ["blue", "red"] as const) {
     const base = map.bases[team];
     if (!base) continue;
-    const center = cellCenter(map.cols, map.rows, map.meta.tileSize, base.row, base.col);
+    const center = cellCenter(
+      map.cols,
+      map.rows,
+      map.meta.tileSize,
+      base.row,
+      base.col,
+    );
     respawns.push({
       team,
       x: center.x,
       z: center.z,
-      radius: round(base.radius)
+      radius: round(base.radius),
     });
   }
 
-  const blue = respawns.find((respawn) => respawn.team === 'blue');
+  const blue = respawns.find((respawn) => respawn.team === "blue");
   const spawn = map.spawn
     ? { x: round(map.spawn.x), z: round(map.spawn.z) }
     : { x: blue?.x ?? 0, z: blue?.z ?? 0 };
 
   const json: EditorMapJson = {
-    $schema: './map.schema.json',
+    $schema: "./map.schema.json",
     id: map.meta.id.trim(),
     name: map.meta.name.trim(),
     tileSize: round(map.meta.tileSize),
     waterHeight: round(map.meta.waterHeight),
     spawn,
     respawns,
-    tiles: cloneTiles(map.tiles)
+    tiles: cloneTiles(map.tiles),
   };
   const mountains = cloneMountains(map.mountains);
   if (mountains.length > 0) json.mountains = mountains;
@@ -410,9 +449,16 @@ export function editorMapToJson(map: EditorMap): EditorMapJson {
 
 /** Importa un mapa del juego (o exportado por el editor) y lo adapta al editor. */
 export function editorMapFromJson(raw: unknown): EditorMap {
-  const value = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : 'mapa-importado';
-  const name = typeof value.name === 'string' && value.name.trim() ? value.name.trim() : id;
+  const value =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const id =
+    typeof value.id === "string" && value.id.trim()
+      ? value.id.trim()
+      : "mapa-importado";
+  const name =
+    typeof value.name === "string" && value.name.trim()
+      ? value.name.trim()
+      : id;
   const parsed = parseMap(raw, { id, name, file: `${id}.json` });
 
   const cols = parsed.tiles[0]?.length ?? 0;
@@ -431,7 +477,7 @@ export function editorMapFromJson(raw: unknown): EditorMap {
       team: respawn.team,
       row: toRow(respawn.z),
       col: toCol(respawn.x),
-      radius: respawn.radius
+      radius: respawn.radius,
     };
   }
 
@@ -439,9 +485,10 @@ export function editorMapFromJson(raw: unknown): EditorMap {
   // el borde nuevo se parezca al resto.
   const counts = new Map<TerrainId, number>();
   for (const row of parsed.tiles) {
-    for (const terrain of row) counts.set(terrain, (counts.get(terrain) ?? 0) + 1);
+    for (const terrain of row)
+      counts.set(terrain, (counts.get(terrain) ?? 0) + 1);
   }
-  let background: TerrainId = 'jungle';
+  let background: TerrainId = "jungle";
   let best = -1;
   for (const terrain of TERRAIN_IDS) {
     const count = counts.get(terrain) ?? 0;
@@ -457,7 +504,8 @@ export function editorMapFromJson(raw: unknown): EditorMap {
       name,
       tileSize: parsed.tileSize,
       waterHeight: parsed.waterHeight,
-      baseRadius: bases.blue?.radius ?? bases.red?.radius ?? EDITOR_DEFAULT_BASE_RADIUS
+      baseRadius:
+        bases.blue?.radius ?? bases.red?.radius ?? EDITOR_DEFAULT_BASE_RADIUS,
     },
     cols,
     rows,
@@ -465,7 +513,7 @@ export function editorMapFromJson(raw: unknown): EditorMap {
     tiles: cloneTiles(parsed.tiles),
     bases,
     mountains: cloneMountains(parsed.mountains),
-    spawn: { ...parsed.spawn }
+    spawn: { ...parsed.spawn },
   };
 }
 
@@ -473,100 +521,129 @@ export function validateEditorMap(map: EditorMap): string[] {
   const issues: string[] = [];
   const id = map.meta.id.trim();
   if (!id) {
-    issues.push('El id no puede estar vacío.');
+    issues.push("El id no puede estar vacío.");
   } else if (!/^[a-z0-9][a-z0-9_-]*$/i.test(id)) {
-    issues.push('El id solo puede usar letras, números, guiones y guiones bajos.');
+    issues.push(
+      "El id solo puede usar letras, números, guiones y guiones bajos.",
+    );
   }
-  if (!map.meta.name.trim()) issues.push('El nombre no puede estar vacío.');
-  if (!(map.meta.tileSize > 0)) issues.push('El tamaño de celda debe ser mayor que cero.');
+  if (!map.meta.name.trim()) issues.push("El nombre no puede estar vacío.");
+  if (!(map.meta.tileSize > 0))
+    issues.push("El tamaño de celda debe ser mayor que cero.");
   if (!Number.isFinite(map.meta.waterHeight)) {
-    issues.push('La altura del agua debe ser un número.');
+    issues.push("La altura del agua debe ser un número.");
   }
   if (!(map.meta.baseRadius > 0)) {
-    issues.push('El radio de base debe ser mayor que cero.');
+    issues.push("El radio de base debe ser mayor que cero.");
   }
   for (const base of [map.bases.blue, map.bases.red]) {
     if (base && !(base.radius > 0)) {
-      issues.push(`El radio de la base ${base.team === 'blue' ? 'azul' : 'roja'} debe ser mayor que cero.`);
+      issues.push(
+        `El radio de la base ${base.team === "blue" ? "azul" : "roja"} debe ser mayor que cero.`,
+      );
     }
   }
   if (map.cols < EDITOR_MIN_SIZE || map.cols > EDITOR_MAX_SIZE) {
-    issues.push(`El ancho de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+    issues.push(
+      `El ancho de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
+    );
   }
   if (map.rows < EDITOR_MIN_SIZE || map.rows > EDITOR_MAX_SIZE) {
-    issues.push(`El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`);
+    issues.push(
+      `El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
+    );
   }
-  if (!map.bases.blue) issues.push('Falta la base azul.');
-  if (!map.bases.red) issues.push('Falta la base roja.');
+  if (!map.bases.blue) issues.push("Falta la base azul.");
+  if (!map.bases.red) issues.push("Falta la base roja.");
   map.mountains.forEach((range, index) => {
-    if (range.kind !== undefined && range.kind !== 'mountain' && range.kind !== 'wall') {
+    if (
+      range.kind !== undefined &&
+      range.kind !== "mountain" &&
+      range.kind !== "wall"
+    ) {
       issues.push(`El separador ${index + 1} tiene un tipo desconocido.`);
     }
     if (!(range.width > 0)) {
-      issues.push(`El ancho del separador ${index + 1} debe ser mayor que cero.`);
+      issues.push(
+        `El ancho del separador ${index + 1} debe ser mayor que cero.`,
+      );
     }
     if (range.points.length < 2) {
       issues.push(`El separador ${index + 1} necesita al menos dos puntos.`);
     }
-    if (range.points.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z))) {
+    if (
+      range.points.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z))
+    ) {
       issues.push(`El separador ${index + 1} tiene un punto no válido.`);
     }
   });
   if (
     map.tiles.length !== map.rows ||
     map.tiles.some(
-      (row) => row.length !== map.cols || row.some((terrain) => !isTerrainId(terrain))
+      (row) =>
+        row.length !== map.cols || row.some((terrain) => !isTerrainId(terrain)),
     )
   ) {
-    issues.push('La rejilla no coincide con el ancho y el alto, o contiene un terreno desconocido.');
+    issues.push(
+      "La rejilla no coincide con el ancho y el alto, o contiene un terreno desconocido.",
+    );
   }
   return issues;
 }
 
 /** Comprueba la forma mínima de un borrador guardado en localStorage. */
 export function isEditorMap(value: unknown): value is EditorMap {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const map = value as Partial<EditorMap>;
-  if (!map.meta || typeof map.meta !== 'object') return false;
-  if (typeof map.meta.id !== 'string' || typeof map.meta.name !== 'string') return false;
-  if (typeof map.meta.tileSize !== 'number' || typeof map.meta.waterHeight !== 'number') return false;
-  if (typeof map.meta.baseRadius !== 'number') return false;
+  if (!map.meta || typeof map.meta !== "object") return false;
+  if (typeof map.meta.id !== "string" || typeof map.meta.name !== "string")
+    return false;
   if (
-    typeof map.cols !== 'number' ||
-    typeof map.rows !== 'number' ||
-    typeof map.background !== 'string'
+    typeof map.meta.tileSize !== "number" ||
+    typeof map.meta.waterHeight !== "number"
+  )
+    return false;
+  if (typeof map.meta.baseRadius !== "number") return false;
+  if (
+    typeof map.cols !== "number" ||
+    typeof map.rows !== "number" ||
+    typeof map.background !== "string"
   ) {
     return false;
   }
   if (!isTerrainId(map.background)) return false;
   if (!Array.isArray(map.tiles) || map.tiles.length !== map.rows) return false;
-  if (!map.tiles.every((row) => Array.isArray(row) && row.length === map.cols)) return false;
-  if (!map.tiles.every((row) => row.every((terrain) => isTerrainId(terrain)))) return false;
-  if (!map.bases || typeof map.bases !== 'object') return false;
+  if (!map.tiles.every((row) => Array.isArray(row) && row.length === map.cols))
+    return false;
+  if (!map.tiles.every((row) => row.every((terrain) => isTerrainId(terrain))))
+    return false;
+  if (!map.bases || typeof map.bases !== "object") return false;
   if (map.mountains !== undefined) {
     if (!Array.isArray(map.mountains)) return false;
     const validMountains = map.mountains.every(
       (range) =>
         range &&
-        (range.kind === undefined || range.kind === 'mountain' || range.kind === 'wall') &&
-        typeof range.width === 'number' &&
+        (range.kind === undefined ||
+          range.kind === "mountain" ||
+          range.kind === "wall") &&
+        typeof range.width === "number" &&
         Array.isArray(range.points) &&
         range.points.length >= 2 &&
         range.points.every(
           (point) =>
             Array.isArray(point) &&
-            typeof point[0] === 'number' &&
-            typeof point[1] === 'number'
-        )
+            typeof point[0] === "number" &&
+            typeof point[1] === "number",
+        ),
     );
     if (!validMountains) return false;
   }
   if (
     map.spawn !== undefined &&
     (!map.spawn ||
-      typeof map.spawn !== 'object' ||
-      typeof map.spawn.x !== 'number' ||
-      typeof map.spawn.z !== 'number')
+      typeof map.spawn !== "object" ||
+      typeof map.spawn.x !== "number" ||
+      typeof map.spawn.z !== "number")
   ) {
     return false;
   }
@@ -579,9 +656,9 @@ export function isEditorMap(value: unknown): value is EditorMap {
  */
 export function readEditorDraft(value: unknown): EditorMap | null {
   if (isEditorMap(value)) return value;
-  if (!value || typeof value !== 'object') return null;
+  if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  if (typeof raw.size !== 'number') return null;
+  if (typeof raw.size !== "number") return null;
   const migrated = { ...raw, cols: raw.size, rows: raw.size };
   return isEditorMap(migrated) ? migrated : null;
 }
