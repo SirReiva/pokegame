@@ -9,7 +9,7 @@
  * - Terreno cómodo (lo resiste o es inmune a él): ×1,08.
  * - Resto de combinaciones: ×1.
  *
- * Así la hierba alta frena a Squirtle, la arena frena a Pikachu, la ciénaga
+ * Así la hierba alta favorece a Scyther, la arena frena a Pikachu, la ciénaga
  * favorece a Bulbasaur, Charmander corre por la Colada volcánica y Eevee va
  * cómodo por los carriles y la carretera. El sistema es puro: no depende de PlayCanvas y puede
  * consultarse desde cualquier módulo.
@@ -45,6 +45,18 @@ const TYPE_CHART: Record<string, Record<string, number>> = {
     Rock: 0.5,
     Steel: 0.5,
     Ghost: 0
+  },
+  Bug: {
+    Grass: 2,
+    Psychic: 2,
+    Dark: 2,
+    Fire: 0.5,
+    Fighting: 0.5,
+    Poison: 0.5,
+    Flying: 0.5,
+    Ghost: 0.5,
+    Steel: 0.5,
+    Fairy: 0.5
   },
   Grass: {
     Water: 2,

@@ -40,7 +40,7 @@ export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
   waterLow: { name: 'Aguas someras', type: 'Water' },
   waterHigh: { name: 'Aguas profundas', type: 'Water' },
   base: { name: 'Base', type: 'Rock' },
-  tallGrass: { name: 'Hierba alta', type: 'Grass' },
+  tallGrass: { name: 'Hierba alta', type: 'Bug' },
   fire: { name: 'Colada volcánica', type: 'Fire' },
   electric: { name: 'Páramo', type: 'Electric' },
   ice: { name: 'Escarcha', type: 'Ice' },
