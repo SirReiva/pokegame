@@ -25,6 +25,7 @@ import {
   createFrostCanvas,
   createGroundCanvas,
   createLeafCanvas,
+  createMistCanvas,
   createMountainRockCanvas,
   createPollenCanvas,
   createShadowCanvas,
@@ -95,6 +96,139 @@ const MOUNTAIN_HEIGHT_SCALE = 0.7;
  * cordilleras; solo cambia la malla, así que esta altura es puramente visual.
  */
 const WALL_HEIGHT = 2.3;
+
+/**
+ * Láminas continuas de niebla/polvo en regiones grandes. Desactivadas por
+ * ahora: las regiones grandes se quedan sin efecto hasta que se ajuste el
+ * diseño. Los charcos pequeños conservan sus partículas de siempre.
+ */
+const LARGE_REGION_WEATHER = false;
+
+/**
+ * Variante de `transformCoreVS` para follaje instanciado. Cada instancia lleva
+ * en `instance_wind` su fase y su fuerza de viento; el vertex shader inclina la
+ * mata sobre su base (y = 0) sin desplazarla. Así la animación de una región
+ * entera cuesta un uniforme por material y ningún trabajo de CPU por mata.
+ */
+const WIND_TRANSFORM_CORE_VS = `
+attribute vec4 vertex_position;
+uniform mat4 matrix_viewProjection;
+uniform mat4 matrix_model;
+#ifdef INSTANCING
+attribute vec4 instance_wind;
+uniform float uWindTime;
+uniform float uWindSpeed;
+uniform float uWindAmplitude;
+#endif
+#ifdef MORPHING
+	uniform vec2 morph_tex_params;
+	attribute uint morph_vertex_id;
+	ivec2 getTextureMorphCoords() {
+		ivec2 textureSize = ivec2(morph_tex_params);
+		int morphGridV = int(morph_vertex_id) / textureSize.x;
+		int morphGridU = int(morph_vertex_id) - (morphGridV * textureSize.x);
+		#ifdef WEBGPU
+			morphGridV = textureSize.y - morphGridV - 1;
+		#endif
+		return ivec2(morphGridU, morphGridV);
+	}
+	#ifdef MORPHING_POSITION
+		#ifdef MORPHING_INT
+			uniform vec3 aabbSize;
+			uniform vec3 aabbMin;
+			uniform usampler2D morphPositionTex;
+		#else
+			uniform highp sampler2D morphPositionTex;
+		#endif
+	#endif
+#endif
+#ifdef defined(BATCH)
+	#include "skinBatchVS"
+	mat4 getModelMatrix() {
+		return getBoneMatrix(vertex_boneIndices);
+	}
+#elif defined(SKIN)
+	#include "skinVS"
+	mat4 getModelMatrix() {
+		return matrix_model * getSkinMatrix(vertex_boneIndices, vertex_boneWeights);
+	}
+#elif defined(INSTANCING)
+	#include "transformInstancingVS"
+#else
+	mat4 getModelMatrix() {
+		return matrix_model;
+	}
+#endif
+vec3 getLocalPosition(vec3 vertexPosition) {
+	vec3 localPos = vertexPosition;
+	#ifdef INSTANCING
+		// Giro sobre Z en el espacio local: la base queda fija y la punta se mece.
+		float sway = sin(uWindTime * uWindSpeed + instance_wind.x) * uWindAmplitude * instance_wind.y;
+		float swaySin = sin(sway);
+		float swayCos = cos(sway);
+		localPos = vec3(
+			localPos.x * swayCos - localPos.y * swaySin,
+			localPos.x * swaySin + localPos.y * swayCos,
+			localPos.z
+		);
+	#endif
+	#ifdef MORPHING_POSITION
+		ivec2 morphUV = getTextureMorphCoords();
+		#ifdef MORPHING_INT
+			vec3 morphPos = vec3(texelFetch(morphPositionTex, ivec2(morphUV), 0).xyz) / 65535.0 * aabbSize + aabbMin;
+		#else
+			vec3 morphPos = texelFetch(morphPositionTex, ivec2(morphUV), 0).xyz;
+		#endif
+		localPos += morphPos;
+	#endif
+	return localPos;
+}
+`;
+
+/** Lote instanciado de mariposas: cuerpo y las dos alas comparten índices. */
+interface ButterflyBatch {
+  body: Float32Array;
+  right: Float32Array;
+  left: Float32Array;
+  bodyBuffer: pc.VertexBuffer;
+  rightBuffer: pc.VertexBuffer;
+  leftBuffer: pc.VertexBuffer;
+}
+
+interface Butterfly {
+  batch: ButterflyBatch;
+  /** Índice dentro de los buffers del lote. */
+  index: number;
+  zone: TerrainZone;
+  rand: () => number;
+  target: pc.Vec3;
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  speed: number;
+  flapSpeed: number;
+  phase: number;
+  yaw: number;
+}
+
+interface InstancedFoliageOptions {
+  label: string;
+  zones: TerrainZone[];
+  meshes: pc.Mesh[];
+  material: pc.StandardMaterial;
+  /** Matas por unidad cuadrada de la zona. */
+  density: number;
+  seed: number;
+  scaleMin: number;
+  scaleMax: number;
+  strengthMin: number;
+  strengthMax: number;
+  /** Fase = x * phaseX + z * phaseZ + aleatorio * phaseJitter. */
+  phaseX: number;
+  phaseZ: number;
+  phaseJitter: number;
+}
 
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
@@ -175,6 +309,8 @@ export function buildWorld(app: pc.Application): World {
   const colliders: Collider[] = [];
   const created: pc.Entity[] = [];
   const materials: pc.StandardMaterial[] = [];
+  const windMaterials: pc.StandardMaterial[] = [];
+  const instancedFoliageBuffers: pc.VertexBuffer[] = [];
   const surfaceMeshes: pc.Mesh[] = [];
   const barrierMeshInstances: pc.MeshInstance[] = [];
 
@@ -236,8 +372,16 @@ export function buildWorld(app: pc.Application): World {
   });
   const smokeTexture = textureFromCanvas(device, createSmokeCanvas(), {
     name: 'swamp-smoke',
+    repeat: true,
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
+  const mistTexture = textureFromCanvas(device, createMistCanvas(), {
+    name: 'swamp-mist',
+    repeat: true,
+    mipmaps: true,
+    minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
   const emberTexture = textureFromCanvas(device, createEmberCanvas(), {
@@ -473,6 +617,8 @@ export function buildWorld(app: pc.Application): World {
   // --- Ciénaga -------------------------------------------------------------
   // La ciénaga comparte la superficie plana, pero es mate y se mueve despacio.
   const swampZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'poison');
+  /** Lado máximo de cada foco de niebla antes de dividir la ciénaga. */
+  const SWAMP_MIST_TILE = 40;
   const swampSurfaceMaterial = standard({
     diffuse: '#4c5a3c',
     diffuseMap: waterTexture,
@@ -491,6 +637,33 @@ export function buildWorld(app: pc.Application): World {
     if (!('points' in zone)) continue;
     const mesh = buildSurfaceMesh(zone.points, waterHeight, 2.8);
     if (mesh) addSurface(mesh, swampSurfaceMaterial, 0, 'swamp-surface');
+  }
+
+  // Lámina de niebla baja para ciénagas grandes. De momento está desactivada
+  // (`LARGE_REGION_WEATHER`): las zonas grandes se quedan sin efecto y los
+  // charcos pequeños siguen usando sus bocanadas.
+  const swampMistMaterial = LARGE_REGION_WEATHER
+    ? standard({
+        diffuse: '#e4f2dc',
+        diffuseMap: mistTexture,
+        specular: '#000000',
+        gloss: 0,
+        opacity: 0.55,
+        blend: pc.BLEND_NORMAL,
+        depthWrite: false,
+        cull: pc.CULLFACE_NONE,
+        useLighting: false
+      })
+    : null;
+  if (swampMistMaterial) {
+    materials.push(swampMistMaterial);
+    for (const zone of swampZones) {
+      if (!('points' in zone)) continue;
+      const bounds = zoneBounds(zone);
+      if (bounds.width <= SWAMP_MIST_TILE && bounds.depth <= SWAMP_MIST_TILE) continue;
+      const mesh = buildSurfaceMesh(zone.points, waterHeight + 0.15, 16);
+      if (mesh) addSurface(mesh, swampMistMaterial, 2, 'swamp-mist');
+    }
   }
 
   // El agua profunda no es un collider fijo: depende del tipo del jugador y se
@@ -996,9 +1169,137 @@ export function buildWorld(app: pc.Application): World {
   });
   materials.push(cactusMaterial);
 
+  /** Cactus completo: los cinco cilindros originales fundidos en una malla. */
+  const buildCactusMesh = (): pc.Mesh => {
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const indices: number[] = [];
+    const transform = new pc.Mat4();
+    const rotation = new pc.Quat();
+
+    const addCylinder = (
+      position: [number, number, number],
+      scale: [number, number, number],
+      rotationZ: number
+    ): void => {
+      const geometry = new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 3,
+        capSegments: 8
+      });
+      rotation.setFromEulerAngles(0, 0, rotationZ);
+      transform.setTRS(
+        new pc.Vec3(position[0], position[1], position[2]),
+        rotation,
+        new pc.Vec3(scale[0], scale[1], scale[2])
+      );
+
+      const base = positions.length / 3;
+      const sourcePositions = geometry.positions;
+      const sourceNormals = geometry.normals;
+      for (let i = 0; i < sourcePositions.length; i += 3) {
+        const point = new pc.Vec3(
+          sourcePositions[i],
+          sourcePositions[i + 1],
+          sourcePositions[i + 2]
+        );
+        transform.transformPoint(point, point);
+        positions.push(point.x, point.y, point.z);
+
+        const normal = new pc.Vec3(
+          sourceNormals[i],
+          sourceNormals[i + 1],
+          sourceNormals[i + 2]
+        );
+        transform.transformVector(normal, normal);
+        normal.normalize();
+        normals.push(normal.x, normal.y, normal.z);
+      }
+      for (const index of geometry.indices) indices.push(index + base);
+    };
+
+    // Mismas piezas y transformaciones que los cactus de siempre.
+    addCylinder([0, 0.8, 0], [0.18, 1.6, 0.18], 0);
+    addCylinder([-0.18, 0.85, 0], [0.1, 0.38, 0.1], 68);
+    addCylinder([-0.34, 1.1, 0], [0.09, 0.5, 0.09], 0);
+    addCylinder([0.18, 1.08, 0], [0.1, 0.32, 0.1], -68);
+    addCylinder([0.32, 1.3, 0], [0.085, 0.44, 0.085], 0);
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const cactusMesh = buildCactusMesh();
+  const cactusInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
+  const DESERT_LARGE_AREA = 400;
   const desertZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'desert');
+
   desertZones.forEach((zone, zoneIndex) => {
+    const area = zoneArea(zone);
     const rand = random(0x3c7d + zoneIndex * 4211);
+
+    // Un desierto enorme con cuatro cactus solo se ve vacío. En zonas grandes
+    // se reparten por área y se dibujan instanciados: una malla y un draw call.
+    if (area > DESERT_LARGE_AREA) {
+      const count = Math.max(4, Math.min(400, Math.round(area * 0.004)));
+      const data = new Float32Array(count * 16);
+
+      for (let i = 0; i < count; i++) {
+        const [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
+        const scale = 0.8 + rand() * 0.35;
+        const yawRadians = (rand() * 360 * Math.PI) / 180;
+        const cos = Math.cos(yawRadians) * scale;
+        const sin = Math.sin(yawRadians) * scale;
+        const offset = i * 16;
+        data[offset] = cos;
+        data[offset + 1] = 0;
+        data[offset + 2] = -sin;
+        data[offset + 3] = 0;
+        data[offset + 4] = 0;
+        data[offset + 5] = scale;
+        data[offset + 6] = 0;
+        data[offset + 7] = 0;
+        data[offset + 8] = sin;
+        data[offset + 9] = 0;
+        data[offset + 10] = cos;
+        data[offset + 11] = 0;
+        data[offset + 12] = x;
+        data[offset + 13] = 0;
+        data[offset + 14] = z;
+        data[offset + 15] = 1;
+      }
+
+      const buffer = new pc.VertexBuffer(device, cactusInstanceFormat, count, {
+        data,
+        usage: pc.BUFFER_STATIC
+      });
+      const instance = new pc.MeshInstance(cactusMesh, cactusMaterial);
+      instance.castShadow = false;
+      instance.receiveShadow = false;
+      instance.setInstancing(buffer, true);
+      instancedFoliageBuffers.push(buffer);
+
+      const bounds = zoneBounds(zone);
+      const entity = new pc.Entity(`desert-cactus-${zoneIndex}`);
+      entity.addComponent('render');
+      entity.render!.castShadows = false;
+      entity.render!.receiveShadows = false;
+      entity.render!.meshInstances = [instance];
+      entity.render!.customAabb = new pc.BoundingBox(
+        new pc.Vec3(bounds.cx, 1, bounds.cz),
+        new pc.Vec3(bounds.width / 2 + 1, 1.2, bounds.depth / 2 + 1)
+      );
+      app.root.addChild(entity);
+      created.push(entity);
+      return;
+    }
+
+    // Zonas pequeñas: se conservan las cuatro entidades de siempre.
     const count = 4;
     const spots: Array<[number, number]> = [];
     for (let i = 0; i < count; i++) {
@@ -1047,12 +1348,40 @@ export function buildWorld(app: pc.Application): World {
   });
 
   // --- Polvo del desierto --------------------------------------------------
+  // Bruma continua para desiertos grandes: misma técnica que la niebla de la
+  // ciénaga, teñida de arena. Un único emisor de partículas sobre un mapa
+  // entero se pierde, así que en zonas grandes manda esta lámina y las
+  // partículas quedan reservadas a los claros pequeños.
+  const desertHazeMaterial = LARGE_REGION_WEATHER
+    ? standard({
+        diffuse: '#d8c08e',
+        diffuseMap: mistTexture,
+        specular: '#000000',
+        gloss: 0,
+        opacity: 0.5,
+        blend: pc.BLEND_NORMAL,
+        depthWrite: false,
+        cull: pc.CULLFACE_NONE,
+        useLighting: false
+      })
+    : null;
+  if (desertHazeMaterial) {
+    materials.push(desertHazeMaterial);
+    for (const zone of desertZones) {
+      if (!('points' in zone) || zoneArea(zone) <= DESERT_LARGE_AREA) continue;
+      const mesh = buildSurfaceMesh(zone.points, 0.45, 18);
+      if (mesh) addSurface(mesh, desertHazeMaterial, 2, 'desert-haze');
+    }
+  }
+
   // Partículas suaves en suspensión sobre toda la zona: nacen repartidas en una
   // caja baja, derivan despacio con el viento y crecen y se desvanecen. Usan
   // una textura de manchas difusas y blending normal, así que se leen como
   // polvo y no como chispas. La densidad y el tamaño son altos para que la
   // bruma se note desde la cámara a 45º.
   desertZones.forEach((zone, zoneIndex) => {
+    if (zoneArea(zone) > DESERT_LARGE_AREA) return;
+
     const [dustX, dustZ] = zoneCenter(zone);
     const dust = new pc.Entity(`desert-dust-${zoneIndex}`);
     dust.setPosition(dustX, 0.8, dustZ);
@@ -1321,29 +1650,76 @@ export function buildWorld(app: pc.Application): World {
   );
 
   const iceZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'ice');
+  const iceInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
   iceZones.forEach((zone, zoneIndex) => {
     const rand = random(0x71f3 + zoneIndex * 6701);
     const count = Math.round(zoneArea(zone) * 1.5);
+    if (count <= 0) return;
+
+    const variants = iceClusterMeshes.length;
+    const counts = new Array<number>(variants).fill(0);
+    for (let i = 0; i < count; i++) counts[(i + zoneIndex) % variants]++;
+
+    const buffers = counts.map((size) => new Float32Array(size * 16));
+    const cursors = new Array<number>(variants).fill(0);
+
     for (let i = 0; i < count; i++) {
       const [x, z] = randomPointInZone(zone, rand, 0.35);
       const scale = 0.75 + rand() * 0.5;
+      const variant = (i + zoneIndex) % variants;
+      const data = buffers[variant];
+      const offset = cursors[variant]++ * 16;
 
-      const cluster = new pc.Entity(`ice-crystal-${zoneIndex}-${i}`);
-      cluster.setLocalPosition(x, 0.002, z);
-      cluster.setLocalEulerAngles(0, rand() * 360, 0);
-      cluster.addComponent('render');
-      cluster.render!.castShadows = false;
-      cluster.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        iceClusterMeshes[(i + zoneIndex) % iceClusterMeshes.length],
-        iceMaterial
-      );
+      // Matriz de mundo en columnas: giro en Y, escala uniforme y traslación.
+      const yawRadians = (rand() * 360 * Math.PI) / 180;
+      const cos = Math.cos(yawRadians) * scale;
+      const sin = Math.sin(yawRadians) * scale;
+      data[offset] = cos;
+      data[offset + 1] = 0;
+      data[offset + 2] = -sin;
+      data[offset + 3] = 0;
+      data[offset + 4] = 0;
+      data[offset + 5] = scale;
+      data[offset + 6] = 0;
+      data[offset + 7] = 0;
+      data[offset + 8] = sin;
+      data[offset + 9] = 0;
+      data[offset + 10] = cos;
+      data[offset + 11] = 0;
+      data[offset + 12] = x;
+      data[offset + 13] = 0.002;
+      data[offset + 14] = z;
+      data[offset + 15] = 1;
+    }
+
+    const bounds = zoneBounds(zone);
+    const aabb = new pc.BoundingBox(
+      new pc.Vec3(bounds.cx, 0.7, bounds.cz),
+      new pc.Vec3(bounds.width / 2 + 1, 0.9, bounds.depth / 2 + 1)
+    );
+
+    for (let variant = 0; variant < variants; variant++) {
+      const data = buffers[variant];
+      if (data.length === 0) continue;
+
+      const buffer = new pc.VertexBuffer(device, iceInstanceFormat, data.length / 16, {
+        data,
+        usage: pc.BUFFER_STATIC
+      });
+      const instance = new pc.MeshInstance(iceClusterMeshes[variant], iceMaterial);
       instance.castShadow = false;
       instance.receiveShadow = false;
-      cluster.render!.meshInstances = [instance];
-      cluster.setLocalScale(scale, scale, scale);
-      app.root.addChild(cluster);
-      created.push(cluster);
+      instance.setInstancing(buffer, true);
+      instancedFoliageBuffers.push(buffer);
+
+      const entity = new pc.Entity(`ice-crystal-${zoneIndex}-${variant}`);
+      entity.addComponent('render');
+      entity.render!.castShadows = false;
+      entity.render!.receiveShadows = false;
+      entity.render!.meshInstances = [instance];
+      entity.render!.customAabb = aabb;
+      app.root.addChild(entity);
+      created.push(entity);
     }
   });
 
@@ -1613,42 +1989,107 @@ export function buildWorld(app: pc.Application): World {
   );
 
   const basaltVents: Array<Array<[number, number]>> = [];
+  const basaltInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
+  const MAX_SMOKE_VENTS = 8;
 
   fireZones.forEach((zone, zoneIndex) => {
     const rand = random(0x2f5b + zoneIndex * 4517);
-    const count = 5;
+    // Antes eran 5 racimos fijos por zona: suficiente en una colada pequeña,
+    // invisible en un mapa volcánico entero. La densidad escala con el área y
+    // los racimos se dibujan instanciados (4 draw calls por zona).
+    const count = Math.max(5, Math.min(2000, Math.round(zoneArea(zone) * 0.01)));
+    const variants = basaltMeshes.length;
+    const counts = new Array<number>(variants).fill(0);
+    for (let i = 0; i < count; i++) counts[(i + zoneIndex) % variants]++;
+
+    const buffers = counts.map((size) => new Float32Array(size * 16));
+    const cursors = new Array<number>(variants).fill(0);
     const spots: Array<[number, number]> = [];
+    // El espaciado se mantiene solo en zonas pequeñas; con cientos de racimos
+    // el chequeo contra todos sería cuadrático e innecesario.
+    const checkSpacing = count <= 24;
+
     for (let i = 0; i < count; i++) {
       let [x, z] = randomPointInZone(zone, rand, 1.0, 0.55);
-      for (let attempt = 0; attempt < 16; attempt++) {
-        const [nx, nz] = randomPointInZone(zone, rand, 1.0, 0.55);
-        if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 1.0)) {
-          x = nx;
-          z = nz;
-          break;
+      if (checkSpacing) {
+        for (let attempt = 0; attempt < 16; attempt++) {
+          const [nx, nz] = randomPointInZone(zone, rand, 1.0, 0.55);
+          if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 1.0)) {
+            x = nx;
+            z = nz;
+            break;
+          }
         }
       }
       spots.push([x, z]);
 
       const scale = 0.8 + rand() * 0.4;
-      const cluster = new pc.Entity(`basalt-${zoneIndex}-${i}`);
-      cluster.setLocalPosition(x, 0.002, z);
-      cluster.setLocalEulerAngles(0, rand() * 360, 0);
-      cluster.addComponent('render');
-      cluster.render!.castShadows = true;
-      cluster.render!.receiveShadows = true;
-      const instance = new pc.MeshInstance(
-        basaltMeshes[(i + zoneIndex) % basaltMeshes.length],
-        basaltMaterial
-      );
+      const variant = (i + zoneIndex) % variants;
+      const data = buffers[variant];
+      const offset = cursors[variant]++ * 16;
+      const yawRadians = (rand() * 360 * Math.PI) / 180;
+      const cos = Math.cos(yawRadians) * scale;
+      const sin = Math.sin(yawRadians) * scale;
+      data[offset] = cos;
+      data[offset + 1] = 0;
+      data[offset + 2] = -sin;
+      data[offset + 3] = 0;
+      data[offset + 4] = 0;
+      data[offset + 5] = scale;
+      data[offset + 6] = 0;
+      data[offset + 7] = 0;
+      data[offset + 8] = sin;
+      data[offset + 9] = 0;
+      data[offset + 10] = cos;
+      data[offset + 11] = 0;
+      data[offset + 12] = x;
+      data[offset + 13] = 0.002;
+      data[offset + 14] = z;
+      data[offset + 15] = 1;
+    }
+
+    const bounds = zoneBounds(zone);
+    const aabb = new pc.BoundingBox(
+      new pc.Vec3(bounds.cx, 0.6, bounds.cz),
+      new pc.Vec3(bounds.width / 2 + 1, 0.9, bounds.depth / 2 + 1)
+    );
+
+    for (let variant = 0; variant < variants; variant++) {
+      const data = buffers[variant];
+      if (data.length === 0) continue;
+
+      const buffer = new pc.VertexBuffer(device, basaltInstanceFormat, data.length / 16, {
+        data,
+        usage: pc.BUFFER_STATIC
+      });
+      const instance = new pc.MeshInstance(basaltMeshes[variant], basaltMaterial);
       instance.castShadow = true;
       instance.receiveShadow = true;
-      cluster.render!.meshInstances = [instance];
-      cluster.setLocalScale(scale, scale, scale);
-      app.root.addChild(cluster);
-      created.push(cluster);
+      instance.setInstancing(buffer, true);
+      instancedFoliageBuffers.push(buffer);
+
+      const entity = new pc.Entity(`basalt-${zoneIndex}-${variant}`);
+      entity.addComponent('render');
+      entity.render!.castShadows = true;
+      entity.render!.receiveShadows = true;
+      entity.render!.meshInstances = [instance];
+      entity.render!.customAabb = aabb;
+      app.root.addChild(entity);
+      created.push(entity);
     }
-    basaltVents.push(spots);
+
+    // El humo no puede tener una columna por cada roca en una zona enorme:
+    // se conservan unos pocos focos repartidos entre los racimos.
+    const ventCount = Math.min(MAX_SMOKE_VENTS, spots.length);
+    const vents: Array<[number, number]> = [];
+    for (let v = 0; v < ventCount; v++) {
+      const index = Math.min(
+        spots.length - 1,
+        Math.floor(((v + 0.5) * spots.length) / ventCount)
+      );
+      vents.push(spots[index]);
+    }
+    basaltVents.push(vents);
   });
 
   const emberLights: Array<{ entity: pc.Entity; phase: number }> = [];
@@ -1772,15 +2213,43 @@ export function buildWorld(app: pc.Application): World {
   // Matas 3D de verdad: cada mata es una malla con varias briznas geométricas
   // (dos tramos y punta) y color por vértice de la base a la punta. Sin
   // texturas ni recortes: la hierba tiene volumen desde cualquier ángulo.
-  const tallGrassMaterial = standard({
-    diffuse: '#ffffff',
-    specular: '#0a1a0a',
-    gloss: 0.06,
-    cull: pc.CULLFACE_NONE
-  });
-  tallGrassMaterial.diffuseVertexColor = true;
-  tallGrassMaterial.update();
-  materials.push(tallGrassMaterial);
+  //
+  // Las matas se dibujan con GPU Instancing: una sola malla y un solo draw call
+  // por variante y región. El viento va en el vertex shader, así que animar
+  // miles de matas no toca la CPU.
+
+  /**
+   * Material de follaje instanciado con viento. `instance_wind` (atributo de
+   * instancia) guarda la fase y la fuerza; el chunk `transformCoreVS` inclina
+   * cada vértice alrededor de la base de la mata.
+   */
+  const createWindMaterial = (
+    specular: string,
+    gloss: number,
+    speed: number,
+    amplitudeDegrees: number
+  ): pc.StandardMaterial => {
+    const material = standard({
+      diffuse: '#ffffff',
+      specular,
+      gloss,
+      cull: pc.CULLFACE_NONE
+    });
+    material.diffuseVertexColor = true;
+    material.userAttributes.set(pc.SEMANTIC_ATTR13, 'instance_wind');
+    material
+      .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
+      .set('transformCoreVS', WIND_TRANSFORM_CORE_VS);
+    material.setParameter('uWindTime', 0);
+    material.setParameter('uWindSpeed', speed);
+    material.setParameter('uWindAmplitude', (amplitudeDegrees * Math.PI) / 180);
+    material.update();
+    materials.push(material);
+    windMaterials.push(material);
+    return material;
+  };
+
+  const tallGrassMaterial = createWindMaterial('#0a1a0a', 0.06, 1.15, 8);
 
   const GRASS_PALETTE: Array<[number, number, number]> = [
     [0.08, 0.2, 0.07],
@@ -1883,64 +2352,150 @@ export function buildWorld(app: pc.Application): World {
     buildGrassCluster(0x51a7 + variant * 3571, 18)
   );
 
-  const grassTufts: Array<{
-    entity: pc.Entity;
-    yaw: number;
-    phase: number;
-    strength: number;
-  }> = [];
+  // Formato de instancia compartido por todas las matas: cuatro columnas de la
+  // matriz de mundo (los mismos semánticos que usa PlayCanvas para instancing)
+  // y un vec4 con fase y fuerza del viento.
+  const foliageInstanceFormat = new pc.VertexFormat(device, [
+    { semantic: pc.SEMANTIC_ATTR11, components: 4, type: pc.TYPE_FLOAT32 },
+    { semantic: pc.SEMANTIC_ATTR12, components: 4, type: pc.TYPE_FLOAT32 },
+    { semantic: pc.SEMANTIC_ATTR14, components: 4, type: pc.TYPE_FLOAT32 },
+    { semantic: pc.SEMANTIC_ATTR15, components: 4, type: pc.TYPE_FLOAT32 },
+    { semantic: pc.SEMANTIC_ATTR13, components: 4, type: pc.TYPE_FLOAT32 }
+  ]);
 
-  const tallGrassZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'tallGrass');
-  tallGrassZones.forEach((zone, zoneIndex) => {
-    const rand = random(0x9a11 + zoneIndex * 7919);
-    const count = Math.round(zoneArea(zone) * 3.6);
-    for (let i = 0; i < count; i++) {
-      const [x, z] = randomPointInZone(zone, rand, 0.3);
-      const yaw = rand() * 360;
-      const tuftScale = 0.9 + rand() * 0.55;
+  /**
+   * Convierte las matas de una lista de regiones en lotes instanciados: un
+   * draw call por región y variante de malla. La posición, el giro y la escala
+   * van en la matriz de instancia; la fase y la fuerza del viento, en
+   * `instance_wind`.
+   */
+  const buildInstancedFoliage = (options: InstancedFoliageOptions): void => {
+    const {
+      label,
+      zones,
+      meshes,
+      material,
+      density,
+      seed,
+      scaleMin,
+      scaleMax,
+      strengthMin,
+      strengthMax,
+      phaseX,
+      phaseZ,
+      phaseJitter
+    } = options;
+    const variants = meshes.length;
 
-      const tuft = new pc.Entity(`tall-grass-${zoneIndex}-${i}`);
-      tuft.setLocalPosition(x, 0.002, z);
-      tuft.setLocalEulerAngles(0, yaw, 0);
-      tuft.addComponent('render');
-      tuft.render!.castShadows = false;
-      tuft.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        grassClusterMeshes[(i + zoneIndex) % grassClusterMeshes.length],
-        tallGrassMaterial
+    zones.forEach((zone, zoneIndex) => {
+      const rand = random(seed + zoneIndex * 7919);
+      const count = Math.round(zoneArea(zone) * density);
+      if (count <= 0) return;
+
+      // Reparte las matas entre variantes con el mismo criterio cíclico de
+      // siempre, pero reservando un único Float32Array por variante.
+      const counts = new Array<number>(variants).fill(0);
+      for (let i = 0; i < count; i++) counts[(i + zoneIndex) % variants]++;
+
+      const buffers = counts.map((size) => new Float32Array(size * 20));
+      const cursors = new Array<number>(variants).fill(0);
+
+      for (let i = 0; i < count; i++) {
+        const [x, z] = randomPointInZone(zone, rand, 0.3);
+        const yaw = rand() * 360;
+        const tuftScale = scaleMin + rand() * (scaleMax - scaleMin);
+        const variant = (i + zoneIndex) % variants;
+        const data = buffers[variant];
+        const offset = cursors[variant]++ * 20;
+
+        // Matriz de mundo en columnas: giro en Y, escala uniforme y traslación.
+        const yawRadians = (yaw * Math.PI) / 180;
+        const cos = Math.cos(yawRadians) * tuftScale;
+        const sin = Math.sin(yawRadians) * tuftScale;
+        data[offset] = cos;
+        data[offset + 1] = 0;
+        data[offset + 2] = -sin;
+        data[offset + 3] = 0;
+        data[offset + 4] = 0;
+        data[offset + 5] = tuftScale;
+        data[offset + 6] = 0;
+        data[offset + 7] = 0;
+        data[offset + 8] = sin;
+        data[offset + 9] = 0;
+        data[offset + 10] = cos;
+        data[offset + 11] = 0;
+        data[offset + 12] = x;
+        data[offset + 13] = 0.002;
+        data[offset + 14] = z;
+        data[offset + 15] = 1;
+        // x = fase, y = fuerza; z/w quedan libres para futuras variaciones.
+        data[offset + 16] = x * phaseX + z * phaseZ + rand() * phaseJitter;
+        data[offset + 17] = strengthMin + rand() * (strengthMax - strengthMin);
+        data[offset + 18] = 0;
+        data[offset + 19] = 0;
+      }
+
+      // Caja que envuelve la región completa: permite descartar el lote entero
+      // cuando la zona queda fuera de cámara sin recorrer sus matas.
+      const bounds = zoneBounds(zone);
+      const aabb = new pc.BoundingBox(
+        new pc.Vec3(bounds.cx, 1.25, bounds.cz),
+        new pc.Vec3(bounds.width / 2 + 1, 1.5, bounds.depth / 2 + 1)
       );
-      // Las banderas hay que fijarlas en la instancia: el componente las aplica
-      // a las instancias que ya existen al asignarlas, y aquí las creamos antes.
-      instance.castShadow = false;
-      instance.receiveShadow = false;
-      tuft.render!.meshInstances = [instance];
-      tuft.setLocalScale(tuftScale, tuftScale, tuftScale);
-      app.root.addChild(tuft);
-      created.push(tuft);
 
-      grassTufts.push({
-        entity: tuft,
-        yaw,
-        phase: x * 0.55 + z * 0.3 + rand() * 1.4,
-        strength: 0.7 + rand() * 0.6
-      });
-    }
+      for (let variant = 0; variant < variants; variant++) {
+        const data = buffers[variant];
+        if (data.length === 0) continue;
+
+        const vertexBuffer = new pc.VertexBuffer(
+          device,
+          foliageInstanceFormat,
+          data.length / 20,
+          { data, usage: pc.BUFFER_STATIC }
+        );
+        const instance = new pc.MeshInstance(meshes[variant], material);
+        instance.castShadow = false;
+        instance.receiveShadow = false;
+        instance.setInstancing(vertexBuffer, true);
+        instancedFoliageBuffers.push(vertexBuffer);
+
+        const batch = new pc.Entity(`${label}-${zoneIndex}-${variant}`);
+        batch.addComponent('render');
+        batch.render!.castShadows = false;
+        batch.render!.receiveShadows = false;
+        batch.render!.meshInstances = [instance];
+        // El componente aplica su propio AABB al asignar las instancias, así
+        // que se fija después para conservar la caja de toda la región.
+        batch.render!.customAabb = aabb;
+        app.root.addChild(batch);
+        created.push(batch);
+      }
+    });
+  };
+
+  buildInstancedFoliage({
+    label: 'tall-grass',
+    zones: TERRAIN_ZONES.filter((zone) => zone.terrain === 'tallGrass'),
+    meshes: grassClusterMeshes,
+    material: tallGrassMaterial,
+    density: 3.6,
+    seed: 0x9a11,
+    scaleMin: 0.9,
+    scaleMax: 1.45,
+    strengthMin: 0.7,
+    strengthMax: 1.3,
+    phaseX: 0.55,
+    phaseZ: 0.3,
+    phaseJitter: 1.4
   });
 
   // --- Claro feérico: flores 3D ---------------------------------------------
   // Misma técnica que la hierba alta, pero con flores: cada mata es una malla
   // de tallos, hojas y corolas de 5-6 pétalos con el corazón amarillo. Todo va
   // por color de vértice, sin texturas ni recortes alfa, así que las flores
-  // tienen volumen desde cualquier ángulo.
-  const flowerMaterial = standard({
-    diffuse: '#ffffff',
-    specular: '#3a2a33',
-    gloss: 0.18,
-    cull: pc.CULLFACE_NONE
-  });
-  flowerMaterial.diffuseVertexColor = true;
-  flowerMaterial.update();
-  materials.push(flowerMaterial);
+  // tienen volumen desde cualquier ángulo. También van instanciadas y con el
+  // viento resuelto en el vertex shader.
+  const flowerMaterial = createWindMaterial('#3a2a33', 0.18, 1.05, 5);
 
   /** Corolas: rosa, lila, blanco, amarillo pálido, rosa fuerte y azul cielo. */
   const BLOOM_COLORS: Array<[number, number, number]> = [
@@ -2115,46 +2670,21 @@ export function buildWorld(app: pc.Application): World {
     buildFlowerCluster(0x2f7a + variant * 4129, 7)
   );
 
-  const fairyFlowers: Array<{
-    entity: pc.Entity;
-    yaw: number;
-    phase: number;
-    strength: number;
-  }> = [];
-
   const fairyZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'fairy');
-  fairyZones.forEach((zone, zoneIndex) => {
-    const rand = random(0x4f1e + zoneIndex * 8117);
-    const count = Math.round(zoneArea(zone) * 2.6);
-    for (let i = 0; i < count; i++) {
-      const [x, z] = randomPointInZone(zone, rand, 0.3);
-      const yaw = rand() * 360;
-      const clusterScale = 0.95 + rand() * 0.55;
-
-      const flowers = new pc.Entity(`fairy-flowers-${zoneIndex}-${i}`);
-      flowers.setLocalPosition(x, 0.002, z);
-      flowers.setLocalEulerAngles(0, yaw, 0);
-      flowers.addComponent('render');
-      flowers.render!.castShadows = false;
-      flowers.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        flowerClusterMeshes[(i + zoneIndex) % flowerClusterMeshes.length],
-        flowerMaterial
-      );
-      instance.castShadow = false;
-      instance.receiveShadow = false;
-      flowers.render!.meshInstances = [instance];
-      flowers.setLocalScale(clusterScale, clusterScale, clusterScale);
-      app.root.addChild(flowers);
-      created.push(flowers);
-
-      fairyFlowers.push({
-        entity: flowers,
-        yaw,
-        phase: x * 0.5 + z * 0.35 + rand() * 1.6,
-        strength: 0.45 + rand() * 0.35
-      });
-    }
+  buildInstancedFoliage({
+    label: 'fairy-flowers',
+    zones: fairyZones,
+    meshes: flowerClusterMeshes,
+    material: flowerMaterial,
+    density: 2.6,
+    seed: 0x4f1e,
+    scaleMin: 0.95,
+    scaleMax: 1.5,
+    strengthMin: 0.45,
+    strengthMax: 0.8,
+    phaseX: 0.5,
+    phaseZ: 0.35,
+    phaseJitter: 1.6
   });
 
   // Polen del claro feérico: motas doradas diminutas que flotan entre las
@@ -2251,73 +2781,162 @@ export function buildWorld(app: pc.Application): World {
   };
   const butterflyWingRight = buildButterflyWing(1);
   const butterflyWingLeft = buildButterflyWing(-1);
+  // Caja unitaria para el cuerpo; la escala real va en la matriz de instancia.
+  const butterflyBodyMesh = pc.Mesh.fromGeometry(device, new pc.BoxGeometry());
+  const butterflyInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
 
-  const butterflies: Array<{
-    root: pc.Entity;
-    right: pc.Entity;
-    left: pc.Entity;
-    target: pc.Vec3;
-    rand: () => number;
-    zone: TerrainZone;
-    speed: number;
-    flapSpeed: number;
-    phase: number;
-    yaw: number;
-  }> = [];
+  /** Matriz del cuerpo: traslación + giro en Y + escala no uniforme. */
+  const writeButterflyBody = (
+    data: Float32Array,
+    offset: number,
+    butterfly: Butterfly,
+    yawRadians: number
+  ): void => {
+    const cos = Math.cos(yawRadians);
+    const sin = Math.sin(yawRadians);
+    const sx = 0.05 * butterfly.scale;
+    const sy = 0.05 * butterfly.scale;
+    const sz = 0.16 * butterfly.scale;
+    // Columnas de Ry(yaw) * diag(sx, sy, sz).
+    data[offset] = cos * sx;
+    data[offset + 1] = 0;
+    data[offset + 2] = -sin * sx;
+    data[offset + 3] = 0;
+    data[offset + 4] = 0;
+    data[offset + 5] = sy;
+    data[offset + 6] = 0;
+    data[offset + 7] = 0;
+    data[offset + 8] = sin * sz;
+    data[offset + 9] = 0;
+    data[offset + 10] = cos * sz;
+    data[offset + 11] = 0;
+    data[offset + 12] = butterfly.x;
+    data[offset + 13] = butterfly.y;
+    data[offset + 14] = butterfly.z;
+    data[offset + 15] = 1;
+  };
+
+  /** Matriz del ala: traslación + giro en Y + aleteo en Z + escala uniforme. */
+  const writeButterflyWing = (
+    data: Float32Array,
+    offset: number,
+    butterfly: Butterfly,
+    yawRadians: number,
+    flapRadians: number
+  ): void => {
+    const cy = Math.cos(yawRadians);
+    const sy = Math.sin(yawRadians);
+    const cf = Math.cos(flapRadians);
+    const sf = Math.sin(flapRadians);
+    const scale = butterfly.scale;
+    // Columnas de Ry(yaw) * Rz(flap) * scale.
+    data[offset] = cy * cf * scale;
+    data[offset + 1] = sf * scale;
+    data[offset + 2] = -sy * cf * scale;
+    data[offset + 3] = 0;
+    data[offset + 4] = -cy * sf * scale;
+    data[offset + 5] = cf * scale;
+    data[offset + 6] = sy * sf * scale;
+    data[offset + 7] = 0;
+    data[offset + 8] = sy * scale;
+    data[offset + 9] = 0;
+    data[offset + 10] = cy * scale;
+    data[offset + 11] = 0;
+    data[offset + 12] = butterfly.x;
+    data[offset + 13] = butterfly.y;
+    data[offset + 14] = butterfly.z;
+    data[offset + 15] = 1;
+  };
+
+  const butterflies: Butterfly[] = [];
+  const butterflyBatches: ButterflyBatch[] = [];
 
   fairyZones.forEach((zone, zoneIndex) => {
     const rand = random(0x7e3a + zoneIndex * 3559);
-    const count = 8;
+    // Antes eran 8 fijas por zona: en un claro pequeño bastaba, pero en un
+    // mapa entero de claro feérico se perdían. Ahora la densidad se escala con
+    // el área (con un mínimo de 8 y un tope para no disparar la CPU).
+    const count = Math.max(
+      8,
+      Math.min(2000, Math.round(zoneArea(zone) * 0.025))
+    );
+
+    const body = new Float32Array(count * 16);
+    const right = new Float32Array(count * 16);
+    const left = new Float32Array(count * 16);
+    const bodyBuffer = new pc.VertexBuffer(device, butterflyInstanceFormat, count, {
+      data: body,
+      usage: pc.BUFFER_DYNAMIC
+    });
+    const rightBuffer = new pc.VertexBuffer(device, butterflyInstanceFormat, count, {
+      data: right,
+      usage: pc.BUFFER_DYNAMIC
+    });
+    const leftBuffer = new pc.VertexBuffer(device, butterflyInstanceFormat, count, {
+      data: left,
+      usage: pc.BUFFER_DYNAMIC
+    });
+    const batch: ButterflyBatch = { body, right, left, bodyBuffer, rightBuffer, leftBuffer };
+    butterflyBatches.push(batch);
+
+    const entity = new pc.Entity(`fairy-butterflies-${zoneIndex}`);
+    entity.addComponent('render');
+    entity.render!.castShadows = false;
+    entity.render!.receiveShadows = false;
+
+    const bodyInstance = new pc.MeshInstance(butterflyBodyMesh, butterflyBodyMaterial);
+    bodyInstance.castShadow = false;
+    bodyInstance.receiveShadow = false;
+    bodyInstance.setInstancing(bodyBuffer, true);
+
+    const rightInstance = new pc.MeshInstance(butterflyWingRight, butterflyWingMaterial);
+    rightInstance.castShadow = false;
+    rightInstance.receiveShadow = false;
+    rightInstance.setInstancing(rightBuffer, true);
+
+    const leftInstance = new pc.MeshInstance(butterflyWingLeft, butterflyWingMaterial);
+    leftInstance.castShadow = false;
+    leftInstance.receiveShadow = false;
+    leftInstance.setInstancing(leftBuffer, true);
+
+    entity.render!.meshInstances = [bodyInstance, rightInstance, leftInstance];
+    const bounds = zoneBounds(zone);
+    entity.render!.customAabb = new pc.BoundingBox(
+      new pc.Vec3(bounds.cx, 1.0, bounds.cz),
+      new pc.Vec3(bounds.width / 2 + 1, 1.25, bounds.depth / 2 + 1)
+    );
+    app.root.addChild(entity);
+    created.push(entity);
+
     for (let i = 0; i < count; i++) {
       const [x, z] = randomPointInZone(zone, rand, 0.3);
       const y = 0.5 + rand() * 1.0;
-
-      const root = new pc.Entity(`fairy-butterfly-${zoneIndex}-${i}`);
-      root.setLocalPosition(x, y, z);
       // Pequeñas: la escala baja el cuerpo y las alas a la vez, sin tocar la
       // amplitud del aleteo ni la velocidad de vuelo.
-      const butterflyScale = 0.5 + rand() * 0.2;
-      root.setLocalScale(butterflyScale, butterflyScale, butterflyScale);
-      app.root.addChild(root);
-      created.push(root);
-
-      const body = part(root, 'box', butterflyBodyMaterial, {
-        position: [0, 0, 0],
-        scale: [0.05, 0.05, 0.16]
-      });
-      body.render!.castShadows = false;
-      body.render!.receiveShadows = false;
-
-      const right = new pc.Entity('butterfly-wing-right');
-      right.addComponent('render');
-      right.render!.castShadows = false;
-      right.render!.receiveShadows = false;
-      right.render!.meshInstances = [
-        new pc.MeshInstance(butterflyWingRight, butterflyWingMaterial)
-      ];
-      root.addChild(right);
-
-      const left = new pc.Entity('butterfly-wing-left');
-      left.addComponent('render');
-      left.render!.castShadows = false;
-      left.render!.receiveShadows = false;
-      left.render!.meshInstances = [
-        new pc.MeshInstance(butterflyWingLeft, butterflyWingMaterial)
-      ];
-      root.addChild(left);
-
-      butterflies.push({
-        root,
-        right,
-        left,
-        target: new pc.Vec3(x, y, z),
-        rand: random(0x9c51 + zoneIndex * 4813 + i * 197),
+      const butterfly: Butterfly = {
+        batch,
+        index: i,
         zone,
+        rand: random(0x9c51 + zoneIndex * 4813 + i * 197),
+        target: new pc.Vec3(x, y, z),
+        x,
+        y,
+        z,
+        scale: 0.5 + rand() * 0.2,
         speed: 0.5 + rand() * 0.5,
         flapSpeed: 9 + rand() * 5,
         phase: rand() * Math.PI * 2,
         yaw: rand() * 360
-      });
+      };
+      butterflies.push(butterfly);
+
+      // Matrices iniciales para que el primer frame también sea válido.
+      const yawRadians = (butterfly.yaw * Math.PI) / 180;
+      const flapRadians = (Math.sin(butterfly.phase) * 30 * Math.PI) / 180;
+      const offset = butterfly.index * 16;
+      writeButterflyBody(body, offset, butterfly, yawRadians);
+      writeButterflyWing(right, offset, butterfly, yawRadians, flapRadians);
+      writeButterflyWing(left, offset, butterfly, yawRadians, -flapRadians);
     }
   });
 
@@ -2325,16 +2944,9 @@ export function buildWorld(app: pc.Application): World {
   // Misma idea que la hierba y las flores, pero con la silueta del frailejón
   // (tronco leñoso corto y roseta de hojas lanceoladas plateadas) y matas de
   // hierba seca entre ellos. El color va por vértice, sin texturas ni recortes,
-  // así que las plantas tienen volumen desde cualquier ángulo.
-  const paramoMaterial = standard({
-    diffuse: '#ffffff',
-    specular: '#1c1408',
-    gloss: 0.1,
-    cull: pc.CULLFACE_NONE
-  });
-  paramoMaterial.diffuseVertexColor = true;
-  paramoMaterial.update();
-  materials.push(paramoMaterial);
+  // así que las plantas tienen volumen desde cualquier ángulo. También van
+  // instanciadas y con el viento resuelto en el vertex shader.
+  const paramoPlantMaterial = createWindMaterial('#1c1408', 0.1, 0.85, 2);
 
   const TRUNK_BASE: [number, number, number] = [0.14, 0.11, 0.08];
   const TRUNK_TOP: [number, number, number] = [0.22, 0.18, 0.12];
@@ -2631,46 +3243,21 @@ export function buildWorld(app: pc.Application): World {
     buildShrubCluster(0x63c1 + variant * 3301, 1 + (variant % 2))
   );
 
-  const paramoPlants: Array<{
-    entity: pc.Entity;
-    yaw: number;
-    phase: number;
-    strength: number;
-  }> = [];
-
   const paramoZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'electric');
-  paramoZones.forEach((zone, zoneIndex) => {
-    const rand = random(0xd0b5 + zoneIndex * 6421);
-    const count = Math.round(zoneArea(zone) * 1.2);
-    for (let i = 0; i < count; i++) {
-      const [x, z] = randomPointInZone(zone, rand, 0.3);
-      const yaw = rand() * 360;
-      const clusterScale = 0.9 + rand() * 0.25;
-
-      const plant = new pc.Entity(`paramo-frailejon-${zoneIndex}-${i}`);
-      plant.setLocalPosition(x, 0.002, z);
-      plant.setLocalEulerAngles(0, yaw, 0);
-      plant.addComponent('render');
-      plant.render!.castShadows = false;
-      plant.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        shrubClusterMeshes[(i + zoneIndex) % shrubClusterMeshes.length],
-        paramoMaterial
-      );
-      instance.castShadow = false;
-      instance.receiveShadow = false;
-      plant.render!.meshInstances = [instance];
-      plant.setLocalScale(clusterScale, clusterScale, clusterScale);
-      app.root.addChild(plant);
-      created.push(plant);
-
-      paramoPlants.push({
-        entity: plant,
-        yaw,
-        phase: x * 0.42 + z * 0.31 + rand() * 1.5,
-        strength: 0.5 + rand() * 0.4
-      });
-    }
+  buildInstancedFoliage({
+    label: 'paramo-frailejon',
+    zones: paramoZones,
+    meshes: shrubClusterMeshes,
+    material: paramoPlantMaterial,
+    density: 1.2,
+    seed: 0xd0b5,
+    scaleMin: 0.9,
+    scaleMax: 1.15,
+    strengthMin: 0.5,
+    strengthMax: 0.9,
+    phaseX: 0.42,
+    phaseZ: 0.31,
+    phaseJitter: 1.5
   });
 
   // Hierba seca del páramo: briznas cortas y pajizas que llenan los huecos
@@ -2679,46 +3266,22 @@ export function buildWorld(app: pc.Application): World {
   const dryGrassMeshes = [0, 1, 2, 3].map((variant) =>
     buildGrassCluster(0x8c3f + variant * 2749, 14, DRY_GRASS_PALETTE, 0.55)
   );
+  const dryGrassMaterial = createWindMaterial('#1c1408', 0.1, 0.95, 6);
 
-  const dryGrassTufts: Array<{
-    entity: pc.Entity;
-    yaw: number;
-    phase: number;
-    strength: number;
-  }> = [];
-
-  paramoZones.forEach((zone, zoneIndex) => {
-    const rand = random(0xb17c + zoneIndex * 4391);
-    const count = Math.round(zoneArea(zone) * 2.6);
-    for (let i = 0; i < count; i++) {
-      const [x, z] = randomPointInZone(zone, rand, 0.3);
-      const yaw = rand() * 360;
-      const tuftScale = 0.85 + rand() * 0.45;
-
-      const tuft = new pc.Entity(`paramo-dry-grass-${zoneIndex}-${i}`);
-      tuft.setLocalPosition(x, 0.002, z);
-      tuft.setLocalEulerAngles(0, yaw, 0);
-      tuft.addComponent('render');
-      tuft.render!.castShadows = false;
-      tuft.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        dryGrassMeshes[(i + zoneIndex) % dryGrassMeshes.length],
-        paramoMaterial
-      );
-      instance.castShadow = false;
-      instance.receiveShadow = false;
-      tuft.render!.meshInstances = [instance];
-      tuft.setLocalScale(tuftScale, tuftScale, tuftScale);
-      app.root.addChild(tuft);
-      created.push(tuft);
-
-      dryGrassTufts.push({
-        entity: tuft,
-        yaw,
-        phase: x * 0.55 + z * 0.4 + rand() * 1.6,
-        strength: 0.55 + rand() * 0.45
-      });
-    }
+  buildInstancedFoliage({
+    label: 'paramo-dry-grass',
+    zones: paramoZones,
+    meshes: dryGrassMeshes,
+    material: dryGrassMaterial,
+    density: 2.6,
+    seed: 0xb17c,
+    scaleMin: 0.85,
+    scaleMax: 1.3,
+    strengthMin: 0.55,
+    strengthMax: 1,
+    phaseX: 0.55,
+    phaseZ: 0.4,
+    phaseJitter: 1.6
   });
 
   // --- Páramo: rayos y chispas ----------------------------------------------
@@ -2961,53 +3524,36 @@ export function buildWorld(app: pc.Application): World {
   const darkGrassMeshes = [0, 1, 2, 3].map((variant) =>
     buildGrassCluster(0x4d17 + variant * 1993, 11, DARK_GRASS_PALETTE, 0.6)
   );
+  const darkGrassMaterial = createWindMaterial('#1c1408', 0.1, 0.75, 4.5);
 
-  const darkGrassTufts: Array<{
-    entity: pc.Entity;
-    yaw: number;
-    phase: number;
-    strength: number;
-  }> = [];
-
-  swampZones.forEach((zone, zoneIndex) => {
-    const rand = random(0x7a31 + zoneIndex * 6203);
-    const count = Math.round(zoneArea(zone) * 1.8);
-    for (let i = 0; i < count; i++) {
-      const [x, z] = randomPointInZone(zone, rand, 0.3);
-      const yaw = rand() * 360;
-      const tuftScale = 0.85 + rand() * 0.4;
-
-      const tuft = new pc.Entity(`swamp-grass-${zoneIndex}-${i}`);
-      tuft.setLocalPosition(x, 0.002, z);
-      tuft.setLocalEulerAngles(0, yaw, 0);
-      tuft.addComponent('render');
-      tuft.render!.castShadows = false;
-      tuft.render!.receiveShadows = false;
-      const instance = new pc.MeshInstance(
-        darkGrassMeshes[(i + zoneIndex) % darkGrassMeshes.length],
-        paramoMaterial
-      );
-      instance.castShadow = false;
-      instance.receiveShadow = false;
-      tuft.render!.meshInstances = [instance];
-      tuft.setLocalScale(tuftScale, tuftScale, tuftScale);
-      app.root.addChild(tuft);
-      created.push(tuft);
-
-      darkGrassTufts.push({
-        entity: tuft,
-        yaw,
-        phase: x * 0.6 + z * 0.45 + rand() * 1.7,
-        strength: 0.5 + rand() * 0.45
-      });
-    }
+  buildInstancedFoliage({
+    label: 'swamp-grass',
+    zones: swampZones,
+    meshes: darkGrassMeshes,
+    material: darkGrassMaterial,
+    density: 1.8,
+    seed: 0x7a31,
+    scaleMin: 0.85,
+    scaleMax: 1.25,
+    strengthMin: 0.5,
+    strengthMax: 0.95,
+    phaseX: 0.6,
+    phaseZ: 0.45,
+    phaseJitter: 1.7
   });
 
   // Humo bajo de la ciénaga: bocanadas que nacen casi a ras del agua, suben
   // despacio y se ensanchan hasta deshacerse. El tono verdoso y la opacidad
   // baja lo separan del polvo del desierto: aquí interesa que parezca vapor
   // estancado, no una nube.
+  //
+  // Solo se usa en charcos pequeños. En ciénagas grandes manda la lámina
+  // continua de niebla: repetir focos de partículas por todo el mapa producía
+  // una nube de bocanadas sueltas que no aportaba nada sobre el manto.
   swampZones.forEach((zone, zoneIndex) => {
+    const bounds = zoneBounds(zone);
+    if (bounds.width > SWAMP_MIST_TILE || bounds.depth > SWAMP_MIST_TILE) return;
+
     const [smokeX, smokeZ] = zoneCenter(zone);
     const smoke = new pc.Entity(`swamp-smoke-${zoneIndex}`);
     smoke.setPosition(smokeX, 0.3, smokeZ);
@@ -3638,32 +4184,22 @@ export function buildWorld(app: pc.Application): World {
       swampSurfaceMaterial.diffuseMapOffset = new pc.Vec2(-time * 0.07, time * 0.11);
       swampSurfaceMaterial.update();
 
-      // Viento sobre la hierba alta: cada mata se inclina sobre su base con
-      // una fase ligada a su posición, de modo que la onda recorre el calvero.
-      for (const tuft of grassTufts) {
-        const sway = Math.sin(time * 1.15 + tuft.phase) * 8 * tuft.strength;
-        tuft.entity.setLocalEulerAngles(0, tuft.yaw, sway);
+      // Las láminas de niebla/polvo de regiones grandes están desactivadas
+      // por ahora; si se reactivan, solo hay que avanzar sus UVs.
+      if (swampMistMaterial) {
+        swampMistMaterial.diffuseMapOffset = new pc.Vec2(time * 0.008, time * 0.005);
+        swampMistMaterial.update();
+      }
+      if (desertHazeMaterial) {
+        desertHazeMaterial.diffuseMapOffset = new pc.Vec2(time * 0.014, time * 0.006);
+        desertHazeMaterial.update();
       }
 
-      // Las flores del claro feérico se mecen con la misma onda, algo más
-      // suave: los tallos son más rígidos que las briznas.
-      for (const flower of fairyFlowers) {
-        const sway = Math.sin(time * 1.05 + flower.phase) * 5 * flower.strength;
-        flower.entity.setLocalEulerAngles(0, flower.yaw, sway);
-      }
-
-      // Los frailejones apenas se mueven: el tronco es leñoso y el viento del
-      // páramo solo balancea un poco la roseta.
-      for (const plant of paramoPlants) {
-        const sway = Math.sin(time * 0.85 + plant.phase) * 2 * plant.strength;
-        plant.entity.setLocalEulerAngles(0, plant.yaw, sway);
-      }
-
-      // La hierba seca se mece más que los frailejones, pero con una onda más
-      // lenta y corta que la hierba alta: son briznas rígidas y pajizas.
-      for (const tuft of dryGrassTufts) {
-        const sway = Math.sin(time * 0.95 + tuft.phase) * 6 * tuft.strength;
-        tuft.entity.setLocalEulerAngles(0, tuft.yaw, sway);
+      // Viento sobre la hierba instanciada: la inclinación se calcula en el
+      // vertex shader con la fase de cada mata, así que solo hay que avanzar
+      // el reloj de los materiales. No se recorre ninguna mata en CPU.
+      for (const material of windMaterials) {
+        material.setParameter('uWindTime', time);
       }
 
       // Rayos del páramo: cuenta atrás hasta la descarga y, mientras dura,
@@ -3722,25 +4258,21 @@ export function buildWorld(app: pc.Application): World {
 
       // Mariposas: vuelan hacia su objetivo y aletean rápido. Cuando llegan,
       // eligen otra mota del calvero, de modo que revolotean sin patrón fijo.
+      // El movimiento sigue en CPU, pero las tres mallas de todas las
+      // mariposas se dibujan con instancing: solo se suben sus matrices.
       for (const butterfly of butterflies) {
-        const pos = butterfly.root.getPosition();
-        let dx = butterfly.target.x - pos.x;
-        let dy = butterfly.target.y - pos.y;
-        let dz = butterfly.target.z - pos.z;
+        let dx = butterfly.target.x - butterfly.x;
+        let dy = butterfly.target.y - butterfly.y;
+        let dz = butterfly.target.z - butterfly.z;
         const distance = Math.hypot(dx, dy, dz);
         if (distance < 0.25) {
           const [tx, tz] = randomPointInZone(butterfly.zone, butterfly.rand, 0.4);
           butterfly.target.set(tx, 0.5 + butterfly.rand() * 1.0, tz);
         } else if (distance > 0.0001) {
           const step = butterfly.speed * dt;
-          dx /= distance;
-          dy /= distance;
-          dz /= distance;
-          butterfly.root.setPosition(
-            pos.x + dx * step,
-            pos.y + dy * step,
-            pos.z + dz * step
-          );
+          butterfly.x += (dx / distance) * step;
+          butterfly.y += (dy / distance) * step;
+          butterfly.z += (dz / distance) * step;
 
           const targetYaw = Math.atan2(dx, dz) * (180 / Math.PI);
           let delta = targetYaw - butterfly.yaw;
@@ -3750,20 +4282,28 @@ export function buildWorld(app: pc.Application): World {
         }
         butterfly.phase += dt * butterfly.flapSpeed;
         const flap = Math.sin(butterfly.phase) * 30;
-        butterfly.root.setLocalEulerAngles(0, butterfly.yaw, 0);
-        butterfly.right.setLocalEulerAngles(0, 0, flap);
-        butterfly.left.setLocalEulerAngles(0, 0, -flap);
+        const yawRadians = (butterfly.yaw * Math.PI) / 180;
+        const flapRadians = (flap * Math.PI) / 180;
+        const offset = butterfly.index * 16;
+        writeButterflyBody(butterfly.batch.body, offset, butterfly, yawRadians);
+        writeButterflyWing(butterfly.batch.right, offset, butterfly, yawRadians, flapRadians);
+        writeButterflyWing(butterfly.batch.left, offset, butterfly, yawRadians, -flapRadians);
+      }
+      for (const batch of butterflyBatches) {
+        batch.bodyBuffer.setData(batch.body);
+        batch.rightBuffer.setData(batch.right);
+        batch.leftBuffer.setData(batch.left);
       }
 
-      // La hierba de la ciénaga está medio sumergida: se mece despacio, como
-      // si el agua frenara cada brizna.
-      for (const tuft of darkGrassTufts) {
-        const sway = Math.sin(time * 0.75 + tuft.phase) * 4.5 * tuft.strength;
-        tuft.entity.setLocalEulerAngles(0, tuft.yaw, sway);
-      }
     },
     dispose() {
       for (const entity of created) entity.destroy();
+      for (const buffer of instancedFoliageBuffers) buffer.destroy();
+      for (const batch of butterflyBatches) {
+        batch.bodyBuffer.destroy();
+        batch.rightBuffer.destroy();
+        batch.leftBuffer.destroy();
+      }
       for (const material of materials) material.destroy();
       groundTexture.destroy();
       soilTexture.destroy();
@@ -3774,6 +4314,7 @@ export function buildWorld(app: pc.Application): World {
       dustTexture.destroy();
       frostTexture.destroy();
       smokeTexture.destroy();
+      mistTexture.destroy();
       emberTexture.destroy();
       wispTexture.destroy();
       pollenTexture.destroy();
@@ -3783,6 +4324,7 @@ export function buildWorld(app: pc.Application): World {
       mountainRockTexture.destroy();
       wallStoneTexture.destroy();
       for (const texture of leafTextures) texture.destroy();
+      cactusMesh.destroy();
       for (const mesh of grassClusterMeshes) mesh.destroy();
       for (const mesh of flowerClusterMeshes) mesh.destroy();
       for (const mesh of shrubClusterMeshes) mesh.destroy();
@@ -3793,6 +4335,7 @@ export function buildWorld(app: pc.Application): World {
       for (const mesh of ghostTreeMeshes) mesh.destroy();
       for (const mesh of mountainPeakMeshes) mesh.destroy();
       for (const mesh of wallSegmentMeshes) mesh.destroy();
+      butterflyBodyMesh.destroy();
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
       for (const mesh of lightningMeshes) mesh.destroy();

@@ -1126,6 +1126,70 @@ export function createSmokeCanvas(size = 96): HTMLCanvasElement {
 }
 
 /**
+ * Manto de niebla continuo y repetible para el suelo de la ciénaga.
+ *
+ * A diferencia de `createSmokeCanvas` (bocanadas sueltas), aquí interesa una
+ * capa de nubosidad suave que tile sin costuras: varias octavas de ruido de
+ * valor periódico, con alfa bajo y variaciones amplias. El material la estira
+ * sobre toda la zona y la desplaza despacio para que parezca niebla viva.
+ */
+export function createMistCanvas(size = 128): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const random = mulberry32(0x2f4b);
+  const octaves = [4, 8, 16, 32];
+  const weights = [0.45, 0.27, 0.17, 0.11];
+  const grids = octaves.map((cells) => {
+    const grid = new Float32Array(cells * cells);
+    for (let i = 0; i < grid.length; i++) grid[i] = random();
+    return { cells, grid };
+  });
+
+  const sample = (u: number, v: number): number => {
+    let value = 0;
+    for (let o = 0; o < grids.length; o++) {
+      const { cells, grid } = grids[o];
+      const gx = u * cells;
+      const gy = v * cells;
+      const x0 = Math.floor(gx);
+      const y0 = Math.floor(gy);
+      const fx = gx - x0;
+      const fy = gy - y0;
+      const sx = fx * fx * (3 - 2 * fx);
+      const sy = fy * fy * (3 - 2 * fy);
+      const cx0 = ((x0 % cells) + cells) % cells;
+      const cy0 = ((y0 % cells) + cells) % cells;
+      const cx1 = (cx0 + 1) % cells;
+      const cy1 = (cy0 + 1) % cells;
+      const v00 = grid[cy0 * cells + cx0];
+      const v10 = grid[cy0 * cells + cx1];
+      const v01 = grid[cy1 * cells + cx0];
+      const v11 = grid[cy1 * cells + cx1];
+      const top = v00 * (1 - sx) + v10 * sx;
+      const bottom = v01 * (1 - sx) + v11 * sx;
+      value += (top * (1 - sy) + bottom * sy) * weights[o];
+    }
+    return value;
+  };
+
+  const image = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const shaped = Math.min(1, Math.max(0, (sample(x / size, y / size) - 0.32) / 0.42));
+      const alpha = 0.07 + shaped * 0.26;
+      const index = (y * size + x) * 4;
+      // Blanco neutro: el tinte lo pone cada material (verde en la ciénaga,
+      // arena en el desierto) sin arrastrar una dominante de color.
+      image.data[index] = 255;
+      image.data[index + 1] = 255;
+      image.data[index + 2] = 255;
+      image.data[index + 3] = Math.round(alpha * 255);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return ctx.canvas;
+}
+
+/**
  * Chispa de lava: núcleo blanco-amarillo que cae a naranja y rojo. Está
  * pensada para blending aditivo, así que el borde es alfa 0 y el centro suma
  * luz sobre el basalto.
