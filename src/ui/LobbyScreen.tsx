@@ -20,16 +20,14 @@ interface LobbyScreenProps {
   devices: InputDeviceInfo[];
   maps: MapIndexEntry[];
   mapId: string;
-  mapLoading: boolean;
-  mapError: string | null;
   onChangeMap: (mapId: string) => void;
-  onJoin: (deviceId: string) => void;
+  onJoin: (device: InputDeviceInfo) => void;
   onTeam: (slot: number, team: Team) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
   onContinue: () => void;
-  onControls: () => void;
-  onCredits: () => void;
+  onBack: () => void;
+  onOptions: () => void;
   onEditor: () => void;
 }
 
@@ -160,16 +158,14 @@ export function LobbyScreen({
   devices,
   maps,
   mapId,
-  mapLoading,
-  mapError,
   onChangeMap,
   onJoin,
   onTeam,
   onReady,
   onLeave,
   onContinue,
-  onControls,
-  onCredits,
+  onBack,
+  onOptions,
   onEditor
 }: LobbyScreenProps) {
   const counts = countTeams(players);
@@ -189,15 +185,15 @@ export function LobbyScreen({
               <li className={stepActive}>1 · Equipos</li>
               <li className={stepIdle}>2 · Pokémon</li>
             </ol>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onBack}>
+                ← Menú
+              </button>
               <button type="button" className={btnClass('ghost', 'small')} onClick={onEditor}>
                 Editor de mapas
               </button>
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onControls}>
-                Controles
-              </button>
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onCredits}>
-                Créditos
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onOptions}>
+                Opciones
               </button>
             </div>
           </div>
@@ -261,7 +257,7 @@ export function LobbyScreen({
                       key={map.id}
                       type="button"
                       className={btnClass(map.id === mapId ? 'accent' : 'ghost', 'tiny')}
-                      disabled={mapLoading || map.id === mapId}
+                      disabled={map.id === mapId}
                       title={map.description}
                       onClick={() => onChangeMap(map.id)}
                     >
@@ -269,16 +265,9 @@ export function LobbyScreen({
                     </button>
                   ))}
                 </div>
-                {mapLoading && (
-                  <p className="mt-2 animate-pulse font-mono text-[0.62rem] tracking-[0.04em] text-[#8b9db2]">
-                    Cargando mapa…
-                  </p>
-                )}
-                {mapError && (
-                  <p className="mt-2 font-mono text-[0.62rem] tracking-[0.04em] text-[#ff8b8f]">
-                    {mapError}
-                  </p>
-                )}
+                <p className="mt-2 font-mono text-[0.62rem] tracking-[0.04em] text-[#8b9db2]">
+                  El mapa se carga al empezar la partida.
+                </p>
               </div>
             )}
 
@@ -311,7 +300,7 @@ export function LobbyScreen({
                     <button
                       type="button"
                       className={btnClass('accent', 'tiny')}
-                      onClick={() => onJoin(device.id)}
+                      onClick={() => onJoin(device)}
                     >
                       Unirse
                     </button>

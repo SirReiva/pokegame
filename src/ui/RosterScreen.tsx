@@ -16,8 +16,7 @@ interface RosterScreenProps {
   onToggleReady: (slot: number) => void;
   onStart: () => void;
   onBack: () => void;
-  onControls: () => void;
-  onCredits: () => void;
+  onOptions: () => void;
 }
 
 const overlay =
@@ -42,8 +41,7 @@ export function RosterScreen({
   onToggleReady,
   onStart,
   onBack,
-  onControls,
-  onCredits
+  onOptions
 }: RosterScreenProps) {
   const counts = countTeams(players);
   const allReady = players.length > 0 && players.every((player) => player.rosterReady);
@@ -63,11 +61,11 @@ export function RosterScreen({
               <li className={stepActive}>2 · Pokémon</li>
             </ol>
             <div className="flex gap-2">
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onControls}>
-                Controles
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onBack}>
+                ← Equipos
               </button>
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onCredits}>
-                Créditos
+              <button type="button" className={btnClass('ghost', 'small')} onClick={onOptions}>
+                Opciones
               </button>
             </div>
           </div>

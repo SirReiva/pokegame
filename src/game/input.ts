@@ -79,7 +79,7 @@ interface PadState {
  * en cada frame.
  */
 export class Input {
-  private readonly canvas: HTMLCanvasElement;
+  private readonly canvas: HTMLCanvasElement | null;
   private readonly keys = new Set<string>();
   /** Teclas pulsadas desde el último poll (captura toques entre frames). */
   private readonly keyTaps = new Set<string>();
@@ -115,7 +115,7 @@ export class Input {
     this.dragging = true;
     this.lastPointerX = event.clientX;
     this.pointerId = event.pointerId;
-    this.canvas.setPointerCapture?.(event.pointerId);
+    this.canvas?.setPointerCapture?.(event.pointerId);
   };
 
   private readonly onPointerMove = (event: PointerEvent) => {
@@ -130,7 +130,7 @@ export class Input {
     if (this.pointerId !== null && event.pointerId !== this.pointerId) return;
     this.dragging = false;
     this.pointerId = null;
-    this.canvas.releasePointerCapture?.(event.pointerId);
+    this.canvas?.releasePointerCapture?.(event.pointerId);
   };
 
   private readonly onWheel = (event: WheelEvent) => {
@@ -144,16 +144,20 @@ export class Input {
     this.dragging = false;
   };
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
+  /**
+   * Sin canvas es una fuente de entrada solo para menús: teclado y mandos
+   * siguen funcionando, pero se omiten los eventos de puntero y rueda.
+   */
+  constructor(canvas?: HTMLCanvasElement | null) {
+    this.canvas = canvas ?? null;
     window.addEventListener('keydown', this.onKeyDown, { passive: false });
     window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('blur', this.onBlur);
-    canvas.addEventListener('pointerdown', this.onPointerDown);
+    this.canvas?.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointermove', this.onPointerMove);
     window.addEventListener('pointerup', this.onPointerUp);
     window.addEventListener('pointercancel', this.onPointerUp);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    this.canvas?.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
   private isTypingTarget(target: EventTarget | null): boolean {
@@ -360,11 +364,11 @@ export class Input {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas?.removeEventListener('pointerdown', this.onPointerDown);
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
     window.removeEventListener('pointercancel', this.onPointerUp);
-    this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas?.removeEventListener('wheel', this.onWheel);
   }
 }
 

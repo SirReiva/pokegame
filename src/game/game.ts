@@ -28,7 +28,6 @@ import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import {
   TERRAINS,
-  firstRespawnForTeam,
   getActiveMap,
   resolveDeepWater,
   setActiveMap,
@@ -58,8 +57,12 @@ export interface GameCallbacks {
   onMatchStats(stats: PlayerMatchStats[]): void;
 }
 
-/** Los NPC del menú solo giran hacia la cámara cuando esta se acerca. */
-const NPC_NOTICE_RADIUS = 2.4;
+export interface GameOptions {
+  /** Mapa que se carga al montar `/play`. */
+  mapId?: string;
+  /** Manifiesto ya descargado por la sesión, para no pedirlo dos veces. */
+  manifest?: SpriteManifest;
+}
 
 /** Cuánto se ensancha el radio de colisión de las cuñas de sombra. */
 const MOUNTAIN_SHADOW_RADIUS = 1.05;
@@ -109,6 +112,7 @@ function clamp(value: number, min: number, max: number): number {
  */
 export class Game {
   private readonly callbacks: GameCallbacks;
+  private readonly options: GameOptions;
   private readonly app: pc.Application;
   private readonly input: Input;
 
@@ -125,9 +129,6 @@ export class Game {
 
   private manifest: SpriteManifest | null = null;
   private readonly assets = new Map<string, SpriteAsset>();
-
-  /** Pokémon de exposición en la base azul mientras se eligen equipos. */
-  private menuNpcs: Actor[] = [];
 
   private matchPlayers: MatchPlayerState[] = [];
   private viewLayers: pc.Layer[] = [];
@@ -149,8 +150,9 @@ export class Game {
   private statsTimer = 0;
   private fps = 0;
 
-  constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks) {
+  constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks, options: GameOptions = {}) {
     this.callbacks = callbacks;
+    this.options = options;
 
     this.app = new pc.Application(canvas, {
       graphicsDeviceOptions: {
@@ -177,22 +179,26 @@ export class Game {
     try {
       this.callbacks.onProgress({ loaded: 0, total: 13, label: 'Cargando mapas' });
       this.mapIndex = await loadMapIndex();
-      const requested = new URLSearchParams(window.location.search).get('map');
+      const requested =
+        this.options.mapId ?? new URLSearchParams(window.location.search).get('map');
       const entry =
         this.mapIndex.find((candidate) => candidate.id === requested) ?? this.mapIndex[0];
       const map = await loadMap(entry);
       this.applyMap(map);
 
-      this.callbacks.onProgress({
-        loaded: 0,
-        total: 12,
-        label: 'Leyendo el manifiesto de sprites'
-      });
-      const response = await fetch(`${import.meta.env.BASE_URL}sprites/manifest.json`);
-      if (!response.ok) {
-        throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
+      let manifest = this.options.manifest ?? null;
+      if (!manifest) {
+        this.callbacks.onProgress({
+          loaded: 0,
+          total: 12,
+          label: 'Leyendo el manifiesto de sprites'
+        });
+        const response = await fetch(`${import.meta.env.BASE_URL}sprites/manifest.json`);
+        if (!response.ok) {
+          throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
+        }
+        manifest = (await response.json()) as SpriteManifest;
       }
-      const manifest = (await response.json()) as SpriteManifest;
       this.manifest = manifest;
 
       const total = manifest.pokemon.length * 2;
@@ -214,7 +220,6 @@ export class Game {
 
       if (this.disposed) return;
 
-      this.buildMenuCast();
       this.ready = true;
       this.mode = 'menu';
       this.menuCamera.setEnabled(true);
@@ -232,20 +237,17 @@ export class Game {
     if (!entry) throw new Error(`No existe el mapa "${id}"`);
     const map = await loadMap(entry);
     this.applyMap(map);
-    this.buildMenuCast();
     this.menuCamera.setEnabled(true);
     return true;
   }
 
   /**
    * Reemplaza el mundo actual por el mapa indicado. Se usa al arrancar y al
-   * cambiar de mapa; destruye la partida y los NPC del menú para no dejar
-   * entidades ni materiales del mapa anterior.
+   * cambiar de mapa; destruye la partida anterior para no dejar entidades ni
+   * materiales del mapa anterior.
    */
   private applyMap(map: GameMap): void {
     this.clearMatch();
-    for (const npc of this.menuNpcs) npc.destroy();
-    this.menuNpcs = [];
     this.menuCamera?.dispose();
     this.world?.dispose();
 
@@ -289,39 +291,6 @@ export class Game {
     });
   }
 
-  /** Huecos de los Pokémon de exposición, en anillo alrededor de la base azul. */
-  private npcSlots(): Array<{ x: number; z: number }> {
-    const base = firstRespawnForTeam('blue');
-    const radius = Math.max(1.7, base.radius * 0.65);
-    const count = this.manifest?.pokemon.length ?? 11;
-    return Array.from({ length: count }, (_, index) => {
-      const angle = (index / count) * Math.PI * 2 + Math.PI * 0.15;
-      return {
-        x: base.x + Math.cos(angle) * radius,
-        z: base.z + Math.sin(angle) * radius
-      };
-    });
-  }
-
-  private buildMenuCast(): void {
-    const manifest = this.manifest;
-    if (!manifest) return;
-
-    for (const npc of this.menuNpcs) npc.destroy();
-    this.menuNpcs = [];
-
-    const slots = this.npcSlots();
-    manifest.pokemon.forEach((entry, index) => {
-      const asset = this.assets.get(entry.id);
-      if (!asset) return;
-      const slot = slots[index % slots.length];
-      const homeFacing = Math.atan2(-slot.x, -slot.z);
-      const npc = new Actor(this.app, asset, this.world.shadowMaterial, slot, homeFacing);
-      npc.play('idle');
-      this.menuNpcs.push(npc);
-    });
-  }
-
   /** Empieza una partida con los jugadores ya elegidos en React. */
   startMatch(configs: MatchPlayerConfig[]): void {
     if (!this.ready || configs.length === 0) return;
@@ -337,7 +306,6 @@ export class Game {
     this.statsTimer = 0;
     this.fps = 0;
     this.menuCamera.setEnabled(false);
-    for (const npc of this.menuNpcs) npc.setVisible(false);
     this.app.graphicsDevice.maxPixelRatio = Math.min(
       window.devicePixelRatio || 1,
       valid.length > 4 ? 1.2 : 1.5
@@ -450,7 +418,6 @@ export class Game {
     this.statsTimer = 0;
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.menuCamera.setEnabled(true);
-    for (const npc of this.menuNpcs) npc.setVisible(true);
     this.refreshSunShadows();
     this.callbacks.onMatchStats([]);
   }
@@ -546,19 +513,6 @@ export class Game {
   private updateMenu(dt: number): void {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
     this.menuCamera.update(dt, getActiveMap().spawn, 0, 0);
-
-    for (const npc of this.menuNpcs) {
-      const dx = this.menuCamera.position.x - npc.position.x;
-      const dz = this.menuCamera.position.z - npc.position.z;
-      const distance = Math.hypot(dx, dz);
-      const targetFacing =
-        distance < NPC_NOTICE_RADIUS ? Math.atan2(dx, dz) : npc.homeFacing;
-      const turn = distance < NPC_NOTICE_RADIUS ? 4.5 : 1.2;
-      npc.setFacing(angleLerp(npc.facing, targetFacing, 1 - Math.exp(-turn * dt)));
-      npc.play('idle');
-      npc.update(dt, this.menuCamera.position);
-    }
-
     this.world.update(dt);
   }
 
@@ -833,7 +787,7 @@ export class Game {
         }
       }
 
-      // Colisión entre jugadores (los NPC del menú están ocultos en partida).
+      // Colisión entre jugadores.
       for (const other of this.matchPlayers) {
         if (other === self) continue;
         const dx = px - other.x;
@@ -871,8 +825,6 @@ export class Game {
     this.fogMesh = null;
     this.fogDecalMesh?.destroy();
     this.fogDecalMesh = null;
-    for (const npc of this.menuNpcs) npc.destroy();
-    this.menuNpcs = [];
     this.menuCamera?.dispose();
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();

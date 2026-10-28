@@ -7,6 +7,7 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 ## Stack
 
 - **React 19** + **TypeScript 7** + **Vite**: HUD, menús y pantallas.
+- **wouter**: router mínimo para el flujo entre menú, configuración y partida.
 - **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
 - **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
 - **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle y Walk).
@@ -30,6 +31,21 @@ pnpm sprites --force    # fuerza la descarga
 
 Requiere Node 18+ (el importador usa `fetch` y `zlib`).
 
+## Flujo de pantallas
+
+La navegación usa **wouter**. El estado compartido (manifiesto, mapas y jugadores) vive en `SessionProvider`; PlayCanvas solo se monta al entrar en `/play`. Las rutas de partida y del editor se cargan con `lazy`/`Suspense`, así que el menú no descarga el motor 3D.
+
+| Ruta | Pantalla |
+| --- | --- |
+| `/` | Menú principal: **Jugar**, **Editor** y **Opciones**. |
+| `/opciones` | Controles, créditos y licencia. Vuelve a la pantalla desde la que se abrió. |
+| `/editor` | Editor de mapas a pantalla completa. |
+| `/lobby` | Paso 1: unirse con cada mando, elegir equipo y mapa. |
+| `/roster` | Paso 2: cada jugador elige su Pokémon y marca listo. |
+| `/play` | Partida: se crea el canvas y el motor de PlayCanvas. |
+
+`Jugar` empieza una sesión limpia. Al salir de la partida se puede volver a `/roster`, a `/lobby` o al menú. Las rutas de configuración redirigen a `/lobby` si no hay jugadores (por ejemplo, al recargar la página).
+
 ## Controles
 
 El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cada dispositivo que pulsa confirmar se convierte en un jugador independiente.
@@ -47,16 +63,16 @@ El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cad
 | Pausa | `Start` / `B` | `Esc` |
 | Ocultar HUD | — | `H` |
 
-La configuración tiene dos pantallas:
+La configuración tiene dos rutas:
 
-1. **Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
-2. **Pokémon**: cada jugador mueve su cursor por las once especies y confirma con `A`. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida.
+1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
+2. **`/roster` · Pokémon**: cada jugador mueve su cursor por las once especies y confirma con `A`. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (azul o roja) y explora el mapa libremente. La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo.
 
 ## Mapas definidos por JSON
 
-Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la pantalla de equipos permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
+Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
 
 Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, separadores (cordilleras y muros) y ajustes de cámara:
 
@@ -89,7 +105,7 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
 - `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
 - `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra. `kind` elige el aspecto: `mountain` (picos de piedra, por defecto) o `wall` (sillería con almenas). La colisión y la visión son idénticas en ambos.
-- `spawn` es el punto al que mira la cámara del menú. Si falta, se usa el respawn azul.
+- `spawn` es el punto al que mira la cámara mientras se carga la partida. Si falta, se usa el respawn azul.
 - Los calveros, el agua y su decoración 3D se derivan de las celdas: cada grupo conexo de un terreno decorativo se convierte en una región poligonal, y cada cuerpo de agua se triangula para colocar la lámina superficial.
 - `public/maps/map.schema.json` describe el formato para que el editor valide los archivos. Los mapas existentes lo referencian con `"$schema": "./map.schema.json"`.
 
@@ -105,7 +121,7 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
 
 ## Editor de mapas
 
-La pantalla de equipos incluye el botón **Editor de mapas**; también se abre directo con `?editor`. Permite crear un mapa jugable sin editar el JSON a mano:
+El menú principal (`/`) y la sala de equipos (`/lobby`) enlazan a **Editor**, que también se abre directo en `/editor`. Permite crear un mapa jugable sin editar el JSON a mano:
 
 1. **Dimensiones**: al entrar sin borrador pide id, nombre, ancho y alto de la rejilla (8–128 cada uno), `tileSize`, `waterHeight` y terreno de fondo. También puede cargar un mapa existente de `public/maps/` o importar un archivo `.json`.
 2. **Dibujo**: rejilla 2D con los quince terrenos. Herramientas de lápiz (interpola al arrastrar para no dejar huecos), relleno, rectángulo y borrador. El clic derecho borra. `Ctrl+Z` / `Ctrl+Y` deshacen y rehacen.
@@ -134,7 +150,7 @@ El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de
 
 - **Billboard vertical**: el plano del sprite solo gira en Y para mirar a la cámara; no se inclina, así que el personaje permanece de pie sobre el terreno. El billboard no implica que el personaje “mire a cámara”: solo mantiene el plano visible.
 - **8 direcciones según el rumbo**: cada actor conserva una dirección propia (`facing`). La fila visible se calcula con el ángulo entre ese rumbo y la cámara, usando el eje “derecha de pantalla”. Al orbitar, el sprite cambia de vista de forma continua sin dejar de mirar hacia donde mira de verdad.
-- **Rumbos independientes**: cada jugador empieza mirando al centro desde su base y solo cambia de rumbo al moverse. Los Pokémon del menú tienen una orientación de reposo propia y únicamente giran hacia la cámara cuando esta se acerca.
+- **Rumbos independientes**: cada jugador empieza mirando al centro desde su base y solo cambia de rumbo al moverse.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
 - **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Mewtwo 7,8 u/s, Raikou 7,7, Zapdos 7,6, Lugia 7,5, Greninja 7,4, Entei 7,2, Scyther 7,2, Celebi 7,1, Moltres 7,0, Mew 7,0, Suicune 7,0, Ho-Oh 6,9, Pikachu 6,9, Articuno 6,8, Lucario 6,5, Eevee 6,1, Charmander 5,4, Squirtle 4,8, Onix 4,6, Bulbasaur 4,2). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
@@ -142,13 +158,13 @@ El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
 - **Anillo de rumbo**: cada jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real, tintado con el color de su equipo. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
 - **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
-- **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores y los Pokémon del menú no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
+- **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
 - **Pixel art configurable**: `CONFIG.sprite.filter` elige el muestreo. `'nearest'` deja los bloques duros; `'smooth'` precarga la hoja con NEAREST a `smoothScale` y luego filtra con LINEAR, de modo que el contorno se antialiasea 1-2 px sin emborronar el interior; `'linear'` interpola directamente sobre la hoja original (el más suave y borroso). `CONFIG.sprite.alphaToCoverage` delega el recorte alfa en las muestras del MSAA, y las UVs mantienen medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
 - **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y separadores declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando. El páramo añade rayos con luz azul y chispas crepitando entre la hierba seca.
 - **Terrenos tipados**: la arena tiene quince terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios; la partida es exploración libre, sin combate.
-- **UI en español** con selector de equipos, selector de Pokémon por jugador, HUD de telemetría por vista (terreno, tipo, velocidad, multiplicador), controles y créditos.
+- **UI en español** con menú principal, pantalla de opciones, selector de equipos, selector de Pokémon por jugador, HUD de telemetría por vista (terreno, tipo, velocidad, multiplicador), controles y créditos.
 
 ## Terrenos y tipos Pokémon
 
@@ -190,7 +206,7 @@ La **escarcha** (`ice`, tipo Hielo) suma al suelo helado un efecto 3D propio. El
 
 El **bosque umbrío** (`ghost`, tipo Fantasma) pasa de ser solo suelo pintado a tener volumen propio. En cada calvero se levantan **cinco árboles secos y retorcidos** con tres variantes de malla: raíces cortas, tronco en dos tramos inclinados y tres o cuatro ramas quebradas en dos segmentos, todo con prismas facetados y color por vértice, del casi negro de la base al gris violeta de las puntas. Son los únicos árboles del mapa que proyectan sombra real y tienen collider circular. Entre ellos flotan **18 fuegos fatuos** aditivos: orbes pequeños que nacen en una caja baja, derivan muy despacio y parpadean con una textura neutra teñida de violeta por el `colorGraph`. Una luz omni violeta de corto alcance respira con un pulso lento y tiñe troncos y suelo. Por último, una **niebla rastrera** de 130 partículas cubre el calvero con una capa continua: caja ancha y casi plana, vida larga, opacidad media-alta y deriva horizontal, para que se lea como un bosque húmedo y no como el humo vertical de la ciénaga. Los árboles se mecen muy poco y muy despacio en `world.update`.
 
-Las **bases** son plataformas de piedra pintadas en el suelo con un anillo y cuatro losanges del color del equipo (azul o rojo). En el centro hay un nexo 3D: pedestal de dos tambores de piedra, cristal emisivo del color del equipo y una luz omni corta que tiñe la plataforma. El cristal y el pedestal son colliders circulares. La base azul acoge al equipo azul y a los Pokémon de exposición del menú, colocados en un anillo derivado de su respawn; la roja es el punto de aparición del otro equipo.
+Las **bases** son plataformas de piedra pintadas en el suelo con un anillo y cuatro losanges del color del equipo (azul o rojo). En el centro hay un nexo 3D: pedestal de dos tambores de piedra, cristal emisivo del color del equipo y una luz omni corta que tiñe la plataforma. El cristal y el pedestal son colliders circulares. Cada base es el punto de aparición de su equipo.
 
 La **hierba alta**, la **hierba oscura de la ciénaga**, el **claro feérico** y el **páramo** son los calveros con volumen propio. La hierba alta, además de pintarse en el suelo con briznas de 2 px y punta clara, genera matas 3D hechas con geometría real. Cada mata es una malla de 18 briznas (dos tramos y punta, con curvatura y alturas variadas) coloreadas por vértice con verdes profundos, de tono oscuro en la base a más claro en la punta; no usa texturas ni recortes alfa, así que tiene volumen desde cualquier ángulo y se resuelve en una sola llamada de dibujo por mata. Las matas se colocan de forma determinista dentro de las regiones derivadas de las celdas `tallGrass` (`TERRAIN_ZONES`), con densidad alta para que el calvero se lea frondoso, no colisionan y se mecen con el viento en `world.update` inclinándose sobre su base con una fase ligada a la posición.
 
@@ -359,11 +375,26 @@ src/game/
   sprite.ts                  texturas, material, UVs, animación y billboard
   marker.ts                  anillo de jugador con flecha de rumbo y color de equipo
   actor.ts                   sprite + sombra de contacto + posición + capa de render
-  game.ts                    orquestador: menú, equipos, partida, cámaras y colisiones
+  game.ts                    orquestador de la partida: mapa, cámaras, actores y colisiones
+src/session/
+  sessionContext.ts          contexto y contrato del estado compartido
+  SessionProvider.tsx        manifiesto, mapas y jugadores que sobreviven a la ruta
+  useSession.ts              hook de acceso al estado compartido
+src/screens/
+  HomeScreen.tsx             menú principal con Jugar, Editor y Opciones
+  OptionsScreen.tsx          controles y créditos a pantalla completa
+  EditorRoute.tsx            entrada a `/editor`
+  LobbyRoute.tsx             entrada a `/lobby`, entrada de mandos y equipos
+  RosterRoute.tsx            entrada a `/roster`, selección de Pokémon
+  PlayScreen.tsx             entrada a `/play`, monta PlayCanvas y la partida
+  SessionGate.tsx            espera de manifiesto/mapas antes de una pantalla
 src/ui/
   PokemonPortrait.tsx        retrato normal para las interfaces HTML
   Brand.tsx                  logotipo compartido (versión normal y compacta)
   KeyPill.tsx                tecla/botón de los textos de ayuda
+  BootScreen.tsx             pantallas de carga y error compartidas
+  InfoPanels.tsx             contenido de controles y créditos
+  InfoDialog.tsx             modal de controles/créditos durante la pausa
   LobbyScreen.tsx            sala de equipos y detección de mandos
   MapEditorScreen.tsx        editor de mapas: dimensiones, dibujo y exportación
   RosterScreen.tsx           selección simultánea de Pokémon
@@ -373,7 +404,9 @@ src/ui/
   buttonStyles.ts            variantes y tamaños de los botones en Tailwind
   styles.ts                  clases compartidas (eyebrow, pasos del asistente)
   rosterGrid.ts              columnas de la rejilla según el viewport
-src/App.tsx                  flujo de pantallas, estado de jugadores, editor y modales
+  useMenuInput.ts            teclado/mandos para pantallas HTML sin PlayCanvas
+  useReturnPath.ts           vuelta a la pantalla de origen de `/opciones` y `/editor`
+src/App.tsx                  rutas de wouter y composición de pantallas
 src/index.css                Tailwind: tokens del tema y estilos base
 ```
 
@@ -393,7 +426,6 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
 - `public/maps/*.json`: rejilla de terrenos, `tileSize`, `waterHeight`, respawns de cada equipo, separadores y punto de cámara del menú. `public/maps/index.json` decide qué mapas aparecen en el selector. `TERRAINS` en `src/game/terrain.ts` mantiene los nombres y tipos Pokémon de cada `TerrainId`.
 - `MAX_PLAYERS`, `MAX_TEAM_SIZE`, `TEAM_INFO`, `spawnForTeam` y `computeSplitLayout` en `src/game/multiplayer.ts`: límite de jugadores, tope por equipo, colores/coordenadas de base y rejilla del splitscreen.
-- `NPC_SLOTS` (`src/game/game.ts`): Pokémon de exposición que acompañan al menú de equipos en la base azul.
 
 Los colores de acento, tipos y créditos vienen del manifiesto.
 
@@ -402,7 +434,6 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - Solo se importan **Idle** y **Walk**; no hay ataque, daño, captura ni combate.
 - El multijugador local es **exploración libre por equipos**: no hay objetivo, marcador ni condición de victoria.
 - La selección de Pokémon permite repetir especie aunque hay 11 especies para hasta 8 jugadores.
-- Los NPC del menú son estáticos: giran hacia la cámara, pero no patrullan.
 - La niebla exterior es un círculo de pantalla por vista; los separadores añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
