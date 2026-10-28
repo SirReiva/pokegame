@@ -31,6 +31,17 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * Ruido determinista por coordenada. XOR de dos productos lineales (lo que
+ * había antes) deja diagonales visibles en la rejilla; este hash mezcla los
+ * bits para que el grano se lea como ruido y no como una trama.
+ */
+function blockNoise(x: number, y: number): number {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 export function canvas2d(
   width: number,
   height = width,
@@ -589,7 +600,24 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
   const cols = map.tiles[0]?.length ?? 0;
   const cellPxX = ctx.canvas.width / cols;
   const cellPxY = ctx.canvas.height / rows;
-  const step = 4;
+  // El grano representa una franja de mundo parecida en todos los mapas: con
+  // muchas celdas por téxel se reduce el bloque para que no se lea como una
+  // trama enorme encima de cada celda.
+  const pixelsPerUnit = map.tileSize > 0 ? cellPxX / map.tileSize : 0;
+  const step = Math.max(1, Math.min(4, Math.round(pixelsPerUnit * 0.15)));
+  // Cuando cada téxel ocupa mucho en pantalla, el grano se lee como una trama
+  // regular al girar la cámara. Se baja el contraste en esos mapas sin perder
+  // el detalle de los que ya iban sobrados de resolución.
+  const grainStrength = Math.min(1, Math.max(0.35, pixelsPerUnit / 32));
+  // Los detalles por celda (matas de hierba, marcas del suelo, ondas del agua)
+  // estaban medidos en píxeles fijos. En un mapa grande la celda ocupa pocos
+  // píxeles y esas marcas acababan siendo casi toda la celda, así que su
+  // tamaño también se deriva de la escala del mundo.
+  const detailSize = Math.max(1, Math.round(pixelsPerUnit * 0.075));
+  const tuftWidth = Math.max(1, Math.round(pixelsPerUnit * 0.075));
+  const tuftHeight = Math.max(1, Math.round(pixelsPerUnit * 0.112));
+  const streakWidth = Math.max(1, Math.round(pixelsPerUnit * 0.15));
+  const streakHeight = Math.max(1, Math.round(pixelsPerUnit * 0.075));
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -606,23 +634,23 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
       ctx.fillStyle = palette.base;
       ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
-      // Grano de 4 px con semilla por bloque de pantalla, no por celda: así
-      // dos celdas vecinas del mismo terreno comparten el ruido y no aparece
-      // una costura de tablero en cada borde.
+      // Grano con semilla por bloque de pantalla, no por celda: así dos celdas
+      // vecinas del mismo terreno comparten el ruido y no aparece una costura
+      // de tablero en cada borde.
       for (let py = y0; py < y1; py += step) {
         for (let px = x0; px < x1; px += step) {
-          const grain = mulberry32(
-            ((Math.floor(py / step) + 1) * 92837111) ^
-              ((Math.floor(px / step) + 1) * 689287499),
-          );
-          if (grain() < 0.62) continue;
+          const gx = Math.floor(px / step) + 1;
+          const gy = Math.floor(py / step) + 1;
+          if (blockNoise(gx, gy) < 0.62) continue;
+          const tone = blockNoise(gx + 1013, gy - 811);
           ctx.fillStyle =
-            grain() < 0.45
+            tone < 0.45
               ? palette.light
-              : grain() < 0.5
+              : tone < 0.5
                 ? palette.dark
                 : palette.accent2;
-          ctx.globalAlpha = 0.14 + grain() * 0.22;
+          ctx.globalAlpha =
+            (0.14 + blockNoise(gx - 733, gy + 457) * 0.22) * grainStrength;
           ctx.fillRect(px, py, Math.min(step, x1 - px), Math.min(step, y1 - py));
         }
       }
@@ -636,13 +664,13 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
             terrain === "waterHigh" ? palette.accent : "#c4f0fb";
           ctx.globalAlpha = 0.55;
           for (let i = 0; i < streaks; i++) {
-            const sx = x0 + 3 + random() * Math.max(1, x1 - x0 - 8);
-            const sy = y0 + 3 + random() * Math.max(1, y1 - y0 - 6);
+            const sx = x0 + random() * Math.max(1, x1 - x0 - streakWidth);
+            const sy = y0 + random() * Math.max(1, y1 - y0 - streakHeight);
             ctx.fillRect(
               Math.round(sx),
               Math.round(sy),
-              4 + Math.floor(random() * 4),
-              2,
+              streakWidth,
+              streakHeight,
             );
           }
           ctx.globalAlpha = 1;
@@ -653,10 +681,10 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
           ctx.globalAlpha = 0.6;
           for (let i = 0; i < 5; i++) {
             ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 2)),
-              2,
-              2,
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
+              detailSize,
+              detailSize,
             );
           }
           ctx.globalAlpha = 1;
@@ -668,10 +696,10 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
           ctx.globalAlpha = 0.55;
           for (let i = 0; i < 4; i++) {
             ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 2)),
-              2,
-              2,
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
+              detailSize,
+              detailSize,
             );
           }
           ctx.globalAlpha = 1;
@@ -682,10 +710,10 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
           ctx.globalAlpha = 0.5;
           for (let i = 0; i < 3; i++) {
             ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - 2)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - 3)),
-              2,
-              3,
+              x0 + Math.floor(random() * Math.max(1, x1 - x0 - tuftWidth)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0 - tuftHeight)),
+              tuftWidth,
+              tuftHeight,
             );
           }
           ctx.globalAlpha = 1;
@@ -735,6 +763,55 @@ function paintBases(
 }
 
 /**
+ * Resolución de la textura del suelo.
+ *
+ * La densidad se mantiene constante en el mundo (hasta `maxPixelsPerUnit`) para
+ * que una celda no acabe con un solo téxel: eso convertía los mapas grandes en
+ * manchas de color borrosas al acercar la cámara. El total se limita con un
+ * presupuesto de téxeles y con el tamaño máximo que acepta la GPU.
+ *
+ * Devuelve el lado mayor de la textura; `createGroundCanvas` deriva el otro del
+ * aspecto del mapa. `size` antiguo era siempre 1024, así que los mapas pequeños
+ * conservan (o mejoran) su detalle.
+ */
+export function groundTextureSize(
+  map: GameMap,
+  options: {
+    /** Presupuesto total de téxeles (ancho × alto). */
+    maxTexels?: number;
+    /** Densidad máxima, en píxeles por unidad de mundo. */
+    maxPixelsPerUnit?: number;
+    /** Lado máximo permitido por la GPU. */
+    maxSize?: number;
+    /** Lado mínimo, para no perder detalle en mapas pequeños. */
+    minSize?: number;
+  } = {},
+): number {
+  const {
+    maxTexels = 8_000_000,
+    maxPixelsPerUnit = 32,
+    maxSize = 8192,
+    minSize = 1024,
+  } = options;
+
+  const rows = map.tiles.length;
+  const cols = map.tiles[0]?.length ?? 0;
+  const worldWidth = cols * map.tileSize;
+  const worldDepth = rows * map.tileSize;
+  const longestWorld = Math.max(worldWidth, worldDepth);
+  const area = worldWidth * worldDepth;
+  if (longestWorld <= 0 || area <= 0) return minSize;
+
+  const pixelsPerUnit = Math.min(
+    maxPixelsPerUnit,
+    Math.sqrt(maxTexels / area),
+  );
+  return Math.round(
+    Math.min(maxSize, Math.max(minSize, longestWorld * pixelsPerUnit)),
+  );
+}
+
+/**
  * Suelo del mapa: cada celda pinta su terreno y encima se añaden los detalles
  * de los calveros, las plataformas de las bases y las flores de la jungla.
  * `size` es el lado mayor de la textura; el otro se deriva del aspecto del
@@ -771,8 +848,12 @@ export function createGroundCanvas(
 
   paintBases(ctx, map, toPxX, toPxY, scale);
 
-  // Flores: ramilletes solo en la jungla, lejos de cordilleras.
+  // Flores: ramilletes solo en la jungla, lejos de cordilleras. El tamaño se
+  // deriva de la escala para que un mapa enorme no convierta cada flor en un
+  // cuadrado de varios metros.
   const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
+  const petalSize = Math.max(1, Math.round(scale * 0.11));
+  const petalSpread = Math.max(1, Math.round(scale * 0.11));
   for (let i = 0; i < 220; i++) {
     const x = (random() * 2 - 1) * (halfX - 1.5);
     const z = (random() * 2 - 1) * (halfZ - 1.5);
@@ -783,10 +864,10 @@ export function createGroundCanvas(
       ctx.fillStyle = color;
       ctx.globalAlpha = 0.9;
       ctx.fillRect(
-        toPxX(x) + (random() * 6 - 3),
-        toPxY(z) + (random() * 6 - 3),
-        3,
-        3,
+        toPxX(x) + (random() * 2 - 1) * petalSpread,
+        toPxY(z) + (random() * 2 - 1) * petalSpread,
+        petalSize,
+        petalSize,
       );
     }
   }

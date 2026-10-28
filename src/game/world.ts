@@ -35,6 +35,7 @@ import {
   createWallStoneCanvas,
   createWaterCanvas,
   createWispCanvas,
+  groundTextureSize,
   textureFromCanvas
 } from './textures';
 
@@ -180,10 +181,13 @@ export function buildWorld(app: pc.Application): World {
   // --- Texturas procedurales -------------------------------------------------
   const groundTexture = textureFromCanvas(
     device,
-    createGroundCanvas(1024, {
-      map,
-      zones: TERRAIN_ZONES
-    }),
+    createGroundCanvas(
+      groundTextureSize(map, { maxSize: Math.min(device.maxTextureSize, 8192) }),
+      {
+        map,
+        zones: TERRAIN_ZONES
+      }
+    ),
     { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST }
   );
   const soilTexture = textureFromCanvas(device, createSoilCanvas(), {
