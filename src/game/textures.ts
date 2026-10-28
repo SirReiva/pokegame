@@ -977,6 +977,52 @@ export function createFrostCanvas(size = 64): HTMLCanvasElement {
 }
 
 /**
+ * Chispa eléctrica: núcleo blanco azulado, halo frío y cuatro brazos quebrados.
+ * Está pensada para blending aditivo, así que el borde es alfa 0 y el azul lo
+ * termina de fijar el `colorGraph` de las partículas del páramo.
+ */
+export function createSparkCanvas(size = 48): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+
+  const glow = ctx.createRadialGradient(
+    center,
+    center,
+    0,
+    center,
+    center,
+    center,
+  );
+  glow.addColorStop(0, "rgba(255, 255, 255, 1)");
+  glow.addColorStop(0.2, "rgba(226, 247, 255, 0.95)");
+  glow.addColorStop(0.52, "rgba(150, 214, 255, 0.42)");
+  glow.addColorStop(1, "rgba(88, 158, 255, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, size, size);
+
+  // Brazos cortos en zigzag: dan la silueta de chispa sin convertir la mota en
+  // una estrella simétrica cuando se ve a tamaño de juego.
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = "rgba(214, 241, 255, 0.7)";
+  ctx.lineWidth = Math.max(1, size * 0.035);
+  for (let i = 0; i < 4; i++) {
+    const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const knee = center * 0.44;
+    const tip = center * 0.84;
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.lineTo(
+      center + Math.cos(angle + 0.22) * knee,
+      center + Math.sin(angle + 0.22) * knee,
+    );
+    ctx.lineTo(center + Math.cos(angle) * tip, center + Math.sin(angle) * tip);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = "source-over";
+  return ctx.canvas;
+}
+
+/**
  * Humo de ciénaga: jirones suaves y redondeados, con más cuerpo y menos brillo
  * que el polvo. Se usa como `colorMap` de las partículas de humo; el tono
  * verdoso lo pone el `colorGraph` del sistema.

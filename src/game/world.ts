@@ -30,6 +30,7 @@ import {
   createShadowCanvas,
   createSkyCanvas,
   createSmokeCanvas,
+  createSparkCanvas,
   createSoilCanvas,
   createWaterCanvas,
   createWispCanvas,
@@ -229,6 +230,12 @@ export function buildWorld(app: pc.Application): World {
   });
   const pollenTexture = textureFromCanvas(device, createPollenCanvas(), {
     name: 'fairy-pollen',
+    mipmaps: false,
+    minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
+  const sparkTexture = textureFromCanvas(device, createSparkCanvas(), {
+    name: 'paramo-spark',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
@@ -2515,6 +2522,239 @@ export function buildWorld(app: pc.Application): World {
     }
   });
 
+  // --- Páramo: rayos y chispas ----------------------------------------------
+  // El calvero eléctrico descarga rayos a intervalos irregulares. Cada descarga
+  // cae sobre un punto distinto del calvero e ilumina los frailejones con una
+  // luz azul durante unas décimas. El rayo es
+  // malla pura con color por vértice, sin texturas, y se extiende en cintas
+  // cruzadas para tener volumen desde cualquier ángulo de cámara. Entre descarga
+  // y descarga, unas chispas aditivas mantienen el calvero crepitando.
+  const buildLightningMesh = (seed: number): pc.Mesh => {
+    const rand = random(seed);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    const height = 4.2;
+
+    const push = (
+      x: number,
+      y: number,
+      z: number,
+      color: [number, number, number]
+    ) => {
+      positions.push(x, y, z);
+      normals.push(0, 1, 0);
+      colors.push(color[0], color[1], color[2], 1);
+    };
+
+    /** Convierte una polilínea en una cinta luminosa fina, sin halo. */
+    const ribbon = (path: Array<[number, number, number]>, scale: number) => {
+      const layers: Array<{ width: number; color: [number, number, number] }> = [
+        { width: 0.014, color: [0.9, 0.96, 1] }
+      ];
+
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let dz = b[2] - a[2];
+        const length = Math.hypot(dx, dy, dz) || 1;
+        dx /= length;
+        dy /= length;
+        dz /= length;
+
+        // Perpendicular horizontal y su ortogonal en el plano del tramo: las
+        // dos cintas se cruzan, así que el rayo se lee desde cualquier giro de
+        // cámara sin convertirse en una línea de canto.
+        const plen = Math.hypot(-dz, dx) || 1;
+        const px = -dz / plen;
+        const pz = dx / plen;
+        const qx = dy * pz;
+        const qy = dz * px - dx * pz;
+        const qz = -dy * px;
+
+        for (const layer of layers) {
+          const w = layer.width * scale;
+          for (const [ox, oy, oz] of [
+            [px, 0, pz],
+            [qx, qy, qz]
+          ]) {
+            const start = positions.length / 3;
+            push(a[0] - ox * w, a[1] - oy * w, a[2] - oz * w, layer.color);
+            push(a[0] + ox * w, a[1] + oy * w, a[2] + oz * w, layer.color);
+            push(b[0] + ox * w, b[1] + oy * w, b[2] + oz * w, layer.color);
+            push(b[0] - ox * w, b[1] - oy * w, b[2] - oz * w, layer.color);
+            indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+          }
+        }
+      }
+    };
+
+    // Tronco principal: cae desde 4,2 u con quiebros horizontales y termina
+    // exactamente en el punto de impacto, que es donde se coloca la entidad.
+    const main: Array<[number, number, number]> = [];
+    const steps = 12;
+    let x = 0;
+    let z = 0;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      if (i > 0 && i < steps) {
+        x += (rand() - 0.5) * 0.55;
+        z += (rand() - 0.5) * 0.55;
+      }
+      main.push([x, height * (1 - t), z]);
+    }
+    main[0] = [x * 0.5, height, z * 0.5];
+    main[steps] = [0, 0, 0];
+    ribbon(main, 1);
+
+    // Rama lateral: sale de un quiebro alto y muere antes de tocar el suelo, así
+    // que se lee como una bifurcación del rayo y no como un segundo impacto.
+    const branchRoot = main[3 + Math.floor(rand() * 4)];
+    const branch: Array<[number, number, number]> = [branchRoot];
+    const branchAngle = rand() * Math.PI * 2;
+    let bx = branchRoot[0];
+    let bz = branchRoot[2];
+    const branchSteps = 4 + Math.floor(rand() * 3);
+    for (let i = 1; i <= branchSteps; i++) {
+      const t = i / branchSteps;
+      const spread = 0.18 + rand() * 0.22;
+      bx += Math.cos(branchAngle) * spread + (rand() - 0.5) * 0.18;
+      bz += Math.sin(branchAngle) * spread + (rand() - 0.5) * 0.18;
+      branch.push([
+        bx,
+        Math.max(0.35, branchRoot[1] - t * (0.9 + rand() * 0.9)),
+        bz
+      ]);
+    }
+    ribbon(branch, 0.55);
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setColors(colors);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const lightningMeshes = [0, 1, 2].map((variant) =>
+    buildLightningMesh(0x3f27 + variant * 7919)
+  );
+
+  const lightningZones: Array<{
+    zone: TerrainZone;
+    rand: () => number;
+    bolt: pc.Entity;
+    material: pc.StandardMaterial;
+    light: pc.Entity;
+    next: number;
+    flash: number;
+    flashDuration: number;
+    seed: number;
+  }> = [];
+
+  paramoZones.forEach((zone, zoneIndex) => {
+    const rand = random(0x5e91 + zoneIndex * 8353);
+    const [zoneX, zoneZ] = zoneCenter(zone);
+
+    const material = standard({
+      diffuse: '#ffffff',
+      specular: '#000000',
+      gloss: 0,
+      blend: pc.BLEND_ADDITIVE,
+      depthWrite: false,
+      useLighting: false,
+      cull: pc.CULLFACE_NONE
+    });
+    material.diffuseVertexColor = true;
+    material.update();
+    materials.push(material);
+
+    const bolt = new pc.Entity(`paramo-lightning-${zoneIndex}`);
+    bolt.addComponent('render');
+    bolt.render!.castShadows = false;
+    bolt.render!.receiveShadows = false;
+    bolt.render!.meshInstances = [new pc.MeshInstance(lightningMeshes[0], material)];
+    bolt.enabled = false;
+    app.root.addChild(bolt);
+    created.push(bolt);
+
+    const light = new pc.Entity(`paramo-lightning-light-${zoneIndex}`);
+    light.addComponent('light', {
+      type: 'omni',
+      color: hex('#bfe4ff'),
+      intensity: 0,
+      range: 8.5,
+      castShadows: false
+    });
+    light.setPosition(zoneX, 1.7, zoneZ);
+    app.root.addChild(light);
+    created.push(light);
+
+    // Chispas ambientales: motas azuladas que asoman entre la hierba seca y
+    // suben muy poco antes de apagarse. La densidad es baja para que no compitan
+    // con los rayos ni con el polen del claro feérico.
+    const sparks = new pc.Entity(`paramo-sparks-${zoneIndex}`);
+    sparks.setPosition(zoneX, 0.45, zoneZ);
+    sparks.addComponent('particlesystem', {
+      numParticles: 34,
+      lifetime: 2.4,
+      rate: 0.05,
+      rate2: 0.1,
+      loop: true,
+      preWarm: true,
+      autoPlay: true,
+      emitterShape: pc.EMITTERSHAPE_BOX,
+      emitterExtents: zoneEmitterExtents(zone, 1.5, 0.7),
+      colorMap: sparkTexture,
+      colorGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 0.78, 0.96, 1],
+          [0, 0.58, 0.88, 1],
+          [0, 0.44, 0.8, 1]
+        ]
+      },
+      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.18, 0.9, 0.55, 0.45, 1, 0] },
+      scaleGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [0, 0.018, 0.3, 0.045, 0.75, 0.03, 1, 0.008]
+      },
+      velocityGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 0.04, 1, 0.15],
+          [0, 0.07, 1, 0.22],
+          [0, 0.04, 1, 0.15]
+        ]
+      },
+      blendType: pc.BLEND_ADDITIVE,
+      depthWrite: false,
+      useFog: true,
+      lighting: false,
+      intensity: 1,
+      orientation: pc.PARTICLEORIENTATION_SCREEN
+    });
+    app.root.addChild(sparks);
+    if (sparks.particlesystem) sparks.particlesystem.drawOrder = 2;
+    created.push(sparks);
+
+    lightningZones.push({
+      zone,
+      rand,
+      bolt,
+      material,
+      light,
+      next: 1.4 + rand() * 2.6,
+      flash: 0,
+      flashDuration: 0.55,
+      seed: rand() * Math.PI * 2
+    });
+  });
+
   // Hierba oscura de la ciénaga: briznas casi negras que sobresalen del agua
   // turbia. Usa la misma malla que la hierba alta con una paleta apagada,
   // menos briznas y menos altura: la ciénaga debe leerse como un lodazal con
@@ -3189,6 +3429,53 @@ export function buildWorld(app: pc.Application): World {
         tuft.entity.setLocalEulerAngles(0, tuft.yaw, sway);
       }
 
+      // Rayos del páramo: cuenta atrás hasta la descarga y, mientras dura,
+      // parpadeo rápido del rayo y pulso de la luz azul. Todo se apaga al
+      // terminar el destello.
+      for (const strike of lightningZones) {
+        if (strike.flash > 0) {
+          strike.flash = Math.max(0, strike.flash - dt);
+          const progress = 1 - strike.flash / strike.flashDuration;
+          const flicker = Math.sin(progress * 62 + strike.seed) > -0.25 ? 0.9 : 0.18;
+          const strobe = progress < 0.12 ? 1 : flicker;
+          const fade = (1 - progress) * (1 - progress);
+          const power = fade * strobe;
+
+          strike.material.opacity = power;
+          strike.material.update();
+
+          const light = strike.light.light;
+          if (light) light.intensity = 2.6 * power;
+
+          if (strike.flash === 0) {
+            strike.bolt.enabled = false;
+            if (light) light.intensity = 0;
+          }
+        } else {
+          strike.next -= dt;
+          if (strike.next > 0) continue;
+
+          const [x, z] = randomPointInZone(strike.zone, strike.rand, 0.32);
+          strike.bolt.setLocalPosition(x, 0, z);
+          strike.bolt.setLocalEulerAngles(0, strike.rand() * 360, 0);
+          const instance = strike.bolt.render!.meshInstances[0];
+          if (instance) {
+            instance.mesh =
+              lightningMeshes[Math.floor(strike.rand() * lightningMeshes.length)];
+          }
+          strike.bolt.enabled = true;
+
+          strike.flashDuration = 0.5 + strike.rand() * 0.18;
+          strike.flash = strike.flashDuration;
+          strike.seed = strike.rand() * Math.PI * 2;
+          strike.material.opacity = 1;
+          strike.material.update();
+
+          strike.light.setPosition(x, 1.6, z);
+          strike.next = 3.2 + strike.rand() * 5.5;
+        }
+      }
+
       // Los árboles muertos se balancean muy poco y muy despacio: son troncos
       // secos, no copas frondosas, pero el movimiento los separa del decorado.
       for (const tree of ghostTrees) {
@@ -3253,6 +3540,7 @@ export function buildWorld(app: pc.Application): World {
       emberTexture.destroy();
       wispTexture.destroy();
       pollenTexture.destroy();
+      sparkTexture.destroy();
       skyTexture.destroy();
       barkTexture.destroy();
       mountainRockTexture.destroy();
@@ -3268,6 +3556,7 @@ export function buildWorld(app: pc.Application): World {
       for (const mesh of mountainPeakMeshes) mesh.destroy();
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
+      for (const mesh of lightningMeshes) mesh.destroy();
     }
   };
 }
