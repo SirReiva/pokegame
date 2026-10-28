@@ -318,11 +318,11 @@ export function buildWorld(app: pc.Application): World {
     type: 'directional',
     color: hex('#fff1d6'),
     intensity: 1.65,
-    castShadows: true,
-    shadowResolution: 2048,
-    shadowDistance: 48,
-    normalOffsetBias: 0.04,
-    shadowBias: 0.25
+    castShadows: CONFIG.sun.shadows,
+    shadowResolution: CONFIG.sun.shadowResolution,
+    shadowDistance: CONFIG.sun.shadowDistance,
+    normalOffsetBias: CONFIG.sun.normalOffsetBias,
+    shadowBias: CONFIG.sun.shadowBias
   });
   sun.setLocalEulerAngles(52, -34, 0);
   app.root.addChild(sun);

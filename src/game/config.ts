@@ -93,6 +93,20 @@ export const CONFIG = {
     /** Velocidad (1/s) con la que el sprite se hunde o emerge. */
     submergeLerp: 7,
   },
+  sun: {
+    /**
+     * Sombras direccionales que proyecta el sol sobre el mapa. Desactivadas
+     * por defecto: el mundo ya tiene las sombras de contacto de los actores y
+     * el decal de sombra de la niebla.
+     */
+    shadows: false,
+    /** Resolución del shadow map; más alto = bordes más finos y más coste. */
+    shadowResolution: 2048,
+    /** Distancia (u) a la cámara hasta la que se dibujan sombras del sol. */
+    shadowDistance: 48,
+    normalOffsetBias: 0.04,
+    shadowBias: 0.25,
+  },
   fog: {
     color: [0.73, 0.87, 0.96] as [number, number, number],
     near: 34,

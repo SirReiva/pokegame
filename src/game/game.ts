@@ -255,10 +255,17 @@ export class Game {
     this.activeMapId = map.id;
     this.rebuildSightOccluders();
     this.menuCamera = new CameraRig(this.app, map.spawn);
+    this.refreshSunShadows();
+  }
 
-    // Las sombras del mundo son estáticas (los actores no proyectan sombra
-    // direccional). Renderizarlas una sola vez evita repetir el pase por cada
-    // viewport del splitscreen.
+  /**
+   * Rehornea el shadow map del sol cuando hay sombras activas. El mapa es
+   * estático y los actores no proyectan sombra direccional, así que basta con
+   * renderizarlas una vez por encuadre de cámara en vez de repetir el pase por
+   * cada viewport del splitscreen. Sin sombras activas no hace nada.
+   */
+  private refreshSunShadows(): void {
+    if (!CONFIG.sun.shadows) return;
     const sun = this.app.root.findByName('sun') as pc.Entity | null;
     if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
   }
@@ -428,11 +435,9 @@ export class Game {
       });
     });
 
-    // El mapa es estático, pero el encuadre de las sombras depende de la
-    // cámara. Rehorneamos una vez al empezar para que las bases de ambos
-    // equipos queden cubiertas por el mapa de sombras del primer viewport.
-    const sun = this.app.root.findByName('sun') as pc.Entity | null;
-    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+    // Con sombras del sol activas, el encuadre depende de la cámara: se
+    // rehornean al empezar para cubrir las bases de ambos equipos.
+    this.refreshSunShadows();
 
     this.callbacks.onMatchStats([]);
   }
@@ -446,8 +451,7 @@ export class Game {
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.menuCamera.setEnabled(true);
     for (const npc of this.menuNpcs) npc.setVisible(true);
-    const sun = this.app.root.findByName('sun') as pc.Entity | null;
-    if (sun?.light) sun.light.shadowUpdateMode = pc.SHADOWUPDATE_THISFRAME;
+    this.refreshSunShadows();
     this.callbacks.onMatchStats([]);
   }
 
