@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react';
 import type { MapIndexEntry } from '../game/map';
@@ -16,7 +17,9 @@ import {
   EDITOR_MIN_SIZE,
   TERRAIN_SWATCHES,
   applySnapshot,
+  cellCenter,
   cloneBases,
+  cloneMountains,
   cloneTiles,
   createEditorMap,
   editorMapFromJson,
@@ -36,7 +39,13 @@ import {
   type EditorMeta,
   type EditorSnapshot
 } from '../game/mapEditor';
-import { TERRAIN_IDS, TERRAINS, type Team, type TerrainId } from '../game/terrain';
+import {
+  TERRAIN_IDS,
+  TERRAINS,
+  type MountainRange,
+  type Team,
+  type TerrainId
+} from '../game/terrain';
 import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
 import { KeyPill } from './KeyPill';
@@ -48,7 +57,7 @@ interface MapEditorScreenProps {
   onExit: () => void;
 }
 
-type Tool = 'pencil' | 'fill' | 'rect' | 'eraser' | 'base-blue' | 'base-red';
+type Tool = 'pencil' | 'fill' | 'rect' | 'eraser' | 'mountain' | 'base-blue' | 'base-red';
 
 interface EditorState {
   map: EditorMap | null;
@@ -73,12 +82,21 @@ interface Cell {
 
 const DRAFT_KEY = 'newpoke.map-editor.draft.v1';
 const SIZE_PRESETS = [16, 24, 32, 48, 64, 76];
+const DEFAULT_MOUNTAIN_WIDTH = 2.2;
+const MOUNTAIN_COLOR = 'rgba(216, 199, 170, 0.9)';
+const MOUNTAIN_SELECTED_COLOR = '#7ac74c';
 
 const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
   { id: 'pencil', label: 'Lápiz', key: 'B', title: 'Pinta celdas al arrastrar' },
   { id: 'fill', label: 'Relleno', key: 'G', title: 'Rellena la región conectada del mismo terreno' },
   { id: 'rect', label: 'Rectángulo', key: 'R', title: 'Arrastra para pintar un rectángulo' },
   { id: 'eraser', label: 'Borrador', key: 'E', title: 'Pinta con el terreno de fondo' },
+  {
+    id: 'mountain',
+    label: 'Cordillera',
+    key: 'M',
+    title: 'Haz clic para añadir puntos; doble clic o Enter para cerrar'
+  },
   { id: 'base-blue', label: 'Base azul', key: '1', title: 'Coloca o mueve la base del equipo azul' },
   { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' }
 ];
@@ -157,6 +175,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [viewport, setViewport] = useState({ width: 900, height: 640 });
+  const [mountainWidth, setMountainWidth] = useState(DEFAULT_MOUNTAIN_WIDTH);
+  const [selectedMountain, setSelectedMountain] = useState<number | null>(null);
+  const [draftPoints, setDraftPoints] = useState<Array<[number, number]>>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridAreaRef = useRef<HTMLDivElement | null>(null);
@@ -170,6 +191,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     startRow: number;
     startCol: number;
   } | null>(null);
+  const mountainDragRef = useRef<{
+    rangeIndex: number;
+    pointIndex: number;
+    moved: boolean;
+  } | null>(null);
 
   const map = state.map;
   const mapCols = map?.cols;
@@ -178,6 +204,12 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const commit = (next: EditorState) => {
     stateRef.current = next;
     setState(next);
+  };
+
+  /** Cambia de herramienta y descarta el trazado de cordillera a medias. */
+  const changeTool = (next: Tool) => {
+    if (next !== 'mountain') setDraftPoints([]);
+    setTool(next);
   };
 
   const saveDraft = () => {
@@ -254,6 +286,18 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     updateMap({ ...current, bases }, pushHistory);
   };
 
+  const mutateMountains = (
+    mutate: (mountains: MountainRange[]) => boolean,
+    pushHistory = true
+  ): boolean => {
+    const current = stateRef.current.map;
+    if (!current) return false;
+    const mountains = cloneMountains(current.mountains);
+    if (!mutate(mountains)) return false;
+    updateMap({ ...current, mountains }, pushHistory);
+    return true;
+  };
+
   const updateMeta = (patch: Partial<EditorMeta>) => {
     const current = stateRef.current.map;
     if (!current) return;
@@ -301,12 +345,270 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     return { row, col };
   };
 
+  /** Posición del puntero en coordenadas fraccionarias de celda. */
+  const pointerCellFloat = (
+    event: ReactPointerEvent<HTMLCanvasElement> | ReactMouseEvent<HTMLCanvasElement>
+  ) => {
+    const current = stateRef.current.map;
+    if (!current) return null;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+    return {
+      map: current,
+      col: ((event.clientX - bounds.left) / bounds.width) * current.cols,
+      row: ((event.clientY - bounds.top) / bounds.height) * current.rows,
+      threshold: Math.min(1.5, Math.max(0.35, (10 / bounds.width) * current.cols))
+    };
+  };
+
+  /** Punto de mundo a coordenadas fraccionarias de celda. */
+  const worldToCellFloat = (current: EditorMap, x: number, z: number) => {
+    const halfX = (current.cols * current.meta.tileSize) / 2;
+    const halfZ = (current.rows * current.meta.tileSize) / 2;
+    return {
+      col: (x + halfX) / current.meta.tileSize,
+      row: (z + halfZ) / current.meta.tileSize
+    };
+  };
+
+  const findMountainPoint = (
+    event: ReactPointerEvent<HTMLCanvasElement> | ReactMouseEvent<HTMLCanvasElement>
+  ): { rangeIndex: number; pointIndex: number } | null => {
+    const pointer = pointerCellFloat(event);
+    if (!pointer) return null;
+    let best: { rangeIndex: number; pointIndex: number } | null = null;
+    let bestDistance = pointer.threshold;
+    pointer.map.mountains.forEach((range, rangeIndex) => {
+      range.points.forEach(([x, z], pointIndex) => {
+        const point = worldToCellFloat(pointer.map, x, z);
+        const distance = Math.hypot(point.col - pointer.col, point.row - pointer.row);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          best = { rangeIndex, pointIndex };
+        }
+      });
+    });
+    return best;
+  };
+
+  const distanceToSegment = (
+    px: number,
+    py: number,
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number
+  ): number => {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lengthSquared = dx * dx + dy * dy;
+    const t =
+      lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  };
+
+  const findMountainLine = (event: ReactPointerEvent<HTMLCanvasElement>): number | null => {
+    const pointer = pointerCellFloat(event);
+    if (!pointer) return null;
+    let best: number | null = null;
+    let bestDistance = Infinity;
+    pointer.map.mountains.forEach((range, rangeIndex) => {
+      if (range.points.length < 2) return;
+      const limit =
+        Math.max(0.5, range.width / pointer.map.meta.tileSize / 2) + 0.25;
+      for (let index = 1; index < range.points.length; index++) {
+        const a = worldToCellFloat(pointer.map, ...range.points[index - 1]);
+        const b = worldToCellFloat(pointer.map, ...range.points[index]);
+        const distance = distanceToSegment(pointer.col, pointer.row, a.col, a.row, b.col, b.row);
+        if (distance <= limit && distance < bestDistance) {
+          bestDistance = distance;
+          best = rangeIndex;
+        }
+      }
+    });
+    return best;
+  };
+
+  /** Tramo más cercano y punto de inserción para añadir un vértice. */
+  const findMountainSegment = (
+    event: ReactPointerEvent<HTMLCanvasElement> | ReactMouseEvent<HTMLCanvasElement>
+  ): { rangeIndex: number; insertIndex: number; point: [number, number] } | null => {
+    const pointer = pointerCellFloat(event);
+    if (!pointer) return null;
+    let best: { rangeIndex: number; insertIndex: number; point: [number, number] } | null = null;
+    let bestDistance = Infinity;
+    const halfX = (pointer.map.cols * pointer.map.meta.tileSize) / 2;
+    const halfZ = (pointer.map.rows * pointer.map.meta.tileSize) / 2;
+
+    pointer.map.mountains.forEach((range, rangeIndex) => {
+      if (range.points.length < 2) return;
+      const limit =
+        Math.max(0.5, range.width / pointer.map.meta.tileSize / 2) + 0.25;
+      for (let index = 1; index < range.points.length; index++) {
+        const a = worldToCellFloat(pointer.map, ...range.points[index - 1]);
+        const b = worldToCellFloat(pointer.map, ...range.points[index]);
+        const dx = b.col - a.col;
+        const dy = b.row - a.row;
+        const lengthSquared = dx * dx + dy * dy;
+        const t =
+          lengthSquared === 0
+            ? 0
+            : Math.max(
+                0,
+                Math.min(1, ((pointer.col - a.col) * dx + (pointer.row - a.row) * dy) / lengthSquared)
+              );
+        const closestCol = a.col + t * dx;
+        const closestRow = a.row + t * dy;
+        const distance = Math.hypot(pointer.col - closestCol, pointer.row - closestRow);
+        if (distance <= limit && distance < bestDistance) {
+          bestDistance = distance;
+          best = {
+            rangeIndex,
+            insertIndex: index,
+            point: [
+              closestCol * pointer.map.meta.tileSize - halfX,
+              closestRow * pointer.map.meta.tileSize - halfZ
+            ]
+          };
+        }
+      }
+    });
+    return best;
+  };
+
+  const selectMountain = (index: number) => {
+    const current = stateRef.current.map;
+    const range = current?.mountains[index];
+    if (!current || !range) return;
+    setSelectedMountain(index);
+    setMountainWidth(range.width);
+    setDraftPoints([]);
+    setTool('mountain');
+  };
+
+  const startMountainDraft = () => {
+    setTool('mountain');
+    setSelectedMountain(null);
+    setDraftPoints([]);
+  };
+
+  const finishDraft = () => {
+    const current = stateRef.current.map;
+    if (!current) return;
+    if (!(mountainWidth > 0)) {
+      setToast('El ancho de la cordillera debe ser mayor que cero.');
+      return;
+    }
+    if (draftPoints.length < 2) {
+      setToast('Añade al menos dos puntos para crear una cordillera.');
+      return;
+    }
+    const points = draftPoints.map(([x, z]) => [x, z] as [number, number]);
+    const mountains = [...cloneMountains(current.mountains), { width: mountainWidth, points }];
+    updateMap({ ...current, mountains }, true);
+    setSelectedMountain(mountains.length - 1);
+    setDraftPoints([]);
+    setToast('Cordillera añadida. Arrastra uno de sus puntos para moverlo.');
+  };
+
+  const removeMountain = (index: number) => {
+    const current = stateRef.current.map;
+    if (!current || !current.mountains[index]) return;
+    const mountains = cloneMountains(current.mountains);
+    mountains.splice(index, 1);
+    updateMap({ ...current, mountains }, true);
+    setSelectedMountain(null);
+    setDraftPoints([]);
+    setToast('Cordillera eliminada.');
+  };
+
+  const updateMountainWidth = (width: number) => {
+    setMountainWidth(width);
+    if (selectedMountain === null) return;
+    mutateMountains((mountains) => {
+      const range = mountains[selectedMountain];
+      if (!range || range.width === width) return false;
+      range.width = width;
+      return true;
+    }, false);
+  };
+
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (setupOpen || (event.button !== 0 && event.button !== 2)) return;
     const cell = cellFromPointer(event);
     if (!cell) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+
+    if (tool === 'mountain') {
+      const current = stateRef.current.map;
+      if (!current) return;
+
+      if (event.button === 2) {
+        if (draftPoints.length > 0) {
+          setDraftPoints((previous) => previous.slice(0, -1));
+          return;
+        }
+        const pointHit = findMountainPoint(event);
+        if (pointHit) {
+          const range = current.mountains[pointHit.rangeIndex];
+          if (range && range.points.length <= 2) {
+            setToast('Una cordillera necesita al menos dos puntos.');
+          } else if (range) {
+            const mountains = cloneMountains(current.mountains);
+            mountains[pointHit.rangeIndex].points.splice(pointHit.pointIndex, 1);
+            updateMap({ ...current, mountains }, true);
+            setSelectedMountain(pointHit.rangeIndex);
+            setToast('Punto de la cordillera eliminado.');
+          }
+        } else {
+          setSelectedMountain(null);
+        }
+        return;
+      }
+
+      if (draftPoints.length > 0) {
+        const point = cellCenter(
+          current.cols,
+          current.rows,
+          current.meta.tileSize,
+          cell.row,
+          cell.col
+        );
+        setDraftPoints((previous) => {
+          const last = previous[previous.length - 1];
+          if (last && last[0] === point.x && last[1] === point.z) return previous;
+          return [...previous, [point.x, point.z]];
+        });
+        return;
+      }
+
+      const pointHit = findMountainPoint(event);
+      if (pointHit) {
+        selectMountain(pointHit.rangeIndex);
+        mountainDragRef.current = { ...pointHit, moved: false };
+        return;
+      }
+
+      const lineHit = findMountainLine(event);
+      if (lineHit !== null) {
+        selectMountain(lineHit);
+        return;
+      }
+
+      const point = cellCenter(
+        current.cols,
+        current.rows,
+        current.meta.tileSize,
+        cell.row,
+        cell.col
+      );
+      setSelectedMountain(null);
+      setDraftPoints([[point.x, point.z]]);
+      return;
+    }
 
     const active: Tool = event.button === 2 ? 'eraser' : tool;
     dragRef.current = {
@@ -332,6 +634,23 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         ? previous
         : cell
     );
+
+    const mountainDrag = mountainDragRef.current;
+    if (mountainDrag) {
+      if (!cell) return;
+      const current = stateRef.current.map;
+      if (!current) return;
+      const point = cellCenter(current.cols, current.rows, current.meta.tileSize, cell.row, cell.col);
+      const changed = mutateMountains((mountains) => {
+        const target = mountains[mountainDrag.rangeIndex]?.points[mountainDrag.pointIndex];
+        if (!target || (target[0] === point.x && target[1] === point.z)) return false;
+        target[0] = point.x;
+        target[1] = point.z;
+        return true;
+      }, !mountainDrag.moved);
+      if (changed) mountainDrag.moved = true;
+      return;
+    }
 
     const drag = dragRef.current;
     if (!drag || !cell) return;
@@ -368,6 +687,14 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (mountainDragRef.current) {
+      mountainDragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      return;
+    }
+
     const drag = dragRef.current;
     dragRef.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -389,9 +716,32 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     setRect(null);
   };
 
+  const onDoubleClick = (event: ReactMouseEvent<HTMLCanvasElement>) => {
+    if (tool !== 'mountain') return;
+    if (draftPoints.length >= 2) {
+      event.preventDefault();
+      finishDraft();
+      return;
+    }
+    if (draftPoints.length === 1) return;
+    if (findMountainPoint(event)) return;
+
+    const segment = findMountainSegment(event);
+    const current = stateRef.current.map;
+    if (!segment || !current) return;
+    event.preventDefault();
+    const mountains = cloneMountains(current.mountains);
+    mountains[segment.rangeIndex].points.splice(segment.insertIndex, 0, segment.point);
+    updateMap({ ...current, mountains }, true);
+    setSelectedMountain(segment.rangeIndex);
+    setToast('Punto añadido a la cordillera.');
+  };
+
   const selectTerrain = (next: TerrainId) => {
     setTerrain(next);
-    if (tool === 'eraser' || tool === 'base-blue' || tool === 'base-red') setTool('pencil');
+    if (tool === 'eraser' || tool === 'mountain' || tool === 'base-blue' || tool === 'base-red') {
+      changeTool('pencil');
+    }
   };
 
   const buildJson = (): EditorMapJson | null => {
@@ -437,6 +787,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     commit({ map: imported, undo: [], redo: [] });
     setTerrain(imported.background);
     setZoom(1);
+    setSelectedMountain(null);
+    setDraftPoints([]);
+    setMountainWidth(imported.mountains[0]?.width ?? DEFAULT_MOUNTAIN_WIDTH);
     syncSizeInputs(imported.cols, imported.rows);
     setSetupOpen(false);
     setFormError(null);
@@ -512,6 +865,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     commit({ map: next, undo: [], redo: [] });
     setTerrain(next.background);
     setZoom(1);
+    setSelectedMountain(null);
+    setDraftPoints([]);
+    setMountainWidth(DEFAULT_MOUNTAIN_WIDTH);
     syncSizeInputs(next.cols, next.rows);
     setSetupOpen(false);
     setFormError(null);
@@ -572,13 +928,26 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       }
       if (modifier) return;
 
-      if (key === 'b') setTool('pencil');
-      else if (key === 'g') setTool('fill');
-      else if (key === 'r') setTool('rect');
-      else if (key === 'e') setTool('eraser');
-      else if (key === '1') setTool('base-blue');
-      else if (key === '2') setTool('base-red');
-      else if (key === '+' || key === '=') setZoom((value) => Math.min(8, value * 1.25));
+      const nextTool: Tool | null =
+        key === 'b'
+          ? 'pencil'
+          : key === 'g'
+            ? 'fill'
+            : key === 'r'
+              ? 'rect'
+              : key === 'e'
+                ? 'eraser'
+                : key === 'm'
+                  ? 'mountain'
+                  : key === '1'
+                    ? 'base-blue'
+                    : key === '2'
+                      ? 'base-red'
+                      : null;
+      if (nextTool) {
+        if (nextTool !== 'mountain') setDraftPoints([]);
+        setTool(nextTool);
+      } else if (key === '+' || key === '=') setZoom((value) => Math.min(8, value * 1.25));
       else if (key === '-') setZoom((value) => Math.max(0.25, value / 1.25));
       else if (key === '0') setZoom(1);
     };
@@ -586,6 +955,54 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Los atajos leen la última versión de los manejadores sin re-registrarse.
+  const mountainActionsRef = useRef({ finishDraft, removeMountain });
+  useEffect(() => {
+    mountainActionsRef.current = { finishDraft, removeMountain };
+  });
+
+  // Atajos propios del trazado de cordilleras. Se registran aparte para leer
+  // siempre el borrador y la selección actuales.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (draftPoints.length > 0) {
+          event.preventDefault();
+          setDraftPoints([]);
+        }
+        return;
+      }
+      if (event.key === 'Enter' && tool === 'mountain' && draftPoints.length > 0) {
+        event.preventDefault();
+        mountainActionsRef.current.finishDraft();
+        return;
+      }
+      if (
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        tool === 'mountain' &&
+        draftPoints.length === 0 &&
+        selectedMountain !== null
+      ) {
+        event.preventDefault();
+        mountainActionsRef.current.removeMountain(selectedMountain);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [draftPoints, tool, selectedMountain]);
 
   // --- Autoguardado y medidas ------------------------------------------------
 
@@ -690,6 +1107,43 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       context.stroke();
     }
 
+    // --- Cordilleras ---------------------------------------------------------
+    const halfX = (map.cols * map.meta.tileSize) / 2;
+    const halfZ = (map.rows * map.meta.tileSize) / 2;
+    const toCanvas = (x: number, z: number) => ({
+      x: ((x + halfX) / map.meta.tileSize) * cellSize,
+      y: ((z + halfZ) / map.meta.tileSize) * cellSize
+    });
+
+    const tracePoints = (points: Array<[number, number]>) => {
+      if (points.length === 0) return;
+      const first = toCanvas(points[0][0], points[0][1]);
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      for (let index = 1; index < points.length; index++) {
+        const point = toCanvas(points[index][0], points[index][1]);
+        context.lineTo(point.x, point.y);
+      }
+    };
+
+    const showMountainHandles = tool === 'mountain';
+    map.mountains.forEach((range, index) => {
+      if (range.points.length === 0) return;
+      const selected = showMountainHandles && selectedMountain === index;
+      const bandWidth = Math.max(3, (range.width / map.meta.tileSize) * cellSize);
+      context.save();
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      tracePoints(range.points);
+      context.strokeStyle = selected ? 'rgba(122, 199, 76, 0.4)' : 'rgba(196, 180, 158, 0.36)';
+      context.lineWidth = bandWidth;
+      context.stroke();
+      context.strokeStyle = selected ? MOUNTAIN_SELECTED_COLOR : MOUNTAIN_COLOR;
+      context.lineWidth = Math.max(1, Math.min(2, cellSize * 0.14));
+      context.stroke();
+      context.restore();
+    });
+
     const drawBase = (base: EditorBase) => {
       const centerX = (base.col + 0.5) * cellSize;
       const centerY = (base.row + 0.5) * cellSize;
@@ -714,6 +1168,68 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
     if (map.bases.blue) drawBase(map.bases.blue);
     if (map.bases.red) drawBase(map.bases.red);
+
+    if (showMountainHandles) {
+      map.mountains.forEach((range, index) => {
+        const selected = selectedMountain === index;
+        const radius = selected
+          ? Math.max(3.5, Math.min(8, cellSize * 0.42))
+          : Math.max(2, Math.min(5, cellSize * 0.3));
+        range.points.forEach(([x, z]) => {
+          const point = toCanvas(x, z);
+          context.beginPath();
+          context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+          context.fillStyle = selected ? MOUNTAIN_SELECTED_COLOR : 'rgba(235, 226, 209, 0.88)';
+          context.fill();
+          context.lineWidth = Math.max(1, radius * 0.35);
+          context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
+          context.stroke();
+        });
+      });
+    }
+
+    if (showMountainHandles && draftPoints.length > 0) {
+      const preview = hover
+        ? toCanvas(
+            (hover.col + 0.5) * map.meta.tileSize - halfX,
+            (hover.row + 0.5) * map.meta.tileSize - halfZ
+          )
+        : null;
+      const first = toCanvas(draftPoints[0][0], draftPoints[0][1]);
+
+      context.save();
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      if (draftPoints.length >= 2 && mountainWidth > 0) {
+        tracePoints(draftPoints);
+        context.strokeStyle = 'rgba(122, 199, 76, 0.24)';
+        context.lineWidth = Math.max(3, (mountainWidth / map.meta.tileSize) * cellSize);
+        context.stroke();
+      }
+      context.setLineDash([Math.max(4, cellSize * 0.4), Math.max(3, cellSize * 0.28)]);
+      context.strokeStyle = MOUNTAIN_SELECTED_COLOR;
+      context.lineWidth = Math.max(1.5, Math.min(2.5, cellSize * 0.16));
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      for (let index = 1; index < draftPoints.length; index++) {
+        const point = toCanvas(draftPoints[index][0], draftPoints[index][1]);
+        context.lineTo(point.x, point.y);
+      }
+      if (preview) context.lineTo(preview.x, preview.y);
+      context.stroke();
+      context.setLineDash([]);
+      draftPoints.forEach(([x, z]) => {
+        const point = toCanvas(x, z);
+        context.beginPath();
+        context.arc(point.x, point.y, Math.max(3, Math.min(7, cellSize * 0.36)), 0, Math.PI * 2);
+        context.fillStyle = MOUNTAIN_SELECTED_COLOR;
+        context.fill();
+        context.lineWidth = Math.max(1, cellSize * 0.08);
+        context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
+        context.stroke();
+      });
+      context.restore();
+    }
 
     if (rect) {
       const rowA = Math.min(rect.rowA, rect.rowB);
@@ -749,9 +1265,22 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         cellSize - 1
       );
     }
-  }, [map, cellSize, hover, rect, terrain]);
+  }, [
+    map,
+    cellSize,
+    hover,
+    rect,
+    terrain,
+    tool,
+    selectedMountain,
+    draftPoints,
+    mountainWidth
+  ]);
 
   const activeTool = TOOLS.find((entry) => entry.id === tool);
+  const selectedRange =
+    map && selectedMountain !== null ? map.mountains[selectedMountain] : undefined;
+  const mountainWidthValue = selectedRange?.width ?? mountainWidth;
   const canExport = map !== null && issues.length === 0;
 
   return (
@@ -820,7 +1349,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                   type="button"
                   title={`${entry.title} (${entry.key})`}
                   className={btnClass(tool === entry.id ? 'primary' : 'ghost', 'small')}
-                  onClick={() => setTool(entry.id)}
+                  onClick={() => changeTool(entry.id)}
                 >
                   {entry.label}
                 </button>
@@ -939,6 +1468,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
+                onDoubleClick={onDoubleClick}
                 onPointerLeave={() => setHover(null)}
                 onContextMenu={(event) => event.preventDefault()}
               />
@@ -966,7 +1496,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             </span>
             <span className="ml-auto">
               <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno · <KeyPill>R</KeyPill>{' '}
-              rectángulo · <KeyPill>E</KeyPill> borrador · <KeyPill>Ctrl+Z</KeyPill> deshacer
+              rectángulo · <KeyPill>E</KeyPill> borrador · <KeyPill>M</KeyPill> cordillera ·{' '}
+              <KeyPill>Ctrl+Z</KeyPill> deshacer
             </span>
           </footer>
         </main>
@@ -1064,15 +1595,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               Redimensionar rejilla
             </button>
             <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
-              Redimensionar conserva la esquina noroeste y rellena lo nuevo con el terreno de fondo.
+              Redimensionar conserva la esquina noroeste, rellena lo nuevo con el terreno de fondo y
+              desplaza las cordilleras con la rejilla.
             </p>
-            {map && map.mountains.length > 0 && (
-              <p className="mt-2 rounded-[9px] border border-line bg-white/[0.03] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-[#a9bccf]">
-                Conserva {map.mountains.length}{' '}
-                {map.mountains.length === 1 ? 'cordillera importada' : 'cordilleras importadas'}.
-                No se editan aquí, pero se mantienen al exportar.
-              </p>
-            )}
           </section>
 
           <section>
@@ -1101,18 +1626,136 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               <button
                 type="button"
                 className={`${btnClass('ghost', 'tiny')} flex-1`}
-                onClick={() => setTool('base-blue')}
+                onClick={() => changeTool('base-blue')}
               >
                 Mover azul
               </button>
               <button
                 type="button"
                 className={`${btnClass('ghost', 'tiny')} flex-1`}
-                onClick={() => setTool('base-red')}
+                onClick={() => changeTool('base-red')}
               >
                 Mover roja
               </button>
             </div>
+          </section>
+
+          <section>
+            <h2 className={sectionTitle}>Cordilleras</h2>
+            <div className="flex flex-col gap-1.5">
+              {map && map.mountains.length > 0 ? (
+                map.mountains.map((range, index) => {
+                  const selected = tool === 'mountain' && selectedMountain === index;
+                  return (
+                    <div
+                      key={`mountain-${index}`}
+                      className={`flex items-center gap-1.5 rounded-[9px] border px-2 py-1.5 ${
+                        selected
+                          ? 'border-accent/60 bg-accent/10'
+                          : 'border-line bg-white/[0.03]'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 cursor-pointer text-left"
+                        onClick={() => selectMountain(index)}
+                        title="Seleccionar la cordillera para mover sus puntos"
+                      >
+                        <span className="block truncate text-[0.74rem] text-[#d7e2ee]">
+                          Cordillera {index + 1}
+                        </span>
+                        <span className="block font-mono text-[0.6rem] text-[#8fa3b8]">
+                          {range.points.length}{' '}
+                          {range.points.length === 1 ? 'punto' : 'puntos'} · ancho{' '}
+                          {Math.round(range.width * 10) / 10}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-[0.85rem] text-muted transition-colors hover:border-[#ff5c5c]/40 hover:bg-[#ff5c5c]/10 hover:text-[#ffb2b5]"
+                        onClick={() => removeMountain(index)}
+                        title="Eliminar cordillera"
+                        aria-label={`Eliminar cordillera ${index + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="rounded-[9px] border border-line bg-white/[0.03] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-muted">
+                  Sin cordilleras. Usa «Dibujar cordillera» y haz clic en la rejilla para trazar
+                  una.
+                </p>
+              )}
+            </div>
+
+            <label className={`${fieldClass} mt-2`}>
+              <span>
+                {selectedMountain !== null
+                  ? `Ancho de la cordillera ${selectedMountain + 1}`
+                  : 'Ancho de la nueva cordillera'}
+              </span>
+              <input
+                className={inputClass}
+                type="number"
+                min={0.2}
+                step={0.1}
+                value={mountainWidthValue}
+                onChange={(event) => updateMountainWidth(Number(event.target.value))}
+                disabled={!map}
+              />
+            </label>
+
+            <div className="mt-2 flex gap-1.5">
+              <button
+                type="button"
+                className={`${btnClass('ghost', 'tiny')} flex-1`}
+                onClick={startMountainDraft}
+                disabled={!map}
+              >
+                Dibujar cordillera
+              </button>
+              {selectedMountain !== null && (
+                <button
+                  type="button"
+                  className={btnClass('ghost', 'tiny')}
+                  onClick={() => removeMountain(selectedMountain)}
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
+
+            {draftPoints.length > 0 && (
+              <div className="mt-2 rounded-[9px] border border-accent/40 bg-accent/[0.08] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-[#d7e2ee]">
+                Trazando cordillera · {draftPoints.length}{' '}
+                {draftPoints.length === 1 ? 'punto' : 'puntos'}
+                <div className="mt-1.5 flex gap-1.5">
+                  <button
+                    type="button"
+                    className={`${btnClass('primary', 'tiny')} flex-1`}
+                    onClick={finishDraft}
+                    disabled={draftPoints.length < 2}
+                  >
+                    Terminar
+                  </button>
+                  <button
+                    type="button"
+                    className={`${btnClass('ghost', 'tiny')} flex-1`}
+                    onClick={() => setDraftPoints([])}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
+              Haz clic para añadir puntos y doble clic o <KeyPill>Enter</KeyPill> para cerrar.
+              Arrastra un punto para moverlo; doble clic sobre la línea añade uno y el clic derecho
+              sobre un punto lo quita.
+            </p>
           </section>
 
           <section>
@@ -1148,13 +1791,17 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 <KeyPill>1</KeyPill> base azul · <KeyPill>2</KeyPill> base roja
               </li>
               <li className="flex items-center gap-2">
+                <KeyPill>M</KeyPill> cordillera · <KeyPill>Enter</KeyPill> cerrar trazado
+              </li>
+              <li className="flex items-center gap-2">
                 <KeyPill>Ctrl+Z</KeyPill> deshacer · <KeyPill>Ctrl+Y</KeyPill> rehacer
               </li>
               <li className="flex items-center gap-2">
                 <KeyPill>+ / −</KeyPill> zoom · <KeyPill>0</KeyPill> ajustar
               </li>
               <li className="text-[0.68rem] leading-[1.45] text-muted">
-                Clic derecho pinta con el terreno de fondo. El borrador también usa el fondo.
+                Clic derecho pinta con el terreno de fondo. Con la herramienta Cordillera, quita
+                el último punto del trazado o el punto bajo el cursor.
               </li>
             </ul>
           </section>

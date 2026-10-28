@@ -73,7 +73,7 @@ export interface EditorMap {
   background: TerrainId;
   tiles: TerrainId[][];
   bases: EditorBases;
-  /** Cordilleras importadas. El editor no las edita, pero las conserva al exportar. */
+  /** Cordilleras del mapa, en coordenadas de mundo. */
   mountains: MountainRange[];
   /** Punto de cámara del menú importado. Si falta, se exporta la base azul. */
   spawn?: { x: number; z: number };
@@ -85,6 +85,7 @@ export interface EditorSnapshot {
   rows: number;
   tiles: TerrainId[][];
   bases: EditorBases;
+  mountains: MountainRange[];
 }
 
 export interface EditorMapJson {
@@ -119,7 +120,7 @@ export function cloneBases(bases: EditorBases): EditorBases {
   return next;
 }
 
-function cloneMountains(mountains: MountainRange[] | undefined): MountainRange[] {
+export function cloneMountains(mountains: MountainRange[] | undefined): MountainRange[] {
   return (mountains ?? []).map((range) => ({
     width: range.width,
     points: range.points.map(([x, z]) => [x, z] as [number, number])
@@ -144,7 +145,8 @@ export function snapshotOf(map: EditorMap): EditorSnapshot {
     cols: map.cols,
     rows: map.rows,
     tiles: cloneTiles(map.tiles),
-    bases: cloneBases(map.bases)
+    bases: cloneBases(map.bases),
+    mountains: cloneMountains(map.mountains)
   };
 }
 
@@ -154,7 +156,8 @@ export function applySnapshot(map: EditorMap, snapshot: EditorSnapshot): EditorM
     cols: snapshot.cols,
     rows: snapshot.rows,
     tiles: cloneTiles(snapshot.tiles),
-    bases: cloneBases(snapshot.bases)
+    bases: cloneBases(snapshot.bases),
+    mountains: cloneMountains(snapshot.mountains)
   };
 }
 
@@ -223,7 +226,19 @@ export function resizeEditorMap(map: EditorMap, cols: number, rows: number): Edi
     };
   }
 
-  return { ...map, cols: nextCols, rows: nextRows, tiles, bases };
+  // Las cordilleras viven en coordenadas de mundo y el origen del mapa está en
+  // su centro, así que al cambiar el tamaño hay que desplazarlas lo mismo que
+  // se desplazan las celdas para que sigan alineadas con el terreno.
+  const shiftX = ((nextCols - map.cols) * map.meta.tileSize) / 2;
+  const shiftZ = ((nextRows - map.rows) * map.meta.tileSize) / 2;
+  const mountains: MountainRange[] = map.mountains.map((range) => ({
+    width: range.width,
+    points: range.points.map(
+      ([x, z]) => [round(x - shiftX), round(z - shiftZ)] as [number, number]
+    )
+  }));
+
+  return { ...map, cols: nextCols, rows: nextRows, tiles, bases, mountains };
 }
 
 export function paintCellInPlace(
@@ -481,6 +496,17 @@ export function validateEditorMap(map: EditorMap): string[] {
   }
   if (!map.bases.blue) issues.push('Falta la base azul.');
   if (!map.bases.red) issues.push('Falta la base roja.');
+  map.mountains.forEach((range, index) => {
+    if (!(range.width > 0)) {
+      issues.push(`El ancho de la cordillera ${index + 1} debe ser mayor que cero.`);
+    }
+    if (range.points.length < 2) {
+      issues.push(`La cordillera ${index + 1} necesita al menos dos puntos.`);
+    }
+    if (range.points.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z))) {
+      issues.push(`La cordillera ${index + 1} tiene un punto no válido.`);
+    }
+  });
   if (
     map.tiles.length !== map.rows ||
     map.tiles.some(

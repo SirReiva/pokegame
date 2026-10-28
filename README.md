@@ -109,11 +109,12 @@ La pantalla de equipos incluye el botón **Editor de mapas**; también se abre d
 1. **Dimensiones**: al entrar sin borrador pide id, nombre, ancho y alto de la rejilla (8–128 cada uno), `tileSize`, `waterHeight` y terreno de fondo. También puede cargar un mapa existente de `public/maps/` o importar un archivo `.json`.
 2. **Dibujo**: rejilla 2D con los quince terrenos. Herramientas de lápiz (interpola al arrastrar para no dejar huecos), relleno, rectángulo y borrador. El clic derecho borra. `Ctrl+Z` / `Ctrl+Y` deshacen y rehacen.
 3. **Bases**: las herramientas de base azul y roja (teclas `1` y `2`) colocan cada respawn en el centro de una celda. El radio se ajusta en el panel derecho y se aplica a ambas bases.
-4. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre o sin las dos bases.
+4. **Cordilleras**: la herramienta Cordillera (`M`) traza una polilínea haciendo clic en las celdas. El doble clic o `Enter` cierra el trazado y el clic derecho quita el último punto. Los puntos se pueden arrastrar y las líneas admiten nuevos vértices con doble clic; el clic derecho sobre un punto lo elimina. El ancho se ajusta por cordillera en el panel derecho y `Supr` borra la seleccionada.
+5. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre, sin las dos bases o con cordilleras incompletas.
 
 El borrador se guarda en `localStorage` (`newpoke.map-editor.draft.v1`) y se recupera al volver a abrir el editor. Para jugar el mapa, guarda el archivo en `public/maps/<id>.json` y añade su entrada a `public/maps/index.json`.
 
-El editor no dibuja cordilleras (`mountains`) ni cambia el `spawn` de cámara, pero conserva ambos al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
+El editor dibuja y edita cordilleras (`mountains`), pero no cambia el `spawn` de cámara, que conserva al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos; al redimensionar, las cordilleras se desplazan con el terreno. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
 
 ## Multijugador local
 
@@ -405,7 +406,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
 - En splitscreen, el mundo se dibuja una vez por vista. Con 7-8 jugadores el rendimiento baja de forma notable, sobre todo en equipos modestos.
-- El editor de mapas solo edita celdas, bases y metadatos; las cordilleras y el `spawn` de cámara siguen siendo manuales en el JSON.
+- El editor de mapas edita celdas, bases, cordilleras y metadatos; el `spawn` de cámara sigue siendo manual en el JSON.
 
 ## Créditos y licencia
 
