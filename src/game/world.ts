@@ -76,6 +76,13 @@ function zoneEmitterExtents(
  */
 const SPAWN_TREES = false;
 
+/**
+ * Escala vertical de los picos de cordillera. 1 = altura original; 0.7 deja las
+ * crestas un 30% más bajas sin tocar su huella en el suelo (colliders, visión y
+ * anchura del trazado siguen igual).
+ */
+const MOUNTAIN_HEIGHT_SCALE = 0.7;
+
 function hex(value: string): pc.Color {
   const n = Number.parseInt(value.replace('#', ''), 16);
   return new pc.Color(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
@@ -771,7 +778,11 @@ export function buildWorld(app: pc.Application): World {
       const peak = new pc.Entity(`mountain-${rangeIndex}-${i}`);
       peak.setLocalPosition(x + jitterX, 0.02, z + jitterZ);
       peak.setLocalEulerAngles(0, rand() * 360, 0);
-      peak.setLocalScale(scale, scale * (0.9 + rand() * 0.45), scale);
+      peak.setLocalScale(
+        scale,
+        scale * (0.9 + rand() * 0.45) * MOUNTAIN_HEIGHT_SCALE,
+        scale
+      );
       peak.addComponent('render');
       peak.render!.castShadows = true;
       peak.render!.receiveShadows = true;
