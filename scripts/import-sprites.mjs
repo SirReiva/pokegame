@@ -488,7 +488,7 @@ async function importPokemon(pokemon) {
     );
 
     animations[slug(action)] = {
-      sheet: `/sprites/${pokemon.id}/${file}`,
+      sheet: `sprites/${pokemon.id}/${file}`,
       frameWidth: meta.frameWidth,
       frameHeight: meta.frameHeight,
       columns,
@@ -516,7 +516,7 @@ async function importPokemon(pokemon) {
       shadowSize,
       source: `${SOURCE}#/${pokemon.id}`,
       credits,
-      portrait: `/sprites/${pokemon.id}/${portraitFile}`,
+      portrait: `sprites/${pokemon.id}/${portraitFile}`,
       animations
     }
   };

@@ -1,3 +1,4 @@
+import { publicUrl } from '../game/publicUrl';
 import type { PokemonEntry } from '../game/types';
 
 interface PokemonPortraitProps {
@@ -20,7 +21,7 @@ export function PokemonPortrait({
 }: PokemonPortraitProps) {
   return (
     <img
-      src={entry.portrait}
+      src={publicUrl(entry.portrait)}
       alt={entry.name}
       width={height}
       height={height}

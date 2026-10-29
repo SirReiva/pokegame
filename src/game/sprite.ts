@@ -1,6 +1,7 @@
 import * as pc from 'playcanvas';
 import { ABILITIES, MOVESETS } from './abilities';
 import { CONFIG, DEG, RAD } from './config';
+import { publicUrl } from './publicUrl';
 import type {
   AnimationName,
   PokemonEntry,
@@ -189,12 +190,15 @@ function buildTightSheet(
 }
 
 export function loadImage(url: string): Promise<HTMLImageElement> {
+  // El manifiesto puede traer rutas absolutas (`/sprites/...`); se adaptan al
+  // `base` para que funcionen también bajo el subdirectorio de GitHub Pages.
+  const resolved = publicUrl(url);
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`No se pudo cargar ${url}`));
-    image.src = url;
+    image.onerror = () => reject(new Error(`No se pudo cargar ${resolved}`));
+    image.src = resolved;
   });
 }
 

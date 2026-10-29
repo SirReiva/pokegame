@@ -71,10 +71,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0001/portrait.png",
+      "portrait": "sprites/0001/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0001/idle.png",
+          "sheet": "sprites/0001/idle.png",
           "frameWidth": 32,
           "frameHeight": 40,
           "columns": 3,
@@ -260,7 +260,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0001/walk.png",
+          "sheet": "sprites/0001/walk.png",
           "frameWidth": 40,
           "frameHeight": 40,
           "columns": 6,
@@ -549,7 +549,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0001/attack.png",
+          "sheet": "sprites/0001/attack.png",
           "frameWidth": 64,
           "frameHeight": 72,
           "columns": 11,
@@ -1063,7 +1063,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0001/hurt.png",
+          "sheet": "sprites/0001/hurt.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 2,
@@ -1208,7 +1208,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0001/faint.png",
+          "sheet": "sprites/0001/faint.png",
           "frameWidth": 32,
           "frameHeight": 24,
           "columns": 4,
@@ -1489,10 +1489,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0004/portrait.png",
+      "portrait": "sprites/0004/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0004/idle.png",
+          "sheet": "sprites/0004/idle.png",
           "frameWidth": 32,
           "frameHeight": 40,
           "columns": 4,
@@ -1719,7 +1719,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0004/walk.png",
+          "sheet": "sprites/0004/walk.png",
           "frameWidth": 32,
           "frameHeight": 32,
           "columns": 4,
@@ -1946,7 +1946,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0004/attack.png",
+          "sheet": "sprites/0004/attack.png",
           "frameWidth": 64,
           "frameHeight": 64,
           "columns": 11,
@@ -2450,7 +2450,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0004/hurt.png",
+          "sheet": "sprites/0004/hurt.png",
           "frameWidth": 48,
           "frameHeight": 56,
           "columns": 2,
@@ -2595,7 +2595,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0004/faint.png",
+          "sheet": "sprites/0004/faint.png",
           "frameWidth": 32,
           "frameHeight": 32,
           "columns": 4,
@@ -2836,10 +2836,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0007/portrait.png",
+      "portrait": "sprites/0007/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0007/idle.png",
+          "sheet": "sprites/0007/idle.png",
           "frameWidth": 32,
           "frameHeight": 32,
           "columns": 8,
@@ -3230,7 +3230,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0007/walk.png",
+          "sheet": "sprites/0007/walk.png",
           "frameWidth": 32,
           "frameHeight": 32,
           "columns": 4,
@@ -3457,7 +3457,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0007/attack.png",
+          "sheet": "sprites/0007/attack.png",
           "frameWidth": 64,
           "frameHeight": 72,
           "columns": 10,
@@ -3915,7 +3915,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0007/hurt.png",
+          "sheet": "sprites/0007/hurt.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 2,
@@ -4060,7 +4060,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0007/faint.png",
+          "sheet": "sprites/0007/faint.png",
           "frameWidth": 40,
           "frameHeight": 32,
           "columns": 4,
@@ -4341,10 +4341,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0025/portrait.png",
+      "portrait": "sprites/0025/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0025/idle.png",
+          "sheet": "sprites/0025/idle.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 6,
@@ -4653,7 +4653,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0025/walk.png",
+          "sheet": "sprites/0025/walk.png",
           "frameWidth": 32,
           "frameHeight": 40,
           "columns": 4,
@@ -4880,7 +4880,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0025/attack.png",
+          "sheet": "sprites/0025/attack.png",
           "frameWidth": 80,
           "frameHeight": 80,
           "columns": 10,
@@ -5338,7 +5338,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0025/hurt.png",
+          "sheet": "sprites/0025/hurt.png",
           "frameWidth": 48,
           "frameHeight": 64,
           "columns": 2,
@@ -5483,7 +5483,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0025/faint.png",
+          "sheet": "sprites/0025/faint.png",
           "frameWidth": 40,
           "frameHeight": 40,
           "columns": 4,
@@ -5710,7 +5710,7 @@
           ]
         },
         "quickstrike": {
-          "sheet": "/sprites/0025/quickstrike.png",
+          "sheet": "sprites/0025/quickstrike.png",
           "frameWidth": 120,
           "frameHeight": 136,
           "columns": 10,
@@ -6183,7 +6183,7 @@
           ]
         },
         "shock": {
-          "sheet": "/sprites/0025/shock.png",
+          "sheet": "sprites/0025/shock.png",
           "frameWidth": 48,
           "frameHeight": 64,
           "columns": 13,
@@ -6834,10 +6834,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0133/portrait.png",
+      "portrait": "sprites/0133/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0133/idle.png",
+          "sheet": "sprites/0133/idle.png",
           "frameWidth": 24,
           "frameHeight": 32,
           "columns": 2,
@@ -6982,7 +6982,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0133/walk.png",
+          "sheet": "sprites/0133/walk.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 7,
@@ -7332,7 +7332,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0133/attack.png",
+          "sheet": "sprites/0133/attack.png",
           "frameWidth": 64,
           "frameHeight": 72,
           "columns": 11,
@@ -7831,7 +7831,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0133/hurt.png",
+          "sheet": "sprites/0133/hurt.png",
           "frameWidth": 48,
           "frameHeight": 48,
           "columns": 2,
@@ -7976,7 +7976,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0133/faint.png",
+          "sheet": "sprites/0133/faint.png",
           "frameWidth": 40,
           "frameHeight": 32,
           "columns": 4,
@@ -8277,10 +8277,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0448/portrait.png",
+      "portrait": "sprites/0448/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0448/idle.png",
+          "sheet": "sprites/0448/idle.png",
           "frameWidth": 32,
           "frameHeight": 56,
           "columns": 6,
@@ -8589,7 +8589,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0448/walk.png",
+          "sheet": "sprites/0448/walk.png",
           "frameWidth": 32,
           "frameHeight": 48,
           "columns": 4,
@@ -8816,7 +8816,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0448/attack.png",
+          "sheet": "sprites/0448/attack.png",
           "frameWidth": 64,
           "frameHeight": 72,
           "columns": 15,
@@ -9494,7 +9494,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0448/hurt.png",
+          "sheet": "sprites/0448/hurt.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 2,
@@ -9639,7 +9639,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0448/faint.png",
+          "sheet": "sprites/0448/faint.png",
           "frameWidth": 32,
           "frameHeight": 48,
           "columns": 4,
@@ -9866,7 +9866,7 @@
           ]
         },
         "quickstrike": {
-          "sheet": "/sprites/0448/quickstrike.png",
+          "sheet": "sprites/0448/quickstrike.png",
           "frameWidth": 112,
           "frameHeight": 120,
           "columns": 15,
@@ -10628,10 +10628,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0658/portrait.png",
+      "portrait": "sprites/0658/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0658/idle.png",
+          "sheet": "sprites/0658/idle.png",
           "frameWidth": 32,
           "frameHeight": 56,
           "columns": 7,
@@ -10981,7 +10981,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0658/walk.png",
+          "sheet": "sprites/0658/walk.png",
           "frameWidth": 32,
           "frameHeight": 48,
           "columns": 4,
@@ -11208,7 +11208,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0658/attack.png",
+          "sheet": "sprites/0658/attack.png",
           "frameWidth": 64,
           "frameHeight": 72,
           "columns": 12,
@@ -11753,7 +11753,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0658/hurt.png",
+          "sheet": "sprites/0658/hurt.png",
           "frameWidth": 40,
           "frameHeight": 64,
           "columns": 2,
@@ -11898,7 +11898,7 @@
           ]
         },
         "quickstrike": {
-          "sheet": "/sprites/0658/quickstrike.png",
+          "sheet": "sprites/0658/quickstrike.png",
           "frameWidth": 112,
           "frameHeight": 120,
           "columns": 14,
@@ -12598,10 +12598,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0150/portrait.png",
+      "portrait": "sprites/0150/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0150/idle.png",
+          "sheet": "sprites/0150/idle.png",
           "frameWidth": 32,
           "frameHeight": 64,
           "columns": 8,
@@ -12992,7 +12992,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0150/walk.png",
+          "sheet": "sprites/0150/walk.png",
           "frameWidth": 48,
           "frameHeight": 56,
           "columns": 6,
@@ -13301,7 +13301,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0150/attack.png",
+          "sheet": "sprites/0150/attack.png",
           "frameWidth": 80,
           "frameHeight": 88,
           "columns": 11,
@@ -13815,7 +13815,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0150/hurt.png",
+          "sheet": "sprites/0150/hurt.png",
           "frameWidth": 48,
           "frameHeight": 72,
           "columns": 2,
@@ -13960,7 +13960,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0150/faint.png",
+          "sheet": "sprites/0150/faint.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 4,
@@ -14247,10 +14247,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0151/portrait.png",
+      "portrait": "sprites/0151/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0151/idle.png",
+          "sheet": "sprites/0151/idle.png",
           "frameWidth": 32,
           "frameHeight": 56,
           "columns": 4,
@@ -14477,7 +14477,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0151/walk.png",
+          "sheet": "sprites/0151/walk.png",
           "frameWidth": 40,
           "frameHeight": 64,
           "columns": 6,
@@ -14786,7 +14786,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0151/attack.png",
+          "sheet": "sprites/0151/attack.png",
           "frameWidth": 64,
           "frameHeight": 88,
           "columns": 14,
@@ -15413,7 +15413,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0151/hurt.png",
+          "sheet": "sprites/0151/hurt.png",
           "frameWidth": 40,
           "frameHeight": 64,
           "columns": 2,
@@ -15558,7 +15558,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0151/faint.png",
+          "sheet": "sprites/0151/faint.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 4,
@@ -15818,10 +15818,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0095/portrait.png",
+      "portrait": "sprites/0095/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0095/idle.png",
+          "sheet": "sprites/0095/idle.png",
           "frameWidth": 96,
           "frameHeight": 104,
           "columns": 4,
@@ -16048,7 +16048,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0095/walk.png",
+          "sheet": "sprites/0095/walk.png",
           "frameWidth": 88,
           "frameHeight": 112,
           "columns": 4,
@@ -16275,7 +16275,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0095/attack.png",
+          "sheet": "sprites/0095/attack.png",
           "frameWidth": 128,
           "frameHeight": 152,
           "columns": 11,
@@ -16784,7 +16784,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0095/hurt.png",
+          "sheet": "sprites/0095/hurt.png",
           "frameWidth": 80,
           "frameHeight": 88,
           "columns": 2,
@@ -16962,10 +16962,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0123/portrait.png",
+      "portrait": "sprites/0123/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0123/idle.png",
+          "sheet": "sprites/0123/idle.png",
           "frameWidth": 32,
           "frameHeight": 48,
           "columns": 4,
@@ -17192,7 +17192,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0123/walk.png",
+          "sheet": "sprites/0123/walk.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 4,
@@ -17419,7 +17419,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0123/attack.png",
+          "sheet": "sprites/0123/attack.png",
           "frameWidth": 72,
           "frameHeight": 80,
           "columns": 10,
@@ -17892,7 +17892,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0123/hurt.png",
+          "sheet": "sprites/0123/hurt.png",
           "frameWidth": 48,
           "frameHeight": 56,
           "columns": 2,
@@ -18071,10 +18071,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0144/portrait.png",
+      "portrait": "sprites/0144/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0144/idle.png",
+          "sheet": "sprites/0144/idle.png",
           "frameWidth": 88,
           "frameHeight": 88,
           "columns": 4,
@@ -18301,7 +18301,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0144/walk.png",
+          "sheet": "sprites/0144/walk.png",
           "frameWidth": 88,
           "frameHeight": 88,
           "columns": 4,
@@ -18528,7 +18528,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0144/attack.png",
+          "sheet": "sprites/0144/attack.png",
           "frameWidth": 88,
           "frameHeight": 120,
           "columns": 10,
@@ -19001,7 +19001,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0144/hurt.png",
+          "sheet": "sprites/0144/hurt.png",
           "frameWidth": 64,
           "frameHeight": 120,
           "columns": 2,
@@ -19180,10 +19180,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0145/portrait.png",
+      "portrait": "sprites/0145/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0145/idle.png",
+          "sheet": "sprites/0145/idle.png",
           "frameWidth": 56,
           "frameHeight": 96,
           "columns": 4,
@@ -19410,7 +19410,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0145/walk.png",
+          "sheet": "sprites/0145/walk.png",
           "frameWidth": 56,
           "frameHeight": 96,
           "columns": 4,
@@ -19637,7 +19637,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0145/attack.png",
+          "sheet": "sprites/0145/attack.png",
           "frameWidth": 80,
           "frameHeight": 88,
           "columns": 11,
@@ -20121,7 +20121,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0145/hurt.png",
+          "sheet": "sprites/0145/hurt.png",
           "frameWidth": 80,
           "frameHeight": 104,
           "columns": 2,
@@ -20299,10 +20299,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0146/portrait.png",
+      "portrait": "sprites/0146/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0146/idle.png",
+          "sheet": "sprites/0146/idle.png",
           "frameWidth": 80,
           "frameHeight": 96,
           "columns": 4,
@@ -20529,7 +20529,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0146/walk.png",
+          "sheet": "sprites/0146/walk.png",
           "frameWidth": 80,
           "frameHeight": 96,
           "columns": 4,
@@ -20756,7 +20756,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0146/attack.png",
+          "sheet": "sprites/0146/attack.png",
           "frameWidth": 104,
           "frameHeight": 136,
           "columns": 14,
@@ -21393,7 +21393,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0146/hurt.png",
+          "sheet": "sprites/0146/hurt.png",
           "frameWidth": 80,
           "frameHeight": 120,
           "columns": 2,
@@ -21570,10 +21570,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0243/portrait.png",
+      "portrait": "sprites/0243/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0243/idle.png",
+          "sheet": "sprites/0243/idle.png",
           "frameWidth": 56,
           "frameHeight": 48,
           "columns": 14,
@@ -22210,7 +22210,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0243/walk.png",
+          "sheet": "sprites/0243/walk.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 4,
@@ -22437,7 +22437,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0243/attack.png",
+          "sheet": "sprites/0243/attack.png",
           "frameWidth": 72,
           "frameHeight": 80,
           "columns": 13,
@@ -23018,7 +23018,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0243/hurt.png",
+          "sheet": "sprites/0243/hurt.png",
           "frameWidth": 48,
           "frameHeight": 64,
           "columns": 2,
@@ -23163,7 +23163,7 @@
           ]
         },
         "quickstrike": {
-          "sheet": "/sprites/0243/quickstrike.png",
+          "sheet": "sprites/0243/quickstrike.png",
           "frameWidth": 120,
           "frameHeight": 120,
           "columns": 13,
@@ -23744,7 +23744,7 @@
           ]
         },
         "shock": {
-          "sheet": "/sprites/0243/shock.png",
+          "sheet": "sprites/0243/shock.png",
           "frameWidth": 64,
           "frameHeight": 88,
           "columns": 13,
@@ -24373,10 +24373,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0244/portrait.png",
+      "portrait": "sprites/0244/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0244/idle.png",
+          "sheet": "sprites/0244/idle.png",
           "frameWidth": 48,
           "frameHeight": 56,
           "columns": 14,
@@ -25013,7 +25013,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0244/walk.png",
+          "sheet": "sprites/0244/walk.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 4,
@@ -25240,7 +25240,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0244/attack.png",
+          "sheet": "sprites/0244/attack.png",
           "frameWidth": 72,
           "frameHeight": 88,
           "columns": 11,
@@ -25754,7 +25754,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0244/hurt.png",
+          "sheet": "sprites/0244/hurt.png",
           "frameWidth": 48,
           "frameHeight": 56,
           "columns": 2,
@@ -25932,10 +25932,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0245/portrait.png",
+      "portrait": "sprites/0245/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0245/idle.png",
+          "sheet": "sprites/0245/idle.png",
           "frameWidth": 48,
           "frameHeight": 48,
           "columns": 14,
@@ -26572,7 +26572,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0245/walk.png",
+          "sheet": "sprites/0245/walk.png",
           "frameWidth": 40,
           "frameHeight": 48,
           "columns": 4,
@@ -26799,7 +26799,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0245/attack.png",
+          "sheet": "sprites/0245/attack.png",
           "frameWidth": 72,
           "frameHeight": 88,
           "columns": 11,
@@ -27293,7 +27293,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0245/hurt.png",
+          "sheet": "sprites/0245/hurt.png",
           "frameWidth": 40,
           "frameHeight": 56,
           "columns": 2,
@@ -27471,10 +27471,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0249/portrait.png",
+      "portrait": "sprites/0249/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0249/idle.png",
+          "sheet": "sprites/0249/idle.png",
           "frameWidth": 72,
           "frameHeight": 96,
           "columns": 2,
@@ -27619,7 +27619,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0249/walk.png",
+          "sheet": "sprites/0249/walk.png",
           "frameWidth": 80,
           "frameHeight": 96,
           "columns": 2,
@@ -27764,7 +27764,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0249/attack.png",
+          "sheet": "sprites/0249/attack.png",
           "frameWidth": 104,
           "frameHeight": 112,
           "columns": 10,
@@ -28237,7 +28237,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0249/hurt.png",
+          "sheet": "sprites/0249/hurt.png",
           "frameWidth": 88,
           "frameHeight": 112,
           "columns": 2,
@@ -28415,10 +28415,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0250/portrait.png",
+      "portrait": "sprites/0250/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0250/idle.png",
+          "sheet": "sprites/0250/idle.png",
           "frameWidth": 72,
           "frameHeight": 112,
           "columns": 5,
@@ -28686,7 +28686,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0250/walk.png",
+          "sheet": "sprites/0250/walk.png",
           "frameWidth": 72,
           "frameHeight": 112,
           "columns": 5,
@@ -28954,7 +28954,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0250/attack.png",
+          "sheet": "sprites/0250/attack.png",
           "frameWidth": 88,
           "frameHeight": 120,
           "columns": 15,
@@ -29612,7 +29612,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0250/hurt.png",
+          "sheet": "sprites/0250/hurt.png",
           "frameWidth": 96,
           "frameHeight": 128,
           "columns": 2,
@@ -29836,10 +29836,10 @@
           ]
         }
       ],
-      "portrait": "/sprites/0251/portrait.png",
+      "portrait": "sprites/0251/portrait.png",
       "animations": {
         "idle": {
-          "sheet": "/sprites/0251/idle.png",
+          "sheet": "sprites/0251/idle.png",
           "frameWidth": 24,
           "frameHeight": 56,
           "columns": 6,
@@ -30148,7 +30148,7 @@
           ]
         },
         "walk": {
-          "sheet": "/sprites/0251/walk.png",
+          "sheet": "sprites/0251/walk.png",
           "frameWidth": 24,
           "frameHeight": 48,
           "columns": 8,
@@ -30539,7 +30539,7 @@
           ]
         },
         "attack": {
-          "sheet": "/sprites/0251/attack.png",
+          "sheet": "sprites/0251/attack.png",
           "frameWidth": 72,
           "frameHeight": 80,
           "columns": 16,
@@ -31258,7 +31258,7 @@
           ]
         },
         "hurt": {
-          "sheet": "/sprites/0251/hurt.png",
+          "sheet": "sprites/0251/hurt.png",
           "frameWidth": 48,
           "frameHeight": 72,
           "columns": 2,
@@ -31403,7 +31403,7 @@
           ]
         },
         "faint": {
-          "sheet": "/sprites/0251/faint.png",
+          "sheet": "sprites/0251/faint.png",
           "frameWidth": 32,
           "frameHeight": 48,
           "columns": 4,
