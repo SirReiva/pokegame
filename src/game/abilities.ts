@@ -238,419 +238,524 @@ export function defineAbility(
  */
 export const ABILITIES: Record<AbilityId, AbilityDef> = {};
 
-ABILITIES.impactrueno = defineAbility({
-  id: 'impactrueno',
-  name: 'Impactrueno',
-  type: 'Electric',
-  category: 'special',
-  shape: 'projectile',
-  power: 40,
-  accuracy: 100,
-  cooldown: 0.9,
-  range: 8,
-  radius: 0.26,
-  projectileSpeed: 14,
-  projectileStyle: 'electric',
-  impactStyle: 'electric',
-  castTime: 0.34,
-  windup: 0.22,
-  windupAnimationMode: 'once',
-  animation: 'shock',
-  color: [247, 208, 44],
-  description: 'Proyectil eléctrico rápido. Ataque básico de Pikachu.'
-});
+/**
+ * Builder fluido de habilidades.
+ *
+ * Cada definición declara solo lo que se diferencia del valor por defecto; el
+ * resto lo rellena `defineAbility`. Los métodos devuelven `this`, así que una
+ * habilidad se lee de arriba abajo sin objetos anidados.
+ */
+type AbilitySeed = Pick<
+  AbilityDef,
+  'id' | 'name' | 'type' | 'category' | 'shape'
+>;
 
-ABILITIES.ataqueRapido = defineAbility({
-  id: 'ataqueRapido',
-  name: 'Ataque Rápido',
-  type: 'Normal',
-  category: 'physical',
-  shape: 'dash',
-  power: 40,
-  accuracy: 100,
-  cooldown: 4,
-  range: 0,
-  radius: 0.9,
-  dashDistance: 4.5,
-  knockback: 0.4,
-  castTime: 0.25,
-  animation: 'quickstrike',
-  color: [232, 244, 255],
-  description: 'Se lanza hacia delante y golpea a los rivales del camino.'
-});
+export class AbilityBuilder {
+  private readonly draft: AbilitySeed & Partial<AbilityDef>;
 
-ABILITIES.rayo = defineAbility({
-  id: 'rayo',
-  name: 'Rayo',
-  type: 'Electric',
-  category: 'special',
-  shape: 'beam',
-  power: 90,
-  accuracy: 100,
-  cooldown: 8,
-  range: 11,
-  radius: 0.35,
-  impactStyle: 'electric',
-  castTime: 0.55,
-  windup: 0.5,
-  windupAnimationMode: 'once',
-  animation: 'shock',
-  color: [255, 238, 88],
-  description: 'Haz eléctrico instantáneo en la dirección en la que mira Pikachu.'
-});
+  constructor(seed: AbilitySeed) {
+    this.draft = { ...seed };
+  }
 
-ABILITIES.placaje = defineAbility({
-  id: 'placaje',
-  name: 'Placaje',
-  type: 'Normal',
-  category: 'physical',
-  shape: 'melee',
-  power: 40,
-  accuracy: 100,
-  cooldown: 0.25,
-  range: 1.8,
-  radius: 0.7,
-  halfAngle: 50,
-  knockback: 0.6,
-  castTime: 0.35,
-  color: [235, 228, 210],
-  description: 'Embestida cuerpo a cuerpo contra los rivales que tenga delante.'
-});
+  power(value: number): this {
+    this.draft.power = value;
+    return this;
+  }
+
+  accuracy(value: number): this {
+    this.draft.accuracy = value;
+    return this;
+  }
+
+  cooldown(value: number): this {
+    this.draft.cooldown = value;
+    return this;
+  }
+
+  range(value: number): this {
+    this.draft.range = value;
+    return this;
+  }
+
+  radius(value: number): this {
+    this.draft.radius = value;
+    return this;
+  }
+
+  halfAngle(value: number): this {
+    this.draft.halfAngle = value;
+    return this;
+  }
+
+  /** Configura un proyectil con su velocidad y su aspecto visual. */
+  projectile(style: ProjectileStyle, speed: number): this {
+    this.draft.projectileStyle = style;
+    this.draft.projectileSpeed = speed;
+    return this;
+  }
+
+  impact(style: ImpactStyle): this {
+    this.draft.impactStyle = style;
+    return this;
+  }
+
+  beam(style: BeamStyle): this {
+    this.draft.beamStyle = style;
+    return this;
+  }
+
+  /** Configura un área con su estilo, modo de daño y duración. */
+  area(
+    style: AoeStyle,
+    mode: AoeDamageMode,
+    duration: number,
+    tickInterval?: number
+  ): this {
+    this.draft.aoeStyle = style;
+    this.draft.aoeDamageMode = mode;
+    this.draft.aoeDuration = duration;
+    if (tickInterval !== undefined) this.draft.aoeTickInterval = tickInterval;
+    return this;
+  }
+
+  /** Activa el daño radial con el multiplicador del borde. */
+  radial(minDamage: number): this {
+    this.draft.radialDamage = true;
+    this.draft.radialMinDamage = minDamage;
+    return this;
+  }
+
+  pierce(value: number): this {
+    this.draft.pierce = value;
+    return this;
+  }
+
+  dash(distance: number): this {
+    this.draft.dashDistance = distance;
+    return this;
+  }
+
+  knockback(value: number): this {
+    this.draft.knockback = value;
+    return this;
+  }
+
+  buff(stat: BuffStat, multiplier: number, duration: number): this {
+    this.draft.buffs = [
+      ...(this.draft.buffs ?? []),
+      { stat, multiplier, duration }
+    ];
+    return this;
+  }
+
+  slow(multiplier: number, duration: number): this {
+    this.draft.slow = { multiplier, duration };
+    return this;
+  }
+
+  heal(fraction: number): this {
+    this.draft.healSelf = fraction;
+    return this;
+  }
+
+  color(r: number, g: number, b: number): this {
+    this.draft.color = [r, g, b];
+    return this;
+  }
+
+  cast(seconds: number): this {
+    this.draft.castTime = seconds;
+    return this;
+  }
+
+  windup(
+    seconds: number,
+    options: {
+      mode?: WindupAnimationMode;
+      speed?: number;
+      move?: boolean;
+    } = {}
+  ): this {
+    this.draft.windup = seconds;
+    if (options.mode !== undefined) {
+      this.draft.windupAnimationMode = options.mode;
+    }
+    if (options.speed !== undefined) {
+      this.draft.windupAnimationSpeed = options.speed;
+    }
+    if (options.move !== undefined) this.draft.moveWhileWindup = options.move;
+    return this;
+  }
+
+  animation(name: AnimationName): this {
+    this.draft.animation = name;
+    return this;
+  }
+
+  description(text: string): this {
+    this.draft.description = text;
+    return this;
+  }
+
+  build(): AbilityDef {
+    return defineAbility(this.draft);
+  }
+}
+
+/** Punto de entrada del builder. */
+export function ability(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  shape: AbilityShape
+): AbilityBuilder {
+  return new AbilityBuilder({ id, name, type, category, shape });
+}
+
+/** Construye la habilidad y la registra en el catálogo. */
+export function registerAbility(builder: AbilityBuilder): AbilityDef {
+  const def = builder.build();
+  ABILITIES[def.id] = def;
+  return def;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Pikachu                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('impactrueno', 'Impactrueno', 'Electric', 'special', 'projectile')
+    .power(40)
+    .accuracy(100)
+    .cooldown(0.9)
+    .range(8)
+    .radius(0.26)
+    .projectile('electric', 14)
+    .impact('electric')
+    .cast(0.34)
+    .windup(0.22, { mode: 'once' })
+    .animation('shock')
+    .color(247, 208, 44)
+    .description('Proyectil eléctrico rápido. Ataque básico de Pikachu.')
+);
+
+registerAbility(
+  ability('ataqueRapido', 'Ataque Rápido', 'Normal', 'physical', 'dash')
+    .power(40)
+    .accuracy(100)
+    .cooldown(4)
+    .range(0)
+    .radius(0.9)
+    .dash(4.5)
+    .knockback(0.4)
+    .cast(0.25)
+    .animation('quickstrike')
+    .color(232, 244, 255)
+    .description('Se lanza hacia delante y golpea a los rivales del camino.')
+);
+
+registerAbility(
+  ability('rayo', 'Rayo', 'Electric', 'special', 'beam')
+    .power(90)
+    .accuracy(100)
+    .cooldown(8)
+    .range(11)
+    .radius(0.35)
+    .impact('electric')
+    .cast(0.55)
+    .windup(0.5, { mode: 'once' })
+    .animation('shock')
+    .color(255, 238, 88)
+    .description(
+      'Haz eléctrico instantáneo en la dirección en la que mira Pikachu.'
+    )
+);
+
+registerAbility(
+  ability('placaje', 'Placaje', 'Normal', 'physical', 'melee')
+    .power(40)
+    .accuracy(100)
+    .cooldown(0.25)
+    .range(1.8)
+    .radius(0.7)
+    .halfAngle(50)
+    .knockback(0.6)
+    .cast(0.35)
+    .color(235, 228, 210)
+    .description('Embestida cuerpo a cuerpo contra los rivales que tenga delante.')
+);
 
 /* ------------------------------------------------------------------------- */
 /* Charmander                                                                */
 /* ------------------------------------------------------------------------- */
 
-ABILITIES.aranazo = defineAbility({
-  id: 'aranazo',
-  name: 'Arañazo',
-  type: 'Normal',
-  category: 'physical',
-  shape: 'melee',
-  power: 40,
-  accuracy: 100,
-  cooldown: 0.3,
-  range: 1.7,
-  radius: 0.65,
-  halfAngle: 45,
-  knockback: 0.35,
-  castTime: 0.3,
-  color: [246, 236, 220],
-  description: 'Zarpazo rápido cuerpo a cuerpo. Ataque básico de Charmander.'
-});
+registerAbility(
+  ability('aranazo', 'Arañazo', 'Normal', 'physical', 'melee')
+    .power(40)
+    .accuracy(100)
+    .cooldown(0.3)
+    .range(1.7)
+    .radius(0.65)
+    .halfAngle(45)
+    .knockback(0.35)
+    .cast(0.3)
+    .color(246, 236, 220)
+    .description('Zarpazo rápido cuerpo a cuerpo. Ataque básico de Charmander.')
+);
 
-ABILITIES.giroFuego = defineAbility({
-  id: 'giroFuego',
-  name: 'Giro Fuego',
-  type: 'Fire',
-  category: 'special',
-  shape: 'aoe',
-  power: 35,
-  accuracy: 85,
-  cooldown: 6,
-  range: 3.6,
-  radius: 1.7,
-  windup: 0.5,
-  castTime: 0.45,
-  moveWhileWindup: true,
-  aoeStyle: 'whirl',
-  aoeDamageMode: 'overTime',
-  aoeDuration: 2.4,
-  aoeTickInterval: 0.4,
-  impactStyle: 'fire',
-  color: [255, 132, 40],
-  description:
-    'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s a quien siga dentro.'
-});
+registerAbility(
+  ability('giroFuego', 'Giro Fuego', 'Fire', 'special', 'aoe')
+    .power(35)
+    .accuracy(85)
+    .cooldown(6)
+    .range(3.6)
+    .radius(1.7)
+    .windup(0.5, { move: true })
+    .cast(0.45)
+    .area('whirl', 'overTime', 2.4, 0.4)
+    .impact('fire')
+    .color(255, 132, 40)
+    .description(
+      'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s a quien siga dentro.'
+    )
+);
 
-ABILITIES.lanzallamas = defineAbility({
-  id: 'lanzallamas',
-  name: 'Lanzallamas',
-  type: 'Fire',
-  category: 'special',
-  shape: 'beam',
-  power: 90,
-  accuracy: 100,
-  cooldown: 7,
-  range: 9.5,
-  radius: 0.4,
-  windup: 0.35,
-  castTime: 0.5,
-  beamStyle: 'fire',
-  impactStyle: 'fire',
-  color: [255, 138, 42],
-  description: 'Chorro de fuego instantáneo que atraviesa a los rivales en línea.'
-});
+registerAbility(
+  ability('lanzallamas', 'Lanzallamas', 'Fire', 'special', 'beam')
+    .power(90)
+    .accuracy(100)
+    .cooldown(7)
+    .range(9.5)
+    .radius(0.4)
+    .windup(0.35)
+    .cast(0.5)
+    .beam('fire')
+    .impact('fire')
+    .color(255, 138, 42)
+    .description('Chorro de fuego instantáneo que atraviesa a los rivales en línea.')
+);
 
-ABILITIES.anilloIgneo = defineAbility({
-  id: 'anilloIgneo',
-  name: 'Anillo Ígneo',
-  type: 'Fire',
-  category: 'special',
-  shape: 'aoe',
-  power: 110,
-  accuracy: 85,
-  cooldown: 14,
-  range: 4.2,
-  radius: 3.1,
-  windup: 0.75,
-  castTime: 0.7,
-  aoeStyle: 'fire',
-  aoeDamageMode: 'instant',
-  aoeDuration: 0.5,
-  impactStyle: 'fire',
-  color: [255, 92, 30],
-  description:
-    'Definitiva: explosión de fuego instantánea con un breve estallido de llamas.'
-});
+registerAbility(
+  ability('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', 'aoe')
+    .power(110)
+    .accuracy(85)
+    .cooldown(14)
+    .range(4.2)
+    .radius(3.1)
+    .windup(0.75)
+    .cast(0.7)
+    .area('fire', 'instant', 0.5)
+    .impact('fire')
+    .color(255, 92, 30)
+    .description(
+      'Definitiva: explosión de fuego instantánea con un breve estallido de llamas.'
+    )
+);
 
 /* ------------------------------------------------------------------------- */
 /* Bulbasaur                                                                 */
 /* ------------------------------------------------------------------------- */
 
-ABILITIES.hojaAfilada = defineAbility({
-  id: 'hojaAfilada',
-  name: 'Hoja Afilada',
-  type: 'Grass',
-  category: 'physical',
-  shape: 'melee',
-  power: 60,
-  accuracy: 100,
-  cooldown: 5,
-  range: 2.6,
-  radius: 0.8,
-  halfAngle: 50,
-  knockback: 0.4,
-  castTime: 0.45,
-  windup: 0.3,
-  animation: 'attack',
-  impactStyle: 'grass',
-  color: [126, 214, 88],
-  description:
-    'Hoja cortante de gran alcance; empuja a quien golpea.'
-});
+registerAbility(
+  ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'physical', 'melee')
+    .power(60)
+    .accuracy(100)
+    .cooldown(5)
+    .range(2.6)
+    .radius(0.8)
+    .halfAngle(50)
+    .knockback(0.4)
+    .cast(0.45)
+    .windup(0.3)
+    .animation('attack')
+    .impact('grass')
+    .color(126, 214, 88)
+    .description('Hoja cortante de gran alcance; empuja a quien golpea.')
+);
 
-ABILITIES.paralizador = defineAbility({
-  id: 'paralizador',
-  name: 'Paralizador',
-  type: 'Grass',
-  category: 'status',
-  shape: 'melee',
-  power: 0,
-  accuracy: 100,
-  cooldown: 10,
-  range: 3,
-  radius: 0.9,
-  halfAngle: 60,
-  windup: 0.2,
-  castTime: 0.4,
-  impactStyle: 'spore',
-  slow: { multiplier: 0.55, duration: 3 },
-  color: [72, 124, 54],
-  description:
-    'Nube de partículas verdes que paraliza parcialmente: ralentiza un 45 % durante 3 s a los rivales que tenga delante.'
-});
+registerAbility(
+  ability('paralizador', 'Paralizador', 'Grass', 'status', 'melee')
+    .power(0)
+    .accuracy(100)
+    .cooldown(10)
+    .range(3)
+    .radius(0.9)
+    .halfAngle(60)
+    .windup(0.2)
+    .cast(0.4)
+    .impact('spore')
+    .slow(0.55, 3)
+    .color(72, 124, 54)
+    .description(
+      'Nube de partículas verdes que paraliza parcialmente: ralentiza un 45 % durante 3 s a los rivales que tenga delante.'
+    )
+);
 
-ABILITIES.llueveHojas = defineAbility({
-  id: 'llueveHojas',
-  name: 'Lluevehojas',
-  type: 'Grass',
-  category: 'special',
-  shape: 'aoe',
-  power: 120,
-  accuracy: 95,
-  cooldown: 14,
-  range: 4.2,
-  radius: 3.2,
-  windup: 0.75,
-  castTime: 0.7,
-  aoeStyle: 'grass',
-  aoeDamageMode: 'instant',
-  aoeDuration: 1.1,
-  impactStyle: 'grass',
-  color: [112, 204, 72],
-  description:
-    'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 120 de potencia.'
-});
+registerAbility(
+  ability('llueveHojas', 'Lluevehojas', 'Grass', 'special', 'aoe')
+    .power(120)
+    .accuracy(95)
+    .cooldown(14)
+    .range(4.2)
+    .radius(3.2)
+    .windup(0.75)
+    .cast(0.7)
+    .area('grass', 'instant', 1.1)
+    .impact('grass')
+    .color(112, 204, 72)
+    .description(
+      'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 120 de potencia.'
+    )
+);
 
 /* ------------------------------------------------------------------------- */
 /* Mewtwo                                                                    */
 /* ------------------------------------------------------------------------- */
 
-ABILITIES.telequinesis = defineAbility({
-  id: 'telequinesis',
-  name: 'Telequinesis',
-  type: 'Psychic',
-  category: 'special',
-  shape: 'melee',
-  power: 55,
-  accuracy: 100,
-  cooldown: 0.6,
-  range: 2.5,
-  radius: 0.8,
-  halfAngle: 55,
-  knockback: 1.4,
-  castTime: 0.4,
-  windup: 0.12,
-  impactStyle: 'psychic',
-  color: [214, 122, 255],
-  description:
-    'Onda telequinética de corto alcance que empuja con fuerza. Ataque básico de Mewtwo.'
-});
+registerAbility(
+  ability('telequinesis', 'Telequinesis', 'Psychic', 'special', 'melee')
+    .power(55)
+    .accuracy(100)
+    .cooldown(0.6)
+    .range(2.5)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(1.4)
+    .cast(0.4)
+    .windup(0.12)
+    .impact('psychic')
+    .color(214, 122, 255)
+    .description(
+      'Onda telequinética de corto alcance que empuja con fuerza. Ataque básico de Mewtwo.'
+    )
+);
 
-ABILITIES.teletransporte = defineAbility({
-  id: 'teletransporte',
-  name: 'Teletransporte',
-  type: 'Psychic',
-  category: 'status',
-  shape: 'dash',
-  power: 0,
-  accuracy: 0,
-  cooldown: 6,
-  range: 0,
-  radius: 0.85,
-  dashDistance: 5,
-  castTime: 0.24,
-  animation: 'quickstrike',
-  impactStyle: 'psychic',
-  color: [170, 104, 255],
-  description:
-    'Desaparece y reaparece 5 u más adelante. Movilidad pura para entrar o salir del combate.'
-});
+registerAbility(
+  ability('teletransporte', 'Teletransporte', 'Psychic', 'status', 'dash')
+    .power(0)
+    .accuracy(0)
+    .cooldown(6)
+    .range(0)
+    .radius(0.85)
+    .dash(5)
+    .cast(0.24)
+    .animation('quickstrike')
+    .impact('psychic')
+    .color(170, 104, 255)
+    .description(
+      'Desaparece y reaparece 5 u más adelante. Movilidad pura para entrar o salir del combate.'
+    )
+);
 
-ABILITIES.psiquico = defineAbility({
-  id: 'psiquico',
-  name: 'Psíquico',
-  type: 'Psychic',
-  category: 'special',
-  shape: 'beam',
-  power: 95,
-  accuracy: 100,
-  cooldown: 7,
-  range: 10,
-  radius: 0.42,
-  windup: 0.4,
-  castTime: 0.5,
-  beamStyle: 'psychic',
-  impactStyle: 'psychic',
-  color: [226, 132, 255],
-  description:
-    'Lanza psíquico instantáneo de largo alcance que atraviesa a los rivales en línea.'
-});
+registerAbility(
+  ability('psiquico', 'Psíquico', 'Psychic', 'special', 'beam')
+    .power(95)
+    .accuracy(100)
+    .cooldown(7)
+    .range(10)
+    .radius(0.42)
+    .windup(0.4)
+    .cast(0.5)
+    .beam('psychic')
+    .impact('psychic')
+    .color(226, 132, 255)
+    .description(
+      'Lanza psíquico instantáneo de largo alcance que atraviesa a los rivales en línea.'
+    )
+);
 
-ABILITIES.psicoataque = defineAbility({
-  id: 'psicoataque',
-  name: 'Psicoataque',
-  type: 'Psychic',
-  category: 'special',
-  shape: 'aoe',
-  power: 125,
-  accuracy: 95,
-  cooldown: 15,
-  range: 4.5,
-  radius: 3.2,
-  windup: 0.8,
-  castTime: 0.7,
-  aoeStyle: 'psychic',
-  aoeDamageMode: 'instant',
-  radialDamage: true,
-  radialMinDamage: 0.35,
-  aoeDuration: 0.85,
-  impactStyle: 'psychic',
-  color: [198, 96, 255],
-  description:
-    'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
-});
+registerAbility(
+  ability('psicoataque', 'Psicoataque', 'Psychic', 'special', 'aoe')
+    .power(125)
+    .accuracy(95)
+    .cooldown(15)
+    .range(4.5)
+    .radius(3.2)
+    .windup(0.8)
+    .cast(0.7)
+    .area('psychic', 'instant', 0.85)
+    .radial(0.35)
+    .impact('psychic')
+    .color(198, 96, 255)
+    .description(
+      'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
+    )
+);
 
 /* ------------------------------------------------------------------------- */
 /* Mew                                                                       */
 /* ------------------------------------------------------------------------- */
 
-ABILITIES.psicogolpe = defineAbility({
-  id: 'psicogolpe',
-  name: 'Golpe Psíquico',
-  type: 'Psychic',
-  category: 'special',
-  shape: 'melee',
-  power: 45,
-  accuracy: 100,
-  cooldown: 0.3,
-  range: 2.1,
-  radius: 0.7,
-  halfAngle: 55,
-  knockback: 0.5,
-  castTime: 0.32,
-  windup: 0.1,
-  impactStyle: 'psychic',
-  color: [255, 150, 220],
-  description:
-    'Onda psíquica de corto alcance y cadencia alta. Ataque básico de Mew.'
-});
+registerAbility(
+  ability('psicogolpe', 'Golpe Psíquico', 'Psychic', 'special', 'melee')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.3)
+    .range(2.1)
+    .radius(0.7)
+    .halfAngle(55)
+    .knockback(0.5)
+    .cast(0.32)
+    .windup(0.1)
+    .impact('psychic')
+    .color(255, 150, 220)
+    .description(
+      'Onda psíquica de corto alcance y cadencia alta. Ataque básico de Mew.'
+    )
+);
 
-ABILITIES.agilidad = defineAbility({
-  id: 'agilidad',
-  name: 'Agilidad',
-  type: 'Psychic',
-  category: 'status',
-  shape: 'dash',
-  power: 0,
-  accuracy: 0,
-  cooldown: 8,
-  range: 0,
-  radius: 0.85,
-  dashDistance: 4.4,
-  castTime: 0.26,
-  animation: 'quickstrike',
-  buffs: [{ stat: 'speed', multiplier: 1.3, duration: 3 }],
-  impactStyle: 'psychic',
-  color: [255, 176, 232],
-  description:
-    'Se impulsa 4,4 u hacia delante y gana un 30 % de velocidad durante 3 s.'
-});
+registerAbility(
+  ability('agilidad', 'Agilidad', 'Psychic', 'status', 'dash')
+    .power(0)
+    .accuracy(0)
+    .cooldown(8)
+    .range(0)
+    .radius(0.85)
+    .dash(4.4)
+    .cast(0.26)
+    .animation('quickstrike')
+    .buff('speed', 1.3, 3)
+    .impact('psychic')
+    .color(255, 176, 232)
+    .description(
+      'Se impulsa 4,4 u hacia delante y gana un 30 % de velocidad durante 3 s.'
+    )
+);
 
-ABILITIES.premonicion = defineAbility({
-  id: 'premonicion',
-  name: 'Premonición',
-  type: 'Psychic',
-  category: 'special',
-  shape: 'aoe',
-  power: 85,
-  accuracy: 100,
-  cooldown: 10,
-  range: 6,
-  radius: 2.4,
-  windup: 0.9,
-  castTime: 0.55,
-  moveWhileWindup: true,
-  aoeStyle: 'psychic',
-  aoeDamageMode: 'instant',
-  radialDamage: true,
-  radialMinDamage: 0.5,
-  aoeDuration: 0.8,
-  impactStyle: 'psychic',
-  slow: { multiplier: 0.7, duration: 2 },
-  color: [250, 128, 222],
-  description:
-    'Marca un punto a 6 u: tras 0,9 s cae una explosión de 2,4 u que ralentiza un 30 % durante 2 s. Hace el 100 % en el centro y el 50 % en el borde.'
-});
+registerAbility(
+  ability('premonicion', 'Premonición', 'Psychic', 'special', 'aoe')
+    .power(85)
+    .accuracy(100)
+    .cooldown(10)
+    .range(6)
+    .radius(2.4)
+    .windup(0.9, { move: true })
+    .cast(0.55)
+    .area('psychic', 'instant', 0.8)
+    .radial(0.5)
+    .impact('psychic')
+    .slow(0.7, 2)
+    .color(250, 128, 222)
+    .description(
+      'Marca un punto a 6 u: tras 0,9 s cae una explosión de 2,4 u que ralentiza un 30 % durante 2 s. Hace el 100 % en el centro y el 50 % en el borde.'
+    )
+);
 
-ABILITIES.recuperacion = defineAbility({
-  id: 'recuperacion',
-  name: 'Recuperación',
-  type: 'Psychic',
-  category: 'status',
-  shape: 'self',
-  power: 0,
-  accuracy: 0,
-  cooldown: 14,
-  radius: 1,
-  castTime: 1,
-  windup: 0.75,
-  healSelf: 0.25,
-  color: [255, 170, 230],
-  description:
-    'Se concentra y recupera el 25 % de su vida máxima. Si le golpean durante la concentración, se cancela.'
-});
+registerAbility(
+  ability('recuperacion', 'Recuperación', 'Psychic', 'status', 'self')
+    .power(0)
+    .accuracy(0)
+    .cooldown(14)
+    .radius(1)
+    .cast(1)
+    .windup(0.75)
+    .heal(0.25)
+    .color(255, 170, 230)
+    .description(
+      'Se concentra y recupera el 25 % de su vida máxima. Si le golpean durante la concentración, se cancela.'
+    )
+);
 
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].

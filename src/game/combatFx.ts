@@ -13,6 +13,13 @@ import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilit
 import { DEG } from './config';
 import { createFlameCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
+/** Opacidad base del arco melee según el estilo de impacto. */
+const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
+  poison: 0.38,
+  spore: 0.28,
+  psychic: 0.3
+};
+
 export interface EffectHandle {
   setPosition(x: number, z: number): void;
   update(dt: number): void;
@@ -292,6 +299,44 @@ export class CombatFx {
   private readonly dashRingMesh: pc.Mesh;
   private readonly telegraphs = new Set<AoeTelegraph>();
 
+  /** Fábricas de VFX por estilo: evitan cadenas de `if` en cada spawn. */
+  private readonly impactEffects: Record<
+    ImpactStyle,
+    (x: number, z: number, color: readonly [number, number, number], effectiveness: number) => void
+  >;
+  private readonly projectileFactories: Record<
+    ProjectileStyle,
+    (
+      x: number,
+      z: number,
+      color: readonly [number, number, number],
+      radius: number,
+      dirX: number,
+      dirZ: number
+    ) => EffectHandle
+  >;
+  private readonly beamFactories: Record<
+    BeamStyle,
+    (
+      x1: number,
+      z1: number,
+      x2: number,
+      z2: number,
+      color: readonly [number, number, number],
+      width: number
+    ) => void
+  >;
+  private readonly aoeFactories: Record<
+    AoeStyle,
+    (
+      x: number,
+      z: number,
+      radius: number,
+      color: readonly [number, number, number],
+      duration: number
+    ) => void
+  >;
+
   constructor(app: pc.Application, layerId: number) {
     this.app = app;
     this.layerId = layerId;
@@ -345,6 +390,62 @@ export class CombatFx {
     this.dashRingMesh = createDashRingMesh(this.device);
     this.discMesh.incRefCount();
     this.dashRingMesh.incRefCount();
+
+    this.impactEffects = {
+      hit: (x, z, color, effectiveness) =>
+        this.spawnHit(x, z, color, effectiveness),
+      electric: (x, z, color, effectiveness) =>
+        this.spawnElectricBurst(x, z, color, effectiveness),
+      fire: (x, z, color, effectiveness) =>
+        this.spawnFireBurst(x, z, color, effectiveness),
+      grass: (x, z, color, effectiveness) =>
+        this.spawnGrassBurst(x, z, color, effectiveness),
+      poison: (x, z, color, effectiveness) =>
+        this.spawnPoisonBurst(x, z, color, effectiveness),
+      spore: (x, z, color, effectiveness) =>
+        this.spawnHit(x, z, color, effectiveness),
+      psychic: (x, z, color, effectiveness) =>
+        this.spawnPsychicBurst(x, z, color, effectiveness)
+    };
+
+    this.projectileFactories = {
+      orb: (x, z, color, radius) =>
+        this.spawnOrbProjectile(x, z, color, radius),
+      electric: (x, z, _color, radius, dirX, dirZ) =>
+        this.spawnElectricProjectile(x, z, radius, dirX, dirZ),
+      fire: (x, z, _color, radius, dirX, dirZ) =>
+        this.spawnFireProjectile(x, z, radius, dirX, dirZ),
+      grass: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnGrassProjectile(x, z, radius, dirX, dirZ, color),
+      poison: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnPoisonProjectile(x, z, radius, dirX, dirZ, color),
+      psychic: (x, z, color, radius) =>
+        this.spawnOrbProjectile(x, z, color, radius)
+    };
+
+    this.beamFactories = {
+      electric: (x1, z1, x2, z2, color, width) =>
+        this.spawnElectricBeam(x1, z1, x2, z2, color, width),
+      fire: (x1, z1, x2, z2, color, width) =>
+        this.spawnFireBeam(x1, z1, x2, z2, color, width),
+      psychic: (x1, z1, x2, z2, color, width) =>
+        this.spawnPsychicBeam(x1, z1, x2, z2, color, width)
+    };
+
+    this.aoeFactories = {
+      ring: (x, z, radius, color, duration) =>
+        this.spawnRingAoe(x, z, radius, color, duration),
+      fire: (x, z, radius, color, duration) =>
+        this.spawnFireAoe(x, z, radius, color, duration),
+      whirl: (x, z, radius, color, duration) =>
+        this.spawnFireWhirl(x, z, radius, color, duration),
+      grass: (x, z, radius, color, duration) =>
+        this.spawnGrassAoe(x, z, radius, color, duration),
+      poison: (x, z, radius, color, duration) =>
+        this.spawnPoisonAoe(x, z, radius, color, duration),
+      psychic: (x, z, radius, color, duration) =>
+        this.spawnPsychicAoe(x, z, radius, color, duration)
+    };
   }
 
   private createMaterial(
@@ -810,19 +911,18 @@ export class CombatFx {
     dirX: number,
     dirZ: number
   ): EffectHandle {
-    if (style === 'electric') {
-      return this.spawnElectricProjectile(x, z, radius, dirX, dirZ);
-    }
-    if (style === 'fire') {
-      return this.spawnFireProjectile(x, z, radius, dirX, dirZ);
-    }
-    if (style === 'grass') {
-      return this.spawnGrassProjectile(x, z, radius, dirX, dirZ, color);
-    }
-    if (style === 'poison') {
-      return this.spawnPoisonProjectile(x, z, radius, dirX, dirZ, color);
-    }
+    const factory =
+      this.projectileFactories[style] ?? this.projectileFactories.orb;
+    return factory(x, z, color, radius, dirX, dirZ);
+  }
 
+  /** Proyectil genérico: esfera emisiva del color de la habilidad. */
+  private spawnOrbProjectile(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number
+  ): EffectHandle {
     const material = this.createMaterial(color, 0.95);
     const entity = this.createEntity(this.sphereMesh, [material]);
     entity.setPosition(x, 0.7, z);
@@ -1441,18 +1541,11 @@ export class CombatFx {
 
     // La malla del arco es exclusiva de este efecto: al destruir la entidad,
     // su MeshInstance la libera y PlayCanvas se encarga de destruirla.
+    const arcOpacity = MELEE_ARC_OPACITY[style] ?? 0.85;
     let time = 0;
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
-      material.opacity =
-        (style === 'poison'
-          ? 0.38
-          : style === 'spore'
-            ? 0.28
-            : style === 'psychic'
-              ? 0.3
-              : 0.85) *
-        (1 - t);
+      material.opacity = arcOpacity * (1 - t);
       const scale = 0.92 + 0.12 * t;
       entity.setLocalScale(scale, 1, scale);
       for (const leaf of leaves) {
@@ -1562,14 +1655,22 @@ export class CombatFx {
     width: number,
     style: BeamStyle = 'electric'
   ): void {
-    if (style === 'fire') {
-      this.spawnFireBeam(x1, z1, x2, z2, color, width);
-      return;
-    }
-    if (style === 'psychic') {
-      this.spawnPsychicBeam(x1, z1, x2, z2, color, width);
-      return;
-    }
+    const factory = this.beamFactories[style] ?? this.beamFactories.electric;
+    factory(x1, z1, x2, z2, color, width);
+  }
+
+  /**
+   * Haz eléctrico: dos rayos zigzagueantes que giran en sentidos opuestos,
+   * cruzándose mientras el haz se extiende desde el lanzador hacia delante.
+   */
+  private spawnElectricBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
     const dx = x2 - x1;
     const dz = z2 - z1;
     const length = Math.max(0.1, Math.hypot(dx, dz));
@@ -1945,26 +2046,19 @@ export class CombatFx {
     duration = 0.65
   ): void {
     const life = Math.max(0.2, duration);
-    if (style === 'fire') {
-      this.spawnFireAoe(x, z, radius, color, life);
-      return;
-    }
-    if (style === 'whirl') {
-      this.spawnFireWhirl(x, z, radius, color, life);
-      return;
-    }
-    if (style === 'grass') {
-      this.spawnGrassAoe(x, z, radius, color, life);
-      return;
-    }
-    if (style === 'poison') {
-      this.spawnPoisonAoe(x, z, radius, color, life);
-      return;
-    }
-    if (style === 'psychic') {
-      this.spawnPsychicAoe(x, z, radius, color, life);
-      return;
-    }
+    const factory = this.aoeFactories[style] ?? this.aoeFactories.ring;
+    factory(x, z, radius, color, life);
+  }
+
+  /** Anillo de área genérico: crece y se desvanece en el suelo. */
+  private spawnRingAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
     const material = this.createMaterial(color, 0.8);
     const entity = this.createEntity(this.torusMesh, [material]);
     entity.setPosition(x, 0.12, z);
@@ -3235,6 +3329,18 @@ export class CombatFx {
         );
       }
     });
+  }
+
+  /** Elige la fábrica de impacto según el estilo de la habilidad. */
+  spawnImpact(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number,
+    style: ImpactStyle = 'hit'
+  ): void {
+    const effect = this.impactEffects[style] ?? this.impactEffects.hit;
+    effect(x, z, color, effectiveness);
   }
 
   /** Impacto de un golpe. `effectiveness` tiñe el destello. */

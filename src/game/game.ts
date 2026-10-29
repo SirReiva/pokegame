@@ -8,26 +8,28 @@ import {
   type BuffStat,
   type SlowSpec
 } from './abilities';
+import {
+  ABILITY_EXECUTORS,
+  type AbilityExecutorDeps
+} from './abilityExecutors';
 import { Actor } from './actor';
 import { CameraRig } from './camera';
 import {
   KO_TARGET,
   angleDelta,
+  closestPointOnCollider,
   computeDamage,
+  pointBlockedByColliders,
   pointSegmentDistance,
-  raycastColliderDistance,
   rollAccuracy,
   rollCritical,
   rollRandomFactor,
   segmentBlockedByColliders
 } from './combat';
-import {
-  CombatFx,
-  type EffectHandle,
-  type TelegraphHandle
-} from './combatFx';
+import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
+import { CAST_EFFECTS } from './effects';
 import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder } from './fog';
 import {
   IDLE_INPUT,
@@ -38,6 +40,12 @@ import {
   type MenuAction
 } from './input';
 import { loadMap, loadMapIndex, type MapIndexEntry } from './map';
+import type {
+  ActiveAoe,
+  MatchPlayerState,
+  PendingMeleeHit,
+  Projectile
+} from './matchState';
 import {
   MAX_PLAYERS,
   TEAM_INFO,
@@ -48,10 +56,9 @@ import {
   syncTeamsWithMap,
   type MatchEndResult,
   type MatchPlayerConfig,
-  type PlayerMatchStats,
-  type SplitRect
+  type PlayerMatchStats
 } from './multiplayer';
-import { baseStatsFor, combatStatsFor, type CombatStats } from './pokedex';
+import { baseStatsFor, combatStatsFor } from './pokedex';
 import { speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import {
@@ -61,17 +68,15 @@ import {
   setActiveMap,
   terrainAt,
   type GameMap,
-  type Team,
-  type TerrainId
+  type Team
 } from './terrain';
-import { terrainSpeedEffect, type TerrainSpeedReason } from './terrainSpeed';
+import { terrainSpeedEffect } from './terrainSpeed';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
   isTargetVisible,
   terrainConcealment,
-  visionForPokemon,
-  type Concealment
+  visionForPokemon
 } from './vision';
 import { buildWorld, type Collider, type World } from './world';
 
@@ -95,131 +100,6 @@ export interface GameOptions {
 
 /** Cuánto se ensancha el radio de colisión de las cuñas de sombra. */
 const MOUNTAIN_SHADOW_RADIUS = 1.05;
-
-interface ActiveBuff {
-  stat: BuffStat;
-  multiplier: number;
-  duration: number;
-}
-
-interface Projectile {
-  owner: MatchPlayerState;
-  def: AbilityDef;
-  x: number;
-  z: number;
-  vx: number;
-  vz: number;
-  traveled: number;
-  pierce: number;
-  hit: Set<MatchPlayerState>;
-  visual: EffectHandle;
-}
-
-interface PendingMeleeHit {
-  attacker: MatchPlayerState;
-  target: MatchPlayerState;
-  def: AbilityDef;
-}
-
-interface PlayerDash {
-  def: AbilityDef;
-  elapsed: number;
-  duration: number;
-  dirX: number;
-  dirZ: number;
-  speed: number;
-  /** Velocidad de la animación para que dure lo mismo que el desplazamiento. */
-  playback: number;
-  trailTimer: number;
-  hit: Set<MatchPlayerState>;
-}
-
-interface PendingCast {
-  def: AbilityDef;
-  slotIndex: number;
-  elapsed: number;
-  windup: number;
-  /** Marca en el suelo de las habilidades de área; `null` en las demás. */
-  marker: TelegraphHandle | null;
-  /** Centro del área fijado al empezar el lanzamiento. */
-  targetX: number;
-  targetZ: number;
-}
-
-/** Área persistente que aplica daño periódico mientras el rival siga dentro. */
-interface ActiveAoe {
-  owner: MatchPlayerState;
-  def: AbilityDef;
-  x: number;
-  z: number;
-  radius: number;
-  elapsed: number;
-  duration: number;
-  tickInterval: number;
-  /** Segundos restantes hasta el próximo golpe. */
-  tickTimer: number;
-}
-
-interface MatchPlayerState extends MatchPlayerConfig {
-  types: string[];
-  maxSpeed: number;
-  x: number;
-  z: number;
-  facing: number;
-  vx: number;
-  vz: number;
-  submerge: number;
-  animation: AnimationName;
-  playback: number;
-  terrain: TerrainId;
-  terrainMultiplier: number;
-  terrainSpeedReason: TerrainSpeedReason;
-  visionRange: number;
-  concealment: Concealment;
-  /** Nº de rivales vivos que te ven ahora mismo (se recalcula cada frame). */
-  enemiesSeeing: number;
-  camera: CameraRig;
-  /** Una copia del actor por viewport, indexada por jugador/vista. */
-  copies: Actor[];
-  /** Rectángulo normalizado de esta vista, para proyectar la niebla. */
-  viewport: SplitRect;
-
-  /** Punto de reaparición del equipo. */
-  spawn: { x: number; z: number };
-  /** Stats finales a nivel 50 (HP, ataque, defensa...). */
-  combat: CombatStats;
-  hp: number;
-  maxHp: number;
-  alive: boolean;
-  /** Segundos restantes hasta reaparecer. */
-  respawnTimer: number;
-  /** Segundos restantes de invulnerabilidad tras reaparecer. */
-  invulnerableTimer: number;
-  /** Bloqueo breve que impide moverse y atacar tras recibir un golpe. */
-  stunTimer: number;
-  /** Tiempo restante de la animación de daño. */
-  hurtTimer: number;
-  /** Tiempo restante de la animación de ataque. */
-  actionTimer: number;
-  actionAnimation: AnimationName;
-  /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
-  dash: PlayerDash | null;
-  /** Habilidad en preparación (windup) o `null`. */
-  pendingCast: PendingCast | null;
-  /** Tiempo que el cuerpo sigue visible tras un KO. */
-  deathFade: number;
-  kills: number;
-  deaths: number;
-  /** Enfriamiento restante de cada habilidad, en segundos. */
-  cooldowns: number[];
-  buffs: ActiveBuff[];
-  /** Segundos restantes de ralentización. */
-  slowTimer: number;
-  /** Multiplicador de velocidad mientras dure la ralentización (1 = normal). */
-  slowMultiplier: number;
-  /** Ids de las cuatro habilidades; `null` deja el hueco vacío. */
-  abilityIds: (string | null)[];
-}
 
 function angleLerp(current: number, target: number, t: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
@@ -1263,257 +1143,32 @@ export class Game {
     targetX?: number,
     targetZ?: number
   ): void {
-    // Los buffs son de lanzador y se aplican al ejecutar la habilidad.
-    for (const buff of def.buffs) {
-      player.buffs.push({ ...buff, duration: buff.duration });
-    }
+    CAST_EFFECTS({
+      player,
+      def,
+      combatFx: this.combatFx,
+      showHealPopup: (target, amount) => this.showHealPopup(target, amount)
+    });
 
-    // Curación al lanzador: nunca supera la vida máxima y muestra un número
-    // verde/rosa sobre el Pokémon para que el cambio de vida sea legible.
-    if (def.healSelf > 0 && player.alive) {
-      const missing = Math.max(0, player.maxHp - player.hp);
-      const amount = Math.min(
-        missing,
-        Math.round(player.maxHp * def.healSelf)
-      );
-      if (amount > 0) {
-        player.hp += amount;
-        this.showHealPopup(player, amount);
-      }
-      this.combatFx.spawnHeal(
-        player.x,
-        player.z,
-        def.color,
-        Math.max(0.8, def.radius)
-      );
-    }
+    const deps: AbilityExecutorDeps = {
+      combatFx: this.combatFx,
+      world: this.world,
+      matchPlayers: this.matchPlayers,
+      canHit: (attacker, target) => this.canHit(attacker, target),
+      applyAbilityDamage: (attacker, target, ability, options) =>
+        this.applyAbilityDamage(attacker, target, ability, options),
+      radialDamageMultiplier: (ability, distance, radius) =>
+        this.radialDamageMultiplier(ability, distance, radius),
+      dashPosition: (source, x, z, dirX, dirZ, distance) =>
+        this.dashPosition(source, x, z, dirX, dirZ, distance),
+      animationPlaybackFor: (source, animation, duration) =>
+        this.animationPlaybackFor(source, animation, duration),
+      addProjectile: (projectile) => this.projectiles.push(projectile),
+      addActiveAoe: (aoe) => this.activeAoes.push(aoe),
+      addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit)
+    };
 
-    const dirX = Math.sin(player.facing);
-    const dirZ = Math.cos(player.facing);
-    const originX = player.x + dirX * 0.4;
-    const originZ = player.z + dirZ * 0.4;
-
-    switch (def.shape) {
-      case 'melee': {
-        this.combatFx.spawnMelee(
-          player.x,
-          player.z,
-          player.facing,
-          def.range,
-          def.halfAngle,
-          def.color,
-          def.impactStyle
-        );
-        for (const target of this.matchPlayers) {
-          if (!this.canHit(player, target)) continue;
-          const dx = target.x - player.x;
-          const dz = target.z - player.z;
-          const distance = Math.hypot(dx, dz);
-          if (distance > def.range + CONFIG.player.radius) continue;
-          if (distance < 0.001) {
-            this.pendingMeleeHits.push({ attacker: player, target, def });
-            continue;
-          }
-          const delta = Math.abs(angleDelta(Math.atan2(dx, dz), player.facing));
-          if (delta <= def.halfAngle * DEG) {
-            this.pendingMeleeHits.push({ attacker: player, target, def });
-          }
-        }
-        break;
-      }
-
-      case 'projectile': {
-        const speed = def.projectileSpeed > 0 ? def.projectileSpeed : 12;
-        const visual = this.combatFx.spawnProjectile(
-          originX,
-          originZ,
-          def.color,
-          def.radius,
-          def.projectileStyle,
-          dirX,
-          dirZ
-        );
-        this.projectiles.push({
-          owner: player,
-          def,
-          x: originX,
-          z: originZ,
-          vx: dirX * speed,
-          vz: dirZ * speed,
-          traveled: 0,
-          pierce: def.pierce,
-          hit: new Set(),
-          visual
-        });
-        break;
-      }
-
-      case 'beam': {
-        // El haz se corta en el primer separador, muro o roca: ni el visual ni
-        // el daño atraviesan obstáculos.
-        const distance = Math.max(
-          0.1,
-          raycastColliderDistance(
-            player.x,
-            player.z,
-            dirX,
-            dirZ,
-            def.range,
-            this.world.colliders
-          )
-        );
-        const endX = player.x + dirX * distance;
-        const endZ = player.z + dirZ * distance;
-        this.combatFx.spawnBeam(
-          player.x,
-          player.z,
-          endX,
-          endZ,
-          def.color,
-          Math.max(0.08, def.radius),
-          def.beamStyle
-        );
-        for (const target of this.matchPlayers) {
-          if (!this.canHit(player, target)) continue;
-          // Comprobación en el marco del haz: el objetivo debe estar delante
-          // del lanzador y dentro del tramo. Así nadie recibe el golpe por
-          // detrás ni más allá de la punta por el margen de radio.
-          const toX = target.x - player.x;
-          const toZ = target.z - player.z;
-          const along = toX * dirX + toZ * dirZ;
-          const lateral = Math.abs(toX * dirZ - toZ * dirX);
-          if (along < 0 || along > distance) continue;
-          if (lateral > def.radius + CONFIG.player.radius) continue;
-          if (
-            segmentBlockedByColliders(
-              player.x,
-              player.z,
-              target.x,
-              target.z,
-              this.world.colliders
-            )
-          ) {
-            continue;
-          }
-          this.applyAbilityDamage(player, target, def);
-        }
-        break;
-      }
-
-      case 'aoe': {
-        const centerX = targetX ?? player.x + dirX * def.range;
-        const centerZ = targetZ ?? player.z + dirZ * def.range;
-        const duration = Math.max(0.1, def.aoeDuration);
-        this.combatFx.spawnAoe(
-          centerX,
-          centerZ,
-          def.radius,
-          def.color,
-          def.aoeStyle,
-          duration
-        );
-        if (def.aoeDamageMode === 'overTime') {
-          const tickInterval = Math.max(
-            0.05,
-            Math.min(def.aoeTickInterval, duration)
-          );
-          this.activeAoes.push({
-            owner: player,
-            def,
-            x: centerX,
-            z: centerZ,
-            radius: def.radius,
-            elapsed: 0,
-            duration,
-            tickInterval,
-            tickTimer: 0
-          });
-          break;
-        }
-        for (const target of this.matchPlayers) {
-          if (!this.canHit(player, target)) continue;
-          const distance = Math.hypot(target.x - centerX, target.z - centerZ);
-          if (distance <= def.radius + CONFIG.player.radius) {
-            const radial = this.radialDamageMultiplier(
-              def,
-              distance,
-              def.radius
-            );
-            this.applyAbilityDamage(player, target, def, {
-              power: def.power * radial
-            });
-          }
-        }
-        break;
-      }
-
-      case 'dash': {
-        // El desplazamiento real se reparte en `stepDash` durante la animación.
-        const resolved = this.dashPosition(
-          player,
-          player.x,
-          player.z,
-          dirX,
-          dirZ,
-          def.dashDistance
-        );
-        const distance = Math.hypot(
-          resolved.x - player.x,
-          resolved.z - player.z
-        );
-        // La animación dura lo que tarda en recorrer la distancia real. Si un
-        // obstáculo acorta el dash, también se acorta QuickStrike.
-        const duration =
-          distance > 0.01 && def.dashDistance > 0.01
-            ? Math.max(
-                0.08,
-                Math.min(
-                  def.castTime,
-                  (distance / def.dashDistance) * def.castTime
-                )
-              )
-            : 0.08;
-        const speed = distance > 0.01 ? distance / duration : 0;
-        const playback = this.animationPlaybackFor(
-          player,
-          def.animation,
-          duration
-        );
-        player.actionTimer = duration;
-        player.playback = playback;
-        player.dash = {
-          def,
-          elapsed: 0,
-          duration,
-          dirX,
-          dirZ,
-          speed,
-          playback,
-          trailTimer: 0,
-          hit: new Set()
-        };
-        player.vx = 0;
-        player.vz = 0;
-        // Fuerza el cambio de capa en el mismo frame del casteo; el bucle de
-        // copias lo mantiene después sin reiniciar el frame de la animación.
-        player.animation = def.animation;
-        for (const copy of player.copies) copy.play(def.animation, true);
-        break;
-      }
-
-      case 'self': {
-        // Recuperación ya tiene su propio estallido de curación.
-        if (def.healSelf <= 0) {
-          this.combatFx.spawnBuff(
-            player.x,
-            player.z,
-            def.color,
-            Math.max(0.8, def.radius)
-          );
-        }
-        break;
-      }
-    }
+    ABILITY_EXECUTORS[def.shape](player, def, deps, targetX, targetZ);
   }
 
   private canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean {
@@ -1585,44 +1240,13 @@ export class Game {
       randomFactor: rollRandomFactor()
     });
 
-    if (def.impactStyle === 'electric') {
-      this.combatFx.spawnElectricBurst(
-        target.x,
-        target.z,
-        def.color,
-        result.effectiveness
-      );
-    } else if (def.impactStyle === 'fire') {
-      this.combatFx.spawnFireBurst(
-        target.x,
-        target.z,
-        def.color,
-        result.effectiveness
-      );
-    } else if (def.impactStyle === 'grass') {
-      this.combatFx.spawnGrassBurst(
-        target.x,
-        target.z,
-        def.color,
-        result.effectiveness
-      );
-    } else if (def.impactStyle === 'poison') {
-      this.combatFx.spawnPoisonBurst(
-        target.x,
-        target.z,
-        def.color,
-        result.effectiveness
-      );
-    } else if (def.impactStyle === 'psychic') {
-      this.combatFx.spawnPsychicBurst(
-        target.x,
-        target.z,
-        def.color,
-        result.effectiveness
-      );
-    } else {
-      this.combatFx.spawnHit(target.x, target.z, def.color, result.effectiveness);
-    }
+    this.combatFx.spawnImpact(
+      target.x,
+      target.z,
+      def.color,
+      result.effectiveness,
+      def.impactStyle
+    );
     this.showDamagePopup(target, result.damage, result.critical, result.effectiveness);
 
     // Los ticks de un área no controlan al objetivo: solo restan vida y
@@ -1951,24 +1575,12 @@ export class Game {
   }
 
   private projectileBlocked(projectile: Projectile): boolean {
-    const padding = Math.max(0.05, projectile.def.radius);
-    for (const collider of this.world.colliders) {
-      const hit =
-        collider.type === 'circle'
-          ? Math.hypot(projectile.x - collider.x, projectile.z - collider.z) <=
-            collider.radius + padding
-          : pointSegmentDistance(
-              projectile.x,
-              projectile.z,
-              collider.ax,
-              collider.az,
-              collider.bx,
-              collider.bz
-            ) <=
-            collider.radius + padding;
-      if (hit) return true;
-    }
-    return false;
+    return pointBlockedByColliders(
+      projectile.x,
+      projectile.z,
+      this.world.colliders,
+      Math.max(0.05, projectile.def.radius)
+    );
   }
 
   private removeProjectile(index: number): void {
@@ -2110,41 +1722,19 @@ export class Game {
       let pushed = false;
 
       for (const collider of colliders) {
-        if (collider.type === 'circle') {
-          const dx = px - collider.x;
-          const dz = pz - collider.z;
-          const distance = Math.hypot(dx, dz);
-          const minimum = collider.radius + radius;
-          if (distance < minimum) {
-            if (distance < 0.0001) {
-              px += minimum;
-            } else {
-              px = collider.x + (dx / distance) * minimum;
-              pz = collider.z + (dz / distance) * minimum;
-            }
-            pushed = true;
+        const closest = closestPointOnCollider(collider, px, pz);
+        const dx = px - closest.x;
+        const dz = pz - closest.z;
+        const distance = Math.hypot(dx, dz);
+        const minimum = collider.radius + radius;
+        if (distance < minimum) {
+          if (distance < 0.0001) {
+            px += minimum;
+          } else {
+            px = closest.x + (dx / distance) * minimum;
+            pz = closest.z + (dz / distance) * minimum;
           }
-        } else {
-          const dx = collider.bx - collider.ax;
-          const dz = collider.bz - collider.az;
-          const lengthSq = dx * dx + dz * dz;
-          let t = lengthSq > 0 ? ((px - collider.ax) * dx + (pz - collider.az) * dz) / lengthSq : 0;
-          t = clamp(t, 0, 1);
-          const closestX = collider.ax + dx * t;
-          const closestZ = collider.az + dz * t;
-          const ox = px - closestX;
-          const oz = pz - closestZ;
-          const distance = Math.hypot(ox, oz);
-          const minimum = collider.radius + radius;
-          if (distance < minimum) {
-            if (distance < 0.0001) {
-              px += minimum;
-            } else {
-              px = closestX + (ox / distance) * minimum;
-              pz = closestZ + (oz / distance) * minimum;
-            }
-            pushed = true;
-          }
+          pushed = true;
         }
       }
 

@@ -115,6 +115,20 @@ Las habilidades de estado pueden declarar una `slow` (`{ multiplier, duration }`
 
 También pueden curar al lanzador con `healSelf`, una fracción de la vida máxima (`0.25` = 25 %; `0` por defecto). La curación se aplica al ejecutar la habilidad, nunca supera la vida máxima y muestra un número flotante rosa con prefijo `+`. `Recuperación` de Mew usa `healSelf: 0.25`, se concentra `0,75 s` y se cancela si le golpean antes de completarla.
 
+### Arquitectura y patrones
+
+El combate está separado por responsabilidades para que `game.ts` solo orqueste:
+
+- **Builder** (`abilities.ts`): cada habilidad se declara con `ability(...).power(...).cooldown(...).build()`; `registerAbility` la valida y la mete en `ABILITIES`. Los valores por defecto siguen viviendo en `DEFAULT_ABILITY`.
+- **Strategy + Registry** (`abilityExecutors.ts`): `ABILITY_EXECUTORS[shape]` resuelve `melee`, `projectile`, `beam`, `aoe`, `dash` y `self`. Añadir una forma nueva es registrar una estrategia, no añadir otro `case` a `executeAbility`.
+- **Compose** (`effects.ts`): `CAST_EFFECTS` encadena buffs y curación al lanzar. `compose(...)` permite añadir pasos sin tocar el orden de los existentes.
+- **Decorator** (`combat.ts`): `DAMAGE_MODIFIERS` aplica crítico → aleatorio → STAB → efectividad en cadena; cada decorador redondea con `floor` y conserva la fórmula oficial.
+- **Factory** (`combatFx.ts`): `projectileFactories`, `beamFactories`, `aoeFactories` e `impactEffects` eligen el VFX por estilo sin cadenas de `if`. `spawnImpact` es el punto de entrada para los impactos.
+- **Strategy de colisión** (`combat.ts`): cada tipo de collider declara su distancia a un punto y a un segmento; el raycast y el bloqueo de línea de visión comparten esas estrategias.
+- **Command/Registry del editor** (`MapEditorScreen.tsx` y `mapEditor.ts`): las herramientas de pintado son comandos por id y la validación del mapa es una lista ordenada de reglas, así que añadir una regla no toca las demás.
+
+`Game` conserva el estado mutable de la partida (`matchState.ts`) y delega el resto. `matchState.ts` define jugadores, proyectiles, áreas, dash y lanzamientos pendientes sin depender de la clase `Game`.
+
 El fuego tiene efectos dedicados: el proyectil es una bola con núcleo blanco-amarillo y estela de llamas; el haz es un chorro de lenguas de fuego solapadas con núcleo brillante y llama en la punta; las áreas usan dos estilos (`aoeStyle`): `whirl` levanta tres brazos espirales de llamas que giran como un remolino, y `fire` reparte tres anillos concéntricos de llamas por todo el disco; cada impacto genera además una explosión con núcleo, halo, llamas ascendentes, chispas y anillo en el suelo. Las llamas combinan quads cruzados con una textura procedural (`createFlameCanvas` en `textures.ts`) y partículas orientadas a cámara con esa misma textura, de modo que el fuego tiene volumen y movimiento en todas las vistas del splitscreen. Cada efecto de fuego añade además una luz omni cálida de corto alcance que tiñe el suelo y los sprites cercanos. El visual eléctrico de `Impactrueno`/`Rayo` sigue disponible con `projectileStyle`, `beamStyle` e `impactStyle` a `'electric'`.
 
 Planta y Veneno tienen estilos propios: `aoeStyle: 'grass'` levanta un torbellino bajo y ancho de hojas que gira en espiral y ocupa todo el radio del área, con partículas de hoja y un anillo verde; `aoeStyle: 'poison'` levanta una nube de esporas con puffs y motas aditivas, disponible para futuras áreas. Los golpes melee usan `impactStyle: 'grass'` (hojas despedidas) o `'spore'` (rocío de partículas pequeñas de verde oscuro que nace en el vértice y se abre hacia todos los ángulos del borde, como `Paralizador`, manteniendo el cono visible como guía), y hay proyectiles `projectileStyle: 'grass'`/`'poison'` para futuras habilidades. La silueta de hoja se genera en `createLeafParticleCanvas` y las esporas reutilizan `createPollenCanvas`.
@@ -449,9 +463,12 @@ src/game/
   roster.ts                  velocidad punta de cada Pokémon
   pokedex.ts                 stats base y stats finales a nivel 50
   typeChart.ts               tabla de tipos completa y STAB
-  abilities.ts               catálogo de habilidades y movesets por Pokémon
-  combat.ts                  fórmula de daño, precisión, críticos y geometría
-  combatFx.ts                proyectiles, arcos, haces, áreas, dashes y auras
+  abilities.ts               builder, catálogo de habilidades y movesets por Pokémon
+  abilityExecutors.ts        estrategias de ejecución por forma de habilidad
+  matchState.ts              estado mutable de jugadores, proyectiles, áreas y dash
+  effects.ts                 composición de efectos al lanzar (buffs, curación)
+  combat.ts                  fórmula de daño, decoradores, precisión y geometría
+  combatFx.ts                fábricas de proyectiles, arcos, haces, áreas, dashes y auras
   damageNumbers.ts           texto de daño en PlayCanvas: textura, quad y fadeout
   terrainSpeed.ts            multiplicadores de velocidad por terreno y tipo
   vision.ts                  rangos de visión, ocultación, tipos y línea de visión

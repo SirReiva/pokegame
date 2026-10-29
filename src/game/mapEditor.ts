@@ -517,110 +517,137 @@ export function editorMapFromJson(raw: unknown): EditorMap {
   };
 }
 
-export function validateEditorMap(map: EditorMap): string[] {
-  const issues: string[] = [];
-  const id = map.meta.id.trim();
-  if (!id) {
-    issues.push("El id no puede estar vacío.");
-  } else if (!/^[a-z0-9][a-z0-9_-]*$/i.test(id)) {
-    issues.push(
-      "El id solo puede usar letras, números, guiones y guiones bajos.",
-    );
-  }
-  if (!map.meta.name.trim()) issues.push("El nombre no puede estar vacío.");
-  if (!(map.meta.tileSize > 0))
-    issues.push("El tamaño de celda debe ser mayor que cero.");
-  if (!Number.isFinite(map.meta.waterHeight)) {
-    issues.push("La altura del agua debe ser un número.");
-  }
-  if (!(map.meta.baseRadius > 0)) {
-    issues.push("El radio de base debe ser mayor que cero.");
-  }
-  for (const base of [map.bases.blue, map.bases.red]) {
-    if (base && !(base.radius > 0)) {
-      issues.push(
-        `El radio de la base ${base.team === "blue" ? "azul" : "roja"} debe ser mayor que cero.`,
-      );
+/**
+ * Reglas de validación del editor. Cada regla devuelve sus propios mensajes;
+ * `validateEditorMap` las encadena en orden para que el panel muestre siempre
+ * los mismos avisos.
+ */
+type MapValidationRule = (map: EditorMap) => string[];
+
+const VALIDATION_RULES: readonly MapValidationRule[] = [
+  (map) => {
+    const id = map.meta.id.trim();
+    if (!id) return ["El id no puede estar vacío."];
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(id)) {
+      return ["El id solo puede usar letras, números, guiones y guiones bajos."];
     }
-  }
-  if (map.cols < EDITOR_MIN_SIZE || map.cols > EDITOR_MAX_SIZE) {
-    issues.push(
-      `El ancho de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
-    );
-  }
-  if (map.rows < EDITOR_MIN_SIZE || map.rows > EDITOR_MAX_SIZE) {
-    issues.push(
-      `El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
-    );
-  }
-  if (!map.bases.blue) issues.push("Falta la base azul.");
-  if (!map.bases.red) issues.push("Falta la base roja.");
-  map.mountains.forEach((range, index) => {
-    if (
-      range.kind !== undefined &&
-      range.kind !== "mountain" &&
-      range.kind !== "wall"
-    ) {
-      issues.push(`El separador ${index + 1} tiene un tipo desconocido.`);
-    }
-    if (!(range.width > 0)) {
-      issues.push(
-        `El ancho del separador ${index + 1} debe ser mayor que cero.`,
-      );
-    }
-    if (range.points.length < 2) {
-      issues.push(`El separador ${index + 1} necesita al menos dos puntos.`);
-    }
-    if (
-      range.points.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z))
-    ) {
-      issues.push(`El separador ${index + 1} tiene un punto no válido.`);
-    }
-  });
-  if (
+    return [];
+  },
+  (map) =>
+    map.meta.name.trim() ? [] : ["El nombre no puede estar vacío."],
+  (map) =>
+    map.meta.tileSize > 0
+      ? []
+      : ["El tamaño de celda debe ser mayor que cero."],
+  (map) =>
+    Number.isFinite(map.meta.waterHeight)
+      ? []
+      : ["La altura del agua debe ser un número."],
+  (map) =>
+    map.meta.baseRadius > 0
+      ? []
+      : ["El radio de base debe ser mayor que cero."],
+  (map) =>
+    [map.bases.blue, map.bases.red].flatMap((base) =>
+      base && !(base.radius > 0)
+        ? [
+            `El radio de la base ${base.team === "blue" ? "azul" : "roja"} debe ser mayor que cero.`,
+          ]
+        : [],
+    ),
+  (map) =>
+    map.cols < EDITOR_MIN_SIZE || map.cols > EDITOR_MAX_SIZE
+      ? [
+          `El ancho de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
+        ]
+      : [],
+  (map) =>
+    map.rows < EDITOR_MIN_SIZE || map.rows > EDITOR_MAX_SIZE
+      ? [
+          `El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
+        ]
+      : [],
+  (map) => (map.bases.blue ? [] : ["Falta la base azul."]),
+  (map) => (map.bases.red ? [] : ["Falta la base roja."]),
+  (map) =>
+    map.mountains.flatMap((range, index) => {
+      const issues: string[] = [];
+      if (
+        range.kind !== undefined &&
+        range.kind !== "mountain" &&
+        range.kind !== "wall"
+      ) {
+        issues.push(`El separador ${index + 1} tiene un tipo desconocido.`);
+      }
+      if (!(range.width > 0)) {
+        issues.push(
+          `El ancho del separador ${index + 1} debe ser mayor que cero.`,
+        );
+      }
+      if (range.points.length < 2) {
+        issues.push(`El separador ${index + 1} necesita al menos dos puntos.`);
+      }
+      if (
+        range.points.some(
+          ([x, z]) => !Number.isFinite(x) || !Number.isFinite(z),
+        )
+      ) {
+        issues.push(`El separador ${index + 1} tiene un punto no válido.`);
+      }
+      return issues;
+    }),
+  (map) =>
     map.tiles.length !== map.rows ||
     map.tiles.some(
       (row) =>
         row.length !== map.cols || row.some((terrain) => !isTerrainId(terrain)),
     )
-  ) {
-    issues.push(
-      "La rejilla no coincide con el ancho y el alto, o contiene un terreno desconocido.",
-    );
-  }
-  return issues;
+      ? [
+          "La rejilla no coincide con el ancho y el alto, o contiene un terreno desconocido.",
+        ]
+      : [],
+];
+
+export function validateEditorMap(map: EditorMap): string[] {
+  return VALIDATION_RULES.flatMap((rule) => rule(map));
 }
 
-/** Comprueba la forma mínima de un borrador guardado en localStorage. */
-export function isEditorMap(value: unknown): value is EditorMap {
-  if (!value || typeof value !== "object") return false;
-  const map = value as Partial<EditorMap>;
-  if (!map.meta || typeof map.meta !== "object") return false;
-  if (typeof map.meta.id !== "string" || typeof map.meta.name !== "string")
-    return false;
-  if (
-    typeof map.meta.tileSize !== "number" ||
-    typeof map.meta.waterHeight !== "number"
-  )
-    return false;
-  if (typeof map.meta.baseRadius !== "number") return false;
-  if (
-    typeof map.cols !== "number" ||
-    typeof map.rows !== "number" ||
-    typeof map.background !== "string"
-  ) {
-    return false;
-  }
-  if (!isTerrainId(map.background)) return false;
-  if (!Array.isArray(map.tiles) || map.tiles.length !== map.rows) return false;
-  if (!map.tiles.every((row) => Array.isArray(row) && row.length === map.cols))
-    return false;
-  if (!map.tiles.every((row) => row.every((terrain) => isTerrainId(terrain))))
-    return false;
-  if (!map.bases || typeof map.bases !== "object") return false;
-  if (map.mountains !== undefined) {
+/**
+ * Comprobaciones de forma de un borrador guardado en localStorage. Se evalúan
+ * en orden y basta con que una falle para descartar el borrador.
+ */
+type EditorMapCheck = (map: Partial<EditorMap>) => boolean;
+
+const EDITOR_MAP_CHECKS: readonly EditorMapCheck[] = [
+  (map) => !!map.meta && typeof map.meta === "object",
+  (map) =>
+    typeof map.meta?.id === "string" && typeof map.meta?.name === "string",
+  (map) =>
+    typeof map.meta?.tileSize === "number" &&
+    typeof map.meta?.waterHeight === "number",
+  (map) => typeof map.meta?.baseRadius === "number",
+  (map) =>
+    typeof map.cols === "number" &&
+    typeof map.rows === "number" &&
+    typeof map.background === "string",
+  (map) => !!map.background && isTerrainId(map.background),
+  (map) => Array.isArray(map.tiles) && map.tiles.length === map.rows,
+  (map) =>
+    Array.isArray(map.tiles) &&
+    map.tiles.every(
+      (row) => Array.isArray(row) && row.length === map.cols,
+    ),
+  (map) =>
+    Array.isArray(map.tiles) &&
+    map.tiles.every(
+      (row) =>
+        Array.isArray(row) && row.every((terrain) => isTerrainId(terrain)),
+    ),
+  (map) => !!map.bases && typeof map.bases === "object",
+  (map) => {
+    if (map.mountains === undefined) return true;
     if (!Array.isArray(map.mountains)) return false;
-    const validMountains = map.mountains.every(
+    return map.mountains.every(
       (range) =>
         range &&
         (range.kind === undefined ||
@@ -636,18 +663,20 @@ export function isEditorMap(value: unknown): value is EditorMap {
             typeof point[1] === "number",
         ),
     );
-    if (!validMountains) return false;
-  }
-  if (
-    map.spawn !== undefined &&
-    (!map.spawn ||
-      typeof map.spawn !== "object" ||
-      typeof map.spawn.x !== "number" ||
-      typeof map.spawn.z !== "number")
-  ) {
-    return false;
-  }
-  return true;
+  },
+  (map) =>
+    map.spawn === undefined ||
+    (!!map.spawn &&
+      typeof map.spawn === "object" &&
+      typeof map.spawn.x === "number" &&
+      typeof map.spawn.z === "number"),
+];
+
+/** Comprueba la forma mínima de un borrador guardado en localStorage. */
+export function isEditorMap(value: unknown): value is EditorMap {
+  if (!value || typeof value !== "object") return false;
+  const map = value as Partial<EditorMap>;
+  return EDITOR_MAP_CHECKS.every((check) => check(map));
 }
 
 /**

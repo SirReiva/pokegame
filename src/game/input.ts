@@ -17,6 +17,25 @@ export interface InputDeviceInfo {
 /** Familias de mando con distribución de botones conocida. */
 export type GamepadFamily = 'xbox' | 'playstation' | 'nintendo' | 'generic';
 
+/** Familias reconocidas, en orden de prioridad. Cada una declara sus patrones. */
+const GAMEPAD_FAMILIES: Array<{
+  family: Exclude<GamepadFamily, 'generic'>;
+  patterns: RegExp[];
+}> = [
+  {
+    family: 'playstation',
+    patterns: [/dualsense|dualshock|playstation|sony/, /\b054c\b/]
+  },
+  {
+    family: 'xbox',
+    patterns: [/xbox|xinput|microsoft/, /\b045e\b/]
+  },
+  {
+    family: 'nintendo',
+    patterns: [/nintendo|switch|joy-?con|pro controller/, /\b057e\b/]
+  }
+];
+
 /**
  * Deduce la familia a partir del identificador que expone la Gamepad API.
  * Los formatos varían por navegador, así que se aceptan tanto nombres
@@ -25,19 +44,10 @@ export type GamepadFamily = 'xbox' | 'playstation' | 'nintendo' | 'generic';
  */
 export function detectGamepadFamily(id: string): GamepadFamily {
   const name = id.toLowerCase();
-  if (
-    /dualsense|dualshock|playstation|sony/.test(name) ||
-    /\b054c\b/.test(name)
-  ) {
-    return 'playstation';
-  }
-  if (/xbox|xinput|microsoft/.test(name) || /\b045e\b/.test(name)) {
-    return 'xbox';
-  }
-  if (/nintendo|switch|joy-?con|pro controller/.test(name) || /\b057e\b/.test(name)) {
-    return 'nintendo';
-  }
-  return 'generic';
+  const match = GAMEPAD_FAMILIES.find((entry) =>
+    entry.patterns.some((pattern) => pattern.test(name))
+  );
+  return match?.family ?? 'generic';
 }
 
 export interface DeviceInputSnapshot {
@@ -84,6 +94,28 @@ const NAV_KEYS = {
   left: ['a', 'arrowleft'],
   right: ['d', 'arrowright']
 } as const;
+
+/** Teclas de las cuatro habilidades, en orden de slot. */
+const KEYBOARD_ABILITY_KEYS = ['j', 'k', 'l', 'u'] as const;
+
+/** Botones de mando de las cuatro habilidades: X, Y, RB y LB. */
+const PAD_ABILITY_BUTTONS = [2, 3, 5, 4] as const;
+
+/** Orden de prioridad cuando varias acciones de menú coinciden. */
+const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
+  'confirm',
+  'cancel',
+  'up',
+  'down',
+  'left',
+  'right'
+];
+
+function resolveMenuAction(
+  active: Partial<Record<MenuAction, boolean>>
+): MenuAction | null {
+  return MENU_ACTION_PRIORITY.find((action) => active[action]) ?? null;
+}
 
 function applyDeadzone(value: number, deadzone = DEADZONE): number {
   const magnitude = Math.abs(value);
@@ -255,18 +287,17 @@ export class Input {
     const right = edgeNav(NAV_KEYS.right);
     const confirm = tapped(' ') || tapped('enter');
     const cancel = tapped('escape') || tapped('backspace');
-    const ability1 = tapped('j');
-    const ability2 = tapped('k');
-    const ability3 = tapped('l');
-    const ability4 = tapped('u');
+    const [ability1, ability2, ability3, ability4] =
+      KEYBOARD_ABILITY_KEYS.map(tapped);
 
-    let action: MenuAction | null = null;
-    if (confirm) action = 'confirm';
-    else if (cancel) action = 'cancel';
-    else if (up) action = 'up';
-    else if (down) action = 'down';
-    else if (left) action = 'left';
-    else if (right) action = 'right';
+    const action = resolveMenuAction({
+      confirm,
+      cancel,
+      up,
+      down,
+      left,
+      right
+    });
 
     const snapshot: DeviceInputSnapshot = {
       moveX,
@@ -336,21 +367,20 @@ export class Input {
     const cancel = edge(1);
     const startPressed = edge(9);
     // X, Y, RB y LB. El botón B sigue reservado para pausa/volver.
-    const ability1 = edge(2);
-    const ability2 = edge(3);
-    const ability3 = edge(5);
-    const ability4 = edge(4);
+    const [ability1, ability2, ability3, ability4] =
+      PAD_ABILITY_BUTTONS.map(edge);
 
     state.buttons = pad.buttons.map((button) => button.pressed);
     state.nav = navNow;
 
-    let action: MenuAction | null = null;
-    if (confirm) action = 'confirm';
-    else if (cancel) action = 'cancel';
-    else if (up) action = 'up';
-    else if (down) action = 'down';
-    else if (left) action = 'left';
-    else if (right) action = 'right';
+    const action = resolveMenuAction({
+      confirm,
+      cancel,
+      up,
+      down,
+      left,
+      right
+    });
 
     const zoom =
       -applyDeadzone(axes[3] ?? 0) +

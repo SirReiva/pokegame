@@ -54,6 +54,63 @@ const FADE_START = 0.45;
 const TARGET_PIXELS = 38;
 const TARGET_PIXELS_CRITICAL = 52;
 
+/** Énfasis tipográfico: tamaño, margen y contorno. */
+interface NumberEmphasis {
+  fontSize: number;
+  paddingX: number;
+  strokeWidth: number;
+  shadowBlur: number;
+}
+
+const EMPHASIS: Record<'normal' | 'critical', NumberEmphasis> = {
+  normal: { fontSize: 76, paddingX: 22, strokeWidth: 10, shadowBlur: 14 },
+  critical: { fontSize: 96, paddingX: 28, strokeWidth: 13, shadowBlur: 20 }
+};
+
+/** Estrategias de etiqueta: curación, crítico y daño normal. */
+const LABELS: Record<
+  'heal' | 'critical' | 'normal',
+  (amount: number) => string
+> = {
+  heal: (amount) => `+${amount}`,
+  critical: (amount) => `${amount}!`,
+  normal: (amount) => `${amount}`
+};
+
+/** Estrategias de color de relleno del número. */
+const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
+  heal: '#ffa6de',
+  weak: '#d46a75',
+  critical: '#ff2d55',
+  normal: '#ff4d5a'
+};
+
+/** Estrategias de resplandor: curación rosa o daño rojo. */
+const GLOW_COLORS: Record<'heal' | 'damage', string> = {
+  heal: 'rgba(255, 120, 220, 0.9)',
+  damage: 'rgba(255, 40, 70, 0.85)'
+};
+
+function labelFor(options: DamageNumberOptions): string {
+  const key = options.heal ? 'heal' : options.critical ? 'critical' : 'normal';
+  return LABELS[key](options.amount);
+}
+
+function fillFor(
+  critical: boolean,
+  effectiveness: number,
+  heal: boolean
+): string {
+  const key = heal
+    ? 'heal'
+    : effectiveness < 1
+      ? 'weak'
+      : critical
+        ? 'critical'
+        : 'normal';
+  return FILL_COLORS[key];
+}
+
 export class DamageNumbers {
   private readonly app: pc.Application;
   private readonly device: pc.GraphicsDevice;
@@ -93,9 +150,9 @@ export class DamageNumbers {
     effectiveness: number,
     heal: boolean
   ): DamageTexture {
-    const fontSize = critical ? 96 : 76;
+    const emphasis = critical ? EMPHASIS.critical : EMPHASIS.normal;
+    const { fontSize, paddingX } = emphasis;
     const font = `900 ${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
-    const paddingX = critical ? 28 : 22;
 
     const measureCanvas = document.createElement('canvas');
     const measure = measureCanvas.getContext('2d');
@@ -117,24 +174,16 @@ export class DamageNumbers {
     context.textBaseline = 'middle';
     context.lineJoin = 'round';
     context.miterLimit = 2;
-    context.lineWidth = critical ? 13 : 10;
+    context.lineWidth = emphasis.strokeWidth;
     context.strokeStyle = 'rgba(24, 4, 9, 0.96)';
-    context.shadowColor = heal
-      ? 'rgba(255, 120, 220, 0.9)'
-      : 'rgba(255, 40, 70, 0.85)';
-    context.shadowBlur = critical ? 20 : 14;
+    context.shadowColor = heal ? GLOW_COLORS.heal : GLOW_COLORS.damage;
+    context.shadowBlur = emphasis.shadowBlur;
 
     const centerX = width / 2;
     const centerY = height / 2 + 2;
     context.strokeText(label, centerX, centerY);
     context.shadowBlur = 0;
-    context.fillStyle = heal
-      ? '#ffa6de'
-      : effectiveness < 1
-        ? '#d46a75'
-        : critical
-          ? '#ff2d55'
-          : '#ff4d5a';
+    context.fillStyle = fillFor(critical, effectiveness, heal);
     context.fillText(label, centerX, centerY);
 
     const texture = new pc.Texture(this.device, {
@@ -220,11 +269,7 @@ export class DamageNumbers {
   }
 
   spawn(options: DamageNumberOptions): void {
-    const label = options.heal
-      ? `+${options.amount}`
-      : options.critical
-        ? `${options.amount}!`
-        : `${options.amount}`;
+    const label = labelFor(options);
 
     for (const view of options.views) {
       const { texture, width: textureWidth, height: textureHeight } =

@@ -324,22 +324,56 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     );
   };
 
-  const applyTool = (row: number, col: number, activeTool: Tool, pushHistory: boolean) => {
-    const current = stateRef.current.map;
-    if (!current) return;
-
-    if (activeTool === 'pencil' || activeTool === 'eraser') {
-      const paint = activeTool === 'eraser' ? current.background : terrain;
-      mutateTiles((tiles) => paintCellInPlace(tiles, row, col, paint), pushHistory);
-    } else if (activeTool === 'fill') {
-      mutateTiles((tiles) => floodFillInPlace(tiles, row, col, terrain), pushHistory);
-    } else if (activeTool === 'base-blue' || activeTool === 'base-red') {
-      const team: Team = activeTool === 'base-blue' ? 'blue' : 'red';
+  /**
+   * Comandos de pintado por herramienta. `rect` y `mountain` tienen su propio
+   * flujo (arrastre y puntos), así que solo se registran aquí las que pintan
+   * una celda directamente.
+   */
+  type CellTool = Exclude<Tool, 'rect' | 'mountain'>;
+  const cellCommands: Record<
+    CellTool,
+    (row: number, col: number, current: EditorMap, pushHistory: boolean) => void
+  > = {
+    pencil: (row, col, _current, pushHistory) => {
+      mutateTiles(
+        (tiles) => paintCellInPlace(tiles, row, col, terrain),
+        pushHistory
+      );
+    },
+    eraser: (row, col, current, pushHistory) => {
+      mutateTiles(
+        (tiles) => paintCellInPlace(tiles, row, col, current.background),
+        pushHistory
+      );
+    },
+    fill: (row, col, _current, pushHistory) => {
+      mutateTiles(
+        (tiles) => floodFillInPlace(tiles, row, col, terrain),
+        pushHistory
+      );
+    },
+    'base-blue': (row, col, current, pushHistory) => {
       mutateBases(
-        (bases) => setBaseInPlace(bases, team, row, col, current.meta.baseRadius),
+        (bases) =>
+          setBaseInPlace(bases, 'blue', row, col, current.meta.baseRadius),
+        pushHistory
+      );
+    },
+    'base-red': (row, col, current, pushHistory) => {
+      mutateBases(
+        (bases) =>
+          setBaseInPlace(bases, 'red', row, col, current.meta.baseRadius),
         pushHistory
       );
     }
+  };
+
+  const applyTool = (row: number, col: number, activeTool: Tool, pushHistory: boolean) => {
+    const current = stateRef.current.map;
+    if (!current) return;
+    const command = cellCommands[activeTool as CellTool];
+    if (!command) return;
+    command(row, col, current, pushHistory);
   };
 
   const cellFromPointer = (event: ReactPointerEvent<HTMLCanvasElement>): Cell | null => {

@@ -43,6 +43,51 @@ export interface DamageResult {
 }
 
 /**
+ * Contexto que reciben los decoradores de daño. Cada decorador transforma el
+ * resultado del anterior, así que el orden de la cadena es parte de la regla.
+ */
+export interface DamageModifierContext {
+  critical: boolean;
+  randomFactor: number;
+  stab: boolean;
+  effectiveness: number;
+}
+
+/**
+ * Decorador de daño: recibe el daño acumulado y devuelve el siguiente. Todos
+ * redondean con `floor`, igual que la fórmula oficial, para que el orden no
+ * cambie el resultado.
+ */
+export type DamageModifier = (
+  damage: number,
+  context: DamageModifierContext
+) => number;
+
+/**
+ * Cadena de modificadores en el orden oficial:
+ * crítico → aleatorio → STAB → efectividad.
+ */
+export const DAMAGE_MODIFIERS: readonly DamageModifier[] = [
+  (damage, context) =>
+    context.critical ? Math.floor(damage * CRIT_MULTIPLIER) : damage,
+  (damage, context) => Math.floor(damage * context.randomFactor),
+  (damage, context) => (context.stab ? Math.floor(damage * 1.5) : damage),
+  (damage, context) => Math.floor(damage * context.effectiveness)
+];
+
+/** Aplica la cadena de decoradores sobre el daño base. */
+export function decorateDamage(
+  base: number,
+  context: DamageModifierContext,
+  modifiers: readonly DamageModifier[] = DAMAGE_MODIFIERS
+): number {
+  return modifiers.reduce(
+    (damage, modifier) => modifier(damage, context),
+    base
+  );
+}
+
+/**
  * Fórmula oficial de daño a nivel 50:
  *
  * ```
@@ -79,11 +124,12 @@ export function computeDamage(input: DamageInput): DamageResult {
   }
 
   const stab = isStab(input.moveType, input.attackerTypes);
-  let damage = base;
-  if (input.critical) damage = Math.floor(damage * CRIT_MULTIPLIER);
-  damage = Math.floor(damage * input.randomFactor);
-  if (stab) damage = Math.floor(damage * 1.5);
-  damage = Math.floor(damage * effectiveness);
+  const damage = decorateDamage(base, {
+    critical: input.critical,
+    randomFactor: input.randomFactor,
+    stab,
+    effectiveness
+  });
 
   return {
     damage: Math.max(1, damage),
@@ -142,6 +188,109 @@ type SegmentCollider =
       radius: number;
     };
 
+type CircleCollider = Extract<SegmentCollider, { type: 'circle' }>;
+type LineCollider = Extract<SegmentCollider, { type: 'segment' }>;
+
+/**
+ * Estrategias de distancia por tipo de collider. Cada una devuelve la
+ * distancia libre desde el punto hasta la superficie (0 si está dentro).
+ */
+const COLLIDER_POINT_DISTANCE: {
+  circle: (px: number, pz: number, collider: CircleCollider) => number;
+  segment: (px: number, pz: number, collider: LineCollider) => number;
+} = {
+  circle: (px, pz, collider) =>
+    Math.max(0, Math.hypot(px - collider.x, pz - collider.z) - collider.radius),
+  segment: (px, pz, collider) =>
+    Math.max(
+      0,
+      pointSegmentDistance(px, pz, collider.ax, collider.az, collider.bx, collider.bz) -
+        collider.radius
+    )
+};
+
+/** Estrategias de bloqueo de un segmento por tipo de collider. */
+const COLLIDER_SEGMENT_DISTANCE: {
+  circle: (
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    collider: CircleCollider
+  ) => number;
+  segment: (
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    collider: LineCollider
+  ) => number;
+} = {
+  circle: (ax, az, bx, bz, collider) =>
+    Math.max(
+      0,
+      pointSegmentDistance(collider.x, collider.z, ax, az, bx, bz) - collider.radius
+    ),
+  segment: (ax, az, bx, bz, collider) =>
+    Math.max(
+      0,
+      segmentDistance(ax, az, bx, bz, collider.ax, collider.az, collider.bx, collider.bz) -
+        collider.radius
+    )
+};
+
+function pointToCollider(
+  px: number,
+  pz: number,
+  collider: SegmentCollider
+): number {
+  const strategy = COLLIDER_POINT_DISTANCE[collider.type] as (
+    x: number,
+    z: number,
+    value: SegmentCollider
+  ) => number;
+  return strategy(px, pz, collider);
+}
+
+/**
+ * Punto más cercano de un collider a `px/pz`. Permite resolver la separación
+ * de círculos y cápsulas con el mismo código.
+ */
+export function closestPointOnCollider(
+  collider: SegmentCollider,
+  px: number,
+  pz: number
+): { x: number; z: number } {
+  if (collider.type === 'circle') {
+    return { x: collider.x, z: collider.z };
+  }
+  const dx = collider.bx - collider.ax;
+  const dz = collider.bz - collider.az;
+  const lengthSq = dx * dx + dz * dz;
+  const t =
+    lengthSq > 0
+      ? Math.min(1, Math.max(0, ((px - collider.ax) * dx + (pz - collider.az) * dz) / lengthSq))
+      : 0;
+  return { x: collider.ax + dx * t, z: collider.az + dz * t };
+}
+
+function segmentToCollider(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  collider: SegmentCollider
+): number {
+  const strategy = COLLIDER_SEGMENT_DISTANCE[collider.type] as (
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    value: SegmentCollider
+  ) => number;
+  return strategy(ax, az, bx, bz, collider);
+}
+
 /** Distancia mínima entre dos segmentos en XZ. */
 function segmentDistance(
   a0x: number,
@@ -199,29 +348,25 @@ export function raycastColliderDistance(
     const px = x + dx * t;
     const pz = z + dz * t;
     for (const collider of colliders) {
-      if (collider.type === 'circle') {
-        if (
-          Math.hypot(px - collider.x, pz - collider.z) <=
-          collider.radius + padding
-        ) {
-          return t;
-        }
-      } else if (
-        pointSegmentDistance(
-          px,
-          pz,
-          collider.ax,
-          collider.az,
-          collider.bx,
-          collider.bz
-        ) <=
-        collider.radius + padding
-      ) {
-        return t;
-      }
+      if (pointToCollider(px, pz, collider) <= padding) return t;
     }
   }
   return maxDistance;
+}
+
+/**
+ * ¿Está el punto dentro de algún collider (con `padding` de margen)? Se usa
+ * para que los proyectiles se detengan en muros, rocas y separadores.
+ */
+export function pointBlockedByColliders(
+  x: number,
+  z: number,
+  colliders: readonly SegmentCollider[],
+  padding = 0
+): boolean {
+  return colliders.some(
+    (collider) => pointToCollider(x, z, collider) <= padding
+  );
 }
 
 /**
@@ -238,17 +383,7 @@ export function segmentBlockedByColliders(
   padding = 0
 ): boolean {
   for (const collider of colliders) {
-    if (collider.type === 'circle') {
-      if (
-        pointSegmentDistance(collider.x, collider.z, ax, az, bx, bz) <=
-        collider.radius + padding
-      ) {
-        return true;
-      }
-    } else if (
-      segmentDistance(ax, az, bx, bz, collider.ax, collider.az, collider.bx, collider.bz) <=
-      collider.radius + padding
-    ) {
+    if (segmentToCollider(ax, az, bx, bz, collider) <= padding) {
       return true;
     }
   }

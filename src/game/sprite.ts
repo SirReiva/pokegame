@@ -23,6 +23,24 @@ export interface SpriteAsset {
 
 const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
 
+/**
+ * Animaciones opcionales. `requiresMoveset` evita subir hojas grandes que
+ * ningún Pokémon del roster usa (QuickStrike, Shock).
+ */
+const OPTIONAL_ANIMATIONS: ReadonlyArray<{
+  name: AnimationName;
+  requiresMoveset: boolean;
+  logLabel?: string;
+}> = [
+  { name: 'faint', requiresMoveset: false },
+  { name: 'quickstrike', requiresMoveset: true, logLabel: 'QuickStrike' },
+  { name: 'shock', requiresMoveset: true, logLabel: 'Shock' }
+];
+
+const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
+  (animation) => animation.name
+);
+
 /** Límites para no crear texturas gigantes que la GPU no pueda subir. */
 const MAX_TEXTURE_DIMENSION = 2048;
 const MAX_TEXTURE_AREA = MAX_TEXTURE_DIMENSION * MAX_TEXTURE_DIMENSION;
@@ -267,26 +285,23 @@ export async function loadSpriteAsset(
     createFor(name, images[index], animations[name])
   );
 
-  // Faint es opcional para el KO. QuickStrike solo se carga si el moveset del
-  // Pokémon realmente la usa; así no se suben hojas grandes que nadie usa.
-  if (animations.faint) {
-    const faintImage = await loadImage(animations.faint.sheet);
-    createFor('faint', faintImage, animations.faint);
-  }
-  if (
-    animations.quickstrike &&
-    movesetUsesAnimation(entry, 'quickstrike')
-  ) {
-    const quickstrikeImage = await loadImage(
-      animations.quickstrike.sheet
-    );
-    createFor('quickstrike', quickstrikeImage, animations.quickstrike);
-    console.info(`[sprite] QuickStrike cargado para ${entry.id}`);
-  }
-  if (animations.shock && movesetUsesAnimation(entry, 'shock')) {
-    const shockImage = await loadImage(animations.shock.sheet);
-    createFor('shock', shockImage, animations.shock);
-    console.info(`[sprite] Shock cargado para ${entry.id}`);
+  // Faint es opcional para el KO. QuickStrike y Shock solo se cargan si el
+  // moveset del Pokémon realmente los usa; así no se suben hojas grandes que
+  // nadie usa.
+  for (const optional of OPTIONAL_ANIMATIONS) {
+    const animation = animations[optional.name];
+    if (!animation) continue;
+    if (
+      optional.requiresMoveset &&
+      !movesetUsesAnimation(entry, optional.name)
+    ) {
+      continue;
+    }
+    const image = await loadImage(animation.sheet);
+    createFor(optional.name, image, animation);
+    if (optional.logLabel) {
+      console.info(`[sprite] ${optional.logLabel} cargado para ${entry.id}`);
+    }
   }
 
   onProgress?.();
@@ -430,36 +445,17 @@ export class SpriteBillboard {
         )
       );
     }
-    if (asset.entry.animations.faint && asset.textures.faint) {
+    for (const name of OPTIONAL_LAYER_NAMES) {
+      const animation = asset.entry.animations[name];
+      const texture = asset.textures[name];
+      if (!animation || !texture) continue;
       this.layers.set(
-        'faint',
+        name,
         this.createLayer(
-          'faint',
-          asset.entry.animations.faint,
-          asset.textures.faint,
-          asset.textureScales.faint ?? SPRITE_TEXTURE_SCALE
-        )
-      );
-    }
-    if (asset.entry.animations.quickstrike && asset.textures.quickstrike) {
-      this.layers.set(
-        'quickstrike',
-        this.createLayer(
-          'quickstrike',
-          asset.entry.animations.quickstrike,
-          asset.textures.quickstrike,
-          asset.textureScales.quickstrike ?? SPRITE_TEXTURE_SCALE
-        )
-      );
-    }
-    if (asset.entry.animations.shock && asset.textures.shock) {
-      this.layers.set(
-        'shock',
-        this.createLayer(
-          'shock',
-          asset.entry.animations.shock,
-          asset.textures.shock,
-          asset.textureScales.shock ?? SPRITE_TEXTURE_SCALE
+          name,
+          animation,
+          texture,
+          asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
         )
       );
     }
