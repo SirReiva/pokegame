@@ -2,7 +2,9 @@ import * as pc from 'playcanvas';
 import { RAD } from './config';
 import {
   createMarkerCanvas,
+  MARKER_RING_CENTER_Y,
   MARKER_RING_OUTER,
+  MARKER_TEXTURE_HEIGHT,
   MARKER_TEXTURE_SIZE,
   textureFromCanvas
 } from './textures';
@@ -34,7 +36,7 @@ export class PlayerMarker {
     const device = app.graphicsDevice;
     this.height = height;
 
-    this.texture = textureFromCanvas(device, createMarkerCanvas(MARKER_TEXTURE_SIZE, accent), {
+    this.texture = textureFromCanvas(device, createMarkerCanvas(accent), {
       name: 'player-marker',
       mipmaps: false,
       minFilter: pc.FILTER_NEAREST,
@@ -87,13 +89,19 @@ export class PlayerMarker {
     this.occlusionMaterial.update();
 
     // Quad horizontal en XZ. Las UVs están alineadas con el mundo: V=1 cae en
-    // +Z, que es hacia donde apunta la flecha dibujada en la textura.
+    // +Z, que es hacia donde apunta la flecha dibujada en la textura. El quad
+    // es más largo por delante para que la flecha alargada no se recorte y el
+    // centro del anillo siga justo bajo los pies del jugador.
+    const pixel = diameter / (MARKER_RING_OUTER * 2);
+    const halfWidth = (MARKER_TEXTURE_SIZE / 2) * pixel;
+    const behind = (MARKER_TEXTURE_HEIGHT - MARKER_RING_CENTER_Y) * pixel;
+    const ahead = MARKER_RING_CENTER_Y * pixel;
     this.mesh = new pc.Mesh(device);
     this.mesh.setPositions([
-      -0.5, 0, -0.5,
-      0.5, 0, -0.5,
-      0.5, 0, 0.5,
-      -0.5, 0, 0.5
+      -halfWidth, 0, -behind,
+      halfWidth, 0, -behind,
+      halfWidth, 0, ahead,
+      -halfWidth, 0, ahead
     ]);
     this.mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
     this.mesh.setIndices([0, 1, 2, 0, 2, 3]);
@@ -113,10 +121,6 @@ export class PlayerMarker {
     occlusion.receiveShadow = false;
     occlusion.drawOrder = 4;
     render.meshInstances = [normal, occlusion];
-    // `diameter` es el diámetro visible del anillo; el quad es mayor para que
-    // la flecha que sale del círculo tenga sitio en la textura.
-    const quad = (diameter * MARKER_TEXTURE_SIZE) / (MARKER_RING_OUTER * 2);
-    this.root.setLocalScale(quad, 1, quad);
     this.root.setLocalPosition(0, height, 0);
     app.root.addChild(this.root);
   }

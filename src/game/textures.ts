@@ -1470,10 +1470,23 @@ export function createShadowCanvas(size = 128): HTMLCanvasElement {
   return ctx.canvas;
 }
 
-/** Resolución de la textura del anillo de jugador. */
+/** Resolución horizontal de la textura del anillo de jugador. */
 export const MARKER_TEXTURE_SIZE = 64;
+/**
+ * Alto de la textura: añade espacio sobre el anillo para que la flecha
+ * alargada un 50% no se recorte.
+ */
+export const MARKER_TEXTURE_HEIGHT = 72;
+/** Centro vertical del anillo; el espacio extra queda arriba, hacia la flecha. */
+export const MARKER_RING_CENTER_Y = MARKER_TEXTURE_HEIGHT - MARKER_TEXTURE_SIZE / 2;
 /** Radio exterior del anillo en píxeles de la textura; lo usa `marker.ts`. */
 export const MARKER_RING_OUTER = 16;
+/** Distancia del centro al arranque de la flecha, pegado al borde del anillo. */
+const MARKER_ARROW_BASE = MARKER_RING_OUTER - 0.5;
+/** La flecha es un 50% más larga que antes, manteniendo el mismo ancho. */
+const MARKER_ARROW_LENGTH = MARKER_ARROW_BASE * 1.5;
+/** Semiancho de la flecha, para que siga leyéndose fina. */
+const MARKER_ARROW_HALF_WIDTH = 5;
 
 /**
  * Anillo de jugador con flecha de rumbo. Se dibuja píxel a píxel (sin
@@ -1482,21 +1495,22 @@ export const MARKER_RING_OUTER = 16;
  * borde exterior del anillo para que ambos formen una sola silueta.
  */
 export function createMarkerCanvas(
-  size = MARKER_TEXTURE_SIZE,
-  accent: readonly [number, number, number] = [255, 224, 102]
+  accent: readonly [number, number, number] = [255, 224, 102],
+  width = MARKER_TEXTURE_SIZE,
+  height = MARKER_TEXTURE_HEIGHT
 ): HTMLCanvasElement {
-  const ctx = canvas2d(size);
-  const image = ctx.createImageData(size, size);
+  const ctx = canvas2d(width, height);
+  const image = ctx.createImageData(width, height);
   const data = image.data;
-  const scale = size / 64;
-  const cx = size / 2;
-  const cy = size / 2;
+  const scale = width / MARKER_TEXTURE_SIZE;
+  const cx = width / 2;
+  const cy = MARKER_RING_CENTER_Y;
 
   // Un solo color: sin borde oscuro. El color llega del equipo del jugador.
   const color = [accent[0], accent[1], accent[2], 255];
 
   const put = (x: number, y: number, value: readonly number[]) => {
-    const index = (y * size + x) * 4;
+    const index = (y * width + x) * 4;
     data[index] = value[0];
     data[index + 1] = value[1];
     data[index + 2] = value[2];
@@ -1521,17 +1535,17 @@ export function createMarkerCanvas(
     return !(hasNeg && hasPos);
   };
 
-  // Base de la flecha apoyada en el anillo: el triángulo arranca desde dentro
-  // del borde exterior y sale hacia arriba, sin quedar separado del círculo.
-  // La flecha es más estrecha que el anillo para que se lea fina y no una cuña.
+  // Base de la flecha apoyada en el anillo: el triángulo arranca desde el
+  // borde exterior y sale hacia arriba, sin quedar separado del círculo. La
+  // flecha es más estrecha que el anillo para que se lea fina y no una cuña.
   const arrow = {
-    tip: [32, 1] as const,
-    left: [27, 16.5] as const,
-    right: [37, 16.5] as const,
+    tip: [0, -MARKER_ARROW_BASE - MARKER_ARROW_LENGTH] as const,
+    left: [-MARKER_ARROW_HALF_WIDTH, -MARKER_ARROW_BASE] as const,
+    right: [MARKER_ARROW_HALF_WIDTH, -MARKER_ARROW_BASE] as const,
   };
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
       const px = (x + 0.5 - cx) / scale;
       const py = (y + 0.5 - cy) / scale;
       const radius = Math.hypot(px, py);
@@ -1540,12 +1554,12 @@ export function createMarkerCanvas(
       const inArrow = inTriangle(
         x + 0.5,
         y + 0.5,
-        arrow.tip[0] * scale,
-        arrow.tip[1] * scale,
-        arrow.left[0] * scale,
-        arrow.left[1] * scale,
-        arrow.right[0] * scale,
-        arrow.right[1] * scale,
+        cx + arrow.tip[0] * scale,
+        cy + arrow.tip[1] * scale,
+        cx + arrow.left[0] * scale,
+        cy + arrow.left[1] * scale,
+        cx + arrow.right[0] * scale,
+        cy + arrow.right[1] * scale,
       );
 
       if (inRing || inArrow) put(x, y, color);
