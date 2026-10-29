@@ -1288,6 +1288,45 @@ export class CombatFx {
       }
     }
 
+    const psychicOrbs: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      height: number;
+      delay: number;
+      travel: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    if (style === 'psychic') {
+      // Onda telequinética: el arco apenas se marca y una lluvia de orbes
+      // psíquicos sale despedida hacia todos los ángulos del cono.
+      effectDuration = 0.62;
+      material.opacity = 0.3;
+      const orbMaterial = this.createMaterial([242, 194, 255], 0.95);
+      materials.push(orbMaterial);
+      const orbCount = 24;
+      for (let index = 0; index < orbCount; index++) {
+        const angle =
+          -halfAngle * 0.92 +
+          (index / (orbCount - 1)) * halfAngle * 1.84 +
+          (Math.random() - 0.5) * 0.06;
+        const size = 0.09 + Math.random() * 0.1;
+        const orb = this.createEntity(this.sphereMesh, [orbMaterial], entity);
+        orb.setLocalScale(size, size, size);
+        psychicOrbs.push({
+          entity: orb,
+          angle,
+          distance: range * (0.55 + Math.random() * 0.45),
+          height: 0.35 + Math.random() * 0.55,
+          delay: Math.random() * 0.12,
+          travel: 0.4 + Math.random() * 0.22,
+          size,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+
     const puffs: {
       entity: pc.Entity;
       baseX: number;
@@ -1406,7 +1445,13 @@ export class CombatFx {
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity =
-        (style === 'poison' ? 0.38 : style === 'spore' ? 0.28 : 0.85) *
+        (style === 'poison'
+          ? 0.38
+          : style === 'spore'
+            ? 0.28
+            : style === 'psychic'
+              ? 0.3
+              : 0.85) *
         (1 - t);
       const scale = 0.92 + 0.12 * t;
       entity.setLocalScale(scale, 1, scale);
@@ -1452,6 +1497,35 @@ export class CombatFx {
         );
       }
 
+      for (const orb of psychicOrbs) {
+        const local = Math.min(
+          1,
+          Math.max(0, (time - orb.delay) / orb.travel)
+        );
+        const ease = 1 - (1 - local) * (1 - local);
+        const distance = orb.distance * ease;
+        const angle = orb.angle + Math.sin(time * 3.1 + orb.phase) * 0.04;
+        const y =
+          0.55 +
+          (orb.height - 0.55) * ease +
+          Math.sin(local * Math.PI) * 0.14;
+        orb.entity.setLocalPosition(
+          Math.sin(angle) * distance,
+          y,
+          Math.cos(angle) * distance
+        );
+        const fade =
+          Math.min(1, local / 0.12) * Math.min(1, (1 - local) / 0.2);
+        const orbScale =
+          orb.size * (0.55 + ease * 0.85) * Math.max(0, fade);
+        orb.entity.setLocalScale(orbScale, orbScale, orbScale);
+        orb.entity.setLocalEulerAngles(
+          time * 140 + orb.phase * 30,
+          time * 220 + orb.phase * 50,
+          Math.sin(time * 4 + orb.phase) * 20
+        );
+      }
+
       if (cloudMaterial) cloudMaterial.opacity = 0.26 * (1 - t);
       if (cloudHotMaterial) cloudHotMaterial.opacity = 0.2 * (1 - t);
       for (const puff of puffs) {
@@ -1490,6 +1564,10 @@ export class CombatFx {
   ): void {
     if (style === 'fire') {
       this.spawnFireBeam(x1, z1, x2, z2, color, width);
+      return;
+    }
+    if (style === 'psychic') {
+      this.spawnPsychicBeam(x1, z1, x2, z2, color, width);
       return;
     }
     const dx = x2 - x1;
@@ -1546,6 +1624,96 @@ export class CombatFx {
       coreMaterial.opacity = 0.55 * flicker * fade;
       strandMaterial.update();
       coreMaterial.update();
+    });
+  }
+
+  /**
+   * Haz psíquico: un núcleo luminoso estirado con anillos de energía que
+   * recorren la línea de fuego y una punta pulsante al final.
+   */
+  private spawnPsychicBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('psychic-beam');
+    root.setPosition(x1, 0.7, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const glowMaterial = this.createMaterial(color, 0.42);
+    const coreMaterial = this.createMaterial([255, 240, 255], 0.9);
+    const ringMaterial = this.createMaterial([238, 182, 255], 0.72);
+    const materials = [glowMaterial, coreMaterial, ringMaterial];
+
+    const glowWidth = Math.max(0.06, width * 2.4);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0, length / 2);
+    glow.setLocalScale(glowWidth, glowWidth, length);
+
+    const coreWidth = Math.max(0.04, width * 0.7);
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0, length / 2);
+    core.setLocalScale(coreWidth, coreWidth, length);
+
+    // Anillos perpendiculares al haz que viajan hacia la punta.
+    const rings: pc.Entity[] = [];
+    const ringCount = 7;
+    for (let index = 0; index < ringCount; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0, ((index + 1) / (ringCount + 1)) * length);
+      ring.setLocalEulerAngles(90, 0, 0);
+      rings.push(ring);
+    }
+
+    const tip = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    tip.setLocalPosition(0, 0, length);
+    tip.setLocalScale(width * 3, width * 3, width * 3);
+
+    let time = 0;
+    this.addEffect(root, materials, 0.42, (_t, dt) => {
+      time += dt;
+      const advance = Math.min(1, time / 0.12);
+      const reveal = 1 - (1 - advance) * (1 - advance);
+      const pulse = 0.82 + Math.random() * 0.18;
+      const fade = 1 - Math.max(0, (time - 0.24) / 0.18);
+
+      glow.setLocalPosition(0, 0, (length * reveal) / 2);
+      glow.setLocalScale(
+        glowWidth * pulse,
+        glowWidth * pulse,
+        Math.max(0.02, length * reveal)
+      );
+      core.setLocalPosition(0, 0, (length * reveal) / 2);
+      core.setLocalScale(
+        coreWidth,
+        coreWidth,
+        Math.max(0.02, length * reveal)
+      );
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const path = (time * 2.1 + index / ringCount) % 1;
+        ring.setLocalPosition(0, 0, length * reveal * (0.12 + path * 0.88));
+        const ringScale =
+          width * (1.4 + pulse * 0.9) * (0.55 + Math.sin(path * Math.PI) * 0.9);
+        ring.setLocalScale(ringScale, ringScale, ringScale);
+        ring.setLocalEulerAngles(90, 0, time * 240 + index * 42);
+      }
+
+      tip.setLocalPosition(0, 0, length * reveal);
+      const tipScale = width * 3 * (0.8 + Math.sin(time * 36) * 0.25);
+      tip.setLocalScale(tipScale, tipScale, tipScale);
+
+      glowMaterial.opacity = 0.42 * pulse * fade;
+      coreMaterial.opacity = 0.9 * pulse * fade;
+      ringMaterial.opacity = 0.72 * fade;
     });
   }
 
@@ -1791,6 +1959,10 @@ export class CombatFx {
     }
     if (style === 'poison') {
       this.spawnPoisonAoe(x, z, radius, color, life);
+      return;
+    }
+    if (style === 'psychic') {
+      this.spawnPsychicAoe(x, z, radius, color, life);
       return;
     }
     const material = this.createMaterial(color, 0.8);
@@ -2068,6 +2240,147 @@ export class CombatFx {
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
+  }
+
+  /**
+   * Área psíquica: implosión central y estallido de ondas y esquirlas de
+   * energía que se abren hasta el borde del círculo. Marca el radio con un
+   * anillo y un disco tenue.
+   */
+  private spawnPsychicAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('psychic-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.42);
+    const fillMaterial = this.createMaterial([148, 88, 220], 0.12);
+    const coreMaterial = this.createMaterial([255, 232, 255], 0.95);
+    const shardMaterial = this.createMaterial([240, 186, 255], 0.9);
+    const materials = [
+      ringMaterial,
+      fillMaterial,
+      coreMaterial,
+      shardMaterial
+    ];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.03, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    // Tres ondas de choque que se expanden hacia el borde.
+    const waves: pc.Entity[] = [];
+    for (let index = 0; index < 3; index++) {
+      const wave = this.createEntity(this.torusMesh, [ringMaterial], root);
+      wave.setLocalPosition(0, 0.14 + index * 0.06, 0);
+      waves.push(wave);
+    }
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.7, 0);
+    core.setLocalScale(0.4, 0.4, 0.4);
+
+    const shards: {
+      entity: pc.Entity;
+      angle: number;
+      elevation: number;
+      distance: number;
+      delay: number;
+      travel: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    const shardCount = 54;
+    for (let index = 0; index < shardCount; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const size = 0.08 + Math.random() * 0.1;
+      const shard = this.createEntity(this.sphereMesh, [shardMaterial], root);
+      shard.setLocalScale(size, size, size);
+      shards.push({
+        entity: shard,
+        angle,
+        elevation: 0.15 + Math.random() * 0.8,
+        distance: radius * (0.45 + Math.random() * 0.55),
+        delay: Math.random() * 0.1,
+        travel: 0.38 + Math.random() * 0.24,
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / (life * 0.45)));
+      const pulse = 0.5 + Math.sin(time * 24) * 0.2;
+
+      ringMaterial.opacity = (0.22 + pulse * 0.24) * fadeOut;
+      fillMaterial.opacity = (0.06 + pulse * 0.06) * fadeOut;
+      const groundScale = radius * 2 * (0.98 + pulse * 0.03);
+      ring.setLocalScale(groundScale, 1, groundScale);
+
+      for (let index = 0; index < waves.length; index++) {
+        const wave = waves[index];
+        const progress = Math.min(
+          1,
+          Math.max(0, (time - index * 0.09) / 0.42)
+        );
+        const ease = 1 - (1 - progress) * (1 - progress);
+        const scale = Math.max(0.01, radius * 2 * ease);
+        wave.setLocalScale(scale, 1, scale);
+      }
+
+      // El núcleo se contrae durante la implosión y luego estalla.
+      const implosion = Math.min(1, time / 0.14);
+      const burst = Math.max(0, Math.min(1, (time - 0.14) / 0.32));
+      const coreScale =
+        radius *
+        (0.5 * (1 - implosion) + 0.34 * Math.sin(burst * Math.PI));
+      core.setLocalScale(
+        Math.max(0.01, coreScale),
+        Math.max(0.01, coreScale),
+        Math.max(0.01, coreScale)
+      );
+      core.setLocalPosition(0, 0.7 + Math.sin(burst * Math.PI) * 0.6, 0);
+      coreMaterial.opacity =
+        0.95 * (implosion < 1 ? 1 : Math.max(0, 1 - burst));
+
+      for (const shard of shards) {
+        const local = Math.min(
+          1,
+          Math.max(0, (time - shard.delay) / shard.travel)
+        );
+        const ease = 1 - (1 - local) * (1 - local);
+        const distance = shard.distance * ease;
+        const angle = shard.angle + Math.sin(time * 3 + shard.phase) * 0.06;
+        const y = 0.4 + shard.elevation * ease * radius * 0.45;
+        shard.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          y,
+          Math.sin(angle) * distance
+        );
+        const fade =
+          Math.min(1, local / 0.1) * Math.min(1, (1 - local) / 0.25);
+        const scale =
+          shard.size * (0.6 + ease * 0.9) * Math.max(0, fade) * fadeOut;
+        shard.entity.setLocalScale(scale, scale, scale);
+        shard.entity.setLocalEulerAngles(
+          time * 160 + shard.phase * 30,
+          time * 210 + shard.phase * 40,
+          Math.sin(time * 5 + shard.phase) * 24
+        );
+      }
+    });
   }
 
   /**
@@ -2666,6 +2979,89 @@ export class CombatFx {
       }
       leafMaterial.opacity = 0.95 * (1 - t);
       hotMaterial.opacity = 0.95 * (1 - t);
+    });
+  }
+
+  /** Impacto psíquico: núcleo blanco, anillo violeta y esquirlas radiales. */
+  spawnPsychicBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    _effectiveness: number
+  ): void {
+    const root = new pc.Entity('psychic-burst');
+    root.setPosition(x, 0.04, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 236, 255], 0.95);
+    const ringMaterial = this.createMaterial(color, 0.55);
+    const shardMaterial = this.createMaterial([242, 190, 255], 0.92);
+    const materials = [coreMaterial, ringMaterial, shardMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.68, 0);
+    core.setLocalScale(0.26, 0.26, 0.26);
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.12, 0);
+    ring.setLocalScale(0.5, 1, 0.5);
+
+    const shards: {
+      entity: pc.Entity;
+      angle: number;
+      lift: number;
+      size: number;
+      spin: number;
+    }[] = [];
+    for (let index = 0; index < 16; index++) {
+      const angle = (index / 16) * Math.PI * 2 + Math.random() * 0.25;
+      const size = 0.09 + Math.random() * 0.09;
+      const shard = this.createEntity(this.sphereMesh, [shardMaterial], root);
+      shard.setLocalPosition(
+        Math.cos(angle) * 0.2,
+        0.6,
+        Math.sin(angle) * 0.2
+      );
+      shard.setLocalScale(size, size, size);
+      shards.push({
+        entity: shard,
+        angle,
+        lift: 0.6 + Math.random() * 1.1,
+        size,
+        spin: 120 + Math.random() * 260
+      });
+    }
+
+    this.addEffect(root, materials, 0.55, (t) => {
+      const scale = 0.26 + t * 1.05;
+      core.setLocalScale(scale, scale, scale);
+      core.setLocalPosition(0, 0.68 + t * 0.3, 0);
+      coreMaterial.opacity = 0.95 * (1 - t);
+
+      const ringScale = 0.5 + t * 1.7;
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = 0.55 * (1 - t);
+
+      for (const shard of shards) {
+        const distance = 0.2 + t * 1.5;
+        shard.entity.setLocalPosition(
+          Math.cos(shard.angle) * distance,
+          0.6 + t * shard.lift - t * t * shard.lift * 1.15,
+          Math.sin(shard.angle) * distance
+        );
+        shard.entity.setLocalEulerAngles(
+          t * shard.spin,
+          t * shard.spin * 0.7,
+          t * shard.spin * 0.45
+        );
+        const fade = Math.max(0, 1 - t * 1.2);
+        shard.entity.setLocalScale(
+          shard.size * fade,
+          shard.size * fade,
+          shard.size * fade
+        );
+      }
+      shardMaterial.opacity = 0.92 * (1 - t);
     });
   }
 

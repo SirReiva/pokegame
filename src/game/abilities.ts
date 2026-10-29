@@ -42,16 +42,29 @@ export type DamageCategory = 'physical' | 'special' | 'status';
 export type BuffStat = 'speed' | 'attack' | 'defense' | 'spAttack' | 'spDefense';
 
 /** Aspecto visual de un proyectil. */
-export type ProjectileStyle = 'orb' | 'electric' | 'fire' | 'grass' | 'poison';
+export type ProjectileStyle =
+  | 'orb'
+  | 'electric'
+  | 'fire'
+  | 'grass'
+  | 'poison'
+  | 'psychic';
 
 /** Aspecto visual del impacto de una habilidad. */
-export type ImpactStyle = 'hit' | 'electric' | 'fire' | 'grass' | 'poison' | 'spore';
+export type ImpactStyle =
+  | 'hit'
+  | 'electric'
+  | 'fire'
+  | 'grass'
+  | 'poison'
+  | 'spore'
+  | 'psychic';
 
 /** Aspecto visual de un haz. */
-export type BeamStyle = 'electric' | 'fire';
+export type BeamStyle = 'electric' | 'fire' | 'psychic';
 
 /** Aspecto visual de un área. */
-export type AoeStyle = 'ring' | 'fire' | 'whirl' | 'grass' | 'poison';
+export type AoeStyle = 'ring' | 'fire' | 'whirl' | 'grass' | 'poison' | 'psychic';
 
 /**
  * Reparto del daño de un área:
@@ -441,6 +454,93 @@ ABILITIES.llueveHojas = defineAbility({
     'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 120 de potencia.'
 });
 
+/* ------------------------------------------------------------------------- */
+/* Mewtwo                                                                    */
+/* ------------------------------------------------------------------------- */
+
+ABILITIES.telequinesis = defineAbility({
+  id: 'telequinesis',
+  name: 'Telequinesis',
+  type: 'Psychic',
+  category: 'special',
+  shape: 'melee',
+  power: 55,
+  accuracy: 100,
+  cooldown: 0.6,
+  range: 2.5,
+  radius: 0.8,
+  halfAngle: 55,
+  knockback: 1.4,
+  castTime: 0.4,
+  windup: 0.12,
+  impactStyle: 'psychic',
+  color: [214, 122, 255],
+  description:
+    'Onda telequinética de corto alcance que empuja con fuerza. Ataque básico de Mewtwo.'
+});
+
+ABILITIES.teletransporte = defineAbility({
+  id: 'teletransporte',
+  name: 'Teletransporte',
+  type: 'Psychic',
+  category: 'status',
+  shape: 'dash',
+  power: 0,
+  accuracy: 0,
+  cooldown: 6,
+  range: 0,
+  radius: 0.85,
+  dashDistance: 5,
+  castTime: 0.24,
+  animation: 'quickstrike',
+  impactStyle: 'psychic',
+  color: [170, 104, 255],
+  description:
+    'Desaparece y reaparece 5 u más adelante. Movilidad pura para entrar o salir del combate.'
+});
+
+ABILITIES.psiquico = defineAbility({
+  id: 'psiquico',
+  name: 'Psíquico',
+  type: 'Psychic',
+  category: 'special',
+  shape: 'beam',
+  power: 95,
+  accuracy: 100,
+  cooldown: 7,
+  range: 10,
+  radius: 0.42,
+  windup: 0.4,
+  castTime: 0.5,
+  beamStyle: 'psychic',
+  impactStyle: 'psychic',
+  color: [226, 132, 255],
+  description:
+    'Lanza psíquico instantáneo de largo alcance que atraviesa a los rivales en línea.'
+});
+
+ABILITIES.psicoataque = defineAbility({
+  id: 'psicoataque',
+  name: 'Psicoataque',
+  type: 'Psychic',
+  category: 'special',
+  shape: 'aoe',
+  power: 125,
+  accuracy: 95,
+  cooldown: 15,
+  range: 4.5,
+  radius: 3.2,
+  windup: 0.8,
+  castTime: 0.7,
+  aoeStyle: 'psychic',
+  aoeDamageMode: 'instant',
+  aoeDuration: 0.85,
+  impactStyle: 'psychic',
+  color: [198, 96, 255],
+  description:
+    'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia.'
+});
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -453,6 +553,12 @@ export const MOVESETS: Record<
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
+MOVESETS['0150'] = [
+  'telequinesis',
+  'teletransporte',
+  'psiquico',
+  'psicoataque'
+];
 
 export function abilityForSlot(
   pokemonId: string,

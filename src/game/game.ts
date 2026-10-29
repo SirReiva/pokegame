@@ -1569,6 +1569,13 @@ export class Game {
         def.color,
         result.effectiveness
       );
+    } else if (def.impactStyle === 'psychic') {
+      this.combatFx.spawnPsychicBurst(
+        target.x,
+        target.z,
+        def.color,
+        result.effectiveness
+      );
     } else {
       this.combatFx.spawnHit(target.x, target.z, def.color, result.effectiveness);
     }
