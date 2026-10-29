@@ -20,7 +20,11 @@ import {
   rollRandomFactor,
   segmentBlockedByColliders
 } from './combat';
-import { CombatFx, type EffectHandle } from './combatFx';
+import {
+  CombatFx,
+  type EffectHandle,
+  type TelegraphHandle
+} from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder } from './fog';
@@ -134,6 +138,25 @@ interface PendingCast {
   slotIndex: number;
   elapsed: number;
   windup: number;
+  /** Marca en el suelo de las habilidades de área; `null` en las demás. */
+  marker: TelegraphHandle | null;
+  /** Centro del área fijado al empezar el lanzamiento. */
+  targetX: number;
+  targetZ: number;
+}
+
+/** Área persistente que aplica daño periódico mientras el rival siga dentro. */
+interface ActiveAoe {
+  owner: MatchPlayerState;
+  def: AbilityDef;
+  x: number;
+  z: number;
+  radius: number;
+  elapsed: number;
+  duration: number;
+  tickInterval: number;
+  /** Segundos restantes hasta el próximo golpe. */
+  tickTimer: number;
 }
 
 interface MatchPlayerState extends MatchPlayerConfig {
@@ -237,6 +260,8 @@ export class Game {
   private viewLayers: pc.Layer[] = [];
   /** Proyectiles activos de todas las vistas. */
   private projectiles: Projectile[] = [];
+  /** Áreas persistentes con daño periódico. */
+  private activeAoes: ActiveAoe[] = [];
   /** Golpes melee del frame actual, resueltos después de mover a todos. */
   private pendingMeleeHits: PendingMeleeHit[] = [];
   /** Marcador de la partida; gana el primero que llegue a `KO_TARGET`. */
@@ -569,6 +594,7 @@ export class Game {
   private clearMatch(): void {
     for (const projectile of this.projectiles) projectile.visual.destroy();
     this.projectiles = [];
+    this.activeAoes = [];
     this.pendingMeleeHits = [];
     this.combatFx.clear();
     this.damageNumbers.clear();
@@ -711,6 +737,7 @@ export class Game {
 
     this.resolveMeleeHits();
     this.updateProjectiles(dt);
+    this.updateActiveAoes(dt);
 
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
     // la cámara del viewport que la va a dibujar.
@@ -889,11 +916,18 @@ export class Game {
       );
     }
 
-    // Prioridad de animación: daño > ataque > andar > reposo.
+    // Prioridad de animación: daño > ataque > andar > reposo. Durante un
+    // windup móvil, andar tiene prioridad sobre el ataque para no deslizar.
     if (player.hurtTimer > 0) {
       player.animation = 'hurt';
       player.playback = 1;
-    } else if (player.actionTimer > 0) {
+    } else if (
+      player.actionTimer > 0 &&
+      !(
+        player.pendingCast?.def.moveWhileWindup &&
+        speed > CONFIG.player.minFacingSpeed
+      )
+    ) {
       player.animation = player.actionAnimation;
       player.playback = 1;
     } else if (speed > CONFIG.player.minFacingSpeed) {
@@ -979,31 +1013,48 @@ export class Game {
     if (!pending) return false;
 
     pending.elapsed += dt;
-    player.vx = 0;
-    player.vz = 0;
-    player.animation = pending.def.animation;
-    // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
-    // fija y repetición hasta que termine el windup.
-    player.playback =
-      pending.def.windupAnimationMode === 'loop'
-        ? Math.max(0.05, pending.def.windupAnimationSpeed)
-        : this.animationPlaybackFor(
-            player,
-            pending.def.animation,
-            pending.windup
-          );
+    // Las habilidades marcadas con `moveWhileWindup` dejan seguir moviéndose;
+    // el centro del área ya está fijado y la marca permanece en el suelo.
+    const movable = pending.def.moveWhileWindup;
+    if (!movable) {
+      player.vx = 0;
+      player.vz = 0;
+      player.animation = pending.def.animation;
+      // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
+      // fija y repetición hasta que termine el windup.
+      player.playback =
+        pending.def.windupAnimationMode === 'loop'
+          ? Math.max(0.05, pending.def.windupAnimationSpeed)
+          : this.animationPlaybackFor(
+              player,
+              pending.def.animation,
+              pending.windup
+            );
+    } else {
+      // Mantén la pose de lanzamiento mientras el Pokémon esté quieto; al
+      // andar, la animación de caminar tiene prioridad.
+      player.actionTimer = Math.max(player.actionTimer, 0.05);
+    }
 
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
     player.concealment = terrainConcealment(terrain, player.types);
 
     if (pending.elapsed >= pending.windup) {
-      player.pendingCast = null;
-      this.executeAbility(player, pending.def);
+      this.cancelPendingCast(player);
+      this.executeAbility(
+        player,
+        pending.def,
+        pending.targetX,
+        pending.targetZ
+      );
     }
 
-    this.updateCamera(player, input, dt);
-    return true;
+    if (!movable) {
+      this.updateCamera(player, input, dt);
+      return true;
+    }
+    return false;
   }
 
   private stepDash(
@@ -1124,7 +1175,7 @@ export class Game {
     player.hurtTimer = 0;
     player.actionTimer = 0;
     player.dash = null;
-    player.pendingCast = null;
+    this.cancelPendingCast(player);
     player.deathFade = 0;
     player.cooldowns = [0, 0, 0, 0];
     player.buffs = [];
@@ -1134,6 +1185,12 @@ export class Game {
     player.concealment = terrainConcealment(player.terrain, player.types);
     player.submerge = 0;
     this.combatFx.spawnBuff(player.x, player.z, [255, 255, 255], 1.1);
+  }
+
+  /** Cancela una habilidad en preparación y retira su marca de área. */
+  private cancelPendingCast(player: MatchPlayerState): void {
+    player.pendingCast?.marker?.destroy();
+    player.pendingCast = null;
   }
 
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
@@ -1154,11 +1211,30 @@ export class Game {
     player.vz = 0;
 
     if (def.windup > 0) {
+      const dirX = Math.sin(player.facing);
+      const dirZ = Math.cos(player.facing);
+      const targetX = player.x + dirX * def.range;
+      const targetZ = player.z + dirZ * def.range;
+      // Las habilidades de área fijan su centro al empezar el retardo y
+      // muestran la marca en el suelo hasta el impacto.
+      const marker =
+        def.shape === 'aoe'
+          ? this.combatFx.spawnAoeTelegraph(
+              targetX,
+              targetZ,
+              def.radius,
+              def.color,
+              def.windup
+            )
+          : null;
       player.pendingCast = {
         def,
         slotIndex,
         elapsed: 0,
-        windup: def.windup
+        windup: def.windup,
+        marker,
+        targetX,
+        targetZ
       };
       return;
     }
@@ -1167,7 +1243,12 @@ export class Game {
   }
 
   /** Ejecuta el efecto de una habilidad cuando termina su preparación. */
-  private executeAbility(player: MatchPlayerState, def: AbilityDef): void {
+  private executeAbility(
+    player: MatchPlayerState,
+    def: AbilityDef,
+    targetX?: number,
+    targetZ?: number
+  ): void {
     // Los buffs son de lanzador y se aplican al ejecutar la habilidad.
     for (const buff of def.buffs) {
       player.buffs.push({ ...buff, duration: buff.duration });
@@ -1254,7 +1335,8 @@ export class Game {
           endX,
           endZ,
           def.color,
-          Math.max(0.08, def.radius)
+          Math.max(0.08, def.radius),
+          def.beamStyle
         );
         for (const target of this.matchPlayers) {
           if (!this.canHit(player, target)) continue;
@@ -1284,9 +1366,35 @@ export class Game {
       }
 
       case 'aoe': {
-        const centerX = player.x + dirX * def.range;
-        const centerZ = player.z + dirZ * def.range;
-        this.combatFx.spawnAoe(centerX, centerZ, def.radius, def.color);
+        const centerX = targetX ?? player.x + dirX * def.range;
+        const centerZ = targetZ ?? player.z + dirZ * def.range;
+        const duration = Math.max(0.1, def.aoeDuration);
+        this.combatFx.spawnAoe(
+          centerX,
+          centerZ,
+          def.radius,
+          def.color,
+          def.aoeStyle,
+          duration
+        );
+        if (def.aoeDamageMode === 'overTime') {
+          const tickInterval = Math.max(
+            0.05,
+            Math.min(def.aoeTickInterval, duration)
+          );
+          this.activeAoes.push({
+            owner: player,
+            def,
+            x: centerX,
+            z: centerZ,
+            radius: def.radius,
+            elapsed: 0,
+            duration,
+            tickInterval,
+            tickTimer: 0
+          });
+          break;
+        }
         for (const target of this.matchPlayers) {
           if (!this.canHit(player, target)) continue;
           if (
@@ -1377,9 +1485,11 @@ export class Game {
   private applyAbilityDamage(
     attacker: MatchPlayerState,
     target: MatchPlayerState,
-    def: AbilityDef
+    def: AbilityDef,
+    options: { power?: number; control?: boolean } = {}
   ): void {
-    if (def.power <= 0 || def.category === 'status') return;
+    const power = options.power ?? def.power;
+    if (power <= 0 || def.category === 'status') return;
     if (!rollAccuracy(def.accuracy)) return;
 
     const critical = rollCritical();
@@ -1387,7 +1497,7 @@ export class Game {
     const result = computeDamage({
       moveType: def.type,
       category: def.category,
-      power: def.power,
+      power,
       attacker: attacker.combat,
       defender: target.combat,
       attackerTypes: attacker.types,
@@ -1405,23 +1515,35 @@ export class Game {
         def.color,
         result.effectiveness
       );
+    } else if (def.impactStyle === 'fire') {
+      this.combatFx.spawnFireBurst(
+        target.x,
+        target.z,
+        def.color,
+        result.effectiveness
+      );
     } else {
       this.combatFx.spawnHit(target.x, target.z, def.color, result.effectiveness);
     }
     this.showDamagePopup(target, result.damage, result.critical, result.effectiveness);
 
-    // Cualquier impacto que conecta cancela el dash y la preparación en curso,
-    // aunque sea inmune y reste 0 de vida.
-    target.actionTimer = 0;
-    target.dash = null;
-    target.pendingCast = null;
+    // Los ticks de un área no controlan al objetivo: solo restan vida y
+    // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
+    const control = options.control ?? true;
+    if (control) {
+      target.actionTimer = 0;
+      target.dash = null;
+      this.cancelPendingCast(target);
+    }
 
     if (result.damage <= 0) return;
     target.hp = Math.max(0, target.hp - result.damage);
-    target.hurtTimer = Math.max(target.hurtTimer, 0.35);
-    target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
-    if (def.knockback > 0) {
-      this.applyKnockback(target, attacker.x, attacker.z, def.knockback);
+    target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
+    if (control) {
+      target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
+      if (def.knockback > 0) {
+        this.applyKnockback(target, attacker.x, attacker.z, def.knockback);
+      }
     }
     if (target.hp <= 0) this.knockOut(target, attacker);
   }
@@ -1483,7 +1605,7 @@ export class Game {
     target.hurtTimer = 0;
     target.actionTimer = 0;
     target.dash = null;
-    target.pendingCast = null;
+    this.cancelPendingCast(target);
     target.vx = 0;
     target.vz = 0;
     target.buffs = [];
@@ -1516,7 +1638,6 @@ export class Game {
       projectile.traveled += Math.hypot(projectile.vx, projectile.vz) * dt;
       projectile.visual.setPosition(projectile.x, projectile.z);
       projectile.visual.update(dt);
-
       const bounds = this.world.bounds;
       if (
         Math.abs(projectile.x) > bounds.x ||
@@ -1549,6 +1670,47 @@ export class Game {
         }
       }
       if (removed) continue;
+    }
+  }
+
+  /**
+   * Avanza las áreas persistentes y golpea en cada tick a los enemigos que
+   * sigan dentro. En modo `overTime`, `power` se interpreta como daño por
+   * segundo, así que cada tick usa `power × aoeTickInterval`.
+   */
+  private updateActiveAoes(dt: number): void {
+    for (let index = this.activeAoes.length - 1; index >= 0; index--) {
+      const aoe = this.activeAoes[index];
+      aoe.elapsed += dt;
+      aoe.tickTimer -= dt;
+      // El primer tick cae al aparecer el área (tickTimer empieza en 0).
+      let guard = 0;
+      while (
+        aoe.tickTimer <= 0 &&
+        aoe.elapsed < aoe.duration &&
+        guard < 8
+      ) {
+        guard += 1;
+        this.tickAoe(aoe);
+        aoe.tickTimer += aoe.tickInterval;
+      }
+      if (aoe.elapsed >= aoe.duration) {
+        this.activeAoes.splice(index, 1);
+      }
+    }
+  }
+
+  private tickAoe(aoe: ActiveAoe): void {
+    const power = aoe.def.power * aoe.tickInterval;
+    if (power <= 0) return;
+    for (const target of this.matchPlayers) {
+      if (!this.canHit(aoe.owner, target)) continue;
+      const distance = Math.hypot(target.x - aoe.x, target.z - aoe.z);
+      if (distance > aoe.radius + CONFIG.player.radius) continue;
+      this.applyAbilityDamage(aoe.owner, target, aoe.def, {
+        power,
+        control: false
+      });
     }
   }
 
@@ -1589,7 +1751,7 @@ export class Game {
         player.hurtTimer = Math.max(player.hurtTimer, 0.35);
         player.actionTimer = 0;
         player.dash = null;
-        player.pendingCast = null;
+        this.cancelPendingCast(player);
         player.vx = 0;
         player.vz = 0;
         player.animation = 'hurt';

@@ -11,6 +11,7 @@ import type { SpriteManifest } from '../game/types';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
 import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
+import { TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
 
 interface MatchHudProps {
   manifest: SpriteManifest;
@@ -267,6 +268,17 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                       const keys = playerStats.gamepad
                         ? ['X', 'Y', 'RB', 'LB']
                         : ['J', 'K', 'L', 'U'];
+                      const typeLabel = TYPE_LABELS[ability.type] ?? ability.type;
+                      const typeBadge = compact
+                        ? (TYPE_SHORT_LABELS[ability.type] ??
+                          typeLabel.slice(0, 3).toUpperCase())
+                        : typeLabel;
+                      const categoryLabel =
+                        ability.category === 'physical'
+                          ? 'Físico'
+                          : ability.category === 'special'
+                            ? 'Especial'
+                            : 'Estado';
                       return (
                         <div
                           key={ability.slot}
@@ -275,10 +287,22 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                               ? 'border-[color:color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
                               : 'border-line opacity-75'
                           }`}
-                          title={`${ability.name}${ability.type ? ` · ${ability.type}` : ''}`}
+                          title={`${ability.name}${ability.type ? ` · ${typeLabel} · ${categoryLabel}` : ''}`}
                         >
-                          <span className="font-mono text-[0.44rem] tracking-[0.06em] text-(--team)">
-                            {keys[abilityIndex]}
+                          <span className="flex items-center justify-between gap-1">
+                            <span className="font-mono text-[0.44rem] tracking-[0.06em] text-(--team)">
+                              {keys[abilityIndex]}
+                            </span>
+                            {ability.type && (
+                              <span
+                                className={`shrink-0 rounded-full px-1 py-px font-mono font-bold uppercase leading-none tracking-[0.03em] ${
+                                  compact ? 'text-[0.34rem]' : 'text-[0.4rem]'
+                                }`}
+                                style={typeStyle(ability.type)}
+                              >
+                                {typeBadge}
+                              </span>
+                            )}
                           </span>
                           <span className="truncate font-mono text-[0.46rem] text-[#c6d4e2]">
                             {ability.name}

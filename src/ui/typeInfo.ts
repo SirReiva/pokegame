@@ -42,6 +42,28 @@ export const TYPE_LABELS: Record<string, string> = {
   Fairy: 'Hada'
 };
 
+/** Abreviaturas para espacios muy estrechos, como el HUD de 5+ jugadores. */
+export const TYPE_SHORT_LABELS: Record<string, string> = {
+  Normal: 'NOR',
+  Fire: 'FUE',
+  Water: 'AGU',
+  Electric: 'ELE',
+  Grass: 'PLA',
+  Ice: 'HIE',
+  Fighting: 'LUC',
+  Poison: 'VEN',
+  Ground: 'TIE',
+  Flying: 'VOL',
+  Psychic: 'PSI',
+  Bug: 'BIC',
+  Rock: 'ROC',
+  Ghost: 'FAN',
+  Dragon: 'DRA',
+  Dark: 'SIN',
+  Steel: 'ACE',
+  Fairy: 'HAD'
+};
+
 const LIGHT_TYPES = new Set(['Normal', 'Electric', 'Ice', 'Ground', 'Steel', 'Fairy']);
 
 export function typeStyle(type: string): CSSProperties {

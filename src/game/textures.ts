@@ -1216,6 +1216,92 @@ export function createEmberCanvas(size = 48): HTMLCanvasElement {
 }
 
 /**
+ * Lengua de fuego procedural para los efectos de combate.
+ *
+ * La silueta es un óvalo alargado que se afila hacia la punta y ondula en los
+ * bordes; el color va de blanco-amarillo en el corazón a naranja y rojo en la
+ * periferia. Se usa en quads cruzados con blending aditivo, así que el alfa 0
+ * del contorno hace que las llamas se fundan entre sí sin dejar un rectángulo.
+ */
+export function createFlameCanvas(width = 96, height = 144): HTMLCanvasElement {
+  const ctx = canvas2d(width, height);
+  const image = ctx.createImageData(width, height);
+  const smooth = (edge0: number, edge1: number, value: number): number => {
+    const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  };
+
+  for (let y = 0; y < height; y++) {
+    // v = 0 en la base, 1 en la punta.
+    const v = 1 - (y + 0.5) / height;
+    const taper = Math.pow(1 - v, 0.62);
+    const belly = 0.42 + 0.58 * Math.sin(Math.PI * Math.min(1, 0.1 + v * 1.05));
+    const half = 0.5 * taper * belly + 0.02;
+    // Serpenteo del eje y del borde: evita la simetría perfecta de un cono.
+    const drift = 0.07 * Math.sin(v * 5.1 + 1.2) * v;
+    const wander =
+      0.075 * Math.sin(v * 9.3 + 0.6) * (0.3 + 0.7 * v) +
+      0.03 * Math.sin(v * 23 + 2.4);
+
+    for (let x = 0; x < width; x++) {
+      const u = ((x + 0.5) / width) * 2 - 1;
+      const distance = Math.abs(u - drift - wander) / half;
+      if (distance >= 1) continue;
+
+      const radial = 1 - distance;
+      const grain =
+        0.5 +
+        0.5 * Math.sin(v * 41 + u * 9) * Math.sin(v * 17 - u * 5 + 1.3);
+      const heat = Math.min(
+        1,
+        Math.max(0, 1 - v * 0.78 - (1 - radial) * 0.75)
+      );
+
+      let r: number;
+      let g: number;
+      let b: number;
+      if (heat > 0.72) {
+        const k = (heat - 0.72) / 0.28;
+        r = 255;
+        g = 225 + 30 * k;
+        b = 120 + 110 * k;
+      } else if (heat > 0.45) {
+        const k = (heat - 0.45) / 0.27;
+        r = 255;
+        g = 145 + 80 * k;
+        b = 35 + 85 * k;
+      } else if (heat > 0.2) {
+        const k = (heat - 0.2) / 0.25;
+        r = 226 + 29 * k;
+        g = 74 + 71 * k;
+        b = 18 + 17 * k;
+      } else {
+        const k = heat / 0.2;
+        r = 140 + 86 * k;
+        g = 24 + 50 * k;
+        b = 4 + 14 * k;
+      }
+
+      let alpha = 1 - smooth(0.7, 1, distance);
+      alpha *= 0.55 + 0.45 * grain;
+      alpha *= 1 - smooth(0.88, 1, v);
+      alpha *= 0.6 + 0.4 * smooth(0, 0.06, v);
+      // Alguna rasgadura cerca del borde para que no parezca una lámina.
+      if (grain < 0.22 && distance > 0.55) alpha *= 0.35;
+
+      const index = (y * width + x) * 4;
+      image.data[index] = Math.round(r);
+      image.data[index + 1] = Math.round(g);
+      image.data[index + 2] = Math.round(b);
+      image.data[index + 3] = Math.round(Math.min(1, alpha) * 255);
+    }
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return ctx.canvas;
+}
+
+/**
  * Fuego fatuo: orbe blanco con halo que se apaga y una pluma tenue hacia
  * arriba. Está pensado para blending aditivo y para que el violeta lo ponga el
  * `colorGraph`; la textura se queda neutra para no arrastrar naranjas.

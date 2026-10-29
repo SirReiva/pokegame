@@ -42,10 +42,24 @@ export type DamageCategory = 'physical' | 'special' | 'status';
 export type BuffStat = 'speed' | 'attack' | 'defense' | 'spAttack' | 'spDefense';
 
 /** Aspecto visual de un proyectil. */
-export type ProjectileStyle = 'orb' | 'electric';
+export type ProjectileStyle = 'orb' | 'electric' | 'fire';
 
 /** Aspecto visual del impacto de una habilidad. */
-export type ImpactStyle = 'hit' | 'electric';
+export type ImpactStyle = 'hit' | 'electric' | 'fire';
+
+/** Aspecto visual de un haz. */
+export type BeamStyle = 'electric' | 'fire';
+
+/** Aspecto visual de un área. */
+export type AoeStyle = 'ring' | 'fire' | 'whirl';
+
+/**
+ * Reparto del daño de un área:
+ * - `instant`: un único golpe al completar la preparación.
+ * - `overTime`: el área permanece `aoeDuration` segundos y golpea cada
+ *   `aoeTickInterval` a los enemigos que sigan dentro.
+ */
+export type AoeDamageMode = 'instant' | 'overTime';
 
 /**
  * Cómo se reproduce la animación durante la preparación:
@@ -87,6 +101,16 @@ export interface AbilityDef {
   projectileStyle: ProjectileStyle;
   /** Aspecto visual del impacto. */
   impactStyle: ImpactStyle;
+  /** Aspecto visual del haz (solo para `shape: 'beam'`). */
+  beamStyle: BeamStyle;
+  /** Aspecto visual del área (solo para `shape: 'aoe'`). */
+  aoeStyle: AoeStyle;
+  /** Daño único o daño periódico mientras se permanece dentro. */
+  aoeDamageMode: AoeDamageMode;
+  /** Duración del área en el suelo y del daño periódico en `overTime`. */
+  aoeDuration: number;
+  /** Intervalo entre golpes en modo `overTime` (segundos). */
+  aoeTickInterval: number;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
   pierce: number;
   /** Distancia del dash en unidades de mundo. */
@@ -107,6 +131,12 @@ export interface AbilityDef {
   windupAnimationSpeed: number;
   /** Animación de sprite que se reproduce al lanzar la habilidad. */
   animation: AnimationName;
+  /**
+   * Permite moverse durante el `windup`. El efecto sigue fijado en el centro
+   * calculado al empezar el lanzamiento, así que el Pokémon puede salir de la
+   * zona mientras la marca sigue en el suelo. Sin efecto si `windup` es 0.
+   */
+  moveWhileWindup: boolean;
   /** Texto corto para el HUD y la descripción de la habilidad. */
   description: string;
 }
@@ -126,6 +156,11 @@ export const DEFAULT_ABILITY: Omit<
   projectileSpeed: 12,
   projectileStyle: 'orb',
   impactStyle: 'hit',
+  beamStyle: 'electric',
+  aoeStyle: 'ring',
+  aoeDamageMode: 'instant',
+  aoeDuration: 2.5,
+  aoeTickInterval: 0.5,
   pierce: 0,
   dashDistance: 0,
   knockback: 0,
@@ -136,6 +171,7 @@ export const DEFAULT_ABILITY: Omit<
   windupAnimationMode: 'once',
   windupAnimationSpeed: 1,
   animation: 'attack',
+  moveWhileWindup: false,
   description: ''
 };
 
@@ -238,6 +274,93 @@ ABILITIES.placaje = defineAbility({
   description: 'Embestida cuerpo a cuerpo contra los rivales que tenga delante.'
 });
 
+/* ------------------------------------------------------------------------- */
+/* Charmander                                                                */
+/* ------------------------------------------------------------------------- */
+
+ABILITIES.aranazo = defineAbility({
+  id: 'aranazo',
+  name: 'Arañazo',
+  type: 'Normal',
+  category: 'physical',
+  shape: 'melee',
+  power: 40,
+  accuracy: 100,
+  cooldown: 0.3,
+  range: 1.7,
+  radius: 0.65,
+  halfAngle: 45,
+  knockback: 0.35,
+  castTime: 0.3,
+  color: [246, 236, 220],
+  description: 'Zarpazo rápido cuerpo a cuerpo. Ataque básico de Charmander.'
+});
+
+ABILITIES.giroFuego = defineAbility({
+  id: 'giroFuego',
+  name: 'Giro Fuego',
+  type: 'Fire',
+  category: 'special',
+  shape: 'aoe',
+  power: 35,
+  accuracy: 85,
+  cooldown: 6,
+  range: 3.6,
+  radius: 1.7,
+  windup: 0.5,
+  castTime: 0.45,
+  moveWhileWindup: true,
+  aoeStyle: 'whirl',
+  aoeDamageMode: 'overTime',
+  aoeDuration: 2.4,
+  aoeTickInterval: 0.4,
+  impactStyle: 'fire',
+  color: [255, 132, 40],
+  description:
+    'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s a quien siga dentro.'
+});
+
+ABILITIES.lanzallamas = defineAbility({
+  id: 'lanzallamas',
+  name: 'Lanzallamas',
+  type: 'Fire',
+  category: 'special',
+  shape: 'beam',
+  power: 90,
+  accuracy: 100,
+  cooldown: 7,
+  range: 9.5,
+  radius: 0.4,
+  windup: 0.35,
+  castTime: 0.5,
+  beamStyle: 'fire',
+  impactStyle: 'fire',
+  color: [255, 138, 42],
+  description: 'Chorro de fuego instantáneo que atraviesa a los rivales en línea.'
+});
+
+ABILITIES.anilloIgneo = defineAbility({
+  id: 'anilloIgneo',
+  name: 'Anillo Ígneo',
+  type: 'Fire',
+  category: 'special',
+  shape: 'aoe',
+  power: 110,
+  accuracy: 85,
+  cooldown: 14,
+  range: 4.2,
+  radius: 3.1,
+  windup: 0.75,
+  castTime: 0.7,
+  aoeStyle: 'fire',
+  aoeDamageMode: 'instant',
+  aoeDuration: 0.5,
+  impactStyle: 'fire',
+  color: [255, 92, 30],
+  description:
+    'Definitiva: explosión de fuego instantánea con un breve estallido de llamas.'
+});
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -248,6 +371,7 @@ export const MOVESETS: Record<
 > = {};
 
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
+MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 
 export function abilityForSlot(
   pokemonId: string,

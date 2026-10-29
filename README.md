@@ -103,9 +103,26 @@ El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se 
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,5 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,22 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
+**Charmander** tiene el segundo set: `Arañazo` (básica melee rápida), `Giro Fuego` (remolino de fuego persistente delante, 3,6 u de alcance y 1,7 u de radio, 35 de daño por segundo durante 2,4 s), `Lanzallamas` (haz de fuego de 9,5 u que atraviesa a todos los rivales en línea) y `Anillo Ígneo` (definitiva: gran área de 3,1 u de radio con 110 de potencia). Sus tres habilidades de fuego usan `impactStyle: 'fire'`, y el haz y las áreas tienen visual propio (`beamStyle: 'fire'` y `aoeStyle: 'fire'`).
+
+El fuego tiene efectos dedicados: el proyectil es una bola con núcleo blanco-amarillo y estela de llamas; el haz es un chorro de lenguas de fuego solapadas con núcleo brillante y llama en la punta; las áreas usan dos estilos (`aoeStyle`): `whirl` levanta tres brazos espirales de llamas que giran como un remolino, y `fire` reparte tres anillos concéntricos de llamas por todo el disco; cada impacto genera además una explosión con núcleo, halo, llamas ascendentes, chispas y anillo en el suelo. Las llamas combinan quads cruzados con una textura procedural (`createFlameCanvas` en `textures.ts`) y partículas orientadas a cámara con esa misma textura, de modo que el fuego tiene volumen y movimiento en todas las vistas del splitscreen. Cada efecto de fuego añade además una luz omni cálida de corto alcance que tiñe el suelo y los sprites cercanos. El visual eléctrico de `Impactrueno`/`Rayo` sigue disponible con `projectileStyle`, `beamStyle` e `impactStyle` a `'electric'`.
+
 El proyectil de `Impactrueno` tiene un visual eléctrico propio: núcleo brillante, halo, tres arcos zigzagueantes que giran y parpadean, y una estela orientada hacia la dirección de vuelo. Al impactar genera una pequeña explosión eléctrica con núcleo, halo, arcos cortos y anillo en el suelo. Se configura con `projectileStyle: 'electric'` e `impactStyle: 'electric'`; el resto usa el orbe y el impacto estándar. `Rayo` usa también `impactStyle: 'electric'`, así que cada enemigo alcanzado por el haz recibe su propia explosión eléctrica.
 
 Cada habilidad puede declarar un `windup`: durante ese tiempo el Pokémon se queda quieto, reproduce su animación y no puede moverse ni lanzar otra habilidad. Al terminar, se ejecuta el efecto (proyectil, haz, golpe, dash...). Si recibe un golpe durante la preparación, la habilidad se cancela.
+
+Las habilidades con `shape: 'aoe'` y `windup > 0` muestran una **marca en el suelo** desde el inicio del retardo: anillo discontinuo del radio real, relleno tenue y un disco que se llena hasta el momento del impacto. El centro se fija al empezar el lanzamiento y la marca desaparece justo antes de aplicar el daño; si el lanzamiento se cancela (golpe, KO o choque), también se retira. `Giro Fuego` prepara `0,5 s` y `Anillo Ígneo` `0,75 s`.
+
+El flag `moveWhileWindup` decide si el Pokémon puede moverse durante la preparación. Por defecto es `false` (queda clavado). Si es `true`, el movimiento y el giro siguen funcionando, pero el centro del área y su marca permanecen fijados donde se lanzó: el Pokémon puede salir de la zona mientras el ataque sigue cargándose. `Giro Fuego` lo tiene activo; `Anillo Ígneo` lo mantiene desactivado para que la definitiva arraigue al lanzador.
+
+Las áreas reparten su daño de dos formas con `aoeDamageMode`:
+
+- `instant`: un único golpe al completar el `windup`, como hasta ahora.
+- `overTime`: el área permanece `aoeDuration` segundos y golpea cada `aoeTickInterval` a los enemigos que sigan dentro. En este modo `power` se interpreta como **daño por segundo**, así que cada tick usa `power × aoeTickInterval`. Los ticks no aplican hitstun, knockback ni cancelan lanzamientos: solo restan vida, muestran número de daño e impacto.
+
+En ambos modos el área visible dura `aoeDuration`: el anillo y las llamas que salen del suelo se mantienen hasta el final y se apagan en los últimos 0,35 s. En `instant` el daño se aplica una sola vez al inicio y las llamas quedan como residuo visual; si quieres que sigan dañando, cambia la habilidad a `overTime`.
+
+`Giro Fuego` usa `overTime` (35/s durante 2,4 s, ticks de 0,4 s). `Anillo Ígneo` usa `instant` con `aoeDuration: 0,5`, así que su explosión golpea una vez y el estallido de llamas dura medio segundo.
 
 La animación de preparación se controla con `windupAnimationMode`:
 

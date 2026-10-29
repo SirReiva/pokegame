@@ -9,8 +9,9 @@
  */
 
 import * as pc from 'playcanvas';
-import type { ProjectileStyle } from './abilities';
+import type { AoeStyle, BeamStyle, ProjectileStyle } from './abilities';
 import { DEG } from './config';
+import { createFlameCanvas, textureFromCanvas } from './textures';
 
 export interface EffectHandle {
   setPosition(x: number, z: number): void;
@@ -30,6 +31,44 @@ interface ProjectileVisual {
   entity: pc.Entity;
   materials: pc.StandardMaterial[];
   update: (dt: number) => void;
+}
+
+/** Marca de área activa; se puede cancelar antes de que termine el retardo. */
+export interface TelegraphHandle {
+  destroy(): void;
+}
+
+interface AoeTelegraph {
+  entity: pc.Entity;
+  materials: pc.StandardMaterial[];
+  elapsed: number;
+  duration: number;
+  active: boolean;
+  update: (progress: number, elapsed: number) => void;
+}
+
+/** Configuración de un emisor de partículas de fuego. */
+interface FlameParticleOptions {
+  x?: number;
+  y?: number;
+  z?: number;
+  yaw?: number;
+  extents: [number, number, number];
+  velocity: [number, number, number];
+  velocityEnd: [number, number, number];
+  radialSpeed?: number;
+  radialSpeedEnd?: number;
+  sizeStart: number;
+  sizeMid: number;
+  sizeEnd: number;
+  lifetime: number;
+  rate: number;
+  numParticles: number;
+  stretch?: number;
+  alignToMotion?: boolean;
+  localSpace?: boolean;
+  /** Si es `false`, el emisor empieza vacío y se llena durante el efecto. */
+  preWarm?: boolean;
 }
 
 function createArcMesh(
@@ -117,6 +156,118 @@ function createLightningMesh(
   return mesh;
 }
 
+/**
+ * Tres quads verticales cruzados a 60°, con la base en el origen y la punta en
+ * +Y. Al no ser un billboard, la llama tiene volumen desde cualquier cámara del
+ * splitscreen; con blending aditivo las intersecciones no se notan.
+ */
+function createFlameCrossMesh(device: pc.GraphicsDevice): pc.Mesh {
+  const planes = 3;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let plane = 0; plane < planes; plane++) {
+    const angle = (plane / planes) * Math.PI;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const base = plane * 4;
+    // Base izquierda, base derecha, punta derecha, punta izquierda.
+    positions.push(
+      -0.5 * cos, 0, -0.5 * sin,
+      0.5 * cos, 0, 0.5 * sin,
+      0.5 * cos, 1, 0.5 * sin,
+      -0.5 * cos, 1, -0.5 * sin
+    );
+    normals.push(sin, 0, cos, sin, 0, cos, sin, 0, cos, sin, 0, cos);
+    // v = 0 arriba (punta) y v = 1 abajo (base), como la textura.
+    uvs.push(0, 1, 1, 1, 1, 0, 0, 0);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/** Disco horizontal unitario (radio 0,5) en el plano XZ. */
+function createDiscMesh(device: pc.GraphicsDevice, segments = 48): pc.Mesh {
+  const positions: number[] = [0, 0, 0];
+  const normals: number[] = [0, 1, 0];
+  const uvs: number[] = [0.5, 0.5];
+  const indices: number[] = [];
+
+  for (let index = 0; index <= segments; index++) {
+    const angle = (index / segments) * Math.PI * 2;
+    const x = Math.sin(angle) * 0.5;
+    const z = Math.cos(angle) * 0.5;
+    positions.push(x, 0, z);
+    normals.push(0, 1, 0);
+    uvs.push(0.5 + x, 0.5 + z);
+  }
+  for (let index = 1; index <= segments; index++) {
+    indices.push(0, index, index + 1);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Anillo discontinuo unitario (radio exterior 0,5) para la marca de área.
+ * Los huecos entre segmentos lo distinguen de un simple círculo de efecto.
+ */
+function createDashRingMesh(
+  device: pc.GraphicsDevice,
+  dashes = 20,
+  inner = 0.43,
+  outer = 0.5,
+  fill = 0.72
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const slot = (Math.PI * 2) / dashes;
+  const span = slot * fill;
+
+  for (let dash = 0; dash < dashes; dash++) {
+    const start = dash * slot;
+    const end = start + span;
+    const base = dash * 4;
+    const points: Array<[number, number, number, number]> = [
+      [Math.sin(start) * inner, 0, Math.cos(start) * inner, 0],
+      [Math.sin(start) * outer, 0, Math.cos(start) * outer, 0],
+      [Math.sin(end) * outer, 0, Math.cos(end) * outer, 1],
+      [Math.sin(end) * inner, 0, Math.cos(end) * inner, 1]
+    ];
+    for (const [x, y, z, u] of points) {
+      positions.push(x, y, z);
+      normals.push(0, 1, 0);
+      uvs.push(u, 0);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
 export class CombatFx {
   private readonly app: pc.Application;
   private readonly layerId: number;
@@ -126,6 +277,13 @@ export class CombatFx {
   private readonly sphereMesh: pc.Mesh;
   private readonly boxMesh: pc.Mesh;
   private readonly torusMesh: pc.Mesh;
+  /** Textura de lengua de fuego y malla de tres quads cruzados. */
+  private readonly flameTexture: pc.Texture;
+  private readonly flameMesh: pc.Mesh;
+  /** Mallas de la marca de área y marcas activas. */
+  private readonly discMesh: pc.Mesh;
+  private readonly dashRingMesh: pc.Mesh;
+  private readonly telegraphs = new Set<AoeTelegraph>();
 
   constructor(app: pc.Application, layerId: number) {
     this.app = app;
@@ -139,6 +297,17 @@ export class CombatFx {
       ringRadius: 0.5,
       tubeRadius: 0.05
     });
+    this.flameTexture = textureFromCanvas(
+      this.device,
+      createFlameCanvas(),
+      {
+        name: 'combat-flame',
+        mipmaps: true,
+        minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+        magFilter: pc.FILTER_LINEAR
+      }
+    );
+    this.flameMesh = createFlameCrossMesh(this.device);
 
     // PlayCanvas destruye una malla cuando su último MeshInstance desaparece.
     // Estas mallas son compartidas por muchos efectos, así que reservamos una
@@ -146,6 +315,11 @@ export class CombatFx {
     this.sphereMesh.incRefCount();
     this.boxMesh.incRefCount();
     this.torusMesh.incRefCount();
+    this.flameMesh.incRefCount();
+    this.discMesh = createDiscMesh(this.device);
+    this.dashRingMesh = createDashRingMesh(this.device);
+    this.discMesh.incRefCount();
+    this.dashRingMesh.incRefCount();
   }
 
   private createMaterial(
@@ -166,6 +340,165 @@ export class CombatFx {
     material.cull = pc.CULLFACE_NONE;
     material.update();
     return material;
+  }
+
+  /**
+   * Material de llama: la textura procedural ya trae el degradado de color y la
+   * silueta; el tinte solo sirve para dar variantes más cálidas o más rojas.
+   */
+  private createFlameMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      tint[0] / 255,
+      tint[1] / 255,
+      tint[2] / 255
+    );
+    material.emissiveMap = this.flameTexture;
+    material.emissiveIntensity = 1.12;
+    material.opacityMap = this.flameTexture;
+    material.opacityMapChannel = 'a';
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_ADDITIVEALPHA;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /** Crea una llama cruzada con la base en `position` (la punta crece en +Y). */
+  private createFlame(
+    parent: pc.Entity,
+    material: pc.StandardMaterial,
+    options: {
+      x: number;
+      y: number;
+      z: number;
+      width: number;
+      height: number;
+      yaw?: number;
+      pitch?: number;
+      roll?: number;
+    }
+  ): pc.Entity {
+    const entity = this.createEntity(this.flameMesh, [material], parent);
+    entity.setLocalPosition(options.x, options.y, options.z);
+    entity.setLocalEulerAngles(
+      options.pitch ?? 0,
+      options.yaw ?? 0,
+      options.roll ?? 0
+    );
+    entity.setLocalScale(options.width, options.height, options.width);
+    return entity;
+  }
+
+  /**
+   * Emisor de partículas con la textura de llama. PlayCanvas orienta cada
+   * partícula hacia la cámara, así que en el splitscreen se ven de frente en
+   * todas las vistas y el conjunto se lee como fuego en movimiento.
+   */
+  private spawnFlameParticles(
+    parent: pc.Entity,
+    options: FlameParticleOptions
+  ): void {
+    const entity = new pc.Entity('flame-particles');
+    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
+    if (options.yaw) entity.setLocalEulerAngles(0, options.yaw, 0);
+    parent.addChild(entity);
+
+    const data: Record<string, unknown> = {
+      numParticles: options.numParticles,
+      lifetime: options.lifetime,
+      rate: options.rate,
+      rate2: options.rate,
+      loop: true,
+      preWarm: options.preWarm ?? true,
+      autoPlay: true,
+      emitterShape: pc.EMITTERSHAPE_BOX,
+      emitterExtents: new pc.Vec3(...options.extents),
+      colorMap: this.flameTexture,
+      colorGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 1, 0.5, 1, 1, 1],
+          [0, 0.92, 0.5, 0.6, 1, 0.3],
+          [0, 0.55, 0.5, 0.24, 1, 0.07]
+        ]
+      },
+      alphaGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [0, 0, 0.1, 0.9, 0.55, 0.7, 1, 0]
+      },
+      scaleGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          0,
+          options.sizeStart,
+          0.28,
+          options.sizeMid,
+          0.7,
+          options.sizeMid,
+          1,
+          options.sizeEnd
+        ]
+      },
+      velocityGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, options.velocity[0], 1, options.velocityEnd[0]],
+          [0, options.velocity[1], 1, options.velocityEnd[1]],
+          [0, options.velocity[2], 1, options.velocityEnd[2]]
+        ]
+      },
+      blendType: pc.BLEND_ADDITIVE,
+      depthWrite: false,
+      useFog: true,
+      lighting: false,
+      orientation: pc.PARTICLEORIENTATION_SCREEN,
+      localSpace: options.localSpace ?? false,
+      layers: [this.layerId],
+      stretch: options.stretch ?? 0,
+      alignToMotion: options.alignToMotion ?? false
+    };
+    if (
+      options.radialSpeed !== undefined &&
+      options.radialSpeedEnd !== undefined
+    ) {
+      data.radialSpeedGraph = {
+        type: pc.CURVE_LINEAR,
+        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
+      };
+    }
+    entity.addComponent('particlesystem', data);
+  }
+
+  /** Luz omni corta y cálida: tiñe el suelo y los sprites alrededor del fuego. */
+  private createFireLight(
+    parent: pc.Entity,
+    x: number,
+    y: number,
+    z: number,
+    intensity: number,
+    range: number
+  ): pc.Entity {
+    const entity = new pc.Entity('fire-light');
+    entity.addComponent('light', {
+      type: 'omni',
+      color: new pc.Color(1, 0.45, 0.12),
+      intensity,
+      range,
+      castShadows: false
+    });
+    entity.setLocalPosition(x, y, z);
+    parent.addChild(entity);
+    return entity;
   }
 
   private createEntity(
@@ -213,6 +546,9 @@ export class CombatFx {
   ): EffectHandle {
     if (style === 'electric') {
       return this.spawnElectricProjectile(x, z, radius, dirX, dirZ);
+    }
+    if (style === 'fire') {
+      return this.spawnFireProjectile(x, z, radius, dirX, dirZ);
     }
 
     const material = this.createMaterial(color, 0.95);
@@ -335,6 +671,148 @@ export class CombatFx {
     };
   }
 
+  /**
+   * Proyectil de fuego: núcleo blanco-amarillo, dos halos naranjas y una cola
+   * de llamas texturizadas que parpadea. La cola apunta hacia atrás (−Z local).
+   */
+  private spawnFireProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number
+  ): EffectHandle {
+    const root = new pc.Entity('fire-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 248, 216], 0.9);
+    const innerMaterial = this.createMaterial([255, 176, 64], 0.45);
+    const glowMaterial = this.createMaterial([255, 84, 24], 0.22);
+    const flameMaterial = this.createFlameMaterial([255, 255, 255], 0.55);
+    const innerFlameMaterial = this.createFlameMaterial([255, 244, 205], 0.6);
+    const materials = [
+      coreMaterial,
+      innerMaterial,
+      glowMaterial,
+      flameMaterial,
+      innerFlameMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.5, radius * 1.5, radius * 1.5);
+
+    const inner = this.createEntity(this.sphereMesh, [innerMaterial], root);
+    inner.setLocalScale(radius * 2.6, radius * 2.6, radius * 2.6);
+
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalScale(radius * 4.5, radius * 4.5, radius * 4.5);
+
+    // Dos lenguas tumbadas hacia atrás: la exterior ancha y la interior más
+    // corta y clara, para que la estela tenga cuerpo y no sea un halo.
+    const tailWidth = radius * 3.4;
+    const tailLength = radius * 7.6;
+    const tail = this.createFlame(root, flameMaterial, {
+      x: 0,
+      y: 0,
+      z: radius * 0.35,
+      width: tailWidth,
+      height: tailLength,
+      pitch: -90
+    });
+    const innerTail = this.createFlame(root, innerFlameMaterial, {
+      x: 0,
+      y: radius * 0.2,
+      z: radius * 0.45,
+      width: radius * 2,
+      height: radius * 4.6,
+      pitch: -90,
+      roll: 35
+    });
+
+    this.spawnFlameParticles(root, {
+      extents: [radius * 0.7, radius * 0.7, radius * 0.7],
+      velocity: [-dirX * 1.6, 0.25, -dirZ * 1.6],
+      velocityEnd: [-dirX * 3.2, 0.55, -dirZ * 3.2],
+      sizeStart: radius * 2.2,
+      sizeMid: radius * 3.2,
+      sizeEnd: radius * 1.2,
+      lifetime: 0.24,
+      rate: 1.2,
+      numParticles: 30,
+      stretch: 0.5,
+      localSpace: false
+    });
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        coreMaterial.opacity = 0.78 + Math.random() * 0.15;
+        innerMaterial.opacity = 0.3 + Math.random() * 0.18;
+        glowMaterial.opacity = 0.12 + Math.random() * 0.1;
+        flameMaterial.opacity = 0.3 + Math.random() * 0.15;
+        innerFlameMaterial.opacity = 0.35 + Math.random() * 0.18;
+
+        const pulse = 1 + Math.sin(time * 32) * 0.07;
+        const innerPulse = 1 + Math.sin(time * 22) * 0.09;
+        const glowPulse = 1 + Math.sin(time * 17) * 0.11;
+        core.setLocalScale(
+          radius * 1.5 * pulse,
+          radius * 1.5 * pulse,
+          radius * 1.5 * pulse
+        );
+        inner.setLocalScale(
+          radius * 2.6 * innerPulse,
+          radius * 2.6 * innerPulse,
+          radius * 2.6 * innerPulse
+        );
+        glow.setLocalScale(
+          radius * 4.5 * glowPulse,
+          radius * 4.5 * glowPulse,
+          radius * 4.5 * glowPulse
+        );
+
+        const tailStretch = 0.82 + Math.sin(time * 21) * 0.2;
+        const tailSway = 1 + Math.sin(time * 27) * 0.14;
+        tail.setLocalScale(
+          tailWidth * tailSway,
+          tailLength * tailStretch,
+          tailWidth * tailSway
+        );
+        tail.setLocalEulerAngles(-90, 0, Math.sin(time * 13) * 12);
+
+        const innerStretch = 0.78 + Math.sin(time * 29 + 1.2) * 0.26;
+        const innerSway = 1 + Math.sin(time * 33 + 0.5) * 0.2;
+        innerTail.setLocalScale(
+          radius * 2 * innerSway,
+          radius * 4.6 * innerStretch,
+          radius * 2 * innerSway
+        );
+        innerTail.setLocalEulerAngles(
+          -90,
+          0,
+          35 + Math.sin(time * 19) * 18
+        );
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
   /** Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor. */
   spawnMelee(
     x: number,
@@ -374,8 +852,13 @@ export class CombatFx {
     x2: number,
     z2: number,
     color: readonly [number, number, number],
-    width: number
+    width: number,
+    style: BeamStyle = 'electric'
   ): void {
+    if (style === 'fire') {
+      this.spawnFireBeam(x1, z1, x2, z2, color, width);
+      return;
+    }
     const dx = x2 - x1;
     const dz = z2 - z1;
     const length = Math.max(0.1, Math.hypot(dx, dz));
@@ -433,22 +916,701 @@ export class CombatFx {
     });
   }
 
+  /**
+   * Chorro de fuego: partículas orientadas a cámara a lo largo del recorrido,
+   * lenguas texturizadas que les dan silueta y un núcleo cálido. Avanza muy
+   * rápido y se desvanece antes de desaparecer.
+   */
+  private spawnFireBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('fire-beam');
+    root.setPosition(x1, 0.7, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 226, 170], 0.5);
+    const flameMaterial = this.createFlameMaterial([255, 255, 255], 0.5);
+    const hotMaterial = this.createFlameMaterial([255, 242, 200], 0.55);
+    const glowMaterial = this.createMaterial(color, 0.16);
+    const materials = [coreMaterial, flameMaterial, hotMaterial, glowMaterial];
+
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: 0,
+      z: length / 2,
+      extents: [width * 2, width * 1.8, length * 0.5],
+      velocity: [0, 0.25, 1.4],
+      velocityEnd: [0, 0.9, 3.6],
+      sizeStart: width * 1.6,
+      sizeMid: width * 2.6,
+      sizeEnd: width * 1.1,
+      lifetime: 0.32,
+      rate: 1.1,
+      numParticles: 80,
+      stretch: 0.55,
+      localSpace: true
+    });
+    const beamLight = this.createFireLight(
+      root,
+      0,
+      0.8,
+      length / 2,
+      1.3,
+      6.5
+    );
+
+    const coreWidth = Math.max(0.04, width * 0.28);
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+
+    // Lenguas tumbadas que se solapan a lo largo del chorro: son las que dan
+    // la silueta irregular de fuego; el núcleo brillante solo las une.
+    const licks: {
+      entity: pc.Entity;
+      baseWidth: number;
+      baseHeight: number;
+      phase: number;
+      offsetZ: number;
+      offsetX: number;
+      offsetY: number;
+      pitch: number;
+      yaw: number;
+      roll: number;
+      vertical: boolean;
+    }[] = [];
+    const horizontalCount = Math.min(
+      22,
+      Math.max(6, Math.round(length / 0.8))
+    );
+    for (let index = 0; index < horizontalCount; index++) {
+      const spread = ((index * 37) % 10) / 10;
+      const baseWidth = width * (2.2 + spread * 1.5);
+      const baseHeight = width * (4.2 + spread * 3.2);
+      const pitch = index % 2 === 0 ? -90 : -72;
+      // Yaw pequeño: las lenguas deben alargarse a lo largo del chorro, no
+      // cruzándose en cualquier dirección.
+      const yaw = ((index * 53) % 30) - 15;
+      const roll = ((index * 71) % 90) - 45;
+      const entity = this.createFlame(root, index % 3 === 0 ? hotMaterial : flameMaterial, {
+        x: 0,
+        y: 0,
+        z: 0,
+        width: baseWidth,
+        height: baseHeight,
+        pitch,
+        yaw,
+        roll
+      });
+      licks.push({
+        entity,
+        baseWidth,
+        baseHeight,
+        phase: index * 1.7,
+        offsetZ: ((index + 0.5) / horizontalCount) * length,
+        offsetX: Math.cos(index * 1.7) * width * 0.7,
+        offsetY: Math.sin(index * 2.3) * width * 0.55,
+        pitch,
+        yaw,
+        roll,
+        vertical: false
+      });
+    }
+
+    // Algunas llamas verticales sobre el chorro rompen la línea recta.
+    const verticalCount = Math.min(8, Math.max(3, Math.round(length / 2.2)));
+    for (let index = 0; index < verticalCount; index++) {
+      const spread = ((index * 29) % 10) / 10;
+      const baseWidth = width * (1.8 + spread * 1.4);
+      const baseHeight = width * (3.4 + spread * 2.6);
+      const yaw = (index * 67) % 360;
+      licks.push({
+        entity: this.createFlame(root, flameMaterial, {
+          x: 0,
+          y: 0,
+          z: 0,
+          width: baseWidth,
+          height: baseHeight,
+          yaw
+        }),
+        baseWidth,
+        baseHeight,
+        phase: index * 2.3 + 0.8,
+        offsetZ: ((index + 0.5) / verticalCount) * length,
+        offsetX: Math.cos(index * 2.1) * width * 1.1,
+        offsetY: 0,
+        pitch: 0,
+        yaw,
+        roll: 0,
+        vertical: true
+      });
+    }
+
+    const tipWidth = width * 4;
+    const tipHeight = width * 8;
+    const tip = this.createFlame(root, hotMaterial, {
+      x: 0,
+      y: 0,
+      z: 0,
+      width: tipWidth,
+      height: tipHeight,
+      pitch: -90
+    });
+
+    let time = 0;
+    const animate = (t: number, dt: number): void => {
+      time += dt;
+      // El chorro sale muy rápido: en el primer 18 % ya está casi entero.
+      const reveal = Math.min(1, t / 0.18);
+      const revealEase = 1 - (1 - reveal) * (1 - reveal);
+      const visibleLength = length * revealEase;
+
+      core.setLocalPosition(0, 0, visibleLength / 2);
+      core.setLocalScale(
+        coreWidth * 2,
+        coreWidth * 2,
+        Math.max(0.02, visibleLength)
+      );
+
+      for (const lick of licks) {
+        if (lick.offsetZ > visibleLength) {
+          lick.entity.setLocalScale(0, 0, 0);
+          continue;
+        }
+        const pulse = 0.78 + Math.sin(time * 21 + lick.phase) * 0.24;
+        const stretch = 0.86 + Math.sin(time * 17 + lick.phase * 1.3) * 0.22;
+        const sway = Math.sin(time * 11 + lick.phase) * width * 0.55;
+        const rise = Math.cos(time * 8 + lick.phase) * width * 0.55;
+        const widthNow = lick.baseWidth * pulse;
+        const heightNow = lick.baseHeight * stretch;
+        lick.entity.setLocalPosition(
+          lick.offsetX + sway,
+          lick.offsetY + rise,
+          lick.offsetZ
+        );
+        lick.entity.setLocalScale(widthNow, heightNow, widthNow);
+        if (lick.vertical) {
+          lick.entity.setLocalEulerAngles(
+            0,
+            lick.yaw + Math.sin(time * 6 + lick.phase) * 18,
+            Math.sin(time * 13 + lick.phase) * 8
+          );
+        } else {
+          lick.entity.setLocalEulerAngles(
+            lick.pitch,
+            lick.yaw + Math.sin(time * 9 + lick.phase) * 14,
+            lick.roll + Math.sin(time * 15 + lick.phase) * 12
+          );
+        }
+      }
+
+      tip.setLocalPosition(0, 0, visibleLength);
+      const tipStretch = 0.82 + Math.sin(time * 24) * 0.24;
+      const tipSway = 1 + Math.sin(time * 30) * 0.16;
+      const tipVisible = visibleLength > 0.12 ? 1 : 0;
+      tip.setLocalScale(
+        tipWidth * tipSway * tipVisible,
+        tipHeight * tipStretch * tipVisible,
+        tipWidth * tipSway * tipVisible
+      );
+      tip.setLocalEulerAngles(-90, 0, Math.sin(time * 18) * 14);
+
+      const fade = 1 - Math.max(0, (t - 0.45) / 0.55);
+      coreMaterial.opacity = 0.4 * fade * (0.85 + Math.random() * 0.15);
+      flameMaterial.opacity = (0.28 + Math.random() * 0.16) * fade;
+      hotMaterial.opacity = (0.34 + Math.random() * 0.18) * fade;
+      glowMaterial.opacity = 0.14 * fade * (0.7 + Math.random() * 0.3);
+      beamLight.light!.intensity =
+        1.3 * fade * (0.68 + Math.random() * 0.32);
+    };
+    this.addEffect(root, materials, 0.45, animate);
+    animate(0, 0);
+  }
+
   /** Anillo de área en el suelo, centrado delante del lanzador. */
   spawnAoe(
     x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number]
+    color: readonly [number, number, number],
+    style: AoeStyle = 'ring',
+    duration = 0.65
   ): void {
+    const life = Math.max(0.2, duration);
+    if (style === 'fire') {
+      this.spawnFireAoe(x, z, radius, color, life);
+      return;
+    }
+    if (style === 'whirl') {
+      this.spawnFireWhirl(x, z, radius, color, life);
+      return;
+    }
     const material = this.createMaterial(color, 0.8);
     const entity = this.createEntity(this.torusMesh, [material]);
     entity.setPosition(x, 0.12, z);
 
-    this.addEffect(entity, [material], 0.5, (t) => {
-      const scale = Math.max(0.2, radius * 2) * (0.55 + 0.45 * t);
+    let time = 0;
+    this.addEffect(entity, [material], life, (_t, dt) => {
+      time += dt;
+      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.3), 2);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const scale = Math.max(0.2, radius * 2) * (0.4 + 0.6 * grow);
       entity.setLocalScale(scale, 1, scale);
-      material.opacity = 0.8 * (1 - t);
+      material.opacity = 0.75 * fadeOut * (0.82 + Math.sin(time * 7) * 0.18);
     });
+  }
+
+  /**
+   * Marca de área para las habilidades con retardo: anillo discontinuo,
+   * relleno tenue y un disco de carga que crece hasta el radio real. El
+   * llamador la destruye justo antes de ejecutar el daño.
+   */
+  spawnAoeTelegraph(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): TelegraphHandle {
+    const root = new pc.Entity('aoe-telegraph');
+    root.setPosition(x, 0.08, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.5);
+    const hot: [number, number, number] = [
+      Math.round(color[0] + (255 - color[0]) * 0.62),
+      Math.round(color[1] + (255 - color[1]) * 0.62),
+      Math.round(color[2] + (255 - color[2]) * 0.62)
+    ];
+    const dashMaterial = this.createMaterial(hot, 0.85);
+    const fillMaterial = this.createMaterial(color, 0.08);
+    const sweepMaterial = this.createMaterial(hot, 0.4);
+    const materials = [ringMaterial, dashMaterial, fillMaterial, sweepMaterial];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const dash = this.createEntity(this.dashRingMesh, [dashMaterial], root);
+    dash.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    const sweep = this.createEntity(this.discMesh, [sweepMaterial], root);
+    sweep.setLocalScale(0.01, 1, 0.01);
+
+    const record: AoeTelegraph = {
+      entity: root,
+      materials,
+      elapsed: 0,
+      duration: Math.max(0.05, duration),
+      active: true,
+      update: (progress, elapsed) => {
+        const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
+        ringMaterial.opacity = 0.3 + pulse * 0.35;
+        dashMaterial.opacity = 0.55 + pulse * 0.35;
+        fillMaterial.opacity = 0.06 + pulse * 0.05;
+        dash.setLocalEulerAngles(0, -elapsed * 32, 0);
+
+        const sweepScale = Math.max(0.01, radius * 2 * progress);
+        sweep.setLocalScale(sweepScale, 1, sweepScale);
+        sweepMaterial.opacity = 0.34 * (1 - progress * 0.55);
+
+        // Destello final: avisa del impacto inminente.
+        if (progress > 0.82) {
+          const flash = (progress - 0.82) / 0.18;
+          ringMaterial.opacity += flash * 0.45;
+          dashMaterial.opacity += flash * 0.35;
+          sweepMaterial.opacity += flash * 0.3;
+        }
+      }
+    };
+
+    this.telegraphs.add(record);
+    return { destroy: () => this.disposeTelegraph(record) };
+  }
+
+  private disposeTelegraph(telegraph: AoeTelegraph): void {
+    if (!telegraph.active) return;
+    telegraph.active = false;
+    this.telegraphs.delete(telegraph);
+    telegraph.entity.destroy();
+    for (const material of telegraph.materials) material.destroy();
+  }
+
+  /**
+   * Área de fuego: anillo en el suelo, resplandor central y lenguas de fuego
+   * texturizadas que crecen, se mecen y se apagan. El conjunto gira lentamente
+   * para dar la sensación de remolino.
+   */
+  private spawnFireAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('fire-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.4);
+    const glowMaterial = this.createMaterial([255, 104, 30], 0.14);
+    const flameMaterial = this.createFlameMaterial([255, 200, 140], 0.5);
+    const hotMaterial = this.createFlameMaterial([255, 232, 185], 0.55);
+    const materials = [ringMaterial, glowMaterial, flameMaterial, hotMaterial];
+
+    const shortBurst = life < 1;
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: 0.14,
+      z: 0,
+      extents: [radius * 0.9, 0.18, radius * 0.9],
+      velocity: [0, 1, 0],
+      velocityEnd: [0, 2.4, 0],
+      radialSpeed: 0.25,
+      radialSpeedEnd: 0.8,
+      sizeStart: radius * 0.2,
+      sizeMid: radius * 0.46,
+      sizeEnd: radius * 0.14,
+      lifetime: shortBurst ? 0.32 : 0.58,
+      rate: shortBurst ? 2.4 : 1.5,
+      numParticles: shortBurst ? 80 : 130,
+      localSpace: false
+    });
+    const aoeLight = this.createFireLight(
+      root,
+      0,
+      1,
+      0,
+      1.8,
+      radius * 2.4
+    );
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.12, 0);
+
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0.14, 0);
+    glow.setLocalScale(radius * 1.15, radius * 0.22, radius * 1.15);
+
+    const flames: {
+      entity: pc.Entity;
+      phase: number;
+      angle: number;
+      dist: number;
+      baseWidth: number;
+      baseHeight: number;
+      yaw: number;
+    }[] = [];
+    // Tres anillos concéntricos con desfase: cubren todo el disco y evitan
+    // el hueco que dejaba una sola corona de llamas.
+    const flameRings = [
+      { count: 8, dist: 0.18, width: 0.24, height: 0.5 },
+      { count: 12, dist: 0.43, width: 0.28, height: 0.62 },
+      { count: 16, dist: 0.68, width: 0.31, height: 0.72 }
+    ];
+    for (let ringIndex = 0; ringIndex < flameRings.length; ringIndex++) {
+      const spec = flameRings[ringIndex];
+      const offset = ringIndex * 0.5;
+      for (let index = 0; index < spec.count; index++) {
+        const angle = ((index + offset) / spec.count) * Math.PI * 2;
+        const variation = ((index * 7 + ringIndex * 3) % 10) / 10;
+        const dist = radius * spec.dist * (0.92 + variation * 0.16);
+        const baseWidth =
+          radius * spec.width * (0.9 + variation * 0.2);
+        const baseHeight =
+          radius * spec.height * (0.88 + variation * 0.24);
+        const yaw = (index * 47 + ringIndex * 31) % 360;
+        const entity = this.createFlame(
+          root,
+          (index + ringIndex) % 4 === 0 ? hotMaterial : flameMaterial,
+          {
+            x: Math.cos(angle) * dist,
+            y: 0,
+            z: Math.sin(angle) * dist,
+            width: baseWidth,
+            height: baseHeight,
+            yaw
+          }
+        );
+        flames.push({
+          entity,
+          phase: index * 1.3 + ringIndex * 2.1,
+          angle,
+          dist,
+          baseWidth,
+          baseHeight,
+          yaw
+        });
+      }
+    }
+
+    // Llama central más alta: da el pico de calor en el centro del anillo.
+    const centerWidth = radius * 0.6;
+    const centerHeight = radius * 1.05;
+    const centerFlame = this.createFlame(root, hotMaterial, {
+      x: 0,
+      y: 0,
+      z: 0,
+      width: centerWidth,
+      height: centerHeight,
+      yaw: 15
+    });
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeInTime = Math.min(0.22, life * 0.3);
+      const fadeOutTime = Math.min(0.35, life * 0.35);
+      const growTime = Math.min(0.3, life * 0.5);
+      const fadeIn = Math.min(1, time / fadeInTime);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / fadeOutTime));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 1 - Math.pow(1 - Math.min(1, time / growTime), 2);
+      const pulse = 0.5 + Math.sin(time * 7) * 0.2;
+
+      const ringScale = Math.max(0.2, radius * 2) * (0.35 + 0.85 * grow);
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = (0.24 + pulse * 0.2) * envelope;
+
+      const glowScale = radius * 1.15 * (0.7 + 0.5 * grow);
+      glow.setLocalScale(
+        glowScale,
+        radius * 0.22 * (0.7 + 0.7 * grow),
+        glowScale
+      );
+      glow.setLocalPosition(0, 0.14 + grow * 0.2, 0);
+      glowMaterial.opacity = (0.08 + pulse * 0.08) * envelope;
+
+      root.setLocalEulerAngles(0, time * 6, 0);
+
+      for (const flame of flames) {
+        const growIn = Math.min(0.25, life * 0.3);
+        const delay = (flame.phase % 1) * growIn * 0.3;
+        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
+        const flicker = 0.88 + Math.sin(time * 11 + flame.phase * 1.7) * 0.12;
+        const sway = Math.sin(time * 6.5 + flame.phase) * 0.2;
+        const scale = Math.max(0.001, localIn * envelope);
+        flame.entity.setLocalScale(
+          flame.baseWidth * scale * flicker,
+          flame.baseHeight * scale * (1.05 + sway),
+          flame.baseWidth * scale * flicker
+        );
+        // Las llamas siguen brotando del suelo hasta el final; solo se mecen.
+        flame.entity.setLocalPosition(
+          Math.cos(flame.angle) * flame.dist,
+          Math.max(0, sway * radius * 0.05),
+          Math.sin(flame.angle) * flame.dist
+        );
+        flame.entity.setLocalEulerAngles(
+          0,
+          flame.yaw + time * 10 + Math.sin(time * 3 + flame.phase) * 10,
+          Math.sin(time * 4 + flame.phase) * 7
+        );
+      }
+
+      const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
+      const centerLife = centerIn * envelope;
+      centerFlame.setLocalScale(
+        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1),
+        centerHeight * centerLife * (1 + Math.sin(time * 7) * 0.12),
+        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1)
+      );
+      centerFlame.setLocalEulerAngles(
+        0,
+        15 + time * 14,
+        Math.sin(time * 5) * 7
+      );
+
+      flameMaterial.opacity =
+        0.4 * envelope * (0.85 + Math.random() * 0.15);
+      hotMaterial.opacity =
+        0.44 * envelope * (0.85 + Math.random() * 0.15);
+      aoeLight.light!.intensity =
+        1.4 * envelope * (0.7 + Math.random() * 0.3);
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
+  }
+
+  /**
+   * Remolino de fuego: tres brazos espirales de llamas que giran alrededor del
+   * centro. Las llamas exteriores son más altas y se inclinan ligeramente para
+   * dar forma de embudo, mientras una columna central marca el eje.
+   */
+  private spawnFireWhirl(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('fire-whirl');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.3);
+    const glowMaterial = this.createMaterial([255, 104, 30], 0.12);
+    const flameMaterial = this.createFlameMaterial([255, 200, 140], 0.48);
+    const hotMaterial = this.createFlameMaterial([255, 232, 185], 0.54);
+    const materials = [ringMaterial, glowMaterial, flameMaterial, hotMaterial];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0.12, 0);
+    glow.setLocalScale(radius * 0.7, radius * 0.16, radius * 0.7);
+
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: 0.12,
+      z: 0,
+      extents: [radius * 0.6, 0.12, radius * 0.6],
+      velocity: [0, 1.2, 0],
+      velocityEnd: [0, 3, 0],
+      radialSpeed: 0.15,
+      radialSpeedEnd: 0.6,
+      sizeStart: radius * 0.14,
+      sizeMid: radius * 0.3,
+      sizeEnd: radius * 0.1,
+      lifetime: 0.5,
+      rate: 1.4,
+      numParticles: 110,
+      localSpace: false
+    });
+    const light = this.createFireLight(root, 0, 1, 0, 1.4, radius * 2.3);
+
+    const flames: {
+      entity: pc.Entity;
+      baseAngle: number;
+      dist: number;
+      baseWidth: number;
+      baseHeight: number;
+      phase: number;
+      lean: number;
+    }[] = [];
+
+    const arms = 3;
+    const perArm = 9;
+    const spiralTurns = 1.35;
+    for (let arm = 0; arm < arms; arm++) {
+      for (let index = 0; index < perArm; index++) {
+        const f = (index + 0.5) / perArm;
+        const dist = radius * (0.1 + 0.8 * f);
+        const baseAngle =
+          (arm / arms) * Math.PI * 2 + f * spiralTurns * Math.PI * 2;
+        const baseWidth = radius * (0.26 + 0.22 * f);
+        const baseHeight = radius * (0.35 + 0.5 * f);
+        const entity = this.createFlame(
+          root,
+          (index + arm) % 4 === 0 ? hotMaterial : flameMaterial,
+          {
+            x: Math.cos(baseAngle) * dist,
+            y: 0,
+            z: Math.sin(baseAngle) * dist,
+            width: baseWidth,
+            height: baseHeight,
+            yaw: 90 - (baseAngle * 180) / Math.PI
+          }
+        );
+        flames.push({
+          entity,
+          baseAngle,
+          dist,
+          baseWidth,
+          baseHeight,
+          phase: arm * 2.3 + index * 1.1,
+          lean: 4 + f * 8
+        });
+      }
+    }
+
+    // Columna central más alta: marca el eje del remolino.
+    const centerWidth = radius * 0.52;
+    const centerHeight = radius * 0.95;
+    const centerFlame = this.createFlame(root, hotMaterial, {
+      x: 0,
+      y: 0,
+      z: 0,
+      width: centerWidth,
+      height: centerHeight,
+      yaw: 0
+    });
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeInTime = Math.min(0.22, life * 0.3);
+      const fadeOutTime = Math.min(0.4, life * 0.35);
+      const fadeIn = Math.min(1, time / fadeInTime);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / fadeOutTime));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const spin = time * 2.8;
+      const pulse = 0.5 + Math.sin(time * 8) * 0.2;
+
+      ringMaterial.opacity = (0.16 + pulse * 0.12) * envelope;
+      glowMaterial.opacity = (0.08 + pulse * 0.05) * envelope;
+      light.light!.intensity = 1.4 * envelope * (0.7 + Math.random() * 0.3);
+
+      const growIn = Math.min(0.24, life * 0.3);
+      for (const flame of flames) {
+        const delay = (flame.phase % 1) * growIn * 0.25;
+        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
+        const scale = localIn * envelope;
+        if (scale <= 0.001) {
+          flame.entity.setLocalScale(0, 0, 0);
+          continue;
+        }
+        // Cada llama avanza por su brazo espiral mientras el conjunto gira.
+        const angle = flame.baseAngle + spin;
+        const flicker = 0.85 + Math.sin(time * 9 + flame.phase) * 0.15;
+        const sway = Math.sin(time * 6 + flame.phase) * 0.18;
+        const widthNow = flame.baseWidth * scale * flicker;
+        flame.entity.setLocalScale(
+          widthNow,
+          flame.baseHeight * scale * (1.05 + sway),
+          widthNow
+        );
+        flame.entity.setLocalPosition(
+          Math.cos(angle) * flame.dist,
+          0,
+          Math.sin(angle) * flame.dist
+        );
+        flame.entity.setLocalEulerAngles(
+          flame.lean,
+          90 - (angle * 180) / Math.PI,
+          Math.sin(time * 4 + flame.phase) * 10
+        );
+      }
+
+      const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
+      const centerScale = centerIn * envelope;
+      centerFlame.setLocalScale(
+        centerWidth * centerScale * (1 + Math.sin(time * 7) * 0.1),
+        centerHeight * centerScale * (1 + Math.sin(time * 5) * 0.12),
+        centerWidth * centerScale * (1 + Math.sin(time * 7) * 0.1)
+      );
+      centerFlame.setLocalEulerAngles(6, time * 60, Math.sin(time * 5) * 8);
+
+      flameMaterial.opacity =
+        0.44 * envelope * (0.85 + Math.random() * 0.15);
+      hotMaterial.opacity =
+        0.5 * envelope * (0.85 + Math.random() * 0.15);
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
   }
 
   /** Estela del desplazamiento de un dash. */
@@ -579,7 +1741,197 @@ export class CombatFx {
     });
   }
 
+  /** Explosión de fuego: núcleo, halo, llamas que suben y anillo en el suelo. */
+  spawnFireBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('fire-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 250, 220], 0.9);
+    const glowMaterial = this.createMaterial(color, 0.4);
+    const flameMaterial = this.createFlameMaterial([255, 255, 255], 0.55);
+    const hotMaterial = this.createFlameMaterial([255, 246, 214], 0.6);
+    const sparkMaterial = this.createMaterial([255, 205, 120], 0.95);
+    const ringMaterial = this.createMaterial(color, 0.4);
+    const materials = [
+      coreMaterial,
+      glowMaterial,
+      flameMaterial,
+      hotMaterial,
+      sparkMaterial,
+      ringMaterial
+    ];
+
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: 0.3,
+      z: 0,
+      extents: [0.12, 0.12, 0.12],
+      velocity: [0, 0.8, 0],
+      velocityEnd: [0, 1.8, 0],
+      radialSpeed: 1.4,
+      radialSpeedEnd: 2.8,
+      sizeStart: 0.16,
+      sizeMid: 0.36,
+      sizeEnd: 0.06,
+      lifetime: 0.38,
+      rate: 1.5,
+      numParticles: 52,
+      localSpace: false,
+      preWarm: false
+    });
+    const burstLight = this.createFireLight(root, 0, 0.55, 0, 1.1, 4);
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.62, 0);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0.62, 0);
+
+    const flames: {
+      entity: pc.Entity;
+      offsetX: number;
+      offsetZ: number;
+      baseWidth: number;
+      baseHeight: number;
+      yaw: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 5; index++) {
+      const angle = (index / 5) * Math.PI * 2 + 0.4;
+      const dist = 0.1 + ((index * 13) % 10) / 10 * 0.16;
+      const baseWidth = 0.28 + ((index * 17) % 10) / 10 * 0.16;
+      const baseHeight = 0.55 + ((index * 29) % 10) / 10 * 0.35;
+      const yaw = (index * 53) % 360;
+      const entity = this.createFlame(
+        root,
+        index % 3 === 0 ? hotMaterial : flameMaterial,
+        {
+          x: Math.cos(angle) * dist,
+          y: 0.08,
+          z: Math.sin(angle) * dist,
+          width: baseWidth,
+          height: baseHeight,
+          yaw
+        }
+      );
+      flames.push({
+        entity,
+        offsetX: Math.cos(angle) * dist,
+        offsetZ: Math.sin(angle) * dist,
+        baseWidth,
+        baseHeight,
+        yaw,
+        phase: index * 1.4
+      });
+    }
+
+    const sparks: {
+      entity: pc.Entity;
+      dirX: number;
+      dirZ: number;
+      speed: number;
+      lift: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const angle = (index / 7) * Math.PI * 2 + 0.9;
+      const spark = this.createEntity(this.sphereMesh, [sparkMaterial], root);
+      const size = 0.05 + ((index * 11) % 10) / 10 * 0.05;
+      spark.setLocalScale(size, size, size);
+      sparks.push({
+        entity: spark,
+        dirX: Math.cos(angle),
+        dirZ: Math.sin(angle),
+        speed: 0.8 + ((index * 7) % 10) / 10 * 1.1,
+        lift: 1.4 + ((index * 3) % 10) / 10 * 1.2,
+        phase: index * 1.9
+      });
+    }
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.08, 0);
+
+    const animate = (t: number): void => {
+      const boost = effectiveness > 1 ? 1.35 : 1;
+      const scale = (0.18 + t * 0.95) * boost;
+      core.setLocalScale(scale, scale, scale);
+      const glowScale = (0.45 + t * 1.7) * boost;
+      glow.setLocalScale(glowScale, glowScale, glowScale);
+      coreMaterial.opacity = 0.9 * (1 - t);
+      glowMaterial.opacity = 0.4 * (1 - t);
+
+      for (const flame of flames) {
+        const life =
+          Math.min(1, t / 0.12) *
+          (1 - Math.max(0, (t - 0.3) / 0.7));
+        const sway = Math.sin(t * 21 + flame.phase) * 0.2;
+        const scaleNow = Math.max(0.001, life);
+        flame.entity.setLocalScale(
+          flame.baseWidth * scaleNow * (1 + sway * 0.3),
+          flame.baseHeight * scaleNow * (1.05 + sway),
+          flame.baseWidth * scaleNow * (1 + sway * 0.3)
+        );
+        flame.entity.setLocalPosition(
+          flame.offsetX * (1 + t * 0.4),
+          0.08 + t * 1.05,
+          flame.offsetZ * (1 + t * 0.4)
+        );
+        flame.entity.setLocalEulerAngles(
+          0,
+          flame.yaw + t * 70,
+          Math.sin(t * 18 + flame.phase) * 10
+        );
+      }
+
+      for (const spark of sparks) {
+        const travel = t * 0.42;
+        const y = spark.lift * travel - 4.2 * travel * travel;
+        spark.entity.setLocalPosition(
+          spark.dirX * spark.speed * travel,
+          Math.max(0.03, 0.35 + y),
+          spark.dirZ * spark.speed * travel
+        );
+        const sparkLife = Math.max(0, 1 - t) * (0.8 + Math.sin(t * 30 + spark.phase) * 0.2);
+        spark.entity.setLocalScale(
+          sparkLife * 0.1,
+          sparkLife * 0.1,
+          sparkLife * 0.1
+        );
+      }
+      sparkMaterial.opacity = 0.9 * (1 - t);
+
+      flameMaterial.opacity = 0.5 * (1 - t) * (0.85 + Math.random() * 0.15);
+      hotMaterial.opacity = 0.55 * (1 - t) * (0.85 + Math.random() * 0.15);
+      burstLight.light!.intensity =
+        1.1 * (1 - t) * (0.65 + Math.random() * 0.35);
+
+      const ringScale = (0.5 + t * 1.15) * boost;
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = 0.4 * (1 - t);
+    };
+    this.addEffect(root, materials, 0.45, animate);
+    animate(0);
+  }
+
   update(dt: number): void {
+    // Marcas de área: se animan y se autodestruyen al llenarse.
+    for (const telegraph of [...this.telegraphs]) {
+      telegraph.elapsed += dt;
+      const progress = Math.min(1, telegraph.elapsed / telegraph.duration);
+      telegraph.update(progress, telegraph.elapsed);
+      for (const material of telegraph.materials) material.update();
+      // Pequeña prórroga: el lanzamiento la retira explícitamente al impactar;
+      // esto solo evita que se quede viva si algo lo interrumpe sin cancelar.
+      if (telegraph.elapsed >= telegraph.duration + 0.1) {
+        this.disposeTelegraph(telegraph);
+      }
+    }
+
     for (let index = this.effects.length - 1; index >= 0; index--) {
       const effect = this.effects[index];
       effect.elapsed += dt;
@@ -598,6 +1950,10 @@ export class CombatFx {
 
   /** Elimina todos los efectos activos. */
   clear(): void {
+    for (const telegraph of [...this.telegraphs]) {
+      this.disposeTelegraph(telegraph);
+    }
+
     for (const effect of this.effects) {
       effect.entity.destroy();
       for (const material of effect.materials) material.destroy();
@@ -616,5 +1972,9 @@ export class CombatFx {
     this.sphereMesh.destroy();
     this.boxMesh.destroy();
     this.torusMesh.destroy();
+    this.flameMesh.destroy();
+    this.flameTexture.destroy();
+    this.discMesh.destroy();
+    this.dashRingMesh.destroy();
   }
 }
