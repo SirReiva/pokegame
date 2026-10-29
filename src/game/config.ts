@@ -74,7 +74,20 @@ export const CONFIG = {
     radius: 0.42,
     acceleration: 16,
     deceleration: 20,
-    turnLerp: 16,
+    /**
+     * Rad/s con los que el vector de avance gira hacia la dirección de entrada.
+     * Alto = giro casi instantáneo; bajo = el Pokémon traza curvas amplias y
+     * parece derrapar.
+     */
+    turnRate: 24,
+    /**
+     * Cambio de rumbo (grados) a partir del cual la velocidad se invierte en
+     * seco en vez de girar progresivamente. Sin esto, un cambio a la dirección
+     * opuesta trazaba un pequeño arco lateral antes de volver.
+     */
+    turnSnapAngle: 135,
+    /** Suavizado del sprite hacia el rumbo de avance (1/s). */
+    turnLerp: 24,
     /** Por debajo de esta velocidad no se cambia la dirección a la que mira. */
     minFacingSpeed: 0.25,
     /** Anillo de rumbo bajo los pies del jugador, en unidades de mundo. */
@@ -111,6 +124,27 @@ export const CONFIG = {
     color: [0.73, 0.87, 0.96] as [number, number, number],
     near: 34,
     far: 96,
+  },
+  combat: {
+    /** KOs de equipo necesarios para ganar la partida. */
+    koTarget: 15,
+    /** Segundos que se tarda en reaparecer tras un KO. */
+    respawnSeconds: 5,
+    /** Segundos de invulnerabilidad al reaparecer. */
+    invulnerabilitySeconds: 2,
+    /** Bloqueo breve al recibir un golpe. Menor que el enfriamiento de Placaje. */
+    hitstunSeconds: 0.15,
+    /** Stun del choque cuando dos melee rivales conectan a la vez. */
+    clashStunSeconds: 0.25,
+    /** Separación aplicada a ambos luchadores en un choque. */
+    clashKnockback: 1,
+    /** Probabilidad de crítico (1/24 en la generación VII+). */
+    critChance: 1 / 24,
+    /** Multiplicador de daño de un crítico. */
+    critMultiplier: 1.5,
+    /** Rango del factor aleatorio oficial de daño. */
+    randomMin: 0.85,
+    randomMax: 1
   },
   vision: {
     /**

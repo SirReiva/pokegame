@@ -22,7 +22,11 @@ import { rosterColumns } from '../ui/rosterGrid';
 import { SessionContext, type BootStatus, type SessionValue } from './sessionContext';
 
 async function loadManifest(): Promise<SpriteManifest> {
-  const response = await fetch(`${import.meta.env.BASE_URL}sprites/manifest.json`);
+  // El manifiesto cambia al ejecutar `pnpm sprites`; la marca evita que el
+  // navegador reutilice una copia antigua sin QuickStrike u otras animaciones.
+  const response = await fetch(
+    `${import.meta.env.BASE_URL}sprites/manifest.json?v=${Date.now()}`
+  );
   if (!response.ok) {
     throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
   }

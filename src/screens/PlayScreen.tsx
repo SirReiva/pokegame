@@ -5,6 +5,7 @@ import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
   TEAM_INFO,
   type LobbyPlayer,
+  type MatchEndResult,
   type MatchPlayerConfig,
   type PlayerMatchStats
 } from '../game/multiplayer';
@@ -39,6 +40,7 @@ interface PlayHandlers {
   onMenuInput: (event: { deviceId: string; action: MenuAction }) => void;
   onPauseRequest: () => void;
   onMatchStats: (stats: PlayerMatchStats[]) => void;
+  onMatchEnd: (result: MatchEndResult) => void;
 }
 
 interface PlayScreenProps {
@@ -66,6 +68,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
   const [modal, setModal] = useState<InfoKind | null>(null);
   const [hudVisible, setHudVisible] = useState(true);
   const [stats, setStats] = useState<PlayerMatchStats[]>([]);
+  const [matchResult, setMatchResult] = useState<MatchEndResult | null>(null);
 
   useEffect(() => {
     configsRef.current = configs;
@@ -95,7 +98,8 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
         }
       },
       onPauseRequest: () => setPaused(true),
-      onMatchStats: (next) => setStats(next)
+      onMatchStats: (next) => setStats(next),
+      onMatchEnd: (result) => setMatchResult(result)
     };
   });
 
@@ -127,6 +131,9 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
         },
         onMatchStats: (next) => {
           if (!disposed) handlersRef.current?.onMatchStats(next);
+        },
+        onMatchEnd: (result) => {
+          if (!disposed) handlersRef.current?.onMatchEnd(result);
         }
       },
       { mapId, manifest }
@@ -176,6 +183,13 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
     navigate('/');
   };
 
+  const rematch = () => {
+    setMatchResult(null);
+    setStats([]);
+    setPaused(false);
+    gameRef.current?.startMatch(configsRef.current);
+  };
+
   const selectedEntryFor = (pokemonId: string) =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
   const fps = stats[0]?.fps ?? 0;
@@ -215,7 +229,12 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       {!error && playing && (
         <>
           {hudVisible && (
-            <MatchHud manifest={manifest} players={players} stats={stats} onPause={() => setPaused(true)} />
+            <MatchHud
+              manifest={manifest}
+              players={players}
+              stats={stats}
+              onPause={() => setPaused(true)}
+            />
           )}
 
           <div className="fixed top-2.5 right-2.5 z-[7] flex animate-fade-in flex-wrap justify-end gap-1.5">
@@ -342,6 +361,41 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
                 <KeyPill>A</KeyPill> continuar · <KeyPill>B</KeyPill> continuar ·{' '}
                 <KeyPill>Start / Esc</KeyPill> pausa
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!error && playing && matchResult && (
+        <div className="fixed inset-0 z-[14] flex animate-fade-in items-center justify-center bg-[#03070c]/[0.78] backdrop-blur-[8px]">
+          <div className={`${panel} w-[min(560px,100%)] animate-rise-in p-[clamp(20px,3vw,30px)]`}>
+            <div className="text-center">
+              <span className={eyebrow}>Fin de la partida</span>
+              <h2
+                className="mt-1 text-[clamp(2rem,5vw,3rem)]"
+                style={{ color: TEAM_INFO[matchResult.winner].color }}
+              >
+                Gana el {TEAM_INFO[matchResult.winner].label.toLowerCase()}
+              </h2>
+              <p className="mt-2 font-mono text-[0.8rem] text-[#9db0c4]">
+                {matchResult.blueScore} KO azules · {matchResult.redScore} KO rojos
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className={`${btnClass('primary', 'play')} col-span-2`}
+                onClick={rematch}
+              >
+                Revancha
+              </button>
+              <button type="button" className={btnClass('ghost')} onClick={backToTeams}>
+                Cambiar equipos
+              </button>
+              <button type="button" className={btnClass('ghost')} onClick={exitToMenu}>
+                Menú principal
+              </button>
             </div>
           </div>
         </div>

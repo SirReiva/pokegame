@@ -176,14 +176,16 @@ export class FogView {
     left: new pc.Vec3(),
     right: new pc.Vec3(),
     near: new pc.Vec3(),
-    far: new pc.Vec3()
+    far: new pc.Vec3(),
+    probe: new pc.Vec3()
   };
   private readonly screenPoints = {
     center: new pc.Vec3(),
     left: new pc.Vec3(),
     right: new pc.Vec3(),
     near: new pc.Vec3(),
-    far: new pc.Vec3()
+    far: new pc.Vec3(),
+    probe: new pc.Vec3()
   };
 
   constructor(
@@ -307,7 +309,40 @@ export class FogView {
 
     const centerX = toX(center.x);
     const centerY = toY(center.y);
-    const radiusX = clampPct(Math.abs(toX(right.x) - toX(left.x)) * 0.5);
+    // El círculo de visión proyectado no es más ancho en sus extremos
+    // izquierdo/derecho "puros": con perspectiva, el máximo horizontal cae en
+    // un punto algo más cercano a la cámara. Proyectar solo los extremos laterales
+    // dejaba el óvalo un 10-15 % estrecho y el rayo (11 u reales) parecía salirse
+    // de la visión. Se muestrea el círculo para obtener el semieje real.
+    const cameraDepthToPlayer =
+      (x - cameraPosition.x) * forwardX + (z - cameraPosition.z) * forwardZ;
+    const probeSteps = 32;
+    let halfSpan = 0;
+    for (let step = 0; step <= probeSteps; step++) {
+      const along = -visionRange + (step / probeSteps) * visionRange * 2;
+      // Los puntos que quedan por detrás de la cámara no se pueden proyectar.
+      if (cameraDepthToPlayer + along <= 0.05) continue;
+      const across = Math.sqrt(
+        Math.max(0, visionRange * visionRange - along * along)
+      );
+      for (let side = -1; side <= 1; side += 2) {
+        const probe = camera.worldToScreen(
+          world.probe.set(
+            x + forwardX * along + rightX * across * side,
+            0,
+            z + forwardZ * along + rightZ * across * side
+          ),
+          screen.probe
+        );
+        const offset = Math.abs(toX(probe.x) - centerX);
+        if (Number.isFinite(offset)) halfSpan = Math.max(halfSpan, offset);
+      }
+    }
+    const radiusX = clampPct(
+      halfSpan > 0.0001
+        ? halfSpan
+        : Math.abs(toX(right.x) - toX(left.x)) * 0.5
+    );
     const rawFarY = toY(far.y);
     const rawNearY = near ? toY(near.y) : 160;
     // Acotar los extremos un poco más allá del panel evita que un punto muy

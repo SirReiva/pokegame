@@ -151,6 +151,10 @@ export class Actor {
     this.billboard.setPlayback(rate);
   }
 
+  setLoop(loop: boolean): void {
+    this.billboard.setLoop(loop);
+  }
+
   update(dt: number, cameraPosition: pc.Vec3): void {
     this.billboard.update(dt, cameraPosition);
   }

@@ -1,0 +1,111 @@
+{
+  "base": "https://pokebrawl.vercel.app/",
+  "animations": {
+    "blastoise": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Rotate",
+      "Shoot",
+      "Swing",
+      "Walk"
+    ],
+    "charizard": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Faint",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Rotate",
+      "Shoot",
+      "Strike",
+      "Swing",
+      "Walk"
+    ],
+    "garchomp": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Rotate",
+      "Shoot",
+      "Swing",
+      "Walk"
+    ],
+    "gardevoir": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Rotate",
+      "Swing",
+      "Walk"
+    ],
+    "gengar": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Faint",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Pose",
+      "Rotate",
+      "Shoot",
+      "Strike",
+      "Swing",
+      "Walk"
+    ],
+    "lucario": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Faint",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Pose",
+      "QuickStrike",
+      "Rotate",
+      "Strike",
+      "Swing",
+      "Walk"
+    ],
+    "pikachu": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Faint",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Pose",
+      "QuickStrike",
+      "Rotate",
+      "Shoot",
+      "Swing",
+      "Walk"
+    ],
+    "venusaur": [
+      "Attack",
+      "Charge",
+      "Double",
+      "Hop",
+      "Hurt",
+      "Idle",
+      "Rotate",
+      "Shoot",
+      "Swing",
+      "Walk"
+    ]
+  }
+}

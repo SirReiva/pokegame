@@ -53,6 +53,11 @@ export interface DeviceInputSnapshot {
   /** Pulsaciones de borde, no estados mantenidos. */
   confirm: boolean;
   cancel: boolean;
+  /** Habilidades de combate: J/K/L/U o X/Y/RB/LB. */
+  ability1: boolean;
+  ability2: boolean;
+  ability3: boolean;
+  ability4: boolean;
   navX: -1 | 0 | 1;
   navY: -1 | 0 | 1;
 }
@@ -250,6 +255,10 @@ export class Input {
     const right = edgeNav(NAV_KEYS.right);
     const confirm = tapped(' ') || tapped('enter');
     const cancel = tapped('escape') || tapped('backspace');
+    const ability1 = tapped('j');
+    const ability2 = tapped('k');
+    const ability3 = tapped('l');
+    const ability4 = tapped('u');
 
     let action: MenuAction | null = null;
     if (confirm) action = 'confirm';
@@ -271,6 +280,10 @@ export class Input {
       startPressed: false,
       confirm,
       cancel,
+      ability1,
+      ability2,
+      ability3,
+      ability4,
       navX: left ? -1 : right ? 1 : 0,
       navY: up ? 1 : down ? -1 : 0
     };
@@ -322,6 +335,11 @@ export class Input {
     const confirm = edge(0);
     const cancel = edge(1);
     const startPressed = edge(9);
+    // X, Y, RB y LB. El botón B sigue reservado para pausa/volver.
+    const ability1 = edge(2);
+    const ability2 = edge(3);
+    const ability3 = edge(5);
+    const ability4 = edge(4);
 
     state.buttons = pad.buttons.map((button) => button.pressed);
     state.nav = navNow;
@@ -345,12 +363,17 @@ export class Input {
       cameraX: applyDeadzone(axes[2] ?? 0),
       zoom,
       wheel: 0,
-      run: pressed(10) || pressed(5),
+      // L3 para correr; RB queda libre para la tercera habilidad.
+      run: pressed(10),
       pointerYaw: 0,
       gamepad: true,
       startPressed,
       confirm,
       cancel,
+      ability1,
+      ability2,
+      ability3,
+      ability4,
       navX: left ? -1 : right ? 1 : 0,
       navY: up ? 1 : down ? -1 : 0
     };
@@ -415,6 +438,10 @@ export const IDLE_INPUT: DeviceInputSnapshot = {
   startPressed: false,
   confirm: false,
   cancel: false,
+  ability1: false,
+  ability2: false,
+  ability3: false,
+  ability4: false,
   navX: 0,
   navY: 0
 };

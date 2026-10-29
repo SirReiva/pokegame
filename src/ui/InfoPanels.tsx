@@ -31,6 +31,12 @@ export function ControlsPanel() {
             <KeyPill>L2 / R2</KeyPill> alejar / acercar
           </li>
           <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>L3</KeyPill> correr
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>X / Y / RB / LB</KeyPill> habilidades (básica, 1, 2 y 3)
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Start</KeyPill> pausar la partida
           </li>
         </ul>
@@ -56,6 +62,9 @@ export function ControlsPanel() {
           </li>
           <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Shift</KeyPill> correr
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>J / K / L / U</KeyPill> habilidades (básica, 1, 2 y 3)
           </li>
           <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Esc</KeyPill> pausa / volver

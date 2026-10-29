@@ -6,6 +6,7 @@
  * viewports y las cuentas de equipo sin levantar el motor.
  */
 
+import type { AbilitySlot } from './abilities';
 import type { InputDeviceInfo } from './input';
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
@@ -189,6 +190,19 @@ export interface MatchPlayerConfig {
   pokemonId: string;
 }
 
+/** Estado de una habilidad para el HUD de cada vista. */
+export interface AbilityHud {
+  slot: AbilitySlot;
+  id: string;
+  name: string;
+  type: string;
+  category: 'physical' | 'special' | 'status';
+  /** Enfriamiento restante, en segundos. */
+  cooldown: number;
+  /** Enfriamiento total, en segundos. */
+  duration: number;
+}
+
 export interface PlayerMatchStats {
   slot: number;
   name: string;
@@ -220,6 +234,33 @@ export interface PlayerMatchStats {
   /** Multiplicador de ocultación por la relación tipo-terreno. */
   concealmentMultiplier: number;
   concealmentReason: TerrainRelationReason;
+  /** Nº de rivales vivos que te ven en este instante. */
+  enemiesSeeing: number;
+  /** `true` si al menos un rival te ve (estás descubierto). */
+  discovered: boolean;
+
+  /** Vida actual y máxima. */
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  /** Segundos restantes hasta reaparecer; 0 si está vivo. */
+  respawnIn: number;
+  /** Invulnerabilidad temporal tras reaparecer. */
+  invulnerable: boolean;
+  kills: number;
+  deaths: number;
+  abilities: AbilityHud[];
+  /** Marcador de equipo, repetido en cada entrada para pintar el HUD. */
+  blueScore: number;
+  redScore: number;
+  winner: Team | null;
+}
+
+/** Resultado final que React usa para mostrar la pantalla de victoria. */
+export interface MatchEndResult {
+  winner: Team;
+  blueScore: number;
+  redScore: number;
 }
 
 export function countTeams(players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>): Record<Team, number> {

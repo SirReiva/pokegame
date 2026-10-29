@@ -55,7 +55,9 @@ const ROSTER = [
   { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' }
 ];
 
-const ACTIONS = ['Idle', 'Walk'];
+// Faint, QuickStrike y Shock son opcionales: no todas las especies las tienen
+// en Sprite Collab. El motor usa QuickStrike y Shock cuando existen.
+const ACTIONS = ['Idle', 'Walk', 'Attack', 'Hurt', 'Faint', 'QuickStrike', 'Shock'];
 const force = process.argv.includes('--force');
 
 function slug(value) {
@@ -233,6 +235,71 @@ function extractBottoms(sheet, frameWidth, frameHeight, columns, rows) {
 }
 
 /**
+ * Calcula cuánto arte hay alrededor del ancla en toda la animación. El motor
+ * usa este recorte para no dibujar el plano gigante de hojas como QuickStrike,
+ * donde el personaje ocupa una esquina y el resto es espacio vacío.
+ */
+function extractContentRows(sheet, frameWidth, frameHeight, columns, rows, anchors) {
+  const result = [];
+
+  for (let row = 0; row < rows; row++) {
+    let left = 0;
+    let right = 0;
+    let top = 0;
+    let bottom = 0;
+    const boxes = [];
+
+    for (let column = 0; column < columns; column++) {
+      let minX = frameWidth;
+      let minY = frameHeight;
+      let maxX = -1;
+      let maxY = -1;
+
+      for (let y = 0; y < frameHeight; y++) {
+        for (let x = 0; x < frameWidth; x++) {
+          const px =
+            ((row * frameHeight + y) * sheet.width + (column * frameWidth + x)) * 4;
+          if (sheet.pixels[px + 3] < 128) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      if (maxX < 0) continue;
+      const anchor = anchors[row * columns + column];
+      boxes.push({ anchor, minX, minY, maxX, maxY });
+      left = Math.max(left, anchor.x - minX);
+      right = Math.max(right, maxX - anchor.x);
+      top = Math.max(top, anchor.y - minY);
+      bottom = Math.max(bottom, maxY - anchor.y);
+    }
+
+    left = Math.max(1, left);
+    right = Math.max(1, right);
+    top = Math.max(1, top);
+    bottom = Math.max(0, bottom);
+
+    let valid = boxes.length > 0;
+    for (const box of boxes) {
+      if (
+        box.anchor.x - left < 0 ||
+        box.anchor.x + right > frameWidth ||
+        box.anchor.y - top < 0 ||
+        box.anchor.y + bottom > frameHeight
+      ) {
+        valid = false;
+        break;
+      }
+    }
+    result.push(valid ? { left, right, top, bottom } : null);
+  }
+
+  return result;
+}
+
+/**
  * Localiza el píxel blanco de la sombra en cada frame. Devuelve una lista
  * fila a fila (8 direcciones x columnas) con el ancla en píxeles.
  */
@@ -340,8 +407,14 @@ async function importPokemon(pokemon) {
   const animations = {};
 
   for (const action of ACTIONS) {
+    const optional =
+      action === 'Faint' || action === 'QuickStrike' || action === 'Shock';
     const meta = anims.get(action);
     if (!meta) {
+      if (optional) {
+        console.log(`  ${action.padEnd(5)} no disponible, se omite`);
+        continue;
+      }
       throw new Error(`${pokemon.name}: AnimData.xml no incluye la animación ${action}`);
     }
 
@@ -350,10 +423,18 @@ async function importPokemon(pokemon) {
     const alreadyThere = existsSync(destination) && !force;
     let buffer;
 
-    if (alreadyThere) {
-      buffer = await readFile(destination);
-    } else {
-      buffer = await download(`${folderUrl}/${action}-Anim.png`, destination);
+    try {
+      if (alreadyThere) {
+        buffer = await readFile(destination);
+      } else {
+        buffer = await download(`${folderUrl}/${action}-Anim.png`, destination);
+      }
+    } catch (error) {
+      if (optional) {
+        console.log(`  ${action.padEnd(5)} no disponible, se omite`);
+        continue;
+      }
+      throw error;
     }
 
     const sheet = decodePng(buffer);
@@ -377,7 +458,16 @@ async function importPokemon(pokemon) {
       );
     }
 
-    const shadowBuffer = await download(`${folderUrl}/${action}-Shadow.png`);
+    let shadowBuffer;
+    try {
+      shadowBuffer = await download(`${folderUrl}/${action}-Shadow.png`);
+    } catch (error) {
+      if (optional) {
+        console.log(`  ${action.padEnd(5)} sin sombra, se omite`);
+        continue;
+      }
+      throw error;
+    }
     const shadow = decodePng(shadowBuffer);
     if (shadow.width !== width || shadow.height !== height) {
       throw new Error(
@@ -388,6 +478,14 @@ async function importPokemon(pokemon) {
 
     const anchors = extractAnchors(shadow, meta.frameWidth, meta.frameHeight, columns);
     const bottoms = extractBottoms(sheet, meta.frameWidth, meta.frameHeight, columns, rows);
+    const contentRows = extractContentRows(
+      sheet,
+      meta.frameWidth,
+      meta.frameHeight,
+      columns,
+      rows,
+      anchors
+    );
 
     animations[slug(action)] = {
       sheet: `/sprites/${pokemon.id}/${file}`,
@@ -397,7 +495,8 @@ async function importPokemon(pokemon) {
       rows,
       durations: meta.durations,
       anchors,
-      bottoms
+      bottoms,
+      contentRows
     };
 
     console.log(

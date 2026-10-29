@@ -1,0 +1,4503 @@
+{
+  "source": {
+    "game": "Poke Brawl",
+    "url": "https://pokebrawl.vercel.app/",
+    "mirror": "https://unfoundgames.in/play/poke-brawl",
+    "engine": "Phaser 3",
+    "inspected": "2026-10-29",
+    "bundle": "assets/index-Cj-UV_Xn.js (1,680,280 bytes)"
+  },
+  "findings": {
+    "abilityIcons": false,
+    "abilitySpriteSheets": false,
+    "fx": "procedural",
+    "note": "No hay PNG/WebP de habilidades. Los unicos PNG son las hojas de animacion de los 8 personajes. Todos los efectos de habilidad se dibujan en runtime con Phaser (Graphics + particles) y 11 texturas generadas con generateTexture."
+  },
+  "typeColors": {
+    "normal": 11052922,
+    "fire": 15630640,
+    "water": 6525168,
+    "electric": 16240684,
+    "grass": 8046412,
+    "ice": 9886166,
+    "fighting": 12725800,
+    "poison": 10698401,
+    "ground": 14860133,
+    "flying": 11112435,
+    "psychic": 16340359,
+    "bug": 10926362,
+    "rock": 11968822,
+    "ghost": 7559063,
+    "dragon": 7288316,
+    "dark": 7362374,
+    "steel": 12040142,
+    "fairy": 14058925
+  },
+  "typeChart": {
+    "normal": {
+      "rock": 0.5,
+      "ghost": 0,
+      "steel": 0.5
+    },
+    "fire": {
+      "fire": 0.5,
+      "water": 0.5,
+      "grass": 2,
+      "ice": 2,
+      "bug": 2,
+      "rock": 0.5,
+      "dragon": 0.5,
+      "steel": 2
+    },
+    "water": {
+      "fire": 2,
+      "water": 0.5,
+      "grass": 0.5,
+      "ground": 2,
+      "rock": 2,
+      "dragon": 0.5
+    },
+    "electric": {
+      "water": 2,
+      "electric": 0.5,
+      "grass": 0.5,
+      "ground": 0,
+      "flying": 2,
+      "dragon": 0.5
+    },
+    "grass": {
+      "fire": 0.5,
+      "water": 2,
+      "grass": 0.5,
+      "poison": 0.5,
+      "ground": 2,
+      "flying": 0.5,
+      "bug": 0.5,
+      "rock": 2,
+      "dragon": 0.5,
+      "steel": 0.5
+    },
+    "ice": {
+      "fire": 0.5,
+      "water": 0.5,
+      "grass": 2,
+      "ice": 0.5,
+      "ground": 2,
+      "flying": 2,
+      "dragon": 2,
+      "steel": 0.5
+    },
+    "fighting": {
+      "normal": 2,
+      "ice": 2,
+      "poison": 0.5,
+      "flying": 0.5,
+      "psychic": 0.5,
+      "bug": 0.5,
+      "rock": 2,
+      "ghost": 0,
+      "dark": 2,
+      "steel": 2,
+      "fairy": 0.5
+    },
+    "poison": {
+      "grass": 2,
+      "poison": 0.5,
+      "ground": 0.5,
+      "rock": 0.5,
+      "ghost": 0.5,
+      "steel": 0,
+      "fairy": 2
+    },
+    "ground": {
+      "fire": 2,
+      "electric": 2,
+      "grass": 0.5,
+      "poison": 2,
+      "flying": 0,
+      "bug": 0.5,
+      "rock": 2,
+      "steel": 2
+    },
+    "flying": {
+      "electric": 0.5,
+      "grass": 2,
+      "fighting": 2,
+      "bug": 2,
+      "rock": 0.5,
+      "steel": 0.5
+    },
+    "psychic": {
+      "fighting": 2,
+      "poison": 2,
+      "psychic": 0.5,
+      "dark": 0,
+      "steel": 0.5
+    },
+    "bug": {
+      "fire": 0.5,
+      "grass": 2,
+      "fighting": 0.5,
+      "poison": 0.5,
+      "flying": 0.5,
+      "psychic": 2,
+      "ghost": 0.5,
+      "dark": 2,
+      "steel": 0.5,
+      "fairy": 0.5
+    },
+    "rock": {
+      "fire": 2,
+      "ice": 2,
+      "fighting": 0.5,
+      "ground": 0.5,
+      "flying": 2,
+      "bug": 2,
+      "steel": 0.5
+    },
+    "ghost": {
+      "normal": 0,
+      "psychic": 2,
+      "ghost": 2,
+      "dark": 0.5
+    },
+    "dragon": {
+      "dragon": 2,
+      "steel": 0.5,
+      "fairy": 0
+    },
+    "dark": {
+      "fighting": 0.5,
+      "psychic": 2,
+      "ghost": 2,
+      "dark": 0.5,
+      "fairy": 0.5
+    },
+    "steel": {
+      "fire": 0.5,
+      "water": 0.5,
+      "electric": 0.5,
+      "ice": 2,
+      "rock": 2,
+      "steel": 0.5,
+      "fairy": 2
+    },
+    "fairy": {
+      "fire": 0.5,
+      "fighting": 2,
+      "poison": 0.5,
+      "dragon": 2,
+      "dark": 2,
+      "steel": 0.5
+    }
+  },
+  "environments": {
+    "sun": {
+      "layer": "weather",
+      "label": "SUN",
+      "start": "THE SUNLIGHT TURNED HARSH!",
+      "end": "THE SUNLIGHT FADED.",
+      "color": 16757818,
+      "boost": {
+        "fire": 1.25,
+        "water": 0.75
+      }
+    },
+    "rain": {
+      "layer": "weather",
+      "label": "RAIN",
+      "start": "IT STARTED TO RAIN!",
+      "end": "THE RAIN STOPPED.",
+      "color": 6992127,
+      "boost": {
+        "water": 1.25,
+        "fire": 0.75
+      }
+    },
+    "sand": {
+      "layer": "weather",
+      "label": "SAND",
+      "start": "A SANDSTORM KICKED UP!",
+      "end": "THE SANDSTORM DIED DOWN.",
+      "color": 14203000,
+      "boost": {}
+    },
+    "dark": {
+      "layer": "weather",
+      "label": "DARK",
+      "start": "DARKNESS FELL OVER THE ARENA!",
+      "end": "THE DARKNESS LIFTED.",
+      "color": 10779903,
+      "boost": {
+        "ghost": 1.25,
+        "dark": 1.25
+      }
+    },
+    "grassy": {
+      "layer": "terrain",
+      "label": "GRASS",
+      "start": "GRASS GREW OVER THE ARENA!",
+      "end": "THE GRASS WITHERED.",
+      "color": 5821034,
+      "boost": {
+        "grass": 1.25
+      }
+    },
+    "electric": {
+      "layer": "terrain",
+      "label": "ELECTRIC",
+      "start": "THE ARENA IS CRACKLING!",
+      "end": "THE CURRENT FADED.",
+      "color": 16306224,
+      "boost": {
+        "electric": 1.25
+      }
+    },
+    "misty": {
+      "layer": "terrain",
+      "label": "MIST",
+      "start": "MIST SWIRLED OVER THE ARENA!",
+      "end": "THE MIST CLEARED.",
+      "color": 16751320,
+      "boost": {
+        "dragon": 0.5,
+        "fairy": 1.25
+      }
+    },
+    "aura": {
+      "layer": "surge",
+      "label": "AURA",
+      "start": "ITS AURA SURGED!",
+      "end": "THE AURA FADED.",
+      "color": 4892927,
+      "boost": {}
+    }
+  },
+  "environmentByPokemon": {
+    "charizard": "sun",
+    "blastoise": "rain",
+    "venusaur": "grassy",
+    "pikachu": "electric",
+    "garchomp": "sand",
+    "gardevoir": "misty",
+    "gengar": "dark",
+    "lucario": "aura"
+  },
+  "characters": [
+    {
+      "id": "pikachu",
+      "name": "Pikachu",
+      "types": [
+        "electric"
+      ],
+      "hp": 445,
+      "atk": 1.05,
+      "def": 0.92,
+      "speed": 215,
+      "radius": 13,
+      "role": "Fast striker. Zaps from range, dives in with Quick Attack.",
+      "moves": [
+        {
+          "name": "Quick Attack",
+          "type": "normal",
+          "kind": "dash",
+          "power": 48,
+          "cooldown": 0.9,
+          "windup": 0.05,
+          "recovery": 0.12,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.22,
+          "aiRange": [
+            0,
+            170
+          ],
+          "dashSpeed": 760,
+          "dashTime": 0.2,
+          "hitRadius": 22
+        },
+        {
+          "name": "Thunderbolt",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 1.5,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 160,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            470
+          ],
+          "speed": 640,
+          "projRadius": 9,
+          "range": 520,
+          "shape": "shard"
+        },
+        {
+          "name": "Iron Tail",
+          "type": "steel",
+          "kind": "melee",
+          "power": 100,
+          "cooldown": 2.5,
+          "windup": 0.26,
+          "recovery": 0.22,
+          "anim": "Swing",
+          "knockback": 380,
+          "hitstun": 0.4,
+          "aiRange": [
+            0,
+            90
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 50
+        },
+        {
+          "name": "Thunder",
+          "type": "electric",
+          "kind": "strike",
+          "power": 115,
+          "cooldown": 7,
+          "windup": 0.35,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 260,
+          "hitstun": 0.55,
+          "aiRange": [
+            60,
+            440
+          ],
+          "radius": 52,
+          "delay": 0.7,
+          "range": 460,
+          "style": "bolt",
+          "crater": 28
+        }
+      ],
+      "extra": [
+        {
+          "name": "Volt Switch",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 1.6,
+          "windup": 0.14,
+          "recovery": 0.1,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.25,
+          "aiRange": [
+            90,
+            380
+          ],
+          "speed": 700,
+          "projRadius": 9,
+          "range": 440,
+          "shape": "shard",
+          "retreat": 820
+        },
+        {
+          "name": "Agility",
+          "type": "psychic",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 8,
+          "windup": 0.2,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 7,
+            "speed": 1.4,
+            "dodge": 1.6
+          }
+        },
+        {
+          "name": "Volt Tackle",
+          "type": "electric",
+          "kind": "dash",
+          "power": 135,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.35,
+          "anim": "QuickStrike",
+          "knockback": 460,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            230
+          ],
+          "dashSpeed": 820,
+          "dashTime": 0.3,
+          "hitRadius": 26,
+          "recoil": 0.25
+        },
+        {
+          "name": "Nuzzle",
+          "type": "electric",
+          "kind": "dash",
+          "power": 50,
+          "cooldown": 1.3,
+          "windup": 0.06,
+          "recovery": 0.14,
+          "anim": "Attack",
+          "knockback": 120,
+          "hitstun": 0.2,
+          "aiRange": [
+            0,
+            150
+          ],
+          "dashSpeed": 680,
+          "dashTime": 0.18,
+          "hitRadius": 22,
+          "status": {
+            "kind": "paralysis",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Thunder Wave",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.18,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 700,
+          "projRadius": 10,
+          "range": 460,
+          "color": 16773754,
+          "status": {
+            "kind": "paralysis",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Electroweb",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 2.6,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.25,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 12,
+          "range": 440,
+          "web": {
+            "r": 62,
+            "seconds": 4
+          }
+        },
+        {
+          "name": "Electro Ball",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 180,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 600,
+          "projRadius": 12,
+          "range": 480,
+          "color": 16773754,
+          "vsStatus": 1.8
+        },
+        {
+          "name": "Discharge",
+          "type": "electric",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 3.2,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.35,
+          "aiRange": [
+            0,
+            110
+          ],
+          "radius": 110,
+          "vsStatus": 1.8,
+          "status": {
+            "kind": "paralysis",
+            "chance": 0.25
+          }
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "FAST STRIKER. ZAPS FROM RANGE, DIVES IN WITH QUICK ATTACK.",
+          "moves": [
+            "Quick Attack",
+            "Thunderbolt",
+            "Iron Tail",
+            "Thunder"
+          ]
+        },
+        {
+          "id": "speedster",
+          "name": "Speedster",
+          "blurb": "DART IN, HIT, AND BE GONE BEFORE THEY ANSWER",
+          "moves": [
+            "Quick Attack",
+            "Volt Switch",
+            "Agility",
+            "Volt Tackle"
+          ]
+        },
+        {
+          "id": "trapper",
+          "name": "Trapper",
+          "blurb": "PARALYSE THEM, THEN PUNISH FROM RANGE",
+          "moves": [
+            "Nuzzle",
+            "Thunder Wave",
+            "Electroweb",
+            "Electro Ball"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Quick Attack",
+          "type": "normal",
+          "kind": "dash",
+          "power": 48,
+          "cooldown": 0.9,
+          "windup": 0.05,
+          "recovery": 0.12,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.22,
+          "aiRange": [
+            0,
+            170
+          ],
+          "dashSpeed": 760,
+          "dashTime": 0.2,
+          "hitRadius": 22
+        },
+        {
+          "name": "Thunderbolt",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 1.5,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 160,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            470
+          ],
+          "speed": 640,
+          "projRadius": 9,
+          "range": 520,
+          "shape": "shard"
+        },
+        {
+          "name": "Iron Tail",
+          "type": "steel",
+          "kind": "melee",
+          "power": 100,
+          "cooldown": 2.5,
+          "windup": 0.26,
+          "recovery": 0.22,
+          "anim": "Swing",
+          "knockback": 380,
+          "hitstun": 0.4,
+          "aiRange": [
+            0,
+            90
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 50
+        },
+        {
+          "name": "Thunder",
+          "type": "electric",
+          "kind": "strike",
+          "power": 115,
+          "cooldown": 7,
+          "windup": 0.35,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 260,
+          "hitstun": 0.55,
+          "aiRange": [
+            60,
+            440
+          ],
+          "radius": 52,
+          "delay": 0.7,
+          "range": 460,
+          "style": "bolt",
+          "crater": 28
+        },
+        {
+          "name": "Volt Switch",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 1.6,
+          "windup": 0.14,
+          "recovery": 0.1,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.25,
+          "aiRange": [
+            90,
+            380
+          ],
+          "speed": 700,
+          "projRadius": 9,
+          "range": 440,
+          "shape": "shard",
+          "retreat": 820
+        },
+        {
+          "name": "Agility",
+          "type": "psychic",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 8,
+          "windup": 0.2,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 7,
+            "speed": 1.4,
+            "dodge": 1.6
+          }
+        },
+        {
+          "name": "Volt Tackle",
+          "type": "electric",
+          "kind": "dash",
+          "power": 135,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.35,
+          "anim": "QuickStrike",
+          "knockback": 460,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            230
+          ],
+          "dashSpeed": 820,
+          "dashTime": 0.3,
+          "hitRadius": 26,
+          "recoil": 0.25
+        },
+        {
+          "name": "Nuzzle",
+          "type": "electric",
+          "kind": "dash",
+          "power": 50,
+          "cooldown": 1.3,
+          "windup": 0.06,
+          "recovery": 0.14,
+          "anim": "Attack",
+          "knockback": 120,
+          "hitstun": 0.2,
+          "aiRange": [
+            0,
+            150
+          ],
+          "dashSpeed": 680,
+          "dashTime": 0.18,
+          "hitRadius": 22,
+          "status": {
+            "kind": "paralysis",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Thunder Wave",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.18,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 700,
+          "projRadius": 10,
+          "range": 460,
+          "color": 16773754,
+          "status": {
+            "kind": "paralysis",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Electroweb",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 2.6,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.25,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 12,
+          "range": 440,
+          "web": {
+            "r": 62,
+            "seconds": 4
+          }
+        },
+        {
+          "name": "Electro Ball",
+          "type": "electric",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 180,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 600,
+          "projRadius": 12,
+          "range": 480,
+          "color": 16773754,
+          "vsStatus": 1.8
+        },
+        {
+          "name": "Discharge",
+          "type": "electric",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 3.2,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.35,
+          "aiRange": [
+            0,
+            110
+          ],
+          "radius": 110,
+          "vsStatus": 1.8,
+          "status": {
+            "kind": "paralysis",
+            "chance": 0.25
+          }
+        }
+      ]
+    },
+    {
+      "id": "charizard",
+      "name": "Charizard",
+      "types": [
+        "fire",
+        "flying"
+      ],
+      "hp": 485,
+      "atk": 1.1,
+      "def": 1,
+      "speed": 180,
+      "radius": 17,
+      "role": "All-rounder. Takes wing to dodge, rush and cross lava: flame streams up close, Fire Blast from afar.",
+      "flight": {
+        "height": 20,
+        "glide": {
+          "anim": "Hop",
+          "frame": 5
+        }
+      },
+      "moves": [
+        {
+          "name": "Dragon Claw",
+          "type": "dragon",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.55,
+          "windup": 0.12,
+          "recovery": 0.18,
+          "anim": "Strike",
+          "knockback": 220,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 38,
+          "hitRadius": 28,
+          "lunge": 26
+        },
+        {
+          "name": "Flamethrower",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 15,
+          "cooldown": 3.2,
+          "windup": 0.2,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.12,
+          "aiRange": [
+            50,
+            290
+          ],
+          "speed": 520,
+          "projRadius": 10,
+          "range": 320,
+          "shots": 7,
+          "interval": 0.07
+        },
+        {
+          "name": "Air Slash",
+          "type": "flying",
+          "kind": "projectile",
+          "power": 56,
+          "cooldown": 2.4,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.25,
+          "aiRange": [
+            80,
+            380
+          ],
+          "speed": 560,
+          "projRadius": 8,
+          "range": 420,
+          "count": 3,
+          "spread": 0.28,
+          "shape": "crescent"
+        },
+        {
+          "name": "Fire Blast",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 120,
+          "cooldown": 7.5,
+          "windup": 0.45,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 420,
+          "hitstun": 0.6,
+          "aiRange": [
+            100,
+            460
+          ],
+          "speed": 430,
+          "projRadius": 17,
+          "range": 520,
+          "explode": 62,
+          "crater": 34
+        }
+      ],
+      "extra": [
+        {
+          "name": "Fly",
+          "type": "flying",
+          "kind": "fly",
+          "power": 90,
+          "cooldown": 7.5,
+          "windup": 0.3,
+          "recovery": 0.3,
+          "anim": "Walk",
+          "knockback": 380,
+          "hitstun": 0.5,
+          "aiRange": [
+            0,
+            520
+          ],
+          "radius": 58,
+          "speed": 300
+        },
+        {
+          "name": "Acrobatics",
+          "type": "flying",
+          "kind": "dash",
+          "power": 42,
+          "cooldown": 1.4,
+          "windup": 0.22,
+          "recovery": 0.12,
+          "anim": "Glide",
+          "knockback": 240,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 860,
+          "dashTime": 0.2,
+          "hitRadius": 26
+        },
+        {
+          "name": "Hurricane",
+          "type": "flying",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 4.5,
+          "windup": 0.35,
+          "recovery": 0.25,
+          "anim": "Shoot",
+          "knockback": 380,
+          "hitstun": 0.42,
+          "aiRange": [
+            100,
+            420
+          ],
+          "speed": 420,
+          "projRadius": 20,
+          "range": 460,
+          "shape": "crescent",
+          "color": 13625599
+        },
+        {
+          "name": "Fire Fang",
+          "type": "fire",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.6,
+          "windup": 0.13,
+          "recovery": 0.17,
+          "anim": "Strike",
+          "knockback": 220,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 36,
+          "hitRadius": 32,
+          "lunge": 36,
+          "status": {
+            "kind": "burn",
+            "chance": 0.3
+          }
+        },
+        {
+          "name": "Will-O-Wisp",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 420,
+          "projRadius": 11,
+          "range": 460,
+          "homing": 2,
+          "color": 8031487,
+          "status": {
+            "kind": "burn",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Dragon Dance",
+          "type": "dragon",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.35,
+          "recovery": 0.15,
+          "anim": "Rotate",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "speed": 1.25,
+            "damage": 1.25
+          }
+        },
+        {
+          "name": "Flare Blitz",
+          "type": "fire",
+          "kind": "dash",
+          "power": 125,
+          "cooldown": 7,
+          "windup": 0.28,
+          "recovery": 0.35,
+          "anim": "Glide",
+          "knockback": 460,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            220
+          ],
+          "dashSpeed": 760,
+          "dashTime": 0.3,
+          "hitRadius": 28,
+          "recoil": 0.25,
+          "status": {
+            "kind": "burn",
+            "chance": 0.1
+          },
+          "crater": 30
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "ALL-ROUNDER. TAKES WING TO DODGE, RUSH AND CROSS LAVA: FLAME STREAMS UP CLOSE, FIRE BLAST FROM AFAR.",
+          "moves": [
+            "Dragon Claw",
+            "Flamethrower",
+            "Air Slash",
+            "Fire Blast"
+          ]
+        },
+        {
+          "id": "sky-ace",
+          "name": "Sky Ace",
+          "blurb": "FIGHT FROM THE AIR, OUT OF REACH",
+          "moves": [
+            "Acrobatics",
+            "Air Slash",
+            "Hurricane",
+            "Fly"
+          ]
+        },
+        {
+          "id": "blaze",
+          "name": "Blaze Brawler",
+          "blurb": "BURN THEM, POWER UP, CHARGE IN",
+          "moves": [
+            "Fire Fang",
+            "Will-O-Wisp",
+            "Dragon Dance",
+            "Flare Blitz"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Dragon Claw",
+          "type": "dragon",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.55,
+          "windup": 0.12,
+          "recovery": 0.18,
+          "anim": "Strike",
+          "knockback": 220,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 38,
+          "hitRadius": 28,
+          "lunge": 26
+        },
+        {
+          "name": "Flamethrower",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 15,
+          "cooldown": 3.2,
+          "windup": 0.2,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.12,
+          "aiRange": [
+            50,
+            290
+          ],
+          "speed": 520,
+          "projRadius": 10,
+          "range": 320,
+          "shots": 7,
+          "interval": 0.07
+        },
+        {
+          "name": "Air Slash",
+          "type": "flying",
+          "kind": "projectile",
+          "power": 56,
+          "cooldown": 2.4,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.25,
+          "aiRange": [
+            80,
+            380
+          ],
+          "speed": 560,
+          "projRadius": 8,
+          "range": 420,
+          "count": 3,
+          "spread": 0.28,
+          "shape": "crescent"
+        },
+        {
+          "name": "Fire Blast",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 120,
+          "cooldown": 7.5,
+          "windup": 0.45,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 420,
+          "hitstun": 0.6,
+          "aiRange": [
+            100,
+            460
+          ],
+          "speed": 430,
+          "projRadius": 17,
+          "range": 520,
+          "explode": 62,
+          "crater": 34
+        },
+        {
+          "name": "Fly",
+          "type": "flying",
+          "kind": "fly",
+          "power": 90,
+          "cooldown": 7.5,
+          "windup": 0.3,
+          "recovery": 0.3,
+          "anim": "Walk",
+          "knockback": 380,
+          "hitstun": 0.5,
+          "aiRange": [
+            0,
+            520
+          ],
+          "radius": 58,
+          "speed": 300
+        },
+        {
+          "name": "Acrobatics",
+          "type": "flying",
+          "kind": "dash",
+          "power": 42,
+          "cooldown": 1.4,
+          "windup": 0.22,
+          "recovery": 0.12,
+          "anim": "Glide",
+          "knockback": 240,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 860,
+          "dashTime": 0.2,
+          "hitRadius": 26
+        },
+        {
+          "name": "Hurricane",
+          "type": "flying",
+          "kind": "projectile",
+          "power": 80,
+          "cooldown": 4.5,
+          "windup": 0.35,
+          "recovery": 0.25,
+          "anim": "Shoot",
+          "knockback": 380,
+          "hitstun": 0.42,
+          "aiRange": [
+            100,
+            420
+          ],
+          "speed": 420,
+          "projRadius": 20,
+          "range": 460,
+          "shape": "crescent",
+          "color": 13625599
+        },
+        {
+          "name": "Fire Fang",
+          "type": "fire",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.6,
+          "windup": 0.13,
+          "recovery": 0.17,
+          "anim": "Strike",
+          "knockback": 220,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 36,
+          "hitRadius": 32,
+          "lunge": 36,
+          "status": {
+            "kind": "burn",
+            "chance": 0.3
+          }
+        },
+        {
+          "name": "Will-O-Wisp",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 420,
+          "projRadius": 11,
+          "range": 460,
+          "homing": 2,
+          "color": 8031487,
+          "status": {
+            "kind": "burn",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Dragon Dance",
+          "type": "dragon",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.35,
+          "recovery": 0.15,
+          "anim": "Rotate",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "speed": 1.25,
+            "damage": 1.25
+          }
+        },
+        {
+          "name": "Flare Blitz",
+          "type": "fire",
+          "kind": "dash",
+          "power": 125,
+          "cooldown": 7,
+          "windup": 0.28,
+          "recovery": 0.35,
+          "anim": "Glide",
+          "knockback": 460,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            220
+          ],
+          "dashSpeed": 760,
+          "dashTime": 0.3,
+          "hitRadius": 28,
+          "recoil": 0.25,
+          "status": {
+            "kind": "burn",
+            "chance": 0.1
+          },
+          "crater": 30
+        }
+      ]
+    },
+    {
+      "id": "blastoise",
+      "name": "Blastoise",
+      "types": [
+        "water"
+      ],
+      "hp": 530,
+      "atk": 0.95,
+      "def": 1.15,
+      "speed": 155,
+      "radius": 17,
+      "role": "Tank. Slow, but walls you out with water and ice.",
+      "moves": [
+        {
+          "name": "Aqua Tail",
+          "type": "water",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.6,
+          "windup": 0.16,
+          "recovery": 0.2,
+          "anim": "Swing",
+          "knockback": 260,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            90
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 24
+        },
+        {
+          "name": "Water Pulse",
+          "type": "water",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.5,
+          "windup": 0.16,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 200,
+          "hitstun": 0.28,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 560,
+          "projRadius": 11,
+          "range": 460
+        },
+        {
+          "name": "Ice Beam",
+          "type": "ice",
+          "kind": "projectile",
+          "power": 85,
+          "cooldown": 3.2,
+          "windup": 0.22,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 120,
+          "hitstun": 0.35,
+          "aiRange": [
+            100,
+            480
+          ],
+          "speed": 780,
+          "projRadius": 8,
+          "range": 520,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Hydro Pump",
+          "type": "water",
+          "kind": "projectile",
+          "power": 22,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.14,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 650,
+          "projRadius": 13,
+          "range": 420,
+          "shots": 6,
+          "interval": 0.08
+        }
+      ],
+      "extra": [
+        {
+          "name": "Rapid Spin",
+          "type": "normal",
+          "kind": "nova",
+          "power": 55,
+          "cooldown": 1.6,
+          "windup": 0.1,
+          "recovery": 0.15,
+          "anim": "Rotate",
+          "knockback": 220,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            90
+          ],
+          "radius": 82,
+          "clears": true
+        },
+        {
+          "name": "Protect",
+          "type": "normal",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.05,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.9,
+            "stagger": 0.6
+          },
+          "color": 10477823
+        },
+        {
+          "name": "Iron Defense",
+          "type": "steel",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.25,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 7,
+            "defense": 0.5
+          }
+        },
+        {
+          "name": "Body Press",
+          "type": "fighting",
+          "kind": "dash",
+          "power": 120,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.25,
+          "anim": "Attack",
+          "knockback": 320,
+          "hitstun": 0.35,
+          "aiRange": [
+            0,
+            170
+          ],
+          "dashSpeed": 560,
+          "dashTime": 0.24,
+          "hitRadius": 30,
+          "poweredBonus": 1.6
+        },
+        {
+          "name": "Flash Cannon",
+          "type": "steel",
+          "kind": "projectile",
+          "power": 65,
+          "cooldown": 2.8,
+          "windup": 0.24,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 240,
+          "hitstun": 0.33,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 540,
+          "projRadius": 12,
+          "range": 500,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Dark Pulse",
+          "type": "dark",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 460,
+          "projRadius": 13,
+          "range": 480,
+          "color": 8014504
+        },
+        {
+          "name": "Aura Sphere",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Charge",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            480
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 560,
+          "homing": 1.6,
+          "color": 4892927
+        },
+        {
+          "name": "Hydro Cannon",
+          "type": "water",
+          "kind": "projectile",
+          "power": 110,
+          "cooldown": 8,
+          "windup": 0.6,
+          "recovery": 0.6,
+          "anim": "Charge",
+          "knockback": 480,
+          "hitstun": 0.6,
+          "aiRange": [
+            100,
+            500
+          ],
+          "speed": 560,
+          "projRadius": 20,
+          "range": 560,
+          "beam": true,
+          "explode": 64,
+          "crater": 34
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "TANK. SLOW, BUT WALLS YOU OUT WITH WATER AND ICE.",
+          "moves": [
+            "Aqua Tail",
+            "Water Pulse",
+            "Ice Beam",
+            "Hydro Pump"
+          ]
+        },
+        {
+          "id": "fortress",
+          "name": "Fortress",
+          "blurb": "TURTLE UP, BLOCK, AND HIT BACK HARD",
+          "moves": [
+            "Water Pulse",
+            "Protect",
+            "Iron Defense",
+            "Body Press"
+          ]
+        },
+        {
+          "id": "artillery",
+          "name": "Artillery",
+          "blurb": "CANNONS FROM ACROSS THE ARENA",
+          "moves": [
+            "Flash Cannon",
+            "Dark Pulse",
+            "Aura Sphere",
+            "Hydro Cannon"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Aqua Tail",
+          "type": "water",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.6,
+          "windup": 0.16,
+          "recovery": 0.2,
+          "anim": "Swing",
+          "knockback": 260,
+          "hitstun": 0.26,
+          "aiRange": [
+            0,
+            90
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 24
+        },
+        {
+          "name": "Water Pulse",
+          "type": "water",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.5,
+          "windup": 0.16,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 200,
+          "hitstun": 0.28,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 560,
+          "projRadius": 11,
+          "range": 460
+        },
+        {
+          "name": "Ice Beam",
+          "type": "ice",
+          "kind": "projectile",
+          "power": 85,
+          "cooldown": 3.2,
+          "windup": 0.22,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 120,
+          "hitstun": 0.35,
+          "aiRange": [
+            100,
+            480
+          ],
+          "speed": 780,
+          "projRadius": 8,
+          "range": 520,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Hydro Pump",
+          "type": "water",
+          "kind": "projectile",
+          "power": 22,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.14,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 650,
+          "projRadius": 13,
+          "range": 420,
+          "shots": 6,
+          "interval": 0.08
+        },
+        {
+          "name": "Rapid Spin",
+          "type": "normal",
+          "kind": "nova",
+          "power": 55,
+          "cooldown": 1.6,
+          "windup": 0.1,
+          "recovery": 0.15,
+          "anim": "Rotate",
+          "knockback": 220,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            90
+          ],
+          "radius": 82,
+          "clears": true
+        },
+        {
+          "name": "Protect",
+          "type": "normal",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.05,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.9,
+            "stagger": 0.6
+          },
+          "color": 10477823
+        },
+        {
+          "name": "Iron Defense",
+          "type": "steel",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.25,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 7,
+            "defense": 0.5
+          }
+        },
+        {
+          "name": "Body Press",
+          "type": "fighting",
+          "kind": "dash",
+          "power": 120,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.25,
+          "anim": "Attack",
+          "knockback": 320,
+          "hitstun": 0.35,
+          "aiRange": [
+            0,
+            170
+          ],
+          "dashSpeed": 560,
+          "dashTime": 0.24,
+          "hitRadius": 30,
+          "poweredBonus": 1.6
+        },
+        {
+          "name": "Flash Cannon",
+          "type": "steel",
+          "kind": "projectile",
+          "power": 65,
+          "cooldown": 2.8,
+          "windup": 0.24,
+          "recovery": 0.2,
+          "anim": "Shoot",
+          "knockback": 240,
+          "hitstun": 0.33,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 540,
+          "projRadius": 12,
+          "range": 500,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Dark Pulse",
+          "type": "dark",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 460,
+          "projRadius": 13,
+          "range": 480,
+          "color": 8014504
+        },
+        {
+          "name": "Aura Sphere",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Charge",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            480
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 560,
+          "homing": 1.6,
+          "color": 4892927
+        },
+        {
+          "name": "Hydro Cannon",
+          "type": "water",
+          "kind": "projectile",
+          "power": 110,
+          "cooldown": 8,
+          "windup": 0.6,
+          "recovery": 0.6,
+          "anim": "Charge",
+          "knockback": 480,
+          "hitstun": 0.6,
+          "aiRange": [
+            100,
+            500
+          ],
+          "speed": 560,
+          "projRadius": 20,
+          "range": 560,
+          "beam": true,
+          "explode": 64,
+          "crater": 34
+        }
+      ]
+    },
+    {
+      "id": "venusaur",
+      "name": "Venusaur",
+      "types": [
+        "grass",
+        "poison"
+      ],
+      "hp": 470,
+      "atk": 1.05,
+      "def": 1.15,
+      "speed": 165,
+      "radius": 17,
+      "role": "Zoner. Long vines, lobbed sludge, and a huge charged Solar Beam.",
+      "moves": [
+        {
+          "name": "Vine Whip",
+          "type": "grass",
+          "kind": "melee",
+          "power": 55,
+          "cooldown": 0.5,
+          "windup": 0.13,
+          "recovery": 0.16,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.27,
+          "aiRange": [
+            0,
+            105
+          ],
+          "reach": 64,
+          "hitRadius": 28,
+          "whip": true
+        },
+        {
+          "name": "Razor Leaf",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 48,
+          "cooldown": 1.3,
+          "windup": 0.15,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 110,
+          "hitstun": 0.22,
+          "aiRange": [
+            80,
+            380
+          ],
+          "speed": 600,
+          "projRadius": 9,
+          "range": 420,
+          "count": 3,
+          "spread": 0.2,
+          "shape": "leaf"
+        },
+        {
+          "name": "Sludge Bomb",
+          "type": "poison",
+          "kind": "strike",
+          "power": 95,
+          "cooldown": 3,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 220,
+          "hitstun": 0.4,
+          "aiRange": [
+            80,
+            400
+          ],
+          "radius": 56,
+          "delay": 0.5,
+          "range": 420,
+          "style": "lob",
+          "crater": 22,
+          "status": {
+            "kind": "poison",
+            "chance": 0.2
+          }
+        },
+        {
+          "name": "Solar Beam",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 130,
+          "cooldown": 7.5,
+          "windup": 0.7,
+          "recovery": 0.28,
+          "anim": "Charge",
+          "knockback": 450,
+          "hitstun": 0.6,
+          "aiRange": [
+            120,
+            600
+          ],
+          "speed": 920,
+          "projRadius": 16,
+          "range": 720,
+          "color": 16187312,
+          "beam": true
+        }
+      ],
+      "extra": [
+        {
+          "name": "Giga Drain",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 1.9,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.28,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 560,
+          "projRadius": 12,
+          "range": 460,
+          "drain": 0.35,
+          "color": 8188026
+        },
+        {
+          "name": "Leech Seed",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.18,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 480,
+          "projRadius": 9,
+          "range": 460,
+          "seed": {
+            "seconds": 10,
+            "share": 0.008
+          },
+          "color": 10147946
+        },
+        {
+          "name": "Synthesis",
+          "type": "grass",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 14,
+          "windup": 0.4,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "heal": 0.12
+          }
+        },
+        {
+          "name": "Petal Blizzard",
+          "type": "grass",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 3.4,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Rotate",
+          "knockback": 300,
+          "hitstun": 0.36,
+          "aiRange": [
+            0,
+            105
+          ],
+          "radius": 105,
+          "color": 16752840
+        },
+        {
+          "name": "Toxic",
+          "type": "poison",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 10,
+          "range": 460,
+          "color": 10698401,
+          "status": {
+            "kind": "toxic",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Venoshock",
+          "type": "poison",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.7,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 180,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 580,
+          "projRadius": 11,
+          "range": 480,
+          "vsStatus": 2,
+          "color": 12611808
+        },
+        {
+          "name": "Sleep Powder",
+          "type": "grass",
+          "kind": "nova",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            85
+          ],
+          "radius": 80,
+          "color": 14217376,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "ZONER. LONG VINES, LOBBED SLUDGE, AND A HUGE CHARGED SOLAR BEAM.",
+          "moves": [
+            "Vine Whip",
+            "Razor Leaf",
+            "Sludge Bomb",
+            "Solar Beam"
+          ]
+        },
+        {
+          "id": "garden",
+          "name": "Garden",
+          "blurb": "OUTLAST THEM: DRAIN, SEED AND HEAL",
+          "moves": [
+            "Petal Blizzard",
+            "Giga Drain",
+            "Leech Seed",
+            "Synthesis"
+          ]
+        },
+        {
+          "id": "toxic",
+          "name": "Toxic",
+          "blurb": "POISON THEM, PUT THEM TO SLEEP, CASH IN",
+          "moves": [
+            "Sleep Powder",
+            "Venoshock",
+            "Toxic",
+            "Sludge Bomb"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Vine Whip",
+          "type": "grass",
+          "kind": "melee",
+          "power": 55,
+          "cooldown": 0.5,
+          "windup": 0.13,
+          "recovery": 0.16,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.27,
+          "aiRange": [
+            0,
+            105
+          ],
+          "reach": 64,
+          "hitRadius": 28,
+          "whip": true
+        },
+        {
+          "name": "Razor Leaf",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 48,
+          "cooldown": 1.3,
+          "windup": 0.15,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 110,
+          "hitstun": 0.22,
+          "aiRange": [
+            80,
+            380
+          ],
+          "speed": 600,
+          "projRadius": 9,
+          "range": 420,
+          "count": 3,
+          "spread": 0.2,
+          "shape": "leaf"
+        },
+        {
+          "name": "Sludge Bomb",
+          "type": "poison",
+          "kind": "strike",
+          "power": 95,
+          "cooldown": 3,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 220,
+          "hitstun": 0.4,
+          "aiRange": [
+            80,
+            400
+          ],
+          "radius": 56,
+          "delay": 0.5,
+          "range": 420,
+          "style": "lob",
+          "crater": 22,
+          "status": {
+            "kind": "poison",
+            "chance": 0.2
+          }
+        },
+        {
+          "name": "Solar Beam",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 130,
+          "cooldown": 7.5,
+          "windup": 0.7,
+          "recovery": 0.28,
+          "anim": "Charge",
+          "knockback": 450,
+          "hitstun": 0.6,
+          "aiRange": [
+            120,
+            600
+          ],
+          "speed": 920,
+          "projRadius": 16,
+          "range": 720,
+          "color": 16187312,
+          "beam": true
+        },
+        {
+          "name": "Giga Drain",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 60,
+          "cooldown": 1.9,
+          "windup": 0.2,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 140,
+          "hitstun": 0.28,
+          "aiRange": [
+            80,
+            420
+          ],
+          "speed": 560,
+          "projRadius": 12,
+          "range": 460,
+          "drain": 0.35,
+          "color": 8188026
+        },
+        {
+          "name": "Leech Seed",
+          "type": "grass",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.18,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 480,
+          "projRadius": 9,
+          "range": 460,
+          "seed": {
+            "seconds": 10,
+            "share": 0.008
+          },
+          "color": 10147946
+        },
+        {
+          "name": "Synthesis",
+          "type": "grass",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 14,
+          "windup": 0.4,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "heal": 0.12
+          }
+        },
+        {
+          "name": "Petal Blizzard",
+          "type": "grass",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 3.4,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Rotate",
+          "knockback": 300,
+          "hitstun": 0.36,
+          "aiRange": [
+            0,
+            105
+          ],
+          "radius": 105,
+          "color": 16752840
+        },
+        {
+          "name": "Toxic",
+          "type": "poison",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 10,
+          "range": 460,
+          "color": 10698401,
+          "status": {
+            "kind": "toxic",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Venoshock",
+          "type": "poison",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.7,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 180,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 580,
+          "projRadius": 11,
+          "range": 480,
+          "vsStatus": 2,
+          "color": 12611808
+        },
+        {
+          "name": "Sleep Powder",
+          "type": "grass",
+          "kind": "nova",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            85
+          ],
+          "radius": 80,
+          "color": 14217376,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "gengar",
+      "name": "Gengar",
+      "types": [
+        "ghost",
+        "poison"
+      ],
+      "hp": 535,
+      "atk": 1.2,
+      "def": 0.95,
+      "speed": 210,
+      "radius": 14,
+      "role": "Trickster. Shrugs off Normal and Fighting moves. Phases behind you.",
+      "moves": [
+        {
+          "name": "Shadow Punch",
+          "type": "ghost",
+          "kind": "melee",
+          "power": 62,
+          "cooldown": 0.5,
+          "windup": 0.12,
+          "recovery": 0.16,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 30,
+          "hitRadius": 26,
+          "lunge": 30
+        },
+        {
+          "name": "Shadow Ball",
+          "type": "ghost",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 1.5,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 260,
+          "hitstun": 0.32,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 460,
+          "projRadius": 13,
+          "range": 500
+        },
+        {
+          "name": "Dark Pulse",
+          "type": "dark",
+          "kind": "nova",
+          "power": 70,
+          "cooldown": 3.5,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 360,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            85
+          ],
+          "radius": 92
+        },
+        {
+          "name": "Phantom Force",
+          "type": "ghost",
+          "kind": "phase",
+          "power": 110,
+          "cooldown": 6,
+          "windup": 0.45,
+          "recovery": 0.28,
+          "anim": "Attack",
+          "knockback": 380,
+          "hitstun": 0.5,
+          "aiRange": [
+            0,
+            520
+          ],
+          "reach": 30,
+          "hitRadius": 32
+        }
+      ],
+      "extra": [
+        {
+          "name": "Shadow Sneak",
+          "type": "ghost",
+          "kind": "dash",
+          "power": 40,
+          "cooldown": 1.2,
+          "windup": 0.08,
+          "recovery": 0.12,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            160
+          ],
+          "dashSpeed": 720,
+          "dashTime": 0.2,
+          "hitRadius": 22
+        },
+        {
+          "name": "Hex",
+          "type": "ghost",
+          "kind": "projectile",
+          "power": 46,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 200,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 480,
+          "vsStatus": 1.3,
+          "color": 10115808
+        },
+        {
+          "name": "Will-O-Wisp",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 420,
+          "projRadius": 11,
+          "range": 460,
+          "homing": 2,
+          "color": 8031487,
+          "status": {
+            "kind": "burn",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Hypnosis",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.25,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 380,
+          "projRadius": 12,
+          "range": 420,
+          "color": 14192895,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Nasty Plot",
+          "type": "dark",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 6,
+            "damage": 1.2,
+            "only": "ranged"
+          }
+        },
+        {
+          "name": "Sludge Wave",
+          "type": "poison",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 4,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 340,
+          "hitstun": 0.4,
+          "aiRange": [
+            0,
+            110
+          ],
+          "radius": 112,
+          "color": 11559120,
+          "status": {
+            "kind": "poison",
+            "chance": 0.2
+          }
+        },
+        {
+          "name": "Focus Blast",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 100,
+          "cooldown": 7.5,
+          "windup": 0.4,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 440,
+          "hitstun": 0.55,
+          "aiRange": [
+            100,
+            460
+          ],
+          "speed": 360,
+          "projRadius": 17,
+          "range": 500,
+          "explode": 56,
+          "color": 8048895
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "TRICKSTER. SHRUGS OFF NORMAL AND FIGHTING MOVES. PHASES BEHIND YOU.",
+          "moves": [
+            "Shadow Punch",
+            "Shadow Ball",
+            "Dark Pulse",
+            "Phantom Force"
+          ]
+        },
+        {
+          "id": "hex",
+          "name": "Hex Caster",
+          "blurb": "AFFLICT THEM, THEN HEX FOR DOUBLE",
+          "moves": [
+            "Shadow Sneak",
+            "Hex",
+            "Will-O-Wisp",
+            "Hypnosis"
+          ]
+        },
+        {
+          "id": "glass",
+          "name": "Glass Cannon",
+          "blurb": "SET UP NASTY PLOT, THEN ONE HUGE BURST",
+          "moves": [
+            "Sludge Wave",
+            "Hex",
+            "Nasty Plot",
+            "Focus Blast"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Shadow Punch",
+          "type": "ghost",
+          "kind": "melee",
+          "power": 62,
+          "cooldown": 0.5,
+          "windup": 0.12,
+          "recovery": 0.16,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 30,
+          "hitRadius": 26,
+          "lunge": 30
+        },
+        {
+          "name": "Shadow Ball",
+          "type": "ghost",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 1.5,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 260,
+          "hitstun": 0.32,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 460,
+          "projRadius": 13,
+          "range": 500
+        },
+        {
+          "name": "Dark Pulse",
+          "type": "dark",
+          "kind": "nova",
+          "power": 70,
+          "cooldown": 3.5,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 360,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            85
+          ],
+          "radius": 92
+        },
+        {
+          "name": "Phantom Force",
+          "type": "ghost",
+          "kind": "phase",
+          "power": 110,
+          "cooldown": 6,
+          "windup": 0.45,
+          "recovery": 0.28,
+          "anim": "Attack",
+          "knockback": 380,
+          "hitstun": 0.5,
+          "aiRange": [
+            0,
+            520
+          ],
+          "reach": 30,
+          "hitRadius": 32
+        },
+        {
+          "name": "Shadow Sneak",
+          "type": "ghost",
+          "kind": "dash",
+          "power": 40,
+          "cooldown": 1.2,
+          "windup": 0.08,
+          "recovery": 0.12,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            160
+          ],
+          "dashSpeed": 720,
+          "dashTime": 0.2,
+          "hitRadius": 22
+        },
+        {
+          "name": "Hex",
+          "type": "ghost",
+          "kind": "projectile",
+          "power": 46,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 200,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 480,
+          "vsStatus": 1.3,
+          "color": 10115808
+        },
+        {
+          "name": "Will-O-Wisp",
+          "type": "fire",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 5,
+          "windup": 0.2,
+          "recovery": 0.15,
+          "anim": "Shoot",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 420,
+          "projRadius": 11,
+          "range": 460,
+          "homing": 2,
+          "color": 8031487,
+          "status": {
+            "kind": "burn",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Hypnosis",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 7,
+          "windup": 0.25,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 380,
+          "projRadius": 12,
+          "range": 420,
+          "color": 14192895,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Nasty Plot",
+          "type": "dark",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 6,
+            "damage": 1.2,
+            "only": "ranged"
+          }
+        },
+        {
+          "name": "Sludge Wave",
+          "type": "poison",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 4,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 340,
+          "hitstun": 0.4,
+          "aiRange": [
+            0,
+            110
+          ],
+          "radius": 112,
+          "color": 11559120,
+          "status": {
+            "kind": "poison",
+            "chance": 0.2
+          }
+        },
+        {
+          "name": "Focus Blast",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 100,
+          "cooldown": 7.5,
+          "windup": 0.4,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 440,
+          "hitstun": 0.55,
+          "aiRange": [
+            100,
+            460
+          ],
+          "speed": 360,
+          "projRadius": 17,
+          "range": 500,
+          "explode": 56,
+          "color": 8048895
+        }
+      ]
+    },
+    {
+      "id": "lucario",
+      "name": "Lucario",
+      "types": [
+        "fighting",
+        "steel"
+      ],
+      "hp": 445,
+      "atk": 1.15,
+      "def": 1.05,
+      "speed": 200,
+      "radius": 14,
+      "role": "Rushdown. Homing Aura Sphere sets up a brutal Close Combat.",
+      "moves": [
+        {
+          "name": "Bullet Punch",
+          "type": "steel",
+          "kind": "melee",
+          "power": 55,
+          "cooldown": 0.45,
+          "windup": 0.1,
+          "recovery": 0.15,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 30,
+          "hitRadius": 26,
+          "lunge": 34
+        },
+        {
+          "name": "Aura Sphere",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 75,
+          "cooldown": 1.6,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Charge",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            480
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 560,
+          "homing": 2.6,
+          "color": 4892927
+        },
+        {
+          "name": "Flash Cannon",
+          "type": "steel",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 2.6,
+          "windup": 0.25,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 260,
+          "hitstun": 0.35,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 680,
+          "projRadius": 12,
+          "range": 480,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Close Combat",
+          "type": "fighting",
+          "kind": "dash",
+          "power": 120,
+          "cooldown": 6.5,
+          "windup": 0.18,
+          "recovery": 0.3,
+          "anim": "QuickStrike",
+          "knockback": 480,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            200
+          ],
+          "dashSpeed": 660,
+          "dashTime": 0.32,
+          "hitRadius": 30
+        }
+      ],
+      "extra": [
+        {
+          "name": "Force Palm",
+          "type": "fighting",
+          "kind": "melee",
+          "power": 65,
+          "cooldown": 0.7,
+          "windup": 0.12,
+          "recovery": 0.17,
+          "anim": "Attack",
+          "knockback": 260,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 30,
+          "hitRadius": 32,
+          "lunge": 50,
+          "status": {
+            "kind": "paralysis",
+            "chance": 0.3
+          }
+        },
+        {
+          "name": "Bone Rush",
+          "type": "ground",
+          "kind": "dash",
+          "power": 36,
+          "cooldown": 2.6,
+          "windup": 0.16,
+          "recovery": 0.25,
+          "anim": "QuickStrike",
+          "knockback": 90,
+          "hitstun": 0.22,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 640,
+          "dashTime": 0.36,
+          "hitRadius": 26,
+          "hits": 3
+        },
+        {
+          "name": "Swords Dance",
+          "type": "normal",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "damage": 1.5,
+            "only": "close"
+          }
+        },
+        {
+          "name": "Vacuum Wave",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 40,
+          "cooldown": 0.8,
+          "windup": 0.08,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 140,
+          "hitstun": 0.22,
+          "aiRange": [
+            60,
+            360
+          ],
+          "speed": 760,
+          "projRadius": 9,
+          "range": 380,
+          "shape": "crescent",
+          "color": 10148095
+        },
+        {
+          "name": "Detect",
+          "type": "fighting",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.03,
+          "recovery": 0.08,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.6
+          },
+          "color": 16769126
+        },
+        {
+          "name": "Counter",
+          "type": "fighting",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.03,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.7,
+            "counter": 1.6
+          },
+          "color": 16747098
+        },
+        {
+          "name": "Extreme Speed",
+          "type": "normal",
+          "kind": "dash",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.14,
+          "recovery": 0.16,
+          "anim": "QuickStrike",
+          "knockback": 260,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            260
+          ],
+          "dashSpeed": 1100,
+          "dashTime": 0.24,
+          "hitRadius": 26
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "RUSHDOWN. HOMING AURA SPHERE SETS UP A BRUTAL CLOSE COMBAT.",
+          "moves": [
+            "Bullet Punch",
+            "Aura Sphere",
+            "Flash Cannon",
+            "Close Combat"
+          ]
+        },
+        {
+          "id": "martial",
+          "name": "Martial Artist",
+          "blurb": "CHAIN COMBOS UP CLOSE",
+          "moves": [
+            "Force Palm",
+            "Bone Rush",
+            "Swords Dance",
+            "Close Combat"
+          ]
+        },
+        {
+          "id": "counter",
+          "name": "Counter Stance",
+          "blurb": "READ THEM, BLOCK, PUNISH",
+          "moves": [
+            "Vacuum Wave",
+            "Detect",
+            "Counter",
+            "Extreme Speed"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Bullet Punch",
+          "type": "steel",
+          "kind": "melee",
+          "power": 55,
+          "cooldown": 0.45,
+          "windup": 0.1,
+          "recovery": 0.15,
+          "anim": "Attack",
+          "knockback": 220,
+          "hitstun": 0.24,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 30,
+          "hitRadius": 26,
+          "lunge": 34
+        },
+        {
+          "name": "Aura Sphere",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 75,
+          "cooldown": 1.6,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Charge",
+          "knockback": 220,
+          "hitstun": 0.3,
+          "aiRange": [
+            80,
+            480
+          ],
+          "speed": 420,
+          "projRadius": 12,
+          "range": 560,
+          "homing": 2.6,
+          "color": 4892927
+        },
+        {
+          "name": "Flash Cannon",
+          "type": "steel",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 2.6,
+          "windup": 0.25,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 260,
+          "hitstun": 0.35,
+          "aiRange": [
+            80,
+            440
+          ],
+          "speed": 680,
+          "projRadius": 12,
+          "range": 480,
+          "shape": "shard",
+          "beam": true
+        },
+        {
+          "name": "Close Combat",
+          "type": "fighting",
+          "kind": "dash",
+          "power": 120,
+          "cooldown": 6.5,
+          "windup": 0.18,
+          "recovery": 0.3,
+          "anim": "QuickStrike",
+          "knockback": 480,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            200
+          ],
+          "dashSpeed": 660,
+          "dashTime": 0.32,
+          "hitRadius": 30
+        },
+        {
+          "name": "Force Palm",
+          "type": "fighting",
+          "kind": "melee",
+          "power": 65,
+          "cooldown": 0.7,
+          "windup": 0.12,
+          "recovery": 0.17,
+          "anim": "Attack",
+          "knockback": 260,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 30,
+          "hitRadius": 32,
+          "lunge": 50,
+          "status": {
+            "kind": "paralysis",
+            "chance": 0.3
+          }
+        },
+        {
+          "name": "Bone Rush",
+          "type": "ground",
+          "kind": "dash",
+          "power": 36,
+          "cooldown": 2.6,
+          "windup": 0.16,
+          "recovery": 0.25,
+          "anim": "QuickStrike",
+          "knockback": 90,
+          "hitstun": 0.22,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 640,
+          "dashTime": 0.36,
+          "hitRadius": 26,
+          "hits": 3
+        },
+        {
+          "name": "Swords Dance",
+          "type": "normal",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "damage": 1.5,
+            "only": "close"
+          }
+        },
+        {
+          "name": "Vacuum Wave",
+          "type": "fighting",
+          "kind": "projectile",
+          "power": 40,
+          "cooldown": 0.8,
+          "windup": 0.08,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 140,
+          "hitstun": 0.22,
+          "aiRange": [
+            60,
+            360
+          ],
+          "speed": 760,
+          "projRadius": 9,
+          "range": 380,
+          "shape": "crescent",
+          "color": 10148095
+        },
+        {
+          "name": "Detect",
+          "type": "fighting",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.03,
+          "recovery": 0.08,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.6
+          },
+          "color": 16769126
+        },
+        {
+          "name": "Counter",
+          "type": "fighting",
+          "kind": "guard",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.03,
+          "recovery": 0.1,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "guard": {
+            "seconds": 0.7,
+            "counter": 1.6
+          },
+          "color": 16747098
+        },
+        {
+          "name": "Extreme Speed",
+          "type": "normal",
+          "kind": "dash",
+          "power": 55,
+          "cooldown": 2.4,
+          "windup": 0.14,
+          "recovery": 0.16,
+          "anim": "QuickStrike",
+          "knockback": 260,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            260
+          ],
+          "dashSpeed": 1100,
+          "dashTime": 0.24,
+          "hitRadius": 26
+        }
+      ]
+    },
+    {
+      "id": "garchomp",
+      "name": "Garchomp",
+      "types": [
+        "dragon",
+        "ground"
+      ],
+      "hp": 540,
+      "atk": 1.12,
+      "def": 1.05,
+      "speed": 185,
+      "radius": 17,
+      "role": "Bruiser. Shrugs off Electric. Digs under the arena and erupts.",
+      "moves": [
+        {
+          "name": "Dragon Claw",
+          "type": "dragon",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.55,
+          "windup": 0.14,
+          "recovery": 0.18,
+          "anim": "Attack",
+          "knockback": 240,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 30
+        },
+        {
+          "name": "Dragon Rush",
+          "type": "dragon",
+          "kind": "dash",
+          "power": 95,
+          "cooldown": 3.6,
+          "windup": 0.2,
+          "recovery": 0.24,
+          "anim": "Attack",
+          "knockback": 400,
+          "hitstun": 0.45,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 640,
+          "dashTime": 0.28,
+          "hitRadius": 28
+        },
+        {
+          "name": "Earthquake",
+          "type": "ground",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 5.5,
+          "windup": 0.4,
+          "recovery": 0.3,
+          "anim": "Double",
+          "knockback": 300,
+          "hitstun": 0.45,
+          "aiRange": [
+            0,
+            120
+          ],
+          "radius": 125,
+          "crater": 40
+        },
+        {
+          "name": "Dig",
+          "type": "ground",
+          "kind": "dig",
+          "power": 110,
+          "cooldown": 7.5,
+          "windup": 0.3,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 420,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            520
+          ],
+          "radius": 62,
+          "speed": 270,
+          "crater": 36
+        }
+      ],
+      "extra": [
+        {
+          "name": "Crunch",
+          "type": "dark",
+          "kind": "melee",
+          "power": 80,
+          "cooldown": 0.7,
+          "windup": 0.15,
+          "recovery": 0.18,
+          "anim": "Attack",
+          "knockback": 240,
+          "hitstun": 0.28,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 34,
+          "hitRadius": 32,
+          "lunge": 46
+        },
+        {
+          "name": "Iron Head",
+          "type": "steel",
+          "kind": "melee",
+          "power": 85,
+          "cooldown": 1.6,
+          "windup": 0.2,
+          "recovery": 0.22,
+          "anim": "Swing",
+          "knockback": 340,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            110
+          ],
+          "reach": 34,
+          "hitRadius": 34,
+          "lunge": 56
+        },
+        {
+          "name": "Swords Dance",
+          "type": "normal",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "damage": 1.5,
+            "only": "close"
+          }
+        },
+        {
+          "name": "Outrage",
+          "type": "dragon",
+          "kind": "rampage",
+          "power": 60,
+          "cooldown": 9,
+          "windup": 0.2,
+          "recovery": 0.2,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            140
+          ],
+          "reach": 34,
+          "hitRadius": 38,
+          "lunge": 30,
+          "rampage": {
+            "seconds": 2.4,
+            "every": 0.4,
+            "dizzy": 0.7
+          }
+        },
+        {
+          "name": "Stone Edge",
+          "type": "rock",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 3.2,
+          "windup": 0.28,
+          "recovery": 0.22,
+          "anim": "Shoot",
+          "knockback": 300,
+          "hitstun": 0.4,
+          "aiRange": [
+            90,
+            440
+          ],
+          "speed": 620,
+          "projRadius": 12,
+          "range": 480,
+          "shape": "shard",
+          "color": 11968822
+        },
+        {
+          "name": "Bulldoze",
+          "type": "ground",
+          "kind": "nova",
+          "power": 60,
+          "cooldown": 2.8,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Double",
+          "knockback": 240,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            100
+          ],
+          "radius": 105,
+          "crater": 20,
+          "slow": {
+            "seconds": 3,
+            "speed": 0.65
+          }
+        },
+        {
+          "name": "Sand Tomb",
+          "type": "ground",
+          "kind": "projectile",
+          "power": 35,
+          "cooldown": 4,
+          "windup": 0.2,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.25,
+          "aiRange": [
+            70,
+            420
+          ],
+          "speed": 500,
+          "projRadius": 13,
+          "range": 460,
+          "color": 14203000,
+          "trap": {
+            "seconds": 4
+          }
+        },
+        {
+          "name": "Stealth Rock",
+          "type": "rock",
+          "kind": "hazard",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "rocks": {
+            "count": 4,
+            "seconds": 15,
+            "share": 0.07
+          }
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "BRUISER. SHRUGS OFF ELECTRIC. DIGS UNDER THE ARENA AND ERUPTS.",
+          "moves": [
+            "Dragon Claw",
+            "Dragon Rush",
+            "Earthquake",
+            "Dig"
+          ]
+        },
+        {
+          "id": "land-shark",
+          "name": "Land Shark",
+          "blurb": "SHARPEN UP, THEN RAMPAGE",
+          "moves": [
+            "Crunch",
+            "Iron Head",
+            "Swords Dance",
+            "Outrage"
+          ]
+        },
+        {
+          "id": "sand",
+          "name": "Sand Fortress",
+          "blurb": "OWN THE ARENA: ROCKS, TRAPS, QUAKES",
+          "moves": [
+            "Bulldoze",
+            "Stone Edge",
+            "Sand Tomb",
+            "Stealth Rock"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Dragon Claw",
+          "type": "dragon",
+          "kind": "melee",
+          "power": 70,
+          "cooldown": 0.55,
+          "windup": 0.14,
+          "recovery": 0.18,
+          "anim": "Attack",
+          "knockback": 240,
+          "hitstun": 0.25,
+          "aiRange": [
+            0,
+            85
+          ],
+          "reach": 34,
+          "hitRadius": 30,
+          "lunge": 30
+        },
+        {
+          "name": "Dragon Rush",
+          "type": "dragon",
+          "kind": "dash",
+          "power": 95,
+          "cooldown": 3.6,
+          "windup": 0.2,
+          "recovery": 0.24,
+          "anim": "Attack",
+          "knockback": 400,
+          "hitstun": 0.45,
+          "aiRange": [
+            0,
+            190
+          ],
+          "dashSpeed": 640,
+          "dashTime": 0.28,
+          "hitRadius": 28
+        },
+        {
+          "name": "Earthquake",
+          "type": "ground",
+          "kind": "nova",
+          "power": 85,
+          "cooldown": 5.5,
+          "windup": 0.4,
+          "recovery": 0.3,
+          "anim": "Double",
+          "knockback": 300,
+          "hitstun": 0.45,
+          "aiRange": [
+            0,
+            120
+          ],
+          "radius": 125,
+          "crater": 40
+        },
+        {
+          "name": "Dig",
+          "type": "ground",
+          "kind": "dig",
+          "power": 110,
+          "cooldown": 7.5,
+          "windup": 0.3,
+          "recovery": 0.3,
+          "anim": "Charge",
+          "knockback": 420,
+          "hitstun": 0.55,
+          "aiRange": [
+            0,
+            520
+          ],
+          "radius": 62,
+          "speed": 270,
+          "crater": 36
+        },
+        {
+          "name": "Crunch",
+          "type": "dark",
+          "kind": "melee",
+          "power": 80,
+          "cooldown": 0.7,
+          "windup": 0.15,
+          "recovery": 0.18,
+          "anim": "Attack",
+          "knockback": 240,
+          "hitstun": 0.28,
+          "aiRange": [
+            0,
+            100
+          ],
+          "reach": 34,
+          "hitRadius": 32,
+          "lunge": 46
+        },
+        {
+          "name": "Iron Head",
+          "type": "steel",
+          "kind": "melee",
+          "power": 85,
+          "cooldown": 1.6,
+          "windup": 0.2,
+          "recovery": 0.22,
+          "anim": "Swing",
+          "knockback": 340,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            110
+          ],
+          "reach": 34,
+          "hitRadius": 34,
+          "lunge": 56
+        },
+        {
+          "name": "Swords Dance",
+          "type": "normal",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 11,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 8,
+            "damage": 1.5,
+            "only": "close"
+          }
+        },
+        {
+          "name": "Outrage",
+          "type": "dragon",
+          "kind": "rampage",
+          "power": 60,
+          "cooldown": 9,
+          "windup": 0.2,
+          "recovery": 0.2,
+          "anim": "Attack",
+          "knockback": 200,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            140
+          ],
+          "reach": 34,
+          "hitRadius": 38,
+          "lunge": 30,
+          "rampage": {
+            "seconds": 2.4,
+            "every": 0.4,
+            "dizzy": 0.7
+          }
+        },
+        {
+          "name": "Stone Edge",
+          "type": "rock",
+          "kind": "projectile",
+          "power": 88,
+          "cooldown": 3.2,
+          "windup": 0.28,
+          "recovery": 0.22,
+          "anim": "Shoot",
+          "knockback": 300,
+          "hitstun": 0.4,
+          "aiRange": [
+            90,
+            440
+          ],
+          "speed": 620,
+          "projRadius": 12,
+          "range": 480,
+          "shape": "shard",
+          "color": 11968822
+        },
+        {
+          "name": "Bulldoze",
+          "type": "ground",
+          "kind": "nova",
+          "power": 60,
+          "cooldown": 2.8,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Double",
+          "knockback": 240,
+          "hitstun": 0.3,
+          "aiRange": [
+            0,
+            100
+          ],
+          "radius": 105,
+          "crater": 20,
+          "slow": {
+            "seconds": 3,
+            "speed": 0.65
+          }
+        },
+        {
+          "name": "Sand Tomb",
+          "type": "ground",
+          "kind": "projectile",
+          "power": 35,
+          "cooldown": 4,
+          "windup": 0.2,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 60,
+          "hitstun": 0.25,
+          "aiRange": [
+            70,
+            420
+          ],
+          "speed": 500,
+          "projRadius": 13,
+          "range": 460,
+          "color": 14203000,
+          "trap": {
+            "seconds": 4
+          }
+        },
+        {
+          "name": "Stealth Rock",
+          "type": "rock",
+          "kind": "hazard",
+          "power": 0,
+          "cooldown": 12,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "rocks": {
+            "count": 4,
+            "seconds": 15,
+            "share": 0.07
+          }
+        }
+      ]
+    },
+    {
+      "id": "gardevoir",
+      "name": "Gardevoir",
+      "types": [
+        "psychic",
+        "fairy"
+      ],
+      "hp": 365,
+      "atk": 1.05,
+      "def": 1,
+      "speed": 175,
+      "radius": 13,
+      "role": "Caster. Shrugs off Dragon. Keeps you away with Psychic power.",
+      "moves": [
+        {
+          "name": "Psybeam",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 44,
+          "cooldown": 0.7,
+          "windup": 0.12,
+          "recovery": 0.14,
+          "anim": "Shoot",
+          "knockback": 120,
+          "hitstun": 0.22,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 640,
+          "projRadius": 9,
+          "range": 440,
+          "beam": true
+        },
+        {
+          "name": "Moonblast",
+          "type": "fairy",
+          "kind": "projectile",
+          "power": 95,
+          "cooldown": 2.9,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.4,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 460,
+          "projRadius": 15,
+          "range": 500,
+          "color": 16766704
+        },
+        {
+          "name": "Dazzling Gleam",
+          "type": "fairy",
+          "kind": "nova",
+          "power": 75,
+          "cooldown": 3.5,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 340,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            95
+          ],
+          "radius": 95
+        },
+        {
+          "name": "Psychic",
+          "type": "psychic",
+          "kind": "strike",
+          "power": 110,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.55,
+          "aiRange": [
+            60,
+            440
+          ],
+          "radius": 50,
+          "delay": 0.62,
+          "range": 460,
+          "style": "psychic"
+        }
+      ],
+      "extra": [
+        {
+          "name": "Psyshock",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 90,
+          "cooldown": 1.8,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 240,
+          "hitstun": 0.33,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 600,
+          "projRadius": 12,
+          "range": 500,
+          "color": 16340359
+        },
+        {
+          "name": "Teleport",
+          "type": "psychic",
+          "kind": "blink",
+          "power": 0,
+          "cooldown": 3,
+          "windup": 0.05,
+          "recovery": 0.08,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "blink": 200
+        },
+        {
+          "name": "Hypnosis",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.25,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 380,
+          "projRadius": 12,
+          "range": 420,
+          "color": 14192895,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Future Sight",
+          "type": "psychic",
+          "kind": "strike",
+          "power": 150,
+          "cooldown": 8,
+          "windup": 0.3,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 380,
+          "hitstun": 0.6,
+          "aiRange": [
+            60,
+            460
+          ],
+          "radius": 70,
+          "delay": 2,
+          "range": 480,
+          "style": "psychic"
+        },
+        {
+          "name": "Draining Kiss",
+          "type": "fairy",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 160,
+          "hitstun": 0.28,
+          "aiRange": [
+            70,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 11,
+          "range": 460,
+          "drain": 0.3,
+          "color": 16756952
+        },
+        {
+          "name": "Light Screen",
+          "type": "psychic",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 14,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "screen": 7
+          }
+        },
+        {
+          "name": "Wish",
+          "type": "fairy",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 16,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "heal": 0.15,
+            "delay": 2
+          }
+        }
+      ],
+      "styles": [
+        {
+          "id": "classic",
+          "name": "Classic",
+          "blurb": "CASTER. SHRUGS OFF DRAGON. KEEPS YOU AWAY WITH PSYCHIC POWER.",
+          "moves": [
+            "Psybeam",
+            "Moonblast",
+            "Dazzling Gleam",
+            "Psychic"
+          ]
+        },
+        {
+          "id": "mind",
+          "name": "Mind Games",
+          "blurb": "BLINK AWAY, LULL THEM, STRIKE FROM THE FUTURE",
+          "moves": [
+            "Psyshock",
+            "Teleport",
+            "Hypnosis",
+            "Future Sight"
+          ]
+        },
+        {
+          "id": "guardian",
+          "name": "Guardian",
+          "blurb": "SHIELD AND HEAL: BEST WITH A PARTNER",
+          "moves": [
+            "Draining Kiss",
+            "Moonblast",
+            "Light Screen",
+            "Wish"
+          ]
+        }
+      ],
+      "movePool": [
+        {
+          "name": "Psybeam",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 44,
+          "cooldown": 0.7,
+          "windup": 0.12,
+          "recovery": 0.14,
+          "anim": "Shoot",
+          "knockback": 120,
+          "hitstun": 0.22,
+          "aiRange": [
+            60,
+            400
+          ],
+          "speed": 640,
+          "projRadius": 9,
+          "range": 440,
+          "beam": true
+        },
+        {
+          "name": "Moonblast",
+          "type": "fairy",
+          "kind": "projectile",
+          "power": 95,
+          "cooldown": 2.9,
+          "windup": 0.3,
+          "recovery": 0.2,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.4,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 460,
+          "projRadius": 15,
+          "range": 500,
+          "color": 16766704
+        },
+        {
+          "name": "Dazzling Gleam",
+          "type": "fairy",
+          "kind": "nova",
+          "power": 75,
+          "cooldown": 3.5,
+          "windup": 0.25,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 340,
+          "hitstun": 0.38,
+          "aiRange": [
+            0,
+            95
+          ],
+          "radius": 95
+        },
+        {
+          "name": "Psychic",
+          "type": "psychic",
+          "kind": "strike",
+          "power": 110,
+          "cooldown": 7,
+          "windup": 0.3,
+          "recovery": 0.25,
+          "anim": "Charge",
+          "knockback": 300,
+          "hitstun": 0.55,
+          "aiRange": [
+            60,
+            440
+          ],
+          "radius": 50,
+          "delay": 0.62,
+          "range": 460,
+          "style": "psychic"
+        },
+        {
+          "name": "Psyshock",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 90,
+          "cooldown": 1.8,
+          "windup": 0.22,
+          "recovery": 0.18,
+          "anim": "Shoot",
+          "knockback": 240,
+          "hitstun": 0.33,
+          "aiRange": [
+            80,
+            460
+          ],
+          "speed": 600,
+          "projRadius": 12,
+          "range": 500,
+          "color": 16340359
+        },
+        {
+          "name": "Teleport",
+          "type": "psychic",
+          "kind": "blink",
+          "power": 0,
+          "cooldown": 3,
+          "windup": 0.05,
+          "recovery": 0.08,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "blink": 200
+        },
+        {
+          "name": "Hypnosis",
+          "type": "psychic",
+          "kind": "projectile",
+          "power": 0,
+          "cooldown": 6,
+          "windup": 0.25,
+          "recovery": 0.15,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            60,
+            380
+          ],
+          "speed": 380,
+          "projRadius": 12,
+          "range": 420,
+          "color": 14192895,
+          "status": {
+            "kind": "sleep",
+            "chance": 1
+          }
+        },
+        {
+          "name": "Future Sight",
+          "type": "psychic",
+          "kind": "strike",
+          "power": 150,
+          "cooldown": 8,
+          "windup": 0.3,
+          "recovery": 0.22,
+          "anim": "Charge",
+          "knockback": 380,
+          "hitstun": 0.6,
+          "aiRange": [
+            60,
+            460
+          ],
+          "radius": 70,
+          "delay": 2,
+          "range": 480,
+          "style": "psychic"
+        },
+        {
+          "name": "Draining Kiss",
+          "type": "fairy",
+          "kind": "projectile",
+          "power": 55,
+          "cooldown": 1.6,
+          "windup": 0.18,
+          "recovery": 0.16,
+          "anim": "Shoot",
+          "knockback": 160,
+          "hitstun": 0.28,
+          "aiRange": [
+            70,
+            420
+          ],
+          "speed": 520,
+          "projRadius": 11,
+          "range": 460,
+          "drain": 0.3,
+          "color": 16756952
+        },
+        {
+          "name": "Light Screen",
+          "type": "psychic",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 14,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "screen": 7
+          }
+        },
+        {
+          "name": "Wish",
+          "type": "fairy",
+          "kind": "buff",
+          "power": 0,
+          "cooldown": 16,
+          "windup": 0.3,
+          "recovery": 0.12,
+          "anim": "Charge",
+          "knockback": 0,
+          "hitstun": 0,
+          "aiRange": [
+            0,
+            999
+          ],
+          "buff": {
+            "seconds": 0,
+            "heal": 0.15,
+            "delay": 2
+          }
+        }
+      ]
+    }
+  ]
+}

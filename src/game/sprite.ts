@@ -1,13 +1,31 @@
 import * as pc from 'playcanvas';
+import { ABILITIES, MOVESETS } from './abilities';
 import { CONFIG, DEG, RAD } from './config';
-import type { AnimationName, PokemonEntry, SpriteAnimation } from './types';
+import type {
+  AnimationName,
+  PokemonEntry,
+  RequiredAnimationName,
+  SpriteAnimation
+} from './types';
+
+export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
+  faint?: pc.Texture;
+  quickstrike?: pc.Texture;
+  shock?: pc.Texture;
+};
 
 export interface SpriteAsset {
   entry: PokemonEntry;
-  textures: Record<AnimationName, pc.Texture>;
+  textures: SpriteTextures;
+  /** Factor de reescalado aplicado a cada hoja (puede ser menor en hojas grandes). */
+  textureScales: Partial<Record<AnimationName, number>>;
 }
 
-const ANIMATIONS: AnimationName[] = ['idle', 'walk'];
+const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
+
+/** Límites para no crear texturas gigantes que la GPU no pueda subir. */
+const MAX_TEXTURE_DIMENSION = 2048;
+const MAX_TEXTURE_AREA = MAX_TEXTURE_DIMENSION * MAX_TEXTURE_DIMENSION;
 
 /** Opacidad máxima de la silueta que se ve a través de los árboles. */
 const SILHOUETTE_OPACITY = 0.72;
@@ -25,6 +43,129 @@ const SILHOUETTE_DRAW_ORDER = 4;
 export const SPRITE_TEXTURE_SCALE =
   CONFIG.sprite.filter === 'smooth' ? CONFIG.sprite.smoothScale : 1;
 
+/**
+ * El modo `smooth` reescala la hoja para suavizar el contorno, pero una hoja
+ * de ataque grande multiplicada por 3 puede superar el límite de textura de la
+ * GPU. Se reduce el factor solo para esas hojas; las pequeñas siguen a máxima
+ * calidad.
+ */
+function textureScaleFor(image: HTMLImageElement | HTMLCanvasElement): number {
+  const base = SPRITE_TEXTURE_SCALE;
+  let scale = base;
+  while (
+    scale > 1 &&
+    (image.width * scale > MAX_TEXTURE_DIMENSION ||
+      image.height * scale > MAX_TEXTURE_DIMENSION ||
+      image.width * image.height * scale * scale > MAX_TEXTURE_AREA)
+  ) {
+    scale -= 1;
+  }
+  return scale;
+}
+
+/** ¿Alguna habilidad del moveset de este Pokémon usa esta animación? */
+function movesetUsesAnimation(
+  entry: PokemonEntry,
+  animation: AnimationName
+): boolean {
+  const moveset = MOVESETS[entry.id];
+  if (!moveset) return false;
+  return moveset.some((id) => {
+    if (!id) return false;
+    return ABILITIES[id]?.animation === animation;
+  });
+}
+
+/**
+ * Genera una hoja recortada por dirección. Cada frame original puede tener
+ * mucho espacio vacío (QuickStrike es el caso extremo); aquí se copia solo el
+ * arte alrededor del ancla a una celda pequeña y se recoloca el ancla en una
+ * posición fija. El renderizador puede seguir usando el frame completo, pero
+ * ahora el plano está centrado en el personaje.
+ */
+function buildTightSheet(
+  image: HTMLImageElement,
+  animation: SpriteAnimation
+): { canvas: HTMLCanvasElement; animation: SpriteAnimation } | null {
+  const rows = animation.contentRows;
+  if (!rows || rows.length !== animation.rows) return null;
+  if (rows.some((content) => content === null)) return null;
+
+  let left = 0;
+  let right = 0;
+  let top = 0;
+  let bottom = 0;
+  for (const content of rows) {
+    if (!content) return null;
+    left = Math.max(left, content.left);
+    right = Math.max(right, content.right);
+    top = Math.max(top, content.top);
+    bottom = Math.max(bottom, content.bottom);
+  }
+
+  const width = left + right;
+  const height = top + bottom;
+  if (width <= 0 || height <= 0) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width * animation.columns;
+  canvas.height = height * animation.rows;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.imageSmoothingEnabled = false;
+
+  for (let row = 0; row < animation.rows; row++) {
+    const content = rows[row];
+    if (!content) return null;
+    for (let column = 0; column < animation.columns; column++) {
+      const index = row * animation.columns + column;
+      const anchor = animation.anchors[index];
+      // Coordenadas absolutas dentro de la hoja original: hay que sumar la
+      // celda de la columna y la fila, no solo el recorte local del frame.
+      const cropX =
+        column * animation.frameWidth + anchor.x - content.left;
+      const cropY =
+        row * animation.frameHeight + anchor.y - content.top;
+      const cropWidth = content.left + content.right;
+      const cropHeight = content.top + content.bottom;
+      const destX = column * width + (left - content.left);
+      const destY = row * height + (top - content.top);
+      context.drawImage(
+        image,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        destX,
+        destY,
+        cropWidth,
+        cropHeight
+      );
+    }
+  }
+
+  const anchors = Array.from(
+    { length: animation.columns * animation.rows },
+    () => ({ x: left, y: top })
+  );
+  const bottoms = animation.bottoms.map((bottom, index) =>
+    bottom < 0 ? -1 : bottom - animation.anchors[index].y + top
+  );
+
+  return {
+    canvas,
+    animation: {
+      ...animation,
+      frameWidth: width,
+      frameHeight: height,
+      anchors,
+      bottoms,
+      content: undefined,
+      contentRows: undefined
+    }
+  };
+}
+
 export function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -41,7 +182,7 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
  * queda antialiaseado pero el interior conserva los bloques del píxel art.
  */
 function upscaleSheet(
-  image: HTMLImageElement,
+  image: HTMLImageElement | HTMLCanvasElement,
   factor: number
 ): HTMLCanvasElement | HTMLImageElement {
   const canvas = document.createElement('canvas');
@@ -56,11 +197,12 @@ function upscaleSheet(
 
 function createSpriteTexture(
   device: pc.GraphicsDevice,
-  image: HTMLImageElement,
-  name: string
+  image: HTMLImageElement | HTMLCanvasElement,
+  name: string,
+  scale: number
 ): pc.Texture {
   const mode = CONFIG.sprite.filter;
-  const source = mode === 'smooth' ? upscaleSheet(image, CONFIG.sprite.smoothScale) : image;
+  const source = mode === 'smooth' && scale > 1 ? upscaleSheet(image, scale) : image;
   // NEAREST mantiene los bloques del píxel art. 'smooth' y 'linear' interpolan;
   // la diferencia es que 'smooth' lo hace sobre una textura de más resolución.
   const filter = mode === 'nearest' ? pc.FILTER_NEAREST : pc.FILTER_LINEAR;
@@ -87,23 +229,72 @@ export async function loadSpriteAsset(
   entry: PokemonEntry,
   onProgress?: () => void
 ): Promise<SpriteAsset> {
-  const [idleImage, walkImage] = await Promise.all([
-    loadImage(entry.animations.idle.sheet),
-    loadImage(entry.animations.walk.sheet)
-  ]);
+  // El recorte tight reemplaza las celdas de cada animación. Se trabaja sobre
+  // una copia: el manifiesto lo comparten la partida, las recargas de HMR y
+  // cualquier remontaje, y mutarlo hacía que la segunda carga aplicara el
+  // recorte ya recortado sobre la hoja original (sprite pequeño y desalineado).
+  const animations = { ...entry.animations };
+  const images = await Promise.all(
+    ANIMATIONS.map((name) => loadImage(animations[name].sheet))
+  );
 
-  const textures = {
-    idle: createSpriteTexture(device, idleImage, `${entry.id}-idle`),
-    walk: createSpriteTexture(device, walkImage, `${entry.id}-walk`)
+  const textures = {} as SpriteTextures;
+  const textureScales: Partial<Record<AnimationName, number>> = {};
+
+  const createFor = (
+    name: AnimationName,
+    image: HTMLImageElement,
+    animation: SpriteAnimation
+  ) => {
+    const tight = buildTightSheet(image, animation);
+    if (tight) animations[name] = tight.animation;
+    const source = tight?.canvas ?? image;
+    const scale = textureScaleFor(source);
+    textures[name] = createSpriteTexture(
+      device,
+      source,
+      `${entry.id}-${name}`,
+      scale
+    );
+    textureScales[name] = scale;
   };
 
+  ANIMATIONS.forEach((name, index) =>
+    createFor(name, images[index], animations[name])
+  );
+
+  // Faint es opcional para el KO. QuickStrike solo se carga si el moveset del
+  // Pokémon realmente la usa; así no se suben hojas grandes que nadie usa.
+  if (animations.faint) {
+    const faintImage = await loadImage(animations.faint.sheet);
+    createFor('faint', faintImage, animations.faint);
+  }
+  if (
+    animations.quickstrike &&
+    movesetUsesAnimation(entry, 'quickstrike')
+  ) {
+    const quickstrikeImage = await loadImage(
+      animations.quickstrike.sheet
+    );
+    createFor('quickstrike', quickstrikeImage, animations.quickstrike);
+    console.info(`[sprite] QuickStrike cargado para ${entry.id}`);
+  }
+  if (animations.shock && movesetUsesAnimation(entry, 'shock')) {
+    const shockImage = await loadImage(animations.shock.sheet);
+    createFor('shock', shockImage, animations.shock);
+    console.info(`[sprite] Shock cargado para ${entry.id}`);
+  }
+
   onProgress?.();
-  return { entry, textures };
+  return {
+    entry: { ...entry, animations },
+    textures,
+    textureScales
+  };
 }
 
 export function disposeSpriteAsset(asset: SpriteAsset): void {
-  asset.textures.idle.destroy();
-  asset.textures.walk.destroy();
+  for (const texture of Object.values(asset.textures)) texture?.destroy();
 }
 
 interface BillboardOptions {
@@ -181,6 +372,7 @@ interface FrameLayer {
   mesh: pc.Mesh;
   animation: SpriteAnimation;
   refAnchorY: number;
+  textureScale: number;
   silhouette: pc.MeshInstance;
   silhouetteMaterial: pc.StandardMaterial;
 }
@@ -207,10 +399,13 @@ export class SpriteBillboard {
   private row = 0;
   private elapsed = 0;
   private playback = 1;
+  /** Si es `false`, el clip se detiene en su último frame en vez de repetirse. */
+  private loop = true;
   private facingYaw = 0;
   private lastAppliedFrame = -1;
   private lastAppliedRow = -1;
   private lastAppliedAnimation: AnimationName | null = null;
+  private warnedMissingQuickstrike = false;
 
   constructor(app: pc.Application, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
@@ -221,36 +416,85 @@ export class SpriteBillboard {
     app.root.addChild(this.root);
 
     for (const name of ANIMATIONS) {
-      this.layers.set(name, this.createLayer(asset, name));
+      this.layers.set(
+        name,
+        this.createLayer(
+          name,
+          asset.entry.animations[name],
+          asset.textures[name],
+          asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
+        )
+      );
+    }
+    if (asset.entry.animations.faint && asset.textures.faint) {
+      this.layers.set(
+        'faint',
+        this.createLayer(
+          'faint',
+          asset.entry.animations.faint,
+          asset.textures.faint,
+          asset.textureScales.faint ?? SPRITE_TEXTURE_SCALE
+        )
+      );
+    }
+    if (asset.entry.animations.quickstrike && asset.textures.quickstrike) {
+      this.layers.set(
+        'quickstrike',
+        this.createLayer(
+          'quickstrike',
+          asset.entry.animations.quickstrike,
+          asset.textures.quickstrike,
+          asset.textureScales.quickstrike ?? SPRITE_TEXTURE_SCALE
+        )
+      );
+    }
+    if (asset.entry.animations.shock && asset.textures.shock) {
+      this.layers.set(
+        'shock',
+        this.createLayer(
+          'shock',
+          asset.entry.animations.shock,
+          asset.textures.shock,
+          asset.textureScales.shock ?? SPRITE_TEXTURE_SCALE
+        )
+      );
     }
 
     this.row = this.computeRow(new pc.Vec3(0, 0, 10));
     this.play('idle', true);
   }
 
-  private createLayer(asset: SpriteAsset, name: AnimationName): FrameLayer {
-    const animation = asset.entry.animations[name];
+  private createLayer(
+    name: AnimationName,
+    animation: SpriteAnimation,
+    texture: pc.Texture,
+    textureScale: number
+  ): FrameLayer {
     const sx = this.options.pixelScale;
     const sy = this.options.pixelScale * this.options.verticalStretch;
-    const halfWidth = animation.frameWidth / 2;
     const refAnchorY = animation.anchors[0]?.y ?? animation.frameHeight * 0.75;
-    const top = refAnchorY * sy;
-    const bottom = -(animation.frameHeight - refAnchorY) * sy;
+    const content = animation.content;
+    // Si el manifiesto trae el recorte de contenido, el plano se ajusta al
+    // arte real alrededor del ancla. Si no, se usa el frame completo.
+    const left = (content?.left ?? animation.frameWidth / 2) * sx;
+    const right = (content?.right ?? animation.frameWidth / 2) * sx;
+    const top = (content?.top ?? refAnchorY) * sy;
+    const bottom = -(content?.bottom ?? (animation.frameHeight - refAnchorY)) * sy;
 
     const mesh = new pc.Mesh(this.device);
     mesh.setPositions([
-      -halfWidth * sx, bottom, 0,
-      (animation.frameWidth - halfWidth) * sx, bottom, 0,
-      (animation.frameWidth - halfWidth) * sx, top, 0,
-      -halfWidth * sx, top, 0
+      -left, bottom, 0,
+      right, bottom, 0,
+      right, top, 0,
+      -left, top, 0
     ]);
     mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
     mesh.setIndices([0, 1, 2, 0, 2, 3]);
     mesh.update();
 
-    const material = createSpriteMaterial(asset.textures[name], this.options.alphaTest);
+    const material = createSpriteMaterial(texture, this.options.alphaTest);
     const silhouetteMaterial = createSilhouetteMaterial(
-      asset.textures[name],
+      texture,
       this.options.alphaTest,
       this.options.silhouetteColor ?? SILHOUETTE_COLOR
     );
@@ -277,6 +521,7 @@ export class SpriteBillboard {
       mesh,
       animation,
       refAnchorY,
+      textureScale,
       silhouette,
       silhouetteMaterial
     };
@@ -310,16 +555,56 @@ export class SpriteBillboard {
     this.playback = rate;
   }
 
+  /**
+   * Activa o desactiva la repetición del clip actual. Al cambiar de animación
+   * vuelve a `true`; el motor lo desactiva solo durante preparaciones `once`.
+   */
+  setLoop(loop: boolean): void {
+    this.loop = loop;
+  }
+
+  /**
+   * Resuelve la animación disponible más cercana. `faint` cae a `hurt` y
+   * `quickstrike` a `attack` cuando la especie no tiene esa hoja.
+   */
+  private resolveAnimation(name: AnimationName): AnimationName {
+    if (this.layers.has(name)) return name;
+    const fallbacks: AnimationName[] =
+      name === 'faint'
+        ? ['hurt', 'idle']
+        : name === 'quickstrike' || name === 'shock'
+          ? ['attack', 'idle']
+          : ['idle'];
+    let resolved: AnimationName = 'idle';
+    for (const fallback of fallbacks) {
+      if (!this.layers.has(fallback)) continue;
+      resolved = fallback;
+      break;
+    }
+    if (name === 'quickstrike' && !this.warnedMissingQuickstrike) {
+      this.warnedMissingQuickstrike = true;
+      console.warn(
+        `[sprite] QuickStrike no disponible para ${this.root.name}; usando ${resolved}`
+      );
+    }
+    return resolved;
+  }
+
   play(name: AnimationName, restart = false): void {
-    if (this.animation === name && !restart) return;
-    this.animation = name;
+    const resolved = this.resolveAnimation(name);
+    if (restart && resolved === 'quickstrike') {
+      console.info(`[sprite] QuickStrike play en ${this.root.name}`);
+    }
+    if (this.animation === resolved && !restart) return;
+    this.animation = resolved;
     this.frame = 0;
     this.elapsed = 0;
     this.playback = 1;
+    this.loop = true;
     this.lastAppliedFrame = -1;
     this.lastAppliedRow = -1;
     for (const [key, layer] of this.layers) {
-      layer.entity.enabled = key === name;
+      layer.entity.enabled = key === resolved;
     }
     if (this.lastAppliedAnimation !== null) {
       this.applyFrame(true);
@@ -375,26 +660,41 @@ export class SpriteBillboard {
 
     const sx = this.options.pixelScale;
     const sy = this.options.pixelScale * this.options.verticalStretch;
-    const offsetX = (animation.frameWidth / 2 - anchor.x) * sx;
-    const offsetY = (anchor.y - layer.refAnchorY + lift) * sy;
-    layer.entity.setLocalPosition(offsetX, offsetY, 0);
-
-    // UVs con medio téxel de margen para no sangrar frames vecinos. En modo
-    // 'smooth' la textura está precargada a más resolución, así que el margen
-    // y el tamaño de celda se miden en téxeles de la textura.
-    const scale = SPRITE_TEXTURE_SCALE;
+    const scale = layer.textureScale;
     const frameWidth = animation.frameWidth * scale;
     const frameHeight = animation.frameHeight * scale;
     const sheetWidth = frameWidth * animation.columns;
     const sheetHeight = frameHeight * animation.rows;
-    const u0 = (this.frame * frameWidth + 0.5) / sheetWidth;
-    // PlayCanvas mide el offset V desde la parte superior de la textura, no
-    // desde abajo. Por eso la fila se compensa con `1 - tiling - offset` dentro
-    // del shader. Si usáramos la V "clásica" (1 - fila) veríamos la fila
-    // espejada de la hoja.
-    const v0 = (this.row * frameHeight + 0.5) / sheetHeight;
-    const du = (frameWidth - 1) / sheetWidth;
-    const dv = (frameHeight - 1) / sheetHeight;
+    const content = animation.content;
+
+    let u0: number;
+    let v0: number;
+    let du: number;
+    let dv: number;
+
+    if (content) {
+      // Recorte tight alrededor del ancla: el plano deja de ser el frame
+      // completo (con mucho espacio vacío) y el personaje queda centrado.
+      const cropLeft = anchor.x - content.left;
+      const cropTop = anchor.y - content.top;
+      const cropWidth = content.left + content.right;
+      const cropHeight = content.top + content.bottom;
+      layer.entity.setLocalPosition(0, lift * sy, 0);
+      u0 = (cropLeft * scale + 0.5) / sheetWidth;
+      v0 = (cropTop * scale + 0.5) / sheetHeight;
+      du = (cropWidth * scale - 1) / sheetWidth;
+      dv = (cropHeight * scale - 1) / sheetHeight;
+    } else {
+      const offsetX = (animation.frameWidth / 2 - anchor.x) * sx;
+      const offsetY = (anchor.y - layer.refAnchorY + lift) * sy;
+      layer.entity.setLocalPosition(offsetX, offsetY, 0);
+      u0 = (this.frame * frameWidth + 0.5) / sheetWidth;
+      // PlayCanvas mide el offset V desde la parte superior de la textura, no
+      // desde abajo. Por eso la fila se compensa con `1 - tiling - offset`.
+      v0 = (this.row * frameHeight + 0.5) / sheetHeight;
+      du = (frameWidth - 1) / sheetWidth;
+      dv = (frameHeight - 1) / sheetHeight;
+    }
 
     layer.material.emissiveMapTiling = new pc.Vec2(du, dv);
     layer.material.emissiveMapOffset = new pc.Vec2(u0, v0);
@@ -422,13 +722,19 @@ export class SpriteBillboard {
     // 1. Animación.
     const animation = layer.animation;
     this.elapsed += dt * Math.max(0.05, this.playback);
+    const lastFrame = animation.columns - 1;
     let guard = 0;
     while (guard++ < 32) {
       const ticks = animation.durations[this.frame] ?? 6;
       const duration = Math.max(1 / 120, ticks / 60);
       if (this.elapsed < duration) break;
+      if (!this.loop && this.frame >= lastFrame) {
+        // Clip de una sola pasada: se queda en el último frame.
+        this.elapsed = duration;
+        break;
+      }
       this.elapsed -= duration;
-      this.frame = (this.frame + 1) % animation.columns;
+      this.frame = this.loop ? (this.frame + 1) % animation.columns : this.frame + 1;
     }
 
     // 2. Dirección según cámara.
