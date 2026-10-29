@@ -211,6 +211,7 @@ ABILITIES.rayo = defineAbility({
   cooldown: 8,
   range: 11,
   radius: 0.35,
+  impactStyle: 'electric',
   castTime: 0.55,
   windup: 0.5,
   windupAnimationMode: 'once',

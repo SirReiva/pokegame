@@ -103,7 +103,7 @@ El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se 
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,5 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,22 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
-El proyectil de `Impactrueno` tiene un visual eléctrico propio: núcleo brillante, halo, tres arcos zigzagueantes que giran y parpadean, y una estela orientada hacia la dirección de vuelo. Al impactar genera una pequeña explosión eléctrica con núcleo, halo, arcos cortos y anillo en el suelo. Se configura con `projectileStyle: 'electric'` e `impactStyle: 'electric'`; el resto usa el orbe y el impacto estándar.
+El proyectil de `Impactrueno` tiene un visual eléctrico propio: núcleo brillante, halo, tres arcos zigzagueantes que giran y parpadean, y una estela orientada hacia la dirección de vuelo. Al impactar genera una pequeña explosión eléctrica con núcleo, halo, arcos cortos y anillo en el suelo. Se configura con `projectileStyle: 'electric'` e `impactStyle: 'electric'`; el resto usa el orbe y el impacto estándar. `Rayo` usa también `impactStyle: 'electric'`, así que cada enemigo alcanzado por el haz recibe su propia explosión eléctrica.
 
 Cada habilidad puede declarar un `windup`: durante ese tiempo el Pokémon se queda quieto, reproduce su animación y no puede moverse ni lanzar otra habilidad. Al terminar, se ejecuta el efecto (proyectil, haz, golpe, dash...). Si recibe un golpe durante la preparación, la habilidad se cancela.
 
