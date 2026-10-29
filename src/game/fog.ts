@@ -117,7 +117,6 @@ export interface ScreenFog {
 }
 
 const MASK_SIZE = 192;
-const MAX_OCCLUDERS = 24;
 const SHADOW_LENGTH = 40;
 /** Extensión de la banda cuando el jugador está pegado a la cresta. */
 const INSIDE_EDGE_EXTENSION = 0.05;
@@ -564,14 +563,15 @@ export class FogDecal {
     const candidates: Array<SightOccluder & { distance: number }> = [];
     for (const occluder of this.occluders) {
       const distance = Math.hypot(occluder.x - playerX, occluder.z - playerZ);
+      // Los separadores se muestrean en tramos cortos, así que no basta con
+      // limitar el número total: un separador cercano llenaría la lista y los
+      // demás dejarían de proyectar sombra. Se dibujan todos los tramos que
+      // caen dentro del radio de visión (fuera de él la niebla ya es opaca).
       if (distance > visionRange + occluder.radius + 2) continue;
       candidates.push({ ...occluder, distance });
     }
 
-    candidates.sort((a, b) => a.distance - b.distance);
-    const selected = candidates.slice(0, MAX_OCCLUDERS);
-
-    for (const occluder of selected) {
+    for (const occluder of candidates) {
       if (occluder.distance <= occluder.radius + 0.01) {
         // Jugador pegado a la cresta: banda sobre el lado opuesto del tramo.
         const segmentX = occluder.bx - occluder.ax;
