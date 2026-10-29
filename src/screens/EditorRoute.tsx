@@ -1,15 +1,13 @@
-import { useLocation } from 'wouter';
 import { useSession } from '../session/useSession';
 import { MapEditorScreen } from '../ui/MapEditorScreen';
-import { useReturnPath } from '../ui/useReturnPath';
+import { useBack } from '../ui/useBack';
 import { SessionGate } from './SessionGate';
 
 function EditorContent() {
   const { maps } = useSession();
-  const [, navigate] = useLocation();
-  const backPath = useReturnPath('/');
+  const goBack = useBack();
 
-  return <MapEditorScreen maps={maps} onExit={() => navigate(backPath)} />;
+  return <MapEditorScreen maps={maps} onExit={goBack} />;
 }
 
 export function EditorRoute() {

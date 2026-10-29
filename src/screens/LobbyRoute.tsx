@@ -86,8 +86,8 @@ function LobbyContent() {
         if (session.continueToRoster()) navigate('/roster');
       }}
       onBack={() => navigate('/')}
-      onOptions={() => navigate(`/opciones?from=${encodeURIComponent('/lobby')}`)}
-      onEditor={() => navigate(`/editor?from=${encodeURIComponent('/lobby')}`)}
+      onOptions={() => navigate('/opciones')}
+      onEditor={() => navigate('/editor')}
     />
   );
 }

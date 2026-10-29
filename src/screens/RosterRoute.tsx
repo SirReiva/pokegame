@@ -58,7 +58,7 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
         session.resetRosterReady();
         navigate('/lobby');
       }}
-      onOptions={() => navigate(`/opciones?from=${encodeURIComponent('/roster')}`)}
+      onOptions={() => navigate('/opciones')}
     />
   );
 }

@@ -1,18 +1,16 @@
-import { useLocation } from 'wouter';
 import { useSession } from '../session/useSession';
 import { Brand } from '../ui/Brand';
 import { btnClass } from '../ui/buttonStyles';
 import { ControlsPanel, CreditsPanel } from '../ui/InfoPanels';
 import { eyebrow } from '../ui/styles';
-import { useReturnPath } from '../ui/useReturnPath';
+import { useBack } from '../ui/useBack';
 
 const panel =
   'rounded-[20px] border border-line bg-[image:linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-[clamp(16px,2.4vw,24px)] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]';
 
 export function OptionsScreen() {
-  const [, navigate] = useLocation();
   const { manifest } = useSession();
-  const backPath = useReturnPath('/');
+  const goBack = useBack();
 
   return (
     <div className="relative h-full overflow-y-auto bg-[image:radial-gradient(circle_at_18%_8%,#122033_0%,#080d15_46%,#05080d_100%)] p-[clamp(16px,2.4vw,32px)]">
@@ -22,7 +20,7 @@ export function OptionsScreen() {
           <button
             type="button"
             className={btnClass('ghost', 'small')}
-            onClick={() => navigate(backPath)}
+            onClick={goBack}
           >
             ← Volver
           </button>

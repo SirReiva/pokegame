@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { Redirect, Route, Switch } from 'wouter';
+import { Redirect, Route, Router, Switch } from 'wouter';
+import { useHashLocation } from './router/hashLocation';
 import { HomeScreen } from './screens/HomeScreen';
 import { LobbyRoute } from './screens/LobbyRoute';
 import { OptionsScreen } from './screens/OptionsScreen';
@@ -55,11 +56,15 @@ function AppRoutes() {
   );
 }
 
+// Rutas con hash (#/roster): funcionan en GitHub Pages sin fallback 404 y
+// mantienen las URLs relativas al index aunque el sitio viva en /<repo>/.
 function App() {
   return (
-    <SessionProvider>
-      <AppRoutes />
-    </SessionProvider>
+    <Router hook={useHashLocation}>
+      <SessionProvider>
+        <AppRoutes />
+      </SessionProvider>
+    </Router>
   );
 }
 

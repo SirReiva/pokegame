@@ -26,8 +26,8 @@ export function HomeScreen() {
     resetPlayers();
     navigate('/lobby');
   };
-  const openEditor = () => navigate(`/editor?from=${encodeURIComponent('/')}`);
-  const openOptions = () => navigate(`/opciones?from=${encodeURIComponent('/')}`);
+  const openEditor = () => navigate('/editor');
+  const openOptions = () => navigate('/opciones');
 
   const activate = (index: number) => {
     if (index === 0) play();
