@@ -5,7 +5,8 @@ import {
   MOVESETS,
   type AbilityDef,
   type AbilitySlot,
-  type BuffStat
+  type BuffStat,
+  type SlowSpec
 } from './abilities';
 import { Actor } from './actor';
 import { CameraRig } from './camera';
@@ -212,6 +213,10 @@ interface MatchPlayerState extends MatchPlayerConfig {
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
   buffs: ActiveBuff[];
+  /** Segundos restantes de ralentización. */
+  slowTimer: number;
+  /** Multiplicador de velocidad mientras dure la ralentización (1 = normal). */
+  slowMultiplier: number;
   /** Ids de las cuatro habilidades; `null` deja el hueco vacío. */
   abilityIds: (string | null)[];
 }
@@ -532,6 +537,8 @@ export class Game {
         deaths: 0,
         cooldowns: [0, 0, 0, 0],
         buffs: [],
+        slowTimer: 0,
+        slowMultiplier: 1,
         abilityIds: [...moveset]
       });
 
@@ -782,6 +789,10 @@ export class Game {
     }
     for (const buff of player.buffs) buff.duration -= dt;
     player.buffs = player.buffs.filter((buff) => buff.duration > 0);
+    if (player.slowTimer > 0) {
+      player.slowTimer = Math.max(0, player.slowTimer - dt);
+      if (player.slowTimer === 0) player.slowMultiplier = 1;
+    }
     if (player.invulnerableTimer > 0) {
       player.invulnerableTimer = Math.max(0, player.invulnerableTimer - dt);
     }
@@ -841,7 +852,8 @@ export class Game {
       player.maxSpeed *
       terrainEffect.multiplier *
       (input.run ? CONFIG.player.runMultiplier : 1) *
-      this.buffMultiplier(player, 'speed');
+      this.buffMultiplier(player, 'speed') *
+      player.slowMultiplier;
 
     const targetSpeed = maxSpeed * Math.min(1, magnitude);
     const currentSpeed = Math.hypot(player.vx, player.vz);
@@ -1179,6 +1191,8 @@ export class Game {
     player.deathFade = 0;
     player.cooldowns = [0, 0, 0, 0];
     player.buffs = [];
+    player.slowTimer = 0;
+    player.slowMultiplier = 1;
     player.animation = 'idle';
     player.playback = 1;
     player.terrain = terrainAt(player.x, player.z);
@@ -1267,7 +1281,8 @@ export class Game {
           player.facing,
           def.range,
           def.halfAngle,
-          def.color
+          def.color,
+          def.impactStyle
         );
         for (const target of this.matchPlayers) {
           if (!this.canHit(player, target)) continue;
@@ -1482,6 +1497,17 @@ export class Game {
     );
   }
 
+  /** Aplica (o refresca) la ralentización de una habilidad de estado. */
+  private applySlow(
+    target: MatchPlayerState,
+    slow: SlowSpec,
+    color: readonly [number, number, number]
+  ): void {
+    target.slowTimer = Math.max(target.slowTimer, slow.duration);
+    target.slowMultiplier = Math.min(target.slowMultiplier, slow.multiplier);
+    this.combatFx.spawnBuff(target.x, target.z, color, 0.95);
+  }
+
   private applyAbilityDamage(
     attacker: MatchPlayerState,
     target: MatchPlayerState,
@@ -1489,14 +1515,21 @@ export class Game {
     options: { power?: number; control?: boolean } = {}
   ): void {
     const power = options.power ?? def.power;
-    if (power <= 0 || def.category === 'status') return;
+    const damaging = power > 0 && def.category !== 'status';
     if (!rollAccuracy(def.accuracy)) return;
 
+    // La ralentización se aplica aunque la habilidad no haga daño (Paralizador).
+    if (def.slow && target.alive) {
+      this.applySlow(target, def.slow, def.color);
+    }
+    if (!damaging) return;
+
     const critical = rollCritical();
-    const physical = def.category === 'physical';
+    const category = def.category === 'physical' ? 'physical' : 'special';
+    const physical = category === 'physical';
     const result = computeDamage({
       moveType: def.type,
-      category: def.category,
+      category,
       power,
       attacker: attacker.combat,
       defender: target.combat,
@@ -1517,6 +1550,20 @@ export class Game {
       );
     } else if (def.impactStyle === 'fire') {
       this.combatFx.spawnFireBurst(
+        target.x,
+        target.z,
+        def.color,
+        result.effectiveness
+      );
+    } else if (def.impactStyle === 'grass') {
+      this.combatFx.spawnGrassBurst(
+        target.x,
+        target.z,
+        def.color,
+        result.effectiveness
+      );
+    } else if (def.impactStyle === 'poison') {
+      this.combatFx.spawnPoisonBurst(
         target.x,
         target.z,
         def.color,
@@ -1609,6 +1656,8 @@ export class Game {
     target.vx = 0;
     target.vz = 0;
     target.buffs = [];
+    target.slowTimer = 0;
+    target.slowMultiplier = 1;
     target.animation = entry?.animations.faint ? 'faint' : 'hurt';
     target.playback = 1;
     for (const copy of target.copies) copy.play(target.animation, true);

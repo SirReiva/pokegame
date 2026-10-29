@@ -103,8 +103,12 @@ function buildTightSheet(
     bottom = Math.max(bottom, content.bottom);
   }
 
-  const width = left + right;
-  const height = top + bottom;
+  // `left/right/top/bottom` son distancias desde el ancla hasta el píxel más
+  // extremo (inclusive), así que el arte ocupa `left + right + 1` columnas: sin
+  // el +1 se recortaba la última columna/fila visible de cada frame (el hocico
+  // en las direcciones que miran a la derecha).
+  const width = left + right + 1;
+  const height = top + bottom + 1;
   if (width <= 0 || height <= 0) return null;
 
   const canvas = document.createElement('canvas');
@@ -126,8 +130,8 @@ function buildTightSheet(
         column * animation.frameWidth + anchor.x - content.left;
       const cropY =
         row * animation.frameHeight + anchor.y - content.top;
-      const cropWidth = content.left + content.right;
-      const cropHeight = content.top + content.bottom;
+      const cropWidth = content.left + content.right + 1;
+      const cropHeight = content.top + content.bottom + 1;
       const destX = column * width + (left - content.left);
       const destY = row * height + (top - content.top);
       context.drawImage(
@@ -677,8 +681,8 @@ export class SpriteBillboard {
       // completo (con mucho espacio vacío) y el personaje queda centrado.
       const cropLeft = anchor.x - content.left;
       const cropTop = anchor.y - content.top;
-      const cropWidth = content.left + content.right;
-      const cropHeight = content.top + content.bottom;
+      const cropWidth = content.left + content.right + 1;
+      const cropHeight = content.top + content.bottom + 1;
       layer.entity.setLocalPosition(0, lift * sy, 0);
       u0 = (cropLeft * scale + 0.5) / sheetWidth;
       v0 = (cropTop * scale + 0.5) / sheetHeight;

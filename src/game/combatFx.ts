@@ -9,9 +9,9 @@
  */
 
 import * as pc from 'playcanvas';
-import type { AoeStyle, BeamStyle, ProjectileStyle } from './abilities';
+import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilities';
 import { DEG } from './config';
-import { createFlameCanvas, textureFromCanvas } from './textures';
+import { createFlameCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
 export interface EffectHandle {
   setPosition(x: number, z: number): void;
@@ -62,6 +62,7 @@ interface FlameParticleOptions {
   sizeMid: number;
   sizeEnd: number;
   lifetime: number;
+  /** Intervalo mínimo entre partículas, en segundos (menor = más denso). */
   rate: number;
   numParticles: number;
   stretch?: number;
@@ -69,6 +70,8 @@ interface FlameParticleOptions {
   localSpace?: boolean;
   /** Si es `false`, el emisor empieza vacío y se llena durante el efecto. */
   preWarm?: boolean;
+  /** Mezcla de partículas; por defecto, aditiva. */
+  blendType?: number;
 }
 
 function createArcMesh(
@@ -280,6 +283,10 @@ export class CombatFx {
   /** Textura de lengua de fuego y malla de tres quads cruzados. */
   private readonly flameTexture: pc.Texture;
   private readonly flameMesh: pc.Mesh;
+  /** Textura de hoja y de espora para los efectos de Planta/Veneno. */
+  private readonly leafTexture: pc.Texture;
+  private readonly sporeTexture: pc.Texture;
+  private readonly leafMesh: pc.Mesh;
   /** Mallas de la marca de área y marcas activas. */
   private readonly discMesh: pc.Mesh;
   private readonly dashRingMesh: pc.Mesh;
@@ -308,6 +315,23 @@ export class CombatFx {
       }
     );
     this.flameMesh = createFlameCrossMesh(this.device);
+    this.leafTexture = textureFromCanvas(
+      this.device,
+      createLeafParticleCanvas(),
+      {
+        name: 'combat-leaf',
+        mipmaps: true,
+        minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+        magFilter: pc.FILTER_LINEAR
+      }
+    );
+    this.sporeTexture = textureFromCanvas(this.device, createPollenCanvas(48), {
+      name: 'combat-spore',
+      mipmaps: true,
+      minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+      magFilter: pc.FILTER_LINEAR
+    });
+    this.leafMesh = createFlameCrossMesh(this.device);
 
     // PlayCanvas destruye una malla cuando su último MeshInstance desaparece.
     // Estas mallas son compartidas por muchos efectos, así que reservamos una
@@ -316,6 +340,7 @@ export class CombatFx {
     this.boxMesh.incRefCount();
     this.torusMesh.incRefCount();
     this.flameMesh.incRefCount();
+    this.leafMesh.incRefCount();
     this.discMesh = createDiscMesh(this.device);
     this.dashRingMesh = createDashRingMesh(this.device);
     this.discMesh.incRefCount();
@@ -363,6 +388,88 @@ export class CombatFx {
     material.emissiveMap = this.flameTexture;
     material.emissiveIntensity = 1.12;
     material.opacityMap = this.flameTexture;
+    material.opacityMapChannel = 'a';
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_ADDITIVEALPHA;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /** Material de hoja: silueta recortada por alfa, con tinte verde. */
+  private createLeafMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      tint[0] / 255,
+      tint[1] / 255,
+      tint[2] / 255
+    );
+    material.emissiveMap = this.leafTexture;
+    material.emissiveIntensity = 1;
+    material.opacityMap = this.leafTexture;
+    material.opacityMapChannel = 'a';
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_NORMAL;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /** Crea una hoja cruzada con la base en `position`. */
+  private createLeaf(
+    parent: pc.Entity,
+    material: pc.StandardMaterial,
+    options: {
+      x: number;
+      y: number;
+      z: number;
+      width: number;
+      height: number;
+      yaw?: number;
+      pitch?: number;
+      roll?: number;
+    }
+  ): pc.Entity {
+    const entity = this.createEntity(this.leafMesh, [material], parent);
+    entity.setLocalPosition(options.x, options.y, options.z);
+    entity.setLocalEulerAngles(
+      options.pitch ?? 0,
+      options.yaw ?? 0,
+      options.roll ?? 0
+    );
+    entity.setLocalScale(options.width, options.height, options.width);
+    return entity;
+  }
+
+  /** Material de espora: mota redonda con blending aditivo y tinte verde. */
+  private createSporeMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      tint[0] / 255,
+      tint[1] / 255,
+      tint[2] / 255
+    );
+    material.emissiveMap = this.sporeTexture;
+    material.emissiveIntensity = 1.1;
+    material.opacityMap = this.sporeTexture;
     material.opacityMapChannel = 'a';
     material.opacity = opacity;
     material.blendType = pc.BLEND_ADDITIVEALPHA;
@@ -479,6 +586,165 @@ export class CombatFx {
     entity.addComponent('particlesystem', data);
   }
 
+  /**
+   * Partículas de hojas: misma emisión que las llamas, pero con la silueta de
+   * hoja y un tinte vegetal que se oscurece al final de la vida.
+   */
+  private spawnLeafParticles(
+    parent: pc.Entity,
+    options: FlameParticleOptions,
+    tint: readonly [number, number, number]
+  ): void {
+    const entity = new pc.Entity('leaf-particles');
+    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
+    parent.addChild(entity);
+
+    const r = tint[0] / 255;
+    const g = tint[1] / 255;
+    const b = tint[2] / 255;
+    const data: Record<string, unknown> = {
+      numParticles: options.numParticles,
+      lifetime: options.lifetime,
+      rate: options.rate,
+      rate2: options.rate,
+      loop: true,
+      preWarm: options.preWarm ?? true,
+      autoPlay: true,
+      emitterShape: pc.EMITTERSHAPE_BOX,
+      emitterExtents: new pc.Vec3(...options.extents),
+      colorMap: this.leafTexture,
+      colorGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 1, 0.4, r, 1, r * 0.55],
+          [0, 1, 0.4, g, 1, g * 0.5],
+          [0, 1, 0.4, b, 1, b * 0.35]
+        ]
+      },
+      alphaGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [0, 0, 0.12, 1, 0.7, 0.9, 1, 0]
+      },
+      scaleGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          0,
+          options.sizeStart,
+          0.3,
+          options.sizeMid,
+          0.7,
+          options.sizeMid,
+          1,
+          options.sizeEnd
+        ]
+      },
+      velocityGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, options.velocity[0], 1, options.velocityEnd[0]],
+          [0, options.velocity[1], 1, options.velocityEnd[1]],
+          [0, options.velocity[2], 1, options.velocityEnd[2]]
+        ]
+      },
+      blendType: pc.BLEND_NORMAL,
+      depthWrite: false,
+      useFog: true,
+      lighting: false,
+      orientation: pc.PARTICLEORIENTATION_SCREEN,
+      localSpace: options.localSpace ?? false,
+      layers: [this.layerId],
+      stretch: options.stretch ?? 0,
+      alignToMotion: options.alignToMotion ?? false
+    };
+    if (
+      options.radialSpeed !== undefined &&
+      options.radialSpeedEnd !== undefined
+    ) {
+      data.radialSpeedGraph = {
+        type: pc.CURVE_LINEAR,
+        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
+      };
+    }
+    entity.addComponent('particlesystem', data);
+  }
+
+  /** Motas de espora: aditivas, pequeñas y con tinte del tipo de la habilidad. */
+  private spawnSporeParticles(
+    parent: pc.Entity,
+    options: FlameParticleOptions,
+    tint: readonly [number, number, number]
+  ): void {
+    const entity = new pc.Entity('spore-particles');
+    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
+    parent.addChild(entity);
+
+    const r = tint[0] / 255;
+    const g = tint[1] / 255;
+    const b = tint[2] / 255;
+    const data: Record<string, unknown> = {
+      numParticles: options.numParticles,
+      lifetime: options.lifetime,
+      rate: options.rate,
+      rate2: options.rate,
+      loop: true,
+      preWarm: options.preWarm ?? true,
+      autoPlay: true,
+      emitterShape: pc.EMITTERSHAPE_BOX,
+      emitterExtents: new pc.Vec3(...options.extents),
+      colorMap: this.sporeTexture,
+      colorGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, 1, 0.5, r, 1, r * 0.5],
+          [0, 1, 0.5, g, 1, g * 0.45],
+          [0, 1, 0.5, b, 1, b * 0.3]
+        ]
+      },
+      alphaGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [0, 0, 0.15, 0.9, 0.65, 0.6, 1, 0]
+      },
+      scaleGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          0,
+          options.sizeStart,
+          0.3,
+          options.sizeMid,
+          0.7,
+          options.sizeMid,
+          1,
+          options.sizeEnd
+        ]
+      },
+      velocityGraph: {
+        type: pc.CURVE_LINEAR,
+        keys: [
+          [0, options.velocity[0], 1, options.velocityEnd[0]],
+          [0, options.velocity[1], 1, options.velocityEnd[1]],
+          [0, options.velocity[2], 1, options.velocityEnd[2]]
+        ]
+      },
+      blendType: options.blendType ?? pc.BLEND_ADDITIVE,
+      depthWrite: false,
+      useFog: true,
+      lighting: false,
+      orientation: pc.PARTICLEORIENTATION_SCREEN,
+      localSpace: options.localSpace ?? false,
+      layers: [this.layerId]
+    };
+    if (
+      options.radialSpeed !== undefined &&
+      options.radialSpeedEnd !== undefined
+    ) {
+      data.radialSpeedGraph = {
+        type: pc.CURVE_LINEAR,
+        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
+      };
+    }
+    entity.addComponent('particlesystem', data);
+  }
+
   /** Luz omni corta y cálida: tiñe el suelo y los sprites alrededor del fuego. */
   private createFireLight(
     parent: pc.Entity,
@@ -549,6 +815,12 @@ export class CombatFx {
     }
     if (style === 'fire') {
       return this.spawnFireProjectile(x, z, radius, dirX, dirZ);
+    }
+    if (style === 'grass') {
+      return this.spawnGrassProjectile(x, z, radius, dirX, dirZ, color);
+    }
+    if (style === 'poison') {
+      return this.spawnPoisonProjectile(x, z, radius, dirX, dirZ, color);
     }
 
     const material = this.createMaterial(color, 0.95);
@@ -813,6 +1085,151 @@ export class CombatFx {
     };
   }
 
+  /** Proyectil de hojas: núcleo verde y un anillo de hojas que gira. */
+  private spawnGrassProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('grass-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([230, 255, 200], 0.95);
+    const glowMaterial = this.createMaterial(color, 0.25);
+    const leafMaterial = this.createLeafMaterial(color, 0.95);
+    const materials = [coreMaterial, glowMaterial, leafMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.7, radius * 1.7, radius * 1.7);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalScale(radius * 4, radius * 4, radius * 4);
+
+    const leafRing = new pc.Entity('leaf-ring');
+    root.addChild(leafRing);
+    const leaves: pc.Entity[] = [];
+    for (let index = 0; index < 5; index++) {
+      const angle = (index / 5) * Math.PI * 2;
+      const leaf = this.createLeaf(leafRing, leafMaterial, {
+        x: Math.cos(angle) * radius * 1.7,
+        y: 0,
+        z: Math.sin(angle) * radius * 1.7,
+        width: radius * 1.1,
+        height: radius * 1.8,
+        yaw: 90 - (angle * 180) / Math.PI,
+        roll: 20
+      });
+      leaves.push(leaf);
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        const pulse = 1 + Math.sin(time * 26) * 0.08;
+        core.setLocalScale(
+          radius * 1.7 * pulse,
+          radius * 1.7 * pulse,
+          radius * 1.7 * pulse
+        );
+        glow.setLocalScale(
+          radius * 4 * (1 + Math.sin(time * 15) * 0.1),
+          radius * 4 * (1 + Math.sin(time * 15) * 0.1),
+          radius * 4 * (1 + Math.sin(time * 15) * 0.1)
+        );
+        leafRing.setLocalEulerAngles(0, time * 420, 0);
+        leafMaterial.opacity = 0.75 + Math.random() * 0.25;
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /** Proyectil de veneno: orbe turbio con una nube de esporas a su alrededor. */
+  private spawnPoisonProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('poison-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial(color, 0.9);
+    const glowMaterial = this.createMaterial([196, 118, 214], 0.24);
+    const materials = [coreMaterial, glowMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.9, radius * 1.9, radius * 1.9);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalScale(radius * 4.4, radius * 4.4, radius * 4.4);
+
+    this.spawnSporeParticles(
+      root,
+      {
+        extents: [radius * 1.4, radius * 1.4, radius * 1.4],
+        velocity: [0, 0.15, 0],
+        velocityEnd: [0, 0.5, 0],
+        sizeStart: radius * 0.5,
+        sizeMid: radius * 0.9,
+        sizeEnd: radius * 0.3,
+        lifetime: 0.32,
+        rate: 0.03,
+        numParticles: 36,
+        localSpace: false
+      },
+      color
+    );
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        const pulse = 1 + Math.sin(time * 22) * 0.1;
+        core.setLocalScale(
+          radius * 1.9 * pulse,
+          radius * 1.9 * pulse,
+          radius * 1.9 * pulse
+        );
+        glowMaterial.opacity = 0.18 + Math.random() * 0.12;
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
   /** Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor. */
   spawnMelee(
     x: number,
@@ -820,7 +1237,8 @@ export class CombatFx {
     yaw: number,
     range: number,
     halfAngleDeg: number,
-    color: readonly [number, number, number]
+    color: readonly [number, number, number],
+    style: ImpactStyle = 'hit'
   ): void {
     const mesh = createArcMesh(
       this.device,
@@ -833,12 +1251,227 @@ export class CombatFx {
     entity.setPosition(x, 0.35, z);
     entity.setEulerAngles(0, yaw / DEG, 0);
 
+    const materials = [material];
+    const halfAngle = Math.max(8, halfAngleDeg) * DEG;
+    let effectDuration = 0.28;
+    const leaves: {
+      entity: pc.Entity;
+      x: number;
+      z: number;
+      yaw: number;
+      roll: number;
+    }[] = [];
+    if (style === 'grass') {
+      // Hojas que salen despedidas dentro del arco para dar cuerpo al latigazo.
+      const leafMaterial = this.createLeafMaterial(color, 0.95);
+      materials.push(leafMaterial);
+      for (let index = 0; index < 9; index++) {
+        const angle = -halfAngle + (index / 8) * halfAngle * 2;
+        const distance = range * (0.45 + ((index * 7) % 10) / 10 * 0.5);
+        const leafYaw = (index * 47) % 360;
+        const leaf = this.createLeaf(entity, leafMaterial, {
+          x: Math.sin(angle) * distance,
+          y: 0.05,
+          z: Math.cos(angle) * distance,
+          width: 0.24 + (index % 3) * 0.05,
+          height: 0.42 + (index % 4) * 0.06,
+          yaw: leafYaw,
+          roll: -20 + (index % 5) * 10
+        });
+        leaves.push({
+          entity: leaf,
+          x: leaf.getLocalPosition().x,
+          z: leaf.getLocalPosition().z,
+          yaw: leafYaw,
+          roll: -20 + (index % 5) * 10
+        });
+      }
+    }
+
+    const puffs: {
+      entity: pc.Entity;
+      baseX: number;
+      baseY: number;
+      baseZ: number;
+      size: number;
+      yaw: number;
+    }[] = [];
+    let cloudMaterial: pc.StandardMaterial | null = null;
+    let cloudHotMaterial: pc.StandardMaterial | null = null;
+    const spores: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      height: number;
+      delay: number;
+      travel: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    if (style === 'spore') {
+      // Rocío en abanico: cada partícula nace en el vértice del cono y viaja
+      // hacia un ángulo distinto del borde, cubriendo toda la abertura.
+      effectDuration = 1;
+      material.opacity = 0.28;
+      const sporeMaterial = this.createSporeMaterial([92, 158, 70], 0.92);
+      materials.push(sporeMaterial);
+      const sporeCount = 104;
+      for (let index = 0; index < sporeCount; index++) {
+        const angle =
+          -halfAngle * 0.95 +
+          (index / (sporeCount - 1)) * halfAngle * 1.9 +
+          (Math.random() - 0.5) * 0.03;
+        const size = 0.055 + Math.random() * 0.07;
+        const entitySpore = this.createLeaf(entity, sporeMaterial, {
+          x: 0,
+          y: 0.55,
+          z: 0,
+          width: size,
+          height: size,
+          yaw: Math.random() * 360
+        });
+        spores.push({
+          entity: entitySpore,
+          angle,
+          distance: range * (0.6 + Math.random() * 0.4),
+          height: 0.18 + Math.random() * 0.62,
+          delay: Math.random() * 0.16,
+          travel: 0.42 + Math.random() * 0.28,
+          size,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+    if (style === 'poison') {
+      // Nube violeta: puffs esféricos que avanzan por el cono y motas aditivas
+      // que se dispersan hacia delante y hacia arriba.
+      effectDuration = 0.62;
+      cloudMaterial = this.createMaterial([146, 78, 186], 0.26);
+      cloudHotMaterial = this.createMaterial([214, 168, 236], 0.2);
+      materials.push(cloudMaterial, cloudHotMaterial);
+
+      this.spawnSporeParticles(
+        entity,
+        {
+          x: 0,
+          y: 0.5,
+          z: range * 0.55,
+          extents: [range * 0.42, 0.3, range * 0.35],
+          velocity: [0, 0.35, 0.5],
+          velocityEnd: [0, 0.9, 1.3],
+          radialSpeed: 0.2,
+          radialSpeedEnd: 0.95,
+          sizeStart: 0.2,
+          sizeMid: 0.44,
+          sizeEnd: 0.18,
+          lifetime: 0.5,
+          rate: 0.03,
+          numParticles: 44,
+          localSpace: true
+        },
+        color
+      );
+
+      for (let index = 0; index < 7; index++) {
+        const spread = (-1 + (index / 6) * 2) * halfAngle * 0.72;
+        const distance = range * (0.32 + ((index * 3) % 10) / 10 * 0.42);
+        const size = 0.3 + ((index * 7) % 10) / 10 * 0.28;
+        const puff = this.createEntity(
+          this.sphereMesh,
+          [index % 3 === 0 ? cloudHotMaterial : cloudMaterial],
+          entity
+        );
+        puff.setLocalPosition(
+          Math.sin(spread) * distance,
+          0.4 + ((index * 5) % 10) / 10 * 0.35,
+          Math.cos(spread) * distance
+        );
+        puff.setLocalScale(size, size * 0.82, size);
+        const yaw = Math.random() * 360;
+        puff.setLocalEulerAngles(0, yaw, 0);
+        puffs.push({
+          entity: puff,
+          baseX: puff.getLocalPosition().x,
+          baseY: puff.getLocalPosition().y,
+          baseZ: puff.getLocalPosition().z,
+          size,
+          yaw
+        });
+      }
+    }
+
     // La malla del arco es exclusiva de este efecto: al destruir la entidad,
     // su MeshInstance la libera y PlayCanvas se encarga de destruirla.
-    this.addEffect(entity, [material], 0.28, (t) => {
-      material.opacity = 0.85 * (1 - t);
+    let time = 0;
+    this.addEffect(entity, materials, effectDuration, (t, dt) => {
+      time += dt;
+      material.opacity =
+        (style === 'poison' ? 0.38 : style === 'spore' ? 0.28 : 0.85) *
+        (1 - t);
       const scale = 0.92 + 0.12 * t;
       entity.setLocalScale(scale, 1, scale);
+      for (const leaf of leaves) {
+        leaf.entity.setLocalPosition(
+          leaf.x * (1 + t * 0.35),
+          0.05 + t * 0.9,
+          leaf.z + t * 1.1
+        );
+        leaf.entity.setLocalEulerAngles(
+          t * 80,
+          leaf.yaw + t * 260,
+          leaf.roll + t * 140
+        );
+      }
+
+      for (const spore of spores) {
+        const local = Math.min(
+          1,
+          Math.max(0, (time - spore.delay) / spore.travel)
+        );
+        const ease = 1 - (1 - local) * (1 - local);
+        const distance = spore.distance * ease;
+        const angle = spore.angle + Math.sin(time * 2.4 + spore.phase) * 0.035;
+        const y =
+          0.55 +
+          (spore.height - 0.55) * ease +
+          Math.sin(local * Math.PI) * 0.18;
+        spore.entity.setLocalPosition(
+          Math.sin(angle) * distance,
+          y,
+          Math.cos(angle) * distance
+        );
+        const fade =
+          Math.min(1, local / 0.1) * Math.min(1, (1 - local) / 0.15);
+        const sporeScale =
+          spore.size * (0.7 + ease * 0.7) * Math.max(0, fade);
+        spore.entity.setLocalScale(sporeScale, sporeScale, sporeScale);
+        spore.entity.setLocalEulerAngles(
+          Math.sin(time * 2.1 + spore.phase) * 18,
+          time * 150 + spore.phase * 40,
+          Math.cos(time * 1.8 + spore.phase) * 18
+        );
+      }
+
+      if (cloudMaterial) cloudMaterial.opacity = 0.26 * (1 - t);
+      if (cloudHotMaterial) cloudHotMaterial.opacity = 0.2 * (1 - t);
+      for (const puff of puffs) {
+        const grow = 0.65 + Math.min(1, t * 2.2) * 0.55;
+        puff.entity.setLocalPosition(
+          puff.baseX * (1 + t * 0.45),
+          puff.baseY + t * 0.45,
+          puff.baseZ + t * 0.85
+        );
+        puff.entity.setLocalScale(
+          puff.size * grow,
+          puff.size * 0.82 * grow,
+          puff.size * grow
+        );
+        puff.entity.setLocalEulerAngles(
+          0,
+          puff.yaw + t * 40,
+          Math.sin(t * 12 + puff.baseX) * 12
+        );
+      }
     });
   }
 
@@ -1152,6 +1785,14 @@ export class CombatFx {
       this.spawnFireWhirl(x, z, radius, color, life);
       return;
     }
+    if (style === 'grass') {
+      this.spawnGrassAoe(x, z, radius, color, life);
+      return;
+    }
+    if (style === 'poison') {
+      this.spawnPoisonAoe(x, z, radius, color, life);
+      return;
+    }
     const material = this.createMaterial(color, 0.8);
     const entity = this.createEntity(this.torusMesh, [material]);
     entity.setPosition(x, 0.12, z);
@@ -1165,6 +1806,268 @@ export class CombatFx {
       entity.setLocalScale(scale, 1, scale);
       material.opacity = 0.75 * fadeOut * (0.82 + Math.sin(time * 7) * 0.18);
     });
+  }
+
+  /**
+   * Área de Planta: torbellino de hojas. Las hojas giran en espiral baja y
+   * ancha, ocupando todo el radio del área, mientras un anillo tenue marca
+   * el borde.
+   */
+  private spawnGrassAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('grass-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.3);
+    const fillMaterial = this.createMaterial([84, 148, 56], 0.1);
+    const leafMaterial = this.createLeafMaterial([226, 248, 190], 0.95);
+    const hotLeafMaterial = this.createLeafMaterial([248, 255, 220], 0.95);
+    const materials = [
+      ringMaterial,
+      fillMaterial,
+      leafMaterial,
+      hotLeafMaterial
+    ];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.03, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    this.spawnLeafParticles(
+      root,
+      {
+        x: 0,
+        y: 0.15,
+        z: 0,
+        extents: [radius * 0.7, 0.1, radius * 0.7],
+        velocity: [0, 0.8, 0],
+        velocityEnd: [0, 2, 0],
+        radialSpeed: 0.9,
+        radialSpeedEnd: 2.6,
+        sizeStart: radius * 0.03,
+        sizeMid: radius * 0.06,
+        sizeEnd: radius * 0.025,
+        lifetime: 0.8,
+        rate: 0.012,
+        numParticles: 120,
+        localSpace: false
+      },
+      color
+    );
+
+    const leaves: {
+      entity: pc.Entity;
+      angle: number;
+      radiusFactor: number;
+      phase: number;
+      rise: number;
+      spin: number;
+      size: number;
+      yaw: number;
+    }[] = [];
+    const leafCount = 120;
+    for (let index = 0; index < leafCount; index++) {
+      // Todas las hojas entran en el giro: se reparten por todo el radio y
+      // ninguna forma una columna fija en el centro.
+      const angle = Math.random() * Math.PI * 2;
+      const radiusFactor = 0.32 + Math.sqrt(Math.random()) * 0.68;
+      const size = radius * (0.045 + Math.random() * 0.05);
+      const yaw = Math.random() * 360;
+      const entity = this.createLeaf(
+        root,
+        index % 5 === 0 ? hotLeafMaterial : leafMaterial,
+        {
+          x: Math.cos(angle) * radius * radiusFactor * 0.2,
+          y: 0.05,
+          z: Math.sin(angle) * radius * radiusFactor * 0.2,
+          width: size,
+          height: size * 1.75,
+          yaw
+        }
+      );
+      leaves.push({
+        entity,
+        angle,
+        radiusFactor,
+        phase: Math.random(),
+        rise: 0.7 + Math.random() * 0.55,
+        spin: 0.8 + Math.random() * 0.5,
+        size,
+        yaw
+      });
+    }
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.12);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.25));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const pulse = 0.5 + Math.sin(time * 9) * 0.2;
+      // Giro global del embudo, además del giro individual de cada hoja.
+      root.setLocalEulerAngles(0, time * 1.4, 0);
+
+      ringMaterial.opacity = (0.18 + pulse * 0.16) * envelope;
+      fillMaterial.opacity = (0.05 + pulse * 0.04) * envelope;
+      const ringScale = radius * 2 * (0.94 + pulse * 0.06);
+      ring.setLocalScale(ringScale, 1, ringScale);
+
+      for (const leaf of leaves) {
+        // La hoja sube en espiral: el ángulo avanza con el tiempo y con la
+        // altura, y el radio se abre en embudo hacia la parte alta.
+        const p = (time * leaf.rise + leaf.phase) % 1;
+        const angle =
+          leaf.angle + time * 7.2 + p * Math.PI * 2.6;
+        // Torbellino bajo y ancho: ya nace abierto y se ensancha hasta el
+        // borde del área sin ganar apenas altura.
+        const funnel = 0.45 + 0.55 * p;
+        const dist = radius * leaf.radiusFactor * funnel;
+        const y = 0.05 + p * radius * 0.45;
+        leaf.entity.setLocalPosition(
+          Math.cos(angle) * dist,
+          y,
+          Math.sin(angle) * dist
+        );
+        leaf.entity.setLocalEulerAngles(
+          Math.sin(time * 2.4 + leaf.phase * 6.28) * 22,
+          leaf.yaw + time * 900 * leaf.spin + p * 540,
+          Math.cos(time * 2 + leaf.phase * 6.28) * 18
+        );
+        const leafFade =
+          Math.min(1, p / 0.1) *
+          Math.min(1, (1 - p) / 0.18) *
+          envelope;
+        const scale =
+          leaf.size *
+          leafFade *
+          (0.8 + Math.sin(time * 6 + leaf.phase * 10) * 0.2);
+        leaf.entity.setLocalScale(scale, scale * 1.75, scale);
+      }
+
+      leafMaterial.opacity = 0.82 * envelope;
+      hotLeafMaterial.opacity = 0.9 * envelope;
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
+  }
+
+  /**
+   * Área de esporas: nube baja que crece desde el suelo y se queda flotando.
+   * Se usa para habilidades de estado, así que no necesita lenguas de fuego:
+   * solo anillo, disco tenue, puffs y motas aditivas.
+   */
+  private spawnPoisonAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('poison-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.3);
+    const fillMaterial = this.createMaterial([116, 176, 68], 0.08);
+    const puffMaterial = this.createMaterial([226, 250, 186], 0.16);
+    const materials = [ringMaterial, fillMaterial, puffMaterial];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.03, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    this.spawnSporeParticles(
+      root,
+      {
+        x: 0,
+        y: 0.14,
+        z: 0,
+        extents: [radius * 0.85, 0.12, radius * 0.85],
+        velocity: [0, 0.35, 0],
+        velocityEnd: [0, 1.15, 0],
+        radialSpeed: 0.12,
+        radialSpeedEnd: 0.55,
+        sizeStart: radius * 0.14,
+        sizeMid: radius * 0.3,
+        sizeEnd: radius * 0.12,
+        lifetime: 0.85,
+        rate: 0.02,
+        numParticles: 120,
+        localSpace: false
+      },
+      color
+    );
+
+    const puffs: {
+      entity: pc.Entity;
+      baseX: number;
+      baseZ: number;
+      baseY: number;
+      phase: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const angle = (index / 7) * Math.PI * 2 + Math.random() * 0.6;
+      const dist = radius * (0.15 + Math.random() * 0.55);
+      const size = radius * (0.34 + Math.random() * 0.28);
+      const puff = this.createEntity(this.sphereMesh, [puffMaterial], root);
+      puff.setLocalPosition(Math.cos(angle) * dist, 0.3, Math.sin(angle) * dist);
+      puff.setLocalScale(size, size * 0.55, size);
+      puffs.push({
+        entity: puff,
+        baseX: Math.cos(angle) * dist,
+        baseZ: Math.sin(angle) * dist,
+        baseY: 0.28 + Math.random() * 0.25,
+        phase: Math.random() * Math.PI * 2,
+        size
+      });
+    }
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.16);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const pulse = 0.5 + Math.sin(time * 7) * 0.2;
+
+      ringMaterial.opacity = (0.2 + pulse * 0.16) * envelope;
+      fillMaterial.opacity = (0.05 + pulse * 0.035) * envelope;
+      puffMaterial.opacity = (0.1 + pulse * 0.07) * envelope;
+
+      const ringScale = radius * 2 * (0.96 + pulse * 0.05);
+      ring.setLocalScale(ringScale, 1, ringScale);
+
+      for (const puff of puffs) {
+        const drift = Math.sin(time * 2.6 + puff.phase) * radius * 0.06;
+        puff.entity.setLocalPosition(
+          puff.baseX + drift,
+          puff.baseY + time * 0.22 + Math.sin(time * 3 + puff.phase) * 0.05,
+          puff.baseZ + Math.cos(time * 2.2 + puff.phase) * radius * 0.05
+        );
+        const scale = puff.size * (0.75 + 0.35 * Math.min(1, time / 0.4));
+        puff.entity.setLocalScale(scale, scale * 0.55, scale);
+        puff.entity.setLocalEulerAngles(0, time * 12 + puff.phase * 30, 0);
+      }
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
   }
 
   /**
@@ -1654,6 +2557,212 @@ export class CombatFx {
     });
   }
 
+  /** Impacto de Planta: núcleo claro, hojas despedidas y anillo verde. */
+  spawnGrassBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    _effectiveness: number
+  ): void {
+    const root = new pc.Entity('grass-burst');
+    root.setPosition(x, 0.04, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([236, 255, 208], 0.95);
+    const ringMaterial = this.createMaterial(color, 0.5);
+    const leafMaterial = this.createLeafMaterial(color, 0.95);
+    const hotMaterial = this.createLeafMaterial([242, 255, 214], 0.95);
+    const materials = [coreMaterial, ringMaterial, leafMaterial, hotMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.68, 0);
+    core.setLocalScale(0.28, 0.28, 0.28);
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.12, 0);
+    ring.setLocalScale(0.5, 1, 0.5);
+
+    this.spawnLeafParticles(
+      root,
+      {
+        x: 0,
+        y: 0.5,
+        z: 0,
+        extents: [0.16, 0.18, 0.16],
+        velocity: [0, 1.4, 0],
+        velocityEnd: [0, 2.2, 0],
+        radialSpeed: 0.7,
+        radialSpeedEnd: 1.7,
+        sizeStart: 0.18,
+        sizeMid: 0.3,
+        sizeEnd: 0.16,
+        lifetime: 0.42,
+        rate: 0.02,
+        numParticles: 26,
+        localSpace: false
+      },
+      color
+    );
+
+    const leaves: {
+      entity: pc.Entity;
+      angle: number;
+      dist: number;
+      spin: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 11; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const size = 0.2 + Math.random() * 0.16;
+      const entity = this.createLeaf(
+        root,
+        index % 3 === 0 ? hotMaterial : leafMaterial,
+        {
+          x: Math.cos(angle) * 0.16,
+          y: 0.55,
+          z: Math.sin(angle) * 0.16,
+          width: size,
+          height: size * 1.75,
+          yaw: Math.random() * 360,
+          roll: Math.random() * 360
+        }
+      );
+      leaves.push({
+        entity,
+        angle,
+        dist: 0.55 + Math.random() * 0.55,
+        spin: 140 + Math.random() * 220,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, 0.55, (t) => {
+      const scale = 0.28 + t * 0.95;
+      core.setLocalScale(scale, scale, scale);
+      coreMaterial.opacity = 0.95 * (1 - t);
+
+      const ringScale = 0.5 + t * 1.35;
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = 0.5 * (1 - t);
+
+      for (const leaf of leaves) {
+        const distance = leaf.dist * (0.2 + t);
+        leaf.entity.setLocalPosition(
+          Math.cos(leaf.angle) * distance,
+          0.55 + t * 0.9 - t * t * 1.1,
+          Math.sin(leaf.angle) * distance
+        );
+        leaf.entity.setLocalEulerAngles(
+          t * 180,
+          leaf.spin * t,
+          leaf.spin * 0.7 * t
+        );
+        const fade = Math.max(0, 1 - t * 1.15);
+        leaf.entity.setLocalScale(
+          leaf.size * fade,
+          leaf.size * 1.75 * fade,
+          leaf.size * fade
+        );
+      }
+      leafMaterial.opacity = 0.95 * (1 - t);
+      hotMaterial.opacity = 0.95 * (1 - t);
+    });
+  }
+
+  /** Impacto de Veneno: orbe turbio con burbujas que suben y anillo violeta. */
+  spawnPoisonBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    _effectiveness: number
+  ): void {
+    const root = new pc.Entity('poison-burst');
+    root.setPosition(x, 0.04, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial(color, 0.9);
+    const ringMaterial = this.createMaterial([190, 116, 206], 0.5);
+    const puffMaterial = this.createMaterial([232, 186, 244], 0.24);
+    const materials = [coreMaterial, ringMaterial, puffMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.68, 0);
+    core.setLocalScale(0.34, 0.34, 0.34);
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.12, 0);
+    ring.setLocalScale(0.5, 1, 0.5);
+
+    this.spawnSporeParticles(
+      root,
+      {
+        x: 0,
+        y: 0.55,
+        z: 0,
+        extents: [0.22, 0.2, 0.22],
+        velocity: [0, 0.9, 0],
+        velocityEnd: [0, 1.8, 0],
+        radialSpeed: 0.5,
+        radialSpeedEnd: 1.3,
+        sizeStart: 0.16,
+        sizeMid: 0.28,
+        sizeEnd: 0.12,
+        lifetime: 0.45,
+        rate: 0.02,
+        numParticles: 28,
+        localSpace: false
+      },
+      color
+    );
+
+    const bubbles: {
+      entity: pc.Entity;
+      baseX: number;
+      baseZ: number;
+      size: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const angle = (index / 6) * Math.PI * 2 + Math.random();
+      const size = 0.16 + Math.random() * 0.14;
+      const bubble = this.createEntity(this.sphereMesh, [puffMaterial], root);
+      bubble.setLocalScale(size, size, size);
+      bubbles.push({
+        entity: bubble,
+        baseX: Math.cos(angle) * 0.28,
+        baseZ: Math.sin(angle) * 0.28,
+        size,
+        delay: Math.random() * 0.2
+      });
+    }
+
+    this.addEffect(root, materials, 0.5, (t) => {
+      const scale = 0.34 + t * 1.05;
+      core.setLocalScale(scale, scale, scale);
+      coreMaterial.opacity = 0.9 * (1 - t);
+
+      const ringScale = 0.5 + t * 1.4;
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = 0.5 * (1 - t);
+      puffMaterial.opacity = 0.26 * (1 - t);
+
+      for (const bubble of bubbles) {
+        const local = Math.max(0, (t - bubble.delay) / (1 - bubble.delay));
+        bubble.entity.setLocalPosition(
+          bubble.baseX * (1 + local * 0.9),
+          0.5 + local * 0.9,
+          bubble.baseZ * (1 + local * 0.9)
+        );
+        const fade = Math.max(0, 1 - local);
+        bubble.entity.setLocalScale(
+          bubble.size * (0.7 + local * 0.6) * fade,
+          bubble.size * (0.7 + local * 0.6) * fade,
+          bubble.size * (0.7 + local * 0.6) * fade
+        );
+      }
+    });
+  }
+
   /** Impacto de un golpe. `effectiveness` tiñe el destello. */
   spawnHit(
     x: number,
@@ -1974,6 +3083,9 @@ export class CombatFx {
     this.torusMesh.destroy();
     this.flameMesh.destroy();
     this.flameTexture.destroy();
+    this.leafMesh.destroy();
+    this.leafTexture.destroy();
+    this.sporeTexture.destroy();
     this.discMesh.destroy();
     this.dashRingMesh.destroy();
   }

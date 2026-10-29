@@ -42,16 +42,16 @@ export type DamageCategory = 'physical' | 'special' | 'status';
 export type BuffStat = 'speed' | 'attack' | 'defense' | 'spAttack' | 'spDefense';
 
 /** Aspecto visual de un proyectil. */
-export type ProjectileStyle = 'orb' | 'electric' | 'fire';
+export type ProjectileStyle = 'orb' | 'electric' | 'fire' | 'grass' | 'poison';
 
 /** Aspecto visual del impacto de una habilidad. */
-export type ImpactStyle = 'hit' | 'electric' | 'fire';
+export type ImpactStyle = 'hit' | 'electric' | 'fire' | 'grass' | 'poison' | 'spore';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle = 'electric' | 'fire';
 
 /** Aspecto visual de un área. */
-export type AoeStyle = 'ring' | 'fire' | 'whirl';
+export type AoeStyle = 'ring' | 'fire' | 'whirl' | 'grass' | 'poison';
 
 /**
  * Reparto del daño de un área:
@@ -71,6 +71,14 @@ export type WindupAnimationMode = 'once' | 'loop';
 export interface BuffSpec {
   stat: BuffStat;
   /** Multiplicador: 1,25 = +25 %, 0,8 = −20 %. */
+  multiplier: number;
+  /** Duración en segundos. */
+  duration: number;
+}
+
+/** Ralentización aplicada a los enemigos alcanzados. */
+export interface SlowSpec {
+  /** Multiplicador de velocidad: 0,55 = 45 % más lento. */
   multiplier: number;
   /** Duración en segundos. */
   duration: number;
@@ -119,6 +127,8 @@ export interface AbilityDef {
   knockback: number;
   /** Buffs que se aplican al lanzador al usar la habilidad. */
   buffs: BuffSpec[];
+  /** Ralentización que se aplica a los enemigos golpeados. */
+  slow: SlowSpec | null;
   /** Color del efecto, en 0-255. */
   color: [number, number, number];
   /** Duración de la animación de ataque, en segundos. */
@@ -165,6 +175,7 @@ export const DEFAULT_ABILITY: Omit<
   dashDistance: 0,
   knockback: 0,
   buffs: [],
+  slow: null,
   color: [255, 255, 255],
   castTime: 0.45,
   windup: 0,
@@ -361,6 +372,75 @@ ABILITIES.anilloIgneo = defineAbility({
     'Definitiva: explosión de fuego instantánea con un breve estallido de llamas.'
 });
 
+/* ------------------------------------------------------------------------- */
+/* Bulbasaur                                                                 */
+/* ------------------------------------------------------------------------- */
+
+ABILITIES.hojaAfilada = defineAbility({
+  id: 'hojaAfilada',
+  name: 'Hoja Afilada',
+  type: 'Grass',
+  category: 'physical',
+  shape: 'melee',
+  power: 60,
+  accuracy: 100,
+  cooldown: 5,
+  range: 2.6,
+  radius: 0.8,
+  halfAngle: 50,
+  knockback: 0.4,
+  castTime: 0.45,
+  windup: 0.3,
+  animation: 'attack',
+  impactStyle: 'grass',
+  color: [126, 214, 88],
+  description:
+    'Hoja cortante de gran alcance; empuja a quien golpea.'
+});
+
+ABILITIES.paralizador = defineAbility({
+  id: 'paralizador',
+  name: 'Paralizador',
+  type: 'Grass',
+  category: 'status',
+  shape: 'melee',
+  power: 0,
+  accuracy: 100,
+  cooldown: 10,
+  range: 3,
+  radius: 0.9,
+  halfAngle: 60,
+  windup: 0.2,
+  castTime: 0.4,
+  impactStyle: 'spore',
+  slow: { multiplier: 0.55, duration: 3 },
+  color: [72, 124, 54],
+  description:
+    'Nube de partículas verdes que paraliza parcialmente: ralentiza un 45 % durante 3 s a los rivales que tenga delante.'
+});
+
+ABILITIES.llueveHojas = defineAbility({
+  id: 'llueveHojas',
+  name: 'Lluevehojas',
+  type: 'Grass',
+  category: 'special',
+  shape: 'aoe',
+  power: 120,
+  accuracy: 95,
+  cooldown: 14,
+  range: 4.2,
+  radius: 3.2,
+  windup: 0.75,
+  castTime: 0.7,
+  aoeStyle: 'grass',
+  aoeDamageMode: 'instant',
+  aoeDuration: 1.1,
+  impactStyle: 'grass',
+  color: [112, 204, 72],
+  description:
+    'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 120 de potencia.'
+});
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -371,6 +451,7 @@ export const MOVESETS: Record<
 > = {};
 
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
+MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 
 export function abilityForSlot(

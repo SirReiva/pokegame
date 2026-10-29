@@ -1302,6 +1302,69 @@ export function createFlameCanvas(width = 96, height = 144): HTMLCanvasElement {
 }
 
 /**
+ * Hoja suelta para los efectos de Planta: silueta alargada con nervadura y
+ * borde transparente. Se usa tanto en quads cruzados como en partículas; el
+ * tono verde final lo pone el material o el `colorGraph`.
+ */
+export function createLeafParticleCanvas(size = 64): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const center = size / 2;
+  const halfWidth = size * 0.3;
+  const halfHeight = size * 0.46;
+
+  ctx.save();
+  ctx.translate(center, center);
+  ctx.rotate(-0.55);
+
+  const fill = ctx.createLinearGradient(0, -halfHeight, 0, halfHeight);
+  fill.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+  fill.addColorStop(0.45, "rgba(244, 255, 232, 1)");
+  fill.addColorStop(1, "rgba(206, 236, 178, 0.92)");
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(0, -halfHeight);
+  ctx.bezierCurveTo(
+    halfWidth,
+    -halfHeight * 0.62,
+    halfWidth,
+    halfHeight * 0.62,
+    0,
+    halfHeight,
+  );
+  ctx.bezierCurveTo(
+    -halfWidth,
+    halfHeight * 0.62,
+    -halfWidth,
+    -halfHeight * 0.62,
+    0,
+    -halfHeight,
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Nervadura central y laterales: dan lectura de hoja a tamaño pequeño.
+  ctx.strokeStyle = "rgba(160, 210, 130, 0.55)";
+  ctx.lineWidth = Math.max(1, size * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(0, -halfHeight * 0.82);
+  ctx.lineTo(0, halfHeight * 0.82);
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, size * 0.014);
+  for (let index = 1; index <= 3; index++) {
+    const y = -halfHeight * 0.55 + (index - 1) * halfHeight * 0.42;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(halfWidth * 0.62, y - halfHeight * 0.18);
+    ctx.moveTo(0, y);
+    ctx.lineTo(-halfWidth * 0.62, y - halfHeight * 0.18);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  return ctx.canvas;
+}
+
+/**
  * Fuego fatuo: orbe blanco con halo que se apaga y una pluma tenue hacia
  * arriba. Está pensado para blending aditivo y para que el violeta lo ponga el
  * `colorGraph`; la textura se queda neutra para no arrastrar naranjas.
