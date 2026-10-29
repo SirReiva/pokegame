@@ -153,6 +153,11 @@ export interface AbilityDef {
   buffs: BuffSpec[];
   /** Ralentización que se aplica a los enemigos golpeados. */
   slow: SlowSpec | null;
+  /**
+   * Curación al lanzador como fracción de su vida máxima: `0.25` = 25 %.
+   * `0` desactiva la curación. Se aplica al ejecutar la habilidad.
+   */
+  healSelf: number;
   /** Color del efecto, en 0-255. */
   color: [number, number, number];
   /** Duración de la animación de ataque, en segundos. */
@@ -202,6 +207,7 @@ export const DEFAULT_ABILITY: Omit<
   knockback: 0,
   buffs: [],
   slow: null,
+  healSelf: 0,
   color: [255, 255, 255],
   castTime: 0.45,
   windup: 0,
@@ -556,6 +562,96 @@ ABILITIES.psicoataque = defineAbility({
     'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
 });
 
+/* ------------------------------------------------------------------------- */
+/* Mew                                                                       */
+/* ------------------------------------------------------------------------- */
+
+ABILITIES.psicogolpe = defineAbility({
+  id: 'psicogolpe',
+  name: 'Golpe Psíquico',
+  type: 'Psychic',
+  category: 'special',
+  shape: 'melee',
+  power: 45,
+  accuracy: 100,
+  cooldown: 0.3,
+  range: 2.1,
+  radius: 0.7,
+  halfAngle: 55,
+  knockback: 0.5,
+  castTime: 0.32,
+  windup: 0.1,
+  impactStyle: 'psychic',
+  color: [255, 150, 220],
+  description:
+    'Onda psíquica de corto alcance y cadencia alta. Ataque básico de Mew.'
+});
+
+ABILITIES.agilidad = defineAbility({
+  id: 'agilidad',
+  name: 'Agilidad',
+  type: 'Psychic',
+  category: 'status',
+  shape: 'dash',
+  power: 0,
+  accuracy: 0,
+  cooldown: 8,
+  range: 0,
+  radius: 0.85,
+  dashDistance: 4.4,
+  castTime: 0.26,
+  animation: 'quickstrike',
+  buffs: [{ stat: 'speed', multiplier: 1.3, duration: 3 }],
+  impactStyle: 'psychic',
+  color: [255, 176, 232],
+  description:
+    'Se impulsa 4,4 u hacia delante y gana un 30 % de velocidad durante 3 s.'
+});
+
+ABILITIES.premonicion = defineAbility({
+  id: 'premonicion',
+  name: 'Premonición',
+  type: 'Psychic',
+  category: 'special',
+  shape: 'aoe',
+  power: 85,
+  accuracy: 100,
+  cooldown: 10,
+  range: 6,
+  radius: 2.4,
+  windup: 0.9,
+  castTime: 0.55,
+  moveWhileWindup: true,
+  aoeStyle: 'psychic',
+  aoeDamageMode: 'instant',
+  radialDamage: true,
+  radialMinDamage: 0.5,
+  aoeDuration: 0.8,
+  impactStyle: 'psychic',
+  slow: { multiplier: 0.7, duration: 2 },
+  color: [250, 128, 222],
+  description:
+    'Marca un punto a 6 u: tras 0,9 s cae una explosión de 2,4 u que ralentiza un 30 % durante 2 s. Hace el 100 % en el centro y el 50 % en el borde.'
+});
+
+ABILITIES.recuperacion = defineAbility({
+  id: 'recuperacion',
+  name: 'Recuperación',
+  type: 'Psychic',
+  category: 'status',
+  shape: 'self',
+  power: 0,
+  accuracy: 0,
+  cooldown: 14,
+  radius: 1,
+  castTime: 1,
+  windup: 0.75,
+  healSelf: 0.25,
+  color: [255, 170, 230],
+  description:
+    'Se concentra y recupera el 25 % de su vida máxima. Si le golpean durante la concentración, se cancela.'
+});
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -573,6 +669,12 @@ MOVESETS['0150'] = [
   'teletransporte',
   'psiquico',
   'psicoataque'
+];
+MOVESETS['0151'] = [
+  'psicogolpe',
+  'agilidad',
+  'premonicion',
+  'recuperacion'
 ];
 
 export function abilityForSlot(

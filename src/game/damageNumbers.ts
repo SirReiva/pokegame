@@ -22,6 +22,8 @@ export interface DamageNumberOptions {
   amount: number;
   critical: boolean;
   effectiveness: number;
+  /** `true` dibuja el número como curación (prefijo + y tono rosa). */
+  heal?: boolean;
   views: DamageNumberView[];
 }
 
@@ -88,7 +90,8 @@ export class DamageNumbers {
   private createTexture(
     label: string,
     critical: boolean,
-    effectiveness: number
+    effectiveness: number,
+    heal: boolean
   ): DamageTexture {
     const fontSize = critical ? 96 : 76;
     const font = `900 ${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
@@ -116,15 +119,22 @@ export class DamageNumbers {
     context.miterLimit = 2;
     context.lineWidth = critical ? 13 : 10;
     context.strokeStyle = 'rgba(24, 4, 9, 0.96)';
-    context.shadowColor = 'rgba(255, 40, 70, 0.85)';
+    context.shadowColor = heal
+      ? 'rgba(255, 120, 220, 0.9)'
+      : 'rgba(255, 40, 70, 0.85)';
     context.shadowBlur = critical ? 20 : 14;
 
     const centerX = width / 2;
     const centerY = height / 2 + 2;
     context.strokeText(label, centerX, centerY);
     context.shadowBlur = 0;
-    context.fillStyle =
-      effectiveness < 1 ? '#d46a75' : critical ? '#ff2d55' : '#ff4d5a';
+    context.fillStyle = heal
+      ? '#ffa6de'
+      : effectiveness < 1
+        ? '#d46a75'
+        : critical
+          ? '#ff2d55'
+          : '#ff4d5a';
     context.fillText(label, centerX, centerY);
 
     const texture = new pc.Texture(this.device, {
@@ -210,13 +220,20 @@ export class DamageNumbers {
   }
 
   spawn(options: DamageNumberOptions): void {
-    const label = options.critical
-      ? `${options.amount}!`
-      : `${options.amount}`;
+    const label = options.heal
+      ? `+${options.amount}`
+      : options.critical
+        ? `${options.amount}!`
+        : `${options.amount}`;
 
     for (const view of options.views) {
       const { texture, width: textureWidth, height: textureHeight } =
-        this.createTexture(label, options.critical, options.effectiveness);
+        this.createTexture(
+          label,
+          options.critical,
+          options.effectiveness,
+          options.heal ?? false
+        );
       const material = this.createMaterial(texture);
       const entity = new pc.Entity('damage-number');
       entity.addComponent('render');

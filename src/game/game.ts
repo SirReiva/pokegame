@@ -1268,6 +1268,26 @@ export class Game {
       player.buffs.push({ ...buff, duration: buff.duration });
     }
 
+    // Curación al lanzador: nunca supera la vida máxima y muestra un número
+    // verde/rosa sobre el Pokémon para que el cambio de vida sea legible.
+    if (def.healSelf > 0 && player.alive) {
+      const missing = Math.max(0, player.maxHp - player.hp);
+      const amount = Math.min(
+        missing,
+        Math.round(player.maxHp * def.healSelf)
+      );
+      if (amount > 0) {
+        player.hp += amount;
+        this.showHealPopup(player, amount);
+      }
+      this.combatFx.spawnHeal(
+        player.x,
+        player.z,
+        def.color,
+        Math.max(0.8, def.radius)
+      );
+    }
+
     const dirX = Math.sin(player.facing);
     const dirZ = Math.cos(player.facing);
     const originX = player.x + dirX * 0.4;
@@ -1482,12 +1502,15 @@ export class Game {
       }
 
       case 'self': {
-        this.combatFx.spawnBuff(
-          player.x,
-          player.z,
-          def.color,
-          Math.max(0.8, def.radius)
-        );
+        // Recuperación ya tiene su propio estallido de curación.
+        if (def.healSelf <= 0) {
+          this.combatFx.spawnBuff(
+            player.x,
+            player.z,
+            def.color,
+            Math.max(0.8, def.radius)
+          );
+        }
         break;
       }
     }
@@ -1633,6 +1656,33 @@ export class Game {
     critical: boolean,
     effectiveness: number
   ): void {
+    this.spawnNumberPopup(target, {
+      amount,
+      critical,
+      effectiveness,
+      heal: false
+    });
+  }
+
+  /** Número de curación flotante, con el mismo sistema que el daño. */
+  private showHealPopup(target: MatchPlayerState, amount: number): void {
+    this.spawnNumberPopup(target, {
+      amount,
+      critical: false,
+      effectiveness: 1,
+      heal: true
+    });
+  }
+
+  private spawnNumberPopup(
+    target: MatchPlayerState,
+    options: {
+      amount: number;
+      critical: boolean;
+      effectiveness: number;
+      heal: boolean;
+    }
+  ): void {
     const asset = this.assets.get(target.pokemonId);
     if (!asset) return;
 
@@ -1657,9 +1707,10 @@ export class Game {
       x: target.x,
       y: worldY,
       z: target.z,
-      amount,
-      critical,
-      effectiveness,
+      amount: options.amount,
+      critical: options.critical,
+      effectiveness: options.effectiveness,
+      heal: options.heal,
       views
     });
   }

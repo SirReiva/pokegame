@@ -2870,6 +2870,84 @@ export class CombatFx {
     });
   }
 
+  /** Curación de Mew: anillos rosas que suben y motas que se elevan y se apagan. */
+  spawnHeal(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number
+  ): void {
+    const root = new pc.Entity('heal-burst');
+    root.setPosition(x, 0.04, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.65);
+    const coreMaterial = this.createMaterial([255, 232, 250], 0.85);
+    const sparkMaterial = this.createMaterial([255, 190, 238], 0.95);
+    const materials = [ringMaterial, coreMaterial, sparkMaterial];
+    const sizeScale = Math.max(0.8, radius);
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.55, 0);
+    core.setLocalScale(0.3, 0.3, 0.3);
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.08 + index * 0.32, 0);
+      ring.setLocalScale(0.5, 1, 0.5);
+      rings.push(ring);
+    }
+
+    const sparks: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      lift: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 14; index++) {
+      const angle = (index / 14) * Math.PI * 2 + Math.random() * 0.4;
+      const size = 0.06 + Math.random() * 0.06;
+      const spark = this.createEntity(this.sphereMesh, [sparkMaterial], root);
+      spark.setLocalScale(size, size, size);
+      sparks.push({
+        entity: spark,
+        angle,
+        distance: 0.15 + Math.random() * 0.35,
+        lift: 0.7 + Math.random() * 0.8,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, 0.85, (t) => {
+      const coreScale = 0.3 + t * 0.35;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      core.setLocalPosition(0, 0.55 + t * 0.35, 0);
+      coreMaterial.opacity = 0.85 * (1 - t);
+
+      rings.forEach((ring, index) => {
+        const scale = sizeScale * (0.5 + t * (1.55 + index * 0.35));
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalPosition(0, 0.08 + index * 0.32 + t * 0.5, 0);
+        ringMaterial.opacity = 0.65 * (1 - t) * (index === 0 ? 1 : 0.7);
+      });
+
+      for (const spark of sparks) {
+        const spread = (spark.distance + t * 0.55) * sizeScale;
+        spark.entity.setLocalPosition(
+          Math.cos(spark.angle) * spread,
+          0.2 + t * spark.lift,
+          Math.sin(spark.angle) * spread
+        );
+        const fade = Math.sin(Math.min(1, t * 1.15) * Math.PI);
+        const size = spark.size * (0.6 + fade * 0.9);
+        spark.entity.setLocalScale(size, size, size);
+      }
+      sparkMaterial.opacity = 0.95 * (1 - t * 0.9);
+    });
+  }
+
   /** Impacto de Planta: núcleo claro, hojas despedidas y anillo verde. */
   spawnGrassBurst(
     x: number,
