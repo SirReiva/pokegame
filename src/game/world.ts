@@ -434,11 +434,13 @@ export function buildWorld(app: pc.Application): World {
     })
   );
 
-  // Piedra marrón de las cordilleras: tile repetible que envuelve los picos.
+  // Piedra marrón de las cordilleras: tile repetible con facetas pixel art y
+  // nieve en la cima. Se muestrea sin suavizado para conservar los píxeles.
   const mountainRockTexture = textureFromCanvas(device, createMountainRockCanvas(), {
+    ...pixelOptions,
     name: 'mountain-rock',
     repeat: true,
-    mipmaps: true
+    flipY: true
   });
 
   // Sillería gris de los muros: misma técnica de tile repetible.
@@ -760,17 +762,20 @@ export function buildWorld(app: pc.Application): World {
   const mountainMaterial = standard({
     diffuse: '#ffffff',
     diffuseMap: mountainRockTexture,
-    tiling: [3, 2],
-    specular: '#2b1e16',
-    gloss: 0.12,
+    // Una sola repetición en vertical para que el casquete de nieve de la
+    // textura quede siempre en la cima, y dos en horizontal para que las
+    // facetas sigan siendo grandes al rodear el pico.
+    tiling: [2, 1],
+    specular: '#1a120c',
+    gloss: 0.06,
     cull: pc.CULLFACE_NONE
   });
   mountainMaterial.diffuseVertexColor = true;
   mountainMaterial.update();
   materials.push(mountainMaterial);
 
-  const MOUNTAIN_DARK: [number, number, number] = [0.55, 0.47, 0.38];
-  const MOUNTAIN_LIGHT: [number, number, number] = [0.92, 0.86, 0.78];
+  const MOUNTAIN_DARK: [number, number, number] = [0.6, 0.53, 0.45];
+  const MOUNTAIN_LIGHT: [number, number, number] = [1, 0.97, 0.9];
 
   const buildMountainPeak = (seed: number): pc.Mesh => {
     const rand = random(seed);
@@ -868,8 +873,11 @@ export function buildWorld(app: pc.Application): World {
         const start = positions.length / 3;
         const u0 = s / sides;
         const u1 = next / sides;
-        const v0 = b / bands;
-        const v1 = (b + 1) / bands;
+        // La costura superior se queda justo por debajo de 1: con `repeat` el
+        // valor exacto 1 envuelve a la fila inferior del tile y pinta una línea
+        // oscura en el borde del pico.
+        const v0 = (b / bands) * 0.999;
+        const v1 = ((b + 1) / bands) * 0.999;
         push(a[0], a[1], a[2], nx, ny, nz, colorAt(b / bands), u0, v0);
         push(bpt[0], bpt[1], bpt[2], nx, ny, nz, colorAt(b / bands), u1, v0);
         push(c[0], c[1], c[2], nx, ny, nz, colorAt((b + 1) / bands), u1, v1);
@@ -878,17 +886,44 @@ export function buildWorld(app: pc.Application): World {
       }
     }
 
-    // Tapa de la cima: abanico plano que cierra el hueco romo del pico.
+    // Cima: un cono bajo que remata el pico en punta. Todas sus UVs apuntan al
+    // mismo texel de nieve para que la tapa no muestree la textura en abanico
+    // (eso producía el molinillo oscuro) y las caras solo se distingan por la
+    // iluminación de su normal.
     const topRing = rings[bands];
     const topColor = colorAt(1);
+    const apexLift = tipRadius * 0.9 + 0.12;
+    const apex: [number, number, number] = [0, height + apexLift, 0];
     for (let s = 0; s < sides; s++) {
       const next = (s + 1) % sides;
       const a = topRing[s];
       const bpt = topRing[next];
+
+      const ux = bpt[0] - a[0];
+      const uy = bpt[1] - a[1];
+      const uz = bpt[2] - a[2];
+      const vx = apex[0] - a[0];
+      const vy = apex[1] - a[1];
+      const vz = apex[2] - a[2];
+      let nx = uy * vz - uz * vy;
+      let ny = uz * vx - ux * vz;
+      let nz = ux * vy - uy * vx;
+      if (ny < 0) {
+        nx = -nx;
+        ny = -ny;
+        nz = -nz;
+      }
+      const normalLength = Math.hypot(nx, ny, nz) || 1;
+      nx /= normalLength;
+      ny /= normalLength;
+      nz /= normalLength;
+
       const start = positions.length / 3;
-      push(0, height, 0, 0, 1, 0, topColor, 0.5, 1);
-      push(a[0], a[1], a[2], 0, 1, 0, topColor, s / sides, 1);
-      push(bpt[0], bpt[1], bpt[2], 0, 1, 0, topColor, next / sides, 1);
+      // u = 0.25 porque el material repite dos veces en horizontal: así el
+      // texel elegido queda lejos de la costura donde u = 1 envuelve a 0.
+      push(apex[0], apex[1], apex[2], nx, ny, nz, topColor, 0.25, 0.97);
+      push(a[0], a[1], a[2], nx, ny, nz, topColor, 0.25, 0.97);
+      push(bpt[0], bpt[1], bpt[2], nx, ny, nz, topColor, 0.25, 0.97);
       indices.push(start, start + 1, start + 2);
     }
 

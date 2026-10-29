@@ -1713,58 +1713,157 @@ export function createLeafCanvas(
 }
 
 /**
- * Piedra marrón para las cordilleras: parches angulosos, grietas y motas, con
- * envoltura en los bordes para que el tile sea continuo al repetirse sobre los
- * picos. Misma técnica pixel art de parches y grietas, en tonos tierra.
+ * Piedra de las cordilleras en pixel art: grandes facetas angulosas, grietas
+ * oscuras y un casquete de nieve con borde quebrado. La paleta es marrón (la
+ * referencia azul pasada a tonos tierra) y el tile envuelve en horizontal para
+ * que no se vea costura al repetirse alrededor de cada pico.
  */
-export function createMountainRockCanvas(size = 128): HTMLCanvasElement {
-  const palette = ["#4a3424", "#5f452f", "#7a5a3e", "#997652", "#b89572"];
+export function createMountainRockCanvas(width = 64, height = 128): HTMLCanvasElement {
+  const ctx = canvas2d(width, height);
   const random = mulberry32(0x7b3a);
-  const ctx = canvas2d(size);
+
+  // De la roca más profunda a la más iluminada, y tonos del hielo.
+  const rock = ["#241710", "#352318", "#4b3220", "#63452c", "#7d5b3a", "#9c764c", "#bd9668"];
+  const snow = ["#f7efdd", "#e9dcc2", "#d7c4a3", "#c2ab87"];
+  const crack = "#1b100a";
 
   const plot = (x: number, y: number, color: string) => {
     ctx.fillStyle = color;
-    ctx.fillRect(((x % size) + size) % size, ((y % size) + size) % size, 1, 1);
+    ctx.fillRect(((x % width) + width) % width, ((y % height) + height) % height, 1, 1);
   };
 
-  ctx.fillStyle = palette[1];
-  ctx.fillRect(0, 0, size, size);
-
-  // Parches angulosos de piedra, con bordes rectos y tonos variados.
-  for (let i = 0; i < 260; i++) {
-    const x = Math.floor(random() * size);
-    const y = Math.floor(random() * size);
-    const w = 4 + Math.floor(random() * 13);
-    const h = 3 + Math.floor(random() * 9);
-    const color =
-      palette[random() < 0.4 ? 0 : random() < 0.5 ? 2 : random() < 0.5 ? 3 : 4];
-    for (let dy = 0; dy < h; dy++) {
-      for (let dx = 0; dx < w; dx++) {
-        if (random() > 0.32) plot(x + dx, y + dy, color);
+  // Rellena un polígono con bordes de píxel duros (sin antialiasing) y repite
+  // el dibujo a ambos lados para que las facetas crucen el borde del tile sin
+  // dejar una costura vertical.
+  const fillPolygon = (points: Array<[number, number]>, color: string) => {
+    const ys = points.map(([, y]) => y);
+    const yStart = Math.max(0, Math.floor(Math.min(...ys)));
+    const yEnd = Math.min(height - 1, Math.ceil(Math.max(...ys)));
+    ctx.fillStyle = color;
+    for (const offset of [-width, 0, width]) {
+      for (let y = yStart; y <= yEnd; y++) {
+        const scan = y + 0.5;
+        const crossings: number[] = [];
+        for (let i = 0; i < points.length; i++) {
+          const [x1, y1] = points[i];
+          const [x2, y2] = points[(i + 1) % points.length];
+          if ((y1 <= scan && y2 > scan) || (y2 <= scan && y1 > scan)) {
+            crossings.push(x1 + ((scan - y1) / (y2 - y1)) * (x2 - x1));
+          }
+        }
+        crossings.sort((a, b) => a - b);
+        for (let i = 0; i + 1 < crossings.length; i += 2) {
+          const left = Math.max(0, Math.ceil(crossings[i] + offset));
+          const right = Math.min(width - 1, Math.floor(crossings[i + 1] + offset));
+          if (right >= left) ctx.fillRect(left, y, right - left + 1, 1);
+        }
       }
     }
+  };
+
+  ctx.fillStyle = rock[2];
+  ctx.fillRect(0, 0, width, height);
+
+  // Facetas de roca: triángulos alargados que se solapan. El tono sube con la
+  // altura (la base queda casi negra y las laderas altas se iluminan) y cada
+  // faceta lleva un pequeño desvío para que no se lea como un degradado.
+  for (let i = 0; i < 74; i++) {
+    const x = random() * width;
+    const y = random() * height;
+    const w = 10 + random() * 26;
+    const h = 8 + random() * 24;
+    const lean = (random() - 0.5) * w * 0.9;
+    const level = 1 - y / height;
+    const shade = Math.max(
+      0,
+      Math.min(
+        rock.length - 1,
+        Math.round(level * (rock.length - 1) + (random() - 0.5) * 2.4),
+      ),
+    );
+    fillPolygon(
+      [
+        [x - w / 2, y + h / 2],
+        [x + w / 2, y + h / 2],
+        [x + lean, y - h / 2],
+      ],
+      rock[shade],
+    );
   }
 
-  // Grietas: recorridos de un píxel con alguna luz al lado.
-  for (let i = 0; i < 12; i++) {
-    let x = Math.floor(random() * size);
-    let y = Math.floor(random() * size);
-    const length = 14 + Math.floor(random() * 22);
+  // Grieta central y ramificaciones: líneas de un píxel que se van abriendo
+  // hacia abajo, como en la referencia.
+  for (let i = 0; i < 14; i++) {
+    let x = Math.floor(random() * width);
+    let y = Math.floor(random() * height * 0.75);
+    const length = 10 + Math.floor(random() * 30);
     for (let k = 0; k < length; k++) {
-      plot(x, y, palette[0]);
-      if (random() < 0.35) plot(x + 1, y, palette[4]);
-      x += random() < 0.7 ? 1 : -1;
-      if (random() < 0.4) y += 1;
+      plot(x, y, crack);
+      if (random() < 0.28) plot(x + 1, y, rock[4]);
+      x += random() < 0.68 ? 1 : -1;
+      if (random() < 0.5) y += 1;
     }
   }
 
-  // Motas y vetas claras.
-  for (let i = 0; i < 900; i++) {
-    plot(
-      Math.floor(random() * size),
-      Math.floor(random() * size),
-      palette[random() < 0.55 ? 1 : random() < 0.7 ? 3 : 4],
+  // Borde de nieve quebrado y periódico: la altura de la línea se repite al
+  // cruzar el ancho del tile para que las dos orillas casen.
+  const snowBase = height * 0.3;
+  const snowLine: number[] = [];
+  for (let x = 0; x <= width; x++) {
+    const u = (x / width) * Math.PI * 2;
+    const wave =
+      Math.sin(u * 3 + 0.7) * height * 0.045 +
+      Math.sin(u * 7 + 2.1) * height * 0.022 +
+      Math.sin(u * 13 + 4.3) * height * 0.012;
+    snowLine.push(Math.round((snowBase + wave) / 2) * 2);
+  }
+  snowLine[width] = snowLine[0];
+  const snowCap: Array<[number, number]> = [
+    [0, 0],
+    [width, 0],
+  ];
+  for (let x = width; x >= 0; x--) snowCap.push([x, snowLine[x]]);
+  fillPolygon(snowCap, snow[1]);
+
+  // Facetas del hielo: planos claros y sombras frías dentro del casquete.
+  for (let i = 0; i < 22; i++) {
+    const x = random() * width;
+    const y = random() * Math.max(4, snowLine[Math.floor(x)] - 6);
+    const w = 5 + random() * 16;
+    const h = 4 + random() * 12;
+    fillPolygon(
+      [
+        [x - w / 2, y + h / 2],
+        [x + w / 2, y + h / 2],
+        [x + (random() - 0.5) * w, y - h / 2],
+      ],
+      snow[Math.floor(random() * snow.length)],
     );
+  }
+
+  // Crestas oscuras que asoman por encima de la nieve, para romper el borde.
+  for (let i = 0; i < 7; i++) {
+    const x = 4 + random() * (width - 8);
+    const baseY = snowLine[Math.floor(x)] + 6;
+    const w = 3 + random() * 8;
+    const h = 8 + random() * 16;
+    fillPolygon(
+      [
+        [x - w / 2, baseY],
+        [x + w / 2, baseY],
+        [x + (random() - 0.5) * w, baseY - h],
+      ],
+      rock[random() < 0.5 ? 1 : 2],
+    );
+  }
+
+  // Grano fino: píxeles sueltos de roca y nieve que rompen las superficies.
+  for (let i = 0; i < 420; i++) {
+    const x = Math.floor(random() * width);
+    const y = Math.floor(random() * height);
+    const isSnow = y < snowLine[x];
+    const palette = isSnow ? snow : rock;
+    plot(x, y, palette[Math.floor(random() * palette.length)]);
   }
 
   return ctx.canvas;
