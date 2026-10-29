@@ -107,7 +107,7 @@ El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque 
 
 **Bulbasaur** tiene el tercer set: `Placaje` (básica melee), `Paralizador` (golpe melee de estado que lanza una nube de partículas verdes y ralentiza un 45 % durante 3 s), `Hoja Afilada` (golpe melee de 2,6 u con 60 de potencia y empuje) y `Lluevehojas` (definitiva: área instantánea de 3,2 u de radio y 120 de potencia). `Paralizador` usa `impactStyle: 'spore'`, `Lluevehojas` `aoeStyle: 'grass'` y `Hoja Afilada` `impactStyle: 'grass'`.
 
-**Mewtwo** tiene un set de bruiser móvil: `Telequinesis` (básica melee de 2,5 u y 55 de potencia con empuje fuerte de 1,4 u), `Teletransporte` (dash de estado de 5 u para entrar o salir, sin daño), `Psíquico` (haz de 10 u que atraviesa a todos los rivales en línea) y `Psicoataque` (definitiva: implosión de 3,2 u de radio con 125 de potencia). El haz y el área usan `beamStyle: 'psychic'` y `aoeStyle: 'psychic'`; la básica y los impactos, `impactStyle: 'psychic'`. La definitiva prepara `0,8 s` y muestra la marca de área en el suelo.
+**Mewtwo** tiene un set de bruiser móvil: `Telequinesis` (básica melee de 2,5 u y 55 de potencia con empuje fuerte de 1,4 u), `Teletransporte` (dash de estado de 5 u para entrar o salir, sin daño), `Psíquico` (haz de 10 u que atraviesa a todos los rivales en línea) y `Psicoataque` (definitiva: implosión de 3,2 u de radio con 125 de potencia y daño radial, 35 % en el borde). El haz y el área usan `beamStyle: 'psychic'` y `aoeStyle: 'psychic'`; la básica y los impactos, `impactStyle: 'psychic'`. La definitiva prepara `0,8 s` y muestra la marca de área en el suelo.
 
 Las habilidades de estado pueden declarar una `slow` (`{ multiplier, duration }`), que se aplica a los enemigos alcanzados aunque la habilidad no haga daño. La velocidad se multiplica por ese valor mientras dure el efecto; al reaparecer o morir se limpia. `Paralizador` es el primer caso: `slow: { multiplier: 0.55, duration: 3 }`.
 
@@ -131,6 +131,8 @@ Las áreas reparten su daño de dos formas con `aoeDamageMode`:
 - `overTime`: el área permanece `aoeDuration` segundos y golpea cada `aoeTickInterval` a los enemigos que sigan dentro. En este modo `power` se interpreta como **daño por segundo**, así que cada tick usa `power × aoeTickInterval`. Los ticks no aplican hitstun, knockback ni cancelan lanzamientos: solo restan vida, muestran número de daño e impacto.
 
 En ambos modos el área visible dura `aoeDuration`: el anillo y las llamas que salen del suelo se mantienen hasta el final y se apagan en los últimos 0,35 s. En `instant` el daño se aplica una sola vez al inicio y las llamas quedan como residuo visual; si quieres que sigan dañando, cambia la habilidad a `overTime`.
+
+Las áreas pueden usar **daño radial** con `radialDamage: true`. El centro siempre hace el 100 % de la potencia y el borde hace `radialMinDamage`, con interpolación lineal según la distancia. Por defecto `radialMinDamage` vale `0`, así que el borde no hace daño; con `0.35` el borde hace el 35 %. Funciona igual en `instant` y en `overTime` (el multiplicador se aplica a cada tick). `Psicoataque` es el primer caso: 100 % en el centro y 35 % en el borde. El resto de áreas siguen haciendo daño completo porque `radialDamage` es `false` por defecto.
 
 `Giro Fuego` usa `overTime` (35/s durante 2,4 s, ticks de 0,4 s). `Anillo Ígneo` usa `instant` con `aoeDuration: 0,5`, así que su explosión golpea una vez y el estallido de llamas dura medio segundo.
 

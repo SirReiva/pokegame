@@ -128,6 +128,17 @@ export interface AbilityDef {
   aoeStyle: AoeStyle;
   /** Daño único o daño periódico mientras se permanece dentro. */
   aoeDamageMode: AoeDamageMode;
+  /**
+   * Daño radial para habilidades de área. Si está activo, la potencia se
+   * escala linealmente desde el 100 % en el centro hasta `radialMinDamage`
+   * en el borde del radio.
+   */
+  radialDamage: boolean;
+  /**
+   * Multiplicador de potencia en el borde del área: `0` = 0 %, `0.35` = 35 %.
+   * El centro siempre hace el 100 %. Solo se usa si `radialDamage` es `true`.
+   */
+  radialMinDamage: number;
   /** Duración del área en el suelo y del daño periódico en `overTime`. */
   aoeDuration: number;
   /** Intervalo entre golpes en modo `overTime` (segundos). */
@@ -182,6 +193,8 @@ export const DEFAULT_ABILITY: Omit<
   beamStyle: 'electric',
   aoeStyle: 'ring',
   aoeDamageMode: 'instant',
+  radialDamage: false,
+  radialMinDamage: 0,
   aoeDuration: 2.5,
   aoeTickInterval: 0.5,
   pierce: 0,
@@ -534,11 +547,13 @@ ABILITIES.psicoataque = defineAbility({
   castTime: 0.7,
   aoeStyle: 'psychic',
   aoeDamageMode: 'instant',
+  radialDamage: true,
+  radialMinDamage: 0.35,
   aoeDuration: 0.85,
   impactStyle: 'psychic',
   color: [198, 96, 255],
   description:
-    'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia.'
+    'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
 });
 
 /**

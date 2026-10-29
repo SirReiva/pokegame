@@ -1412,11 +1412,16 @@ export class Game {
         }
         for (const target of this.matchPlayers) {
           if (!this.canHit(player, target)) continue;
-          if (
-            Math.hypot(target.x - centerX, target.z - centerZ) <=
-            def.radius + CONFIG.player.radius
-          ) {
-            this.applyAbilityDamage(player, target, def);
+          const distance = Math.hypot(target.x - centerX, target.z - centerZ);
+          if (distance <= def.radius + CONFIG.player.radius) {
+            const radial = this.radialDamageMultiplier(
+              def,
+              distance,
+              def.radius
+            );
+            this.applyAbilityDamage(player, target, def, {
+              power: def.power * radial
+            });
           }
         }
         break;
@@ -1506,6 +1511,22 @@ export class Game {
     target.slowTimer = Math.max(target.slowTimer, slow.duration);
     target.slowMultiplier = Math.min(target.slowMultiplier, slow.multiplier);
     this.combatFx.spawnBuff(target.x, target.z, color, 0.95);
+  }
+
+  /**
+   * Multiplicador de daño por distancia al centro en habilidades de área.
+   * Sin `radialDamage` devuelve 1. Con él, el centro hace el 100 % y el borde
+   * `radialMinDamage` (0 % por defecto), con interpolación lineal.
+   */
+  private radialDamageMultiplier(
+    def: AbilityDef,
+    distance: number,
+    radius: number
+  ): number {
+    if (!def.radialDamage) return 1;
+    const t = Math.min(1, Math.max(0, distance / Math.max(0.001, radius)));
+    const min = Math.min(1, Math.max(0, def.radialMinDamage));
+    return 1 - (1 - min) * t;
   }
 
   private applyAbilityDamage(
@@ -1757,14 +1778,19 @@ export class Game {
   }
 
   private tickAoe(aoe: ActiveAoe): void {
-    const power = aoe.def.power * aoe.tickInterval;
-    if (power <= 0) return;
+    const basePower = aoe.def.power * aoe.tickInterval;
+    if (basePower <= 0) return;
     for (const target of this.matchPlayers) {
       if (!this.canHit(aoe.owner, target)) continue;
       const distance = Math.hypot(target.x - aoe.x, target.z - aoe.z);
       if (distance > aoe.radius + CONFIG.player.radius) continue;
+      const radial = this.radialDamageMultiplier(
+        aoe.def,
+        distance,
+        aoe.radius
+      );
       this.applyAbilityDamage(aoe.owner, target, aoe.def, {
-        power,
+        power: basePower * radial,
         control: false
       });
     }
