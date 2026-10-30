@@ -17,7 +17,7 @@ import { createFlameCanvas, createLeafParticleCanvas, createPollenCanvas, textur
 const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   poison: 0.38,
   spore: 0.28,
-  psychic: 0.3
+  psychic: 0.1
 };
 
 export interface EffectHandle {
@@ -109,6 +109,44 @@ function createArcMesh(
   mesh.setIndices(indices);
   mesh.update();
   return mesh;
+}
+
+/**
+ * Banda curva en el plano XZ entre dos radios. Se usa para las ondas psíquicas
+ * que avanzan por el cono como un frente de sonido.
+ */
+function createArcBandMesh(
+  device: pc.GraphicsDevice,
+  innerRadius: number,
+  outerRadius: number,
+  halfAngle: number,
+  segments: number
+): { mesh: pc.Mesh; positions: number[] } {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const angle = -halfAngle + (2 * halfAngle * i) / segments;
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    positions.push(sin * innerRadius, 0, cos * innerRadius);
+    positions.push(sin * outerRadius, 0, cos * outerRadius);
+    normals.push(0, 1, 0, 0, 1, 0);
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const base = i * 2;
+    indices.push(base, base + 1, base + 2);
+    indices.push(base + 1, base + 3, base + 2);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setIndices(indices);
+  mesh.update();
+  return { mesh, positions };
 }
 
 /**
@@ -1388,41 +1426,62 @@ export class CombatFx {
       }
     }
 
-    const psychicOrbs: {
+    const psychicWaves: {
       entity: pc.Entity;
-      angle: number;
-      distance: number;
-      height: number;
+      mesh: pc.Mesh;
+      positions: number[];
+      material: pc.StandardMaterial;
+      segments: number;
+      halfAngle: number;
       delay: number;
       travel: number;
-      size: number;
+      opacity: number;
+      lift: number;
       phase: number;
+      amplitude: number;
+      ripple: number;
     }[] = [];
     if (style === 'psychic') {
-      // Onda telequinética: el arco apenas se marca y una lluvia de orbes
-      // psíquicos sale despedida hacia todos los ángulos del cono.
-      effectDuration = 0.62;
-      material.opacity = 0.3;
-      const orbMaterial = this.createMaterial([242, 194, 255], 0.95);
-      materials.push(orbMaterial);
-      const orbCount = 24;
-      for (let index = 0; index < orbCount; index++) {
-        const angle =
-          -halfAngle * 0.92 +
-          (index / (orbCount - 1)) * halfAngle * 1.84 +
-          (Math.random() - 0.5) * 0.06;
-        const size = 0.09 + Math.random() * 0.1;
-        const orb = this.createEntity(this.sphereMesh, [orbMaterial], entity);
-        orb.setLocalScale(size, size, size);
-        psychicOrbs.push({
-          entity: orb,
-          angle,
-          distance: range * (0.55 + Math.random() * 0.45),
-          height: 0.35 + Math.random() * 0.55,
-          delay: Math.random() * 0.12,
-          travel: 0.4 + Math.random() * 0.22,
-          size,
-          phase: Math.random() * Math.PI * 2
+      // Onda sonora psíquica: frentes curvos que nacen en el lanzador y
+      // recorren el cono hasta su borde, alternando violeta y blanco. Cada
+      // frente se deforma en Y como una cinta ondulada.
+      effectDuration = 0.75;
+      material.opacity = 0.1;
+      const waveCount = 5;
+      const segments = 30;
+      for (let index = 0; index < waveCount; index++) {
+        const highlight = index % 2 === 0;
+        const waveMaterial = this.createMaterial(
+          highlight ? [245, 210, 255] : color,
+          highlight ? 0.8 : 0.55
+        );
+        waveMaterial.opacity = 0;
+        materials.push(waveMaterial);
+        const { mesh: waveMesh, positions: wavePositions } = createArcBandMesh(
+          this.device,
+          0.94,
+          1,
+          halfAngle,
+          segments
+        );
+        const wave = this.createEntity(waveMesh, [waveMaterial], entity);
+        const lift = 0.12 + index * 0.012;
+        wave.setLocalPosition(0, lift, 0);
+        wave.setLocalScale(0.001, 1, 0.001);
+        psychicWaves.push({
+          entity: wave,
+          mesh: waveMesh,
+          positions: wavePositions,
+          material: waveMaterial,
+          segments,
+          halfAngle,
+          delay: index * 0.07,
+          travel: 0.42,
+          opacity: highlight ? 0.8 : 0.55,
+          lift,
+          phase: index * 1.7,
+          amplitude: 0.14 + index * 0.012,
+          ripple: 4 + (index % 3)
         });
       }
     }
@@ -1546,8 +1605,10 @@ export class CombatFx {
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity = arcOpacity * (1 - t);
-      const scale = 0.92 + 0.12 * t;
-      entity.setLocalScale(scale, 1, scale);
+      if (style !== 'psychic') {
+        const scale = 0.92 + 0.12 * t;
+        entity.setLocalScale(scale, 1, scale);
+      }
       for (const leaf of leaves) {
         leaf.entity.setLocalPosition(
           leaf.x * (1 + t * 0.35),
@@ -1590,32 +1651,48 @@ export class CombatFx {
         );
       }
 
-      for (const orb of psychicOrbs) {
+      for (const wave of psychicWaves) {
         const local = Math.min(
           1,
-          Math.max(0, (time - orb.delay) / orb.travel)
+          Math.max(0, (time - wave.delay) / wave.travel)
         );
         const ease = 1 - (1 - local) * (1 - local);
-        const distance = orb.distance * ease;
-        const angle = orb.angle + Math.sin(time * 3.1 + orb.phase) * 0.04;
-        const y =
-          0.55 +
-          (orb.height - 0.55) * ease +
-          Math.sin(local * Math.PI) * 0.14;
-        orb.entity.setLocalPosition(
-          Math.sin(angle) * distance,
-          y,
-          Math.cos(angle) * distance
-        );
+        const radius = range * (0.1 + 0.95 * ease);
+        wave.entity.setLocalScale(radius, 1, radius);
         const fade =
-          Math.min(1, local / 0.12) * Math.min(1, (1 - local) / 0.2);
-        const orbScale =
-          orb.size * (0.55 + ease * 0.85) * Math.max(0, fade);
-        orb.entity.setLocalScale(orbScale, orbScale, orbScale);
-        orb.entity.setLocalEulerAngles(
-          time * 140 + orb.phase * 30,
-          time * 220 + orb.phase * 50,
-          Math.sin(time * 4 + orb.phase) * 20
+          local <= 0
+            ? 0
+            : Math.min(1, local / 0.12) * Math.min(1, (1 - local) / 0.3);
+        wave.material.opacity = wave.opacity * Math.max(0, fade);
+
+        if (local > 0) {
+          // Cinta tridimensional: cada vértice sube y baja en Y según su
+          // ángulo dentro del arco, con un desfase entre borde interior y
+          // exterior para que la onda se retuerza.
+          const positions = wave.positions;
+          const vertices = positions.length / 3;
+          for (let vertex = 0; vertex < vertices; vertex++) {
+            const angleIndex = Math.floor(vertex / 2);
+            const angle =
+              -wave.halfAngle +
+              (2 * wave.halfAngle * angleIndex) / wave.segments;
+            const edgePhase = vertex % 2 === 0 ? 0 : 0.9;
+            positions[vertex * 3 + 1] =
+              Math.sin(
+                angle * wave.ripple +
+                  time * 11 +
+                  wave.phase +
+                  edgePhase
+              ) * wave.amplitude;
+          }
+          wave.mesh.setPositions(positions);
+          wave.mesh.update();
+        }
+
+        wave.entity.setLocalPosition(
+          0,
+          wave.lift + Math.sin(time * 8 + wave.phase) * 0.025,
+          0
         );
       }
 
