@@ -638,11 +638,19 @@ export class Game {
         copy.setPosition(player.x, player.z);
         copy.setFacing(player.facing);
         copy.play(player.animation);
-        if (player.pendingCast) {
-          copy.setLoop(
-            player.pendingCast.def.windupAnimationMode === 'loop'
-          );
-        }
+        // Solo la animación de preparación `once` deja de repetirse. El resto
+        // (andar, reposo, clips en bucle) debe seguir avanzando: sin esto, un
+        // windup móvil sin animación propia, como Giro Fuego, dejaba el caminar
+        // congelado en su último frame para siempre.
+        const pendingDef = player.pendingCast?.def;
+        const windupClip = pendingDef
+          ? pendingDef.windupAnimation ?? pendingDef.animation
+          : null;
+        copy.setLoop(
+          windupClip === null ||
+            player.animation !== windupClip ||
+            pendingDef?.windupAnimationMode === 'loop'
+        );
         copy.setPlayback(player.playback);
         copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.update(dt, cameraPosition);

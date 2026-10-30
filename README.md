@@ -166,6 +166,8 @@ La animación de preparación se controla con `windupAnimation` y `windupAnimati
 
 Por ejemplo, `Rayo` prepara `0.5 s` con `Shock` en modo `once`, así que el clip se ralentiza para encajar justo en la preparación. `Psíquico` de Mewtwo usa `windupAnimation: 'shoot'` durante sus `0.4 s` de preparación y después vuelve al reposo, porque no declara animación de lanzamiento. `Psicoataque` usa `windupAnimation: 'charge'` durante sus `0.8 s` de carga.
 
+El modo `once` solo desactiva la repetición del clip de preparación mientras ese clip está en pantalla. Caminar, reposo y cualquier otro clip siguen en bucle: así un `windup` móvil sin animación propia, como `Giro Fuego`, no deja la animación de andar congelada en su último frame.
+
 ## Mapas definidos por JSON
 
 Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
