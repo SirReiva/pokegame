@@ -621,7 +621,7 @@ registerAbility(
     .knockback(0.4)
     .cast(0.45)
     .windup(0.3)
-    .animation('attack')
+    .animation('charge')
     .impact('grass')
     .color(126, 214, 88)
     .description('Hoja cortante de gran alcance; empuja a quien golpea.')
