@@ -175,14 +175,20 @@ export interface AbilityDef {
   moveLock: number;
   /** Preparación antes de ejecutar el efecto, en segundos. */
   windup: number;
-  /** Animación distinta para la preparación; sin ella se repite `animation`. */
+  /**
+   * Animación distinta para la preparación; sin ella se repite `animation`.
+   * Si ambas son `null`, no se reproduce ninguna animación.
+   */
   windupAnimation: AnimationName | null;
   /** Modo de la animación durante la preparación. */
   windupAnimationMode: WindupAnimationMode;
   /** Velocidad de la animación de preparación en modo `loop` (1 = normal). */
   windupAnimationSpeed: number;
-  /** Animación de sprite que se reproduce al lanzar la habilidad. */
-  animation: AnimationName;
+  /**
+   * Animación de sprite que se reproduce al lanzar la habilidad.
+   * `null` = la habilidad no reproduce ninguna animación.
+   */
+  animation: AnimationName | null;
   /**
    * Permite moverse durante el `windup`. El efecto sigue fijado en el centro
    * calculado al empezar el lanzamiento, así que el Pokémon puede salir de la
@@ -229,7 +235,7 @@ export const DEFAULT_ABILITY: Omit<
   windupAnimation: null,
   windupAnimationMode: 'once',
   windupAnimationSpeed: 1,
-  animation: 'attack',
+  animation: null,
   moveWhileWindup: false,
   description: ''
 };
@@ -422,7 +428,11 @@ export class AbilityBuilder {
     return this;
   }
 
-  animation(name: AnimationName): this {
+  /**
+   * Animación de lanzamiento. Omitirla (o pasar `null`) deja la habilidad sin
+   * animación propia: el Pokémon mantiene su reposo o su caminar.
+   */
+  animation(name: AnimationName | null): this {
     this.draft.animation = name;
     return this;
   }
@@ -567,6 +577,7 @@ registerAbility(
     .radius(0.4)
     .windup(0.35)
     .cast(0.5)
+    .animation('charge')
     .beam('fire')
     .impact('fire')
     .color(255, 138, 42)
@@ -582,6 +593,7 @@ registerAbility(
     .radius(3.1)
     .windup(0.75)
     .cast(0.7)
+    .animation('charge')
     .area('fire', 'instant', 0.5)
     .impact('fire')
     .color(255, 92, 30)
@@ -639,6 +651,7 @@ registerAbility(
     .radius(3.2)
     .windup(0.75)
     .cast(0.7)
+    .animation('shake')
     .area('grass', 'instant', 1.1)
     .impact('grass')
     .color(112, 204, 72)
@@ -662,6 +675,7 @@ registerAbility(
     .knockback(1.4)
     .cast(0.4)
     .windup(0.12)
+    .animation('punch')
     .impact('psychic')
     .color(214, 122, 255)
     .description(
@@ -736,6 +750,7 @@ registerAbility(
     .knockback(0.5)
     .cast(0.32)
     .windup(0.1)
+    .animation('attack')
     .impact('psychic')
     .color(255, 150, 220)
     .description(
@@ -786,8 +801,9 @@ registerAbility(
     .accuracy(0)
     .cooldown(14)
     .radius(1)
-    .cast(1)
+    .cast(0.75)
     .windup(0.75)
+    .animation('twirl')
     .heal(0.25)
     .color(255, 170, 230)
     .description(

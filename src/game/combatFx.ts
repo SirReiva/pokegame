@@ -1443,19 +1443,27 @@ export class CombatFx {
     }[] = [];
     if (style === 'psychic') {
       // Onda sonora psíquica: frentes curvos que nacen en el lanzador y
-      // recorren el cono hasta su borde, alternando violeta y blanco. Cada
-      // frente se deforma en Y como una cinta ondulada.
+      // recorren el cono hasta su borde. Cada frente se deforma en Y como una
+      // cinta ondulada. Se usan dos tonos del color de la habilidad y mezcla
+      // normal: con aditivo el violeta se lavaba a blanco sobre terrenos claros.
       effectDuration = 0.75;
-      material.opacity = 0.1;
+      material.opacity = 0.14;
+      const highlightTint: [number, number, number] = [
+        Math.round(color[0] + (255 - color[0]) * 0.32),
+        Math.round(color[1] + (255 - color[1]) * 0.32),
+        Math.round(color[2] + (255 - color[2]) * 0.32)
+      ];
       const waveCount = 5;
       const segments = 30;
       for (let index = 0; index < waveCount; index++) {
         const highlight = index % 2 === 0;
         const waveMaterial = this.createMaterial(
-          highlight ? [245, 210, 255] : color,
-          highlight ? 0.8 : 0.55
+          highlight ? highlightTint : color,
+          highlight ? 0.9 : 0.75
         );
+        waveMaterial.blendType = pc.BLEND_NORMAL;
         waveMaterial.opacity = 0;
+        waveMaterial.update();
         materials.push(waveMaterial);
         const { mesh: waveMesh, positions: wavePositions } = createArcBandMesh(
           this.device,
@@ -1477,7 +1485,7 @@ export class CombatFx {
           halfAngle,
           delay: index * 0.07,
           travel: 0.42,
-          opacity: highlight ? 0.8 : 0.55,
+          opacity: highlight ? 0.9 : 0.75,
           lift,
           phase: index * 1.7,
           amplitude: 0.14 + index * 0.012,

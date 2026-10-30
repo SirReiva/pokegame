@@ -249,7 +249,10 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
         )
       : 0.08;
   const speed = distance > 0.01 ? distance / duration : 0;
-  const playback = deps.animationPlaybackFor(player, def.animation, duration);
+  const playback =
+    def.animation === null
+      ? 1
+      : deps.animationPlaybackFor(player, def.animation, duration);
   player.actionTimer = duration;
   player.playback = playback;
   player.dash = {
@@ -266,9 +269,12 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
   player.vx = 0;
   player.vz = 0;
   // Fuerza el cambio de capa en el mismo frame del casteo; el bucle de copias
-  // lo mantiene después sin reiniciar el frame de la animación.
-  player.animation = def.animation;
-  for (const copy of player.copies) copy.play(def.animation, true);
+  // lo mantiene después sin reiniciar el frame de la animación. Sin animación
+  // propia el dash se resuelve solo con el desplazamiento.
+  if (def.animation !== null) {
+    player.animation = def.animation;
+    for (const copy of player.copies) copy.play(def.animation, true);
+  }
 };
 
 const executeSelf: AbilityExecutor = (player, def, deps) => {

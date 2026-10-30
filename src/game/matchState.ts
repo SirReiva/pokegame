@@ -124,7 +124,11 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   actionPlayback: number;
   /** Tiempo restante en el que el input no puede mover al jugador. */
   moveLockTimer: number;
-  actionAnimation: AnimationName;
+  /**
+   * Animación del ataque en curso. `null` cuando la habilidad no define
+   * ninguna, en cuyo caso se mantiene la animación de reposo o caminar.
+   */
+  actionAnimation: AnimationName | null;
   /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
   dash: PlayerDash | null;
   /** Habilidad en preparación (windup) o `null`. */

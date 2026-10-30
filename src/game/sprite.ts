@@ -16,6 +16,9 @@ export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
   shoot?: pc.Texture;
   charge?: pc.Texture;
   strike?: pc.Texture;
+  twirl?: pc.Texture;
+  shake?: pc.Texture;
+  punch?: pc.Texture;
 };
 
 export interface SpriteAsset {
@@ -30,13 +33,15 @@ const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
 /**
  * Animaciones con movimiento interno deliberado. No se recortan tight: usan el
  * frame completo para conservar el desplazamiento horizontal, y su movimiento
- * vertical se aplica como avance sobre el suelo (Attack, la vibración de Charge
- * y el zarpazo de Strike).
+ * vertical se aplica como avance sobre el suelo (Attack, la vibración de Charge,
+ * el zarpazo de Strike, el giro de Twirl y la embestida de Punch).
  */
 const PRESERVE_FRAME_MOTION: ReadonlySet<AnimationName> = new Set([
   'attack',
   'charge',
-  'strike'
+  'strike',
+  'twirl',
+  'punch'
 ]);
 
 /**
@@ -53,7 +58,10 @@ const OPTIONAL_ANIMATIONS: ReadonlyArray<{
   { name: 'shock', requiresMoveset: true, logLabel: 'Shock' },
   { name: 'shoot', requiresMoveset: true },
   { name: 'charge', requiresMoveset: true },
-  { name: 'strike', requiresMoveset: true }
+  { name: 'strike', requiresMoveset: true },
+  { name: 'twirl', requiresMoveset: true },
+  { name: 'shake', requiresMoveset: true },
+  { name: 'punch', requiresMoveset: true }
 ];
 
 const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
@@ -612,7 +620,10 @@ export class SpriteBillboard {
             name === 'shock' ||
             name === 'shoot' ||
             name === 'charge' ||
-            name === 'strike'
+            name === 'strike' ||
+            name === 'twirl' ||
+            name === 'shake' ||
+            name === 'punch'
           ? ['attack', 'idle']
           : ['idle'];
     let resolved: AnimationName = 'idle';

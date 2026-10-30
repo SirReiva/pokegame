@@ -411,7 +411,7 @@ export class Game {
         actionTimer: 0,
         actionPlayback: 1,
         moveLockTimer: 0,
-        actionAnimation: 'attack',
+        actionAnimation: null,
         dash: null,
         pendingCast: null,
         deathFade: 0,
@@ -824,6 +824,7 @@ export class Game {
       player.playback = 1;
     } else if (
       player.actionTimer > 0 &&
+      player.actionAnimation !== null &&
       !(
         player.pendingCast?.def.moveWhileWindup &&
         speed > CONFIG.player.minFacingSpeed
@@ -921,15 +922,21 @@ export class Game {
       player.vx = 0;
       player.vz = 0;
       // La preparación puede tener su propia animación (por ejemplo, Shoot);
-      // si no, se reutiliza la de lanzamiento.
+      // si no, se reutiliza la de lanzamiento. Si la habilidad no define
+      // ninguna, se mantiene el reposo en vez de inventar una pose.
       const animation = pending.def.windupAnimation ?? pending.def.animation;
-      player.animation = animation;
-      // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
-      // fija y repetición hasta que termine el windup.
-      player.playback =
-        pending.def.windupAnimationMode === 'loop'
-          ? Math.max(0.05, pending.def.windupAnimationSpeed)
-          : this.animationPlaybackFor(player, animation, pending.windup);
+      if (animation === null) {
+        player.animation = 'idle';
+        player.playback = 1;
+      } else {
+        player.animation = animation;
+        // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
+        // fija y repetición hasta que termine el windup.
+        player.playback =
+          pending.def.windupAnimationMode === 'loop'
+            ? Math.max(0.05, pending.def.windupAnimationSpeed)
+            : this.animationPlaybackFor(player, animation, pending.windup);
+      }
     } else {
       // Mantén la pose de lanzamiento mientras el Pokémon esté quieto; al
       // andar, la animación de caminar tiene prioridad.
@@ -1009,8 +1016,10 @@ export class Game {
       dash.trailTimer = 0.04;
     }
 
-    player.animation = dash.def.animation;
-    player.playback = dash.playback;
+    if (dash.def.animation !== null) {
+      player.animation = dash.def.animation;
+      player.playback = dash.playback;
+    }
     player.vx = dash.dirX * dash.speed;
     player.vz = dash.dirZ * dash.speed;
 
@@ -1107,10 +1116,12 @@ export class Game {
     if (player.cooldowns[slotIndex] > 0.0001) return;
 
     player.cooldowns[slotIndex] = def.cooldown;
-    player.actionTimer = def.animationTime;
+    // Solo las habilidades con animación propia ocupan el canal de acción;
+    // sin animación el Pokémon conserva su reposo o su caminar.
+    player.actionTimer = def.animation === null ? 0 : def.animationTime;
     player.actionPlayback = 1;
     player.actionAnimation = def.animation;
-    player.animation = def.animation;
+    if (def.animation !== null) player.animation = def.animation;
     player.playback = 1;
     player.vx = 0;
     player.vz = 0;
@@ -1118,15 +1129,21 @@ export class Game {
     if (def.windup > 0) {
       // La pose inicial de la preparación también usa su animación propia, así
       // no hay un frame con la animación de lanzamiento antes del windup.
-      player.animation = def.windupAnimation ?? def.animation;
-      player.playback =
-        def.windupAnimationMode === 'loop'
-          ? Math.max(0.05, def.windupAnimationSpeed)
-          : this.animationPlaybackFor(
-              player,
-              player.animation,
-              def.windup
-            );
+      const windupAnimation = def.windupAnimation ?? def.animation;
+      if (windupAnimation !== null) {
+        player.animation = windupAnimation;
+        player.playback =
+          def.windupAnimationMode === 'loop'
+            ? Math.max(0.05, def.windupAnimationSpeed)
+            : this.animationPlaybackFor(
+                player,
+                windupAnimation,
+                def.windup
+              );
+      } else {
+        player.animation = 'idle';
+        player.playback = 1;
+      }
       const dirX = Math.sin(player.facing);
       const dirZ = Math.cos(player.facing);
       const targetX = player.x + dirX * def.range;
@@ -1168,7 +1185,7 @@ export class Game {
     // El lock y el clip de ataque empiezan cuando la habilidad se ejecuta de
     // verdad (tras el windup, si lo tiene). En las melee ambos duran lo mismo.
     player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
-    if (def.shape === 'melee') {
+    if (def.shape === 'melee' && def.animation !== null) {
       player.actionTimer = def.animationTime;
       player.actionPlayback = this.animationPlaybackFor(
         player,
