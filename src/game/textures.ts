@@ -1473,18 +1473,18 @@ export function createShadowCanvas(size = 128): HTMLCanvasElement {
 /** Resolución horizontal de la textura del anillo de jugador. */
 export const MARKER_TEXTURE_SIZE = 64;
 /**
- * Alto de la textura: añade espacio sobre el anillo para que la flecha
- * alargada un 50% no se recorte.
+ * Alto de la textura: añade espacio sobre el anillo para que la flecha,
+ * alargada un 50%, otro 50% y un 30% más, no se recorte.
  */
-export const MARKER_TEXTURE_HEIGHT = 72;
+export const MARKER_TEXTURE_HEIGHT = 94;
 /** Centro vertical del anillo; el espacio extra queda arriba, hacia la flecha. */
 export const MARKER_RING_CENTER_Y = MARKER_TEXTURE_HEIGHT - MARKER_TEXTURE_SIZE / 2;
 /** Radio exterior del anillo en píxeles de la textura; lo usa `marker.ts`. */
 export const MARKER_RING_OUTER = 16;
 /** Distancia del centro al arranque de la flecha, pegado al borde del anillo. */
 const MARKER_ARROW_BASE = MARKER_RING_OUTER - 0.5;
-/** La flecha es un 50% más larga que antes, manteniendo el mismo ancho. */
-const MARKER_ARROW_LENGTH = MARKER_ARROW_BASE * 1.5;
+/** La flecha acumula ×1,5, ×1,5 y ×1,3 (×2,925), con el mismo ancho. */
+const MARKER_ARROW_LENGTH = MARKER_ARROW_BASE * 2.925;
 /** Semiancho de la flecha, para que siga leyéndose fina. */
 const MARKER_ARROW_HALF_WIDTH = 5;
 

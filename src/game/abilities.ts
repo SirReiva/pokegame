@@ -164,6 +164,8 @@ export interface AbilityDef {
   castTime: number;
   /** Preparación antes de ejecutar el efecto, en segundos. */
   windup: number;
+  /** Animación distinta para la preparación; sin ella se repite `animation`. */
+  windupAnimation: AnimationName | null;
   /** Modo de la animación durante la preparación. */
   windupAnimationMode: WindupAnimationMode;
   /** Velocidad de la animación de preparación en modo `loop` (1 = normal). */
@@ -211,6 +213,7 @@ export const DEFAULT_ABILITY: Omit<
   color: [255, 255, 255],
   castTime: 0.45,
   windup: 0,
+  windupAnimation: null,
   windupAnimationMode: 'once',
   windupAnimationSpeed: 1,
   animation: 'attack',
@@ -374,6 +377,7 @@ export class AbilityBuilder {
       mode?: WindupAnimationMode;
       speed?: number;
       move?: boolean;
+      animation?: AnimationName;
     } = {}
   ): this {
     this.draft.windup = seconds;
@@ -384,6 +388,9 @@ export class AbilityBuilder {
       this.draft.windupAnimationSpeed = options.speed;
     }
     if (options.move !== undefined) this.draft.moveWhileWindup = options.move;
+    if (options.animation !== undefined) {
+      this.draft.windupAnimation = options.animation;
+    }
     return this;
   }
 
@@ -655,7 +662,7 @@ registerAbility(
     .cooldown(7)
     .range(10)
     .radius(0.42)
-    .windup(0.4)
+    .windup(0.4, { animation: 'shoot' })
     .cast(0.5)
     .beam('psychic')
     .impact('psychic')
@@ -672,7 +679,7 @@ registerAbility(
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
-    .windup(0.8)
+    .windup(0.8, { animation: 'charge' })
     .cast(0.7)
     .area('psychic', 'instant', 0.85)
     .radial(0.35)

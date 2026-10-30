@@ -8,15 +8,18 @@ export type AnimationName =
   | 'hurt'
   | 'faint'
   | 'quickstrike'
-  | 'shock';
+  | 'shock'
+  | 'shoot'
+  | 'charge';
 
 /**
- * Animaciones que todo el roster debe tener. `faint`, `quickstrike` y `shock`
- * son opcionales porque no todas las especies de PMD Sprite Collab las incluyen.
+ * Animaciones que todo el roster debe tener. `faint`, `quickstrike`, `shock`,
+ * `shoot` y `charge` son opcionales porque no todas las especies de PMD Sprite
+ * Collab las incluyen.
  */
 export type RequiredAnimationName = Exclude<
   AnimationName,
-  'faint' | 'quickstrike' | 'shock'
+  'faint' | 'quickstrike' | 'shock' | 'shoot' | 'charge'
 >;
 
 export interface SpriteAnchor {
@@ -81,6 +84,8 @@ export interface PokemonEntry {
     faint?: SpriteAnimation;
     quickstrike?: SpriteAnimation;
     shock?: SpriteAnimation;
+    shoot?: SpriteAnimation;
+    charge?: SpriteAnimation;
   };
 }
 

@@ -10,7 +10,7 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 - **wouter**: router mínimo para el flujo entre menú, configuración y partida.
 - **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
 - **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
-- **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike y Shock cuando existen).
+- **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike, Shock, Shoot y Charge cuando existen).
 - Sin framework de UI 3D: React nunca toca la escena; habla con `Game` mediante callbacks.
 
 ## Arranque
@@ -84,7 +84,7 @@ Los haces (como `Rayo`) se detienen en el primer separador, muro o roca: ni el v
 
 Los **dashes** avanzan en pasos pequeños y comprueban la colisión de cada tramo, así que se detienen en separadores, árboles, muros y límites del mapa en lugar de atravesarlos. El desplazamiento se reparte durante la animación (por ejemplo, `QuickStrike` en Ataque Rápido), con rastro progresivo y daño a lo largo del recorrido, en vez de teletransportar al Pokémon. La duración se escala con la distancia real: si un obstáculo acorta el dash, la animación también termina antes. Además, la animación se reproduce a la velocidad necesaria para durar exactamente lo mismo que el desplazamiento (más lenta en el dash completo, más rápida si un obstáculo lo acorta).
 
-Las hojas de animación con mucho espacio vacío, como `QuickStrike`, se recortan al cargar a una **hoja tight por dirección** usando `contentRows`: cada frame se ajusta al arte real alrededor del ancla de los pies. Así el plano deja de ser un cuadrado gigante y el personaje queda centrado sobre el Pokémon.
+Las hojas de animación con mucho espacio vacío se recortan al cargar a una **hoja tight por dirección** usando `contentRows`: cada frame se ajusta al arte real alrededor del ancla de los pies. Así el plano deja de ser un cuadrado gigante y el personaje queda centrado sobre el Pokémon. `Charge` y `QuickStrike` son la excepción: conservan el frame completo y un ancla fija por dirección para que su movimiento interno no se cancele al recentrar cada frame (la vibración de `Charge` y el envite de decenas de píxeles de `QuickStrike`).
 
 El daño usa la **fórmula oficial de Pokémon a nivel 50** con stats base reales, IV 31 y EV 0:
 
@@ -137,7 +137,7 @@ Psíquico tiene un estilo propio: la básica `Telequinesis` marca un arco tenue 
 
 El proyectil de `Impactrueno` tiene un visual eléctrico propio: núcleo brillante, halo, tres arcos zigzagueantes que giran y parpadean, y una estela orientada hacia la dirección de vuelo. Al impactar genera una pequeña explosión eléctrica con núcleo, halo, arcos cortos y anillo en el suelo. Se configura con `projectileStyle: 'electric'` e `impactStyle: 'electric'`; el resto usa el orbe y el impacto estándar. `Rayo` usa también `impactStyle: 'electric'`, así que cada enemigo alcanzado por el haz recibe su propia explosión eléctrica.
 
-Cada habilidad puede declarar un `windup`: durante ese tiempo el Pokémon se queda quieto, reproduce su animación y no puede moverse ni lanzar otra habilidad. Al terminar, se ejecuta el efecto (proyectil, haz, golpe, dash...). Si recibe un golpe durante la preparación, la habilidad se cancela.
+Cada habilidad puede declarar un `windup`: durante ese tiempo el Pokémon se queda quieto, reproduce su animación y no puede moverse ni lanzar otra habilidad. Al terminar, se ejecuta el efecto (proyectil, haz, golpe, dash...). Si recibe un golpe durante la preparación, la habilidad se cancela. La preparación puede usar una animación distinta de la de lanzamiento con `windupAnimation`; si no se indica, se reutiliza `animation`.
 
 Las habilidades con `shape: 'aoe'` y `windup > 0` muestran una **marca en el suelo** desde el inicio del retardo: anillo discontinuo del radio real, relleno tenue y un disco que se llena hasta el momento del impacto. El centro se fija al empezar el lanzamiento y la marca desaparece justo antes de aplicar el daño; si el lanzamiento se cancela (golpe, KO o choque), también se retira. `Giro Fuego` prepara `0,5 s`, `Anillo Ígneo` `0,75 s` y `Lluevehojas` `0,75 s`; `Paralizador` es melee y prepara `0,2 s`.
 
@@ -154,12 +154,13 @@ Las áreas pueden usar **daño radial** con `radialDamage: true`. El centro siem
 
 `Giro Fuego` usa `overTime` (35/s durante 2,4 s, ticks de 0,4 s). `Anillo Ígneo` usa `instant` con `aoeDuration: 0,5`, así que su explosión golpea una vez y el estallido de llamas dura medio segundo.
 
-La animación de preparación se controla con `windupAnimationMode`:
+La animación de preparación se controla con `windupAnimation` y `windupAnimationMode`:
 
+- `windupAnimation`: animación propia del `windup`. Si es `null` (por defecto), se usa la animación de lanzamiento (`animation`).
 - `once` (por defecto): la velocidad se ajusta para que el clip dure exactamente lo que el `windup`. Se reproduce una sola vez y se queda en su último frame hasta que termina la acción.
 - `loop`: se usa la velocidad fija de `windupAnimationSpeed` (1 = normal) y el clip se repite hasta que termina la preparación.
 
-Por ejemplo, `Rayo` prepara `0.5 s` con `Shock` en modo `once`, así que el clip se ralentiza para encajar justo en la preparación.
+Por ejemplo, `Rayo` prepara `0.5 s` con `Shock` en modo `once`, así que el clip se ralentiza para encajar justo en la preparación. `Psíquico` de Mewtwo usa `windupAnimation: 'shoot'` durante sus `0.4 s` de preparación y después vuelve a `attack` para el lanzamiento. `Psicoataque` usa `windupAnimation: 'charge'` durante sus `0.8 s` de carga.
 
 ## Mapas definidos por JSON
 
@@ -390,7 +391,7 @@ Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas
 
 `scripts/import-sprites.mjs`:
 
-1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike` y `Shock` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
+1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike`, `Shock`, `Shoot` y `Charge` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
 2. Descarga el retrato `portrait/<id>/Normal.png` de cada Pokémon y lo guarda como `portrait.png`; las interfaces HTML usan ese retrato en lugar de las hojas animadas.
 3. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
 4. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.

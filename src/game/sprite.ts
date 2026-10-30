@@ -13,6 +13,8 @@ export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
   faint?: pc.Texture;
   quickstrike?: pc.Texture;
   shock?: pc.Texture;
+  shoot?: pc.Texture;
+  charge?: pc.Texture;
 };
 
 export interface SpriteAsset {
@@ -25,6 +27,16 @@ export interface SpriteAsset {
 const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
 
 /**
+ * Animaciones con movimiento interno deliberado. No se recortan tight: usan el
+ * frame completo y un ancla fija por dirección para no cancelar el
+ * desplazamiento de sus frames (la vibración de Charge y el envite de
+ * QuickStrike, que llega a moverse decenas de píxeles).
+ */
+const PRESERVE_FRAME_MOTION: ReadonlySet<AnimationName> = new Set([
+  'charge',
+]);
+
+/**
  * Animaciones opcionales. `requiresMoveset` evita subir hojas grandes que
  * ningún Pokémon del roster usa (QuickStrike, Shock).
  */
@@ -35,7 +47,9 @@ const OPTIONAL_ANIMATIONS: ReadonlyArray<{
 }> = [
   { name: 'faint', requiresMoveset: false },
   { name: 'quickstrike', requiresMoveset: true, logLabel: 'QuickStrike' },
-  { name: 'shock', requiresMoveset: true, logLabel: 'Shock' }
+  { name: 'shock', requiresMoveset: true, logLabel: 'Shock' },
+  { name: 'shoot', requiresMoveset: true },
+  { name: 'charge', requiresMoveset: true }
 ];
 
 const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
@@ -91,7 +105,11 @@ function movesetUsesAnimation(
   if (!moveset) return false;
   return moveset.some((id) => {
     if (!id) return false;
-    return ABILITIES[id]?.animation === animation;
+    const ability = ABILITIES[id];
+    return (
+      ability?.animation === animation ||
+      ability?.windupAnimation === animation
+    );
   });
 }
 
@@ -272,7 +290,11 @@ export async function loadSpriteAsset(
     image: HTMLImageElement,
     animation: SpriteAnimation
   ) => {
-    const tight = buildTightSheet(image, animation);
+    // Charge conserva su vibración interna: se usa el frame completo y un
+    // ancla fija, porque el recorte tight recentraría cada frame.
+    const tight = PRESERVE_FRAME_MOTION.has(name)
+      ? null
+      : buildTightSheet(image, animation);
     if (tight) animations[name] = tight.animation;
     const source = tight?.canvas ?? image;
     const scale = textureScaleFor(source);
@@ -576,7 +598,10 @@ export class SpriteBillboard {
     const fallbacks: AnimationName[] =
       name === 'faint'
         ? ['hurt', 'idle']
-        : name === 'quickstrike' || name === 'shock'
+        : name === 'quickstrike' ||
+            name === 'shock' ||
+            name === 'shoot' ||
+            name === 'charge'
           ? ['attack', 'idle']
           : ['idle'];
     let resolved: AnimationName = 'idle';
@@ -650,7 +675,13 @@ export class SpriteBillboard {
 
     const animation = layer.animation;
     const index = this.row * animation.columns + this.frame;
-    const anchor = animation.anchors[index] ?? {
+    // En las animaciones que deben conservar su vibración, el ancla se queda
+    // fija en el primer frame de la dirección; si se usara la de cada frame, el
+    // desplazamiento interno de 1-2 px se cancelaría.
+    const anchorIndex = PRESERVE_FRAME_MOTION.has(this.animation)
+      ? this.row * animation.columns
+      : index;
+    const anchor = animation.anchors[anchorIndex] ?? {
       x: animation.frameWidth / 2,
       y: layer.refAnchorY
     };

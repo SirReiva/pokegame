@@ -911,17 +911,16 @@ export class Game {
     if (!movable) {
       player.vx = 0;
       player.vz = 0;
-      player.animation = pending.def.animation;
+      // La preparación puede tener su propia animación (por ejemplo, Shoot);
+      // si no, se reutiliza la de lanzamiento.
+      const animation = pending.def.windupAnimation ?? pending.def.animation;
+      player.animation = animation;
       // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
       // fija y repetición hasta que termine el windup.
       player.playback =
         pending.def.windupAnimationMode === 'loop'
           ? Math.max(0.05, pending.def.windupAnimationSpeed)
-          : this.animationPlaybackFor(
-              player,
-              pending.def.animation,
-              pending.windup
-            );
+          : this.animationPlaybackFor(player, animation, pending.windup);
     } else {
       // Mantén la pose de lanzamiento mientras el Pokémon esté quieto; al
       // andar, la animación de caminar tiene prioridad.
@@ -1105,6 +1104,17 @@ export class Game {
     player.vz = 0;
 
     if (def.windup > 0) {
+      // La pose inicial de la preparación también usa su animación propia, así
+      // no hay un frame con la animación de lanzamiento antes del windup.
+      player.animation = def.windupAnimation ?? def.animation;
+      player.playback =
+        def.windupAnimationMode === 'loop'
+          ? Math.max(0.05, def.windupAnimationSpeed)
+          : this.animationPlaybackFor(
+              player,
+              player.animation,
+              def.windup
+            );
       const dirX = Math.sin(player.facing);
       const dirZ = Math.cos(player.facing);
       const targetX = player.x + dirX * def.range;
