@@ -152,7 +152,9 @@ export function HomeScreen() {
             </a>{' '}
             · CC BY-NC 4.0
           </span>
-          <span className="font-mono tracking-[0.1em] uppercase">NewPoke · demo técnica</span>
+          <span className="font-mono tracking-[0.1em] uppercase">
+            NewPoke · <span className="normal-case">v{__APP_VERSION__}</span> · demo técnica
+          </span>
         </footer>
       </div>
     </div>
