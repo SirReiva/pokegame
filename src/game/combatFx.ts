@@ -17,7 +17,8 @@ import { createFlameCanvas, createLeafParticleCanvas, createPollenCanvas, textur
 const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   poison: 0.38,
   spore: 0.28,
-  psychic: 0.1
+  psychic: 0.1,
+  slash: 0.16
 };
 
 export interface EffectHandle {
@@ -147,6 +148,69 @@ function createArcBandMesh(
   mesh.setIndices(indices);
   mesh.update();
   return { mesh, positions };
+}
+
+/**
+ * Garra de un zarpazo: cinta blanca larga y afilada que cruza el cono en
+ * diagonal. El radio crece a lo largo del arco (de cerca a lejos), así la curva
+ * acompaña al cono, y el borde exterior va serrado como una zarpa.
+ *
+ * `tStart`/`tEnd` permiten generar solo un tramo del tajo; el dibujo de derecha
+ * a izquierda usa varios tramos estáticos en vez de deformar el mesh por frame.
+ */
+function createSlashStreakMesh(
+  device: pc.GraphicsDevice,
+  innerRadius: number,
+  outerRadius: number,
+  halfThickness: number,
+  angleStart: number,
+  angleSweep: number,
+  segments: number,
+  liftStart: number,
+  liftEnd: number,
+  bow: number,
+  phase: number,
+  tStart = 0,
+  tEnd = 1
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const u = i / segments;
+    const t = tStart + (tEnd - tStart) * u;
+    const angle = angleStart + angleSweep * t;
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    const radius = innerRadius + (outerRadius - innerRadius) * t;
+    // Punta afilada en ambos extremos del tajo completo.
+    const taper = Math.pow(Math.sin(Math.PI * t), 0.35);
+    const thickness = halfThickness * taper;
+    // Borde exterior ligeramente serrado: picos suaves a lo largo del filo.
+    const serration =
+      0.82 + 0.18 * Math.abs(Math.sin(t * Math.PI * 7 + phase));
+    const outerEdge = radius + thickness * serration;
+    const innerEdge = radius - thickness * 0.6;
+    const y =
+      liftStart + (liftEnd - liftStart) * t + Math.sin(Math.PI * t) * bow;
+    positions.push(sin * innerEdge, y, cos * innerEdge);
+    positions.push(sin * outerEdge, y, cos * outerEdge);
+    normals.push(0, 1, 0, 0, 1, 0);
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const base = i * 2;
+    indices.push(base, base + 1, base + 2);
+    indices.push(base + 1, base + 3, base + 2);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
 }
 
 /**
@@ -441,6 +505,8 @@ export class CombatFx {
       poison: (x, z, color, effectiveness) =>
         this.spawnPoisonBurst(x, z, color, effectiveness),
       spore: (x, z, color, effectiveness) =>
+        this.spawnHit(x, z, color, effectiveness),
+      slash: (x, z, color, effectiveness) =>
         this.spawnHit(x, z, color, effectiveness),
       psychic: (x, z, color, effectiveness) =>
         this.spawnPsychicBurst(x, z, color, effectiveness)
@@ -1494,6 +1560,73 @@ export class CombatFx {
       }
     }
 
+    const slashSlices: {
+      material: pc.StandardMaterial;
+      revealAt: number;
+      peak: number;
+    }[] = [];
+    if (style === 'slash') {
+      // Tres zarpas blancas paralelas tumbadas sobre el cono: cubren su
+      // superficie desde el lanzador hasta el borde y comparten apertura, así
+      // que se leen como un único tajo de tres filos dentro del área de golpe.
+      // Cada garra se parte en tramos estáticos que se encienden de derecha a
+      // izquierda, de modo que el trazo parece dibujarse sobre el cono.
+      effectDuration = 0.38;
+      material.opacity = 0.1;
+      const span = halfAngle * 1.9;
+      const start = -span * 0.5;
+      const slices = 10;
+      const drawTime = 0.1;
+      const claws: {
+        inner: number;
+        outer: number;
+        delay: number;
+        peak: number;
+      }[] = [
+        { inner: 0.74, outer: 0.99, delay: 0, peak: 1 },
+        { inner: 0.42, outer: 0.68, delay: 0.03, peak: 0.95 },
+        { inner: 0.1, outer: 0.36, delay: 0.06, peak: 0.9 }
+      ];
+      for (let index = 0; index < claws.length; index++) {
+        const claw = claws[index];
+        for (let slice = 0; slice < slices; slice++) {
+          const tStart = slice / slices;
+          const tEnd = (slice + 1) / slices;
+          const sliceMaterial = this.createMaterial([255, 255, 255], 0);
+          sliceMaterial.blendType = pc.BLEND_NORMAL;
+          sliceMaterial.opacity = 0;
+          sliceMaterial.update();
+          materials.push(sliceMaterial);
+          this.createEntity(
+            createSlashStreakMesh(
+              this.device,
+              range * claw.inner,
+              range * claw.outer,
+              range * 0.07,
+              start,
+              span,
+              4,
+              0.1,
+              0.2,
+              0.04,
+              index * 1.9,
+              tStart,
+              tEnd
+            ),
+            [sliceMaterial],
+            entity
+          );
+          slashSlices.push({
+            material: sliceMaterial,
+            // De derecha (t = 1) a izquierda (t = 0).
+            revealAt:
+              claw.delay + ((slices - 1 - slice) / slices) * drawTime,
+            peak: claw.peak
+          });
+        }
+      }
+    }
+
     const puffs: {
       entity: pc.Entity;
       baseX: number;
@@ -1613,9 +1746,19 @@ export class CombatFx {
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity = arcOpacity * (1 - t);
-      if (style !== 'psychic') {
+      if (style !== 'psychic' && style !== 'slash') {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
+      }
+      const now = t * effectDuration;
+      for (const slice of slashSlices) {
+        const appear = Math.min(
+          1,
+          Math.max(0, (now - slice.revealAt) / 0.012)
+        );
+        const fadeOut =
+          1 - Math.min(1, Math.max(0, (now - 0.2) / (effectDuration - 0.2)));
+        slice.material.opacity = slice.peak * appear * Math.max(0, fadeOut);
       }
       for (const leaf of leaves) {
         leaf.entity.setLocalPosition(

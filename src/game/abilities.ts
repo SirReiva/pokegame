@@ -58,7 +58,8 @@ export type ImpactStyle =
   | 'grass'
   | 'poison'
   | 'spore'
-  | 'psychic';
+  | 'psychic'
+  | 'slash';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle = 'electric' | 'fire' | 'psychic';
@@ -547,6 +548,7 @@ registerAbility(
     .knockback(0.35)
     .cast(0.3)
     .animation('strike')
+    .impact('slash')
     .color(246, 236, 220)
     .description('Zarpazo rápido cuerpo a cuerpo. Ataque básico de Charmander.')
 );
