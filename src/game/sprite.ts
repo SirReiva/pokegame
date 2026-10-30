@@ -15,6 +15,7 @@ export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
   shock?: pc.Texture;
   shoot?: pc.Texture;
   charge?: pc.Texture;
+  strike?: pc.Texture;
 };
 
 export interface SpriteAsset {
@@ -28,12 +29,13 @@ const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
 
 /**
  * Animaciones con movimiento interno deliberado. No se recortan tight: usan el
- * frame completo y un ancla fija por dirección para no cancelar el
- * desplazamiento de sus frames (la vibración de Charge y el envite de
- * QuickStrike, que llega a moverse decenas de píxeles).
+ * frame completo para conservar el desplazamiento horizontal, y su movimiento
+ * vertical se aplica como avance sobre el suelo (la vibración de Charge y el
+ * zarpazo de Strike).
  */
 const PRESERVE_FRAME_MOTION: ReadonlySet<AnimationName> = new Set([
   'charge',
+  'strike'
 ]);
 
 /**
@@ -49,7 +51,8 @@ const OPTIONAL_ANIMATIONS: ReadonlyArray<{
   { name: 'quickstrike', requiresMoveset: true, logLabel: 'QuickStrike' },
   { name: 'shock', requiresMoveset: true, logLabel: 'Shock' },
   { name: 'shoot', requiresMoveset: true },
-  { name: 'charge', requiresMoveset: true }
+  { name: 'charge', requiresMoveset: true },
+  { name: 'strike', requiresMoveset: true }
 ];
 
 const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
@@ -451,6 +454,12 @@ export class SpriteBillboard {
   private lastAppliedRow = -1;
   private lastAppliedAnimation: AnimationName | null = null;
   private warnedMissingQuickstrike = false;
+  /**
+   * Desplazamiento visual sobre el suelo (unidades de mundo) para animaciones
+   * con movimiento interno. Se aplica a favor de la cámara para que el envite
+   * vertical no se entierre bajo el terreno.
+   */
+  private motionOffset = 0;
 
   constructor(app: pc.Application, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
@@ -601,7 +610,8 @@ export class SpriteBillboard {
         : name === 'quickstrike' ||
             name === 'shock' ||
             name === 'shoot' ||
-            name === 'charge'
+            name === 'charge' ||
+            name === 'strike'
           ? ['attack', 'idle']
           : ['idle'];
     let resolved: AnimationName = 'idle';
@@ -675,16 +685,23 @@ export class SpriteBillboard {
 
     const animation = layer.animation;
     const index = this.row * animation.columns + this.frame;
-    // En las animaciones que deben conservar su vibración, el ancla se queda
-    // fija en el primer frame de la dirección; si se usara la de cada frame, el
-    // desplazamiento interno de 1-2 px se cancelaría.
-    const anchorIndex = PRESERVE_FRAME_MOTION.has(this.animation)
-      ? this.row * animation.columns
-      : index;
-    const anchor = animation.anchors[anchorIndex] ?? {
+    const frameAnchor = animation.anchors[index] ?? {
       x: animation.frameWidth / 2,
       y: layer.refAnchorY
     };
+    const preserveMotion = PRESERVE_FRAME_MOTION.has(this.animation);
+    const reference =
+      animation.anchors[this.row * animation.columns] ?? frameAnchor;
+    // Con movimiento preservado se conserva el desplazamiento horizontal dentro
+    // del frame, pero el vertical se convierte en un avance sobre el suelo: si
+    // bajara el dibujo, esos píxeles quedarían por debajo del terreno.
+    const anchor = preserveMotion
+      ? { x: reference.x, y: frameAnchor.y }
+      : frameAnchor;
+    this.motionOffset = preserveMotion
+      ? ((frameAnchor.y - reference.y) * this.options.pixelScale) /
+        Math.max(0.2, Math.sin(CONFIG.camera.pitch * DEG))
+      : 0;
     // El suelo es opaco: los píxeles que el arte dibuja por debajo del ancla
     // (una pata delantera, la cola, el borde del cuerpo) quedarían enterrados y
     // el sprite parecería cortado. Subimos solo esos frames lo justo para que
@@ -782,6 +799,14 @@ export class SpriteBillboard {
     const dx = cameraPosition.x - this.root.getPosition().x;
     const dz = cameraPosition.z - this.root.getPosition().z;
     this.pivot.setLocalEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+
+    // 5. Avance visual sobre el suelo para el movimiento interno vertical.
+    const distance = Math.hypot(dx, dz) || 1;
+    this.pivot.setLocalPosition(
+      (dx / distance) * this.motionOffset,
+      0,
+      (dz / distance) * this.motionOffset
+    );
   }
 
   destroy(): void {

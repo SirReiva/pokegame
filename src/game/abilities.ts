@@ -507,6 +507,7 @@ registerAbility(
     .halfAngle(45)
     .knockback(0.35)
     .cast(0.3)
+    .animation('strike')
     .color(246, 236, 220)
     .description('Zarpazo rápido cuerpo a cuerpo. Ataque básico de Charmander.')
 );

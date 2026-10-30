@@ -55,9 +55,9 @@ const ROSTER = [
   { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' }
 ];
 
-// Faint, QuickStrike, Shock, Shoot y Charge son opcionales: no todas las
-// especies las tienen en Sprite Collab. El motor usa QuickStrike, Shoot y Charge
-// como animaciones de habilidad cuando existen.
+// Faint, QuickStrike, Shock, Shoot, Charge y Strike son opcionales: no todas
+// las especies las tienen en Sprite Collab. El motor usa QuickStrike, Shoot,
+// Charge y Strike como animaciones de habilidad cuando existen.
 const ACTIONS = [
   'Idle',
   'Walk',
@@ -67,7 +67,8 @@ const ACTIONS = [
   'QuickStrike',
   'Shock',
   'Shoot',
-  'Charge'
+  'Charge',
+  'Strike'
 ];
 const force = process.argv.includes('--force');
 
@@ -423,7 +424,8 @@ async function importPokemon(pokemon) {
       action === 'QuickStrike' ||
       action === 'Shock' ||
       action === 'Shoot' ||
-      action === 'Charge';
+      action === 'Charge' ||
+      action === 'Strike';
     const meta = anims.get(action);
     if (!meta) {
       if (optional) {

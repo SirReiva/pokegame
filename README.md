@@ -10,7 +10,7 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 - **wouter**: router mínimo para el flujo entre menú, configuración y partida.
 - **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
 - **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
-- **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike, Shock, Shoot y Charge cuando existen).
+- **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike, Shock, Shoot, Charge y Strike cuando existen).
 - Sin framework de UI 3D: React nunca toca la escena; habla con `Game` mediante callbacks.
 
 ## Arranque
@@ -84,7 +84,7 @@ Los haces (como `Rayo`) se detienen en el primer separador, muro o roca: ni el v
 
 Los **dashes** avanzan en pasos pequeños y comprueban la colisión de cada tramo, así que se detienen en separadores, árboles, muros y límites del mapa en lugar de atravesarlos. El desplazamiento se reparte durante la animación (por ejemplo, `QuickStrike` en Ataque Rápido), con rastro progresivo y daño a lo largo del recorrido, en vez de teletransportar al Pokémon. La duración se escala con la distancia real: si un obstáculo acorta el dash, la animación también termina antes. Además, la animación se reproduce a la velocidad necesaria para durar exactamente lo mismo que el desplazamiento (más lenta en el dash completo, más rápida si un obstáculo lo acorta).
 
-Las hojas de animación con mucho espacio vacío se recortan al cargar a una **hoja tight por dirección** usando `contentRows`: cada frame se ajusta al arte real alrededor del ancla de los pies. Así el plano deja de ser un cuadrado gigante y el personaje queda centrado sobre el Pokémon. `Charge` y `QuickStrike` son la excepción: conservan el frame completo y un ancla fija por dirección para que su movimiento interno no se cancele al recentrar cada frame (la vibración de `Charge` y el envite de decenas de píxeles de `QuickStrike`).
+Las hojas de animación con mucho espacio vacío se recortan al cargar a una **hoja tight por dirección** usando `contentRows`: cada frame se ajusta al arte real alrededor del ancla de los pies. Así el plano deja de ser un cuadrado gigante y el personaje queda centrado sobre el Pokémon. `Charge` y `Strike` son la excepción: conservan el frame completo para que su movimiento horizontal no se cancele, y su desplazamiento vertical se convierte en un avance sobre el suelo (hacia o desde la cámara), de modo que el sprite no se entierra bajo el terreno.
 
 El daño usa la **fórmula oficial de Pokémon a nivel 50** con stats base reales, IV 31 y EV 0:
 
@@ -103,7 +103,7 @@ El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se 
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,5 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,22 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
-**Charmander** tiene el segundo set: `Arañazo` (básica melee rápida), `Giro Fuego` (remolino de fuego persistente delante, 3,6 u de alcance y 1,7 u de radio, 35 de daño por segundo durante 2,4 s), `Lanzallamas` (haz de fuego de 9,5 u que atraviesa a todos los rivales en línea) y `Anillo Ígneo` (definitiva: gran área de 3,1 u de radio con 110 de potencia). Sus tres habilidades de fuego usan `impactStyle: 'fire'`, y el haz y las áreas tienen visual propio (`beamStyle: 'fire'` y `aoeStyle: 'fire'`).
+**Charmander** tiene el segundo set: `Arañazo` (básica melee rápida con la animación `Strike` de PMD), `Giro Fuego` (remolino de fuego persistente delante, 3,6 u de alcance y 1,7 u de radio, 35 de daño por segundo durante 2,4 s), `Lanzallamas` (haz de fuego de 9,5 u que atraviesa a todos los rivales en línea) y `Anillo Ígneo` (definitiva: gran área de 3,1 u de radio con 110 de potencia). Sus tres habilidades de fuego usan `impactStyle: 'fire'`, y el haz y las áreas tienen visual propio (`beamStyle: 'fire'` y `aoeStyle: 'fire'`).
 
 **Bulbasaur** tiene el tercer set: `Placaje` (básica melee), `Paralizador` (golpe melee de estado que lanza una nube de partículas verdes y ralentiza un 45 % durante 3 s), `Hoja Afilada` (golpe melee de 2,6 u con 60 de potencia y empuje) y `Lluevehojas` (definitiva: área instantánea de 3,2 u de radio y 120 de potencia). `Paralizador` usa `impactStyle: 'spore'`, `Lluevehojas` `aoeStyle: 'grass'` y `Hoja Afilada` `impactStyle: 'grass'`.
 
@@ -391,7 +391,7 @@ Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas
 
 `scripts/import-sprites.mjs`:
 
-1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike`, `Shock`, `Shoot` y `Charge` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
+1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike`, `Shock`, `Shoot`, `Charge` y `Strike` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
 2. Descarga el retrato `portrait/<id>/Normal.png` de cada Pokémon y lo guarda como `portrait.png`; las interfaces HTML usan ese retrato en lugar de las hojas animadas.
 3. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
 4. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
