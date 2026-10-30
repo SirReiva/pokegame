@@ -409,6 +409,8 @@ export class Game {
         stunTimer: 0,
         hurtTimer: 0,
         actionTimer: 0,
+        actionPlayback: 1,
+        moveLockTimer: 0,
         actionAnimation: 'attack',
         dash: null,
         pendingCast: null,
@@ -681,6 +683,9 @@ export class Game {
     }
     if (player.hurtTimer > 0) player.hurtTimer = Math.max(0, player.hurtTimer - dt);
     if (player.actionTimer > 0) player.actionTimer = Math.max(0, player.actionTimer - dt);
+    if (player.moveLockTimer > 0) {
+      player.moveLockTimer = Math.max(0, player.moveLockTimer - dt);
+    }
     if (player.deathFade > 0) player.deathFade = Math.max(0, player.deathFade - dt);
 
     if (!player.alive) {
@@ -718,8 +723,12 @@ export class Game {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    const desiredX = rightX * input.moveX + forwardX * input.moveY;
-    const desiredZ = rightZ * input.moveX + forwardZ * input.moveY;
+    // El bloqueo de las melee ignora el input de movimiento, pero deja girar la
+    // cámara y lanzar otras habilidades.
+    const moveX = player.moveLockTimer > 0 ? 0 : input.moveX;
+    const moveY = player.moveLockTimer > 0 ? 0 : input.moveY;
+    const desiredX = rightX * moveX + forwardX * moveY;
+    const desiredZ = rightZ * moveX + forwardZ * moveY;
     const magnitude = Math.hypot(desiredX, desiredZ);
 
     const terrainEffect = terrainSpeedEffect(
@@ -821,7 +830,7 @@ export class Game {
       )
     ) {
       player.animation = player.actionAnimation;
-      player.playback = 1;
+      player.playback = player.actionPlayback;
     } else if (speed > CONFIG.player.minFacingSpeed) {
       player.animation = 'walk';
       player.playback = clamp(
@@ -1065,6 +1074,8 @@ export class Game {
     player.stunTimer = 0;
     player.hurtTimer = 0;
     player.actionTimer = 0;
+    player.actionPlayback = 1;
+    player.moveLockTimer = 0;
     player.dash = null;
     this.cancelPendingCast(player);
     player.deathFade = 0;
@@ -1096,7 +1107,8 @@ export class Game {
     if (player.cooldowns[slotIndex] > 0.0001) return;
 
     player.cooldowns[slotIndex] = def.cooldown;
-    player.actionTimer = def.castTime;
+    player.actionTimer = def.animationTime;
+    player.actionPlayback = 1;
     player.actionAnimation = def.animation;
     player.animation = def.animation;
     player.playback = 1;
@@ -1153,6 +1165,20 @@ export class Game {
     targetX?: number,
     targetZ?: number
   ): void {
+    // El lock y el clip de ataque empiezan cuando la habilidad se ejecuta de
+    // verdad (tras el windup, si lo tiene). En las melee ambos duran lo mismo.
+    player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
+    if (def.shape === 'melee') {
+      player.actionTimer = def.animationTime;
+      player.actionPlayback = this.animationPlaybackFor(
+        player,
+        def.animation,
+        def.animationTime
+      );
+      player.animation = def.animation;
+      player.playback = player.actionPlayback;
+    }
+
     CAST_EFFECTS({
       player,
       def,
@@ -1264,6 +1290,7 @@ export class Game {
     const control = options.control ?? true;
     if (control) {
       target.actionTimer = 0;
+      target.moveLockTimer = 0;
       target.dash = null;
       this.cancelPendingCast(target);
     }
@@ -1364,6 +1391,7 @@ export class Game {
     target.deathFade = Math.max(0.45, deathDuration);
     target.hurtTimer = 0;
     target.actionTimer = 0;
+    target.moveLockTimer = 0;
     target.dash = null;
     this.cancelPendingCast(target);
     target.vx = 0;
@@ -1517,6 +1545,7 @@ export class Game {
         );
         player.hurtTimer = Math.max(player.hurtTimer, 0.35);
         player.actionTimer = 0;
+        player.moveLockTimer = 0;
         player.dash = null;
         this.cancelPendingCast(player);
         player.vx = 0;

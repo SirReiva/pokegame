@@ -162,6 +162,17 @@ export interface AbilityDef {
   color: [number, number, number];
   /** Duración de la animación de ataque, en segundos. */
   castTime: number;
+  /**
+   * Duración real del clip de lanzamiento, en segundos. En las melee coincide
+   * siempre con `moveLock`; en el resto vale `castTime` por defecto.
+   */
+  animationTime: number;
+  /**
+   * Tiempo durante el que el lanzador no puede moverse con el input, en
+   * segundos. Las habilidades melee lo igualan a la mitad de `castTime` por
+   * defecto.
+   */
+  moveLock: number;
   /** Preparación antes de ejecutar el efecto, en segundos. */
   windup: number;
   /** Animación distinta para la preparación; sin ella se repite `animation`. */
@@ -212,6 +223,8 @@ export const DEFAULT_ABILITY: Omit<
   healSelf: 0,
   color: [255, 255, 255],
   castTime: 0.45,
+  animationTime: 0.45,
+  moveLock: 0,
   windup: 0,
   windupAnimation: null,
   windupAnimationMode: 'once',
@@ -229,7 +242,16 @@ export function defineAbility(
   def: Pick<AbilityDef, 'id' | 'name' | 'type' | 'category' | 'shape'> &
     Partial<AbilityDef>
 ): AbilityDef {
-  return { ...DEFAULT_ABILITY, ...def };
+  const ability = { ...DEFAULT_ABILITY, ...def };
+  if (ability.shape === 'melee') {
+    // Las melee bloquean el movimiento durante su animación y el clip dura
+    // exactamente ese mismo tiempo (la mitad del castTime por defecto).
+    if (def.moveLock === undefined) ability.moveLock = ability.castTime * 0.5;
+    ability.animationTime = ability.moveLock;
+  } else if (def.animationTime === undefined) {
+    ability.animationTime = ability.castTime;
+  }
+  return ability;
 }
 
 /**
@@ -371,6 +393,12 @@ export class AbilityBuilder {
     return this;
   }
 
+  /** Bloquea el movimiento del lanzador durante `seconds` al usar la habilidad. */
+  moveLock(seconds: number): this {
+    this.draft.moveLock = seconds;
+    return this;
+  }
+
   windup(
     seconds: number,
     options: {
@@ -489,6 +517,7 @@ registerAbility(
     .halfAngle(50)
     .knockback(0.6)
     .cast(0.35)
+    .animation('attack')
     .color(235, 228, 210)
     .description('Embestida cuerpo a cuerpo contra los rivales que tenga delante.')
 );
@@ -592,6 +621,7 @@ registerAbility(
     .halfAngle(60)
     .windup(0.2)
     .cast(0.4)
+    .animation('shoot')
     .impact('spore')
     .slow(0.55, 3)
     .color(72, 124, 54)

@@ -120,6 +120,10 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   hurtTimer: number;
   /** Tiempo restante de la animación de ataque. */
   actionTimer: number;
+  /** Velocidad del clip de ataque; las melee lo escalan a `moveLock`. */
+  actionPlayback: number;
+  /** Tiempo restante en el que el input no puede mover al jugador. */
+  moveLockTimer: number;
   actionAnimation: AnimationName;
   /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
   dash: PlayerDash | null;
