@@ -18,7 +18,8 @@ const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   poison: 0.38,
   spore: 0.28,
   psychic: 0.1,
-  slash: 0.16
+  slash: 0.16,
+  arc: 0.18
 };
 
 export interface EffectHandle {
@@ -507,6 +508,8 @@ export class CombatFx {
       spore: (x, z, color, effectiveness) =>
         this.spawnHit(x, z, color, effectiveness),
       slash: (x, z, color, effectiveness) =>
+        this.spawnHit(x, z, color, effectiveness),
+      arc: (x, z, color, effectiveness) =>
         this.spawnHit(x, z, color, effectiveness),
       psychic: (x, z, color, effectiveness) =>
         this.spawnPsychicBurst(x, z, color, effectiveness)
@@ -1627,6 +1630,47 @@ export class CombatFx {
       }
     }
 
+    const attackArcs: {
+      entity: pc.Entity;
+      material: pc.StandardMaterial;
+      delay: number;
+      travel: number;
+      peak: number;
+    }[] = [];
+    if (style === 'arc') {
+      // Arco de ataque: tres frentes curvos que salen del lanzador y recorren
+      // el cono hasta su borde, marcando la dirección y el alcance del golpe.
+      // La geometría es estática (radio 1) y solo se escala, así el trazo es
+      // barato y se ve desde cualquier cámara.
+      effectDuration = 0.34;
+      material.opacity = 0.16;
+      const frontCount = 3;
+      for (let index = 0; index < frontCount; index++) {
+        const arcMaterial = this.createMaterial(color, 0);
+        arcMaterial.blendType = pc.BLEND_NORMAL;
+        arcMaterial.opacity = 0;
+        arcMaterial.update();
+        materials.push(arcMaterial);
+        const { mesh: arcMesh } = createArcBandMesh(
+          this.device,
+          0.84,
+          1,
+          halfAngle,
+          26
+        );
+        const arc = this.createEntity(arcMesh, [arcMaterial], entity);
+        arc.setLocalPosition(0, 0.12 + index * 0.035, 0);
+        arc.setLocalScale(0.001, 1, 0.001);
+        attackArcs.push({
+          entity: arc,
+          material: arcMaterial,
+          delay: index * 0.05,
+          travel: 0.2,
+          peak: 1 - index * 0.15
+        });
+      }
+    }
+
     const puffs: {
       entity: pc.Entity;
       baseX: number;
@@ -1746,9 +1790,20 @@ export class CombatFx {
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity = arcOpacity * (1 - t);
-      if (style !== 'psychic' && style !== 'slash') {
+      if (style !== 'psychic' && style !== 'slash' && style !== 'arc') {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
+      }
+      for (const arc of attackArcs) {
+        const local = Math.min(
+          1,
+          Math.max(0, (time - arc.delay) / arc.travel)
+        );
+        const ease = 1 - Math.pow(1 - local, 3);
+        const radius = range * (0.28 + 0.72 * ease);
+        arc.entity.setLocalScale(radius, 1, radius);
+        const fade = Math.min(1, local / 0.18) * (1 - local);
+        arc.material.opacity = arc.peak * Math.max(0, fade);
       }
       const now = t * effectDuration;
       for (const slice of slashSlices) {

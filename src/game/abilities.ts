@@ -59,7 +59,8 @@ export type ImpactStyle =
   | 'poison'
   | 'spore'
   | 'psychic'
-  | 'slash';
+  | 'slash'
+  | 'arc';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle = 'electric' | 'fire' | 'psychic';
@@ -529,6 +530,7 @@ registerAbility(
     .knockback(0.6)
     .cast(0.35)
     .animation('attack')
+    .impact('arc')
     .color(235, 228, 210)
     .description('Embestida cuerpo a cuerpo contra los rivales que tenga delante.')
 );
