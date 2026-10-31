@@ -11,7 +11,7 @@
 import * as pc from 'playcanvas';
 import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilities';
 import { DEG } from './config';
-import { createFlameCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
+import { createFlameCanvas, createFrostCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
 /** Opacidad base del arco melee según el estilo de impacto. */
 const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
@@ -396,6 +396,8 @@ export class CombatFx {
   /** Textura de hoja y de espora para los efectos de Planta/Veneno. */
   private readonly leafTexture: pc.Texture;
   private readonly sporeTexture: pc.Texture;
+  /** Rocío azulado para las partículas de agua. */
+  private readonly waterTexture: pc.Texture;
   private readonly leafMesh: pc.Mesh;
   /** Mallas de la marca de área y marcas activas. */
   private readonly discMesh: pc.Mesh;
@@ -479,6 +481,12 @@ export class CombatFx {
       minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
       magFilter: pc.FILTER_LINEAR
     });
+    this.waterTexture = textureFromCanvas(this.device, createFrostCanvas(48), {
+      name: 'combat-water',
+      mipmaps: true,
+      minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+      magFilter: pc.FILTER_LINEAR
+    });
     this.leafMesh = createFlameCrossMesh(this.device);
 
     // PlayCanvas destruye una malla cuando su último MeshInstance desaparece.
@@ -512,7 +520,9 @@ export class CombatFx {
       arc: (x, z, color, effectiveness) =>
         this.spawnHit(x, z, color, effectiveness),
       psychic: (x, z, color, effectiveness) =>
-        this.spawnPsychicBurst(x, z, color, effectiveness)
+        this.spawnPsychicBurst(x, z, color, effectiveness),
+      water: (x, z, color, effectiveness) =>
+        this.spawnWaterBurst(x, z, color, effectiveness)
     };
 
     this.projectileFactories = {
@@ -527,7 +537,9 @@ export class CombatFx {
       poison: (x, z, color, radius, dirX, dirZ) =>
         this.spawnPoisonProjectile(x, z, radius, dirX, dirZ, color),
       psychic: (x, z, color, radius) =>
-        this.spawnOrbProjectile(x, z, color, radius)
+        this.spawnOrbProjectile(x, z, color, radius),
+      water: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnWaterProjectile(x, z, radius, dirX, dirZ, color)
     };
 
     this.beamFactories = {
@@ -536,7 +548,9 @@ export class CombatFx {
       fire: (x1, z1, x2, z2, color, width) =>
         this.spawnFireBeam(x1, z1, x2, z2, color, width),
       psychic: (x1, z1, x2, z2, color, width) =>
-        this.spawnPsychicBeam(x1, z1, x2, z2, color, width)
+        this.spawnPsychicBeam(x1, z1, x2, z2, color, width),
+      water: (x1, z1, x2, z2, color, width) =>
+        this.spawnWaterBeam(x1, z1, x2, z2, color, width)
     };
 
     this.aoeFactories = {
@@ -551,7 +565,9 @@ export class CombatFx {
       poison: (x, z, radius, color, duration) =>
         this.spawnPoisonAoe(x, z, radius, color, duration),
       psychic: (x, z, radius, color, duration) =>
-        this.spawnPsychicAoe(x, z, radius, color, duration)
+        this.spawnPsychicAoe(x, z, radius, color, duration),
+      water: (x, z, radius, color, duration) =>
+        this.spawnWaterAoe(x, z, radius, color, duration)
     };
   }
 
@@ -625,6 +641,35 @@ export class CombatFx {
     material.emissiveIntensity = 1;
     material.opacityMap = this.leafTexture;
     material.opacityMapChannel = 'a';
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_NORMAL;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /**
+   * Material de agua: mezcla normal para que el azul se lea sobre cualquier
+   * terreno (el aditivo se blanquea con el suelo claro). Sin texturas: la
+   * silueta la dan las esferas y anillos.
+   */
+  private createWaterMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      tint[0] / 255,
+      tint[1] / 255,
+      tint[2] / 255
+    );
+    material.emissiveIntensity = 1.05;
     material.opacity = opacity;
     material.blendType = pc.BLEND_NORMAL;
     material.depthWrite = false;
@@ -876,11 +921,15 @@ export class CombatFx {
     entity.addComponent('particlesystem', data);
   }
 
-  /** Motas de espora: aditivas, pequeñas y con tinte del tipo de la habilidad. */
+  /**
+   * Motas de espora: aditivas, pequeñas y con tinte del tipo de la habilidad.
+   * El agua reutiliza el emisor con su propia textura de rocío y mezcla normal.
+   */
   private spawnSporeParticles(
     parent: pc.Entity,
     options: FlameParticleOptions,
-    tint: readonly [number, number, number]
+    tint: readonly [number, number, number],
+    texture: pc.Texture = this.sporeTexture
   ): void {
     const entity = new pc.Entity('spore-particles');
     entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
@@ -899,7 +948,7 @@ export class CombatFx {
       autoPlay: true,
       emitterShape: pc.EMITTERSHAPE_BOX,
       emitterExtents: new pc.Vec3(...options.extents),
-      colorMap: this.sporeTexture,
+      colorMap: texture,
       colorGraph: {
         type: pc.CURVE_LINEAR,
         keys: [
@@ -1421,6 +1470,115 @@ export class CombatFx {
           radius * 1.9 * pulse
         );
         glowMaterial.opacity = 0.18 + Math.random() * 0.12;
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
+   * Proyectil de agua: tres burbujas pequeñas que giran entre sí alrededor de
+   * un centro común mientras avanzan, con destellos que patinan por su
+   * superficie. Sin núcleo ni estela: el grupo de burbujas es todo el efecto.
+   */
+  private spawnWaterProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('water-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const bubbleMaterial = this.createWaterMaterial(color, 0.5);
+    const shineMaterial = this.createWaterMaterial([246, 255, 255], 0.92);
+    const materials = [bubbleMaterial, shineMaterial];
+
+    const orbit = radius * 1.5;
+    const sizes = [1, 0.8, 0.9];
+    const bubbles: {
+      entity: pc.Entity;
+      body: pc.Entity;
+      phase: number;
+      size: number;
+      orbit: number;
+      bob: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const group = new pc.Entity('water-bubble');
+      root.addChild(group);
+
+      const size = radius * 1.5 * sizes[index];
+      const body = this.createEntity(this.sphereMesh, [bubbleMaterial], group);
+      body.setLocalScale(size, size, size);
+
+      // Dos brillos pequeños: uno grande arriba a la izquierda y otro mínimo
+      // abajo a la derecha. Al girar el grupo, recorren la burbuja como reflejos.
+      const highlight = this.createEntity(
+        this.sphereMesh,
+        [shineMaterial],
+        group
+      );
+      highlight.setLocalPosition(-size * 0.22, size * 0.3, -size * 0.18);
+      highlight.setLocalScale(size * 0.3, size * 0.3, size * 0.3);
+
+      const spark = this.createEntity(this.sphereMesh, [shineMaterial], group);
+      spark.setLocalPosition(size * 0.2, -size * 0.16, -size * 0.22);
+      spark.setLocalScale(size * 0.14, size * 0.14, size * 0.14);
+
+      bubbles.push({
+        entity: group,
+        body,
+        phase: (index / 3) * Math.PI * 2,
+        size,
+        orbit: orbit * (0.94 + index * 0.08),
+        bob: Math.random() * Math.PI * 2
+      });
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        for (const bubble of bubbles) {
+          // Las tres burbujas se persiguen en círculo en el plano perpendicular
+          // a la dirección de vuelo, así que el grupo rueda mientras avanza.
+          const angle = bubble.phase + time * 5.4;
+          bubble.entity.setLocalPosition(
+            Math.cos(angle) * bubble.orbit,
+            Math.sin(angle) * bubble.orbit +
+              Math.sin(time * 6 + bubble.bob) * radius * 0.12,
+            Math.sin(angle * 2 + bubble.phase) * radius * 0.3
+          );
+          // El grupo gira sobre sí mismo para que los brillos patinen.
+          bubble.entity.setLocalEulerAngles(
+            time * 150 + bubble.phase * 40,
+            time * 210 + bubble.phase * 30,
+            0
+          );
+          const pulse = 1 + Math.sin(time * 14 + bubble.phase) * 0.09;
+          const size = bubble.size * pulse;
+          bubble.body.setLocalScale(size, size, size);
+        }
+        bubbleMaterial.opacity = 0.44 + Math.sin(time * 16) * 0.07;
+        shineMaterial.opacity = 0.86 + Math.sin(time * 24) * 0.1;
+        for (const material of materials) material.update();
       }
     };
     visual.update(0);
@@ -2102,6 +2260,296 @@ export class CombatFx {
   }
 
   /**
+   * Chorro de agua a presión: un cañón de agua grueso y turbulento, no un tubo
+   * limpio. Mezcla una neblina exterior, un cuerpo azul con bultos que recorren
+   * la línea, un núcleo blanco con vetas rápidas, espuma en la boca y una
+   * salpicadura en la punta. Todo son transformaciones y opacidad sobre
+   * geometría estática.
+   */
+  private spawnWaterBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('water-beam');
+    root.setPosition(x1, 0.7, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const mistMaterial = this.createWaterMaterial(color, 0.18);
+    const bodyMaterial = this.createWaterMaterial(color, 0.42);
+    const coreMaterial = this.createWaterMaterial([236, 252, 255], 0.95);
+    const foamMaterial = this.createWaterMaterial([216, 245, 255], 0.55);
+    const streakMaterial = this.createWaterMaterial([250, 255, 255], 0.9);
+    const ringMaterial = this.createWaterMaterial([200, 240, 255], 0.7);
+    const materials = [
+      mistMaterial,
+      bodyMaterial,
+      coreMaterial,
+      foamMaterial,
+      streakMaterial,
+      ringMaterial
+    ];
+
+    const mistWidth = Math.max(0.14, width * 3.2);
+    const bodyWidth = Math.max(0.1, width * 1.8);
+    const coreWidth = Math.max(0.06, width * 0.9);
+
+    const sheath = this.createEntity(this.sphereMesh, [mistMaterial], root);
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+
+    // Bultos que viajan por el chorro: rompen la silueta del tubo y transmiten
+    // la presión del agua.
+    const bulges: {
+      entity: pc.Entity;
+      phase: number;
+      speed: number;
+      wobble: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const bulge = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+      const size = bodyWidth * (0.55 + Math.random() * 0.3);
+      bulge.setLocalScale(size, size, size * 1.6);
+      bulges.push({
+        entity: bulge,
+        phase: Math.random(),
+        speed: 2.1 + Math.random() * 1.1,
+        wobble: 14 + Math.random() * 10,
+        size
+      });
+    }
+
+    // Vetas blancas rápidas dentro del núcleo, como agua a toda velocidad.
+    const streaks: {
+      entity: pc.Entity;
+      phase: number;
+      speed: number;
+      x: number;
+      y: number;
+      length: number;
+    }[] = [];
+    for (let index = 0; index < 14; index++) {
+      const streak = this.createEntity(this.boxMesh, [streakMaterial], root);
+      streaks.push({
+        entity: streak,
+        phase: Math.random(),
+        speed: 4.2 + Math.random() * 2.2,
+        x: (Math.random() - 0.5) * coreWidth * 0.9,
+        y: (Math.random() - 0.5) * coreWidth * 0.7,
+        length: length * (0.06 + Math.random() * 0.06)
+      });
+    }
+
+    // Espuma en la boca del lanzador.
+    const foam: {
+      entity: pc.Entity;
+      size: number;
+      phase: number;
+      z: number;
+    }[] = [];
+    for (let index = 0; index < 4; index++) {
+      const bubble = this.createEntity(this.sphereMesh, [foamMaterial], root);
+      const size = bodyWidth * (0.5 + Math.random() * 0.45);
+      bubble.setLocalScale(size, size, size);
+      foam.push({
+        entity: bubble,
+        size,
+        phase: Math.random() * Math.PI * 2,
+        z: 0.02 + Math.random() * 0.35
+      });
+    }
+
+    // Salpicadura en la punta: casquete, dos ondas y gotas.
+    const cap = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    cap.setLocalPosition(0, 0, length);
+    const capScale = Math.max(0.12, width * 1.7);
+    cap.setLocalScale(capScale, capScale, capScale);
+
+    const splashRings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalEulerAngles(90, 0, 0);
+      splashRings.push(ring);
+    }
+
+    const drops: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+      phase: number;
+      speed: number;
+    }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const drop = this.createEntity(this.sphereMesh, [foamMaterial], root);
+      const size = width * (0.12 + Math.random() * 0.14);
+      drop.setLocalScale(size, size, size);
+      drops.push({
+        entity: drop,
+        angle: Math.random() * Math.PI * 2,
+        distance: width * (1.4 + Math.random() * 2.6),
+        rise: width * (1 + Math.random() * 2),
+        size,
+        phase: Math.random(),
+        speed: 1.8 + Math.random() * 1.6
+      });
+    }
+
+    // Rocío localizado en la boca y en la punta: el chorro no lleva una niebla
+    // continua en medio, solo salpicadura donde nace y donde impacta.
+    this.spawnSporeParticles(
+      root,
+      {
+        x: 0,
+        y: 0,
+        z: width * 0.6,
+        extents: [width * 1.6, width * 1.4, width * 0.8],
+        velocity: [0, 0.2, 1.5],
+        velocityEnd: [0, 0.8, 3.4],
+        radialSpeed: 0.6,
+        radialSpeedEnd: 1.8,
+        sizeStart: width * 0.8,
+        sizeMid: width * 1.2,
+        sizeEnd: width * 0.4,
+        lifetime: 0.18,
+        rate: 0.01,
+        numParticles: 26,
+        stretch: 0.3,
+        localSpace: true,
+        blendType: pc.BLEND_NORMAL
+      },
+      color,
+      this.waterTexture
+    );
+    this.spawnSporeParticles(
+      root,
+      {
+        x: 0,
+        y: 0,
+        z: length,
+        extents: [width * 1.4, width * 1.2, width * 1.2],
+        velocity: [0, 0.4, 0.6],
+        velocityEnd: [0, 0.9, 1.2],
+        radialSpeed: 1.4,
+        radialSpeedEnd: 3.2,
+        sizeStart: width * 0.9,
+        sizeMid: width * 1.4,
+        sizeEnd: width * 0.4,
+        lifetime: 0.22,
+        rate: 0.012,
+        numParticles: 30,
+        localSpace: true,
+        blendType: pc.BLEND_NORMAL
+      },
+      color,
+      this.waterTexture
+    );
+
+    let time = 0;
+    this.addEffect(root, materials, 0.55, (_t, dt) => {
+      time += dt;
+      // El chorro sale del lanzador en el primer tramo del efecto.
+      const advance = Math.min(1, time / 0.09);
+      const reveal = 1 - (1 - advance) * (1 - advance);
+      const visibleLength = Math.max(0.04, length * reveal);
+
+      sheath.setLocalPosition(0, 0, visibleLength / 2);
+      sheath.setLocalScale(mistWidth, mistWidth, visibleLength);
+      body.setLocalPosition(0, 0, visibleLength / 2);
+      body.setLocalScale(bodyWidth, bodyWidth, visibleLength);
+      core.setLocalPosition(0, 0, visibleLength / 2);
+      core.setLocalScale(coreWidth, coreWidth, visibleLength);
+
+      for (const bulge of bulges) {
+        const phase = (bulge.phase + time * bulge.speed) % 1;
+        const wobble = Math.sin(time * bulge.wobble + bulge.phase * 6.28);
+        const size = bulge.size * (0.82 + wobble * 0.22);
+        bulge.entity.setLocalPosition(
+          Math.sin(time * 13 + bulge.phase * 6.28) * coreWidth * 0.7,
+          Math.cos(time * 11 + bulge.phase * 6.28) * coreWidth * 0.5,
+          phase * visibleLength
+        );
+        bulge.entity.setLocalScale(size, size, size * 1.6);
+      }
+
+      for (const streak of streaks) {
+        const phase = (streak.phase + time * streak.speed) % 1;
+        streak.entity.setLocalPosition(
+          streak.x,
+          streak.y,
+          phase * visibleLength
+        );
+        streak.entity.setLocalScale(
+          Math.max(0.02, width * 0.09),
+          Math.max(0.02, width * 0.09),
+          Math.max(0.04, streak.length)
+        );
+      }
+
+      for (const bubble of foam) {
+        const pulse = 0.8 + Math.sin(time * 34 + bubble.phase) * 0.28;
+        const size = bubble.size * pulse;
+        bubble.entity.setLocalPosition(
+          Math.sin(time * 18 + bubble.phase) * bodyWidth * 0.28,
+          Math.cos(time * 16 + bubble.phase) * bodyWidth * 0.22,
+          bubble.z * reveal
+        );
+        bubble.entity.setLocalScale(size, size, size);
+      }
+
+      const tipZ = visibleLength;
+      const capPulse = 0.9 + Math.sin(time * 46) * 0.18;
+      cap.setLocalPosition(0, 0, tipZ);
+      cap.setLocalScale(
+        capScale * capPulse,
+        capScale * capPulse,
+        capScale * capPulse
+      );
+
+      splashRings.forEach((ring, index) => {
+        const phase = (time * 2.6 + index * 0.5) % 1;
+        const scale = Math.max(0.08, width * (1.6 + phase * 5));
+        ring.setLocalPosition(0, 0, tipZ);
+        ring.setLocalScale(scale, scale, scale);
+      });
+
+      for (const drop of drops) {
+        const phase = (drop.phase + time * drop.speed) % 1;
+        const distance = drop.distance * phase;
+        drop.entity.setLocalPosition(
+          Math.cos(drop.angle) * distance,
+          Math.sin(phase * Math.PI) * drop.rise,
+          tipZ + Math.sin(drop.angle) * distance * 0.55
+        );
+        const fade = Math.max(0, 1 - phase);
+        drop.entity.setLocalScale(
+          drop.size * fade,
+          drop.size * fade,
+          drop.size * fade
+        );
+      }
+
+      const fade = 1 - Math.max(0, (time - 0.3) / 0.25);
+      mistMaterial.opacity = 0.16 * fade;
+      bodyMaterial.opacity = 0.4 * fade;
+      coreMaterial.opacity = 0.92 * fade;
+      foamMaterial.opacity = 0.5 * fade;
+      streakMaterial.opacity = 0.82 * fade;
+      ringMaterial.opacity =
+        0.62 * fade * Math.max(0, 1 - ((time * 2.6) % 1));
+    });
+  }
+
+  /**
    * Chorro de fuego: partículas orientadas a cámara a lo largo del recorrido,
    * lenguas texturizadas que les dan silueta y un núcleo cálido. Avanza muy
    * rápido y se desvanece antes de desaparecer.
@@ -2506,6 +2954,107 @@ export class CombatFx {
 
       leafMaterial.opacity = 0.82 * envelope;
       hotLeafMaterial.opacity = 0.9 * envelope;
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
+  }
+
+  /**
+   * Área de agua: olas concéntricas que se abren desde el centro y gotas que
+   * salpican. Se apoya en el suelo para leerse como una extensión de líquido.
+   */
+  private spawnWaterAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.3, duration);
+    const root = new pc.Entity('water-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const fillMaterial = this.createWaterMaterial(color, 0.08);
+    const ringMaterial = this.createWaterMaterial([206, 241, 255], 0.55);
+    const dropMaterial = this.createWaterMaterial([226, 248, 255], 0.8);
+    const materials = [fillMaterial, ringMaterial, dropMaterial];
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.02, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    const rings: pc.Entity[] = [];
+    const ringCount = 3;
+    for (let index = 0; index < ringCount; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.09, 0);
+      ring.setLocalScale(0.2, 1, 0.2);
+      rings.push(ring);
+    }
+
+    const drops: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      height: number;
+      size: number;
+      phase: number;
+      speed: number;
+    }[] = [];
+    for (let index = 0; index < 16; index++) {
+      const drop = this.createEntity(this.sphereMesh, [dropMaterial], root);
+      const size = 0.07 + Math.random() * 0.07;
+      drop.setLocalScale(size, size, size);
+      drops.push({
+        entity: drop,
+        angle: Math.random() * Math.PI * 2,
+        distance: radius * (0.35 + Math.random() * 0.6),
+        height: 0.35 + Math.random() * 0.7,
+        size,
+        phase: Math.random(),
+        speed: 1.4 + Math.random() * 0.9
+      });
+    }
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.12);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.25));
+      const envelope = Math.min(fadeIn, fadeOut);
+
+      fillMaterial.opacity = 0.07 * envelope;
+      const fillScale = radius * 2 * (0.96 + Math.sin(time * 6) * 0.03);
+      fill.setLocalScale(fillScale, 1, fillScale);
+
+      rings.forEach((ring, index) => {
+        const ringTime = time - index * 0.14;
+        const phase =
+          ringTime <= 0 ? 0 : (ringTime * 0.75) % 1;
+        const scale = radius * 2 * (0.14 + phase * 0.86);
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalPosition(0, 0.09 + phase * 0.05, 0);
+      });
+      ringMaterial.opacity = 0.5 * envelope;
+
+      for (const drop of drops) {
+        const p = (drop.phase + time * drop.speed) % 1;
+        const distance = drop.distance * (0.2 + p * 0.8);
+        const rise = Math.sin(p * Math.PI) * drop.height;
+        drop.entity.setLocalPosition(
+          Math.cos(drop.angle) * distance,
+          0.1 + rise,
+          Math.sin(drop.angle) * distance
+        );
+        const fade = Math.max(0, 1 - p * 1.1);
+        drop.entity.setLocalScale(
+          drop.size * fade,
+          drop.size * fade,
+          drop.size * fade
+        );
+      }
+      dropMaterial.opacity = 0.75 * envelope;
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
@@ -3434,6 +3983,105 @@ export class CombatFx {
       }
       leafMaterial.opacity = 0.95 * (1 - t);
       hotMaterial.opacity = 0.95 * (1 - t);
+    });
+  }
+
+  /** Impacto de agua: salpicadura con núcleo, ondas y gotas radiales. */
+  spawnWaterBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    _effectiveness: number
+  ): void {
+    const root = new pc.Entity('water-burst');
+    root.setPosition(x, 0.04, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createWaterMaterial([234, 251, 255], 0.95);
+    const bodyMaterial = this.createWaterMaterial(color, 0.6);
+    const ringMaterial = this.createWaterMaterial([205, 240, 255], 0.75);
+    const dropMaterial = this.createWaterMaterial([224, 248, 255], 0.85);
+    const materials = [coreMaterial, bodyMaterial, ringMaterial, dropMaterial];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.62, 0);
+    core.setLocalScale(0.24, 0.24, 0.24);
+
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalPosition(0, 0.55, 0);
+    body.setLocalScale(0.4, 0.34, 0.4);
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.06, 0);
+      ring.setLocalScale(0.4, 1, 0.4);
+      rings.push(ring);
+    }
+
+    const drops: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      height: number;
+      size: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const drop = this.createEntity(this.sphereMesh, [dropMaterial], root);
+      const size = 0.07 + Math.random() * 0.06;
+      drop.setLocalScale(size, size, size);
+      drops.push({
+        entity: drop,
+        angle: Math.random() * Math.PI * 2,
+        distance: 0.55 + Math.random() * 0.7,
+        height: 0.45 + Math.random() * 0.55,
+        size,
+        delay: Math.random() * 0.08
+      });
+    }
+
+    this.addEffect(root, materials, 0.5, (t) => {
+      const local = Math.min(1, Math.max(0, t));
+      const ease = 1 - Math.pow(1 - local, 3);
+      const coreScale = 0.24 + ease * 0.55;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      core.setLocalPosition(0, 0.62 + ease * 0.12, 0);
+      coreMaterial.opacity = 0.95 * (1 - local);
+
+      body.setLocalScale(
+        0.4 + ease * 0.5,
+        0.34 + ease * 0.4,
+        0.4 + ease * 0.5
+      );
+      bodyMaterial.opacity = 0.55 * (1 - local);
+
+      rings.forEach((ring, index) => {
+        const ringT = Math.min(1, Math.max(0, (t - index * 0.06) / 0.32));
+        const ringEase = 1 - Math.pow(1 - ringT, 2);
+        const scale = 0.35 + ringEase * 1.5;
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalPosition(0, 0.1 + ringEase * 0.18, 0);
+      });
+      ringMaterial.opacity = 0.7 * (1 - local);
+
+      for (const drop of drops) {
+        const dropT = Math.min(
+          1,
+          Math.max(0, (t - drop.delay) / 0.38)
+        );
+        const distance = drop.distance * (0.15 + dropT);
+        const rise = Math.sin(dropT * Math.PI) * drop.height;
+        drop.entity.setLocalPosition(
+          Math.cos(drop.angle) * distance,
+          0.28 + rise,
+          Math.sin(drop.angle) * distance
+        );
+        const fade = Math.max(0, 1 - dropT);
+        const size = drop.size * fade;
+        drop.entity.setLocalScale(size, size, size);
+      }
+      dropMaterial.opacity = 0.85 * (1 - local);
     });
   }
 

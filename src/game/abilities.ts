@@ -48,7 +48,8 @@ export type ProjectileStyle =
   | 'fire'
   | 'grass'
   | 'poison'
-  | 'psychic';
+  | 'psychic'
+  | 'water';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -60,13 +61,21 @@ export type ImpactStyle =
   | 'spore'
   | 'psychic'
   | 'slash'
-  | 'arc';
+  | 'arc'
+  | 'water';
 
 /** Aspecto visual de un haz. */
-export type BeamStyle = 'electric' | 'fire' | 'psychic';
+export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water';
 
 /** Aspecto visual de un área. */
-export type AoeStyle = 'ring' | 'fire' | 'whirl' | 'grass' | 'poison' | 'psychic';
+export type AoeStyle =
+  | 'ring'
+  | 'fire'
+  | 'whirl'
+  | 'grass'
+  | 'poison'
+  | 'psychic'
+  | 'water';
 
 /**
  * Reparto del daño de un área:
@@ -665,6 +674,64 @@ registerAbility(
 );
 
 /* ------------------------------------------------------------------------- */
+/* Squirtle                                                                  */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('acuaJet', 'Acua Jet', 'Water', 'physical', 'dash')
+    .power(45)
+    .accuracy(100)
+    .cooldown(5)
+    .range(0)
+    .radius(0.85)
+    .dash(4.2)
+    .knockback(0.3)
+    .cast(0.3)
+    .animation('attack')
+    .color(96, 176, 255)
+    .description(
+      'Se impulsa con un chorro de agua y golpea a los rivales del camino.'
+    )
+);
+
+registerAbility(
+  ability('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', 'projectile')
+    .power(65)
+    .accuracy(100)
+    .cooldown(3.5)
+    .range(8)
+    .radius(0.24)
+    .projectile('water', 13)
+    .impact('water')
+    .cast(0.4)
+    .windup(0.2)
+    .animation('shoot')
+    .slow(0.7, 2)
+    .color(104, 196, 255)
+    .description(
+      'Chorro de burbujas a presión que ralentiza un 30 % durante 2 s.'
+    )
+);
+
+registerAbility(
+  ability('hidrobomba', 'Hidrobomba', 'Water', 'special', 'beam')
+    .power(115)
+    .accuracy(90)
+    .cooldown(9)
+    .range(8.5)
+    .radius(0.42)
+    .beam('water')
+    .impact('water')
+    .windup(0.3, { animation: 'charge' })
+    .cast(0.6)
+    .animation('shoot')
+    .color(88, 168, 255)
+    .description(
+      'Definitiva: chorro de agua a presión que atraviesa la línea de tiro.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
 /* Mewtwo                                                                    */
 /* ------------------------------------------------------------------------- */
 
@@ -827,6 +894,7 @@ export const MOVESETS: Record<
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
+MOVESETS['0007'] = ['placaje', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];
 MOVESETS['0150'] = [
   'telequinesis',
   'teletransporte',
