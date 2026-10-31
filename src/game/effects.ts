@@ -42,12 +42,12 @@ export const applyBuffs: Effect<CastEffectContext> = ({ player, def }) => {
  * Cura al lanzador una fracción de su vida máxima. Nunca supera el máximo y
  * muestra un número flotante para que el cambio de vida sea legible.
  */
-export const healSelf: Effect<CastEffectContext> = ({
-  player,
-  def,
-  combatFx,
-  showHealPopup
-}) => {
+export function applyHealSelf(
+  player: MatchPlayerState,
+  def: AbilityDef,
+  combatFx: CombatFx,
+  showHealPopup: (player: MatchPlayerState, amount: number) => void
+): void {
   if (def.healSelf <= 0 || !player.alive) return;
 
   const missing = Math.max(0, player.maxHp - player.hp);
@@ -62,6 +62,20 @@ export const healSelf: Effect<CastEffectContext> = ({
     def.color,
     Math.max(0.8, def.radius)
   );
+}
+
+/**
+ * Efecto de curación al lanzar. Las habilidades con `healOnHit` esperan a que
+ * el haz impacte, así que este paso las ignora.
+ */
+export const healSelf: Effect<CastEffectContext> = ({
+  player,
+  def,
+  combatFx,
+  showHealPopup
+}) => {
+  if (def.healOnHit) return;
+  applyHealSelf(player, def, combatFx, showHealPopup);
 };
 
 /** Efectos que se resuelven al completar el lanzamiento de cualquier habilidad. */

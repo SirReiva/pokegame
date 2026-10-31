@@ -52,7 +52,8 @@ export type ProjectileStyle =
   | 'water'
   | 'aura'
   | 'shuriken'
-  | 'shadow';
+  | 'shadow'
+  | 'ghost';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -70,10 +71,11 @@ export type ImpactStyle =
   | 'steel'
   | 'fighting'
   | 'dark'
-  | 'shuriken';
+  | 'shuriken'
+  | 'ghost';
 
 /** Aspecto visual de un haz. */
-export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water' | 'dark';
+export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water' | 'dark' | 'ghost';
 
 /** Aspecto visual de un área. */
 export type AoeStyle =
@@ -84,7 +86,8 @@ export type AoeStyle =
   | 'poison'
   | 'psychic'
   | 'water'
-  | 'explosion';
+  | 'explosion'
+  | 'ghost';
 
 /**
  * Reparto del daño de un área:
@@ -175,9 +178,15 @@ export interface AbilityDef {
   slow: SlowSpec | null;
   /**
    * Curación al lanzador como fracción de su vida máxima: `0.25` = 25 %.
-   * `0` desactiva la curación. Se aplica al ejecutar la habilidad.
+   * `0` desactiva la curación. Se aplica al ejecutar la habilidad salvo que
+   * `healOnHit` sea `true`.
    */
   healSelf: number;
+  /**
+   * Si es `true`, `healSelf` no se aplica al lanzar: solo cura cuando la
+   * habilidad impacta al menos en un enemigo. Lo usa `Come Sueños`.
+   */
+  healOnHit: boolean;
   /**
    * Autodaño al lanzador como fracción de su vida máxima: `0.35` = 35 %.
    * `0` lo desactiva. Nunca le quita la última vida: si el golpe lo dejaría a
@@ -253,6 +262,7 @@ export const DEFAULT_ABILITY: Omit<
   buffs: [],
   slow: null,
   healSelf: 0,
+  healOnHit: false,
   selfDamage: 0,
   color: [255, 255, 255],
   castTime: 0.45,
@@ -413,6 +423,12 @@ export class AbilityBuilder {
 
   heal(fraction: number): this {
     this.draft.healSelf = fraction;
+    return this;
+  }
+
+  /** La curación de `heal` solo se aplica si la habilidad impacta. */
+  healOnHit(): this {
+    this.draft.healOnHit = true;
     return this;
   }
 
@@ -641,6 +657,84 @@ registerAbility(
     .color(247, 208, 44)
     .description(
       'Definitiva: carga 0,6 s y detona un área de 4,2 u centrada en Voltorb. Se lleva el 35 % de su vida máxima, sin llegar nunca a 0.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
+/* Gengar                                                                    */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', 'melee')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.7)
+    .range(2)
+    .radius(0.7)
+    .halfAngle(50)
+    .knockback(0.25)
+    .cast(0.32)
+    .animation('shoot')
+    .impact('ghost')
+    .color(150, 110, 220)
+    .description(
+      'Lengüetazo fantasmal de corto alcance. Ataque básico de Gengar.'
+    )
+);
+
+registerAbility(
+  ability('bolaSombra', 'Bola Sombra', 'Ghost', 'special', 'projectile')
+    .power(70)
+    .accuracy(100)
+    .cooldown(6)
+    .range(8.5)
+    .radius(0.3)
+    .projectile('ghost', 14)
+    .impact('ghost')
+    .cast(0.45)
+    .animation('shoot')
+    .color(150, 110, 220)
+    .description(
+      'Proyectil de energía fantasmal. El golpe principal a distancia de Gengar.'
+    )
+);
+
+registerAbility(
+  ability('bombaLodo', 'Bomba Lodo', 'Poison', 'special', 'aoe')
+    .power(25)
+    .accuracy(100)
+    .cooldown(9)
+    .range(6.5)
+    .radius(2.4)
+    .area('poison', 'overTime', 2.5, 0.5)
+    .slow(0.75, 1.5)
+    .windup(0.35, { animation: 'shoot', move: true })
+    .cast(0.5)
+    .animation(null)
+    .impact('poison')
+    .color(150, 90, 180)
+    .description(
+      'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 25 de daño por segundo y ralentiza un 25 %.'
+    )
+);
+
+registerAbility(
+  ability('comeSuenos', 'Come Sueños', 'Ghost', 'special', 'beam')
+    .power(90)
+    .accuracy(100)
+    .cooldown(11)
+    .range(8)
+    .radius(0.42)
+    .beam('ghost')
+    .impact('ghost')
+    .windup(0.25, { animation: 'charge' })
+    .cast(0.55)
+    .animation('shoot')
+    .heal(0.15)
+    .healOnHit()
+    .color(160, 120, 235)
+    .description(
+      'Definitiva: haz fantasma de 8 u y 90 de potencia que cura el 15 % de la vida máxima de Gengar si impacta en al menos un enemigo.'
     )
 );
 
@@ -1145,6 +1239,7 @@ export const MOVESETS: Record<
 
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
 MOVESETS['0100'] = ['chispa', 'rollout', 'ondaTrueno', 'explosion'];
+MOVESETS['0094'] = ['lenguetazo', 'bolaSombra', 'bombaLodo', 'comeSuenos'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 MOVESETS['0007'] = ['placaje', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];

@@ -66,6 +66,8 @@ export interface AbilityExecutorDeps {
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
+  /** Cura al lanzador de una habilidad con `healOnHit` que ya impactó. */
+  healOnHit(player: MatchPlayerState, def: AbilityDef): void;
 }
 
 export type AbilityExecutor = (
@@ -159,6 +161,7 @@ const executeBeam: AbilityExecutor = (player, def, deps) => {
     Math.max(0.08, def.radius),
     def.beamStyle
   );
+  let hitAny = false;
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     // Comprobación en el marco del haz: el objetivo debe estar delante del
@@ -182,7 +185,10 @@ const executeBeam: AbilityExecutor = (player, def, deps) => {
       continue;
     }
     deps.applyAbilityDamage(player, target, def);
+    hitAny = true;
   }
+  // La curación de Come Sueños solo se activa si el haz encontró un enemigo.
+  if (hitAny && def.healOnHit) deps.healOnHit(player, def);
 };
 
 const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {

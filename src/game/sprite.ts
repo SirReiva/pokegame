@@ -34,14 +34,16 @@ const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
  * Animaciones con movimiento interno deliberado. No se recortan tight: usan el
  * frame completo para conservar el desplazamiento horizontal, y su movimiento
  * vertical se aplica como avance sobre el suelo (Attack, la vibración de Charge,
- * el zarpazo de Strike, el giro de Twirl y la embestida de Punch).
+ * el zarpazo de Strike, el giro de Twirl, la embestida de Punch y el disparo de
+ * Shoot).
  */
 const PRESERVE_FRAME_MOTION: ReadonlySet<AnimationName> = new Set([
   'attack',
   'charge',
   'strike',
   'twirl',
-  'punch'
+  'punch',
+  'shoot'
 ]);
 
 /**

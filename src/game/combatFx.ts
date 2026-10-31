@@ -23,7 +23,8 @@ const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   steel: 0.12,
   fighting: 0.2,
   dark: 0.1,
-  shuriken: 0.14
+  shuriken: 0.14,
+  ghost: 0.12
 };
 
 export interface EffectHandle {
@@ -569,7 +570,9 @@ export class CombatFx {
       dark: (x, z, color, effectiveness) =>
         this.spawnDarkBurst(x, z, color, effectiveness),
       shuriken: (x, z, color, effectiveness) =>
-        this.spawnShurikenBurst(x, z, color, effectiveness)
+        this.spawnShurikenBurst(x, z, color, effectiveness),
+      ghost: (x, z, color, effectiveness) =>
+        this.spawnGhostBurst(x, z, color, effectiveness)
     };
 
     this.projectileFactories = {
@@ -592,7 +595,9 @@ export class CombatFx {
       shuriken: (x, z, color, radius, dirX, dirZ) =>
         this.spawnShurikenProjectile(x, z, color, radius, dirX, dirZ),
       shadow: (x, z, color, radius, dirX, dirZ) =>
-        this.spawnShadowProjectile(x, z, color, radius, dirX, dirZ)
+        this.spawnShadowProjectile(x, z, color, radius, dirX, dirZ),
+      ghost: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnGhostProjectile(x, z, color, radius, dirX, dirZ)
     };
 
     this.beamFactories = {
@@ -605,7 +610,9 @@ export class CombatFx {
       water: (x1, z1, x2, z2, color, width) =>
         this.spawnWaterBeam(x1, z1, x2, z2, color, width),
       dark: (x1, z1, x2, z2, color, width) =>
-        this.spawnDarkBeam(x1, z1, x2, z2, color, width)
+        this.spawnDarkBeam(x1, z1, x2, z2, color, width),
+      ghost: (x1, z1, x2, z2, color, width) =>
+        this.spawnGhostBeam(x1, z1, x2, z2, color, width)
     };
 
     this.aoeFactories = {
@@ -624,7 +631,9 @@ export class CombatFx {
       water: (x, z, radius, color, duration) =>
         this.spawnWaterAoe(x, z, radius, color, duration),
       explosion: (x, z, radius, color, duration) =>
-        this.spawnExplosionAoe(x, z, radius, color, duration)
+        this.spawnExplosionAoe(x, z, radius, color, duration),
+      ghost: (x, z, radius, color, duration) =>
+        this.spawnGhostAoe(x, z, radius, color, duration)
     };
   }
 
@@ -1903,6 +1912,149 @@ export class CombatFx {
   }
 
   /**
+   * Proyectil fantasma: orbe morado oscuro con núcleo claro, tres jirones que
+   * ondulan detrás, dos ojos que parpadean en la parte delantera y una estela
+   * de esferas que se apagan. La mezcla normal mantiene legible el morado.
+   */
+  private spawnGhostProjectile(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number,
+    dirX: number,
+    dirZ: number
+  ): EffectHandle {
+    const root = new pc.Entity('ghost-projectile');
+    root.setPosition(x, 0.75, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([238, 226, 255], 0.95);
+    const bodyMaterial = this.createWaterMaterial(color, 0.6);
+    const wispMaterial = this.createWaterMaterial([168, 128, 238], 0.5);
+    const eyeMaterial = this.createMaterial([255, 244, 198], 0.95);
+    const trailMaterial = this.createWaterMaterial([104, 70, 156], 0.28);
+    const materials = [
+      coreMaterial,
+      bodyMaterial,
+      wispMaterial,
+      eyeMaterial,
+      trailMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.35, radius * 1.35, radius * 1.35);
+
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalScale(radius * 3, radius * 3, radius * 3);
+
+    const wisps: {
+      entity: pc.Entity;
+      phase: number;
+      baseZ: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const wisp = this.createEntity(this.boxMesh, [wispMaterial], root);
+      wisp.setLocalScale(radius * 0.5, radius * 0.5, radius * 1.7);
+      wisps.push({
+        entity: wisp,
+        phase: index * 1.7,
+        baseZ: -radius * (1.7 + index * 1.25),
+        size: radius * (0.55 - index * 0.08)
+      });
+    }
+
+    const eyes: { entity: pc.Entity; side: number }[] = [];
+    for (let index = 0; index < 2; index++) {
+      const eye = this.createEntity(this.sphereMesh, [eyeMaterial], root);
+      const side = index === 0 ? -1 : 1;
+      eye.setLocalPosition(side * radius * 0.65, radius * 0.35, radius * 2.1);
+      eye.setLocalScale(radius * 0.5, radius * 0.5, radius * 0.35);
+      eyes.push({ entity: eye, side });
+    }
+
+    const trail: pc.Entity[] = [];
+    for (let index = 0; index < 3; index++) {
+      const puff = this.createEntity(this.sphereMesh, [trailMaterial], root);
+      puff.setLocalPosition(0, 0, -radius * (2.8 + index * 1.7));
+      const scale = radius * (1.4 - index * 0.35);
+      puff.setLocalScale(scale, scale, scale);
+      trail.push(puff);
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        const pulse = 1 + Math.sin(time * 19) * 0.08;
+        core.setLocalScale(
+          radius * 1.35 * pulse,
+          radius * 1.35 * pulse,
+          radius * 1.35 * pulse
+        );
+        const bodyPulse = 1 + Math.sin(time * 12) * 0.07;
+        body.setLocalScale(
+          radius * 3 * bodyPulse,
+          radius * 3 * bodyPulse,
+          radius * 3 * bodyPulse
+        );
+
+        for (const wisp of wisps) {
+          const wave = Math.sin(time * 8 + wisp.phase);
+          wisp.entity.setLocalPosition(
+            wave * radius * 0.55,
+            Math.sin(time * 5 + wisp.phase) * radius * 0.45,
+            wisp.baseZ
+          );
+          wisp.entity.setLocalEulerAngles(
+            0,
+            wave * 22,
+            Math.sin(time * 7 + wisp.phase) * 18
+          );
+          const scale = wisp.size * (0.85 + Math.sin(time * 13 + wisp.phase) * 0.15);
+          wisp.entity.setLocalScale(scale, scale, scale * 2.4);
+        }
+
+        const blink = Math.sin(time * 4.2) > 0.965 ? 0.08 : 1;
+        for (const eye of eyes) {
+          eye.entity.setLocalScale(
+            radius * 0.5,
+            radius * 0.5 * blink,
+            radius * 0.35
+          );
+          eye.entity.setLocalPosition(
+            eye.side * radius * 0.65,
+            radius * 0.35,
+            radius * 2.1
+          );
+        }
+
+        coreMaterial.opacity = 0.9 + Math.sin(time * 27) * 0.08;
+        bodyMaterial.opacity = 0.52 + Math.sin(time * 14) * 0.08;
+        wispMaterial.opacity = 0.42 + Math.sin(time * 17) * 0.1;
+        eyeMaterial.opacity = 0.95;
+        trailMaterial.opacity = 0.2 + Math.sin(time * 11) * 0.05;
+        for (const material of materials) material.update();
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.75, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
    * Proyectil de agua: tres burbujas pequeñas que giran entre sí alrededor de
    * un centro común mientras avanzan, con destellos que patinan por su
    * superficie. Sin núcleo ni estela: el grupo de burbujas es todo el efecto.
@@ -2142,26 +2294,35 @@ export class CombatFx {
       revealAt: number;
       peak: number;
     }[] = [];
-    if (style === 'slash' || style === 'steel' || style === 'dark') {
+    if (
+      style === 'slash' ||
+      style === 'steel' ||
+      style === 'dark' ||
+      style === 'ghost'
+    ) {
       // Tres zarpas blancas paralelas tumbadas sobre el cono: cubren su
       // superficie desde el lanzador hasta el borde y comparten apertura, así
       // que se leen como un único tajo de tres filos dentro del área de golpe.
       // Cada garra se parte en tramos estáticos que se encienden de derecha a
       // izquierda, de modo que el trazo parece dibujarse sobre el cono. La Garra
-      // Metal usa dos filos de acero, y el Tajo Umbrío dos filos violetas.
+      // Metal usa dos filos de acero, el Tajo Umbrío dos violetas y el
+      // Lengüetazo tres trazos fantasmales.
       const steel = style === 'steel';
       const dark = style === 'dark';
-      effectDuration = steel ? 0.3 : dark ? 0.32 : 0.38;
-      material.opacity = steel ? 0.08 : dark ? 0.09 : 0.1;
+      const ghost = style === 'ghost';
+      effectDuration = steel ? 0.3 : dark ? 0.32 : ghost ? 0.34 : 0.38;
+      material.opacity = steel ? 0.08 : dark ? 0.09 : ghost ? 0.08 : 0.1;
       const span = halfAngle * 1.9;
       const start = -span * 0.5;
       const slices = 10;
-      const drawTime = steel ? 0.08 : dark ? 0.07 : 0.1;
+      const drawTime = steel ? 0.08 : dark ? 0.07 : ghost ? 0.08 : 0.1;
       const clawTint: [number, number, number] = steel
         ? [214, 232, 255]
         : dark
           ? [210, 180, 255]
-          : [255, 255, 255];
+          : ghost
+            ? [206, 178, 255]
+            : [255, 255, 255];
       const claws: {
         inner: number;
         outer: number;
@@ -2386,7 +2547,8 @@ export class CombatFx {
         style !== 'steel' &&
         style !== 'arc' &&
         style !== 'fighting' &&
-        style !== 'dark'
+        style !== 'dark' &&
+        style !== 'ghost'
       ) {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
@@ -2847,6 +3009,168 @@ export class CombatFx {
       coreMaterial.opacity = 0.9 * pulse * fade;
       wispMaterial.opacity = 0.5 * fade;
       ringMaterial.opacity = 0.65 * fade;
+    });
+  }
+
+  /**
+   * Haz fantasma: columna morada con núcleo claro, jirones que orbitan la
+   * línea, anillos que viajan hacia la punta y un par de ojos en la boca del
+   * haz. Disponible para futuras habilidades de haz de tipo Fantasma.
+   */
+  private spawnGhostBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('ghost-beam');
+    root.setPosition(x1, 0.75, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const mistMaterial = this.createWaterMaterial([76, 50, 118], 0.26);
+    const bodyMaterial = this.createWaterMaterial(color, 0.55);
+    const coreMaterial = this.createWaterMaterial([228, 216, 255], 0.92);
+    const wispMaterial = this.createWaterMaterial([172, 132, 240], 0.5);
+    const ringMaterial = this.createWaterMaterial([204, 176, 255], 0.6);
+    const eyeMaterial = this.createMaterial([255, 246, 206], 0.95);
+    const materials = [
+      mistMaterial,
+      bodyMaterial,
+      coreMaterial,
+      wispMaterial,
+      ringMaterial,
+      eyeMaterial
+    ];
+
+    const mistWidth = Math.max(0.12, width * 2.4);
+    const bodyWidth = Math.max(0.08, width * 1.25);
+    const coreWidth = Math.max(0.04, width * 0.45);
+
+    const beamMesh = pc.createCylinder(this.device, {
+      radius: 0.5,
+      height: 1,
+      heightSegments: 1,
+      capSegments: 14
+    });
+    const sheath = this.createEntity(beamMesh, [mistMaterial], root);
+    const body = this.createEntity(beamMesh, [bodyMaterial], root);
+    const core = this.createEntity(beamMesh, [coreMaterial], root);
+    sheath.setLocalEulerAngles(90, 0, 0);
+    body.setLocalEulerAngles(90, 0, 0);
+    core.setLocalEulerAngles(90, 0, 0);
+
+    const wisps: {
+      entity: pc.Entity;
+      phase: number;
+      speed: number;
+      orbit: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const wisp = this.createEntity(this.boxMesh, [wispMaterial], root);
+      const size = bodyWidth * (0.18 + Math.random() * 0.1);
+      wisp.setLocalScale(size, size * 0.4, size * 4.6);
+      wisps.push({
+        entity: wisp,
+        phase: Math.random(),
+        speed: 1.6 + Math.random() * 1.4,
+        orbit: bodyWidth * (0.45 + Math.random() * 0.35),
+        size
+      });
+    }
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 5; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalEulerAngles(90, 0, 0);
+      rings.push(ring);
+    }
+
+    const tip = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    const eyes: { entity: pc.Entity; side: number }[] = [];
+    for (let index = 0; index < 2; index++) {
+      const eye = this.createEntity(this.sphereMesh, [eyeMaterial], root);
+      eyes.push({ entity: eye, side: index === 0 ? -1 : 1 });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, 0.48, (_t, dt) => {
+      time += dt;
+      const advance = Math.min(1, time / 0.1);
+      const reveal = 1 - (1 - advance) * (1 - advance);
+      const pulse = 0.84 + Math.random() * 0.16;
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.2);
+
+      const sheathLength = Math.max(0.02, length * reveal);
+      sheath.setLocalPosition(0, 0, sheathLength / 2);
+      sheath.setLocalScale(
+        mistWidth * pulse,
+        sheathLength,
+        mistWidth * pulse
+      );
+      body.setLocalPosition(0, 0, sheathLength / 2);
+      body.setLocalScale(
+        bodyWidth * pulse,
+        sheathLength,
+        bodyWidth * pulse
+      );
+      core.setLocalPosition(0, 0, sheathLength / 2);
+      core.setLocalScale(coreWidth, sheathLength, coreWidth);
+
+      for (const wisp of wisps) {
+        const path = (time * wisp.speed + wisp.phase) % 1;
+        const angle = time * 4.6 + wisp.phase * Math.PI * 2;
+        wisp.entity.setLocalPosition(
+          Math.cos(angle) * wisp.orbit,
+          Math.sin(angle) * wisp.orbit,
+          length * reveal * path
+        );
+        wisp.entity.setLocalEulerAngles(
+          0,
+          angle / DEG,
+          Math.sin(angle * 1.6) * 38
+        );
+      }
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const path = (time * 2 + index / rings.length) % 1;
+        ring.setLocalPosition(0, 0, length * reveal * (0.1 + path * 0.9));
+        const ringScale =
+          width * 0.9 * (1.3 + pulse * 0.8) * (0.55 + Math.sin(path * Math.PI) * 0.85);
+        ring.setLocalScale(ringScale, ringScale, ringScale);
+        ring.setLocalEulerAngles(90, 0, time * 220 + index * 42);
+      }
+
+      tip.setLocalPosition(0, 0, length * reveal);
+      const tipScale = width * (1.6 + Math.sin(time * 30) * 0.25);
+      tip.setLocalScale(tipScale, tipScale, tipScale);
+      for (const eye of eyes) {
+        const blink = Math.sin(time * 9 + eye.side) > 0.9 ? 0.15 : 1;
+        eye.entity.setLocalPosition(
+          eye.side * width * 0.45,
+          width * 0.3,
+          length * reveal
+        );
+        eye.entity.setLocalScale(
+          width * 0.3 * blink,
+          width * 0.3 * blink,
+          width * 0.2 * blink
+        );
+      }
+
+      mistMaterial.opacity = 0.22 * pulse * fade;
+      bodyMaterial.opacity = 0.5 * pulse * fade;
+      coreMaterial.opacity = 0.9 * pulse * fade;
+      wispMaterial.opacity = 0.46 * fade;
+      ringMaterial.opacity = 0.6 * fade;
+      eyeMaterial.opacity = 0.95 * fade;
     });
   }
 
@@ -3668,9 +3992,14 @@ export class CombatFx {
     root.setPosition(x, 0.03, z);
     this.app.root.addChild(root);
 
-    const ringMaterial = this.createMaterial(color, 0.3);
-    const fillMaterial = this.createMaterial([116, 176, 68], 0.08);
-    const puffMaterial = this.createMaterial([226, 250, 186], 0.16);
+    const ringMaterial = this.createWaterMaterial(color, 0.45);
+    const fillMaterial = this.createWaterMaterial(color, 0.1);
+    const puffColor: [number, number, number] = [
+      Math.min(255, color[0] + 46),
+      Math.min(255, color[1] + 46),
+      Math.min(255, color[2] + 46)
+    ];
+    const puffMaterial = this.createWaterMaterial(puffColor, 0.18);
     const materials = [ringMaterial, fillMaterial, puffMaterial];
 
     const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
@@ -3736,9 +4065,9 @@ export class CombatFx {
       const envelope = Math.min(fadeIn, fadeOut);
       const pulse = 0.5 + Math.sin(time * 7) * 0.2;
 
-      ringMaterial.opacity = (0.2 + pulse * 0.16) * envelope;
-      fillMaterial.opacity = (0.05 + pulse * 0.035) * envelope;
-      puffMaterial.opacity = (0.1 + pulse * 0.07) * envelope;
+      ringMaterial.opacity = (0.35 + pulse * 0.15) * envelope;
+      fillMaterial.opacity = (0.08 + pulse * 0.04) * envelope;
+      puffMaterial.opacity = (0.12 + pulse * 0.06) * envelope;
 
       const ringScale = radius * 2 * (0.96 + pulse * 0.05);
       ring.setLocalScale(ringScale, 1, ringScale);
@@ -3948,6 +4277,114 @@ export class CombatFx {
       arcMaterial.opacity = 0.95 * arcFade;
       debrisMaterial.opacity = 0.95 * (1 - t);
       smokeMaterial.opacity = 0.4 * (1 - t);
+    });
+  }
+
+  /**
+   * Área fantasma: disco tenue, anillo morado, jirones que suben del suelo y
+   * ojos que se encienden y se apagan alrededor del borde. Disponible para
+   * futuras habilidades de área de tipo Fantasma.
+   */
+  private spawnGhostAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('ghost-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createWaterMaterial([190, 150, 255], 0.55);
+    const fillMaterial = this.createWaterMaterial(color, 0.1);
+    const wispMaterial = this.createWaterMaterial([158, 118, 226], 0.45);
+    const eyeMaterial = this.createMaterial([255, 244, 198], 0.9);
+    const materials = [
+      ringMaterial,
+      fillMaterial,
+      wispMaterial,
+      eyeMaterial
+    ];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.03, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    const wisps: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      delay: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 10; index++) {
+      const wisp = this.createEntity(this.boxMesh, [wispMaterial], root);
+      const size = radius * (0.05 + Math.random() * 0.05);
+      wisp.setLocalScale(size, size, size * 3.4);
+      wisps.push({
+        entity: wisp,
+        angle: (index / 10) * Math.PI * 2 + Math.random() * 0.4,
+        distance: radius * (0.25 + Math.random() * 0.6),
+        delay: Math.random() * 0.5,
+        rise: radius * (0.35 + Math.random() * 0.4),
+        size
+      });
+    }
+
+    const eyes: { entity: pc.Entity; phase: number }[] = [];
+    for (let index = 0; index < 4; index++) {
+      const angle = (index / 4) * Math.PI * 2 + 0.6;
+      const eye = this.createEntity(this.sphereMesh, [eyeMaterial], root);
+      eye.setLocalPosition(
+        Math.cos(angle) * radius * 0.72,
+        0.45,
+        Math.sin(angle) * radius * 0.72
+      );
+      eyes.push({ entity: eye, phase: index * 1.4 });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const pulse = 0.5 + Math.sin(time * 6) * 0.2;
+      ringMaterial.opacity = (0.35 + pulse * 0.2) * (1 - time / life);
+      fillMaterial.opacity = (0.06 + pulse * 0.04) * (1 - time / life);
+
+      for (const wisp of wisps) {
+        const local = Math.max(0, Math.min(1, (time - wisp.delay) / 1.2));
+        wisp.entity.setLocalPosition(
+          Math.cos(wisp.angle) * wisp.distance,
+          0.1 + local * wisp.rise,
+          Math.sin(wisp.angle) * wisp.distance
+        );
+        const fade = Math.max(0, 1 - local);
+        wisp.entity.setLocalScale(
+          wisp.size * fade,
+          wisp.size * fade,
+          wisp.size * 3.4 * fade
+        );
+        wisp.entity.setLocalEulerAngles(
+          local * 60,
+          wisp.angle / DEG,
+          local * 35
+        );
+      }
+
+      for (const eye of eyes) {
+        const blink =
+          Math.sin(time * 3.2 + eye.phase) > 0.2
+            ? 0.09
+            : 0.02;
+        eye.entity.setLocalScale(blink, blink, blink * 0.6);
+      }
+      eyeMaterial.opacity = 0.85 * (1 - time / life);
     });
   }
 
@@ -5170,6 +5607,122 @@ export class CombatFx {
       bodyMaterial.opacity = 0.5 * (1 - t);
       ringMaterial.opacity = 0.72 * (1 - t);
       moteMaterial.opacity = 0.9 * (1 - t);
+    });
+  }
+
+  /**
+   * Impacto fantasma: destello violáceo, cuerpo oscuro, dos ondas, jirones que
+   * suben y un par de ojos que aparecen un instante antes de desvanecerse.
+   */
+  private spawnGhostBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('ghost-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([240, 230, 255], 0.95);
+    const bodyMaterial = this.createWaterMaterial(color, 0.55);
+    const ringMaterial = this.createWaterMaterial([198, 170, 255], 0.6);
+    const wispMaterial = this.createWaterMaterial([158, 118, 226], 0.5);
+    const eyeMaterial = this.createMaterial([255, 244, 198], 0.95);
+    const materials = [
+      coreMaterial,
+      bodyMaterial,
+      ringMaterial,
+      wispMaterial,
+      eyeMaterial
+    ];
+    const power =
+      effectiveness > 1 ? 1.24 : effectiveness < 1 ? 0.86 : 1;
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.7, 0);
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalPosition(0, 0.7, 0);
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
+      rings.push(ring);
+    }
+
+    const wisps: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const wisp = this.createEntity(this.boxMesh, [wispMaterial], root);
+      const size = 0.12 + Math.random() * 0.12;
+      wisp.setLocalScale(size, size, size * 3);
+      wisps.push({
+        entity: wisp,
+        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.4,
+        distance: (0.4 + Math.random() * 0.55) * power,
+        rise: 0.5 + Math.random() * 0.5,
+        size
+      });
+    }
+
+    const eyes: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const eye = this.createEntity(this.sphereMesh, [eyeMaterial], root);
+      eye.setLocalPosition((index === 0 ? -1 : 1) * 0.18, 0.9, 0.12);
+      eyes.push(eye);
+    }
+
+    this.addEffect(root, materials, 0.45, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const coreScale = (0.16 + ease * 0.62) * power;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      const bodyScale = (0.2 + ease * 1.15) * power;
+      body.setLocalScale(bodyScale, bodyScale, bodyScale);
+
+      for (const ring of rings) {
+        const scale = (0.2 + ease * 1.7) * power;
+        ring.setLocalScale(scale, 1, scale);
+      }
+
+      for (const wisp of wisps) {
+        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.8));
+        const distance = wisp.distance * local;
+        const angle = wisp.angle + local * 1.4;
+        wisp.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          0.35 + Math.sin(local * Math.PI) * wisp.rise,
+          Math.sin(angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        wisp.entity.setLocalScale(
+          wisp.size * fade,
+          wisp.size * fade,
+          wisp.size * 3.2 * fade
+        );
+        wisp.entity.setLocalEulerAngles(
+          local * 70,
+          angle / DEG,
+          local * 45
+        );
+      }
+
+      const eyeFade = Math.max(0, 1 - Math.max(0, (t - 0.18) / 0.28));
+      const eyeScale = 0.1 * power * eyeFade;
+      for (const eye of eyes) {
+        eye.setLocalScale(eyeScale, eyeScale, eyeScale * 0.7);
+      }
+
+      coreMaterial.opacity = 0.95 * (1 - t);
+      bodyMaterial.opacity = 0.5 * (1 - t);
+      ringMaterial.opacity = 0.6 * (1 - t);
+      wispMaterial.opacity = 0.5 * (1 - t);
+      eyeMaterial.opacity = 0.95 * eyeFade;
     });
   }
 

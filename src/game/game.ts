@@ -29,7 +29,7 @@ import {
 import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
-import { CAST_EFFECTS } from './effects';
+import { applyHealSelf, CAST_EFFECTS } from './effects';
 import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder } from './fog';
 import {
   IDLE_INPUT,
@@ -1226,7 +1226,11 @@ export class Game {
         this.animationPlaybackFor(source, animation, duration),
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
-      addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit)
+      addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
+      healOnHit: (attacker, ability) =>
+        applyHealSelf(attacker, ability, this.combatFx, (target, amount) =>
+          this.showHealPopup(target, amount)
+        )
     };
 
     ABILITY_EXECUTORS[def.shape](player, def, deps, targetX, targetZ);

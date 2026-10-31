@@ -22,7 +22,7 @@ export interface DamageNumberOptions {
   amount: number;
   critical: boolean;
   effectiveness: number;
-  /** `true` dibuja el número como curación (prefijo + y tono rosa). */
+  /** `true` dibuja el número como curación (prefijo + y tono verde). */
   heal?: boolean;
   views: DamageNumberView[];
 }
@@ -79,15 +79,15 @@ const LABELS: Record<
 
 /** Estrategias de color de relleno del número. */
 const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
-  heal: '#ffa6de',
+  heal: '#6dff8e',
   weak: '#d46a75',
   critical: '#ff2d55',
   normal: '#ff4d5a'
 };
 
-/** Estrategias de resplandor: curación rosa o daño rojo. */
+/** Estrategias de resplandor: curación verde o daño rojo. */
 const GLOW_COLORS: Record<'heal' | 'damage', string> = {
-  heal: 'rgba(255, 120, 220, 0.9)',
+  heal: 'rgba(60, 255, 120, 0.9)',
   damage: 'rgba(255, 40, 70, 0.85)'
 };
 

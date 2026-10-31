@@ -12,6 +12,7 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0004': 5.4, // Charmander: el ritmo de referencia
   '0007': 4.8, // Squirtle: algo más lento, pero constante
   '0025': 6.9, // Pikachu: muy rápido por sus sentidos eléctricos
+  '0094': 7.6, // Gengar: flota y se desliza, rápido y escurridizo
   '0100': 8.2, // Voltorb: rueda y detona, el más rápido del roster
   '0133': 6.1, // Eevee: ágil y equilibrado
   '0448': 6.5, // Lucario: zancada larga, casi tan rápido como Pikachu

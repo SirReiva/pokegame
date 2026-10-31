@@ -37,6 +37,14 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/credits.txt
 
+## Gengar (#0094)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Lick, Twirl, Swing, Double, Rotate, Hop
+- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0094/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094/credits.txt
+
 ## Voltorb (#0100)
 
 - CHUNSOFT · Attack, Charge, Double, Hop, Hurt, Idle, Rotate, Sleep, Swing, Twirl, Walk
