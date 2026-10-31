@@ -24,7 +24,8 @@ const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   fighting: 0.2,
   dark: 0.1,
   shuriken: 0.14,
-  ghost: 0.12
+  ghost: 0.12,
+  air: 0.16
 };
 
 export interface EffectHandle {
@@ -253,8 +254,58 @@ function createSlashStreakMesh(
 }
 
 /**
- * Cinta zigzagueante en forma de cruz, para que el rayo se vea desde
- * cualquier ángulo de cámara. Se construye a lo largo de Z y se centra en 0.
+ * Hoja de viento: medialuna plana en el plano XY con las puntas afiladas. Los
+ * proyectiles y las áreas de aire la giran alrededor del eje de vuelo o del
+ * suelo, y el degradado de radios hace que parezca una ráfaga curvada.
+ */
+function createWindBladeMesh(
+  device: pc.GraphicsDevice,
+  radius: number,
+  halfAngle: number,
+  thickness: number,
+  segments: number
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const angle = -halfAngle + 2 * halfAngle * t;
+    // Las puntas se afinan hasta desaparecer: la medialuna no acaba en un
+    // corte recto, sino en un filo.
+    const taper = Math.pow(Math.sin(Math.PI * t), 0.55);
+    const half = Math.max(0.001, thickness * taper);
+    const inner = radius - half;
+    const outer = radius + half;
+    positions.push(
+      Math.cos(angle) * inner,
+      Math.sin(angle) * inner,
+      0,
+      Math.cos(angle) * outer,
+      Math.sin(angle) * outer,
+      0
+    );
+    normals.push(0, 0, 1, 0, 0, 1);
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const base = i * 2;
+    indices.push(base, base + 1, base + 2);
+    indices.push(base + 1, base + 3, base + 2);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Cinta zigzagueante en forma de cruz, para que el rayo se vea desde cualquier
+ * ángulo de cámara. Se construye a lo largo de Z y se centra en 0.
  */
 function createLightningMesh(
   device: pc.GraphicsDevice,
@@ -572,7 +623,9 @@ export class CombatFx {
       shuriken: (x, z, color, effectiveness) =>
         this.spawnShurikenBurst(x, z, color, effectiveness),
       ghost: (x, z, color, effectiveness) =>
-        this.spawnGhostBurst(x, z, color, effectiveness)
+        this.spawnGhostBurst(x, z, color, effectiveness),
+      air: (x, z, color, effectiveness) =>
+        this.spawnAirBurst(x, z, color, effectiveness)
     };
 
     this.projectileFactories = {
@@ -597,7 +650,9 @@ export class CombatFx {
       shadow: (x, z, color, radius, dirX, dirZ) =>
         this.spawnShadowProjectile(x, z, color, radius, dirX, dirZ),
       ghost: (x, z, color, radius, dirX, dirZ) =>
-        this.spawnGhostProjectile(x, z, color, radius, dirX, dirZ)
+        this.spawnGhostProjectile(x, z, color, radius, dirX, dirZ),
+      air: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnAirProjectile(x, z, radius, dirX, dirZ, color)
     };
 
     this.beamFactories = {
@@ -612,7 +667,9 @@ export class CombatFx {
       dark: (x1, z1, x2, z2, color, width) =>
         this.spawnDarkBeam(x1, z1, x2, z2, color, width),
       ghost: (x1, z1, x2, z2, color, width) =>
-        this.spawnGhostBeam(x1, z1, x2, z2, color, width)
+        this.spawnGhostBeam(x1, z1, x2, z2, color, width),
+      air: (x1, z1, x2, z2, color, width) =>
+        this.spawnAirBeam(x1, z1, x2, z2, color, width)
     };
 
     this.aoeFactories = {
@@ -633,7 +690,11 @@ export class CombatFx {
       explosion: (x, z, radius, color, duration) =>
         this.spawnExplosionAoe(x, z, radius, color, duration),
       ghost: (x, z, radius, color, duration) =>
-        this.spawnGhostAoe(x, z, radius, color, duration)
+        this.spawnGhostAoe(x, z, radius, color, duration),
+      air: (x, z, radius, color, duration) =>
+        this.spawnAirAoe(x, z, radius, color, duration),
+      heat: (x, z, radius, color, duration) =>
+        this.spawnHeatAoe(x, z, radius, color, duration)
     };
   }
 
@@ -2386,12 +2447,13 @@ export class CombatFx {
       travel: number;
       peak: number;
     }[] = [];
-    if (style === 'arc' || style === 'fighting') {
+    if (style === 'arc' || style === 'fighting' || style === 'air') {
       // Arco de ataque: tres frentes curvos que salen del lanzador y recorren
       // el cono hasta su borde, marcando la dirección y el alcance del golpe.
       // La geometría es estática (radio 1) y solo se escala, así el trazo es
       // barato y se ve desde cualquier cámara. Combate Cercano añade un cuarto
-      // frente y los acelera para que se lea como una ráfaga.
+      // frente y los acelera para que se lea como una ráfaga. Ataque Aéreo usa
+      // los mismos frentes con el blanco cálido del viento.
       const fighting = style === 'fighting';
       effectDuration = fighting ? 0.4 : 0.34;
       material.opacity = 0.16;
@@ -2548,7 +2610,8 @@ export class CombatFx {
         style !== 'arc' &&
         style !== 'fighting' &&
         style !== 'dark' &&
-        style !== 'ghost'
+        style !== 'ghost' &&
+        style !== 'air'
       ) {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
@@ -6539,6 +6602,945 @@ export class CombatFx {
     };
     this.addEffect(root, materials, 0.45, animate);
     animate(0);
+  }
+
+  /**
+   * Proyectil de aire: dos ruedas de aspas de viento cruzadas giran alrededor
+   * del eje de vuelo, con núcleo blanco, halo cálido y una estela de plumas. La
+   * mezcla normal mantiene el blanco legible sobre el cielo y la hierba.
+   */
+  private spawnAirProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('air-projectile');
+    root.setPosition(x, 0.82, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createWaterMaterial([255, 252, 240], 0.9);
+    const glowMaterial = this.createWaterMaterial(color, 0.16);
+    const bladeMaterial = this.createWaterMaterial([255, 240, 210], 0.62);
+    const hotMaterial = this.createMaterial(color, 0.5);
+    const featherMaterial = this.createLeafMaterial([255, 228, 176], 0.85);
+    const materials = [
+      coreMaterial,
+      glowMaterial,
+      bladeMaterial,
+      hotMaterial,
+      featherMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.15, radius * 1.15, radius * 1.15);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalScale(radius * 4, radius * 4, radius * 4);
+
+    // Dos ruedas perpendiculares: una sola medialuna se vería de canto desde
+    // media cámara; la cruz mantiene el aspa con volumen en el splitscreen.
+    const wheel = new pc.Entity('air-wheel');
+    root.addChild(wheel);
+    const crossWheel = new pc.Entity('air-wheel-cross');
+    crossWheel.setLocalEulerAngles(0, 90, 0);
+    root.addChild(crossWheel);
+    for (let index = 0; index < 3; index++) {
+      const blade = this.createEntity(
+        createWindBladeMesh(this.device, radius * 5, 1.08, radius * 1.35, 10),
+        [index === 1 ? hotMaterial : bladeMaterial],
+        wheel
+      );
+      blade.setLocalEulerAngles(0, 0, index * 120);
+      const cross = this.createEntity(
+        createWindBladeMesh(this.device, radius * 3.9, 0.98, radius * 1.05, 10),
+        [index === 2 ? hotMaterial : bladeMaterial],
+        crossWheel
+      );
+      cross.setLocalEulerAngles(0, 0, index * 120 + 60);
+    }
+
+    const feathers: {
+      entity: pc.Entity;
+      phase: number;
+      baseY: number;
+      baseZ: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const baseZ = -radius * (2.4 + index * 1.2);
+      const feather = this.createLeaf(root, featherMaterial, {
+        x: (index - 1) * radius * 1.1,
+        y: (index % 2 === 0 ? 1 : -1) * radius * 0.35,
+        z: baseZ,
+        width: radius * 0.9,
+        height: radius * 2.2,
+        yaw: index * 55,
+        roll: 25 + index * 20
+      });
+      feathers.push({
+        entity: feather,
+        phase: index * 1.7,
+        baseY: feather.getLocalPosition().y,
+        baseZ
+      });
+    }
+
+    const trails: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const trail = this.createEntity(this.boxMesh, [hotMaterial], root);
+      trail.setLocalPosition(0, (index === 0 ? -1 : 1) * radius * 0.45, -radius * 2.2);
+      trail.setLocalScale(radius * 0.35, radius * 0.16, radius * 4.6);
+      trails.push(trail);
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        const spin = time * 720;
+        wheel.setLocalEulerAngles(0, 0, spin);
+        crossWheel.setLocalEulerAngles(0, 90, -spin * 0.82);
+
+        const pulse = 1 + Math.sin(time * 24) * 0.08;
+        const coreScale = radius * 1.15 * pulse;
+        core.setLocalScale(coreScale, coreScale, coreScale);
+        const glowScale = radius * 4 * (1 + Math.sin(time * 16) * 0.1);
+        glow.setLocalScale(glowScale, glowScale, glowScale);
+
+        coreMaterial.opacity = 0.78 + Math.sin(time * 20) * 0.12;
+        glowMaterial.opacity = 0.12 + Math.sin(time * 13) * 0.04;
+        bladeMaterial.opacity = 0.5 + Math.sin(time * 17) * 0.11;
+        hotMaterial.opacity = 0.34 + Math.sin(time * 21 + 1) * 0.09;
+        featherMaterial.opacity = 0.62 + Math.sin(time * 12) * 0.14;
+        for (const material of materials) material.update();
+
+        for (const feather of feathers) {
+          feather.entity.setLocalPosition(
+            Math.sin(time * 9 + feather.phase) * radius * 0.9,
+            feather.baseY + Math.sin(time * 7 + feather.phase) * radius * 0.25,
+            feather.baseZ
+          );
+          feather.entity.setLocalEulerAngles(
+            Math.sin(time * 8 + feather.phase) * 25,
+            time * 120 + feather.phase * 40,
+            Math.cos(time * 7 + feather.phase) * 30
+          );
+        }
+        for (let index = 0; index < trails.length; index++) {
+          trails[index].setLocalEulerAngles(
+            0,
+            Math.sin(time * 10 + index * 2) * 14,
+            index === 0 ? 18 : -18
+          );
+        }
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.82, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
+   * Impacto de aire: destello blanco, tres ondas que se abren, seis ráfagas de
+   * viento que salen en círculo y plumas que suben y caen. El cuerpo cálido usa
+   * mezcla normal para no lavarse sobre el terreno claro.
+   */
+  private spawnAirBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('air-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 255, 244], 0.92);
+    const glowMaterial = this.createWaterMaterial(color, 0.3);
+    const ringMaterial = this.createMaterial([255, 244, 214], 0.55);
+    const bladeMaterial = this.createWaterMaterial([255, 236, 198], 0.66);
+    const featherMaterial = this.createLeafMaterial([255, 224, 168], 0.85);
+    const materials = [
+      coreMaterial,
+      glowMaterial,
+      ringMaterial,
+      bladeMaterial,
+      featherMaterial
+    ];
+    const power = effectiveness > 1 ? 1.24 : effectiveness < 1 ? 0.86 : 1;
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.62, 0);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0.62, 0);
+
+    const rings: pc.Entity[] = [];
+    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    for (let index = 0; index < 3; index++) {
+      const ring = this.createEntity(ringMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.02, 0);
+      rings.push(ring);
+    }
+
+    const blades: {
+      entity: pc.Entity;
+      angle: number;
+      size: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const angle = (index / 6) * Math.PI * 2 + 0.3;
+      const blade = this.createEntity(
+        createWindBladeMesh(this.device, 0.55, 1.15, 0.16, 10),
+        [bladeMaterial],
+        root
+      );
+      blade.setLocalEulerAngles(90, angle / DEG, 0);
+      blades.push({
+        entity: blade,
+        angle,
+        size: 0.9 + ((index * 7) % 10) / 10 * 0.3,
+        delay: index * 0.012
+      });
+    }
+
+    const feathers: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      lift: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 8; index++) {
+      const angle = (index / 8) * Math.PI * 2 + Math.random() * 0.4;
+      const size = 0.12 + Math.random() * 0.09;
+      const feather = this.createLeaf(root, featherMaterial, {
+        x: Math.cos(angle) * 0.22,
+        y: 0.45,
+        z: Math.sin(angle) * 0.22,
+        width: size,
+        height: size * 2.2,
+        yaw: angle / DEG
+      });
+      feathers.push({
+        entity: feather,
+        angle,
+        distance: (0.5 + Math.random() * 0.6) * power,
+        lift: 0.5 + Math.random() * 0.55,
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    this.addEffect(root, materials, 0.52, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const flash = Math.max(0, 1 - t / 0.35);
+      const coreScale = (0.14 + ease * 0.85) * power;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      coreMaterial.opacity = 0.92 * flash;
+      const glowScale = (0.18 + ease * 1.85) * power;
+      glow.setLocalScale(glowScale, glowScale, glowScale);
+      glowMaterial.opacity = 0.28 * (1 - t);
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const scale = (0.3 + ease * (2.2 + index * 0.45)) * power;
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalEulerAngles(0, index * 40 + t * 30, 0);
+      }
+      ringMaterial.opacity = 0.44 * (1 - t);
+
+      for (const blade of blades) {
+        const local = Math.max(0, Math.min(1, (t - blade.delay) / 0.8));
+        const distance = (0.1 + local * 1.85) * power;
+        blade.entity.setLocalPosition(
+          Math.cos(blade.angle) * distance,
+          0.18 + local * 0.55,
+          Math.sin(blade.angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        const scale = blade.size * fade * (0.7 + local * 0.8);
+        blade.entity.setLocalScale(scale, scale, scale);
+        blade.entity.setLocalEulerAngles(
+          90,
+          blade.angle / DEG + local * 210,
+          Math.sin(local * 9 + blade.angle) * 22
+        );
+      }
+
+      for (const feather of feathers) {
+        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.85));
+        const easeFeather = 1 - Math.pow(1 - local, 2);
+        const distance = feather.distance * easeFeather;
+        const angle = feather.angle + local * 1.5;
+        const y =
+          0.45 + feather.lift * Math.sin(local * Math.PI) - local * local * 0.5;
+        feather.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          Math.max(0.05, y),
+          Math.sin(angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        feather.entity.setLocalScale(
+          feather.size * fade,
+          feather.size * 2.2 * fade,
+          feather.size * fade
+        );
+        feather.entity.setLocalEulerAngles(
+          local * 80,
+          angle / DEG + local * 180,
+          Math.sin(local * 7 + feather.phase) * 55
+        );
+      }
+
+      bladeMaterial.opacity = 0.66 * (1 - t);
+      featherMaterial.opacity = 0.8 * (1 - t);
+    });
+  }
+
+  /**
+   * Área de aire: ondas concéntricas en el suelo, aspas que giran dentro del
+   * radio y plumas que suben en espiral. Es la base visual de Onda Ígnea y
+   * Ataque Celeste, con el naranja de la habilidad como cuerpo y blanco cálido
+   * en los filos.
+   */
+  private spawnAirAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('air-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial([255, 226, 178], 0.32);
+    const bladeMaterial = this.createWaterMaterial([255, 240, 208], 0.58);
+    const hotMaterial = this.createMaterial(color, 0.4);
+    const featherMaterial = this.createLeafMaterial([255, 220, 160], 0.8);
+    const materials = [
+      ringMaterial,
+      bladeMaterial,
+      hotMaterial,
+      featherMaterial
+    ];
+
+    const rings: pc.Entity[] = [];
+    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(ringMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.02, 0);
+      rings.push(ring);
+    }
+
+    const blades: {
+      entity: pc.Entity;
+      angle: number;
+      speed: number;
+      distance: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 8; index++) {
+      const angle = (index / 8) * Math.PI * 2 + Math.random() * 0.35;
+      const blade = this.createEntity(
+        createWindBladeMesh(
+          this.device,
+          radius * (0.42 + Math.random() * 0.2),
+          1.25,
+          radius * 0.12,
+          10
+        ),
+        [index % 3 === 0 ? hotMaterial : bladeMaterial],
+        root
+      );
+      blade.setLocalEulerAngles(90, angle / DEG, 0);
+      blades.push({
+        entity: blade,
+        angle,
+        speed: (index % 2 === 0 ? 1 : -1) * (0.8 + Math.random() * 0.7),
+        distance: radius * (0.18 + Math.random() * 0.45),
+        size: 0.75 + Math.random() * 0.4
+      });
+    }
+
+    const feathers: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      delay: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const angle = (index / 12) * Math.PI * 2 + Math.random() * 0.5;
+      const size = radius * (0.035 + Math.random() * 0.03);
+      const feather = this.createLeaf(root, featherMaterial, {
+        x: Math.cos(angle) * radius * 0.2,
+        y: 0.15,
+        z: Math.sin(angle) * radius * 0.2,
+        width: size,
+        height: size * 2.4,
+        yaw: angle / DEG
+      });
+      feathers.push({
+        entity: feather,
+        angle,
+        distance: radius * (0.25 + Math.random() * 0.68),
+        rise: radius * (0.4 + Math.random() * 0.55),
+        delay: Math.random() * 0.45,
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    const embers: { entity: pc.Entity; angle: number; distance: number; phase: number }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const angle = (index / 6) * Math.PI * 2 + 0.5;
+      const ember = this.createEntity(this.sphereMesh, [hotMaterial], root);
+      const size = radius * 0.05;
+      ember.setLocalScale(size, size, size);
+      embers.push({
+        entity: ember,
+        angle,
+        distance: radius * (0.35 + Math.random() * 0.4),
+        phase: index * 1.4
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.16);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.35), 2);
+      const pulse = 0.55 + Math.sin(time * 8) * 0.2;
+
+      ringMaterial.opacity = (0.2 + pulse * 0.14) * envelope;
+      bladeMaterial.opacity = (0.4 + pulse * 0.2) * envelope;
+      hotMaterial.opacity = (0.3 + pulse * 0.16) * envelope;
+      featherMaterial.opacity = (0.52 + pulse * 0.2) * envelope;
+
+      const ringScale = radius * 2 * (0.55 + grow * 0.5);
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        ring.setLocalScale(ringScale, 1, ringScale);
+        ring.setLocalEulerAngles(0, time * (index === 0 ? 90 : -70), 0);
+      }
+
+      for (const blade of blades) {
+        const angle = blade.angle + time * blade.speed;
+        const distance = blade.distance * (0.7 + grow * 0.6);
+        blade.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          0.18 + Math.sin(time * 2.2 + blade.angle) * 0.06,
+          Math.sin(angle) * distance
+        );
+        const scale = blade.size * (0.7 + grow * 0.5);
+        blade.entity.setLocalScale(scale, scale, scale);
+        blade.entity.setLocalEulerAngles(
+          90,
+          angle / DEG + 90,
+          Math.sin(time * 3 + blade.angle) * 18
+        );
+      }
+
+      for (const feather of feathers) {
+        const local = Math.max(0, Math.min(1, (time - feather.delay) / 1.15));
+        const distance = feather.distance * (0.4 + local * 0.8);
+        const angle = feather.angle + time * 1.4 + feather.phase * 0.2;
+        const fade = Math.max(0, 1 - local) * envelope;
+        feather.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          0.12 + local * feather.rise,
+          Math.sin(angle) * distance
+        );
+        feather.entity.setLocalScale(
+          feather.size * fade,
+          feather.size * 2.4 * fade,
+          feather.size * fade
+        );
+        feather.entity.setLocalEulerAngles(
+          Math.sin(time * 4 + feather.phase) * 35,
+          angle / DEG + time * 120,
+          Math.cos(time * 3.5 + feather.phase) * 40
+        );
+      }
+
+      for (const ember of embers) {
+        const angle = ember.angle + time * 2.4;
+        ember.entity.setLocalPosition(
+          Math.cos(angle) * ember.distance,
+          0.14 + Math.min(1, time / life) * radius * 0.55,
+          Math.sin(angle) * ember.distance
+        );
+        const scale = radius * 0.05 * (1 - Math.min(1, time / life) * 0.7);
+        ember.entity.setLocalScale(scale, scale, scale);
+      }
+    });
+  }
+
+  /**
+   * Onda de calor: fuego real repartido por el disco (tres anillos de llamas y
+   * una columna central) con un vórtice de viento que gira por encima. Es el
+   * estilo de `Onda Ígnea`: manda el naranja de la habilidad y el blanco del
+   * aire solo marca el frente de la onda.
+   */
+  private spawnHeatAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('heat-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.42);
+    const glowMaterial = this.createMaterial([255, 112, 34], 0.16);
+    const flameMaterial = this.createFlameMaterial([255, 204, 148], 0.5);
+    const hotMaterial = this.createFlameMaterial([255, 240, 202], 0.58);
+    const windMaterial = this.createWaterMaterial([255, 232, 190], 0.42);
+    const emberMaterial = this.createMaterial([255, 176, 76], 0.85);
+    const materials = [
+      ringMaterial,
+      glowMaterial,
+      flameMaterial,
+      hotMaterial,
+      windMaterial,
+      emberMaterial
+    ];
+
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: 0.14,
+      z: 0,
+      extents: [radius * 0.9, 0.18, radius * 0.9],
+      velocity: [0, 1, 0],
+      velocityEnd: [0, 2.8, 0],
+      radialSpeed: 0.3,
+      radialSpeedEnd: 1.2,
+      sizeStart: radius * 0.2,
+      sizeMid: radius * 0.5,
+      sizeEnd: radius * 0.14,
+      lifetime: 0.55,
+      rate: 1.8,
+      numParticles: 140,
+      localSpace: false
+    });
+    const aoeLight = this.createFireLight(
+      root,
+      0,
+      1,
+      0,
+      1.7,
+      radius * 2.6
+    );
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.12, 0);
+
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalPosition(0, 0.14, 0);
+
+    const flames: {
+      entity: pc.Entity;
+      phase: number;
+      angle: number;
+      dist: number;
+      baseWidth: number;
+      baseHeight: number;
+      yaw: number;
+    }[] = [];
+    const flameRings = [
+      { count: 10, dist: 0.2, width: 0.18, height: 0.42 },
+      { count: 14, dist: 0.45, width: 0.22, height: 0.56 },
+      { count: 20, dist: 0.7, width: 0.26, height: 0.66 }
+    ];
+    for (let ringIndex = 0; ringIndex < flameRings.length; ringIndex++) {
+      const spec = flameRings[ringIndex];
+      const offset = ringIndex * 0.5;
+      for (let index = 0; index < spec.count; index++) {
+        const angle = ((index + offset) / spec.count) * Math.PI * 2;
+        const variation = ((index * 7 + ringIndex * 3) % 10) / 10;
+        const dist = radius * spec.dist * (0.92 + variation * 0.16);
+        const baseWidth =
+          radius * spec.width * (0.9 + variation * 0.2);
+        const baseHeight =
+          radius * spec.height * (0.88 + variation * 0.24);
+        const yaw = (index * 47 + ringIndex * 31) % 360;
+        const entity = this.createFlame(
+          root,
+          (index + ringIndex) % 4 === 0 ? hotMaterial : flameMaterial,
+          {
+            x: Math.cos(angle) * dist,
+            y: 0,
+            z: Math.sin(angle) * dist,
+            width: baseWidth,
+            height: baseHeight,
+            yaw
+          }
+        );
+        flames.push({
+          entity,
+          phase: index * 1.3 + ringIndex * 2.1,
+          angle,
+          dist,
+          baseWidth,
+          baseHeight,
+          yaw
+        });
+      }
+    }
+
+    const centerWidth = radius * 0.58;
+    const centerHeight = radius * 1.05;
+    const centerFlame = this.createFlame(root, hotMaterial, {
+      x: 0,
+      y: 0,
+      z: 0,
+      width: centerWidth,
+      height: centerHeight,
+      yaw: 15
+    });
+
+    // Vórtice de aire sobre las llamas: da el "frente de onda" sin quitarles
+    // protagonismo al fuego.
+    const swirl = new pc.Entity('heat-swirl');
+    swirl.setLocalPosition(0, radius * 0.34, 0);
+    root.addChild(swirl);
+    const windBlades: { entity: pc.Entity; size: number; phase: number }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const angle = (index / 6) * Math.PI * 2;
+      const size = radius * (0.32 + (index % 3) * 0.07);
+      const blade = this.createEntity(
+        createWindBladeMesh(this.device, radius * 0.52, 1.25, radius * 0.1, 10),
+        [windMaterial],
+        swirl
+      );
+      blade.setLocalPosition(
+        Math.cos(angle) * radius * 0.45,
+        Math.sin(angle * 2) * radius * 0.05,
+        Math.sin(angle) * radius * 0.45
+      );
+      blade.setLocalEulerAngles(90, angle / DEG, 0);
+      windBlades.push({ entity: blade, size, phase: index * 1.2 });
+    }
+
+    const embers: {
+      entity: pc.Entity;
+      angle: number;
+      dist: number;
+      rise: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 10; index++) {
+      const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.5;
+      const size = radius * (0.035 + Math.random() * 0.03);
+      const ember = this.createEntity(this.sphereMesh, [emberMaterial], root);
+      ember.setLocalScale(size, size, size);
+      embers.push({
+        entity: ember,
+        angle,
+        dist: radius * (0.2 + Math.random() * 0.65),
+        rise: radius * (0.5 + Math.random() * 0.6),
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.16);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.32), 2);
+      const pulse = 0.5 + Math.sin(time * 8) * 0.2;
+
+      const ringScale = Math.max(0.2, radius * 2) * (0.38 + 0.8 * grow);
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ringMaterial.opacity = (0.3 + pulse * 0.2) * envelope;
+
+      const glowScale = radius * 1.1 * (0.7 + 0.5 * grow);
+      glow.setLocalScale(
+        glowScale,
+        radius * 0.22 * (0.7 + 0.7 * grow),
+        glowScale
+      );
+      glowMaterial.opacity = (0.1 + pulse * 0.08) * envelope;
+
+      swirl.setLocalEulerAngles(0, time * 90, 0);
+      for (const blade of windBlades) {
+        const scale =
+          blade.size * (0.7 + grow * 0.45) * (0.85 + Math.sin(time * 7 + blade.phase) * 0.12) * envelope;
+        blade.entity.setLocalScale(scale, scale, scale);
+        blade.entity.setLocalEulerAngles(
+          90,
+          time * 40 + blade.phase * 60,
+          Math.sin(time * 4 + blade.phase) * 18
+        );
+      }
+
+      for (const flame of flames) {
+        const growIn = Math.min(0.25, life * 0.3);
+        const delay = (flame.phase % 1) * growIn * 0.3;
+        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
+        const flicker = 0.88 + Math.sin(time * 11 + flame.phase * 1.7) * 0.12;
+        const sway = Math.sin(time * 6.5 + flame.phase) * 0.2;
+        const scale = Math.max(0.001, localIn * envelope);
+        flame.entity.setLocalScale(
+          flame.baseWidth * scale * flicker,
+          flame.baseHeight * scale * (1.05 + sway),
+          flame.baseWidth * scale * flicker
+        );
+        flame.entity.setLocalPosition(
+          Math.cos(flame.angle) * flame.dist,
+          Math.max(0, sway * radius * 0.05),
+          Math.sin(flame.angle) * flame.dist
+        );
+        flame.entity.setLocalEulerAngles(
+          0,
+          flame.yaw + time * 10 + Math.sin(time * 3 + flame.phase) * 10,
+          Math.sin(time * 4 + flame.phase) * 7
+        );
+      }
+
+      const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
+      const centerLife = centerIn * envelope;
+      centerFlame.setLocalScale(
+        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1),
+        centerHeight * centerLife * (1 + Math.sin(time * 7) * 0.12),
+        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1)
+      );
+      centerFlame.setLocalEulerAngles(
+        0,
+        15 + time * 14,
+        Math.sin(time * 5) * 7
+      );
+
+      for (const ember of embers) {
+        const progress = Math.min(1, time / Math.max(0.2, life * 0.8));
+        const angle = ember.angle + time * 1.6;
+        const dist = ember.dist * (0.5 + progress * 0.7);
+        ember.entity.setLocalPosition(
+          Math.cos(angle) * dist,
+          0.18 + progress * ember.rise,
+          Math.sin(angle) * dist
+        );
+        const fade = Math.max(0, 1 - progress);
+        ember.entity.setLocalScale(
+          ember.size * fade,
+          ember.size * fade,
+          ember.size * fade
+        );
+      }
+
+      flameMaterial.opacity =
+        0.42 * envelope * (0.85 + Math.random() * 0.15);
+      hotMaterial.opacity =
+        0.46 * envelope * (0.85 + Math.random() * 0.15);
+      windMaterial.opacity = 0.3 * envelope;
+      emberMaterial.opacity = 0.78 * envelope;
+      aoeLight.light!.intensity =
+        1.5 * envelope * (0.7 + Math.random() * 0.3);
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
+  }
+
+  /**
+   * Haz de aire: columna blanca-cálida con tres hélices de viento que giran en
+   * espiral, anillos que viajan hacia la punta y plumas arrastradas. El cuerpo
+   * usa mezcla normal para conservar el blanco sobre el cielo.
+   */
+  private spawnAirBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('air-beam');
+    root.setPosition(x1, 0.8, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const bodyMaterial = this.createWaterMaterial(color, 0.24);
+    const coreMaterial = this.createWaterMaterial([255, 250, 232], 0.52);
+    const ribbonMaterial = this.createWaterMaterial([255, 236, 196], 0.48);
+    const hotMaterial = this.createMaterial(color, 0.42);
+    const ringMaterial = this.createMaterial([255, 242, 206], 0.42);
+    const featherMaterial = this.createLeafMaterial([255, 222, 164], 0.78);
+    const materials = [
+      bodyMaterial,
+      coreMaterial,
+      ribbonMaterial,
+      hotMaterial,
+      ringMaterial,
+      featherMaterial
+    ];
+
+    const beamMesh = pc.createCylinder(this.device, {
+      radius: 0.5,
+      height: 1,
+      heightSegments: 1,
+      capSegments: 14
+    });
+    const body = this.createEntity(beamMesh, [bodyMaterial], root);
+    const core = this.createEntity(beamMesh, [coreMaterial], root);
+    body.setLocalEulerAngles(90, 0, 0);
+    core.setLocalEulerAngles(90, 0, 0);
+
+    const ribbons: {
+      entity: pc.Entity;
+      baseAngle: number;
+      offset: number;
+      radius: number;
+    }[] = [];
+    const segments = 14;
+    for (let helix = 0; helix < 3; helix++) {
+      for (let index = 0; index < segments; index++) {
+        const ribbon = this.createEntity(
+          this.boxMesh,
+          [helix === 1 ? hotMaterial : ribbonMaterial],
+          root
+        );
+        const t = (index + 1) / segments;
+        ribbon.setLocalScale(width * 0.13, width * 0.13, width * 0.82);
+        ribbons.push({
+          entity: ribbon,
+          baseAngle: (helix / 3) * Math.PI * 2,
+          offset: t,
+          radius: width * (1.05 + 0.12 * Math.sin(t * Math.PI))
+        });
+      }
+    }
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 4; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalEulerAngles(90, 0, 0);
+      rings.push(ring);
+    }
+
+    const feathers: {
+      entity: pc.Entity;
+      angle: number;
+      offset: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const size = width * (0.5 + Math.random() * 0.25);
+      const feather = this.createLeaf(root, featherMaterial, {
+        x: 0,
+        y: 0,
+        z: length * 0.5,
+        width: size,
+        height: size * 2.1,
+        yaw: Math.random() * 360
+      });
+      feathers.push({
+        entity: feather,
+        angle: (index / 6) * Math.PI * 2,
+        offset: Math.random(),
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, 0.46, (_t, dt) => {
+      time += dt;
+      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
+      const pulse = 0.86 + Math.random() * 0.14;
+      const visibleLength = Math.max(0.02, length * reveal);
+
+      body.setLocalPosition(0, 0, visibleLength / 2);
+      body.setLocalScale(
+        width * 2 * pulse,
+        visibleLength,
+        width * 2 * pulse
+      );
+      core.setLocalPosition(0, 0, visibleLength / 2);
+      core.setLocalScale(
+        width * 0.58 * pulse,
+        visibleLength,
+        width * 0.58 * pulse
+      );
+
+      for (const ribbon of ribbons) {
+        const z = ribbon.offset * visibleLength;
+        const angle =
+          ribbon.baseAngle + time * 7 + ribbon.offset * Math.PI * 5;
+        ribbon.entity.setLocalPosition(
+          Math.cos(angle) * ribbon.radius * (0.85 + pulse * 0.2),
+          Math.sin(angle) * ribbon.radius * (0.85 + pulse * 0.2),
+          z
+        );
+        ribbon.entity.setLocalEulerAngles(0, -angle / DEG, angle / DEG + 20);
+      }
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const path = (time * 2.4 + index / rings.length) % 1;
+        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
+        const ringScale =
+          width * (1.4 + Math.sin(path * Math.PI) * 1.1) * pulse;
+        ring.setLocalScale(ringScale, ringScale, ringScale);
+        ring.setLocalEulerAngles(90, 0, time * 180 + index * 40);
+      }
+
+      for (const feather of feathers) {
+        const local = Math.min(1, time / 0.4);
+        const angle = feather.angle + time * 3.2;
+        feather.entity.setLocalPosition(
+          Math.cos(angle) * width * (1.2 + local * 0.7),
+          Math.sin(angle) * width * (1.2 + local * 0.7),
+          feather.offset * visibleLength
+        );
+        feather.entity.setLocalEulerAngles(
+          Math.sin(time * 9 + feather.phase) * 35,
+          angle / DEG + time * 160,
+          Math.cos(time * 8 + feather.phase) * 45
+        );
+        const scale = feather.size * Math.max(0, 1 - local * 0.7);
+        feather.entity.setLocalScale(scale, scale * 2.1, scale);
+      }
+
+      bodyMaterial.opacity = 0.2 * pulse * fade;
+      coreMaterial.opacity = 0.48 * pulse * fade;
+      ribbonMaterial.opacity = 0.42 * fade;
+      hotMaterial.opacity = 0.34 * fade;
+      ringMaterial.opacity = 0.4 * fade;
+      featherMaterial.opacity = 0.7 * fade;
+    });
   }
 
   update(dt: number): void {

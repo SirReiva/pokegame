@@ -53,7 +53,8 @@ export type ProjectileStyle =
   | 'aura'
   | 'shuriken'
   | 'shadow'
-  | 'ghost';
+  | 'ghost'
+  | 'air';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -72,10 +73,18 @@ export type ImpactStyle =
   | 'fighting'
   | 'dark'
   | 'shuriken'
-  | 'ghost';
+  | 'ghost'
+  | 'air';
 
 /** Aspecto visual de un haz. */
-export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water' | 'dark' | 'ghost';
+export type BeamStyle =
+  | 'electric'
+  | 'fire'
+  | 'psychic'
+  | 'water'
+  | 'dark'
+  | 'ghost'
+  | 'air';
 
 /** Aspecto visual de un área. */
 export type AoeStyle =
@@ -87,7 +96,9 @@ export type AoeStyle =
   | 'psychic'
   | 'water'
   | 'explosion'
-  | 'ghost';
+  | 'ghost'
+  | 'air'
+  | 'heat';
 
 /**
  * Reparto del daño de un área:
@@ -1228,6 +1239,85 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Moltres                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('ataqueAereo', 'Ataque Aéreo', 'Flying', 'physical', 'melee')
+    .power(55)
+    .accuracy(0)
+    .cooldown(0.55)
+    .range(2.2)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(0.35)
+    .cast(0.36)
+    .animation('strike')
+    .impact('air')
+    .color(255, 190, 92)
+    .description(
+      'Golpe alado de corto alcance que nunca falla. Ataque básico de Moltres.'
+    )
+);
+
+registerAbility(
+  ability('tajoAereo', 'Tajo Aéreo', 'Flying', 'special', 'projectile')
+    .power(65)
+    .accuracy(100)
+    .cooldown(3.5)
+    .range(8.5)
+    .radius(0.3)
+    .projectile('air', 16)
+    .impact('air')
+    .cast(0.4)
+    .animation('shoot')
+    .color(255, 206, 122)
+    .description(
+      'Abanico de viento afilado que vuela 8,5 u. El ataque a distancia fiable de Moltres.'
+    )
+);
+
+registerAbility(
+  ability('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', 'aoe')
+    .power(65)
+    .accuracy(95)
+    .cooldown(8)
+    .range(4.2)
+    .radius(2.9)
+    .area('heat', 'instant', 0.9)
+    .radial(0.4)
+    .slow(0.82, 1.5)
+    .windup(0.3, { animation: 'shoot', move: true })
+    .cast(0.5)
+    .animation(null)
+    .impact('air')
+    .color(255, 150, 60)
+    .description(
+      'Onda de aire abrasador de 2,9 u: 65 de potencia, 40 % en el borde y 18 % de ralentización durante 1,5 s.'
+    )
+);
+
+registerAbility(
+  ability('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', 'aoe')
+    .power(130)
+    .accuracy(90)
+    .cooldown(15)
+    .range(6)
+    .radius(3.1)
+    .area('air', 'instant', 0.9)
+    .radial(0.35)
+    .knockback(0.9)
+    .windup(0.8, { animation: 'charge' })
+    .cast(0.6)
+    .animation('strike')
+    .impact('air')
+    .color(255, 168, 72)
+    .description(
+      'Definitiva: marca un punto a 6 u y se lanza en picado tras 0,8 s. Golpea una vez en 3,1 u con el 100 % en el centro y el 35 % en el borde.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1250,6 +1340,12 @@ MOVESETS['0448'] = [
   'combateCercano'
 ];
 MOVESETS['0658'] = ['shurikenAgua', 'tajoUmbro', 'sombraVil', 'pulsoUmbro'];
+MOVESETS['0146'] = [
+  'ataqueAereo',
+  'tajoAereo',
+  'ondaIgnea',
+  'ataqueCeleste'
+];
 MOVESETS['0150'] = [
   'telequinesis',
   'teletransporte',
