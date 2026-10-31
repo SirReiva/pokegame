@@ -54,7 +54,8 @@ export type ProjectileStyle =
   | 'shuriken'
   | 'shadow'
   | 'ghost'
-  | 'air';
+  | 'air'
+  | 'ice';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -74,7 +75,8 @@ export type ImpactStyle =
   | 'dark'
   | 'shuriken'
   | 'ghost'
-  | 'air';
+  | 'air'
+  | 'ice';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle =
@@ -84,7 +86,8 @@ export type BeamStyle =
   | 'water'
   | 'dark'
   | 'ghost'
-  | 'air';
+  | 'air'
+  | 'ice';
 
 /** Aspecto visual de un área. */
 export type AoeStyle =
@@ -98,7 +101,9 @@ export type AoeStyle =
   | 'explosion'
   | 'ghost'
   | 'air'
-  | 'heat';
+  | 'heat'
+  | 'ice'
+  | 'blizzard';
 
 /**
  * Reparto del daño de un área:
@@ -1318,6 +1323,87 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Articuno                                                                  */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('golpeAla', 'Golpe Ala', 'Flying', 'physical', 'melee')
+    .power(55)
+    .accuracy(100)
+    .cooldown(0.55)
+    .range(2.2)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(0.35)
+    .cast(0.36)
+    .animation('attack')
+    .impact('air')
+    .color(206, 242, 255)
+    .description(
+      'Golpe de ala de corto alcance. Ataque básico de Articuno.'
+    )
+);
+
+registerAbility(
+  ability('rayoHielo', 'Rayo Hielo', 'Ice', 'special', 'beam')
+    .power(90)
+    .accuracy(100)
+    .cooldown(7)
+    .range(9.5)
+    .radius(0.4)
+    .beam('ice')
+    .impact('ice')
+    .windup(0.3, { animation: 'charge' })
+    .cast(0.5)
+    .animation('shoot')
+    .slow(0.8, 1.5)
+    .color(150, 225, 255)
+    .description(
+      'Haz de hielo de 9,5 u y 90 de potencia que congela parcialmente: ralentiza un 20 % durante 1,5 s.'
+    )
+);
+
+registerAbility(
+  ability('vientoGelido', 'Viento Gélido', 'Ice', 'special', 'aoe')
+    .power(55)
+    .accuracy(95)
+    .cooldown(8)
+    .range(4.5)
+    .radius(2.8)
+    .area('ice', 'instant', 0.9)
+    .radial(0.5)
+    .slow(0.65, 2.5)
+    .windup(0.3, { animation: 'shoot', move: true })
+    .cast(0.5)
+    .animation(null)
+    .impact('ice')
+    .color(130, 210, 245)
+    .description(
+      'Ráfaga helada de 2,8 u: 55 de potencia, 50 % en el borde y ralentización del 35 % durante 2,5 s.'
+    )
+);
+
+registerAbility(
+  ability('ventisca', 'Ventisca', 'Ice', 'special', 'aoe')
+    .power(110)
+    .accuracy(90)
+    .cooldown(15)
+    .range(5.5)
+    .radius(3.3)
+    .area('blizzard', 'instant', 1.1)
+    .radial(0.35)
+    .slow(0.75, 2)
+    .windup(0.75, { animation: 'charge' })
+    .cast(0.7)
+    .animation('shoot')
+    .impact('ice')
+    .color(120, 200, 250)
+    .description(
+      'Definitiva: ventisca de 3,3 u que golpea una vez con 110 de potencia, 35 % en el borde y ralentización del 25 % durante 2 s.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1340,6 +1426,7 @@ MOVESETS['0448'] = [
   'combateCercano'
 ];
 MOVESETS['0658'] = ['shurikenAgua', 'tajoUmbro', 'sombraVil', 'pulsoUmbro'];
+MOVESETS['0144'] = ['golpeAla', 'rayoHielo', 'vientoGelido', 'ventisca'];
 MOVESETS['0146'] = [
   'ataqueAereo',
   'tajoAereo',

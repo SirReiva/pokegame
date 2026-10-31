@@ -304,6 +304,86 @@ function createWindBladeMesh(
 }
 
 /**
+ * Cristal de hielo unitario: prisma hexagonal facetado con punta inferior y
+ * superior. Se generan triángulos independientes con normal plana hacia fuera
+ * para que cada cara reciba luz distinta y el cristal se lea en 3D.
+ */
+function createIceCrystalMesh(device: pc.GraphicsDevice): pc.Mesh {
+  const sides = 6;
+  const bottom: [number, number, number] = [0, -0.5, 0];
+  const top: [number, number, number] = [0, 0.5, 0];
+  const ring = (
+    y: number,
+    radius: number,
+    offset: number
+  ): [number, number, number][] =>
+    Array.from({ length: sides }, (_, index) => {
+      const angle = offset + (index / sides) * Math.PI * 2;
+      return [Math.cos(angle) * radius, y, Math.sin(angle) * radius];
+    });
+  const lower = ring(-0.3, 0.34, 0);
+  const middle = ring(0.02, 0.5, Math.PI / sides);
+  const upper = ring(0.3, 0.3, 0);
+
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+
+  const pushTriangle = (
+    a: [number, number, number],
+    b: [number, number, number],
+    c: [number, number, number]
+  ): void => {
+    const ux = b[0] - a[0];
+    const uy = b[1] - a[1];
+    const uz = b[2] - a[2];
+    const vx = c[0] - a[0];
+    const vy = c[1] - a[1];
+    const vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    // Normal hacia fuera: en un cristal convexo centrado, debe apuntar en el
+    // mismo sentido que el centro de la cara.
+    const cx = (a[0] + b[0] + c[0]) / 3;
+    const cy = (a[1] + b[1] + c[1]) / 3;
+    const cz = (a[2] + b[2] + c[2]) / 3;
+    if (nx * cx + ny * cy + nz * cz < 0) {
+      nx = -nx;
+      ny = -ny;
+      nz = -nz;
+    }
+    const length = Math.hypot(nx, ny, nz) || 1;
+    nx /= length;
+    ny /= length;
+    nz /= length;
+    positions.push(...a, ...b, ...c);
+    normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+  };
+
+  for (let index = 0; index < sides; index++) {
+    const next = (index + 1) % sides;
+    pushTriangle(bottom, lower[index], lower[next]);
+    pushTriangle(lower[index], middle[index], lower[next]);
+    pushTriangle(lower[next], middle[index], middle[next]);
+    pushTriangle(middle[index], upper[index], middle[next]);
+    pushTriangle(middle[next], upper[index], upper[next]);
+    pushTriangle(upper[index], top, upper[next]);
+  }
+
+  for (let index = 0; index < positions.length / 3; index++) {
+    indices.push(index);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
  * Cinta zigzagueante en forma de cruz, para que el rayo se vea desde cualquier
  * ángulo de cámara. Se construye a lo largo de Z y se centra en 0.
  */
@@ -491,6 +571,8 @@ export class CombatFx {
   /** Mallas de la marca de área y marcas activas. */
   private readonly discMesh: pc.Mesh;
   private readonly dashRingMesh: pc.Mesh;
+  /** Bipirámide compartida por proyectiles, impactos, haces y áreas de hielo. */
+  private readonly iceCrystalMesh: pc.Mesh;
   private readonly telegraphs = new Set<AoeTelegraph>();
 
   /** Fábricas de VFX por estilo: evitan cadenas de `if` en cada spawn. */
@@ -588,8 +670,10 @@ export class CombatFx {
     this.leafMesh.incRefCount();
     this.discMesh = createDiscMesh(this.device);
     this.dashRingMesh = createDashRingMesh(this.device);
+    this.iceCrystalMesh = createIceCrystalMesh(this.device);
     this.discMesh.incRefCount();
     this.dashRingMesh.incRefCount();
+    this.iceCrystalMesh.incRefCount();
 
     this.impactEffects = {
       hit: (x, z, color, effectiveness) =>
@@ -625,7 +709,9 @@ export class CombatFx {
       ghost: (x, z, color, effectiveness) =>
         this.spawnGhostBurst(x, z, color, effectiveness),
       air: (x, z, color, effectiveness) =>
-        this.spawnAirBurst(x, z, color, effectiveness)
+        this.spawnAirBurst(x, z, color, effectiveness),
+      ice: (x, z, color, effectiveness) =>
+        this.spawnIceBurst(x, z, color, effectiveness)
     };
 
     this.projectileFactories = {
@@ -652,7 +738,9 @@ export class CombatFx {
       ghost: (x, z, color, radius, dirX, dirZ) =>
         this.spawnGhostProjectile(x, z, color, radius, dirX, dirZ),
       air: (x, z, color, radius, dirX, dirZ) =>
-        this.spawnAirProjectile(x, z, radius, dirX, dirZ, color)
+        this.spawnAirProjectile(x, z, radius, dirX, dirZ, color),
+      ice: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnIceProjectile(x, z, radius, dirX, dirZ, color)
     };
 
     this.beamFactories = {
@@ -669,7 +757,9 @@ export class CombatFx {
       ghost: (x1, z1, x2, z2, color, width) =>
         this.spawnGhostBeam(x1, z1, x2, z2, color, width),
       air: (x1, z1, x2, z2, color, width) =>
-        this.spawnAirBeam(x1, z1, x2, z2, color, width)
+        this.spawnAirBeam(x1, z1, x2, z2, color, width),
+      ice: (x1, z1, x2, z2, color, width) =>
+        this.spawnIceBeam(x1, z1, x2, z2, color, width)
     };
 
     this.aoeFactories = {
@@ -694,7 +784,11 @@ export class CombatFx {
       air: (x, z, radius, color, duration) =>
         this.spawnAirAoe(x, z, radius, color, duration),
       heat: (x, z, radius, color, duration) =>
-        this.spawnHeatAoe(x, z, radius, color, duration)
+        this.spawnHeatAoe(x, z, radius, color, duration),
+      ice: (x, z, radius, color, duration) =>
+        this.spawnIceAoe(x, z, radius, color, duration),
+      blizzard: (x, z, radius, color, duration) =>
+        this.spawnBlizzardAoe(x, z, radius, color, duration)
     };
   }
 
@@ -816,6 +910,42 @@ export class CombatFx {
     opacity: number
   ): pc.StandardMaterial {
     return this.createWaterMaterial(tint, opacity);
+  }
+
+  /**
+   * Material de cristal de hielo: iluminado para que cada faceta reciba una
+   * luz distinta y el prisma se lea en 3D. La emisión azul evita que el cristal
+   * desaparezca en zonas de sombra y la mezcla normal conserva el color sobre
+   * terreno claro.
+   */
+  private createIceCrystalMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = true;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(
+      tint[0] / 255,
+      tint[1] / 255,
+      tint[2] / 255
+    );
+    material.emissive = new pc.Color(
+      (tint[0] / 255) * 0.38,
+      (tint[1] / 255) * 0.38,
+      (tint[2] / 255) * 0.38
+    );
+    material.emissiveIntensity = 0.9;
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_NORMAL;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.metalness = 0.1;
+    material.gloss = 0.55;
+    material.update();
+    return material;
   }
 
   /** Crea una hoja cruzada con la base en `position`. */
@@ -7038,7 +7168,7 @@ export class CombatFx {
       hotMaterial.opacity = (0.3 + pulse * 0.16) * envelope;
       featherMaterial.opacity = (0.52 + pulse * 0.2) * envelope;
 
-      const ringScale = radius * 2 * (0.55 + grow * 0.5);
+      const ringScale = radius * (0.55 + grow * 0.5);
       for (let index = 0; index < rings.length; index++) {
         const ring = rings[index];
         ring.setLocalScale(ringScale, 1, ringScale);
@@ -7540,6 +7670,940 @@ export class CombatFx {
       hotMaterial.opacity = 0.34 * fade;
       ringMaterial.opacity = 0.4 * fade;
       featherMaterial.opacity = 0.7 * fade;
+    });
+  }
+
+  /**
+   * Proyectil de hielo: grupo de cristales que gira alrededor de un núcleo
+   * blanco, con halo azul y estela de esquirlas. Disponible para futuros
+   * ataques a distancia de tipo Hielo.
+   */
+  private spawnIceProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('ice-projectile');
+    root.setPosition(x, 0.8, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createWaterMaterial([242, 252, 255], 0.92);
+    const glowMaterial = this.createWaterMaterial(color, 0.2);
+    const crystalMaterial = this.createIceCrystalMaterial(
+      [200, 240, 255],
+      0.88
+    );
+    const deepMaterial = this.createIceCrystalMaterial([86, 168, 226], 0.72);
+    const trailMaterial = this.createIceCrystalMaterial(
+      [220, 248, 255],
+      0.56
+    );
+    const materials = [
+      coreMaterial,
+      glowMaterial,
+      crystalMaterial,
+      deepMaterial,
+      trailMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.35, radius * 1.35, radius * 1.35);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    glow.setLocalScale(radius * 3.6, radius * 3.6, radius * 3.6);
+
+    const wheel = new pc.Entity('ice-wheel');
+    root.addChild(wheel);
+    const shards: {
+      entity: pc.Entity;
+      phase: number;
+      baseAngle: number;
+      baseWidth: number;
+      baseHeight: number;
+    }[] = [];
+    for (let index = 0; index < 5; index++) {
+      const angle = (index / 5) * Math.PI * 2;
+      const baseWidth = radius * 0.5;
+      const baseHeight = radius * 2.1;
+      const shard = this.createEntity(
+        this.iceCrystalMesh,
+        [index % 2 === 0 ? crystalMaterial : deepMaterial],
+        wheel
+      );
+      shard.setLocalPosition(
+        Math.cos(angle) * radius * 1.4,
+        Math.sin(angle) * radius,
+        0
+      );
+      shard.setLocalEulerAngles(0, 0, angle / DEG);
+      shard.setLocalScale(baseWidth, baseHeight, baseWidth);
+      shards.push({
+        entity: shard,
+        phase: index * 1.3,
+        baseAngle: angle,
+        baseWidth,
+        baseHeight
+      });
+    }
+
+    const trailShards: { entity: pc.Entity; phase: number; baseZ: number }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const baseZ = -radius * (2 + index * 1.1);
+      const shard = this.createEntity(
+        this.iceCrystalMesh,
+        [trailMaterial],
+        root
+      );
+      shard.setLocalPosition(
+        (index - 1) * radius * 0.35,
+        (index % 2 === 0 ? 1 : -1) * radius * 0.3,
+        baseZ
+      );
+      shard.setLocalScale(radius * 0.35, radius * 1.2, radius * 0.35);
+      shard.setLocalEulerAngles(70 + index * 25, index * 60, 20);
+      trailShards.push({ entity: shard, phase: index * 1.7, baseZ });
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        wheel.setLocalEulerAngles(0, 0, time * 520);
+
+        const pulse = 1 + Math.sin(time * 22) * 0.08;
+        const coreScale = radius * 1.35 * pulse;
+        core.setLocalScale(coreScale, coreScale, coreScale);
+        const glowScale = radius * 3.6 * (1 + Math.sin(time * 15) * 0.1);
+        glow.setLocalScale(glowScale, glowScale, glowScale);
+
+        coreMaterial.opacity = 0.78 + Math.sin(time * 19) * 0.12;
+        glowMaterial.opacity = 0.14 + Math.sin(time * 12) * 0.05;
+        crystalMaterial.opacity = 0.62 + Math.sin(time * 16) * 0.12;
+        deepMaterial.opacity = 0.38 + Math.sin(time * 18 + 1) * 0.1;
+        trailMaterial.opacity = 0.26 + Math.sin(time * 10) * 0.08;
+        for (const material of materials) material.update();
+
+        for (const shard of shards) {
+          const flicker = 0.9 + Math.sin(time * 13 + shard.phase) * 0.12;
+          shard.entity.setLocalScale(
+            shard.baseWidth * flicker,
+            shard.baseHeight * flicker,
+            shard.baseWidth * flicker
+          );
+          shard.entity.setLocalEulerAngles(
+            0,
+            0,
+            shard.baseAngle / DEG + time * 55 + Math.sin(time * 6 + shard.phase) * 8
+          );
+        }
+        for (const shard of trailShards) {
+          shard.entity.setLocalPosition(
+            Math.sin(time * 8 + shard.phase) * radius * 0.25,
+            Math.sin(time * 7 + shard.phase) * radius * 0.2,
+            shard.baseZ
+          );
+          shard.entity.setLocalEulerAngles(
+            70 + Math.sin(time * 6 + shard.phase) * 15,
+            time * 90 + shard.phase * 40,
+            20
+          );
+        }
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.8, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
+   * Impacto de hielo: destello blanco, cuerpo azul, dos ondas de escarcha,
+   * esquirlas que salen despedidas y copos que flotan. El azul usa mezcla
+   * normal para leerse sobre cualquier terreno.
+   */
+  private spawnIceBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('ice-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([240, 252, 255], 0.92);
+    const bodyMaterial = this.createWaterMaterial(color, 0.4);
+    const ringMaterial = this.createMaterial([180, 238, 255], 0.5);
+    const shardMaterial = this.createIceCrystalMaterial(
+      [210, 245, 255],
+      0.88
+    );
+    const deepMaterial = this.createIceCrystalMaterial([92, 172, 228], 0.74);
+    const snowMaterial = this.createWaterMaterial([226, 248, 255], 0.32);
+    const materials = [
+      coreMaterial,
+      bodyMaterial,
+      ringMaterial,
+      shardMaterial,
+      deepMaterial,
+      snowMaterial
+    ];
+    const power = effectiveness > 1 ? 1.24 : effectiveness < 1 ? 0.86 : 1;
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.6, 0);
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalPosition(0, 0.6, 0);
+
+    const rings: pc.Entity[] = [];
+    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(ringMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
+      rings.push(ring);
+    }
+
+    const shards: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      lift: number;
+      size: number;
+      delay: number;
+      spin: number;
+    }[] = [];
+    for (let index = 0; index < 9; index++) {
+      const angle = (index / 9) * Math.PI * 2 + Math.random() * 0.4;
+      const size = 0.12 + Math.random() * 0.12;
+      const shard = this.createEntity(
+        this.iceCrystalMesh,
+        [index % 3 === 0 ? deepMaterial : shardMaterial],
+        root
+      );
+      shard.setLocalPosition(0, 0.55, 0);
+      shard.setLocalScale(size * 0.4, size * 1.7, size * 0.4);
+      shards.push({
+        entity: shard,
+        angle,
+        distance: (0.5 + Math.random() * 0.8) * power,
+        lift: 0.5 + Math.random() * 0.7,
+        size,
+        delay: index * 0.012,
+        spin: (Math.random() - 0.5) * 540
+      });
+    }
+
+    const snow: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const angle = (index / 6) * Math.PI * 2 + Math.random() * 0.5;
+      const size = 0.14 + Math.random() * 0.12;
+      const puff = this.createEntity(this.sphereMesh, [snowMaterial], root);
+      puff.setLocalPosition(0, 0.45, 0);
+      puff.setLocalScale(size, size, size);
+      snow.push({
+        entity: puff,
+        angle,
+        distance: (0.35 + Math.random() * 0.55) * power,
+        rise: 0.35 + Math.random() * 0.45,
+        size,
+        delay: Math.random() * 0.08
+      });
+    }
+
+    this.addEffect(root, materials, 0.54, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const flash = Math.max(0, 1 - t / 0.32);
+      const coreScale = (0.12 + ease * 0.72) * power;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      coreMaterial.opacity = 0.92 * flash;
+      const bodyScale = (0.18 + ease * 1.25) * power;
+      body.setLocalScale(bodyScale, bodyScale, bodyScale);
+      bodyMaterial.opacity = 0.36 * (1 - t);
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const scale = (0.3 + ease * (2 + index * 0.4)) * power;
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalEulerAngles(0, t * 40 + index * 30, 0);
+      }
+      ringMaterial.opacity = 0.48 * (1 - t);
+
+      for (const shard of shards) {
+        const local = Math.max(0, Math.min(1, (t - shard.delay) / 0.82));
+        const distance = shard.distance * local;
+        const angle = shard.angle + local * 0.7;
+        const y =
+          0.55 + shard.lift * Math.sin(local * Math.PI) - local * local * 0.7;
+        shard.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          Math.max(0.05, y),
+          Math.sin(angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        shard.entity.setLocalScale(
+          shard.size * 0.4 * fade,
+          shard.size * 1.7 * fade,
+          shard.size * 0.4 * fade
+        );
+        shard.entity.setLocalEulerAngles(
+          local * 120,
+          angle / DEG + local * 240,
+          local * shard.spin
+        );
+      }
+
+      for (const puff of snow) {
+        const local = Math.max(0, Math.min(1, (t - puff.delay) / 0.9));
+        const angle = puff.angle + local * 1.1;
+        const distance = puff.distance * local;
+        puff.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          0.35 + local * puff.rise,
+          Math.sin(angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        const scale = puff.size * (0.7 + local * 0.9) * fade;
+        puff.entity.setLocalScale(scale, scale, scale);
+      }
+
+      shardMaterial.opacity = 0.72 * (1 - t);
+      deepMaterial.opacity = 0.5 * (1 - t);
+      snowMaterial.opacity = 0.28 * (1 - t);
+    });
+  }
+
+  /**
+   * Haz de hielo: columna azul con núcleo blanco, cristales incrustados que
+   * giran, anillos de escarcha que viajan y una punta de cristales.
+   */
+  private spawnIceBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('ice-beam');
+    root.setPosition(x1, 0.8, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const bodyMaterial = this.createWaterMaterial(color, 0.3);
+    const coreMaterial = this.createWaterMaterial([242, 252, 255], 0.56);
+    const crystalMaterial = this.createIceCrystalMaterial(
+      [205, 242, 255],
+      0.86
+    );
+    const deepMaterial = this.createIceCrystalMaterial([96, 176, 230], 0.7);
+    const mistMaterial = this.createWaterMaterial([225, 247, 255], 0.24);
+    const materials = [
+      bodyMaterial,
+      coreMaterial,
+      crystalMaterial,
+      deepMaterial,
+      mistMaterial
+    ];
+
+    const beamMesh = pc.createCylinder(this.device, {
+      radius: 0.5,
+      height: 1,
+      heightSegments: 1,
+      capSegments: 14
+    });
+    const body = this.createEntity(beamMesh, [bodyMaterial], root);
+    const core = this.createEntity(beamMesh, [coreMaterial], root);
+    body.setLocalEulerAngles(90, 0, 0);
+    core.setLocalEulerAngles(90, 0, 0);
+
+    const crystals: {
+      entity: pc.Entity;
+      offset: number;
+      angle: number;
+      radius: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const crystal = this.createEntity(
+        this.iceCrystalMesh,
+        [index % 3 === 0 ? deepMaterial : crystalMaterial],
+        root
+      );
+      const size = width * (0.5 + Math.random() * 0.35);
+      crystal.setLocalScale(size * 0.45, size * 1.8, size * 0.45);
+      crystals.push({
+        entity: crystal,
+        offset: (index + 0.5) / 12,
+        angle: (index / 12) * Math.PI * 2 + Math.random() * 0.4,
+        radius: width * (0.7 + Math.random() * 0.6),
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 4; index++) {
+      const ring = this.createEntity(this.torusMesh, [crystalMaterial], root);
+      ring.setLocalEulerAngles(90, 0, 0);
+      rings.push(ring);
+    }
+
+    const tipCrystals: { entity: pc.Entity; angle: number; size: number }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const size = width * (0.7 + index * 0.15);
+      const crystal = this.createEntity(
+        this.iceCrystalMesh,
+        [index === 0 ? crystalMaterial : deepMaterial],
+        root
+      );
+      crystal.setLocalScale(size * 0.4, size * 1.9, size * 0.4);
+      tipCrystals.push({
+        entity: crystal,
+        angle: (index / 3) * Math.PI * 2,
+        size
+      });
+    }
+
+    const mist: { entity: pc.Entity; offset: number; angle: number; size: number }[] = [];
+    for (let index = 0; index < 5; index++) {
+      const size = width * (0.8 + Math.random() * 0.5);
+      const puff = this.createEntity(this.sphereMesh, [mistMaterial], root);
+      puff.setLocalScale(size, size * 0.7, size);
+      mist.push({
+        entity: puff,
+        offset: (index + 0.5) / 5,
+        angle: Math.random() * Math.PI * 2,
+        size
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, 0.48, (_t, dt) => {
+      time += dt;
+      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.2);
+      const pulse = 0.86 + Math.random() * 0.14;
+      const visibleLength = Math.max(0.02, length * reveal);
+
+      body.setLocalPosition(0, 0, visibleLength / 2);
+      body.setLocalScale(
+        width * 2.1 * pulse,
+        visibleLength,
+        width * 2.1 * pulse
+      );
+      core.setLocalPosition(0, 0, visibleLength / 2);
+      core.setLocalScale(
+        width * 0.62 * pulse,
+        visibleLength,
+        width * 0.62 * pulse
+      );
+
+      for (const crystal of crystals) {
+        const angle = crystal.angle + time * 4.5 + crystal.phase;
+        const radius = crystal.radius * (0.85 + pulse * 0.25);
+        crystal.entity.setLocalPosition(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          crystal.offset * visibleLength
+        );
+        crystal.entity.setLocalEulerAngles(
+          time * 120 + crystal.phase * 40,
+          angle / DEG,
+          time * 80
+        );
+        const scale = crystal.size * (0.75 + Math.sin(time * 8 + crystal.phase) * 0.2);
+        crystal.entity.setLocalScale(scale * 0.45, scale * 1.8, scale * 0.45);
+      }
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const path = (time * 2.2 + index / rings.length) % 1;
+        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
+        const ringScale =
+          width * (1.3 + Math.sin(path * Math.PI) * 1.1) * pulse;
+        ring.setLocalScale(ringScale, ringScale, ringScale);
+        ring.setLocalEulerAngles(90, 0, time * 160 + index * 45);
+      }
+
+      for (const tip of tipCrystals) {
+        const angle = tip.angle + time * 3;
+        tip.entity.setLocalPosition(
+          Math.cos(angle) * width * 0.5,
+          Math.sin(angle) * width * 0.5,
+          visibleLength
+        );
+        tip.entity.setLocalEulerAngles(time * 160, angle / DEG, time * 90);
+      }
+
+      for (const puff of mist) {
+        const angle = puff.angle + time * 2.4;
+        puff.entity.setLocalPosition(
+          Math.cos(angle) * width * 1.2,
+          Math.sin(angle) * width * 0.8,
+          puff.offset * visibleLength
+        );
+        const scale = puff.size * (0.7 + Math.sin(time * 5 + puff.angle) * 0.2) * fade;
+        puff.entity.setLocalScale(scale, scale * 0.7, scale);
+      }
+
+      bodyMaterial.opacity = 0.26 * pulse * fade;
+      coreMaterial.opacity = 0.52 * pulse * fade;
+      crystalMaterial.opacity = 0.66 * fade;
+      deepMaterial.opacity = 0.44 * fade;
+      mistMaterial.opacity = 0.2 * fade;
+    });
+  }
+
+  /**
+   * Área de hielo: anillos de escarcha, púas de cristal que brotan del suelo,
+   * niebla fría y destellos. Es el visual de Viento Gélido y Ventisca.
+   */
+  private spawnIceAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('ice-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createWaterMaterial([150, 220, 255], 0.55);
+    const floorMaterial = this.createWaterMaterial([120, 200, 250], 0.12);
+    const spikeMaterial = this.createIceCrystalMaterial(
+      [205, 242, 255],
+      0.9
+    );
+    const deepMaterial = this.createIceCrystalMaterial(color, 0.74);
+    const mistMaterial = this.createWaterMaterial([225, 248, 255], 0.26);
+    const sparkMaterial = this.createMaterial([235, 250, 255], 0.8);
+    const materials = [
+      ringMaterial,
+      floorMaterial,
+      spikeMaterial,
+      deepMaterial,
+      mistMaterial,
+      sparkMaterial
+    ];
+
+    const floor = this.createEntity(this.discMesh, [floorMaterial], root);
+    floor.setLocalPosition(0, 0.02, 0);
+    floor.setLocalScale(radius * 2, 1, radius * 2);
+
+    const rings: pc.Entity[] = [];
+    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(ringMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
+      rings.push(ring);
+    }
+
+    const spikes: {
+      entity: pc.Entity;
+      height: number;
+      width: number;
+      delay: number;
+      tiltX: number;
+      tiltZ: number;
+      yaw: number;
+    }[] = [];
+    for (let index = 0; index < 34; index++) {
+      // Ángulo áureo + raíz del índice: cubre el disco de forma uniforme en
+      // vez de amontonar las púas cerca del centro.
+      const angle = index * 2.399963 + Math.random() * 0.35;
+      const distance =
+        Math.sqrt((index + 0.5) / 34) * radius * 0.92;
+      const height = radius * (0.22 + Math.random() * 0.36);
+      const width = radius * (0.06 + Math.random() * 0.06);
+      const spike = this.createEntity(
+        this.iceCrystalMesh,
+        [index % 4 === 0 ? deepMaterial : spikeMaterial],
+        root
+      );
+      spike.setLocalPosition(
+        Math.cos(angle) * distance,
+        height * 0.5,
+        Math.sin(angle) * distance
+      );
+      spike.setLocalScale(width, height, width);
+      const tiltX = (Math.random() - 0.5) * 24;
+      const tiltZ = (Math.random() - 0.5) * 24;
+      const yaw = Math.random() * 360;
+      spike.setLocalEulerAngles(tiltX, yaw, tiltZ);
+      spikes.push({
+        entity: spike,
+        height,
+        width,
+        delay: Math.random() * 0.2,
+        tiltX,
+        tiltZ,
+        yaw
+      });
+    }
+
+    const mist: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 10; index++) {
+      const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.4;
+      const size = radius * (0.1 + Math.random() * 0.09);
+      const puff = this.createEntity(this.sphereMesh, [mistMaterial], root);
+      puff.setLocalScale(size, size * 0.7, size);
+      mist.push({
+        entity: puff,
+        angle,
+        distance: radius * (0.2 + Math.random() * 0.65),
+        rise: radius * (0.25 + Math.random() * 0.4),
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    const sparks: { entity: pc.Entity; angle: number; distance: number; rise: number; size: number }[] = [];
+    for (let index = 0; index < 12; index++) {
+      const angle = (index / 12) * Math.PI * 2 + Math.random() * 0.4;
+      const size = radius * (0.018 + Math.random() * 0.018);
+      const spark = this.createEntity(this.sphereMesh, [sparkMaterial], root);
+      spark.setLocalScale(size, size, size);
+      sparks.push({
+        entity: spark,
+        angle,
+        distance: radius * (0.15 + Math.random() * 0.7),
+        rise: radius * (0.4 + Math.random() * 0.5),
+        size
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.16);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.3), 2);
+      const pulse = 0.55 + Math.sin(time * 8) * 0.2;
+
+      ringMaterial.opacity = (0.3 + pulse * 0.15) * envelope;
+      floorMaterial.opacity = 0.1 * envelope;
+      const ringScale = radius * (0.5 + grow * 0.5);
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        ring.setLocalScale(ringScale, 1, ringScale);
+        ring.setLocalEulerAngles(0, time * (index === 0 ? 80 : -60), 0);
+      }
+
+      for (const spike of spikes) {
+        const local = Math.max(0, Math.min(1, (time - spike.delay) / 0.22));
+        const ease = 1 - Math.pow(1 - local, 3);
+        const height = spike.height * ease;
+        spike.entity.setLocalScale(spike.width, Math.max(0.001, height), spike.width);
+        spike.entity.setLocalPosition(
+          spike.entity.getLocalPosition().x,
+          height * 0.5,
+          spike.entity.getLocalPosition().z
+        );
+        spike.entity.setLocalEulerAngles(
+          spike.tiltX,
+          spike.yaw,
+          spike.tiltZ
+        );
+      }
+
+      for (const puff of mist) {
+        const local = Math.min(1, time / Math.max(0.2, life * 0.8));
+        const angle = puff.angle + time * 1.3;
+        const distance = puff.distance * (0.5 + local * 0.7);
+        puff.entity.setLocalPosition(
+          Math.cos(angle) * distance,
+          0.15 + local * puff.rise,
+          Math.sin(angle) * distance
+        );
+        const scale =
+          puff.size * (0.7 + local * 0.8) * Math.max(0, 1 - local);
+        puff.entity.setLocalScale(scale, scale * 0.7, scale);
+      }
+
+      for (const spark of sparks) {
+        const local = Math.min(1, time / Math.max(0.2, life * 0.8));
+        const angle = spark.angle + time * 1.8;
+        spark.entity.setLocalPosition(
+          Math.cos(angle) * spark.distance,
+          0.15 + local * spark.rise,
+          Math.sin(angle) * spark.distance
+        );
+        const fade = Math.max(0, 1 - local);
+        spark.entity.setLocalScale(
+          spark.size * fade,
+          spark.size * fade,
+          spark.size * fade
+        );
+      }
+
+      spikeMaterial.opacity = 0.68 * envelope;
+      deepMaterial.opacity = 0.46 * envelope;
+      mistMaterial.opacity = 0.22 * envelope;
+      sparkMaterial.opacity = 0.72 * envelope;
+    });
+  }
+
+  /**
+   * Ventisca: los cristales caen desde arriba, se clavan en el suelo y quedan
+   * sobresaliendo mientras el área se enfría. La marca previa ya avisa del
+   * radio; este efecto empieza con el impacto.
+   */
+  private spawnBlizzardAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.3, duration);
+    const root = new pc.Entity('blizzard-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createWaterMaterial(color, 0.5);
+    const floorMaterial = this.createWaterMaterial([120, 200, 250], 0.1);
+    const crystalMaterial = this.createIceCrystalMaterial(
+      [215, 245, 255],
+      0.9
+    );
+    const deepMaterial = this.createIceCrystalMaterial([96, 176, 230], 0.76);
+    const snowMaterial = this.createWaterMaterial([235, 250, 255], 0.34);
+    const flashMaterial = this.createMaterial([200, 240, 255], 0.55);
+    const materials = [
+      ringMaterial,
+      floorMaterial,
+      crystalMaterial,
+      deepMaterial,
+      snowMaterial,
+      flashMaterial
+    ];
+
+    const floor = this.createEntity(this.discMesh, [floorMaterial], root);
+    floor.setLocalPosition(0, 0.02, 0);
+    floor.setLocalScale(radius * 2, 1, radius * 2);
+
+    const rings: pc.Entity[] = [];
+    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(ringMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
+      rings.push(ring);
+    }
+
+    const flash = this.createEntity(this.sphereMesh, [flashMaterial], root);
+    flash.setLocalPosition(0, 0.75, 0);
+
+    const shards: {
+      entity: pc.Entity;
+      puff: pc.Entity;
+      targetX: number;
+      targetZ: number;
+      startY: number;
+      landY: number;
+      delay: number;
+      fall: number;
+      width: number;
+      height: number;
+      puffSize: number;
+      tiltX: number;
+      tiltZ: number;
+      yaw: number;
+    }[] = [];
+    for (let index = 0; index < 32; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.sqrt(Math.random()) * radius * 0.9;
+      const targetX = Math.cos(angle) * distance;
+      const targetZ = Math.sin(angle) * distance;
+      const height = radius * (0.22 + Math.random() * 0.35);
+      const width = radius * (0.06 + Math.random() * 0.055);
+      // El centro queda por debajo de la superficie: la punta inferior se
+      // entierra y la superior sobresale, como un cristal clavado.
+      const landY = height * 0.28;
+      const startY = radius * (1.3 + Math.random() * 1.2) + height;
+      const tiltX = (Math.random() - 0.5) * 18;
+      const tiltZ = (Math.random() - 0.5) * 18;
+      const yaw = Math.random() * 360;
+      const crystal = this.createEntity(
+        this.iceCrystalMesh,
+        [index % 4 === 0 ? deepMaterial : crystalMaterial],
+        root
+      );
+      crystal.setLocalPosition(targetX, startY, targetZ);
+      crystal.setLocalScale(0.001, 0.001, 0.001);
+      crystal.setLocalEulerAngles(tiltX, yaw, tiltZ);
+
+      const puffSize = radius * (0.045 + Math.random() * 0.04);
+      const puff = this.createEntity(this.sphereMesh, [snowMaterial], root);
+      puff.setLocalPosition(targetX, 0.12, targetZ);
+      puff.setLocalScale(0.001, 0.001, 0.001);
+
+      shards.push({
+        entity: crystal,
+        puff,
+        targetX,
+        targetZ,
+        startY,
+        landY,
+        delay: Math.random() * 0.06,
+        fall: 0.1 + Math.random() * 0.06,
+        width,
+        height,
+        puffSize,
+        tiltX,
+        tiltZ,
+        yaw
+      });
+    }
+
+    const snowflakes: {
+      entity: pc.Entity;
+      x: number;
+      z: number;
+      startY: number;
+      fall: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 24; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.sqrt(Math.random()) * radius * 0.95;
+      const size = radius * (0.014 + Math.random() * 0.016);
+      const flake = this.createEntity(this.sphereMesh, [snowMaterial], root);
+      flake.setLocalScale(size, size, size);
+      snowflakes.push({
+        entity: flake,
+        x: Math.cos(angle) * distance,
+        z: Math.sin(angle) * distance,
+        startY: radius * (1.4 + Math.random() * 1.6),
+        fall: 0.65 + Math.random() * 0.35,
+        size,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.12);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.24));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.4), 2);
+      const pulse = 0.55 + Math.sin(time * 8) * 0.18;
+
+      ringMaterial.opacity = (0.28 + pulse * 0.15) * envelope;
+      floorMaterial.opacity = 0.09 * envelope;
+      const ringScale = radius * (0.55 + grow * 0.55);
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        ring.setLocalScale(ringScale, 1, ringScale);
+        ring.setLocalEulerAngles(0, time * (index === 0 ? 70 : -50), 0);
+      }
+
+      const flashIn = Math.min(1, time / 0.14);
+      const flashScale = radius * (0.1 + flashIn * 0.28);
+      flash.setLocalScale(flashScale, flashScale, flashScale);
+      flashMaterial.opacity = 0.5 * Math.max(0, 1 - time / 0.2);
+
+      for (const shard of shards) {
+        const local = (time - shard.delay) / shard.fall;
+        if (local <= 0) {
+          shard.entity.setLocalScale(0.001, 0.001, 0.001);
+          shard.puff.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        const fall = Math.min(1, local);
+        const eased = fall * fall * fall;
+        const y = shard.startY + (shard.landY - shard.startY) * eased;
+        const landed = fall >= 1;
+        const settle = landed
+          ? Math.min(1, (time - (shard.delay + shard.fall)) / 0.16)
+          : 0;
+        const endFade = Math.min(1, Math.max(0, (life - time) / 0.22));
+        const appear = Math.min(1, local * 6);
+        const scale = appear * endFade;
+
+        shard.entity.setLocalPosition(shard.targetX, y, shard.targetZ);
+        shard.entity.setLocalScale(
+          Math.max(0.001, shard.width * scale),
+          Math.max(0.001, shard.height * scale),
+          Math.max(0.001, shard.width * scale)
+        );
+        shard.entity.setLocalEulerAngles(
+          shard.tiltX + (landed ? Math.sin(settle * Math.PI) * 4 : 0),
+          shard.yaw,
+          shard.tiltZ
+        );
+
+        const puffLocal = Math.min(
+          1,
+          Math.max(0, (time - (shard.delay + shard.fall)) / 0.3)
+        );
+        const puffScale =
+          shard.puffSize *
+          (0.3 + puffLocal * 1.1) *
+          Math.max(0, 1 - puffLocal) *
+          envelope;
+        shard.puff.setLocalScale(
+          Math.max(0.001, puffScale),
+          Math.max(0.001, puffScale * 0.7),
+          Math.max(0.001, puffScale)
+        );
+      }
+
+      for (const flake of snowflakes) {
+        const fall = Math.min(1, time / flake.fall);
+        const drift = Math.sin(time * 1.7 + flake.phase) * radius * 0.07;
+        flake.entity.setLocalPosition(
+          flake.x + drift,
+          0.1 + flake.startY * (1 - fall),
+          flake.z + Math.cos(time * 1.4 + flake.phase) * radius * 0.07
+        );
+        const scale =
+          flake.size * (1 - fall * 0.5) * Math.max(0, 1 - fall);
+        flake.entity.setLocalScale(
+          Math.max(0.001, scale),
+          Math.max(0.001, scale),
+          Math.max(0.001, scale)
+        );
+      }
+
+      crystalMaterial.opacity = 0.86 * envelope;
+      deepMaterial.opacity = 0.72 * envelope;
+      snowMaterial.opacity = 0.3 * envelope;
     });
   }
 
