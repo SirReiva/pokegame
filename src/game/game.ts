@@ -653,6 +653,7 @@ export class Game {
         );
         copy.setPlayback(player.playback);
         copy.setSubmerge(player.submerge, this.world.waterHeight);
+        copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
         copy.update(dt, cameraPosition);
       });
     });

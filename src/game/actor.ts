@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
+import { HealthBar } from './healthBar';
 import { PlayerMarker } from './marker';
 import { SpriteBillboard, type SpriteAsset } from './sprite';
 import type { AnimationName } from './types';
@@ -24,6 +25,8 @@ const MARKER_FLOAT_SINK = 0.12;
 export class Actor {
   readonly billboard: SpriteBillboard;
   private readonly shadow: pc.Entity;
+  /** Barra de vida flotante sobre el sprite. */
+  private readonly healthBar: HealthBar;
   /** Anillo de rumbo; solo lo lleva el jugador. */
   private readonly marker: PlayerMarker | null;
   readonly asset: SpriteAsset;
@@ -56,9 +59,9 @@ export class Actor {
 
     const idle = asset.entry.animations.idle;
     const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
-    this.visibleHeight =
-      BILLBOARD_BASE_Y +
+    const spriteHeight =
       anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
+    this.visibleHeight = BILLBOARD_BASE_Y + spriteHeight;
 
     this.billboard = new SpriteBillboard(app, asset, {
       pixelScale: CONFIG.sprite.pixelScale,
@@ -70,6 +73,15 @@ export class Actor {
       silhouetteColor: accent
     });
     this.billboard.setFacing(facing);
+
+    // La barra se apoya sobre la cabeza del sprite y conserva la proporción
+    // entre Pokémon altos y bajos.
+    const barWidth = pc.math.clamp(spriteHeight * 0.4, 0.6, 1.55);
+    this.healthBar = new HealthBar(app, this.billboard.root, {
+      width: barWidth,
+      height: Math.max(0.09, barWidth * 0.11),
+      y: spriteHeight + 0.14
+    });
 
     const diameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
     this.shadow = new pc.Entity(`shadow-${asset.entry.id}`);
@@ -151,12 +163,18 @@ export class Actor {
     this.billboard.setPlayback(rate);
   }
 
+  /** Actualiza la vida mostrada sobre el sprite (0 = KO, barra oculta). */
+  setHealth(fraction: number): void {
+    this.healthBar.setFraction(fraction);
+  }
+
   setLoop(loop: boolean): void {
     this.billboard.setLoop(loop);
   }
 
   update(dt: number, cameraPosition: pc.Vec3): void {
     this.billboard.update(dt, cameraPosition);
+    this.healthBar.update(cameraPosition);
   }
 
   setVisible(visible: boolean): void {
@@ -177,9 +195,11 @@ export class Actor {
     const shadowRender = this.shadow.render;
     if (shadowRender) shadowRender.layers = [layerId];
     this.marker?.setLayer(layerId);
+    this.healthBar.setLayer(layerId);
   }
 
   destroy(): void {
+    this.healthBar.destroy();
     this.billboard.destroy();
     this.shadow.destroy();
     this.marker?.destroy();
