@@ -1337,6 +1337,10 @@ export class Game {
 
     // Los ticks de un área no controlan al objetivo: solo restan vida y
     // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
+    // Una inmunidad (daño 0) deja un impacto visual, pero no interrumpe: no
+    // debe cancelar habilidades ni aplicar hitstun.
+    if (result.damage <= 0) return;
+
     const control = options.control ?? true;
     if (control) {
       target.actionTimer = 0;
@@ -1345,7 +1349,6 @@ export class Game {
       this.cancelPendingCast(target);
     }
 
-    if (result.damage <= 0) return;
     target.hp = Math.max(0, target.hp - result.damage);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
     if (control) {
