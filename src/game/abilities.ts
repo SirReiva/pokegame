@@ -1404,6 +1404,81 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Scyther                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('golpeFuria', 'Golpe Furia', 'Bug', 'physical', 'melee')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.4)
+    .range(2.1)
+    .radius(0.75)
+    .halfAngle(55)
+    .knockback(0.25)
+    .cast(0.3)
+    .animation('attack')
+    .impact('slash')
+    .color(166, 185, 26)
+    .description(
+      'Tajo de guadaña rápido y corto. Ataque básico de Scyther.'
+    )
+);
+
+registerAbility(
+  ability('corteAereo', 'Corte Aéreo', 'Flying', 'physical', 'dash')
+    .power(60)
+    .accuracy(100)
+    .cooldown(6.5)
+    .range(0)
+    .radius(0.9)
+    .dash(5)
+    .knockback(0.6)
+    .cast(0.26)
+    .animation('attack')
+    .impact('air')
+    .color(196, 240, 160)
+    .description(
+      'Se lanza 5 u hacia delante entre el viento y corta a los rivales del camino. Entrada y escape.'
+    )
+);
+
+registerAbility(
+  ability('danzaEspada', 'Danza Espada', 'Normal', 'status', 'self')
+    .power(0)
+    .accuracy(0)
+    .cooldown(12)
+    .radius(1.2)
+    .windup(0.45, { animation: 'charge' })
+    .cast(0.6)
+    .animation('charge')
+    .buff('attack', 1.35, 4.5)
+    .color(170, 210, 60)
+    .description(
+      'Danza de filos que aumenta un 35 % su ataque durante 4,5 s. Prepárala antes de entrar al combate.'
+    )
+);
+
+registerAbility(
+  ability('tijeraX', 'Tijera X', 'Bug', 'physical', 'melee')
+    .power(130)
+    .accuracy(100)
+    .cooldown(14)
+    .range(2.7)
+    .radius(1.1)
+    .halfAngle(70)
+    .knockback(1.1)
+    .windup(0.35, { animation: 'charge' })
+    .cast(0.65)
+    .animation('attack')
+    .impact('slash')
+    .color(170, 200, 40)
+    .description(
+      'Definitiva: cruza las guadañas en un cono amplio de 2,7 u. Mucho daño y empuje, pero exige estar cerca.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1445,6 +1520,7 @@ MOVESETS['0151'] = [
   'premonicion',
   'recuperacion'
 ];
+MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
 
 export function abilityForSlot(
   pokemonId: string,
