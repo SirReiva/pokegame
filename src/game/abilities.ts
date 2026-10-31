@@ -50,7 +50,9 @@ export type ProjectileStyle =
   | 'poison'
   | 'psychic'
   | 'water'
-  | 'aura';
+  | 'aura'
+  | 'shuriken'
+  | 'shadow';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -66,10 +68,12 @@ export type ImpactStyle =
   | 'water'
   | 'aura'
   | 'steel'
-  | 'fighting';
+  | 'fighting'
+  | 'dark'
+  | 'shuriken';
 
 /** Aspecto visual de un haz. */
-export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water';
+export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water' | 'dark';
 
 /** Aspecto visual de un área. */
 export type AoeStyle =
@@ -813,6 +817,81 @@ registerAbility(
 );
 
 /* ------------------------------------------------------------------------- */
+/* Greninja                                                                  */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('shurikenAgua', 'Shuriken de Agua', 'Water', 'special', 'projectile')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.65)
+    .range(9)
+    .radius(0.24)
+    .projectile('shuriken', 20)
+    .impact('shuriken')
+    .cast(0.3)
+    .animation('shoot')
+    .color(112, 196, 255)
+    .description(
+      'Lanza un shuriken de agua que gira en el aire. Ataque básico a media distancia de Greninja.'
+    )
+);
+
+registerAbility(
+  ability('tajoUmbro', 'Tajo Umbrío', 'Dark', 'physical', 'melee')
+    .power(70)
+    .accuracy(100)
+    .cooldown(1.4)
+    .range(2.1)
+    .radius(0.75)
+    .halfAngle(55)
+    .knockback(0.35)
+    .cast(0.32)
+    .animation('attack')
+    .impact('dark')
+    .color(154, 120, 232)
+    .description(
+      'Zarpazo de sombra rápido. Castiga al rival que se acerca demasiado.'
+    )
+);
+
+registerAbility(
+  ability('sombraVil', 'Sombra Vil', 'Dark', 'physical', 'dash')
+    .power(50)
+    .accuracy(100)
+    .cooldown(7)
+    .range(0)
+    .radius(0.85)
+    .dash(4.8)
+    .knockback(0.5)
+    .cast(0.26)
+    .animation('quickstrike')
+    .impact('dark')
+    .color(128, 100, 216)
+    .description(
+      'Se desliza por las sombras 4,8 u y golpea a los rivales del camino. Entrada y escape.'
+    )
+);
+
+registerAbility(
+  ability('pulsoUmbro', 'Pulso Umbrío', 'Dark', 'special', 'beam')
+    .power(95)
+    .accuracy(100)
+    .cooldown(10)
+    .range(9.5)
+    .radius(0.42)
+    .beam('dark')
+    .impact('dark')
+    .windup(0.25, { animation: 'charge' })
+    .cast(0.55)
+    .animation('shoot')
+    .color(124, 92, 224)
+    .description(
+      'Definitiva: descarga un haz de energía oscura que atraviesa la línea de tiro.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
 /* Mewtwo                                                                    */
 /* ------------------------------------------------------------------------- */
 
@@ -982,6 +1061,7 @@ MOVESETS['0448'] = [
   'esferaAura',
   'combateCercano'
 ];
+MOVESETS['0658'] = ['shurikenAgua', 'tajoUmbro', 'sombraVil', 'pulsoUmbro'];
 MOVESETS['0150'] = [
   'telequinesis',
   'teletransporte',
