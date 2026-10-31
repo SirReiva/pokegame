@@ -24,7 +24,8 @@ import {
   rollAccuracy,
   rollCritical,
   rollRandomFactor,
-  segmentBlockedByColliders
+  segmentBlockedByColliders,
+  segmentBlockedBySeparator
 } from './combat';
 import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
@@ -1632,6 +1633,20 @@ export class Game {
           angleDelta(Math.atan2(dx, dz), hit.attacker.facing)
         );
         if (delta > hit.def.halfAngle * DEG) continue;
+      }
+
+      // También se vuelve a comprobar el separador: si el objetivo terminó al
+      // otro lado de un muro durante el frame, el golpe no debe colar.
+      if (
+        segmentBlockedBySeparator(
+          hit.attacker.x,
+          hit.attacker.z,
+          hit.target.x,
+          hit.target.z,
+          this.world.colliders
+        )
+      ) {
+        continue;
       }
 
       this.applyAbilityDamage(hit.attacker, hit.target, hit.def);

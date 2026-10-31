@@ -12,7 +12,8 @@ import { CONFIG, DEG } from './config';
 import {
   angleDelta,
   raycastColliderDistance,
-  segmentBlockedByColliders
+  segmentBlockedByColliders,
+  segmentBlockedBySeparator
 } from './combat';
 import type { CombatFx } from './combatFx';
 import type {
@@ -90,6 +91,19 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
   );
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
+    // Un separador entre ambos corta el golpe: no se puede pegar a través de
+    // una cordillera o un muro aunque el objetivo esté dentro del arco.
+    if (
+      segmentBlockedBySeparator(
+        player.x,
+        player.z,
+        target.x,
+        target.z,
+        deps.world.colliders
+      )
+    ) {
+      continue;
+    }
     const dx = target.x - player.x;
     const dz = target.z - player.z;
     const distance = Math.hypot(dx, dz);

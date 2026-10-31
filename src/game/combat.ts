@@ -370,6 +370,25 @@ export function pointBlockedByColliders(
 }
 
 /**
+ * ¿Hay un separador (cordillera o muro) entre dos puntos? Los separadores son
+ * los únicos colliders de tipo segmento, así que rocas, árboles y adornos no
+ * cuentan. Se usa para que los golpes melee no atraviesen una cordillera.
+ */
+export function segmentBlockedBySeparator(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  colliders: readonly SegmentCollider[]
+): boolean {
+  return colliders.some(
+    (collider) =>
+      collider.type === 'segment' &&
+      segmentToCollider(ax, az, bx, bz, collider) <= 0
+  );
+}
+
+/**
  * ¿Bloquea algún collider el segmento entre dos puntos? Se usa para haces y
  * para la línea de visión de las habilidades. `padding` ensancha los colliders
  * con el radio del efecto.
