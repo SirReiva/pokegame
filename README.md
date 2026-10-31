@@ -526,6 +526,7 @@ src/screens/
   RosterRoute.tsx            entrada a `/roster`, selección de Pokémon
   PlayScreen.tsx             entrada a `/play`, monta PlayCanvas y la partida
   SessionGate.tsx            espera de manifiesto/mapas antes de una pantalla
+src/assets/types/            SVG de los 18 tipos (solo el símbolo, `currentColor`)
 src/ui/
   PokemonPortrait.tsx        retrato normal para las interfaces HTML
   Brand.tsx                  logotipo compartido (versión normal y compacta)
@@ -538,7 +539,7 @@ src/ui/
   RosterScreen.tsx           selección simultánea de Pokémon
   MatchHud.tsx               etiquetas, telemetría y bordes del splitscreen
   TypeBadge.tsx              insignia de tipo
-  typeInfo.ts                colores y etiquetas de tipos
+  typeInfo.ts                colores, etiquetas e iconos de tipos
   buttonStyles.ts            variantes y tamaños de los botones en Tailwind
   styles.ts                  clases compartidas (eyebrow, pasos del asistente)
   rosterGrid.ts              columnas de la rejilla según el viewport
@@ -586,3 +587,5 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 Los sprites pertenecen a la comunidad de **[PMD Sprite Collab](https://sprites.pmdcollab.org/)** y se distribuyen bajo **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**. Esta demo es **no comercial** y muestra la atribución en la interfaz y en `public/sprites/CREDITS.md`.
 
 Cada Pokémon conserva su `credits.txt` original en `public/sprites/<id>/`. El código del proyecto es una demo técnica y no reclama propiedad sobre esos sprites.
+
+Los iconos de tipo de `src/assets/types/` son los símbolos de la [tabla de tipos oficial](https://sg.portal-pokemon.com/game/type-chart/) de Pokémon, sin fondo ni marco. Pokémon y los nombres de los tipos son marcas de Nintendo, Creatures Inc. y GAME FREAK inc.

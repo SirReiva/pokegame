@@ -8,7 +8,7 @@
     "dev": "vite --host",
     "build": "tsc -b && vite build",
     "sprites": "node scripts/import-sprites.mjs",
-    "lint": "oxlint",
+    "lint": "twlinter && oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "@vitejs/plugin-react": "6.1.2",
     "oxlint": "1.90.0",
     "tailwindcss": "4.3.3",
+    "twlinter": "0.8.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"
   }

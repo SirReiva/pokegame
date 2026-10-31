@@ -21,6 +21,28 @@ export const TYPE_COLORS: Record<string, string> = {
   Fairy: '#d685ad'
 };
 
+/** Slugs de los iconos de tipo, en `src/assets/types/<slug>.svg`. */
+export const TYPE_ICONS: Record<string, string> = {
+  Normal: 'normal',
+  Fire: 'fire',
+  Water: 'water',
+  Electric: 'electric',
+  Grass: 'grass',
+  Ice: 'ice',
+  Fighting: 'fighting',
+  Poison: 'poison',
+  Ground: 'ground',
+  Flying: 'flying',
+  Psychic: 'psychic',
+  Bug: 'bug',
+  Rock: 'rock',
+  Ghost: 'ghost',
+  Dragon: 'dragon',
+  Dark: 'dark',
+  Steel: 'steel',
+  Fairy: 'fairy'
+};
+
 export const TYPE_LABELS: Record<string, string> = {
   Normal: 'Normal',
   Fire: 'Fuego',
