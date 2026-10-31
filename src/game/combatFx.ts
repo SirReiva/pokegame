@@ -622,7 +622,9 @@ export class CombatFx {
       psychic: (x, z, radius, color, duration) =>
         this.spawnPsychicAoe(x, z, radius, color, duration),
       water: (x, z, radius, color, duration) =>
-        this.spawnWaterAoe(x, z, radius, color, duration)
+        this.spawnWaterAoe(x, z, radius, color, duration),
+      explosion: (x, z, radius, color, duration) =>
+        this.spawnExplosionAoe(x, z, radius, color, duration)
     };
   }
 
@@ -3755,6 +3757,198 @@ export class CombatFx {
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
+  }
+
+  /**
+   * Explosión eléctrica: destello central, cúpula de energía, tres ondas de
+   * choque en el suelo, arcos que cruzan el área, escombros que salen
+   * despedidos y humo que se eleva. Todo son transformaciones sobre geometría
+   * estática; la silueta la marcan las ondas y los escombros.
+   */
+  private spawnExplosionAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.3, duration);
+    const root = new pc.Entity('explosion-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 255, 236], 0.95);
+    const hotMaterial = this.createMaterial([255, 232, 128], 0.5);
+    const arcMaterial = this.createMaterial([170, 232, 255], 0.95);
+    const debrisMaterial = this.createWaterMaterial([255, 186, 64], 0.95);
+    const smokeMaterial = this.createWaterMaterial([92, 80, 72], 0.4);
+    const materials = [
+      coreMaterial,
+      hotMaterial,
+      arcMaterial,
+      debrisMaterial,
+      smokeMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.55, 0);
+
+    const dome = this.createEntity(this.sphereMesh, [hotMaterial], root);
+    dome.setLocalPosition(0, 0.5, 0);
+
+    const rings: {
+      entity: pc.Entity;
+      material: pc.StandardMaterial;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const material = this.createWaterMaterial(color, 0.8);
+      materials.push(material);
+      const ring = this.createEntity(this.torusMesh, [material], root);
+      ring.setLocalPosition(0, 0.08 + index * 0.05, 0);
+      rings.push({ entity: ring, material, delay: index * 0.11 });
+    }
+
+    const arcs: { entity: pc.Entity; yaw: number; speed: number }[] = [];
+    for (let index = 0; index < 4; index++) {
+      const mesh = createLightningMesh(
+        this.device,
+        radius * 1.15,
+        Math.max(0.018, radius * 0.02),
+        8,
+        7000 + index * 6151
+      );
+      const arc = this.createEntity(mesh, [arcMaterial], root);
+      arc.setLocalPosition(0, 0.45 + index * 0.05, 0);
+      arcs.push({
+        entity: arc,
+        yaw: (index / 4) * 360 + 22,
+        speed: 40 + index * 35
+      });
+    }
+
+    const debris: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+      yaw: number;
+      roll: number;
+    }[] = [];
+    for (let index = 0; index < 14; index++) {
+      const chunk = this.createEntity(this.boxMesh, [debrisMaterial], root);
+      const size = radius * (0.035 + Math.random() * 0.045);
+      chunk.setLocalScale(size * 2, size * 1.2, size * 2.6);
+      debris.push({
+        entity: chunk,
+        angle: (index / 14) * Math.PI * 2 + Math.random() * 0.4,
+        distance: radius * (0.55 + Math.random() * 0.6),
+        rise: 0.35 + Math.random() * 0.85,
+        size,
+        yaw: Math.random() * 360,
+        roll: (Math.random() - 0.5) * 160
+      });
+    }
+
+    const smoke: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 8; index++) {
+      const puff = this.createEntity(this.sphereMesh, [smokeMaterial], root);
+      const size = radius * (0.18 + Math.random() * 0.16);
+      puff.setLocalScale(size, size * 0.7, size);
+      smoke.push({
+        entity: puff,
+        angle: (index / 8) * Math.PI * 2 + Math.random() * 0.5,
+        distance: radius * (0.25 + Math.random() * 0.5),
+        rise: 0.5 + Math.random() * 0.8,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, life, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const flash = Math.max(0, 1 - t / 0.22);
+      const coreScale = radius * (0.32 + ease * 0.58);
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      const domeScale = radius * (0.4 + ease * 1);
+      dome.setLocalScale(domeScale, domeScale * 0.72, domeScale);
+
+      for (const ring of rings) {
+        const local = Math.min(
+          1,
+          Math.max(0, (t - ring.delay) / 0.42)
+        );
+        const scale = radius * 2 * (0.14 + local * 0.86);
+        ring.entity.setLocalScale(scale, 1, scale);
+        ring.material.opacity =
+          0.85 * Math.pow(Math.max(0, 1 - local), 1.4) * (1 - t * 0.4);
+      }
+
+      const arcReveal = Math.min(1, t / 0.14);
+      const arcFade = Math.max(0, 1 - t / 0.42);
+      for (const arc of arcs) {
+        arc.entity.setLocalEulerAngles(
+          0,
+          arc.yaw + t * arc.speed,
+          Math.sin(t * 22 + arc.speed) * 12
+        );
+        arc.entity.setLocalScale(
+          0.35 + arcReveal * 0.65,
+          0.4 + arcReveal * 0.6,
+          0.35 + arcReveal * 0.65
+        );
+      }
+
+      for (const chunk of debris) {
+        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.7));
+        const distance = chunk.distance * local;
+        chunk.entity.setLocalPosition(
+          Math.cos(chunk.angle) * distance,
+          0.25 + Math.sin(local * Math.PI) * chunk.rise,
+          Math.sin(chunk.angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        chunk.entity.setLocalScale(
+          chunk.size * 2 * fade,
+          chunk.size * 1.2 * fade,
+          chunk.size * 2.6 * fade
+        );
+        chunk.entity.setLocalEulerAngles(
+          chunk.yaw + t * 260,
+          chunk.yaw + t * 190,
+          chunk.roll + t * 140
+        );
+      }
+
+      for (const puff of smoke) {
+        const local = Math.min(1, t / 0.9);
+        const distance = puff.distance * (0.35 + local * 1.2);
+        puff.entity.setLocalPosition(
+          Math.cos(puff.angle) * distance,
+          0.35 + local * puff.rise,
+          Math.sin(puff.angle) * distance
+        );
+        const grow = 0.85 + local * 1.1;
+        const fade = Math.max(0, 1 - local);
+        puff.entity.setLocalScale(
+          puff.size * grow * fade,
+          puff.size * 0.7 * grow * fade,
+          puff.size * grow * fade
+        );
+      }
+
+      coreMaterial.opacity = 0.95 * flash;
+      hotMaterial.opacity = 0.45 * (1 - t) * (1 - t);
+      arcMaterial.opacity = 0.95 * arcFade;
+      debrisMaterial.opacity = 0.95 * (1 - t);
+      smokeMaterial.opacity = 0.4 * (1 - t);
+    });
   }
 
   /**

@@ -37,6 +37,7 @@ const ROSTER = [
   { id: '0004', name: 'Charmander', types: ['Fire'], accent: '#ee8130' },
   { id: '0007', name: 'Squirtle', types: ['Water'], accent: '#6390f0' },
   { id: '0025', name: 'Pikachu', types: ['Electric'], accent: '#f7d02c' },
+  { id: '0100', name: 'Voltorb', types: ['Electric'], accent: '#f7d02c' },
   { id: '0133', name: 'Eevee', types: ['Normal'], accent: '#a8a77a' },
   { id: '0448', name: 'Lucario', types: ['Fighting', 'Steel'], accent: '#c22e28' },
   { id: '0658', name: 'Greninja', types: ['Water', 'Dark'], accent: '#3f6f9f' },

@@ -1230,6 +1230,25 @@ export class Game {
     };
 
     ABILITY_EXECUTORS[def.shape](player, def, deps, targetX, targetZ);
+    this.applySelfDamage(player, def);
+  }
+
+  /**
+   * Coste de vida de habilidades como Explosión. Se aplica después del efecto
+   * para que el golpe salga aunque el lanzador se quede al borde de la muerte,
+   * y nunca le quita la última vida: como mínimo conserva 1 PV.
+   */
+  private applySelfDamage(
+    player: MatchPlayerState,
+    def: AbilityDef
+  ): void {
+    if (def.selfDamage <= 0 || !player.alive) return;
+    const raw = Math.round(player.maxHp * def.selfDamage);
+    const amount = Math.min(raw, Math.max(0, player.hp - 1));
+    if (amount <= 0) return;
+    player.hp -= amount;
+    player.hurtTimer = Math.max(player.hurtTimer, 0.25);
+    this.showDamagePopup(player, amount, false, 1);
   }
 
   private canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean {

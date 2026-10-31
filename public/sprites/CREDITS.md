@@ -37,6 +37,15 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/credits.txt
 
+## Voltorb (#0100)
+
+- CHUNSOFT · Attack, Charge, Double, Hop, Hurt, Idle, Rotate, Sleep, Swing, Twirl, Walk
+- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0100/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100/credits.txt
+
 ## Eevee (#0133)
 
 - CHUNSOFT · Walk, Attack, Strike, Shoot, Appeal, TailWhip, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround

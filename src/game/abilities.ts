@@ -83,7 +83,8 @@ export type AoeStyle =
   | 'grass'
   | 'poison'
   | 'psychic'
-  | 'water';
+  | 'water'
+  | 'explosion';
 
 /**
  * Reparto del daño de un área:
@@ -177,6 +178,12 @@ export interface AbilityDef {
    * `0` desactiva la curación. Se aplica al ejecutar la habilidad.
    */
   healSelf: number;
+  /**
+   * Autodaño al lanzador como fracción de su vida máxima: `0.35` = 35 %.
+   * `0` lo desactiva. Nunca le quita la última vida: si el golpe lo dejaría a
+   * 0, se queda con 1 PV.
+   */
+  selfDamage: number;
   /** Color del efecto, en 0-255. */
   color: [number, number, number];
   /** Duración de la animación de ataque, en segundos. */
@@ -246,6 +253,7 @@ export const DEFAULT_ABILITY: Omit<
   buffs: [],
   slow: null,
   healSelf: 0,
+  selfDamage: 0,
   color: [255, 255, 255],
   castTime: 0.45,
   animationTime: 0.45,
@@ -408,6 +416,12 @@ export class AbilityBuilder {
     return this;
   }
 
+  /** Autodaño no letal como fracción de la vida máxima del lanzador. */
+  selfDamage(fraction: number): this {
+    this.draft.selfDamage = fraction;
+    return this;
+  }
+
   color(r: number, g: number, b: number): this {
     this.draft.color = [r, g, b];
     return this;
@@ -550,6 +564,84 @@ registerAbility(
     .impact('arc')
     .color(235, 228, 210)
     .description('Embestida cuerpo a cuerpo contra los rivales que tenga delante.')
+);
+
+/* ------------------------------------------------------------------------- */
+/* Voltorb                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('chispa', 'Chispa', 'Electric', 'physical', 'melee')
+    .power(65)
+    .accuracy(100)
+    .cooldown(0.6)
+    .range(2)
+    .radius(0.7)
+    .halfAngle(50)
+    .knockback(0.25)
+    .cast(0.3)
+    .animation('attack')
+    .impact('electric')
+    .color(247, 208, 44)
+    .description(
+      'Descarga eléctrica de corto alcance. Ataque básico de Voltorb.'
+    )
+);
+
+registerAbility(
+  ability('rollout', 'Rollout', 'Normal', 'physical', 'dash')
+    .power(80)
+    .accuracy(100)
+    .cooldown(6)
+    .range(0)
+    .radius(0.95)
+    .dash(5)
+    .knockback(0.6)
+    .cast(0.3)
+    .animation('twirl')
+    .impact('electric')
+    .color(247, 208, 44)
+    .description(
+      'Rueda 5 u hacia delante y arrolla a los rivales del camino. Entrada y escape.'
+    )
+);
+
+registerAbility(
+  ability('ondaTrueno', 'Onda Trueno', 'Electric', 'status', 'projectile')
+    .power(0)
+    .accuracy(100)
+    .cooldown(5)
+    .range(9)
+    .radius(0.3)
+    .projectile('electric', 16)
+    .impact('electric')
+    .cast(0.35)
+    .animation('charge')
+    .slow(0.55, 2.5)
+    .color(247, 208, 44)
+    .description(
+      'Proyectil eléctrico que ralentiza un 45 % durante 2,5 s. No hace daño.'
+    )
+);
+
+registerAbility(
+  ability('explosion', 'Explosión', 'Electric', 'special', 'aoe')
+    .power(175)
+    .accuracy(100)
+    .cooldown(18)
+    .range(0)
+    .radius(4.2)
+    .area('explosion', 'instant', 0.85)
+    .windup(0.6, { animation: 'charge' })
+    .cast(0.5)
+    .animation(null)
+    .impact('electric')
+    .knockback(1.2)
+    .selfDamage(0.35)
+    .color(247, 208, 44)
+    .description(
+      'Definitiva: carga 0,6 s y detona un área de 4,2 u centrada en Voltorb. Se lleva el 35 % de su vida máxima, sin llegar nunca a 0.'
+    )
 );
 
 /* ------------------------------------------------------------------------- */
@@ -1052,6 +1144,7 @@ export const MOVESETS: Record<
 > = {};
 
 MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
+MOVESETS['0100'] = ['chispa', 'rollout', 'ondaTrueno', 'explosion'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 MOVESETS['0007'] = ['placaje', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];

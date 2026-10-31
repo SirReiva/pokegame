@@ -39,6 +39,7 @@ export const POKEDEX_STATS: Record<string, BaseStats> = {
   '0004': { hp: 39, attack: 52, defense: 43, spAttack: 60, spDefense: 50, speed: 65 }, // Charmander
   '0007': { hp: 44, attack: 48, defense: 65, spAttack: 50, spDefense: 64, speed: 43 }, // Squirtle
   '0025': { hp: 35, attack: 55, defense: 40, spAttack: 50, spDefense: 50, speed: 90 }, // Pikachu
+  '0100': { hp: 40, attack: 30, defense: 50, spAttack: 55, spDefense: 55, speed: 100 }, // Voltorb
   '0133': { hp: 55, attack: 55, defense: 50, spAttack: 45, spDefense: 65, speed: 55 }, // Eevee
   '0448': { hp: 70, attack: 110, defense: 70, spAttack: 115, spDefense: 70, speed: 90 }, // Lucario
   '0658': { hp: 72, attack: 95, defense: 67, spAttack: 103, spDefense: 71, speed: 122 }, // Greninja
