@@ -19,7 +19,9 @@ const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   spore: 0.28,
   psychic: 0.1,
   slash: 0.16,
-  arc: 0.18
+  arc: 0.18,
+  steel: 0.12,
+  fighting: 0.2
 };
 
 export interface EffectHandle {
@@ -522,7 +524,13 @@ export class CombatFx {
       psychic: (x, z, color, effectiveness) =>
         this.spawnPsychicBurst(x, z, color, effectiveness),
       water: (x, z, color, effectiveness) =>
-        this.spawnWaterBurst(x, z, color, effectiveness)
+        this.spawnWaterBurst(x, z, color, effectiveness),
+      aura: (x, z, color, effectiveness) =>
+        this.spawnAuraBurst(x, z, color, effectiveness),
+      steel: (x, z, color, effectiveness) =>
+        this.spawnSteelBurst(x, z, color, effectiveness),
+      fighting: (x, z, color, effectiveness) =>
+        this.spawnFightingBurst(x, z, color, effectiveness)
     };
 
     this.projectileFactories = {
@@ -539,7 +547,9 @@ export class CombatFx {
       psychic: (x, z, color, radius) =>
         this.spawnOrbProjectile(x, z, color, radius),
       water: (x, z, color, radius, dirX, dirZ) =>
-        this.spawnWaterProjectile(x, z, radius, dirX, dirZ, color)
+        this.spawnWaterProjectile(x, z, radius, dirX, dirZ, color),
+      aura: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnAuraProjectile(x, z, color, radius, dirX, dirZ)
     };
 
     this.beamFactories = {
@@ -677,6 +687,18 @@ export class CombatFx {
     material.cull = pc.CULLFACE_NONE;
     material.update();
     return material;
+  }
+
+  /**
+   * Material de aura: reutiliza la mezcla normal del agua para que el azul no
+   * se lave sobre arena o hierba clara. La silueta la dan las esferas, los
+   * anillos y los destellos.
+   */
+  private createAuraMaterial(
+    tint: readonly [number, number, number],
+    opacity: number
+  ): pc.StandardMaterial {
+    return this.createWaterMaterial(tint, opacity);
   }
 
   /** Crea una hoja cruzada con la base en `position`. */
@@ -1487,6 +1509,140 @@ export class CombatFx {
   }
 
   /**
+   * Proyectil de aura: núcleo blanco, cuerpo azul translúcido, dos anillos
+   * girados que envuelven la esfera y cuatro motas que orbitan. Una estela corta
+   * de esferas que se apagan detrás transmite el avance. Todo son
+   * transformaciones sobre geometría estática.
+   */
+  private spawnAuraProjectile(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number,
+    dirX: number,
+    dirZ: number
+  ): EffectHandle {
+    const root = new pc.Entity('aura-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([238, 250, 255], 0.95);
+    const bodyMaterial = this.createAuraMaterial(color, 0.55);
+    const haloMaterial = this.createMaterial(color, 0.16);
+    const ringMaterial = this.createAuraMaterial([194, 226, 255], 0.7);
+    const moteMaterial = this.createAuraMaterial([220, 240, 255], 0.85);
+    const trailMaterial = this.createAuraMaterial(color, 0.3);
+    const materials = [
+      coreMaterial,
+      bodyMaterial,
+      haloMaterial,
+      ringMaterial,
+      moteMaterial,
+      trailMaterial
+    ];
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalScale(radius * 1.5, radius * 1.5, radius * 1.5);
+
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalScale(radius * 2.7, radius * 2.7, radius * 2.7);
+
+    const halo = this.createEntity(this.sphereMesh, [haloMaterial], root);
+    halo.setLocalScale(radius * 5.2, radius * 5.2, radius * 5.2);
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalEulerAngles(70 + index * 40, index * 90, 0);
+      const scale = radius * (3.6 + index * 0.5);
+      ring.setLocalScale(scale, scale, scale);
+      rings.push(ring);
+    }
+
+    const motes: { entity: pc.Entity; phase: number; orbit: number; bob: number }[] =
+      [];
+    for (let index = 0; index < 4; index++) {
+      const mote = this.createEntity(this.sphereMesh, [moteMaterial], root);
+      const size = radius * (0.28 + (index % 2) * 0.1);
+      mote.setLocalScale(size, size, size);
+      motes.push({
+        entity: mote,
+        phase: (index / 4) * Math.PI * 2,
+        orbit: radius * (2.6 + (index % 3) * 0.35),
+        bob: index * 1.6
+      });
+    }
+
+    const trail: pc.Entity[] = [];
+    for (let index = 0; index < 3; index++) {
+      const puff = this.createEntity(this.sphereMesh, [trailMaterial], root);
+      puff.setLocalPosition(0, 0, -radius * (2.4 + index * 2.1));
+      const scale = radius * (1.9 - index * 0.45);
+      puff.setLocalScale(scale, scale, scale);
+      trail.push(puff);
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+        const corePulse = 1 + Math.sin(time * 24) * 0.1;
+        const bodyPulse = 1 + Math.sin(time * 16) * 0.07;
+        core.setLocalScale(
+          radius * 1.5 * corePulse,
+          radius * 1.5 * corePulse,
+          radius * 1.5 * corePulse
+        );
+        body.setLocalScale(
+          radius * 2.7 * bodyPulse,
+          radius * 2.7 * bodyPulse,
+          radius * 2.7 * bodyPulse
+        );
+        const haloPulse = 1 + Math.sin(time * 11) * 0.12;
+        halo.setLocalScale(
+          radius * 5.2 * haloPulse,
+          radius * 5.2 * haloPulse,
+          radius * 5.2 * haloPulse
+        );
+
+        rings[0].setLocalEulerAngles(70, time * 210, time * 120);
+        rings[1].setLocalEulerAngles(-60, 90 + time * 260, time * 90);
+
+        for (const mote of motes) {
+          const angle = mote.phase + time * 4.6;
+          mote.entity.setLocalPosition(
+            Math.cos(angle) * mote.orbit,
+            Math.sin(angle * 1.6 + mote.bob) * radius * 0.9,
+            Math.sin(angle) * mote.orbit
+          );
+        }
+
+        coreMaterial.opacity = 0.9 + Math.sin(time * 30) * 0.08;
+        bodyMaterial.opacity = 0.48 + Math.sin(time * 14) * 0.08;
+        haloMaterial.opacity = 0.12 + Math.sin(time * 9) * 0.05;
+        ringMaterial.opacity = 0.58 + Math.sin(time * 18) * 0.12;
+        trailMaterial.opacity = 0.22 + Math.sin(time * 12) * 0.06;
+        for (const material of materials) material.update();
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
    * Proyectil de agua: tres burbujas pequeñas que giran entre sí alrededor de
    * un centro común mientras avanzan, con destellos que patinan por su
    * superficie. Sin núcleo ni estela: el grupo de burbujas es todo el efecto.
@@ -1726,34 +1882,44 @@ export class CombatFx {
       revealAt: number;
       peak: number;
     }[] = [];
-    if (style === 'slash') {
+    if (style === 'slash' || style === 'steel') {
       // Tres zarpas blancas paralelas tumbadas sobre el cono: cubren su
       // superficie desde el lanzador hasta el borde y comparten apertura, así
       // que se leen como un único tajo de tres filos dentro del área de golpe.
       // Cada garra se parte en tramos estáticos que se encienden de derecha a
-      // izquierda, de modo que el trazo parece dibujarse sobre el cono.
-      effectDuration = 0.38;
-      material.opacity = 0.1;
+      // izquierda, de modo que el trazo parece dibujarse sobre el cono. La Garra
+      // Metal usa dos filos de acero más anchos y un trazo más rápido.
+      const steel = style === 'steel';
+      effectDuration = steel ? 0.3 : 0.38;
+      material.opacity = steel ? 0.08 : 0.1;
       const span = halfAngle * 1.9;
       const start = -span * 0.5;
       const slices = 10;
-      const drawTime = 0.1;
+      const drawTime = steel ? 0.08 : 0.1;
+      const clawTint: [number, number, number] = steel
+        ? [214, 232, 255]
+        : [255, 255, 255];
       const claws: {
         inner: number;
         outer: number;
         delay: number;
         peak: number;
-      }[] = [
-        { inner: 0.74, outer: 0.99, delay: 0, peak: 1 },
-        { inner: 0.42, outer: 0.68, delay: 0.03, peak: 0.95 },
-        { inner: 0.1, outer: 0.36, delay: 0.06, peak: 0.9 }
-      ];
+      }[] = steel
+        ? [
+            { inner: 0.66, outer: 0.99, delay: 0, peak: 1 },
+            { inner: 0.2, outer: 0.58, delay: 0.04, peak: 0.9 }
+          ]
+        : [
+            { inner: 0.74, outer: 0.99, delay: 0, peak: 1 },
+            { inner: 0.42, outer: 0.68, delay: 0.03, peak: 0.95 },
+            { inner: 0.1, outer: 0.36, delay: 0.06, peak: 0.9 }
+          ];
       for (let index = 0; index < claws.length; index++) {
         const claw = claws[index];
         for (let slice = 0; slice < slices; slice++) {
           const tStart = slice / slices;
           const tEnd = (slice + 1) / slices;
-          const sliceMaterial = this.createMaterial([255, 255, 255], 0);
+          const sliceMaterial = this.createMaterial(clawTint, 0);
           sliceMaterial.blendType = pc.BLEND_NORMAL;
           sliceMaterial.opacity = 0;
           sliceMaterial.update();
@@ -1795,14 +1961,16 @@ export class CombatFx {
       travel: number;
       peak: number;
     }[] = [];
-    if (style === 'arc') {
+    if (style === 'arc' || style === 'fighting') {
       // Arco de ataque: tres frentes curvos que salen del lanzador y recorren
       // el cono hasta su borde, marcando la dirección y el alcance del golpe.
       // La geometría es estática (radio 1) y solo se escala, así el trazo es
-      // barato y se ve desde cualquier cámara.
-      effectDuration = 0.34;
+      // barato y se ve desde cualquier cámara. Combate Cercano añade un cuarto
+      // frente y los acelera para que se lea como una ráfaga.
+      const fighting = style === 'fighting';
+      effectDuration = fighting ? 0.4 : 0.34;
       material.opacity = 0.16;
-      const frontCount = 3;
+      const frontCount = fighting ? 4 : 3;
       for (let index = 0; index < frontCount; index++) {
         const arcMaterial = this.createMaterial(color, 0);
         arcMaterial.blendType = pc.BLEND_NORMAL;
@@ -1822,9 +1990,9 @@ export class CombatFx {
         attackArcs.push({
           entity: arc,
           material: arcMaterial,
-          delay: index * 0.05,
-          travel: 0.2,
-          peak: 1 - index * 0.15
+          delay: index * (fighting ? 0.035 : 0.05),
+          travel: fighting ? 0.17 : 0.2,
+          peak: 1 - index * (fighting ? 0.14 : 0.15)
         });
       }
     }
@@ -1948,7 +2116,13 @@ export class CombatFx {
     this.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity = arcOpacity * (1 - t);
-      if (style !== 'psychic' && style !== 'slash' && style !== 'arc') {
+      if (
+        style !== 'psychic' &&
+        style !== 'slash' &&
+        style !== 'steel' &&
+        style !== 'arc' &&
+        style !== 'fighting'
+      ) {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
       }
@@ -4296,6 +4470,395 @@ export class CombatFx {
       entity.setLocalScale(scale, scale, scale);
       entity.setPosition(x, 0.65 + t * 0.15, z);
       material.opacity = 0.95 * (1 - t);
+    });
+  }
+
+  /**
+   * Explosión de aura: núcleo claro, cuerpo azul que se expande, dos ondas y
+   * motas que salen despedidas. La mezcla normal mantiene el azul legible.
+   */
+  private spawnAuraBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('aura-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([240, 250, 255], 0.95);
+    const bodyMaterial = this.createAuraMaterial(color, 0.5);
+    const ringMaterial = this.createAuraMaterial([196, 228, 255], 0.72);
+    const moteMaterial = this.createAuraMaterial([220, 242, 255], 0.9);
+    const materials = [coreMaterial, bodyMaterial, ringMaterial, moteMaterial];
+    const power =
+      effectiveness > 1 ? 1.25 : effectiveness < 1 ? 0.85 : 1;
+
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0.65, 0);
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalPosition(0, 0.65, 0);
+    body.setLocalScale(0.2, 0.2, 0.2);
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
+      rings.push(ring);
+    }
+
+    const motes: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const mote = this.createEntity(this.sphereMesh, [moteMaterial], root);
+      const size = 0.07 + (index % 3) * 0.025;
+      mote.setLocalScale(size, size, size);
+      motes.push({
+        entity: mote,
+        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.3,
+        distance: (0.55 + Math.random() * 0.55) * power,
+        rise: 0.25 + Math.random() * 0.55,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, 0.42, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const coreScale = (0.2 + ease * 1.15) * power;
+      core.setLocalScale(coreScale, coreScale, coreScale);
+      const bodyScale = (0.2 + ease * 1.9) * power;
+      body.setLocalScale(bodyScale, bodyScale, bodyScale);
+
+      rings.forEach((ring, index) => {
+        const scale = (0.25 + ease * (2.1 + index * 0.45)) * power;
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalEulerAngles(90, t * (index === 0 ? 180 : -140), 0);
+      });
+
+      for (const mote of motes) {
+        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.8));
+        const distance = mote.distance * local;
+        mote.entity.setLocalPosition(
+          Math.cos(mote.angle) * distance,
+          0.65 + Math.sin(local * Math.PI) * mote.rise,
+          Math.sin(mote.angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        mote.entity.setLocalScale(
+          mote.size * fade,
+          mote.size * fade,
+          mote.size * fade
+        );
+      }
+
+      coreMaterial.opacity = 0.95 * (1 - t);
+      bodyMaterial.opacity = 0.5 * (1 - t);
+      ringMaterial.opacity = 0.72 * (1 - t);
+      moteMaterial.opacity = 0.9 * (1 - t);
+    });
+  }
+
+  /**
+   * Impacto de acero: tres tajos largos que se cruzan, esquirlas metálicas y
+   * chispas. El destello es pequeño para que la silueta la den los filos.
+   */
+  private spawnSteelBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('steel-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const flashMaterial = this.createMaterial([246, 251, 255], 0.9);
+    const slashMaterial = this.createMaterial([224, 242, 255], 0.9);
+    const steelMaterial = this.createAuraMaterial(color, 0.8);
+    const ringMaterial = this.createAuraMaterial(color, 0.55);
+    const sparkMaterial = this.createMaterial([255, 250, 218], 0.95);
+    const materials = [
+      flashMaterial,
+      slashMaterial,
+      steelMaterial,
+      ringMaterial,
+      sparkMaterial
+    ];
+    const power =
+      effectiveness > 1 ? 1.22 : effectiveness < 1 ? 0.86 : 1;
+
+    const flash = this.createEntity(this.sphereMesh, [flashMaterial], root);
+    flash.setLocalPosition(0, 0.65, 0);
+
+    const slashes: {
+      entity: pc.Entity;
+      yaw: number;
+      roll: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const slash = this.createEntity(this.boxMesh, [slashMaterial], root);
+      slashes.push({
+        entity: slash,
+        yaw: index * 60 + 15,
+        roll: (index - 1) * 24,
+        delay: index * 0.025
+      });
+    }
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
+      rings.push(ring);
+    }
+
+    const shards: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      length: number;
+      yaw: number;
+      roll: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const shard = this.createEntity(this.boxMesh, [steelMaterial], root);
+      shards.push({
+        entity: shard,
+        angle: (index / 6) * Math.PI * 2 + 0.35,
+        distance: (0.45 + Math.random() * 0.5) * power,
+        rise: 0.12 + Math.random() * 0.35,
+        length: 0.28 + Math.random() * 0.26,
+        yaw: Math.random() * 360,
+        roll: (Math.random() - 0.5) * 120
+      });
+    }
+
+    const sparks: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 8; index++) {
+      const spark = this.createEntity(this.sphereMesh, [sparkMaterial], root);
+      const size = 0.05 + Math.random() * 0.04;
+      spark.setLocalScale(size, size, size);
+      sparks.push({
+        entity: spark,
+        angle: Math.random() * Math.PI * 2,
+        distance: (0.55 + Math.random() * 0.8) * power,
+        rise: 0.25 + Math.random() * 0.55,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, 0.34, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const flashScale = (0.14 + ease * 0.42) * power;
+      flash.setLocalScale(flashScale, flashScale, flashScale);
+
+      slashes.forEach((slash) => {
+        const local = Math.min(
+          1,
+          Math.max(0, (t - slash.delay) / 0.42)
+        );
+        const length = (0.3 + local * 1.05) * power;
+        const thickness = 0.05 * (1 - local * 0.45);
+        slash.entity.setLocalScale(thickness, thickness, length);
+        slash.entity.setLocalEulerAngles(
+          0,
+          slash.yaw + local * 18,
+          slash.roll + local * 30
+        );
+      });
+
+      for (const ring of rings) {
+        const scale = (0.2 + ease * 1.7) * power;
+        ring.setLocalScale(scale, 1, scale);
+        ring.setLocalEulerAngles(90, t * 240, 0);
+      }
+
+      for (const shard of shards) {
+        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.75));
+        const distance = shard.distance * local;
+        shard.entity.setLocalPosition(
+          Math.cos(shard.angle) * distance,
+          0.65 + Math.sin(local * Math.PI) * shard.rise,
+          Math.sin(shard.angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        shard.entity.setLocalScale(
+          0.07 * fade,
+          0.07 * fade,
+          shard.length * fade
+        );
+        shard.entity.setLocalEulerAngles(
+          shard.yaw + t * 180,
+          shard.yaw + t * 240,
+          shard.roll
+        );
+      }
+
+      for (const spark of sparks) {
+        const local = Math.min(1, Math.max(0, (t - 0.02) / 0.82));
+        const distance = spark.distance * local;
+        spark.entity.setLocalPosition(
+          Math.cos(spark.angle) * distance,
+          0.65 + Math.sin(local * Math.PI) * spark.rise,
+          Math.sin(spark.angle) * distance
+        );
+        const fade = Math.max(0, 1 - local);
+        spark.entity.setLocalScale(
+          spark.size * fade,
+          spark.size * fade,
+          spark.size * fade
+        );
+      }
+
+      flashMaterial.opacity = 0.9 * (1 - t);
+      slashMaterial.opacity = 0.9 * (1 - t);
+      steelMaterial.opacity = 0.8 * (1 - t);
+      ringMaterial.opacity = 0.55 * (1 - t);
+      sparkMaterial.opacity = 0.95 * (1 - t);
+    });
+  }
+
+  /**
+   * Impacto de lucha: tres focos de golpe escalonados con líneas de impacto
+   * cruzadas, una onda en el suelo y polvo de aura. Se lee como una ráfaga de
+   * puñetazos, no como una única explosión.
+   */
+  private spawnFightingBurst(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('fighting-burst');
+    root.setPosition(x, 0, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 246, 224], 0.9);
+    const lineMaterial = this.createMaterial([236, 248, 255], 0.9);
+    const ringMaterial = this.createAuraMaterial(color, 0.65);
+    const puffMaterial = this.createAuraMaterial([196, 226, 255], 0.34);
+    const materials = [coreMaterial, lineMaterial, ringMaterial, puffMaterial];
+    const power =
+      effectiveness > 1 ? 1.25 : effectiveness < 1 ? 0.85 : 1;
+
+    const clusters: {
+      core: pc.Entity;
+      lines: { entity: pc.Entity; angle: number }[];
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const angle = (index / 3) * Math.PI * 2 + 0.4;
+      const offset = (0.12 + index * 0.06) * power;
+      const cluster = new pc.Entity('fighting-cluster');
+      cluster.setLocalPosition(
+        Math.cos(angle) * offset,
+        0.68 + index * 0.04,
+        Math.sin(angle) * offset
+      );
+      root.addChild(cluster);
+
+      const core = this.createEntity(this.sphereMesh, [coreMaterial], cluster);
+      const lines: { entity: pc.Entity; angle: number }[] = [];
+      for (let lineIndex = 0; lineIndex < 4; lineIndex++) {
+        const line = this.createEntity(this.boxMesh, [lineMaterial], cluster);
+        lines.push({
+          entity: line,
+          angle: (lineIndex / 4) * Math.PI * 2 + index * 0.5
+        });
+      }
+      clusters.push({ core, lines, delay: index * 0.05 });
+    }
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.08, 0);
+
+    const puffs: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const puff = this.createEntity(this.sphereMesh, [puffMaterial], root);
+      const size = 0.2 + Math.random() * 0.18;
+      puff.setLocalScale(size, size * 0.8, size);
+      puffs.push({
+        entity: puff,
+        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.35,
+        distance: (0.55 + Math.random() * 0.55) * power,
+        rise: 0.25 + Math.random() * 0.45,
+        size
+      });
+    }
+
+    this.addEffect(root, materials, 0.42, (t) => {
+      const ease = 1 - Math.pow(1 - t, 3);
+      const ringScale = (0.22 + ease * 2.1) * power;
+      ring.setLocalScale(ringScale, 1, ringScale);
+      ring.setLocalEulerAngles(90, t * 160, 0);
+
+      for (const cluster of clusters) {
+        const local = Math.min(
+          1,
+          Math.max(0, (t - cluster.delay) / 0.32)
+        );
+        const appear = local <= 0 ? 0 : 1;
+        const fade = Math.max(0, 1 - local);
+        const coreScale = (0.08 + local * 0.42) * appear;
+        cluster.core.setLocalScale(coreScale, coreScale, coreScale);
+
+        for (const line of cluster.lines) {
+          const distance = (0.1 + local * 0.45) * power;
+          line.entity.setLocalPosition(
+            Math.sin(line.angle) * distance,
+            0,
+            Math.cos(line.angle) * distance
+          );
+          line.entity.setLocalScale(
+            0.035 * fade,
+            0.035 * fade,
+            (0.16 + local * 0.42) * fade
+          );
+          line.entity.setLocalEulerAngles(0, line.angle / DEG, 0);
+        }
+      }
+
+      for (const puff of puffs) {
+        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.78));
+        const distance = puff.distance * local;
+        puff.entity.setLocalPosition(
+          Math.cos(puff.angle) * distance,
+          0.35 + Math.sin(local * Math.PI) * puff.rise,
+          Math.sin(puff.angle) * distance
+        );
+        const grow = 0.7 + local * 0.6;
+        const fade = Math.max(0, 1 - local);
+        puff.entity.setLocalScale(
+          puff.size * grow * fade,
+          puff.size * 0.8 * grow * fade,
+          puff.size * grow * fade
+        );
+      }
+
+      coreMaterial.opacity = 0.9 * (1 - t);
+      lineMaterial.opacity = 0.9 * (1 - t);
+      ringMaterial.opacity = 0.65 * (1 - t);
+      puffMaterial.opacity = 0.34 * (1 - t);
     });
   }
 

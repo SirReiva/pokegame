@@ -49,7 +49,8 @@ export type ProjectileStyle =
   | 'grass'
   | 'poison'
   | 'psychic'
-  | 'water';
+  | 'water'
+  | 'aura';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -62,7 +63,10 @@ export type ImpactStyle =
   | 'psychic'
   | 'slash'
   | 'arc'
-  | 'water';
+  | 'water'
+  | 'aura'
+  | 'steel'
+  | 'fighting';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle = 'electric' | 'fire' | 'psychic' | 'water';
@@ -732,6 +736,83 @@ registerAbility(
 );
 
 /* ------------------------------------------------------------------------- */
+/* Lucario                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('garraMetal', 'Garra Metal', 'Steel', 'physical', 'melee')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.5)
+    .range(2)
+    .radius(0.7)
+    .halfAngle(45)
+    .knockback(0.25)
+    .cast(0.32)
+    .animation('strike')
+    .impact('steel')
+    .color(176, 198, 228)
+    .description(
+      'Zarpazo de acero rápido y corto. Ataque básico de Lucario.'
+    )
+);
+
+registerAbility(
+  ability('velocidadExtrema', 'Velocidad Extrema', 'Normal', 'physical', 'dash')
+    .power(55)
+    .accuracy(100)
+    .cooldown(6)
+    .range(0)
+    .radius(0.9)
+    .dash(5.2)
+    .knockback(0.6)
+    .cast(0.25)
+    .animation('quickstrike')
+    .impact('fighting')
+    .color(214, 236, 255)
+    .description(
+      'Se lanza a una velocidad imposible y golpea a los rivales del camino. Entrada y escape.'
+    )
+);
+
+registerAbility(
+  ability('esferaAura', 'Esfera Aura', 'Fighting', 'special', 'projectile')
+    .power(60)
+    .accuracy(0)
+    .cooldown(5)
+    .range(10)
+    .radius(0.32)
+    .projectile('aura', 15)
+    .impact('aura')
+    .windup(0.2, { animation: 'charge' })
+    .cast(0.4)
+    .animation('attack')
+    .color(82, 152, 255)
+    .description(
+      'Proyectil de aura que nunca falla. Alcance largo y golpe único; remata a los rivales que huyen.'
+    )
+);
+
+registerAbility(
+  ability('combateCercano', 'Combate Cercano', 'Fighting', 'physical', 'melee')
+    .power(125)
+    .accuracy(100)
+    .cooldown(13)
+    .range(2.4)
+    .radius(1)
+    .halfAngle(65)
+    .knockback(1.1)
+    .windup(0.35, { animation: 'charge' })
+    .cast(0.65)
+    .animation('strike')
+    .impact('fighting')
+    .color(96, 150, 255)
+    .description(
+      'Definitiva: ráfaga de golpes de aura en un cono amplio. Mucho daño y empuje, pero exige acercarse.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
 /* Mewtwo                                                                    */
 /* ------------------------------------------------------------------------- */
 
@@ -895,6 +976,12 @@ MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 MOVESETS['0007'] = ['placaje', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];
+MOVESETS['0448'] = [
+  'garraMetal',
+  'velocidadExtrema',
+  'esferaAura',
+  'combateCercano'
+];
 MOVESETS['0150'] = [
   'telequinesis',
   'teletransporte',
