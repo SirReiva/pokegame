@@ -109,10 +109,10 @@ const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
 ];
 
 const sectionTitle =
-  'mb-2 font-mono text-[0.63rem] tracking-[0.16em] uppercase text-muted';
+  'mb-2 font-mono text-10.08 tracking-[0.16em] uppercase text-muted';
 const inputClass =
-  'w-full rounded-[9px] border border-line bg-[#070c14]/80 px-2.5 py-1.5 font-mono text-[0.76rem] text-ink outline-none transition-colors focus:border-accent/60';
-const fieldClass = 'flex flex-col gap-1 text-[0.7rem] text-muted';
+  'w-full rounded-[9px] border border-line bg-night-830/80 px-2.5 py-1.5 font-mono text-12.16 text-ink outline-none transition-colors focus:border-accent/60';
+const fieldClass = 'flex flex-col gap-1 text-11.2 text-muted';
 
 function loadDraft(): EditorState {
   try {
@@ -1363,14 +1363,14 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const canExport = map !== null && issues.length === 0;
 
   return (
-    <div className="fixed inset-0 z-30 flex animate-fade-in flex-col bg-[image:radial-gradient(circle_at_18%_8%,#122033_0%,#080d15_46%,#05080d_100%)]">
+    <div className="fixed inset-0 z-30 flex animate-fade-in flex-col bg-[radial-gradient(circle_at_18%_8%,#122033_0%,#080d15_46%,#05080d_100%)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel-strong px-4 py-2.5">
         <div className="flex items-center gap-3">
           <Brand compact />
           <span className="hidden h-8 w-px bg-line sm:block" />
           <div>
             <span className={eyebrow}>Editor de mapas</span>
-            <h1 className="mt-0.5 text-[1.1rem] leading-tight">
+            <h1 className="mt-0.5 text-17.6/tight">
               {map ? map.meta.name || 'Mapa sin nombre' : 'Sin mapa'}
             </h1>
           </div>
@@ -1418,7 +1418,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       />
 
       <div className="flex min-h-0 flex-1 max-[980px]:flex-col max-[980px]:overflow-y-auto">
-        <aside className="flex w-[264px] flex-none flex-col gap-4 overflow-y-auto border-r border-line bg-[#080d15]/80 p-3 max-[980px]:w-full max-[980px]:border-r-0 max-[980px]:border-b">
+        <aside className="flex w-66 flex-none flex-col gap-4 overflow-y-auto border-r border-line bg-night-800/80 p-3 max-[980px]:w-full max-[980px]:border-r-0 max-[980px]:border-b">
           <section>
             <h2 className={sectionTitle}>Herramientas</h2>
             <div className="grid grid-cols-2 gap-1.5">
@@ -1465,7 +1465,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                   className={`flex w-full cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-left transition-colors ${
                     terrain === id
                       ? 'border-accent/70 bg-accent/10'
-                      : 'border-transparent hover:border-line hover:bg-white/[0.04]'
+                      : 'border-transparent hover:border-line hover:bg-white/4'
                   }`}
                   onClick={() => selectTerrain(id)}
                 >
@@ -1473,11 +1473,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                     className="size-4 flex-none rounded-[3px] border border-black/40 shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"
                     style={{ background: TERRAIN_SWATCHES[id] }}
                   />
-                  <span className="min-w-0 flex-1 truncate text-[0.75rem] text-[#d7e2ee]">
+                  <span className="min-w-0 flex-1 truncate text-xs text-steel-200">
                     {TERRAINS[id].name}
                   </span>
                   <TypeBadge type={TERRAINS[id].type} />
-                  <span className="w-8 text-right font-mono text-[0.58rem] tabular-nums text-[#6f8298]">
+                  <span className="w-8 text-right font-mono text-9.28 tabular-nums text-steel-800">
                     {counts[id]}
                   </span>
                 </button>
@@ -1487,8 +1487,8 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-[0.7rem] text-muted">
-            <span className="font-mono text-[0.62rem] tracking-[0.08em] uppercase text-[#8fa3b8]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-11.2 text-muted">
+            <span className="font-mono text-9.92 tracking-[0.08em] uppercase text-steel-450">
               {activeTool?.label ?? 'Herramienta'}
             </span>
             <span>
@@ -1512,7 +1512,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               >
                 −
               </button>
-              <span className="w-12 text-center font-mono text-[0.68rem] tabular-nums text-ink">
+              <span className="w-12 text-center font-mono text-10.88 tabular-nums text-ink">
                 {Math.round(zoom * 100)}%
               </span>
               <button
@@ -1542,7 +1542,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               <canvas
                 ref={canvasRef}
                 aria-label="Rejilla del mapa"
-                className="m-auto shrink-0 cursor-crosshair touch-none rounded-[4px] shadow-[0_18px_50px_rgb(0_0_0/0.55)] outline outline-1 outline-white/10"
+                className="m-auto shrink-0 cursor-crosshair touch-none rounded-sm shadow-[0_18px_50px_rgb(0_0_0/0.55)] outline outline-white/10"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -1553,7 +1553,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               />
             ) : (
               <div className="m-auto text-center text-muted">
-                <p className="text-[0.9rem]">Todavía no hay ningún mapa.</p>
+                <p className="text-14.4">Todavía no hay ningún mapa.</p>
                 <button
                   type="button"
                   className={`${btnClass('primary')} mt-3`}
@@ -1565,13 +1565,13 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             )}
           </div>
 
-          <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 font-mono text-[0.63rem] text-[#7f92a7]">
+          <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 font-mono text-10.08 text-steel-650">
             <span>
               Rejilla {map ? `${map.cols} × ${map.rows}` : '—'} ·{' '}
               {map ? map.cols * map.rows : 0} celdas
             </span>
             <span>
-              Fondo: <strong className="text-[#a9bccf]">{TERRAINS[map?.background ?? 'jungle'].name}</strong>
+              Fondo: <strong className="text-steel-350">{TERRAINS[map?.background ?? 'jungle'].name}</strong>
             </span>
             <span className="ml-auto">
               <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno · <KeyPill>R</KeyPill>{' '}
@@ -1581,7 +1581,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           </footer>
         </main>
 
-        <aside className="flex w-[286px] flex-none flex-col gap-5 overflow-y-auto border-l border-line bg-[#080d15]/80 p-4 max-[980px]:w-full max-[980px]:border-l-0 max-[980px]:border-t">
+        <aside className="flex w-71.5 flex-none flex-col gap-5 overflow-y-auto border-l border-line bg-night-800/80 p-4 max-[980px]:w-full max-[980px]:border-l-0 max-[980px]:border-t">
           <section>
             <h2 className={sectionTitle}>Datos del mapa</h2>
             <div className="grid grid-cols-2 gap-2">
@@ -1673,7 +1673,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             >
               Redimensionar rejilla
             </button>
-            <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
+            <p className="mt-2 text-10.88/normal text-muted">
               Redimensionar conserva la esquina noroeste, rellena lo nuevo con el terreno de fondo y
               desplaza los separadores con la rejilla.
             </p>
@@ -1687,14 +1687,14 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 return (
                   <div
                     key={team}
-                    className="flex items-center gap-2 rounded-[9px] border border-line bg-white/[0.03] px-2 py-1.5"
+                    className="flex items-center gap-2 rounded-[9px] border border-line bg-white/3 px-2 py-1.5"
                   >
                     <span
                       className="size-2.5 flex-none rounded-full"
                       style={{ background: teamColor(team) }}
                     />
-                    <span className="text-[0.74rem] text-[#d7e2ee]">{teamLabel(team)}</span>
-                    <span className="ml-auto font-mono text-[0.62rem] text-[#8fa3b8]">
+                    <span className="text-11.84 text-steel-200">{teamLabel(team)}</span>
+                    <span className="ml-auto font-mono text-9.92 text-steel-450">
                       {base ? `fila ${base.row} · col ${base.col}` : 'sin colocar'}
                     </span>
                   </div>
@@ -1732,7 +1732,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                       className={`flex items-center gap-1.5 rounded-[9px] border px-2 py-1.5 ${
                         selected
                           ? 'border-accent/60 bg-accent/10'
-                          : 'border-line bg-white/[0.03]'
+                          : 'border-line bg-white/3'
                       }`}
                     >
                       <button
@@ -1741,10 +1741,10 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                         onClick={() => selectMountain(index)}
                         title={`Seleccionar ${label.toLowerCase()} para mover sus puntos`}
                       >
-                        <span className="block truncate text-[0.74rem] text-[#d7e2ee]">
+                        <span className="block truncate text-11.84 text-steel-200">
                           {label} {index + 1}
                         </span>
-                        <span className="block font-mono text-[0.6rem] text-[#8fa3b8]">
+                        <span className="block font-mono text-9.6 text-steel-450">
                           {range.points.length}{' '}
                           {range.points.length === 1 ? 'punto' : 'puntos'} · ancho{' '}
                           {Math.round(range.width * 10) / 10}
@@ -1752,7 +1752,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                       </button>
                       <button
                         type="button"
-                        className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-[0.85rem] text-muted transition-colors hover:border-[#ff5c5c]/40 hover:bg-[#ff5c5c]/10 hover:text-[#ffb2b5]"
+                        className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-13.6 text-muted transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
                         onClick={() => removeMountain(index)}
                         title={`Eliminar ${label.toLowerCase()}`}
                         aria-label={`Eliminar ${label.toLowerCase()} ${index + 1}`}
@@ -1763,7 +1763,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                   );
                 })
               ) : (
-                <p className="rounded-[9px] border border-line bg-white/[0.03] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-muted">
+                <p className="rounded-[9px] border border-line bg-white/3 px-2.5 py-2 text-10.88/normal text-muted">
                   Sin separadores. Usa «Dibujar separador» y haz clic en la rejilla para trazar uno.
                 </p>
               )}
@@ -1835,7 +1835,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             </div>
 
             {draftPoints.length > 0 && (
-              <div className="mt-2 rounded-[9px] border border-accent/40 bg-accent/[0.08] px-2.5 py-2 text-[0.68rem] leading-[1.5] text-[#d7e2ee]">
+              <div className="mt-2 rounded-[9px] border border-accent/40 bg-accent/8 px-2.5 py-2 text-10.88/normal text-steel-200">
                 Trazando {barrierKind === 'wall' ? 'muro' : 'cordillera'} · {draftPoints.length}{' '}
                 {draftPoints.length === 1 ? 'punto' : 'puntos'}
                 <div className="mt-1.5 flex gap-1.5">
@@ -1858,7 +1858,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               </div>
             )}
 
-            <p className="mt-2 text-[0.68rem] leading-[1.5] text-muted">
+            <p className="mt-2 text-10.88/normal text-muted">
               Elige arriba si el trazado es cordillera o muro. Haz clic para añadir puntos y doble
               clic o <KeyPill>Enter</KeyPill> para cerrar. Arrastra un punto para moverlo; doble
               clic sobre la línea añade uno y el clic derecho sobre un punto lo quita.
@@ -1868,7 +1868,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           <section>
             <h2 className={sectionTitle}>Validación</h2>
             {issues.length === 0 ? (
-              <p className="rounded-[9px] border border-[#7ac74c]/25 bg-[#7ac74c]/[0.08] px-2.5 py-2 text-[0.72rem] text-[#bff39d]">
+              <p className="rounded-[9px] border border-accent/25 bg-accent/8 px-2.5 py-2 text-11.52 text-accent-soft">
                 El mapa está listo para exportar.
               </p>
             ) : (
@@ -1876,7 +1876,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 {issues.map((issue) => (
                   <li
                     key={issue}
-                    className="rounded-[9px] border border-[#ff5c5c]/25 bg-[#ff5c5c]/[0.08] px-2.5 py-1.5 text-[0.7rem] leading-[1.45] text-[#ffb2b5]"
+                    className="rounded-[9px] border border-danger/25 bg-danger/8 px-2.5 py-1.5 text-11.2 leading-[1.45] text-danger-100"
                   >
                     {issue}
                   </li>
@@ -1887,7 +1887,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
           <section>
             <h2 className={sectionTitle}>Atajos</h2>
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[0.7rem] text-[#a9bccf]">
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-11.2 text-steel-350">
               <li className="flex items-center gap-2">
                 <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno
               </li>
@@ -1906,7 +1906,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               <li className="flex items-center gap-2">
                 <KeyPill>+ / −</KeyPill> zoom · <KeyPill>0</KeyPill> ajustar
               </li>
-              <li className="text-[0.68rem] leading-[1.45] text-muted">
+              <li className="text-10.88 leading-[1.45] text-muted">
                 Clic derecho pinta con el terreno de fondo. Con la herramienta Separador, quita
                 el último punto del trazado o el punto bajo el cursor.
               </li>
@@ -1916,11 +1916,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       </div>
 
       {setupOpen && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-[#04070c]/[0.82] p-4 backdrop-blur-[6px]">
-          <div className="w-[min(560px,100%)] animate-pop-in rounded-[18px] border border-line bg-panel-strong p-5 shadow-[0_34px_80px_rgb(0_0_0/0.6)]">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-night-900/82 p-4 backdrop-blur-[6px]">
+          <div className="w-[min(560px,100%)] animate-pop-in rounded-panel border border-line bg-panel-strong p-5 shadow-[0_34px_80px_rgb(0_0_0/0.6)]">
             <span className={eyebrow}>Nuevo mapa</span>
-            <h2 className="mt-1 text-[1.5rem]">Elige las dimensiones</h2>
-            <p className="mt-1.5 text-[0.8rem] leading-[1.55] text-muted">
+            <h2 className="mt-1 text-2xl">Elige las dimensiones</h2>
+            <p className="mt-1.5 text-12.8 leading-[1.55] text-muted">
               Elige el ancho y el alto de la rejilla; pueden ser distintos. Después podrás pintar
               celda a celda y colocar las dos bases.
             </p>
@@ -2018,7 +2018,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             </div>
 
             {formError && (
-              <p className="mt-3 rounded-[9px] border border-[#ff5c5c]/25 bg-[#ff5c5c]/[0.09] px-2.5 py-2 text-[0.75rem] leading-[1.5] text-[#ffb2b5]">
+              <p className="mt-3 rounded-[9px] border border-danger/25 bg-danger/9 px-2.5 py-2 text-xs/normal text-danger-100">
                 {formError}
               </p>
             )}
@@ -2035,7 +2035,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 Importar JSON
               </button>
               <select
-                className={`${inputClass} w-auto min-w-[170px] flex-1`}
+                className={`${inputClass} w-auto min-w-42.5 flex-1`}
                 value=""
                 onChange={(event) => {
                   const entry = maps.find((candidate) => candidate.id === event.target.value);
@@ -2063,18 +2063,18 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               )}
             </div>
 
-            <p className="mt-3 border-t border-line pt-2.5 text-[0.68rem] leading-[1.5] text-muted">
+            <p className="mt-3 border-t border-line pt-2.5 text-10.88/normal text-muted">
               Crear un mapa nuevo reemplaza el borrador actual. El editor guarda el mapa en este
               navegador automáticamente; para usarlo en el juego, exporta el JSON a{' '}
-              <code className="font-mono text-[#a9bccf]">public/maps/</code> y añádelo a{' '}
-              <code className="font-mono text-[#a9bccf]">index.json</code>.
+              <code className="font-mono text-steel-350">public/maps/</code> y añádelo a{' '}
+              <code className="font-mono text-steel-350">index.json</code>.
             </p>
           </div>
         </div>
       )}
 
       {toast && (
-        <div className="pointer-events-none absolute bottom-14 left-1/2 z-50 -translate-x-1/2 animate-rise-in rounded-xl border border-line bg-[#0a121c]/95 px-4 py-2 text-[0.78rem] text-ink shadow-[0_18px_40px_rgb(0_0_0/0.5)]">
+        <div className="pointer-events-none absolute bottom-14 left-1/2 z-50 -translate-x-1/2 animate-rise-in rounded-xl border border-line bg-night-700/95 px-4 py-2 text-12.48 text-ink shadow-[0_18px_40px_rgb(0_0_0/0.5)]">
           {toast}
         </div>
       )}

@@ -2,11 +2,11 @@ import type { SpriteManifest } from '../game/types';
 import { KeyPill } from './KeyPill';
 
 const code =
-  'rounded-[5px] border border-[#92b2d6]/[0.16] bg-[#92b2d6]/[0.13] px-[5px] py-px font-mono text-[0.85em]';
+  'rounded-[5px] border border-chip/16 bg-chip/13 px-1.25 py-px font-mono text-[0.85em]';
 const sectionTitle =
-  'mb-2.5 font-mono text-[0.78rem] tracking-[0.14em] uppercase text-muted';
-const list = 'm-0 flex list-none flex-col gap-2 p-0 text-[0.83rem] text-[#c2d0de]';
-const note = 'border-t border-line pt-3.5 text-[0.77rem] leading-[1.6] text-muted';
+  'mb-2.5 font-mono text-12.48 tracking-[0.14em] uppercase text-muted';
+const list = 'm-0 flex list-none flex-col gap-2 p-0 text-13.28 text-steel-300';
+const note = 'border-t border-line pt-3.5 text-12.32 leading-[1.6] text-muted';
 
 /** Controles de mando y teclado, compartidos por la pantalla de opciones y la pausa. */
 export function ControlsPanel() {
@@ -91,10 +91,10 @@ interface CreditsPanelProps {
 export function CreditsPanel({ manifest }: CreditsPanelProps) {
   return (
     <div>
-      <p className="text-[0.84rem] leading-[1.6] text-[#c2d0de]">
+      <p className="text-13.44 leading-[1.6] text-steel-300">
         Los sprites proceden de{' '}
         <a
-          className="text-[#8fd1ff] underline underline-offset-2"
+          className="text-info underline underline-offset-2"
           href={manifest?.source ?? 'https://sprites.pmdcollab.org/'}
           target="_blank"
           rel="noreferrer"
@@ -103,7 +103,7 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
         </a>{' '}
         y se distribuyen bajo licencia{' '}
         <a
-          className="text-[#8fd1ff] underline underline-offset-2"
+          className="text-info underline underline-offset-2"
           href={manifest?.licenseUrl ?? 'https://creativecommons.org/licenses/by-nc/4.0/'}
           target="_blank"
           rel="noreferrer"
@@ -119,21 +119,21 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
           const actions = entry.credits.flatMap((credit) => credit.actions);
           return (
             <div
-              className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-[#9abee4]/[0.08] py-[9px] text-[0.8rem] last:border-b-0 max-[640px]:grid-cols-1 max-[640px]:gap-1"
+              className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-line-faint py-2.25 text-12.8 last:border-b-0 max-[640px]:grid-cols-1 max-[640px]:gap-1"
               key={entry.id}
             >
-              <div className="flex items-baseline gap-[7px]">
+              <div className="flex items-baseline gap-1.75">
                 <strong>{entry.name}</strong>
-                <span className="font-mono text-[0.62rem] text-[#71859b]">
+                <span className="font-mono text-9.92 text-steel-750">
                   #{String(entry.dex).padStart(3, '0')}
                 </span>
               </div>
-              <div className="flex min-w-0 flex-col gap-0.5 break-words text-[#c2d0de]">
+              <div className="flex min-w-0 flex-col gap-0.5 wrap-break-word text-steel-300">
                 <span>
                   {artists.length > 0 ? artists.join(' · ') : 'Créditos no disponibles'}
                 </span>
                 {actions.length > 0 && (
-                  <span className="text-[0.78rem] leading-[1.5] text-muted">
+                  <span className="text-12.48/normal text-muted">
                     Animaciones: {[...new Set(actions)].join(', ')}
                   </span>
                 )}
@@ -143,7 +143,7 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
         })}
       </div>
 
-      <p className="text-[0.77rem] leading-[1.6] text-muted">
+      <p className="text-12.32 leading-[1.6] text-muted">
         Las hojas originales, sus ficheros <code className={code}>credits.txt</code> y el detalle
         completo están en <code className={code}>public/sprites/CREDITS.md</code>.
       </p>

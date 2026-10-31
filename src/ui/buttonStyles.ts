@@ -14,16 +14,16 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   neutral: 'border-transparent bg-white/5 text-ink',
   ghost:
-    'border-line bg-white/[0.045] text-ink backdrop-blur-[8px] hover:border-line-strong hover:bg-white/10',
+    'border-line bg-white/[0.045] text-ink backdrop-blur-sm hover:border-line-strong hover:bg-white/10',
   primary:
-    'border-transparent bg-accent text-[#0a1016] shadow-[0_14px_32px_rgb(0_0_0/0.4)] hover:brightness-[1.08]',
-  accent: 'border-transparent bg-accent text-[#0a1016]'
+    'border-transparent bg-accent text-ink-dark shadow-[0_14px_32px_rgb(0_0_0/0.4)] hover:brightness-[1.08]',
+  accent: 'border-transparent bg-accent text-ink-dark'
 };
 
 const sizes: Record<ButtonSize, string> = {
-  md: 'rounded-xl px-[18px] py-2.5 text-[0.88rem]',
-  small: 'rounded-xl px-[13px] py-[7px] text-[0.76rem]',
-  tiny: 'rounded-xl px-2.5 py-1.5 font-mono text-[0.69rem]',
+  md: 'rounded-xl px-[18px] py-2.5 text-14.08',
+  small: 'rounded-xl px-[13px] py-1.75 text-12.16',
+  tiny: 'rounded-xl px-2.5 py-1.5 font-mono text-11.04',
   play: 'rounded-[14px] px-7 py-3.5 text-base'
 };
 

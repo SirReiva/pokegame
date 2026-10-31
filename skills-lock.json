@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "install-twlinter": {
+      "source": "tinyfroggy/twlint",
+      "sourceType": "github",
+      "skillPath": "skills/install-twlinter/SKILL.md",
+      "computedHash": "bc20c86931ac473bcefd7df8c2558d7d4533d485fbc1d801cd563bca82babf85"
+    }
+  }
+}

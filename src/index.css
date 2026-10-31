@@ -13,8 +13,102 @@
   --color-ink: #eef4fb;
   --color-muted: #93a4ba;
   --color-accent: #7ac74c;
+  --color-accent-soft: #bff39d;
   --color-team-blue: #4b9cff;
   --color-team-red: #ff5f63;
+  --color-danger: #ff5c5c;
+  --color-danger-100: #ffb2b5;
+  --color-danger-200: #ff9b9b;
+  --color-danger-300: #ff8f92;
+  --color-info: #8fd1ff;
+  --color-link: #9fc4e8;
+  --color-warning: #ffd479;
+  --color-success: #8ee08a;
+  --color-success-deep: #08170f;
+  --color-danger-deep: #2a0d11;
+  --color-chip: #92b2d6;
+  --color-line-faint: rgb(154 190 228 / 0.08);
+  --color-ink-dark: #0a1016;
+  --color-ink-dark-soft: #0b1118;
+  --color-ink-dark-strong: #06101a;
+
+  /* Neutros azulados de la interfaz, de más claro a más oscuro. */
+  --color-steel-50: #e6f0fa;
+  --color-steel-100: #dbe7f3;
+  --color-steel-150: #d7e6f4;
+  --color-steel-200: #d7e2ee;
+  --color-steel-250: #c6d4e2;
+  --color-steel-300: #c2d0de;
+  --color-steel-340: #aabccf;
+  --color-steel-350: #a9bccf;
+  --color-steel-375: #9fb1c4;
+  --color-steel-400: #9db0c4;
+  --color-steel-450: #8fa3b8;
+  --color-steel-500: #8b9db2;
+  --color-steel-550: #8799ae;
+  --color-steel-600: #8298ad;
+  --color-steel-650: #7f92a7;
+  --color-steel-700: #73869c;
+  --color-steel-750: #71859b;
+  --color-steel-800: #6f8298;
+  --color-steel-900: #5f7288;
+  --color-steel-950: #55677d;
+
+  /* Fondos profundos del juego. */
+  --color-night-700: #0a121c;
+  --color-night-720: #0b121b;
+  --color-night-725: #0a1119;
+  --color-night-750: #090f18;
+  --color-night-800: #080d15;
+  --color-night-820: #070c13;
+  --color-night-830: #070c14;
+  --color-night-850: #050a10;
+  --color-night-900: #04070c;
+  --color-night-950: #03070c;
+
+  /*
+   * Escala tipográfica compacta. El nombre equivale al tamaño en píxeles
+   * (7_04 = 7,04 px) para conservar la escala actual de la interfaz.
+   */
+  --text-5_44: 0.34rem;
+  --text-6_4: 0.4rem;
+  --text-7_04: 0.44rem;
+  --text-7_36: 0.46rem;
+  --text-8: 0.5rem;
+  --text-8_32: 0.52rem;
+  --text-8_8: 0.55rem;
+  --text-8_96: 0.56rem;
+  --text-9_28: 0.58rem;
+  --text-9_6: 0.6rem;
+  --text-9_92: 0.62rem;
+  --text-10_08: 0.63rem;
+  --text-10_24: 0.64rem;
+  --text-10_56: 0.66rem;
+  --text-10_88: 0.68rem;
+  --text-11_04: 0.69rem;
+  --text-11_2: 0.7rem;
+  --text-11_52: 0.72rem;
+  --text-11_84: 0.74rem;
+  --text-12_16: 0.76rem;
+  --text-12_32: 0.77rem;
+  --text-12_48: 0.78rem;
+  --text-12_8: 0.8rem;
+  --text-13_12: 0.82rem;
+  --text-13_28: 0.83rem;
+  --text-13_44: 0.84rem;
+  --text-13_6: 0.85rem;
+  --text-14_08: 0.88rem;
+  --text-14_4: 0.9rem;
+  --text-14_72: 0.92rem;
+  --text-15_2: 0.95rem;
+  --text-15_68: 0.98rem;
+  --text-16_8: 1.05rem;
+  --text-17_6: 1.1rem;
+  --text-18_4: 1.15rem;
+  --text-19_2: 1.2rem;
+  --text-21_6: 1.35rem;
+  --text-25_6: 1.6rem;
+  --text-27_2: 1.7rem;
 
   --radius-panel: 18px;
 

@@ -21,14 +21,14 @@ interface MatchHudProps {
 }
 
 const splitPause =
-  'pointer-events-auto fixed top-14 left-1/2 z-[7] inline-flex -translate-x-1/2 animate-fade-in cursor-pointer items-center justify-center gap-2 rounded-xl border border-line-strong bg-[#050a10]/80 px-[13px] py-[7px] text-[0.76rem] font-[650] text-ink backdrop-blur-[8px] transition-colors duration-[120ms] ease-out hover:bg-white/10';
+  'pointer-events-auto fixed top-14 left-1/2 z-7 inline-flex -translate-x-1/2 animate-fade-in cursor-pointer items-center justify-center gap-2 rounded-xl border border-line-strong bg-night-850/80 px-[13px] py-1.75 text-12.16 font-[650] text-ink backdrop-blur-sm transition-colors duration-[120ms] ease-out hover:bg-white/10';
 
 /** Color del porcentaje de ocultación: verde si el tipo ayuda, rojo si delata. */
 function concealmentClassFor(stats: PlayerMatchStats | undefined): string {
   if (!stats || stats.concealment <= 0) return '';
-  if (stats.concealmentReason === 'hostile') return 'text-[#ffb2b5]';
+  if (stats.concealmentReason === 'hostile') return 'text-danger-100';
   if (stats.concealmentReason === 'home' || stats.concealmentReason === 'comfortable') {
-    return 'text-[#bff39d]';
+    return 'text-accent-soft';
   }
   return '';
 }
@@ -51,19 +51,19 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
   const scoreRed = stats[0]?.redScore ?? 0;
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[6]" aria-hidden="false">
-      <div className="fixed top-2.5 left-1/2 z-[8] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line-strong bg-[#050a10]/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-[8px]">
+    <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
+      <div className="fixed top-2.5 left-1/2 z-8 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
         <span
-          className="font-display text-[0.92rem] font-extrabold tabular-nums"
+          className="font-display text-14.72 font-extrabold tabular-nums"
           style={{ color: TEAM_INFO.blue.color }}
         >
           {scoreBlue}
         </span>
-        <span className="font-mono text-[0.58rem] tracking-[0.12em] text-[#7f92a7] uppercase">
+        <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
           a {KO_TARGET}
         </span>
         <span
-          className="font-display text-[0.92rem] font-extrabold tabular-nums"
+          className="font-display text-14.72 font-extrabold tabular-nums"
           style={{ color: TEAM_INFO.red.color }}
         >
           {scoreRed}
@@ -95,7 +95,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
         return (
           <section
             key={player.slot}
-            className="absolute animate-fade-in bg-[image:linear-gradient(180deg,color-mix(in_srgb,var(--team)_9%,transparent),transparent_16%)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--team)_58%,transparent)] after:pointer-events-none after:absolute after:inset-0 after:shadow-[inset_0_0_26px_rgb(0_0_0/0.22)]"
+            className="absolute animate-fade-in bg-[linear-gradient(180deg,color-mix(in_srgb,var(--team)_9%,transparent),transparent_16%)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--team)_58%,transparent)] after:pointer-events-none after:absolute after:inset-0 after:shadow-[inset_0_0_26px_rgb(0_0_0/0.22)]"
             style={
               {
                 ...splitRectToStyle(rect),
@@ -105,30 +105,30 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
             }
           >
             <div
-              className={`pointer-events-none absolute flex flex-col rounded-[10px] border border-line bg-[#050a10]/[0.84] shadow-[0_10px_24px_rgb(0_0_0/0.4)] backdrop-blur-[7px] ${
+              className={`pointer-events-none absolute flex flex-col rounded-[10px] border border-line bg-night-850/84 shadow-[0_10px_24px_rgb(0_0_0/0.4)] backdrop-blur-[7px] ${
                 compact
                   ? 'inset-x-1 bottom-1 gap-1 px-1.5 py-1'
-                  : 'inset-x-2 bottom-2 gap-[5px] px-2 py-1.5'
+                  : 'inset-x-2 bottom-2 gap-1.25 px-2 py-1.5'
               }`}
             >
               {/* Fila 1: identidad y vida. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`grid place-items-center rounded-[6px] bg-(--team) font-display font-extrabold text-[#06101a] ${
-                      compact ? 'size-5 text-[0.68rem]' : 'size-6 text-[0.8rem]'
+                    className={`grid place-items-center rounded-md bg-(--team) font-display font-extrabold text-ink-dark-strong ${
+                      compact ? 'size-5 text-10.88' : 'size-6 text-12.8'
                     }`}
                   >
                     {player.slot}
                   </span>
                   {entry && <PokemonPortrait entry={entry} height={compact ? 22 : 28} />}
                   <span className="flex flex-col leading-[1.05]">
-                    <strong className="font-mono text-[0.62rem] tracking-[0.08em] uppercase">
+                    <strong className="font-mono text-9.92 tracking-[0.08em] uppercase">
                       {player.name}
                     </strong>
                     <span
-                      className={`flex items-center gap-1 text-[#c6d4e2] ${
-                        compact ? 'text-[0.6rem]' : 'text-[0.68rem]'
+                      className={`flex items-center gap-1 text-steel-250 ${
+                        compact ? 'text-9.6' : 'text-10.88'
                       }`}
                     >
                       {entry?.name ?? '—'}
@@ -137,7 +137,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                 </div>
 
                 {playerStats && (
-                  <div className="flex min-w-[120px] flex-1 items-center gap-1.5">
+                  <div className="flex min-w-30 flex-1 items-center gap-1.5">
                     <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-black/60">
                       <div
                         className="h-full rounded-full transition-[width,background-color] duration-150"
@@ -147,14 +147,14 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                         }}
                       />
                     </div>
-                    <span className="font-mono text-[0.5rem] tabular-nums text-[#c6d4e2]">
+                    <span className="font-mono text-8 tabular-nums text-steel-250">
                       {Math.ceil(playerStats.hp)}/{playerStats.maxHp}
                     </span>
-                    <span className="font-mono text-[0.5rem] tabular-nums text-[#7f92a7]">
+                    <span className="font-mono text-8 tabular-nums text-steel-650">
                       K{playerStats.kills} D{playerStats.deaths}
                     </span>
                     {playerStats.invulnerable && (
-                      <span className="rounded bg-white/10 px-1 font-mono text-[0.46rem] tracking-[0.06em] text-[#d7e6f4]">
+                      <span className="rounded bg-white/10 px-1 font-mono text-7.36 tracking-[0.06em] text-steel-150">
                         INV
                       </span>
                     )}
@@ -163,14 +163,14 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
 
                 {playerStats && playerStats.alive && (
                   <div
-                    className={`pointer-events-auto ml-auto flex items-center rounded-[6px] border font-mono tracking-[0.08em] uppercase ${
+                    className={`pointer-events-auto ml-auto flex items-center rounded-md border font-mono tracking-[0.08em] uppercase ${
                       compact
-                        ? 'gap-1 px-1.5 py-0.5 text-[0.46rem]'
-                        : 'gap-1.5 px-2 py-[3px] text-[0.52rem]'
+                        ? 'gap-1 px-1.5 py-0.5 text-7.36'
+                        : 'gap-1.5 px-2 py-0.75 text-8.32'
                     } ${
                       playerStats.discovered
-                        ? 'border-[color:color-mix(in_srgb,#ff5f63_50%,transparent)] bg-[#2a0d11]/[0.78] text-[#ffb2b5]'
-                        : 'border-[color:color-mix(in_srgb,#8ee08a_42%,transparent)] bg-[#08170f]/[0.76] text-[#bff39d]'
+                        ? 'border-[color-mix(in_srgb,#ff5f63_50%,transparent)] bg-danger-deep/78 text-danger-100'
+                        : 'border-[color-mix(in_srgb,#8ee08a_42%,transparent)] bg-success-deep/76 text-accent-soft'
                     }`}
                     title={
                       playerStats.discovered
@@ -201,12 +201,12 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                       >
                         <span
                           className={`size-1.5 shrink-0 rounded-full ${
-                            playerStats.discovered ? 'bg-[#ff5f63]' : 'bg-[#8ee08a]'
+                            playerStats.discovered ? 'bg-team-red' : 'bg-success'
                           }`}
                         />
                         {playerStats.discovered ? 'Descubierto' : 'Oculto'}
                         {playerStats.discovered && playerStats.enemiesSeeing > 1 && (
-                          <span className="text-[#ff8f92]">×{playerStats.enemiesSeeing}</span>
+                          <span className="text-danger-300">×{playerStats.enemiesSeeing}</span>
                         )}
                       </span>
                     </span>
@@ -217,29 +217,29 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
               {playerStats && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <div
-                    className={`pointer-events-auto flex items-center whitespace-nowrap rounded-[6px] border border-line bg-[#050a10]/[0.55] font-mono text-[#9fb1c4] ${
+                    className={`pointer-events-auto flex items-center whitespace-nowrap rounded-md border border-line bg-night-850/55 font-mono text-steel-375 ${
                       compact
-                        ? 'gap-1 px-1.5 py-0.5 text-[0.5rem]'
-                        : 'gap-2 px-2 py-[3px] text-[0.55rem]'
+                        ? 'gap-1 px-1.5 py-0.5 text-8'
+                        : 'gap-2 px-2 py-0.75 text-8.8'
                     }`}
                     title={concealmentTitle}
                   >
-                    <span className="text-[#d7e6f4]">
+                    <span className="text-steel-150">
                       {compact ? 'V' : 'Visión'} {playerStats.visionRange.toFixed(1)} u
                     </span>
-                    <span className={concealmentClass || 'text-[#aabccf]'}>
+                    <span className={concealmentClass || 'text-steel-340'}>
                       {compact ? 'O' : 'Ocultación'} {concealmentPct}%
                     </span>
                     {!compact && (
-                      <span className="text-[#7f92a7] max-[760px]:hidden">
+                      <span className="text-steel-650 max-[760px]:hidden">
                         te ven a {playerStats.detectionRange.toFixed(1)} u
                       </span>
                     )}
                   </div>
 
                   <div
-                    className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-[#aabccf] ${
-                      compact ? 'text-[0.5rem]' : 'text-[0.55rem]'
+                    className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-steel-340 ${
+                      compact ? 'text-8' : 'text-8.8'
                     }`}
                   >
                     <TypeBadge type={playerStats.terrainType} />
@@ -247,10 +247,10 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                     <span
                       className={`whitespace-nowrap ${
                         playerStats.terrainSpeedMultiplier > 1
-                          ? 'text-[#bff39d]'
+                          ? 'text-accent-soft'
                           : playerStats.terrainSpeedMultiplier < 1
-                            ? 'text-[#ffb2b5]'
-                            : 'text-[#8fa3b8]'
+                            ? 'text-danger-100'
+                            : 'text-steel-450'
                       }`}
                     >
                       {playerStats.speed.toFixed(1)} u/s · ×
@@ -282,21 +282,21 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                       return (
                         <div
                           key={ability.slot}
-                          className={`relative flex min-w-10 flex-1 flex-col overflow-hidden rounded-[8px] border bg-[#050a10]/[0.82] px-1 py-0.5 backdrop-blur-[6px] ${
+                          className={`relative flex min-w-10 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
                             ready && ability.id
-                              ? 'border-[color:color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
+                              ? 'border-[color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
                               : 'border-line opacity-75'
                           }`}
                           title={`${ability.name}${ability.type ? ` · ${typeLabel} · ${categoryLabel}` : ''}`}
                         >
                           <span className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-[0.44rem] tracking-[0.06em] text-(--team)">
+                            <span className="font-mono text-7.04 tracking-[0.06em] text-(--team)">
                               {keys[abilityIndex]}
                             </span>
                             {ability.type && (
                               <span
                                 className={`shrink-0 rounded-full px-1 py-px font-mono font-bold uppercase leading-none tracking-[0.03em] ${
-                                  compact ? 'text-[0.34rem]' : 'text-[0.4rem]'
+                                  compact ? 'text-5.44' : 'text-6.4'
                                 }`}
                                 style={typeStyle(ability.type)}
                               >
@@ -304,11 +304,11 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                               </span>
                             )}
                           </span>
-                          <span className="truncate font-mono text-[0.46rem] text-[#c6d4e2]">
+                          <span className="truncate font-mono text-7.36 text-steel-250">
                             {ability.name}
                           </span>
                           {!ready && (
-                            <span className="absolute inset-0 grid place-items-center bg-[#03070c]/[0.74] font-mono text-[0.72rem] font-bold text-[#e6f0fa]">
+                            <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
                               {ability.cooldown.toFixed(1)}
                             </span>
                           )}
@@ -327,12 +327,12 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
             </div>
 
             {playerStats && !playerStats.alive && (
-              <div className="absolute inset-0 grid place-items-center bg-[#03070c]/[0.46]">
-                <div className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-[#050a10]/[0.86] px-6 py-4 text-center backdrop-blur-[6px]">
-                  <span className="font-display text-[1.6rem] font-extrabold tracking-[0.16em] text-[#ffb2b5]">
+              <div className="absolute inset-0 grid place-items-center bg-night-950/46">
+                <div className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-night-850/86 px-6 py-4 text-center backdrop-blur-[6px]">
+                  <span className="font-display text-25.6 font-extrabold tracking-[0.16em] text-danger-100">
                     KO
                   </span>
-                  <span className="font-mono text-[0.7rem] text-[#c6d4e2]">
+                  <span className="font-mono text-11.2 text-steel-250">
                     Reapareces en {Math.ceil(playerStats.respawnIn)} s
                   </span>
                 </div>
@@ -344,7 +344,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
 
       <button type="button" className={splitPause} onClick={onPause}>
         Pausa{' '}
-        <span className="ml-1.5 font-mono text-[0.55rem] text-[#7f92a7] max-[760px]:hidden">
+        <span className="ml-1.5 font-mono text-8.8 text-steel-650 max-[760px]:hidden">
           Start / Esc
         </span>
       </button>

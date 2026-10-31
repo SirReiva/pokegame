@@ -201,7 +201,7 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
       twlinter:
-        specifier: ^0.8.0
+        specifier: 0.8.0
         version: 0.8.0
       typescript:
         specifier: 7.0.2

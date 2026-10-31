@@ -30,7 +30,7 @@ const panel =
   'rounded-[20px] border border-line bg-panel-strong shadow-[0_34px_80px_rgb(0_0_0/0.55)]';
 const modalHead = 'flex items-center justify-between gap-4 border-b border-line px-6 py-[18px]';
 const modalClose =
-  'size-[34px] cursor-pointer rounded-[9px] border border-transparent bg-transparent text-[1.7rem] leading-none text-muted transition-colors duration-[120ms] hover:bg-white/[0.07] hover:text-ink';
+  'size-[34px] cursor-pointer rounded-[9px] border border-transparent bg-transparent text-27.2 leading-none text-muted transition-colors duration-[120ms] hover:bg-white/[0.07] hover:text-ink';
 
 interface PlayHandlers {
   onReady: () => void;
@@ -195,18 +195,18 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
   const fps = stats[0]?.fps ?? 0;
   const fpsTone =
     fps === 0
-      ? 'text-[#8fa3b8]'
+      ? 'text-steel-450'
       : fps >= 55
-        ? 'text-[#bff39d]'
+        ? 'text-accent-soft'
         : fps >= 30
-          ? 'text-[#ffd479]'
-          : 'text-[#ffb2b5]';
+          ? 'text-warning'
+          : 'text-danger-100';
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative size-full">
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 block h-full w-full cursor-grab touch-none outline-none active:cursor-grabbing"
+        className="fixed inset-0 block size-full cursor-grab touch-none outline-none active:cursor-grabbing"
       />
 
       {!error && !playing && (
@@ -237,7 +237,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
             />
           )}
 
-          <div className="fixed top-2.5 right-2.5 z-[7] flex animate-fade-in flex-wrap justify-end gap-1.5">
+          <div className="fixed top-2.5 right-2.5 z-7 flex animate-fade-in flex-wrap justify-end gap-1.5">
             <button type="button" className={btnClass('ghost', 'small')} onClick={() => setPaused(true)}>
               Pausa
             </button>
@@ -263,7 +263,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
               {hudVisible ? 'Ocultar HUD (H)' : 'Mostrar HUD (H)'}
             </button>
             <span
-              className="flex items-baseline gap-1 rounded-xl border border-line bg-[#050a10]/80 px-2.5 py-[7px] font-mono text-[0.7rem] tabular-nums text-[#8fa3b8] backdrop-blur-[8px]"
+              className="flex items-baseline gap-1 rounded-xl border border-line bg-night-850/80 px-2.5 py-1.75 font-mono text-11.2 tabular-nums text-steel-450 backdrop-blur-sm"
               title="Fotogramas por segundo"
             >
               <strong className={`font-semibold transition-colors duration-300 ${fpsTone}`}>
@@ -276,12 +276,12 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       )}
 
       {!error && playing && paused && !modal && (
-        <div className="fixed inset-0 z-[12] flex animate-fade-in items-center justify-center bg-[#03070c]/[0.72] backdrop-blur-[7px]">
+        <div className="fixed inset-0 z-12 flex animate-fade-in items-center justify-center bg-night-950/72 backdrop-blur-[7px]">
           <div className={`${panel} w-[min(620px,100%)] animate-rise-in p-[clamp(18px,3vw,28px)]`}>
             <header className={modalHead}>
               <div>
                 <span className={eyebrow}>Partida en pausa</span>
-                <h2 className="mt-[3px] text-[clamp(1.7rem,3vw,2.3rem)]">Pausa</h2>
+                <h2 className="mt-0.75 text-[clamp(1.7rem,3vw,2.3rem)]">Pausa</h2>
               </div>
               <button type="button" className={modalClose} onClick={resumeGame} aria-label="Continuar">
                 ×
@@ -296,7 +296,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
                   return (
                     <div
                       key={player.slot}
-                      className="flex items-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--team)_38%,var(--color-line))] border-l-[3px] border-l-(--team) bg-[image:linear-gradient(100deg,color-mix(in_srgb,var(--team)_10%,rgb(8_13_21/0.9)),rgb(8_13_21/0.9))] px-[9px] py-[7px]"
+                      className="flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--team)_38%,var(--color-line))] border-l-[3px] border-l-(--team) bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_10%,rgb(8_13_21/0.9)),rgb(8_13_21/0.9))] px-2.25 py-1.75"
                       style={
                         {
                           '--team': info.color
@@ -307,14 +307,14 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
                         {entry ? <PokemonPortrait entry={entry} height={36} /> : '—'}
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <strong className="font-mono text-[0.62rem] tracking-[0.06em]">
+                        <strong className="font-mono text-9.92 tracking-[0.06em]">
                           {player.name}
                         </strong>
-                        <span className="text-[0.7rem] text-[#9db0c4]">
+                        <span className="text-11.2 text-steel-400">
                           {entry?.name ?? '—'}
                         </span>
                       </span>
-                      <span className="font-mono text-[0.52rem] uppercase text-(--team)">
+                      <span className="font-mono text-8.32 uppercase text-(--team)">
                         {info.short}
                       </span>
                     </div>
@@ -357,7 +357,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
                 </div>
               </div>
 
-              <p className="text-center font-mono text-[0.64rem] text-[#7f92a7]">
+              <p className="text-center font-mono text-10.24 text-steel-650">
                 <KeyPill>A</KeyPill> continuar · <KeyPill>B</KeyPill> continuar ·{' '}
                 <KeyPill>Start / Esc</KeyPill> pausa
               </p>
@@ -367,7 +367,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       )}
 
       {!error && playing && matchResult && (
-        <div className="fixed inset-0 z-[14] flex animate-fade-in items-center justify-center bg-[#03070c]/[0.78] backdrop-blur-[8px]">
+        <div className="fixed inset-0 z-14 flex animate-fade-in items-center justify-center bg-night-950/78 backdrop-blur-sm">
           <div className={`${panel} w-[min(560px,100%)] animate-rise-in p-[clamp(20px,3vw,30px)]`}>
             <div className="text-center">
               <span className={eyebrow}>Fin de la partida</span>
@@ -377,7 +377,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
               >
                 Gana el {TEAM_INFO[matchResult.winner].label.toLowerCase()}
               </h2>
-              <p className="mt-2 font-mono text-[0.8rem] text-[#9db0c4]">
+              <p className="mt-2 font-mono text-12.8 text-steel-400">
                 {matchResult.blueScore} KO azules · {matchResult.redScore} KO rojos
               </p>
             </div>
