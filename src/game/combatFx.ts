@@ -338,35 +338,44 @@ function createWindBladeMesh(
 }
 
 /**
- * Cristal de hielo unitario: prisma hexagonal facetado con punta inferior y
- * superior. Se generan triángulos independientes con normal plana hacia fuera
- * para que cada cara reciba luz distinta y el cristal se lea en 3D.
+ * Cristal de hielo unitario: prisma hexagonal irregular con punta inferior,
+ * punta superior desplazada y caras de distinto tono. Cada triángulo lleva su
+ * propia normal y su propio color de vértice, así que las facetas se sombrean
+ * y además tienen el contraste claro/oscuro de un cristal tallado.
  */
 function createIceCrystalMesh(device: pc.GraphicsDevice): pc.Mesh {
+  type Vec3 = [number, number, number];
   const sides = 6;
-  const bottom: [number, number, number] = [0, -0.5, 0];
-  const top: [number, number, number] = [0, 0.5, 0];
-  const ring = (
-    y: number,
-    radius: number,
-    offset: number
-  ): [number, number, number][] =>
-    Array.from({ length: sides }, (_, index) => {
+  const bottom: Vec3 = [0, -0.55, 0];
+  const top: Vec3 = [0.07, 0.52, -0.02];
+  const lowerRadii = [0.3, 0.36, 0.4, 0.34, 0.28, 0.24];
+  const middleRadii = [0.44, 0.5, 0.47, 0.4, 0.36, 0.42];
+  const upperRadii = [0.24, 0.3, 0.28, 0.22, 0.2, 0.25];
+
+  const ring = (y: number, radii: number[], offset: number): Vec3[] =>
+    radii.map((radius, index) => {
       const angle = offset + (index / sides) * Math.PI * 2;
       return [Math.cos(angle) * radius, y, Math.sin(angle) * radius];
     });
-  const lower = ring(-0.3, 0.34, 0);
-  const middle = ring(0.02, 0.5, Math.PI / sides);
-  const upper = ring(0.3, 0.3, 0);
+  const lower = ring(-0.3, lowerRadii, 0);
+  const middle = ring(0.02, middleRadii, Math.PI / sides);
+  const upper = ring(0.3, upperRadii, 0);
 
   const positions: number[] = [];
   const normals: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
 
+  const shade = (color: Vec3, factor: number): Vec3 => [
+    Math.min(255, color[0] * factor),
+    Math.min(255, color[1] * factor),
+    Math.min(255, color[2] * factor)
+  ];
   const pushTriangle = (
-    a: [number, number, number],
-    b: [number, number, number],
-    c: [number, number, number]
+    a: Vec3,
+    b: Vec3,
+    c: Vec3,
+    color: Vec3
   ): void => {
     const ux = b[0] - a[0];
     const uy = b[1] - a[1];
@@ -377,8 +386,6 @@ function createIceCrystalMesh(device: pc.GraphicsDevice): pc.Mesh {
     let nx = uy * vz - uz * vy;
     let ny = uz * vx - ux * vz;
     let nz = ux * vy - uy * vx;
-    // Normal hacia fuera: en un cristal convexo centrado, debe apuntar en el
-    // mismo sentido que el centro de la cara.
     const cx = (a[0] + b[0] + c[0]) / 3;
     const cy = (a[1] + b[1] + c[1]) / 3;
     const cz = (a[2] + b[2] + c[2]) / 3;
@@ -393,16 +400,41 @@ function createIceCrystalMesh(device: pc.GraphicsDevice): pc.Mesh {
     nz /= length;
     positions.push(...a, ...b, ...c);
     normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+    colors.push(
+      color[0], color[1], color[2], 255,
+      color[0], color[1], color[2], 255,
+      color[0], color[1], color[2], 255
+    );
   };
+
+  // Tonos de la referencia: blanco hielo, cian claro, azul medio, azul oscuro
+  // y azul profundo. El degradado recorre las seis caras del prisma.
+  const bright: Vec3 = [238, 255, 255];
+  const light: Vec3 = [174, 235, 250];
+  const mid: Vec3 = [92, 190, 236];
+  const dark: Vec3 = [42, 132, 198];
+  const deep: Vec3 = [24, 92, 158];
+  const sideColors: Vec3[] = [light, bright, mid, dark, deep, mid];
 
   for (let index = 0; index < sides; index++) {
     const next = (index + 1) % sides;
-    pushTriangle(bottom, lower[index], lower[next]);
-    pushTriangle(lower[index], middle[index], lower[next]);
-    pushTriangle(lower[next], middle[index], middle[next]);
-    pushTriangle(middle[index], upper[index], middle[next]);
-    pushTriangle(middle[next], upper[index], upper[next]);
-    pushTriangle(upper[index], top, upper[next]);
+    const color = sideColors[index];
+    pushTriangle(bottom, lower[index], lower[next], shade(deep, 0.9));
+    pushTriangle(lower[index], middle[index], lower[next], color);
+    pushTriangle(lower[next], middle[index], middle[next], color);
+    pushTriangle(
+      middle[index],
+      upper[index],
+      middle[next],
+      shade(color, 1.18)
+    );
+    pushTriangle(
+      middle[next],
+      upper[index],
+      upper[next],
+      shade(color, 1.18)
+    );
+    pushTriangle(upper[index], top, upper[next], bright);
   }
 
   for (let index = 0; index < positions.length / 3; index++) {
@@ -412,6 +444,7 @@ function createIceCrystalMesh(device: pc.GraphicsDevice): pc.Mesh {
   const mesh = new pc.Mesh(device);
   mesh.setPositions(positions);
   mesh.setNormals(normals);
+  mesh.setColors(colors, 4);
   mesh.setIndices(indices);
   mesh.update();
   return mesh;
@@ -977,11 +1010,15 @@ export class CombatFx {
       tint[2] / 255
     );
     material.emissive = new pc.Color(
-      (tint[0] / 255) * 0.38,
-      (tint[1] / 255) * 0.38,
-      (tint[2] / 255) * 0.38
+      (tint[0] / 255) * 0.42,
+      (tint[1] / 255) * 0.42,
+      (tint[2] / 255) * 0.42
     );
     material.emissiveIntensity = 0.9;
+    // El color de cada faceta viene de la malla: claro en un lado, azul
+    // profundo en el otro, como un cristal tallado.
+    material.diffuseVertexColor = true;
+    material.emissiveVertexColor = true;
     material.opacity = opacity;
     material.blendType = pc.BLEND_NORMAL;
     material.depthWrite = false;
@@ -7888,7 +7925,7 @@ export class CombatFx {
     }[] = [];
     for (let index = 0; index < 5; index++) {
       const angle = (index / 5) * Math.PI * 2;
-      const baseWidth = radius * 0.5;
+      const baseWidth = radius * 0.75;
       const baseHeight = radius * 2.1;
       const shard = this.createEntity(
         this.iceCrystalMesh,
@@ -7924,7 +7961,7 @@ export class CombatFx {
         (index % 2 === 0 ? 1 : -1) * radius * 0.3,
         baseZ
       );
-      shard.setLocalScale(radius * 0.35, radius * 1.2, radius * 0.35);
+      shard.setLocalScale(radius * 0.5, radius * 1.2, radius * 0.5);
       shard.setLocalEulerAngles(70 + index * 25, index * 60, 20);
       trailShards.push({ entity: shard, phase: index * 1.7, baseZ });
     }
@@ -8056,7 +8093,7 @@ export class CombatFx {
         root
       );
       shard.setLocalPosition(0, 0.55, 0);
-      shard.setLocalScale(size * 0.4, size * 1.7, size * 0.4);
+      shard.setLocalScale(size * 0.7, size * 1.8, size * 0.7);
       shards.push({
         entity: shard,
         angle,
@@ -8123,9 +8160,9 @@ export class CombatFx {
         );
         const fade = Math.max(0, 1 - local);
         shard.entity.setLocalScale(
-          shard.size * 0.4 * fade,
-          shard.size * 1.7 * fade,
-          shard.size * 0.4 * fade
+          shard.size * 0.7 * fade,
+          shard.size * 1.8 * fade,
+          shard.size * 0.7 * fade
         );
         shard.entity.setLocalEulerAngles(
           local * 120,
@@ -8216,7 +8253,7 @@ export class CombatFx {
         root
       );
       const size = width * (0.5 + Math.random() * 0.35);
-      crystal.setLocalScale(size * 0.45, size * 1.8, size * 0.45);
+      crystal.setLocalScale(size * 0.7, size * 1.9, size * 0.7);
       crystals.push({
         entity: crystal,
         offset: (index + 0.5) / 12,
@@ -8242,7 +8279,7 @@ export class CombatFx {
         [index === 0 ? crystalMaterial : deepMaterial],
         root
       );
-      crystal.setLocalScale(size * 0.4, size * 1.9, size * 0.4);
+      crystal.setLocalScale(size * 0.65, size * 2, size * 0.65);
       tipCrystals.push({
         entity: crystal,
         angle: (index / 3) * Math.PI * 2,
@@ -8298,7 +8335,7 @@ export class CombatFx {
           time * 80
         );
         const scale = crystal.size * (0.75 + Math.sin(time * 8 + crystal.phase) * 0.2);
-        crystal.entity.setLocalScale(scale * 0.45, scale * 1.8, scale * 0.45);
+        crystal.entity.setLocalScale(scale * 0.7, scale * 1.9, scale * 0.7);
       }
 
       for (let index = 0; index < rings.length; index++) {
@@ -8395,14 +8432,14 @@ export class CombatFx {
       tiltZ: number;
       yaw: number;
     }[] = [];
-    for (let index = 0; index < 34; index++) {
+    for (let index = 0; index < 26; index++) {
       // Ángulo áureo + raíz del índice: cubre el disco de forma uniforme en
       // vez de amontonar las púas cerca del centro.
       const angle = index * 2.399963 + Math.random() * 0.35;
       const distance =
-        Math.sqrt((index + 0.5) / 34) * radius * 0.92;
-      const height = radius * (0.22 + Math.random() * 0.36);
-      const width = radius * (0.06 + Math.random() * 0.06);
+        Math.sqrt((index + 0.5) / 26) * radius * 0.92;
+      const height = radius * (0.24 + Math.random() * 0.36);
+      const width = radius * (0.1 + Math.random() * 0.06);
       const spike = this.createEntity(
         this.iceCrystalMesh,
         [index % 4 === 0 ? deepMaterial : spikeMaterial],
@@ -8605,13 +8642,13 @@ export class CombatFx {
       tiltZ: number;
       yaw: number;
     }[] = [];
-    for (let index = 0; index < 32; index++) {
+    for (let index = 0; index < 26; index++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.sqrt(Math.random()) * radius * 0.9;
       const targetX = Math.cos(angle) * distance;
       const targetZ = Math.sin(angle) * distance;
-      const height = radius * (0.22 + Math.random() * 0.35);
-      const width = radius * (0.06 + Math.random() * 0.055);
+      const height = radius * (0.24 + Math.random() * 0.34);
+      const width = radius * (0.09 + Math.random() * 0.055);
       // El centro queda por debajo de la superficie: la punta inferior se
       // entierra y la superior sobresale, como un cristal clavado.
       const landY = height * 0.28;
