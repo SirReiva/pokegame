@@ -9,8 +9,7 @@ import { mapHalfDepth, mapHalfWidth } from './terrain';
  * Hay dos piezas:
  * - `FogView`: quad pegado a la cámara que sombrea fuera del círculo de visión.
  * - `FogDecal`: plano horizontal en el mundo con la sombra que proyectan las
- *   cordilleras y las copas de los árboles. Al estar fijo en el mapa, esa
- *   sombra no depende de la cámara.
+ *   cordilleras. Al estar fijo en el mapa, esa sombra no depende de la cámara.
  */
 
 const VERTEX_SHADER = `
@@ -52,16 +51,11 @@ uniform vec3 uFogColor;
 uniform float uFogOpacity;
 uniform vec2 uFogCenter;
 uniform vec2 uFogRadius;
-uniform float uFogInner;
 uniform float uFogFeather;
 
 void main(void) {
   vec2 offset = (vUv - uFogCenter) / max(uFogRadius, vec2(0.0001));
-  // uFogInner es el radio (fracción del rango base) dentro del cual cualquier
-  // objetivo es visible incluso con la ocultación máxima. A partir de ahí la
-  // niebla crece hasta el rango base: el degradado representa el margen de
-  // ocultación, no un borde duro que promete más visión de la real.
-  float alpha = smoothstep(uFogInner, 1.0 + uFogFeather, length(offset)) * uFogOpacity;
+  float alpha = smoothstep(1.0 - uFogFeather, 1.0, length(offset)) * uFogOpacity;
   gl_FragColor = vec4(uFogColor, alpha);
 }
 `;
@@ -74,7 +68,6 @@ uniform float uFogOpacity;
 uniform sampler2D uFogMask;
 uniform vec2 uScreenCenter;
 uniform vec2 uScreenRadius;
-uniform float uScreenInner;
 uniform float uScreenFeather;
 uniform float uScreenOpacity;
 
@@ -88,7 +81,7 @@ void main(void) {
   // costura y sin oscurecer dos veces la zona de solape.
   vec2 clipUv = vClip.xy / vClip.w * 0.5 + 0.5;
   vec2 offset = (clipUv - uScreenCenter) / max(uScreenRadius, vec2(0.0001));
-  float circle = smoothstep(uScreenInner, 1.0 + uScreenFeather, length(offset)) * uScreenOpacity;
+  float circle = smoothstep(1.0 - uScreenFeather, 1.0, length(offset)) * uScreenOpacity;
   float target = max(circle, shadow);
   float alpha = clamp(
     (target - circle) / max(1.0 - circle, 0.001),
@@ -102,12 +95,10 @@ void main(void) {
 
 /** Oclusor de visión que proyecta sombra sobre el terreno. */
 export interface SightOccluder {
-  /** Copa circular (árbol) o tramo de cresta (cordillera). */
-  kind: 'circle' | 'segment';
   x: number;
   z: number;
   radius: number;
-  /** Extremos del tramo de cresta; en un círculo coinciden con su centro. */
+  /** Extremos del tramo de cresta, para el caso de jugador pegado. */
   ax: number;
   az: number;
   bx: number;
@@ -121,8 +112,6 @@ export interface SightOccluder {
 export interface ScreenFog {
   center: Float32Array;
   radius: Float32Array;
-  /** Fracción del radio dentro de la cual la visión es segura. */
-  inner: number;
   feather: number;
   opacity: number;
 }
@@ -165,7 +154,7 @@ export function createFogDecalMesh(device: pc.GraphicsDevice): pc.Mesh {
   return mesh;
 }
 
-/** Niebla de pantalla de una vista: degradado de visión y sombreado exterior. */
+/** Niebla de pantalla de una vista: círculo de visión y sombreado exterior. */
 export class FogView {
   readonly entity: pc.Entity;
 
@@ -173,7 +162,6 @@ export class FogView {
   readonly screenFog: ScreenFog = {
     center: new Float32Array(2),
     radius: new Float32Array(2),
-    inner: 1 - CONFIG.vision.maxConcealment,
     feather: CONFIG.vision.fogFeather,
     opacity: 0
   };
@@ -224,7 +212,6 @@ export class FogView {
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
     this.material.setParameter('uFogOpacity', this.screenFog.opacity);
     this.material.setParameter('uFogFeather', this.screenFog.feather);
-    this.material.setParameter('uFogInner', this.screenFog.inner);
     this.material.setParameter('uFogCenter', this.screenFog.center);
     this.material.setParameter('uFogRadius', this.screenFog.radius);
     this.material.update();
@@ -250,11 +237,6 @@ export class FogView {
    * extremos horizontales y los extremos cercano/lejano del círculo en el
    * suelo; el centro vertical del óvalo es el punto medio entre estos dos
    * últimos porque la perspectiva hace que el lado cercano ocupe más pantalla.
-   *
-   * `clearRange` es el radio dentro del cual cualquier objetivo es visible
-   * (rango base descontando la ocultación máxima). El tramo entre ese radio y
-   * `visionRange` se dibuja como un degradado: comunica que, más lejos, un
-   * rival puede seguir oculto aunque el fondo aún no esté negro.
    */
   update(
     camera: pc.CameraComponent,
@@ -262,8 +244,7 @@ export class FogView {
     yaw: number,
     x: number,
     z: number,
-    visionRange: number,
-    clearRange: number
+    visionRange: number
   ): void {
     const { width: canvasWidth, height: canvasHeight } = this.device.clientRect;
     const rectWidth = viewport.w * canvasWidth;
@@ -389,14 +370,9 @@ export class FogView {
     this.screenFog.center[1] = 1 - gradientY / 100;
     this.screenFog.radius[0] = radiusX / 100;
     this.screenFog.radius[1] = radiusY / 100;
-    this.screenFog.inner =
-      visionRange > 0.0001
-        ? Math.min(1, Math.max(0, clearRange / visionRange))
-        : 1;
 
     this.material.setParameter('uFogCenter', this.screenFog.center);
     this.material.setParameter('uFogRadius', this.screenFog.radius);
-    this.material.setParameter('uFogInner', this.screenFog.inner);
     this.setOpacity(CONFIG.vision.fogOpacity);
   }
 
@@ -412,11 +388,11 @@ export class FogView {
 }
 
 /**
- * Sombra de cordillera y de copa fija en el mundo. La máscara se dibuja en
- * coordenadas XZ del mapa y el plano vive en la capa de la vista; la cámara solo
- * lo mira, no lo deforma. Se dibuja sin test de profundidad para que la cuña
- * tiña también la vegetación y las decoraciones, y usa una máscara de esténcil
- * para excluir a los separadores y no sombrear su cara visible.
+ * Sombra de cordillera fija en el mundo. La máscara se dibuja en coordenadas
+ * XZ del mapa y el plano vive en la capa de la vista; la cámara solo lo mira,
+ * no lo deforma. Se dibuja sin test de profundidad para que la cuña tiña también
+ * la vegetación y las decoraciones, y usa una máscara de esténcil para excluir
+ * a los separadores y no sombrear su cara visible.
  */
 export class FogDecal {
   readonly entity: pc.Entity;
@@ -428,7 +404,6 @@ export class FogDecal {
   private readonly maskTexture: pc.Texture;
   private readonly screenCenter = new Float32Array(2);
   private readonly screenRadius = new Float32Array(2);
-  private screenInner = 1 - CONFIG.vision.maxConcealment;
   private screenFeather: number = CONFIG.vision.fogFeather;
   private screenOpacity = 0;
   private lastX = Number.NaN;
@@ -491,7 +466,6 @@ export class FogDecal {
     this.material.setParameter('uFogMask', this.maskTexture);
     this.material.setParameter('uScreenCenter', this.screenCenter);
     this.material.setParameter('uScreenRadius', this.screenRadius);
-    this.material.setParameter('uScreenInner', this.screenInner);
     this.material.setParameter('uScreenFeather', this.screenFeather);
     this.material.setParameter('uScreenOpacity', this.screenOpacity);
     this.material.update();
@@ -564,7 +538,6 @@ export class FogDecal {
       this.screenCenter[1] = screen.center[1];
       this.screenRadius[0] = screen.radius[0];
       this.screenRadius[1] = screen.radius[1];
-      this.screenInner = screen.inner;
       this.screenFeather = screen.feather;
       this.screenOpacity = screen.opacity;
     } else {
@@ -572,7 +545,6 @@ export class FogDecal {
     }
     this.material.setParameter('uScreenCenter', this.screenCenter);
     this.material.setParameter('uScreenRadius', this.screenRadius);
-    this.material.setParameter('uScreenInner', this.screenInner);
     this.material.setParameter('uScreenFeather', this.screenFeather);
     this.material.setParameter('uScreenOpacity', this.screenOpacity);
   }
@@ -601,10 +573,6 @@ export class FogDecal {
 
     for (const occluder of candidates) {
       if (occluder.distance <= occluder.radius + 0.01) {
-        // Dentro de una copa el observador ve hacia fuera (`lineOfSightBlocked`
-        // lo ignora), así que no se proyecta sombra. Una cresta pegada sí
-        // dibuja la banda del lado opuesto.
-        if (occluder.kind === 'circle') continue;
         // Jugador pegado a la cresta: banda sobre el lado opuesto del tramo.
         const segmentX = occluder.bx - occluder.ax;
         const segmentZ = occluder.bz - occluder.az;

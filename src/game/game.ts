@@ -81,7 +81,6 @@ import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
   isTargetVisible,
-  MAX_TERRAIN_CONCEALMENT,
   terrainConcealment,
   visionForPokemon
 } from './vision';
@@ -324,39 +323,22 @@ export class Game {
   }
 
   private rebuildSightOccluders(): void {
-    this.sightOccluders = [];
-    for (const collider of this.world.colliders) {
-      const sightRadius = collider.sightRadius;
-      if (sightRadius === undefined) continue;
-      if (collider.type === 'circle') {
-        // La copa de un árbol ya bloquea la línea de visión de los actores; el
-        // decal debe proyectar la misma cuña. Se guarda como círculo, sin los
-        // extremos de cresta.
-        this.sightOccluders.push({
-          kind: 'circle',
-          x: collider.x,
-          z: collider.z,
-          radius: sightRadius,
-          ax: collider.x,
-          az: collider.z,
-          bx: collider.x,
-          bz: collider.z
-        });
-        continue;
-      }
-      this.sightOccluders.push({
-        kind: 'segment',
-        x: (collider.ax + collider.bx) / 2,
-        z: (collider.az + collider.bz) / 2,
-        // Un poco más ancho que el radio de colisión del tramo para cubrir
-        // el volumen visible de los picos, sin abrir la cuña de más.
-        radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
-        ax: collider.ax,
-        az: collider.az,
-        bx: collider.bx,
-        bz: collider.bz
-      });
-    }
+    this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
+      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
+      return [
+        {
+          x: (collider.ax + collider.bx) / 2,
+          z: (collider.az + collider.bz) / 2,
+          // Un poco más ancho que el radio de colisión del tramo para cubrir
+          // el volumen visible de los picos, sin abrir la cuña de más.
+          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
+          ax: collider.ax,
+          az: collider.az,
+          bx: collider.bx,
+          bz: collider.bz
+        }
+      ];
+    });
   }
 
   /** Empieza una partida con los jugadores ya elegidos en React. */
@@ -2198,17 +2180,13 @@ export class Game {
       const fog = this.fogViews[viewIndex];
       const camera = observer.camera.entity.camera;
       if (fog && camera) {
-        // La niebla se aclara del todo hasta el radio en el que incluso el
-        // objetivo más oculto es visible, y se degrada hasta el rango base.
-        // Así el borde del círculo no promete más visión de la que hay.
         fog.update(
           camera,
           observer.viewport,
           observer.camera.yaw,
           observer.x,
           observer.z,
-          observer.visionRange,
-          effectiveVisionRange(observer.visionRange, MAX_TERRAIN_CONCEALMENT)
+          observer.visionRange
         );
       }
 
