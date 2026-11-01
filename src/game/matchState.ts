@@ -187,6 +187,12 @@ export interface MatchPlayerState extends MatchPlayerConfig {
    */
   actionAnimation: AnimationName | null;
   /**
+   * Mantiene el último frame de `actionAnimation` durante el lanzamiento en
+   * vez de reiniciar el clip. Se activa cuando la preparación ya reprodujo esa
+   * misma animación: así no se ve dos veces seguidas.
+   */
+  actionHold: boolean;
+  /**
    * Recuperación global tras lanzar una habilidad no melee. Mientras sea > 0
    * no se puede lanzar ninguna otra, sea del hueco que sea.
    */

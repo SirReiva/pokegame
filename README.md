@@ -200,6 +200,8 @@ La animación de preparación se controla con `windupAnimation` y `windupAnimati
 
 Por ejemplo, `Rayo` prepara `0.5 s` con `Shock` en modo `once`, así que el clip se ralentiza para encajar justo en la preparación. `Psíquico` de Mewtwo usa `windupAnimation: 'shoot'` durante sus `0.4 s` de preparación y después vuelve al reposo, porque no declara animación de lanzamiento. `Psicoataque` usa `windupAnimation: 'charge'` durante sus `0.8 s` de carga.
 
+Cuando la preparación reutiliza la animación de lanzamiento (el caso de `Rayo` e `Impactrueno`), el clip se reproduce una sola vez: al ejecutar la habilidad se mantiene su último frame durante `animationTime` en vez de reiniciarlo, así no se ve dos veces seguidas. Si se declara una `windupAnimation` distinta, la preparación y el lanzamiento reproducen cada una su propio clip.
+
 El modo `once` solo desactiva la repetición del clip de preparación mientras ese clip está en pantalla. Caminar, reposo y cualquier otro clip siguen en bucle: así un `windup` móvil sin animación propia, como `Giro Fuego`, no deja la animación de andar congelada en su último frame.
 
 ## Mapas definidos por JSON

@@ -464,6 +464,7 @@ export class Game {
         actionPlayback: 1,
         moveLockTimer: 0,
         actionAnimation: null,
+        actionHold: false,
         castLockTimer: 0,
         dash: null,
         pendingCast: null,
@@ -714,10 +715,18 @@ export class Game {
         const windupClip = pendingDef
           ? pendingDef.windupAnimation ?? pendingDef.animation
           : null;
+        // Un clip de preparación `once` se detiene en su último frame. Si al
+        // lanzar se reutiliza ese mismo clip, se mantiene esa pose final en vez
+        // de reiniciarlo: si no, la animación se ve dos veces seguidas.
+        const holdAction =
+          player.actionHold &&
+          player.actionTimer > 0 &&
+          player.animation === player.actionAnimation;
         copy.setLoop(
-          windupClip === null ||
-            player.animation !== windupClip ||
-            pendingDef?.windupAnimationMode === 'loop'
+          !holdAction &&
+            (windupClip === null ||
+              player.animation !== windupClip ||
+              pendingDef?.windupAnimationMode === 'loop')
         );
         copy.setPlayback(player.playback);
         copy.setSubmerge(player.submerge, this.world.waterHeight);
@@ -762,7 +771,10 @@ export class Game {
       player.stunTimer = Math.max(0, player.stunTimer - dt);
     }
     if (player.hurtTimer > 0) player.hurtTimer = Math.max(0, player.hurtTimer - dt);
-    if (player.actionTimer > 0) player.actionTimer = Math.max(0, player.actionTimer - dt);
+    if (player.actionTimer > 0) {
+      player.actionTimer = Math.max(0, player.actionTimer - dt);
+      if (player.actionTimer === 0) player.actionHold = false;
+    }
     if (player.castLockTimer > 0) {
       player.castLockTimer = Math.max(0, player.castLockTimer - dt);
     }
@@ -1210,6 +1222,7 @@ export class Game {
     player.actionTimer = 0;
     player.actionPlayback = 1;
     player.actionAnimation = null;
+    player.actionHold = false;
     player.moveLockTimer = 0;
     player.castLockTimer = 0;
     player.dash = null;
@@ -1266,6 +1279,7 @@ export class Game {
     player.actionTimer = def.animation === null ? 0 : def.animationTime;
     player.actionPlayback = 1;
     player.actionAnimation = def.animation;
+    player.actionHold = false;
     if (def.animation !== null) player.animation = def.animation;
     player.playback = 1;
     player.vx = 0;
@@ -1381,17 +1395,30 @@ export class Game {
     // (por ejemplo, Ataque Celeste), el temporizador arrancado en `castAbility`
     // se agotaba durante la preparación y la animación de lanzamiento no
     // llegaba a verse nunca.
+    const windupClip =
+      def.windup > 0 ? def.windupAnimation ?? def.animation : null;
+    // Si la preparación usó la misma animación que el lanzamiento, el clip ya
+    // se reprodujo entero y está en su último frame. Reiniciarlo aquí lo
+    // mostraría dos veces seguidas, así que se mantiene esa pose.
+    const reusesWindupClip =
+      windupClip !== null && windupClip === def.animation;
     player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
     if (def.animation !== null) {
       player.actionTimer = def.animationTime;
       player.actionAnimation = def.animation;
-      player.actionPlayback = this.animationPlaybackFor(
-        player,
-        def.animation,
-        def.animationTime
-      );
-      player.animation = def.animation;
-      player.playback = player.actionPlayback;
+      if (reusesWindupClip) {
+        player.actionHold = true;
+        player.animation = def.animation;
+      } else {
+        player.actionHold = false;
+        player.actionPlayback = this.animationPlaybackFor(
+          player,
+          def.animation,
+          def.animationTime
+        );
+        player.animation = def.animation;
+        player.playback = player.actionPlayback;
+      }
     }
 
     CAST_EFFECTS({
