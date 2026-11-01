@@ -11,15 +11,19 @@ const TYPE_ICON_SVGS = import.meta.glob('../assets/types/*.svg', {
 interface TypeBadgeProps {
   type: string;
   className?: string;
+  /** `sm` reduce padding y tipografía para listas compactas. */
+  size?: 'md' | 'sm';
 }
 
-export function TypeBadge({ type, className = '' }: TypeBadgeProps) {
+export function TypeBadge({ type, className = '', size = 'md' }: TypeBadgeProps) {
   const slug = TYPE_ICONS[type];
   const svg = slug ? TYPE_ICON_SVGS[`../assets/types/${slug}.svg`] : undefined;
 
   return (
     <span
-      className={`inline-flex items-center gap-[0.3em] rounded-full border border-white/20 px-1.5 py-0.5 font-mono text-8.96 leading-[1.4] font-bold tracking-[0.06em] uppercase ${className}`}
+      className={`inline-flex items-center gap-[0.3em] rounded-full border border-white/20 font-mono leading-[1.4] font-bold tracking-[0.06em] uppercase ${
+        size === 'sm' ? 'px-1 py-0 text-7.36' : 'px-1.5 py-0.5 text-8.96'
+      } ${className}`}
       style={typeStyle(type)}
     >
       {svg && (

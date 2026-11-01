@@ -55,7 +55,8 @@ El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cad
 | Unirse / confirmar | `A` | `Espacio` / `Enter` |
 | Volver / desmarcar | `B` | `Esc` / `Retroceso` |
 | Elegir equipo | Cruceta izquierda / stick izquierdo | `A` / `D` o flechas |
-| Navegar por la rejilla de Pokémon | Cruceta / stick izquierdo | `WASD` / flechas |
+| Navegar por tu carrusel de Pokémon | Cruceta / stick izquierdo | `WASD` / flechas |
+| Girar la card del Pokémon | `X` / `Y` | `Tab` / `F` |
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
 | Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
 | Zoom | Gatillos `L2` / `R2` o stick derecho vertical | Rueda |
@@ -70,7 +71,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cad
 La configuración tiene dos rutas:
 
 1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
-2. **`/roster` · Pokémon**: cada jugador mueve su cursor por las veintitrés especies y confirma con `A`. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
+2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veintitrés especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (azul o roja). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo.
 
@@ -549,13 +550,12 @@ src/ui/
   InfoDialog.tsx             modal de controles/créditos durante la pausa
   LobbyScreen.tsx            sala de equipos y detección de mandos
   MapEditorScreen.tsx        editor de mapas: dimensiones, dibujo y exportación
-  RosterScreen.tsx           selección simultánea de Pokémon
+  RosterScreen.tsx           carrusel y card giratoria por jugador
   MatchHud.tsx               etiquetas, telemetría y bordes del splitscreen
   TypeBadge.tsx              insignia de tipo
   typeInfo.ts                colores, etiquetas e iconos de tipos
   buttonStyles.ts            variantes y tamaños de los botones en Tailwind
   styles.ts                  clases compartidas (eyebrow, pasos del asistente)
-  rosterGrid.ts              columnas de la rejilla según el viewport
   useMenuInput.ts            teclado/mandos para pantallas HTML sin PlayCanvas
   useReturnPath.ts           vuelta a la pantalla de origen de `/opciones` y `/editor`
 src/App.tsx                  rutas de wouter y composición de pantallas
@@ -588,7 +588,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - El catálogo de habilidades arranca vacío: cada habilidad se define en `src/game/abilities.ts` y se asigna por Pokémon en `MOVESETS`. No hay captura, objetos ni estados alterados.
 - El multijugador local es un **team deathmatch a 15 KO**; no hay súbditos, torretas ni otros objetivos MOBA.
 - No hay bots: para que haya combate hace falta al menos un jugador en cada equipo.
-- La selección de Pokémon permite repetir especie aunque hay 20 especies para hasta 8 jugadores.
+- La selección de Pokémon permite repetir especie aunque hay 23 especies para hasta 8 jugadores.
 - La niebla exterior es un círculo de pantalla por vista; los separadores añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.

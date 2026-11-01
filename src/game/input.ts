@@ -1,7 +1,14 @@
 import { CONFIG } from './config';
 
 /** Acción de interfaz (menús) emitida por un dispositivo concreto. */
-export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'cancel';
+export type MenuAction =
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'confirm'
+  | 'cancel'
+  | 'flip';
 
 export interface InputDeviceInfo {
   /** Identidad estable del dispositivo: `kbd` o `pad-<index>`. */
@@ -105,6 +112,7 @@ const PAD_ABILITY_BUTTONS = [2, 3, 5, 4] as const;
 const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
   'confirm',
   'cancel',
+  'flip',
   'up',
   'down',
   'left',
@@ -163,7 +171,7 @@ export class Input {
     if (this.isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
     if (
-      ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter'].includes(key)
+      ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter', 'tab'].includes(key)
     ) {
       event.preventDefault();
     }
@@ -287,12 +295,15 @@ export class Input {
     const right = edgeNav(NAV_KEYS.right);
     const confirm = tapped(' ') || tapped('enter');
     const cancel = tapped('escape') || tapped('backspace');
+    const flip =
+      tapped('tab') || tapped('f') || tapped('x') || tapped('y');
     const [ability1, ability2, ability3, ability4] =
       KEYBOARD_ABILITY_KEYS.map(tapped);
 
     const action = resolveMenuAction({
       confirm,
       cancel,
+      flip,
       up,
       down,
       left,
@@ -365,6 +376,10 @@ export class Input {
 
     const confirm = edge(0);
     const cancel = edge(1);
+    // X / Cuadrado y Y / Triángulo: giran la card del Pokémon seleccionado en
+    // los menús. Se aceptan ambos porque el layout de botones cambia entre
+    // familias de mando.
+    const flip = edge(2) || edge(3);
     const startPressed = edge(9);
     // X, Y, RB y LB. El botón B sigue reservado para pausa/volver.
     const [ability1, ability2, ability3, ability4] =
@@ -376,6 +391,7 @@ export class Input {
     const action = resolveMenuAction({
       confirm,
       cancel,
+      flip,
       up,
       down,
       left,

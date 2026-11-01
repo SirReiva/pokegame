@@ -18,7 +18,6 @@ import {
 } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
-import { rosterColumns } from '../ui/rosterGrid';
 import { SessionContext, type BootStatus, type SessionValue } from './sessionContext';
 
 async function loadManifest(): Promise<SpriteManifest> {
@@ -212,23 +211,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const list = manifestRef.current?.pokemon ?? [];
       if (!player || player.rosterReady || list.length === 0) return;
 
-      const columns = rosterColumns();
       const index = Math.max(
         0,
         list.findIndex((entry) => entry.id === player.pokemonId)
       );
-      const column = index % columns;
-      let nextIndex = index;
+      const delta =
+        action === 'left' || action === 'up'
+          ? -1
+          : action === 'right' || action === 'down'
+            ? 1
+            : 0;
+      if (delta === 0) return;
 
-      if (action === 'left' && column > 0) nextIndex = index - 1;
-      else if (action === 'right' && column < columns - 1 && index + 1 < list.length) {
-        nextIndex = index + 1;
-      } else if (action === 'up' && index - columns >= 0) {
-        nextIndex = index - columns;
-      } else if (action === 'down' && index + columns < list.length) {
-        nextIndex = index + columns;
-      }
-
+      const nextIndex = Math.max(0, Math.min(list.length - 1, index + delta));
       if (nextIndex === index) return;
       commitPlayers(
         current.map((entry) =>
