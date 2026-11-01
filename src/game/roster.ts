@@ -21,6 +21,7 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
   '0095': 4.6, // Onix: una serpiente de piedra enorme, avanza pesada
   '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
+  '0248': 4.5, // Tyranitar: mole de roca y piel dura, avanza con paso implacable
   '0144': 6.8, // Articuno: planea con calma gélida, sin prisa pero sin pausa
   '0145': 7.6, // Zapdos: alas de tormenta, el ave legendaria más veloz
   '0146': 7.0, // Moltres: vuelo ardiente y constante

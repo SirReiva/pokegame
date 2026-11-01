@@ -110,6 +110,13 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/credits.txt
 
+## Tyranitar (#0248)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0248/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248/credits.txt
+
 ## Articuno (#0144)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop

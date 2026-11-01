@@ -46,6 +46,7 @@ const ROSTER = [
   { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' },
   { id: '0095', name: 'Onix', types: ['Rock', 'Ground'], accent: '#b6a136' },
   { id: '0123', name: 'Scyther', types: ['Bug', 'Flying'], accent: '#a6b91a' },
+  { id: '0248', name: 'Tyranitar', types: ['Rock', 'Dark'], accent: '#6f8f6a', actions: ['Hop'] },
   { id: '0144', name: 'Articuno', types: ['Ice', 'Flying'], accent: '#7fc4dc' },
   { id: '0145', name: 'Zapdos', types: ['Electric', 'Flying'], accent: '#f2c53d' },
   { id: '0146', name: 'Moltres', types: ['Fire', 'Flying'], accent: '#e8663c' },
@@ -76,6 +77,20 @@ const ACTIONS = [
   'Shake',
   'Punch'
 ];
+// Acciones que no todas las especies incluyen. Las que declare un Pokémon en
+// `actions` (por ejemplo Hop en Tyranitar) se tratan también como opcionales.
+const OPTIONAL_ACTIONS = new Set([
+  'Faint',
+  'QuickStrike',
+  'Shock',
+  'Shoot',
+  'Charge',
+  'Strike',
+  'Twirl',
+  'Shake',
+  'Punch',
+  'Hop'
+]);
 const force = process.argv.includes('--force');
 
 function slug(value) {
@@ -424,17 +439,8 @@ async function importPokemon(pokemon) {
   const shadowSize = Number(/<ShadowSize>(\d+)<\/ShadowSize>/.exec(animDataXml)?.[1] ?? 1);
   const animations = {};
 
-  for (const action of ACTIONS) {
-    const optional =
-      action === 'Faint' ||
-      action === 'QuickStrike' ||
-      action === 'Shock' ||
-      action === 'Shoot' ||
-      action === 'Charge' ||
-      action === 'Strike' ||
-      action === 'Twirl' ||
-      action === 'Shake' ||
-      action === 'Punch';
+  for (const action of [...ACTIONS, ...(pokemon.actions ?? [])]) {
+    const optional = OPTIONAL_ACTIONS.has(action);
     const meta = anims.get(action);
     if (!meta) {
       if (optional) {

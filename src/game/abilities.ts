@@ -55,7 +55,8 @@ export type ProjectileStyle =
   | 'shadow'
   | 'ghost'
   | 'air'
-  | 'ice';
+  | 'ice'
+  | 'rock';
 
 /** Aspecto visual del impacto de una habilidad. */
 export type ImpactStyle =
@@ -76,7 +77,9 @@ export type ImpactStyle =
   | 'shuriken'
   | 'ghost'
   | 'air'
-  | 'ice';
+  | 'ice'
+  | 'rock'
+  | 'ground';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle =
@@ -87,7 +90,8 @@ export type BeamStyle =
   | 'dark'
   | 'ghost'
   | 'air'
-  | 'ice';
+  | 'ice'
+  | 'rock';
 
 /** Aspecto visual de un área. */
 export type AoeStyle =
@@ -103,7 +107,8 @@ export type AoeStyle =
   | 'air'
   | 'heat'
   | 'ice'
-  | 'blizzard';
+  | 'blizzard'
+  | 'ground';
 
 /**
  * Reparto del daño de un área:
@@ -1481,6 +1486,85 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Tyranitar                                                                 */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('triturar', 'Triturar', 'Dark', 'physical', 'melee')
+    .power(75)
+    .accuracy(100)
+    .cooldown(0.85)
+    .range(2)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(0.35)
+    .cast(0.42)
+    .animation('attack')
+    .impact('dark')
+    .color(126, 98, 166)
+    .description(
+      'Mordisco de mandíbula brutal. Golpe cuerpo a cuerpo lento pero muy contundente. Ataque básico de Tyranitar.'
+    )
+);
+
+registerAbility(
+  ability('avalancha', 'Avalancha', 'Rock', 'physical', 'projectile')
+    .power(75)
+    .accuracy(90)
+    .cooldown(5)
+    .range(8.5)
+    .radius(0.34)
+    .projectile('rock', 14)
+    .impact('rock')
+    .knockback(0.45)
+    .windup(0.25)
+    .cast(0.45)
+    .animation('shoot')
+    .color(196, 166, 104)
+    .description(
+      'Lanza un pedrusco de 8,5 u que estalla en esquirlas al impactar. Su ataque a distancia fiable.'
+    )
+);
+
+registerAbility(
+  ability('terremoto', 'Terremoto', 'Ground', 'physical', 'aoe')
+    .power(40)
+    .accuracy(100)
+    .cooldown(9)
+    .range(0)
+    .radius(3.4)
+    .area('ground', 'overTime', 2.5, 0.5)
+    .windup(0.45, { animation: 'hop' })
+    .cast(0.7)
+    .animation(null)
+    .impact('ground')
+    .color(198, 158, 92)
+    .description(
+      'Salta y golpea el suelo: el área de 3,4 u sigue agrietada 2,5 s y hace 40 de daño por segundo (100 en total) a quien permanezca dentro.'
+    )
+);
+
+registerAbility(
+  ability('rocaAfilada', 'Roca Afilada', 'Rock', 'physical', 'beam')
+    .power(125)
+    .accuracy(80)
+    .cooldown(12)
+    .range(9)
+    .radius(0.5)
+    .beam('rock')
+    .impact('rock')
+    .windup(0.5, { animation: 'charge' })
+    .cast(0.6)
+    // El haz y las estalagmitas son el golpe: no hay clip de lanzamiento
+    // después de la carga para no encadenar un Attack que no aporta nada.
+    .animation(null)
+    .color(210, 178, 118)
+    .description(
+      'Definitiva: una línea de estalagmitas de 9 u que brota del suelo y golpea con 125 de potencia a todos los rivales en línea.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1523,6 +1607,7 @@ MOVESETS['0151'] = [
   'recuperacion'
 ];
 MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
+MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
 
 export function abilityForSlot(
   pokemonId: string,

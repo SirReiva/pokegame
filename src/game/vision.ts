@@ -40,6 +40,7 @@ export const POKEMON_VISION: Record<string, number> = {
   '0151': 11.0, // Mew: sentidos psíquicos y curiosidad infinita
   '0095': 8.8, // Onix: vive bajo tierra, poca luz y vista corta
   '0123': 10.8, // Scyther: ojos de depredador y reflejos de mantis
+  '0248': 9.6, // Tyranitar: vista de depredador nocturno, pero poca altura de ojos
   '0144': 11.6, // Articuno: ojo de ave rapaz sobre el hielo
   '0145': 11.8, // Zapdos: percibe la electricidad del aire a distancia
   '0146': 11.5, // Moltres: la luz de sus llamas le abre el horizonte

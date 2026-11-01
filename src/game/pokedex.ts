@@ -48,6 +48,7 @@ export const POKEDEX_STATS: Record<string, BaseStats> = {
   '0151': { hp: 100, attack: 100, defense: 100, spAttack: 100, spDefense: 100, speed: 100 }, // Mew
   '0095': { hp: 35, attack: 45, defense: 160, spAttack: 30, spDefense: 45, speed: 70 }, // Onix
   '0123': { hp: 70, attack: 110, defense: 80, spAttack: 55, spDefense: 80, speed: 105 }, // Scyther
+  '0248': { hp: 100, attack: 134, defense: 110, spAttack: 95, spDefense: 100, speed: 61 }, // Tyranitar
   '0144': { hp: 90, attack: 85, defense: 100, spAttack: 95, spDefense: 125, speed: 85 }, // Articuno
   '0145': { hp: 90, attack: 90, defense: 85, spAttack: 125, spDefense: 90, speed: 100 }, // Zapdos
   '0146': { hp: 90, attack: 100, defense: 90, spAttack: 125, spDefense: 85, speed: 90 }, // Moltres

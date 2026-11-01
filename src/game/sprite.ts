@@ -19,6 +19,7 @@ export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
   twirl?: pc.Texture;
   shake?: pc.Texture;
   punch?: pc.Texture;
+  hop?: pc.Texture;
 };
 
 export interface SpriteAsset {
@@ -63,7 +64,8 @@ const OPTIONAL_ANIMATIONS: ReadonlyArray<{
   { name: 'strike', requiresMoveset: true },
   { name: 'twirl', requiresMoveset: true },
   { name: 'shake', requiresMoveset: true },
-  { name: 'punch', requiresMoveset: true }
+  { name: 'punch', requiresMoveset: true },
+  { name: 'hop', requiresMoveset: true, logLabel: 'Hop' }
 ];
 
 const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
