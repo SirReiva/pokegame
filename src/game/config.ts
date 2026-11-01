@@ -138,6 +138,18 @@ export const CONFIG = {
     clashStunSeconds: 0.25,
     /** Separación aplicada a ambos luchadores en un choque. */
     clashKnockback: 1,
+    /**
+     * Margen (u) con el que la línea de visión de la melee se separa de los
+     * obstáculos. Los dos extremos son centros de jugador, que ya quedan a
+     * `player.radius` de cualquier collider, así que este margen solo descarta
+     * golpes que pasan rozando un árbol o una roca.
+     */
+    meleeSightPadding: 0.15,
+    /**
+     * Margen (u) al que se detiene el centro de un área antes de un obstáculo.
+     * Evita que el telegraph y el daño se coloquen detrás de un muro.
+     */
+    aoeSightPadding: 0.25,
     /** Probabilidad de crítico (1/24 en la generación VII+). */
     critChance: 1 / 24,
     /** Multiplicador de daño de un crítico. */

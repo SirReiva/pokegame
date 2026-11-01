@@ -4,8 +4,9 @@
  * No usan hojas de ataque externas: son mallas simples de PlayCanvas con
  * materiales aditivos. Cada habilidad nueva puede elegir su color y su forma,
  * y el motor reutiliza estas primitivas (proyectil, arco, haz, área, dash y
- * aura). Todos los efectos se dibujan en la capa `World`, así que se ven en
- * todos los viewports del splitscreen.
+ * aura). Cada efecto se dibuja solo en las capas de las vistas que pueden
+ * verlo: el resolvedor de capas lo decide con la misma niebla que oculta a los
+ * actores, así que un proyectil o un haz no delata a un rival fuera de visión.
  */
 
 import * as pc from 'playcanvas';
@@ -34,11 +35,43 @@ export interface EffectHandle {
   destroy(): void;
 }
 
+/**
+ * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
+ * Devuelve un array vacío si ninguna vista lo ve.
+ */
+export type FxLayerResolver = (x: number, z: number) => readonly number[];
+
+/** Puntos que anclan un efecto para decidir en qué vistas se dibuja. */
+type FxAnchors = ReadonlyArray<readonly [number, number]>;
+
+/**
+ * Anclas de un área: el centro y cuatro puntos del borde. Así el círculo se ve
+ * en una vista que solo alcanza su borde, no únicamente si ve el centro.
+ */
+function areaAnchors(x: number, z: number, radius: number): FxAnchors {
+  return [
+    [x, z],
+    [x + radius, z],
+    [x - radius, z],
+    [x, z + radius],
+    [x, z - radius]
+  ];
+}
+
+function sameLayers(current: readonly number[], next: readonly number[]): boolean {
+  if (current.length !== next.length) return false;
+  for (let index = 0; index < current.length; index++) {
+    if (current[index] !== next[index]) return false;
+  }
+  return true;
+}
+
 interface ActiveEffect {
   entity: pc.Entity;
   materials: pc.StandardMaterial[];
   duration: number;
   elapsed: number;
+  anchors: FxAnchors;
   update: (t: number, dt: number) => void;
 }
 
@@ -59,6 +92,7 @@ interface AoeTelegraph {
   elapsed: number;
   duration: number;
   active: boolean;
+  anchors: FxAnchors;
   update: (progress: number, elapsed: number) => void;
 }
 
@@ -553,6 +587,12 @@ function createDashRingMesh(
 export class CombatFx {
   private readonly app: pc.Application;
   private readonly layerId: number;
+  /** Resuelve las capas de las vistas que pueden ver un efecto. */
+  private readonly resolveLayers: FxLayerResolver;
+  /** Anclas del efecto que se está construyendo, si las define su `spawn`. */
+  private pendingAnchors: FxAnchors | null = null;
+  /** Acumulador para no repetir el cálculo de niebla de todos los FX por frame. */
+  private visibilityTimer = 0;
   private readonly device: pc.GraphicsDevice;
   private readonly effects: ActiveEffect[] = [];
   private readonly projectiles = new Set<ProjectileVisual>();
@@ -613,9 +653,14 @@ export class CombatFx {
     ) => void
   >;
 
-  constructor(app: pc.Application, layerId: number) {
+  constructor(
+    app: pc.Application,
+    layerId: number,
+    resolveLayers: FxLayerResolver = () => [layerId]
+  ) {
     this.app = app;
     this.layerId = layerId;
+    this.resolveLayers = resolveLayers;
     this.device = app.graphicsDevice;
     this.sphereMesh = pc.createSphere(this.device, { radius: 0.5 });
     this.boxMesh = pc.createBox(this.device, {
@@ -1315,15 +1360,65 @@ export class CombatFx {
     entity: pc.Entity,
     materials: pc.StandardMaterial[],
     duration: number,
-    update: (t: number, dt: number) => void
+    update: (t: number, dt: number) => void,
+    anchors?: FxAnchors
   ): void {
+    // Solo las vistas que ven el origen (o el destino) del efecto lo dibujan.
+    const points =
+      anchors ??
+      this.pendingAnchors ??
+      ([[entity.getPosition().x, entity.getPosition().z]] as FxAnchors);
+    this.applyVisibility(entity, points);
     this.effects.push({
       entity,
       materials,
       duration,
       elapsed: 0,
+      anchors: points,
       update
     });
+  }
+
+  /**
+   * Ejecuta `run` con las anclas indicadas: todos los efectos que cree dentro
+   * (incluidas las fábricas de haces, áreas e impactos) se dibujarán solo en
+   * las vistas que vean alguno de esos puntos.
+   */
+  private withAnchors<T>(anchors: FxAnchors, run: () => T): T {
+    const previous = this.pendingAnchors;
+    this.pendingAnchors = anchors;
+    try {
+      return run();
+    } finally {
+      this.pendingAnchors = previous;
+    }
+  }
+
+  /**
+   * Ajusta las capas del árbol de un efecto a las vistas que lo ven. PlayCanvas
+   * guarda las capas por componente (`render` y `particlesystem`), así que hay
+   * que recorrer los hijos además del nodo raíz.
+   */
+  private applyVisibility(entity: pc.Entity, anchors: FxAnchors): void {
+    const layers: number[] = [];
+    for (const [x, z] of anchors) {
+      for (const id of this.resolveLayers(x, z)) {
+        if (!layers.includes(id)) layers.push(id);
+      }
+    }
+    this.setEntityLayers(entity, layers);
+  }
+
+  private setEntityLayers(entity: pc.Entity, layers: readonly number[]): void {
+    const render = entity.render;
+    if (render && !sameLayers(render.layers, layers)) {
+      render.layers = [...layers];
+    }
+    const particles = entity.particlesystem;
+    if (particles && !sameLayers(particles.layers, layers)) {
+      particles.layers = [...layers];
+    }
+    for (const child of entity.children as pc.Entity[]) this.setEntityLayers(child, layers);
   }
 
   /** Bola luminosa que avanza con un proyectil. */
@@ -1338,7 +1433,35 @@ export class CombatFx {
   ): EffectHandle {
     const factory =
       this.projectileFactories[style] ?? this.projectileFactories.orb;
-    return factory(x, z, color, radius, dirX, dirZ);
+    // Las fábricas registran su `ProjectileVisual`; se compara el conjunto para
+    // recuperar el nodo recién creado sin cambiar la firma de cada una.
+    const known = new Set(this.projectiles);
+    const handle = factory(x, z, color, radius, dirX, dirZ);
+    let visual: ProjectileVisual | undefined;
+    for (const candidate of this.projectiles) {
+      if (!known.has(candidate)) {
+        visual = candidate;
+        break;
+      }
+    }
+    if (!visual) return handle;
+
+    this.applyVisibility(visual.entity, [[x, z]]);
+
+    // El proyectil se mueve: al alejarse lo suficiente se recalculan las capas
+    // para que entre o salga de la niebla de cada vista sin quedarse pegado a
+    // la visibilidad del punto de lanzamiento.
+    let lastX = x;
+    let lastZ = z;
+    const setPosition = handle.setPosition;
+    handle.setPosition = (nextX, nextZ) => {
+      setPosition(nextX, nextZ);
+      if (Math.hypot(nextX - lastX, nextZ - lastZ) < 0.4) return;
+      lastX = nextX;
+      lastZ = nextZ;
+      this.applyVisibility(visual.entity, [[nextX, nextZ]]);
+    };
+    return handle;
   }
 
   /** Proyectil genérico: esfera emisiva del color de la habilidad. */
@@ -2874,7 +2997,10 @@ export class CombatFx {
           Math.sin(t * 12 + puff.baseX) * 12
         );
       }
-    });
+    }, [
+      [x, z],
+      [x + Math.sin(yaw) * range, z + Math.cos(yaw) * range]
+    ]);
   }
 
   /**
@@ -2891,7 +3017,16 @@ export class CombatFx {
     style: BeamStyle = 'electric'
   ): void {
     const factory = this.beamFactories[style] ?? this.beamFactories.electric;
-    factory(x1, z1, x2, z2, color, width);
+    // Origen y destino: el haz se ve si cualquiera de los dos extremos (o su
+    // punto medio) cae dentro de la visión del observador.
+    this.withAnchors(
+      [
+        [x1, z1],
+        [(x1 + x2) / 2, (z1 + z2) / 2],
+        [x2, z2]
+      ],
+      () => factory(x1, z1, x2, z2, color, width)
+    );
   }
 
   /**
@@ -3886,7 +4021,9 @@ export class CombatFx {
   ): void {
     const life = Math.max(0.2, duration);
     const factory = this.aoeFactories[style] ?? this.aoeFactories.ring;
-    factory(x, z, radius, color, life);
+    this.withAnchors(areaAnchors(x, z, radius), () =>
+      factory(x, z, radius, color, life)
+    );
   }
 
   /** Anillo de área genérico: crece y se desvanece en el suelo. */
@@ -4767,6 +4904,7 @@ export class CombatFx {
       elapsed: 0,
       duration: Math.max(0.05, duration),
       active: true,
+      anchors: areaAnchors(x, z, radius),
       update: (progress, elapsed) => {
         const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
         ringMaterial.opacity = 0.3 + pulse * 0.35;
@@ -4788,6 +4926,7 @@ export class CombatFx {
       }
     };
 
+    this.applyVisibility(root, areaAnchors(x, z, radius));
     this.telegraphs.add(record);
     return { destroy: () => this.disposeTelegraph(record) };
   }
@@ -5185,9 +5324,18 @@ export class CombatFx {
     entity.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     entity.setLocalScale(0.8, 0.12, length);
 
-    this.addEffect(entity, [material], 0.35, (t) => {
-      material.opacity = 0.7 * (1 - t);
-    });
+    this.addEffect(
+      entity,
+      [material],
+      0.35,
+      (t) => {
+        material.opacity = 0.7 * (1 - t);
+      },
+      [
+        [x1, z1],
+        [x2, z2]
+      ]
+    );
   }
 
   /** Aura circular para buffs, escudos y reapariciones. */
@@ -5201,12 +5349,18 @@ export class CombatFx {
     const entity = this.createEntity(this.torusMesh, [material]);
     entity.setPosition(x, 0.15, z);
 
-    this.addEffect(entity, [material], 0.65, (t) => {
-      const scale = Math.max(0.3, radius * 2) * (0.35 + 0.85 * t);
-      entity.setLocalScale(scale, 1, scale);
-      entity.setPosition(x, 0.15 + t * 0.8, z);
-      material.opacity = 0.8 * (1 - t);
-    });
+    this.addEffect(
+      entity,
+      [material],
+      0.65,
+      (t) => {
+        const scale = Math.max(0.3, radius * 2) * (0.35 + 0.85 * t);
+        entity.setLocalScale(scale, 1, scale);
+        entity.setPosition(x, 0.15 + t * 0.8, z);
+        material.opacity = 0.8 * (1 - t);
+      },
+      [[x, z]]
+    );
   }
 
   /** Curación de Mew: anillos rosas que suben y motas que se elevan y se apagan. */
@@ -5284,7 +5438,7 @@ export class CombatFx {
         spark.entity.setLocalScale(size, size, size);
       }
       sparkMaterial.opacity = 0.95 * (1 - t * 0.9);
-    });
+    }, [[x, z]]);
   }
 
   /** Impacto de Planta: núcleo claro, hojas despedidas y anillo verde. */
@@ -5684,7 +5838,9 @@ export class CombatFx {
     style: ImpactStyle = 'hit'
   ): void {
     const effect = this.impactEffects[style] ?? this.impactEffects.hit;
-    effect(x, z, color, effectiveness);
+    this.withAnchors([[x, z]] as FxAnchors, () =>
+      effect(x, z, color, effectiveness)
+    );
   }
 
   /** Impacto de un golpe. `effectiveness` tiñe el destello. */
@@ -5704,12 +5860,18 @@ export class CombatFx {
     const entity = this.createEntity(this.sphereMesh, [material]);
     entity.setPosition(x, 0.65, z);
 
-    this.addEffect(entity, [material], 0.3, (t) => {
-      const scale = 0.25 + t * (effectiveness > 1 ? 1.35 : 0.85);
-      entity.setLocalScale(scale, scale, scale);
-      entity.setPosition(x, 0.65 + t * 0.15, z);
-      material.opacity = 0.95 * (1 - t);
-    });
+    this.addEffect(
+      entity,
+      [material],
+      0.3,
+      (t) => {
+        const scale = 0.25 + t * (effectiveness > 1 ? 1.35 : 0.85);
+        entity.setLocalScale(scale, scale, scale);
+        entity.setPosition(x, 0.65 + t * 0.15, z);
+        material.opacity = 0.95 * (1 - t);
+      },
+      [[x, z]]
+    );
   }
 
   /**
@@ -8608,11 +8770,23 @@ export class CombatFx {
   }
 
   update(dt: number): void {
+    // Recalcular la niebla cuesta una prueba de línea de visión por vista; con
+    // 0,1 s de margen basta para que los efectos entren y salgan de la niebla
+    // sin repetir el cálculo en cada frame.
+    this.visibilityTimer += dt;
+    const refreshVisibility = this.visibilityTimer >= 0.1;
+    if (refreshVisibility) this.visibilityTimer = 0;
+
     // Marcas de área: se animan y se autodestruyen al llenarse.
     for (const telegraph of [...this.telegraphs]) {
       telegraph.elapsed += dt;
       const progress = Math.min(1, telegraph.elapsed / telegraph.duration);
       telegraph.update(progress, telegraph.elapsed);
+      // La visibilidad se recalcula a intervalos: una marca creada en la niebla
+      // aparece en cuanto el jugador se acerca lo suficiente a verla.
+      if (refreshVisibility) {
+        this.applyVisibility(telegraph.entity, telegraph.anchors);
+      }
       for (const material of telegraph.materials) material.update();
       // Pequeña prórroga: el lanzamiento la retira explícitamente al impactar;
       // esto solo evita que se quede viva si algo lo interrumpe sin cancelar.
@@ -8626,6 +8800,11 @@ export class CombatFx {
       effect.elapsed += dt;
       const t = Math.min(1, effect.elapsed / effect.duration);
       effect.update(t, dt);
+      // Las vistas se mueven: un efecto estático también puede entrar o salir
+      // de la niebla mientras dura.
+      if (refreshVisibility) {
+        this.applyVisibility(effect.entity, effect.anchors);
+      }
       // `opacity` es un uniforme del material: sin update() el fundido no
       // llega a la GPU igual que ocurre con los offsets de textura del sprite.
       for (const material of effect.materials) material.update();

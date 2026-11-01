@@ -153,6 +153,25 @@ export function rollRandomFactor(): number {
   return RANDOM_MIN + Math.random() * (RANDOM_MAX - RANDOM_MIN);
 }
 
+/** Punto del segmento A-B más cercano a P en el plano XZ. */
+export function closestPointOnSegment(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number
+): { x: number; z: number } {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lengthSq = dx * dx + dz * dz;
+  const t =
+    lengthSq > 0
+      ? Math.min(1, Math.max(0, ((px - ax) * dx + (pz - az) * dz) / lengthSq))
+      : 0;
+  return { x: ax + dx * t, z: az + dz * t };
+}
+
 /** Diferencia angular normalizada al rango [-π, π]. */
 export function angleDelta(a: number, b: number): number {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -366,25 +385,6 @@ export function pointBlockedByColliders(
 ): boolean {
   return colliders.some(
     (collider) => pointToCollider(x, z, collider) <= padding
-  );
-}
-
-/**
- * ¿Hay un separador (cordillera o muro) entre dos puntos? Los separadores son
- * los únicos colliders de tipo segmento, así que rocas, árboles y adornos no
- * cuentan. Se usa para que los golpes melee no atraviesen una cordillera.
- */
-export function segmentBlockedBySeparator(
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-  colliders: readonly SegmentCollider[]
-): boolean {
-  return colliders.some(
-    (collider) =>
-      collider.type === 'segment' &&
-      segmentToCollider(ax, az, bx, bz, collider) <= 0
   );
 }
 

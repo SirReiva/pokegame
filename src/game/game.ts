@@ -18,14 +18,14 @@ import {
   KO_TARGET,
   angleDelta,
   closestPointOnCollider,
+  closestPointOnSegment,
   computeDamage,
-  pointBlockedByColliders,
   pointSegmentDistance,
+  raycastColliderDistance,
   rollAccuracy,
   rollCritical,
   rollRandomFactor,
-  segmentBlockedByColliders,
-  segmentBlockedBySeparator
+  segmentBlockedByColliders
 } from './combat';
 import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
@@ -43,9 +43,13 @@ import {
 import { loadMap, loadMapIndex, type MapIndexEntry } from './map';
 import type {
   ActiveAoe,
+  HealOnHitToken,
   MatchPlayerState,
+  PendingInstantHit,
   PendingMeleeHit,
-  Projectile
+  Projectile,
+  QueuedCast,
+  SlowEffect
 } from './matchState';
 import {
   MAX_PLAYERS,
@@ -72,10 +76,12 @@ import {
   type Team
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
+import { typeEffectiveness } from './typeChart';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
   isTargetVisible,
+  MAX_TERRAIN_CONCEALMENT,
   terrainConcealment,
   visionForPokemon
 } from './vision';
@@ -111,6 +117,9 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+/** Tipos vacíos: la ocultación de un punto usa solo el terreno, sin especie. */
+const NO_TYPES: readonly string[] = [];
+
 /**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
  * partida y recibe eventos de entrada y telemetría por callbacks.
@@ -138,6 +147,8 @@ export class Game {
   private activeMapId = '';
 
   private readonly baseCameraLayers: number[];
+  /** Capa del mundo: respaldo de los FX fuera de partida. */
+  private readonly worldLayerId: number;
 
   private manifest: SpriteManifest | null = null;
   private readonly assets = new Map<string, SpriteAsset>();
@@ -150,6 +161,10 @@ export class Game {
   private activeAoes: ActiveAoe[] = [];
   /** Golpes melee del frame actual, resueltos después de mover a todos. */
   private pendingMeleeHits: PendingMeleeHit[] = [];
+  /** Habilidades instantáneas que esperan al final del frame para ejecutarse. */
+  private queuedCasts: QueuedCast[] = [];
+  /** Golpes de dash detectados al moverse, resueltos con el resto del frame. */
+  private pendingInstantHits: PendingInstantHit[] = [];
   /** Marcador de la partida; gana el primero que llegue a `KO_TARGET`. */
   private teamScores: Record<Team, number> = { blue: 0, red: 0 };
   private matchOver = false;
@@ -197,7 +212,12 @@ export class Game {
 
     const worldLayerId =
       this.app.scene.layers.getLayerByName('World')?.id ?? pc.LAYERID_WORLD;
-    this.combatFx = new CombatFx(this.app, worldLayerId);
+    this.worldLayerId = worldLayerId;
+    // Los FX preguntan en qué capas de vista deben dibujarse; el resolvedor usa
+    // la misma visibilidad que la niebla de los actores.
+    this.combatFx = new CombatFx(this.app, worldLayerId, (x, z) =>
+      this.fxLayersAt(x, z)
+    );
     this.damageNumbers = new DamageNumbers(this.app);
 
     this.app.on('update', this.onUpdate);
@@ -304,33 +324,64 @@ export class Game {
   }
 
   private rebuildSightOccluders(): void {
-    this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
-      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
-      return [
-        {
-          x: (collider.ax + collider.bx) / 2,
-          z: (collider.az + collider.bz) / 2,
-          // Un poco más ancho que el radio de colisión del tramo para cubrir
-          // el volumen visible de los picos, sin abrir la cuña de más.
-          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
-          ax: collider.ax,
-          az: collider.az,
-          bx: collider.bx,
-          bz: collider.bz
-        }
-      ];
-    });
+    this.sightOccluders = [];
+    for (const collider of this.world.colliders) {
+      const sightRadius = collider.sightRadius;
+      if (sightRadius === undefined) continue;
+      if (collider.type === 'circle') {
+        // La copa de un árbol ya bloquea la línea de visión de los actores; el
+        // decal debe proyectar la misma cuña. Se guarda como círculo, sin los
+        // extremos de cresta.
+        this.sightOccluders.push({
+          kind: 'circle',
+          x: collider.x,
+          z: collider.z,
+          radius: sightRadius,
+          ax: collider.x,
+          az: collider.z,
+          bx: collider.x,
+          bz: collider.z
+        });
+        continue;
+      }
+      this.sightOccluders.push({
+        kind: 'segment',
+        x: (collider.ax + collider.bx) / 2,
+        z: (collider.az + collider.bz) / 2,
+        // Un poco más ancho que el radio de colisión del tramo para cubrir
+        // el volumen visible de los picos, sin abrir la cuña de más.
+        radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
+        ax: collider.ax,
+        az: collider.az,
+        bx: collider.bx,
+        bz: collider.bz
+      });
+    }
   }
 
   /** Empieza una partida con los jugadores ya elegidos en React. */
-  startMatch(configs: MatchPlayerConfig[]): void {
-    if (!this.ready || configs.length === 0) return;
+  startMatch(configs: MatchPlayerConfig[]): boolean {
+    if (!this.ready || configs.length === 0) return false;
+
+    // Nunca se descarta a un jugador en silencio: un sprite que no llegó a
+    // cargarse dejaría la partida en 1v0 y el HUD repartiría los paneles con
+    // otro número de jugadores. Mejor abortar y avisar para volver al roster.
+    const missing = configs.filter(
+      (config) => !this.assets.has(config.pokemonId)
+    );
+    if (missing.length > 0) {
+      const ids = [...new Set(missing.map((config) => config.pokemonId))];
+      this.callbacks.onError(
+        `No se pudo cargar el sprite de ${ids.join(', ')}. Vuelve al roster e inténtalo de nuevo.`
+      );
+      return false;
+    }
+
     this.clearMatch();
 
-    const valid = configs
-      .filter((config) => this.assets.has(config.pokemonId))
-      .slice(0, MAX_PLAYERS);
-    if (valid.length === 0) return;
+    // El lobby ya limita el número de jugadores; se recorta por seguridad.
+    const valid = configs.slice(0, MAX_PLAYERS);
+    if (valid.length === 0) return false;
 
     this.mode = 'match';
     this.paused = false;
@@ -413,6 +464,7 @@ export class Game {
         actionPlayback: 1,
         moveLockTimer: 0,
         actionAnimation: null,
+        castLockTimer: 0,
         dash: null,
         pendingCast: null,
         deathFade: 0,
@@ -420,7 +472,7 @@ export class Game {
         deaths: 0,
         cooldowns: [0, 0, 0, 0],
         buffs: [],
-        slowTimer: 0,
+        slowEffects: [],
         slowMultiplier: 1,
         abilityIds: [...moveset]
       });
@@ -467,6 +519,7 @@ export class Game {
     this.refreshSunShadows();
 
     this.callbacks.onMatchStats([]);
+    return true;
   }
 
   /** Vuelve al menú de selección y destruye la partida actual. */
@@ -486,6 +539,8 @@ export class Game {
     this.projectiles = [];
     this.activeAoes = [];
     this.pendingMeleeHits = [];
+    this.queuedCasts = [];
+    this.pendingInstantHits = [];
     this.combatFx.clear();
     this.damageNumbers.clear();
     this.teamScores = { blue: 0, red: 0 };
@@ -623,11 +678,23 @@ export class Game {
         frame.snapshots.get(player.deviceId) ?? IDLE_INPUT,
         dt
       );
+      // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
+      // el resto de jugadores no debería seguir actuando.
+      if (this.matchOver) break;
     }
 
-    this.resolveMeleeHits();
-    this.updateProjectiles(dt);
-    this.updateActiveAoes(dt);
+    // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
+    // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
+    if (!this.matchOver) {
+      // Las acciones instantáneas (haces, áreas, melee y dashes) se resuelven
+      // aquí, después de que todos los jugadores hayan avanzado su turno: el
+      // orden de `matchPlayers` ya no decide quién golpea primero.
+      this.resolveQueuedCasts();
+      if (!this.matchOver) this.resolveInstantHits();
+      if (!this.matchOver) this.resolveMeleeHits();
+      if (!this.matchOver) this.updateProjectiles(dt);
+      if (!this.matchOver) this.updateActiveAoes(dt);
+    }
 
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
     // la cámara del viewport que la va a dibujar.
@@ -681,9 +748,12 @@ export class Game {
     }
     for (const buff of player.buffs) buff.duration -= dt;
     player.buffs = player.buffs.filter((buff) => buff.duration > 0);
-    if (player.slowTimer > 0) {
-      player.slowTimer = Math.max(0, player.slowTimer - dt);
-      if (player.slowTimer === 0) player.slowMultiplier = 1;
+    if (player.slowEffects.length > 0) {
+      for (const effect of player.slowEffects) effect.remaining -= dt;
+      player.slowEffects = player.slowEffects.filter(
+        (effect) => effect.remaining > 0
+      );
+      this.refreshSlowMultiplier(player);
     }
     if (player.invulnerableTimer > 0) {
       player.invulnerableTimer = Math.max(0, player.invulnerableTimer - dt);
@@ -693,6 +763,9 @@ export class Game {
     }
     if (player.hurtTimer > 0) player.hurtTimer = Math.max(0, player.hurtTimer - dt);
     if (player.actionTimer > 0) player.actionTimer = Math.max(0, player.actionTimer - dt);
+    if (player.castLockTimer > 0) {
+      player.castLockTimer = Math.max(0, player.castLockTimer - dt);
+    }
     if (player.moveLockTimer > 0) {
       player.moveLockTimer = Math.max(0, player.moveLockTimer - dt);
     }
@@ -921,6 +994,9 @@ export class Game {
     input: DeviceInputSnapshot,
     dt: number
   ): boolean {
+    // La partida pudo terminar en una fase anterior del mismo frame: la
+    // preparación no debe seguir avanzando ni llegar a ejecutarse.
+    if (this.matchOver) return true;
     const pending = player.pendingCast;
     if (!pending) return false;
 
@@ -959,12 +1035,7 @@ export class Game {
 
     if (pending.elapsed >= pending.windup) {
       this.cancelPendingCast(player);
-      this.executeAbility(
-        player,
-        pending.def,
-        pending.targetX,
-        pending.targetZ
-      );
+      this.queueCast(player, pending.def, pending.targetX, pending.targetZ);
     }
 
     if (!movable) {
@@ -979,6 +1050,8 @@ export class Game {
     input: DeviceInputSnapshot,
     dt: number
   ): boolean {
+    // Igual que la preparación: un dash en curso no sigue tras el final.
+    if (this.matchOver) return true;
     const dash = player.dash;
     if (!dash) return false;
 
@@ -986,18 +1059,26 @@ export class Game {
     const previousZ = player.z;
     dash.elapsed += dt;
 
+    // El último frame no recorre `speed * dt` completos: se limita al resto de
+    // la distancia para que el dash acabe exactamente en `distance`. Antes el
+    // paso no se limitaba y el desplazamiento real podía superarla hasta en un
+    // frame entero, alcanzando objetivos fuera del radio previsto.
+    const remaining = Math.max(0, dash.distance - dash.traveled);
+    const stepDistance = Math.min(dash.speed * dt, remaining);
     const next = this.dashPosition(
       player,
       player.x,
       player.z,
       dash.dirX,
       dash.dirZ,
-      dash.speed * dt
+      stepDistance
     );
     player.x = next.x;
     player.z = next.z;
     const moved = Math.hypot(player.x - previousX, player.z - previousZ);
+    dash.traveled += moved;
 
+    const dashReach = Math.max(0.5, dash.def.radius) + CONFIG.player.radius;
     for (const target of this.matchPlayers) {
       if (dash.hit.has(target) || !this.canHit(player, target)) continue;
       const distance = pointSegmentDistance(
@@ -1008,10 +1089,38 @@ export class Game {
         player.x,
         player.z
       );
-      if (distance <= Math.max(0.5, dash.def.radius) + CONFIG.player.radius) {
-        dash.hit.add(target);
-        this.applyAbilityDamage(player, target, dash.def);
+      if (distance > dashReach) continue;
+      // El golpe no atraviesa un obstáculo que se interponga entre el tramo
+      // recorrido y el objetivo, aunque esté dentro del radio del dash.
+      const closest = closestPointOnSegment(
+        target.x,
+        target.z,
+        previousX,
+        previousZ,
+        player.x,
+        player.z
+      );
+      if (
+        segmentBlockedByColliders(
+          closest.x,
+          closest.z,
+          target.x,
+          target.z,
+          this.world.colliders
+        )
+      ) {
+        continue;
       }
+      dash.hit.add(target);
+      // El impacto se aplica en la fase común: si este dash mata al rival
+      // antes de que le toque actuar, el orden de los jugadores volvería a
+      // decidir el intercambio.
+      this.pendingInstantHits.push({
+        attacker: player,
+        target,
+        def: dash.def,
+        healToken: dash.healToken
+      });
     }
 
     dash.trailTimer -= dt;
@@ -1048,8 +1157,10 @@ export class Game {
     if (player.submerge < 0.0005) player.submerge = 0;
 
     // Si un obstáculo dinámico detiene el avance, el dash termina en el acto
-    // en vez de quedarse reproduciendo la animación en el sitio.
-    const expected = dash.speed * dt;
+    // en vez de quedarse reproduciendo la animación en el sitio. Se compara
+    // con el paso pedido de este frame, no con `speed * dt`, porque el último
+    // paso puede ser más corto por la distancia restante.
+    const expected = stepDistance;
     if (dash.elapsed > dt && expected > 0.001 && moved < expected * 0.2) {
       player.dash = null;
       player.vx = 0;
@@ -1059,7 +1170,11 @@ export class Game {
       return true;
     }
 
-    if (dash.elapsed >= dash.duration) {
+    // El dash acaba al llegar a su distancia o al agotar la duración. Con el
+    // paso limitado, la distancia se alcanza como muy tarde en el mismo frame
+    // que la duración, así que no queda desplazamiento pendiente.
+    const arrived = dash.traveled >= dash.distance - 0.001;
+    if (arrived || dash.elapsed >= dash.duration) {
       player.dash = null;
       player.vx = 0;
       player.vz = 0;
@@ -1094,17 +1209,24 @@ export class Game {
     player.hurtTimer = 0;
     player.actionTimer = 0;
     player.actionPlayback = 1;
+    player.actionAnimation = null;
     player.moveLockTimer = 0;
+    player.castLockTimer = 0;
     player.dash = null;
     this.cancelPendingCast(player);
     player.deathFade = 0;
     player.cooldowns = [0, 0, 0, 0];
     player.buffs = [];
-    player.slowTimer = 0;
+    player.slowEffects = [];
     player.slowMultiplier = 1;
     player.animation = 'idle';
     player.playback = 1;
+    // El HUD lee estos campos hasta el primer frame de movimiento: deben
+    // reflejar el terreno del spawn nuevo, no el de la vida anterior.
     player.terrain = terrainAt(player.x, player.z);
+    const terrainEffect = terrainSpeedEffect(player.terrain, player.types);
+    player.terrainMultiplier = terrainEffect.multiplier;
+    player.terrainSpeedReason = terrainEffect.reason;
     player.concealment = terrainConcealment(player.terrain, player.types);
     player.submerge = 0;
     this.combatFx.spawnBuff(player.x, player.z, [255, 255, 255], 1.1);
@@ -1119,6 +1241,13 @@ export class Game {
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
     if (!player.alive || this.matchOver) return;
     if (player.pendingCast || player.dash) return;
+    // Las habilidades instantáneas de este frame aún no se han ejecutado: sin
+    // esta comprobación se podrían encolar dos (p. ej. dash + haz) pulsando
+    // dos botones a la vez, y se gastarían ambos enfriamientos.
+    if (this.hasQueuedCast(player)) return;
+    // Bloqueo global de casteo: durante la recuperación de la habilidad
+    // anterior no se puede lanzar otra, sea cual sea el hueco.
+    if (player.castLockTimer > 0) return;
     const abilityId = player.abilityIds[slotIndex];
     if (!abilityId) return;
     const def = ABILITIES[abilityId];
@@ -1126,6 +1255,12 @@ export class Game {
     if (player.cooldowns[slotIndex] > 0.0001) return;
 
     player.cooldowns[slotIndex] = def.cooldown;
+    // Recuperación global: tras lanzar una habilidad no melee no se puede
+    // encadenar otra hasta que pase su `castTime`. Las melee se limitan con su
+    // cooldown y `moveLock`, y no deben alargar su cadencia.
+    if (def.shape !== 'melee') {
+      player.castLockTimer = def.castTime;
+    }
     // Solo las habilidades con animación propia ocupan el canal de acción;
     // sin animación el Pokémon conserva su reposo o su caminar.
     player.actionTimer = def.animation === null ? 0 : def.animationTime;
@@ -1156,16 +1291,32 @@ export class Game {
       }
       const dirX = Math.sin(player.facing);
       const dirZ = Math.cos(player.facing);
-      const targetX = player.x + dirX * def.range;
-      const targetZ = player.z + dirZ * def.range;
+      // Las habilidades de área no se pueden colocar detrás de un obstáculo:
+      // el centro se detiene antes del primer collider.
+      const reach =
+        def.shape === 'aoe'
+          ? raycastColliderDistance(
+              player.x,
+              player.z,
+              dirX,
+              dirZ,
+              def.range,
+              this.world.colliders,
+              CONFIG.combat.aoeSightPadding
+            )
+          : def.range;
+      const targetX = player.x + dirX * reach;
+      const targetZ = player.z + dirZ * reach;
       // Las habilidades de área fijan su centro al empezar el retardo y
-      // muestran la marca en el suelo hasta el impacto.
+      // muestran la marca en el suelo hasta el impacto. La marca incluye el
+      // radio del jugador porque el daño también lo suma: así el borde dibujado
+      // es el borde real y no se puede golpear a quien se ve claramente fuera.
       const marker =
         def.shape === 'aoe'
           ? this.combatFx.spawnAoeTelegraph(
               targetX,
               targetZ,
-              def.radius,
+              def.radius + CONFIG.player.radius,
               def.color,
               def.windup
             )
@@ -1182,7 +1333,39 @@ export class Game {
       return;
     }
 
-    this.executeAbility(player, def);
+    this.queueCast(player, def);
+  }
+
+  /** ¿Tiene este jugador una habilidad instantánea esperando resolución? */
+  private hasQueuedCast(player: MatchPlayerState): boolean {
+    return this.queuedCasts.some((cast) => cast.player === player);
+  }
+
+  /**
+   * Aplaza la ejecución de una habilidad hasta la fase común del final del
+   * frame. La preparación y el enfriamiento se cobran en el acto; el efecto
+   * (daño, control, proyectil, área o dash) espera a que todos los jugadores
+   * hayan tenido su turno.
+   */
+  private queueCast(
+    player: MatchPlayerState,
+    def: AbilityDef,
+    targetX?: number,
+    targetZ?: number
+  ): void {
+    this.queuedCasts.push({ player, def, targetX, targetZ });
+  }
+
+  /** Ejecuta las habilidades instantáneas encoladas en orden de lanzamiento. */
+  private resolveQueuedCasts(): void {
+    if (this.queuedCasts.length === 0) return;
+    const casts = this.queuedCasts;
+    this.queuedCasts = [];
+    for (const cast of casts) {
+      // Un golpe anterior de esta misma tanda pudo cerrar la partida.
+      if (this.matchOver) break;
+      this.executeAbility(cast.player, cast.def, cast.targetX, cast.targetZ);
+    }
   }
 
   /** Ejecuta el efecto de una habilidad cuando termina su preparación. */
@@ -1194,9 +1377,14 @@ export class Game {
   ): void {
     // El lock y el clip de ataque empiezan cuando la habilidad se ejecuta de
     // verdad (tras el windup, si lo tiene). En las melee ambos duran lo mismo.
+    // Reiniciar el clip vale para todas las formas: si `windup > animationTime`
+    // (por ejemplo, Ataque Celeste), el temporizador arrancado en `castAbility`
+    // se agotaba durante la preparación y la animación de lanzamiento no
+    // llegaba a verse nunca.
     player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
-    if (def.shape === 'melee' && def.animation !== null) {
+    if (def.animation !== null) {
       player.actionTimer = def.animationTime;
+      player.actionAnimation = def.animation;
       player.actionPlayback = this.animationPlaybackFor(
         player,
         def.animation,
@@ -1212,6 +1400,12 @@ export class Game {
       combatFx: this.combatFx,
       showHealPopup: (target, amount) => this.showHealPopup(target, amount)
     });
+
+    // Un solo token por lanzamiento: si la forma golpea a varios rivales o
+    // tiene varios ticks, `healOnHit` cura una única vez, no por impacto.
+    const healToken: HealOnHitToken | undefined = def.healOnHit
+      ? { healed: false }
+      : undefined;
 
     const deps: AbilityExecutorDeps = {
       combatFx: this.combatFx,
@@ -1229,10 +1423,7 @@ export class Game {
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
       addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
-      healOnHit: (attacker, ability) =>
-        applyHealSelf(attacker, ability, this.combatFx, (target, amount) =>
-          this.showHealPopup(target, amount)
-        )
+      healToken
     };
 
     ABILITY_EXECUTORS[def.shape](player, def, deps, targetX, targetZ);
@@ -1266,15 +1457,61 @@ export class Game {
     );
   }
 
-  /** Aplica (o refresca) la ralentización de una habilidad de estado. */
+  /**
+   * Aplica una ralentización de estado. Cada lanzador/habilidad mantiene un
+   * único efecto: los ticks de un área no renuevan la duración. Los efectos de
+   * distinto origen conviven con su propio tiempo y solo el más fuerte (el
+   * multiplicador más bajo) marca la velocidad actual.
+   */
   private applySlow(
+    attacker: MatchPlayerState,
     target: MatchPlayerState,
+    def: AbilityDef,
     slow: SlowSpec,
     color: readonly [number, number, number]
   ): void {
-    target.slowTimer = Math.max(target.slowTimer, slow.duration);
-    target.slowMultiplier = Math.min(target.slowMultiplier, slow.multiplier);
+    if (slow.duration <= 0) return;
+    const source = `${attacker.slot}:${def.id}`;
+    if (target.slowEffects.some((effect) => effect.source === source)) return;
+    const effect: SlowEffect = {
+      source,
+      multiplier: slow.multiplier,
+      remaining: slow.duration
+    };
+    target.slowEffects.push(effect);
+    this.refreshSlowMultiplier(target);
     this.combatFx.spawnBuff(target.x, target.z, color, 0.95);
+  }
+
+  /** Recalcula la velocidad con la ralentización más fuerte que siga activa. */
+  private refreshSlowMultiplier(target: MatchPlayerState): void {
+    target.slowMultiplier = target.slowEffects.reduce(
+      (slowest, effect) => Math.min(slowest, effect.multiplier),
+      1
+    );
+  }
+
+  /**
+   * Control de un golpe que conecta: cancela dash y preparación, bloquea el
+   * movimiento un instante y empuja si la habilidad lo indica. Lo comparten las
+   * habilidades dañinas y las de estado: en ambos casos el objetivo ha recibido
+   * un impacto válido.
+   */
+  private applyHitControl(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef,
+    control: boolean
+  ): void {
+    if (!control) return;
+    target.actionTimer = 0;
+    target.moveLockTimer = 0;
+    target.dash = null;
+    this.cancelPendingCast(target);
+    target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
+    if (def.knockback > 0) {
+      this.applyKnockback(target, attacker.x, attacker.z, def.knockback);
+    }
   }
 
   /**
@@ -1297,17 +1534,32 @@ export class Game {
     attacker: MatchPlayerState,
     target: MatchPlayerState,
     def: AbilityDef,
-    options: { power?: number; control?: boolean } = {}
-  ): void {
+    options: {
+      power?: number;
+      control?: boolean;
+      healToken?: HealOnHitToken;
+    } = {}
+  ): boolean {
     const power = options.power ?? def.power;
     const damaging = power > 0 && def.category !== 'status';
-    if (!rollAccuracy(def.accuracy)) return;
+    if (!rollAccuracy(def.accuracy)) return false;
+
+    // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
+    // impacto, ni control. Así `Onda Trueno` no ralentiza a un Pokémon de tipo
+    // Tierra ni `Bomba Lodo` ralentiza a Lucario aunque el daño sea 0.
+    if (typeEffectiveness(def.type, target.types) === 0) return false;
 
     // La ralentización se aplica aunque la habilidad no haga daño (Paralizador).
     if (def.slow && target.alive) {
-      this.applySlow(target, def.slow, def.color);
+      this.applySlow(attacker, target, def, def.slow, def.color);
     }
-    if (!damaging) return;
+
+    // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:
+    // cancela dash y preparación igual que una dañina, como describe el README.
+    if (!damaging) {
+      this.applyHitControl(attacker, target, def, options.control ?? true);
+      return false;
+    }
 
     const critical = rollCritical();
     const category = def.category === 'physical' ? 'physical' : 'special';
@@ -1326,6 +1578,8 @@ export class Game {
       randomFactor: rollRandomFactor()
     });
 
+    // La inmunidad ya se ha descartado arriba, así que un golpe dañino válido
+    // siempre resta al menos 1 PV y puede mostrar su impacto y su número.
     this.combatFx.spawnImpact(
       target.x,
       target.z,
@@ -1337,27 +1591,24 @@ export class Game {
 
     // Los ticks de un área no controlan al objetivo: solo restan vida y
     // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
-    // Una inmunidad (daño 0) deja un impacto visual, pero no interrumpe: no
-    // debe cancelar habilidades ni aplicar hitstun.
-    if (result.damage <= 0) return;
-
     const control = options.control ?? true;
-    if (control) {
-      target.actionTimer = 0;
-      target.moveLockTimer = 0;
-      target.dash = null;
-      this.cancelPendingCast(target);
-    }
+    this.applyHitControl(attacker, target, def, control);
 
     target.hp = Math.max(0, target.hp - result.damage);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
-    if (control) {
-      target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
-      if (def.knockback > 0) {
-        this.applyKnockback(target, attacker.x, attacker.z, def.knockback);
-      }
-    }
     if (target.hp <= 0) this.knockOut(target, attacker);
+
+    // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida
+    // de verdad. Así funciona en todas las formas (melee, proyectil, haz, área
+    // y dash) y una tirada fallida o un objetivo inmune no curan. El token hace
+    // que un lanzamiento con varios impactos o ticks cure una sola vez.
+    if (def.healOnHit && options.healToken && !options.healToken.healed) {
+      options.healToken.healed = true;
+      applyHealSelf(attacker, def, this.combatFx, (healed, amount) =>
+        this.showHealPopup(healed, amount)
+      );
+    }
+    return true;
   }
 
   /**
@@ -1430,6 +1681,10 @@ export class Game {
   }
 
   private knockOut(target: MatchPlayerState, killer: MatchPlayerState): void {
+    // El fin de partida es idempotente: el primer KO que alcanza KO_TARGET
+    // decide el ganador y los KO posteriores del mismo frame ni suman ni
+    // vuelven a llamar a `onMatchEnd`.
+    if (this.matchOver) return;
     if (!target.alive) return;
     const entry = this.assets.get(target.pokemonId)?.entry;
     const deathAnimation = entry?.animations.faint ?? entry?.animations.hurt;
@@ -1445,12 +1700,13 @@ export class Game {
     target.hurtTimer = 0;
     target.actionTimer = 0;
     target.moveLockTimer = 0;
+    target.castLockTimer = 0;
     target.dash = null;
     this.cancelPendingCast(target);
     target.vx = 0;
     target.vz = 0;
     target.buffs = [];
-    target.slowTimer = 0;
+    target.slowEffects = [];
     target.slowMultiplier = 1;
     target.animation = entry?.animations.faint ? 'faint' : 'hurt';
     target.playback = 1;
@@ -1474,36 +1730,98 @@ export class Game {
   }
 
   private updateProjectiles(dt: number): void {
+    // Un KO en un paso anterior del frame cancela los proyectiles restantes.
+    if (this.matchOver) return;
     for (let index = this.projectiles.length - 1; index >= 0; index--) {
+      // Un impacto de este mismo frame pudo cerrar la partida.
+      if (this.matchOver) return;
       const projectile = this.projectiles[index];
-      projectile.x += projectile.vx * dt;
-      projectile.z += projectile.vz * dt;
-      projectile.traveled += Math.hypot(projectile.vx, projectile.vz) * dt;
+      const previousX = projectile.x;
+      const previousZ = projectile.z;
+      // El último tramo se recorta al alcance restante para que el proyectil
+      // termine siempre exactamente en `range`. Sin este recorte, a 20 FPS la
+      // muestra final podía saltar de 8 a 9 u, no comprobar ese tramo y
+      // desaparecer: el alcance efectivo dependía del framerate.
+      const advance = Math.hypot(projectile.vx, projectile.vz) * dt;
+      const remaining = Math.max(0, projectile.def.range - projectile.traveled);
+      const step = Math.min(advance, remaining);
+      const exhausted = step >= remaining;
+      const reach = advance > 0 ? step / advance : 0;
+      projectile.x += projectile.vx * dt * reach;
+      projectile.z += projectile.vz * dt * reach;
+      projectile.traveled += step;
       projectile.visual.setPosition(projectile.x, projectile.z);
       projectile.visual.update(dt);
       const bounds = this.world.bounds;
+      // Se comprueba todo el tramo recorrido, no solo la posición final: a
+      // 20 FPS (dt 0,05) el shuriken de Greninja avanza 1 u por frame y podía
+      // atravesar un árbol de ~0,22 u de radio sin que el punto final tocara
+      // nada. El padding es el radio del proyectil, igual que antes.
+      const blocked = segmentBlockedByColliders(
+        previousX,
+        previousZ,
+        projectile.x,
+        projectile.z,
+        this.world.colliders,
+        Math.max(0.05, projectile.def.radius)
+      );
       if (
         Math.abs(projectile.x) > bounds.x ||
         Math.abs(projectile.z) > bounds.z ||
-        this.projectileBlocked(projectile) ||
-        projectile.traveled >= projectile.def.range
+        blocked
       ) {
         this.removeProjectile(index);
         continue;
       }
 
+      const hitRadius = CONFIG.player.radius + projectile.def.radius;
       let removed = false;
       for (const target of this.matchPlayers) {
+        if (this.matchOver) break;
         if (!this.canHit(projectile.owner, target)) continue;
         if (projectile.hit.has(target)) continue;
-        const distance = Math.hypot(
-          target.x - projectile.x,
-          target.z - projectile.z
+        // La distancia se mide contra todo el tramo recorrido, no solo contra
+        // la posición final: con pasos largos un roce lateral podía caer entre
+        // dos muestras y perderse.
+        if (
+          pointSegmentDistance(
+            target.x,
+            target.z,
+            previousX,
+            previousZ,
+            projectile.x,
+            projectile.z
+          ) > hitRadius
+        ) {
+          continue;
+        }
+        // La línea desde el punto de contacto hasta el objetivo tampoco puede
+        // cruzar un obstáculo: un impacto justo al otro lado de un muro no
+        // cuenta.
+        const contact = closestPointOnSegment(
+          target.x,
+          target.z,
+          previousX,
+          previousZ,
+          projectile.x,
+          projectile.z
         );
-        if (distance > CONFIG.player.radius + projectile.def.radius) continue;
+        if (
+          segmentBlockedByColliders(
+            contact.x,
+            contact.z,
+            target.x,
+            target.z,
+            this.world.colliders
+          )
+        ) {
+          continue;
+        }
 
         projectile.hit.add(target);
-        this.applyAbilityDamage(projectile.owner, target, projectile.def);
+        this.applyAbilityDamage(projectile.owner, target, projectile.def, {
+          healToken: projectile.healToken
+        });
         if (projectile.pierce > 0) {
           projectile.pierce -= 1;
         } else {
@@ -1513,6 +1831,8 @@ export class Game {
         }
       }
       if (removed) continue;
+      // El alcance se agota después de revisar el tramo final, no antes.
+      if (exhausted) this.removeProjectile(index);
     }
   }
 
@@ -1522,6 +1842,9 @@ export class Game {
    * segundo, así que cada tick usa `power × aoeTickInterval`.
    */
   private updateActiveAoes(dt: number): void {
+    // Si un tick de un área cierra la partida, las áreas restantes no siguen
+    // repartiendo daño hasta el siguiente frame (que ya no se simula).
+    if (this.matchOver) return;
     for (let index = this.activeAoes.length - 1; index >= 0; index--) {
       const aoe = this.activeAoes[index];
       aoe.elapsed += dt;
@@ -1545,11 +1868,28 @@ export class Game {
 
   private tickAoe(aoe: ActiveAoe): void {
     const basePower = aoe.def.power * aoe.tickInterval;
-    if (basePower <= 0) return;
+    // Un tick sin daño puede seguir aplicando un estado, como un charco que
+    // solo ralentiza. Solo se descarta si no queda nada que aplicar: antes
+    // `basePower <= 0` cortaba también esos efectos de estado.
+    if (basePower <= 0 && !aoe.def.slow) return;
     for (const target of this.matchPlayers) {
+      if (this.matchOver) break;
       if (!this.canHit(aoe.owner, target)) continue;
       const distance = Math.hypot(target.x - aoe.x, target.z - aoe.z);
       if (distance > aoe.radius + CONFIG.player.radius) continue;
+      // El área se apoya en el suelo, pero sigue sin atravesar un obstáculo
+      // entre su centro y el objetivo.
+      if (
+        segmentBlockedByColliders(
+          aoe.x,
+          aoe.z,
+          target.x,
+          target.z,
+          this.world.colliders
+        )
+      ) {
+        continue;
+      }
       const radial = this.radialDamageMultiplier(
         aoe.def,
         distance,
@@ -1557,7 +1897,26 @@ export class Game {
       );
       this.applyAbilityDamage(aoe.owner, target, aoe.def, {
         power: basePower * radial,
-        control: false
+        control: false,
+        healToken: aoe.healToken
+      });
+    }
+  }
+
+  /**
+   * Aplica los golpes de dash del frame. La detección ya ocurrió durante el
+   * movimiento; aquí solo se revalida que el objetivo siga siendo golpeable y
+   * se aplica el daño, después de que todos los jugadores hayan actuado.
+   */
+  private resolveInstantHits(): void {
+    if (this.pendingInstantHits.length === 0) return;
+    const hits = this.pendingInstantHits;
+    this.pendingInstantHits = [];
+    for (const hit of hits) {
+      if (this.matchOver) break;
+      if (!this.canHit(hit.attacker, hit.target)) continue;
+      this.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
+        healToken: hit.healToken
       });
     }
   }
@@ -1567,20 +1926,58 @@ export class Game {
   }
 
   /**
+   * Un golpe melee pendiente sigue siendo válido si el atacante vive, el
+   * objetivo se puede golpear, ambos siguen dentro del rango y del cono y no
+   * hay ningún obstáculo entre ellos. Se usa tanto para emparejar choques como
+   * para aplicar el daño: así un golpe caducado (atacante muerto, objetivo
+   * invulnerable o al otro lado de un muro) no puede anular el golpe rival.
+   */
+  private meleeHitValid(hit: PendingMeleeHit): boolean {
+    const { attacker, target, def } = hit;
+    if (!attacker.alive || !this.canHit(attacker, target)) return false;
+    const dx = target.x - attacker.x;
+    const dz = target.z - attacker.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance > def.range + CONFIG.player.radius) return false;
+    if (distance >= 0.001) {
+      const delta = Math.abs(angleDelta(Math.atan2(dx, dz), attacker.facing));
+      if (delta > def.halfAngle * DEG) return false;
+    }
+    return !segmentBlockedByColliders(
+      attacker.x,
+      attacker.z,
+      target.x,
+      target.z,
+      this.world.colliders,
+      CONFIG.combat.meleeSightPadding
+    );
+  }
+
+  /**
    * Resuelve los golpes melee del frame. Si dos rivales se golpean mutuamente,
    * se produce un choque: ninguno recibe daño, ambos reciben un stun corto y
    * retroceden. Así dos Placajes simultáneos no se intercambian gratis.
    */
   private resolveMeleeHits(): void {
+    // La partida pudo terminar antes de esta fase; los golpes pendientes se
+    // descartan para no dañar a nadie tras el resultado.
+    if (this.matchOver) {
+      this.pendingMeleeHits = [];
+      return;
+    }
     if (this.pendingMeleeHits.length === 0) return;
     const hits = this.pendingMeleeHits;
     this.pendingMeleeHits = [];
+    // Solo los golpes que siguen siendo válidos pueden emparejarse en un
+    // choque. Antes se emparejaban sin comprobar nada, así que un atacante
+    // muerto o un objetivo invulnerable podía anular el golpe del rival.
+    const validHits = hits.filter((hit) => this.meleeHitValid(hit));
     const clashPairs = new Set<string>();
 
-    for (const hit of hits) {
+    for (const hit of validHits) {
       const key = this.meleePairKey(hit.attacker, hit.target);
       if (clashPairs.has(key)) continue;
-      const reverse = hits.some(
+      const reverse = validHits.some(
         (other) =>
           other.attacker === hit.target && other.target === hit.attacker
       );
@@ -1622,37 +2019,15 @@ export class Game {
     }
 
     for (const hit of hits) {
+      // Un golpe anterior de esta misma tanda pudo cerrar la partida.
+      if (this.matchOver) break;
       if (clashPairs.has(this.meleePairKey(hit.attacker, hit.target))) continue;
-      if (!hit.attacker.alive || !this.canHit(hit.attacker, hit.target)) continue;
-
       // El objetivo puede haberse movido en este mismo frame (dash, empuje de
-      // otro golpe...). Se vuelve a validar el cono antes de aplicar el daño.
-      const dx = hit.target.x - hit.attacker.x;
-      const dz = hit.target.z - hit.attacker.z;
-      const distance = Math.hypot(dx, dz);
-      if (distance > hit.def.range + CONFIG.player.radius) continue;
-      if (distance >= 0.001) {
-        const delta = Math.abs(
-          angleDelta(Math.atan2(dx, dz), hit.attacker.facing)
-        );
-        if (delta > hit.def.halfAngle * DEG) continue;
-      }
-
-      // También se vuelve a comprobar el separador: si el objetivo terminó al
-      // otro lado de un muro durante el frame, el golpe no debe colar.
-      if (
-        segmentBlockedBySeparator(
-          hit.attacker.x,
-          hit.attacker.z,
-          hit.target.x,
-          hit.target.z,
-          this.world.colliders
-        )
-      ) {
-        continue;
-      }
-
-      this.applyAbilityDamage(hit.attacker, hit.target, hit.def);
+      // otro golpe...), así que se revalida todo antes de aplicar el daño.
+      if (!this.meleeHitValid(hit)) continue;
+      this.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
+        healToken: hit.healToken
+      });
     }
   }
 
@@ -1678,15 +2053,6 @@ export class Game {
     );
     target.x = resolved.x;
     target.z = resolved.z;
-  }
-
-  private projectileBlocked(projectile: Projectile): boolean {
-    return pointBlockedByColliders(
-      projectile.x,
-      projectile.z,
-      this.world.colliders,
-      Math.max(0.05, projectile.def.radius)
-    );
   }
 
   private removeProjectile(index: number): void {
@@ -1757,6 +2123,42 @@ export class Game {
   }
 
   /**
+   * Capas de las vistas que deben dibujar un FX situado en `(x, z)`.
+   *
+   * Un efecto usa la misma regla que un actor: entra en la vista si el punto
+   * cae dentro del rango efectivo del observador (descontando la ocultación
+   * del terreno) y no hay una montaña o un árbol entre medias. Así la niebla
+   * tapa también proyectiles, haces, áreas e impactos, no solo los sprites.
+   * Devuelve `[]` cuando ninguna vista lo ve: el efecto no se dibuja.
+   */
+  private fxLayersAt(x: number, z: number): number[] {
+    if (this.mode !== 'match' || this.matchPlayers.length === 0) {
+      return [this.worldLayerId];
+    }
+    const colliders = this.world.colliders;
+    // La ocultación del punto sale del terreno, pero si el ancla cae sobre un
+    // Pokémon se usa la suya (terreno + tipos): así el FX se oculta exactamente
+    // cuando se oculta su sprite, incluso en hierba alta o ciénaga.
+    let concealment = terrainConcealment(terrainAt(x, z), NO_TYPES).value;
+    for (const player of this.matchPlayers) {
+      if (!player.alive) continue;
+      if (Math.hypot(player.x - x, player.z - z) > CONFIG.player.radius + 0.1) {
+        continue;
+      }
+      concealment = Math.max(concealment, player.concealment.value);
+    }
+    const layers: number[] = [];
+    this.matchPlayers.forEach((observer, index) => {
+      const layer = this.viewLayers[index];
+      if (!layer) return;
+      if (isTargetVisible(observer, { x, z }, concealment, colliders)) {
+        layers.push(layer.id);
+      }
+    });
+    return layers;
+  }
+
+  /**
    * Resuelve la niebla de cada vista: oculta las copias que no se ven y coloca
    * el degradado fuera del círculo de visión. La ocultación del objetivo se
    * calcula con el terreno que pisa, no con el del observador.
@@ -1769,13 +2171,17 @@ export class Game {
       const fog = this.fogViews[viewIndex];
       const camera = observer.camera.entity.camera;
       if (fog && camera) {
+        // La niebla se aclara del todo hasta el radio en el que incluso el
+        // objetivo más oculto es visible, y se degrada hasta el rango base.
+        // Así el borde del círculo no promete más visión de la que hay.
         fog.update(
           camera,
           observer.viewport,
           observer.camera.yaw,
           observer.x,
           observer.z,
-          observer.visionRange
+          observer.visionRange,
+          effectiveVisionRange(observer.visionRange, MAX_TERRAIN_CONCEALMENT)
         );
       }
 

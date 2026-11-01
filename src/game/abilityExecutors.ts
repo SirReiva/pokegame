@@ -12,12 +12,12 @@ import { CONFIG, DEG } from './config';
 import {
   angleDelta,
   raycastColliderDistance,
-  segmentBlockedByColliders,
-  segmentBlockedBySeparator
+  segmentBlockedByColliders
 } from './combat';
 import type { CombatFx } from './combatFx';
 import type {
   ActiveAoe,
+  HealOnHitToken,
   MatchPlayerState,
   PendingMeleeHit,
   Projectile
@@ -28,6 +28,8 @@ import type { World } from './world';
 export interface AbilityDamageOptions {
   power?: number;
   control?: boolean;
+  /** Token compartido del lanzamiento para curar como máximo una vez. */
+  healToken?: HealOnHitToken;
 }
 
 /**
@@ -40,12 +42,18 @@ export interface AbilityExecutorDeps {
   readonly world: World;
   readonly matchPlayers: MatchPlayerState[];
   canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean;
+  /**
+   * Aplica daño y devuelve `true` solo si el golpe quitó vida de verdad
+   * (acertó, no era inmune y tenía potencia). Los efectos que dependen del
+   * impacto, como `healOnHit`, usan ese valor en lugar de contar cualquier
+   * intento como acierto.
+   */
   applyAbilityDamage(
     attacker: MatchPlayerState,
     target: MatchPlayerState,
     def: AbilityDef,
     options?: AbilityDamageOptions
-  ): void;
+  ): boolean;
   radialDamageMultiplier(
     def: AbilityDef,
     distance: number,
@@ -67,8 +75,12 @@ export interface AbilityExecutorDeps {
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
-  /** Cura al lanzador de una habilidad con `healOnHit` que ya impactó. */
-  healOnHit(player: MatchPlayerState, def: AbilityDef): void;
+  /**
+   * Token de `healOnHit` del lanzamiento en curso. Las formas que crean
+   * proyectiles, áreas o golpes diferidos lo guardan para que la curación se
+   * aplique cuando el impacto ocurra de verdad.
+   */
+  readonly healToken?: HealOnHitToken;
 }
 
 export type AbilityExecutor = (
@@ -80,26 +92,31 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
+  // El arco dibujado debe cubrir el mismo alcance que el golpe: el chequeo
+  // llega a centros hasta `range + player.radius`, así que sin sumar el radio
+  // el borde visible quedaba 0,42 u por detrás del alcance real.
   deps.combatFx.spawnMelee(
     player.x,
     player.z,
     player.facing,
-    def.range,
+    def.range + CONFIG.player.radius,
     def.halfAngle,
     def.color,
     def.impactStyle
   );
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
-    // Un separador entre ambos corta el golpe: no se puede pegar a través de
-    // una cordillera o un muro aunque el objetivo esté dentro del arco.
+    // Cualquier obstáculo entre ambos corta el golpe: ni cordilleras ni muros,
+    // pero tampoco árboles, rocas o el pedestal de la base. Sin esto se podía
+    // pegar a través de ellos aunque el objetivo estuviera dentro del arco.
     if (
-      segmentBlockedBySeparator(
+      segmentBlockedByColliders(
         player.x,
         player.z,
         target.x,
         target.z,
-        deps.world.colliders
+        deps.world.colliders,
+        CONFIG.combat.meleeSightPadding
       )
     ) {
       continue;
@@ -109,12 +126,22 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
     const distance = Math.hypot(dx, dz);
     if (distance > def.range + CONFIG.player.radius) continue;
     if (distance < 0.001) {
-      deps.addPendingMeleeHit({ attacker: player, target, def });
+      deps.addPendingMeleeHit({
+        attacker: player,
+        target,
+        def,
+        healToken: deps.healToken
+      });
       continue;
     }
     const delta = Math.abs(angleDelta(Math.atan2(dx, dz), player.facing));
     if (delta <= def.halfAngle * DEG) {
-      deps.addPendingMeleeHit({ attacker: player, target, def });
+      deps.addPendingMeleeHit({
+        attacker: player,
+        target,
+        def,
+        healToken: deps.healToken
+      });
     }
   }
 };
@@ -144,7 +171,8 @@ const executeProjectile: AbilityExecutor = (player, def, deps) => {
     traveled: 0,
     pierce: def.pierce,
     hit: new Set(),
-    visual
+    visual,
+    healToken: deps.healToken
   });
 };
 
@@ -175,7 +203,6 @@ const executeBeam: AbilityExecutor = (player, def, deps) => {
     Math.max(0.08, def.radius),
     def.beamStyle
   );
-  let hitAny = false;
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     // Comprobación en el marco del haz: el objetivo debe estar delante del
@@ -198,19 +225,39 @@ const executeBeam: AbilityExecutor = (player, def, deps) => {
     ) {
       continue;
     }
-    deps.applyAbilityDamage(player, target, def);
-    hitAny = true;
+    // La curación de Come Sueños la resuelve `applyAbilityDamage` solo si el
+    // golpe quita vida de verdad, y como mucho una vez por lanzamiento.
+    deps.applyAbilityDamage(player, target, def, {
+      healToken: deps.healToken
+    });
   }
-  // La curación de Come Sueños solo se activa si el haz encontró un enemigo.
-  if (hitAny && def.healOnHit) deps.healOnHit(player, def);
 };
 
 const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const dirX = Math.sin(player.facing);
   const dirZ = Math.cos(player.facing);
-  const centerX = targetX ?? player.x + dirX * def.range;
-  const centerZ = targetZ ?? player.z + dirZ * def.range;
+  // El centro no puede quedar detrás de un obstáculo: se detiene antes del
+  // primer collider para que el telegraph y el daño coincidan con lo que ve el
+  // jugador.
+  const reach = Math.min(
+    def.range,
+    raycastColliderDistance(
+      player.x,
+      player.z,
+      dirX,
+      dirZ,
+      def.range,
+      deps.world.colliders,
+      CONFIG.combat.aoeSightPadding
+    )
+  );
+  const centerX = targetX ?? player.x + dirX * reach;
+  const centerZ = targetZ ?? player.z + dirZ * reach;
   const duration = Math.max(0.1, def.aoeDuration);
+  // El efecto muestra el disco de daño real (`def.radius`). La marca del suelo
+  // que se dibuja durante el windup añade el radio del jugador en `game.ts`:
+  // esa es la zona en la que el centro de un objetivo recibe el golpe. Así el
+  // aviso nunca es más pequeño que la zona de impacto.
   deps.combatFx.spawnAoe(
     centerX,
     centerZ,
@@ -230,19 +277,33 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       elapsed: 0,
       duration,
       tickInterval,
-      tickTimer: 0
+      tickTimer: 0,
+      healToken: deps.healToken
     });
     return;
   }
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     const distance = Math.hypot(target.x - centerX, target.z - centerZ);
-    if (distance <= def.radius + CONFIG.player.radius) {
-      const radial = deps.radialDamageMultiplier(def, distance, def.radius);
-      deps.applyAbilityDamage(player, target, def, {
-        power: def.power * radial
-      });
+    if (distance > def.radius + CONFIG.player.radius) continue;
+    // Un obstáculo entre el centro del área y el objetivo también corta el
+    // golpe: el radio no debe atravesar un árbol, una roca o un muro.
+    if (
+      segmentBlockedByColliders(
+        centerX,
+        centerZ,
+        target.x,
+        target.z,
+        deps.world.colliders
+      )
+    ) {
+      continue;
     }
+    const radial = deps.radialDamageMultiplier(def, distance, def.radius);
+    deps.applyAbilityDamage(player, target, def, {
+      power: def.power * radial,
+      healToken: deps.healToken
+    });
   }
 };
 
@@ -282,9 +343,12 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
     dirX,
     dirZ,
     speed,
+    distance,
+    traveled: 0,
     playback,
     trailTimer: 0,
-    hit: new Set()
+    hit: new Set(),
+    healToken: deps.healToken
   };
   player.vx = 0;
   player.vz = 0;

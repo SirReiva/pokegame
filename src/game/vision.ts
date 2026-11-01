@@ -88,6 +88,18 @@ export const CONCEALMENT_TYPE_FACTOR: Record<TerrainRelationReason, number> = {
   neutral: 1
 };
 
+/**
+ * Ocultación máxima que puede alcanzar un objetivo con los datos actuales: el
+ * terreno más denso (hierba alta, 0,45) con el mejor multiplicador de tipo
+ * (afín, ×1,5), limitada por el tope de `CONFIG.vision`. La niebla la usa para
+ * saber hasta dónde puede ver a cualquier objetivo, por oculto que esté.
+ */
+export const MAX_TERRAIN_CONCEALMENT = Math.min(
+  CONFIG.vision.maxConcealment,
+  Math.max(...Object.values(TERRAIN_CONCEALMENT)) *
+    Math.max(...Object.values(CONCEALMENT_TYPE_FACTOR))
+);
+
 export interface Concealment {
   /** Ocultación base del terreno (0-1). */
   base: number;

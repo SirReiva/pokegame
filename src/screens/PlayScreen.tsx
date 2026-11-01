@@ -82,8 +82,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
   useEffect(() => {
     handlersRef.current = {
       onReady: () => {
-        gameRef.current?.startMatch(configsRef.current);
-        setPlaying(true);
+        if (gameRef.current?.startMatch(configsRef.current)) setPlaying(true);
       },
       onProgress: (next) => setProgress(next),
       onError: (message) => setError(message),
@@ -184,10 +183,10 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
   };
 
   const rematch = () => {
+    if (!gameRef.current?.startMatch(configsRef.current)) return;
     setMatchResult(null);
     setStats([]);
     setPaused(false);
-    gameRef.current?.startMatch(configsRef.current);
   };
 
   const selectedEntryFor = (pokemonId: string) =>

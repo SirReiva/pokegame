@@ -21,6 +21,28 @@ export interface ActiveBuff {
   duration: number;
 }
 
+/**
+ * Seguimiento de la curación por impacto de un mismo lanzamiento. Lo comparten
+ * todos los golpes de la habilidad (varios objetivos, varios ticks o impactos
+ * de un dash) para que `healOnHit` cure una sola vez aunque alcance a más de un
+ * rival.
+ */
+export interface HealOnHitToken {
+  healed: boolean;
+}
+
+/**
+ * Ralentización activa con su propio tiempo restante. Se guardan por separado
+ * para que un slow débil no alargue uno fuerte y para que los ticks de una
+ * misma habilidad no renueven la duración una y otra vez.
+ */
+export interface SlowEffect {
+  /** Lanzador y habilidad que la aplicaron; los ticks de un área comparten la clave. */
+  source: string;
+  multiplier: number;
+  remaining: number;
+}
+
 export interface Projectile {
   owner: MatchPlayerState;
   def: AbilityDef;
@@ -32,12 +54,39 @@ export interface Projectile {
   pierce: number;
   hit: Set<MatchPlayerState>;
   visual: EffectHandle;
+  /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
+  healToken?: HealOnHitToken;
 }
 
 export interface PendingMeleeHit {
   attacker: MatchPlayerState;
   target: MatchPlayerState;
   def: AbilityDef;
+  healToken?: HealOnHitToken;
+}
+
+/**
+ * Habilidad instantánea cuya ejecución se difiere al final del frame, después
+ * de que todos los jugadores hayan tenido su turno. Así el daño, el stun y la
+ * cancelación de una habilidad no dependen del orden de `matchPlayers`.
+ */
+export interface QueuedCast {
+  player: MatchPlayerState;
+  def: AbilityDef;
+  targetX?: number;
+  targetZ?: number;
+}
+
+/**
+ * Golpe de dash detectado durante el desplazamiento. El daño se aplica en la
+ * fase común de resolución para que un dash no tumbe al rival antes de que
+ * este haya podido actuar.
+ */
+export interface PendingInstantHit {
+  attacker: MatchPlayerState;
+  target: MatchPlayerState;
+  def: AbilityDef;
+  healToken?: HealOnHitToken;
 }
 
 export interface PlayerDash {
@@ -47,10 +96,16 @@ export interface PlayerDash {
   dirX: number;
   dirZ: number;
   speed: number;
+  /** Distancia total del dash, ya recortada por obstáculos al lanzarlo. */
+  distance: number;
+  /** Distancia recorrida; nunca supera `distance`. */
+  traveled: number;
   /** Velocidad de la animación para que dure lo mismo que el desplazamiento. */
   playback: number;
   trailTimer: number;
   hit: Set<MatchPlayerState>;
+  /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
+  healToken?: HealOnHitToken;
 }
 
 export interface PendingCast {
@@ -77,6 +132,8 @@ export interface ActiveAoe {
   tickInterval: number;
   /** Segundos restantes hasta el próximo golpe. */
   tickTimer: number;
+  /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
+  healToken?: HealOnHitToken;
 }
 
 export interface MatchPlayerState extends MatchPlayerConfig {
@@ -129,6 +186,11 @@ export interface MatchPlayerState extends MatchPlayerConfig {
    * ninguna, en cuyo caso se mantiene la animación de reposo o caminar.
    */
   actionAnimation: AnimationName | null;
+  /**
+   * Recuperación global tras lanzar una habilidad no melee. Mientras sea > 0
+   * no se puede lanzar ninguna otra, sea del hueco que sea.
+   */
+  castLockTimer: number;
   /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
   dash: PlayerDash | null;
   /** Habilidad en preparación (windup) o `null`. */
@@ -140,9 +202,12 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
   buffs: ActiveBuff[];
-  /** Segundos restantes de ralentización. */
-  slowTimer: number;
-  /** Multiplicador de velocidad mientras dure la ralentización (1 = normal). */
+  /** Ralentizaciones activas, cada una con su propio tiempo restante. */
+  slowEffects: SlowEffect[];
+  /**
+   * Multiplicador de velocidad de la ralentización dominante (1 = normal). Se
+   * recalcula a partir de `slowEffects`; no se asigna a mano.
+   */
   slowMultiplier: number;
   /** Ids de las cuatro habilidades; `null` deja el hueco vacío. */
   abilityIds: (string | null)[];
