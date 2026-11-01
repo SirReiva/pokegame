@@ -1396,7 +1396,9 @@ registerAbility(
     .slow(0.75, 2)
     .windup(0.75, { animation: 'charge' })
     .cast(0.7)
-    .animation('shoot')
+    // El área es instantánea: la ventisca cae al terminar la carga. Sin clip
+    // de lanzamiento para no reproducir el disparo cuando ya ha impactado.
+    .animation(null)
     .impact('ice')
     .color(120, 200, 250)
     .description(
