@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { commonAbilityOption } from '../game/abilities';
 import type { InputDeviceInfo } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
+import { publicUrl } from '../game/publicUrl';
 import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
@@ -202,6 +203,17 @@ export function LobbyScreen({
   const full = players.length >= MAX_PLAYERS;
   const bots = players.filter((player) => player.isBot).length;
   const canFill = !full && (counts.blue < MAX_TEAM_SIZE || counts.red < MAX_TEAM_SIZE);
+  const mapIndex = Math.max(
+    0,
+    maps.findIndex((map) => map.id === mapId)
+  );
+  const activeMap = maps[mapIndex];
+
+  const stepMap = (direction: number) => {
+    if (maps.length < 2) return;
+    const next = (mapIndex + direction + maps.length) % maps.length;
+    onChangeMap(maps[next].id);
+  };
 
   return (
     <div className={overlay}>
@@ -278,23 +290,84 @@ export function LobbyScreen({
           </div>
 
           <aside className="rounded-[20px] border border-line bg-[linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-4 max-[1050px]:order-first">
-            {maps.length > 0 && (
+            {maps.length > 0 && activeMap && (
               <div className="mb-4 border-b border-dashed border-line pb-3.5">
-                <span className={eyebrow}>Mapa</span>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {maps.map((map) => (
-                    <button
-                      key={map.id}
-                      type="button"
-                      className={btnClass(map.id === mapId ? 'accent' : 'ghost', 'tiny')}
-                      disabled={map.id === mapId}
-                      title={map.description}
-                      onClick={() => onChangeMap(map.id)}
-                    >
-                      {map.name}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between gap-2">
+                  <span className={eyebrow}>Mapa</span>
+                  <span className="font-mono text-9.6 text-steel-500">
+                    {mapIndex + 1} / {maps.length}
+                  </span>
                 </div>
+
+                <div className="group relative mt-2 overflow-hidden rounded-[14px] border border-line bg-[radial-gradient(circle_at_50%_40%,rgb(22_48_78/0.45),transparent_65%),linear-gradient(160deg,rgb(10_17_26/0.95),rgb(4_8_14/0.95))]">
+                  <div className="relative aspect-4/3">
+                    {activeMap.preview ? (
+                      <img
+                        key={activeMap.id}
+                        src={publicUrl(activeMap.preview)}
+                        alt={`Vista previa de ${activeMap.name}`}
+                        className="size-full animate-fade-in object-contain"
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="grid size-full place-items-center font-mono text-10.56 tracking-[0.08em] uppercase text-steel-600">
+                        Sin vista previa
+                      </div>
+                    )}
+
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgb(4_8_14/0.94),transparent_52%)]" />
+
+                    {maps.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Mapa anterior"
+                          className="absolute top-1/2 left-2 grid size-8 -translate-y-1/2 place-items-center rounded-full border border-line-strong bg-night-900/85 pb-0.5 text-19.2 leading-none text-ink backdrop-blur-sm transition-[background-color,border-color,transform] duration-200 hover:scale-105 hover:border-accent/60 hover:bg-night-800"
+                          onClick={() => stepMap(-1)}
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Mapa siguiente"
+                          className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full border border-line-strong bg-night-900/85 pb-0.5 text-19.2 leading-none text-ink backdrop-blur-sm transition-[background-color,border-color,transform] duration-200 hover:scale-105 hover:border-accent/60 hover:bg-night-800"
+                          onClick={() => stepMap(1)}
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
+
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
+                      <strong className="block font-display text-16.8/tight text-ink">
+                        {activeMap.name}
+                      </strong>
+                      <p className="mt-1 line-clamp-2 text-11.52 leading-[1.45] text-steel-400">
+                        {activeMap.description ?? 'Mapa listo para la partida.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {maps.length > 1 && (
+                    <div className="flex items-center justify-center gap-1.5 border-t border-line bg-night-900/70 px-2 py-1.5">
+                      {maps.map((map) => (
+                        <button
+                          key={map.id}
+                          type="button"
+                          aria-label={`Ver ${map.name}`}
+                          aria-current={map.id === mapId ? 'true' : undefined}
+                          className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ${
+                            map.id === mapId
+                              ? 'w-6 bg-accent'
+                              : 'w-1.5 bg-steel-900 hover:bg-steel-700'
+                          }`}
+                          onClick={() => onChangeMap(map.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
                   El mapa se carga al empezar la partida.
                 </p>

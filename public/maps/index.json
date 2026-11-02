@@ -3,13 +3,15 @@
     {
       "id": "arena",
       "name": "Arena MOBA",
-      "file": "arena.json"
+      "file": "arena.json",
+      "preview": "maps/previews/arena.png"
     },
     {
       "id": "laberinto",
       "name": "Laberinto de las Esquinas",
       "file": "laberinto.json",
-      "description": "Laberinto de 128 × 128 celdas con bases en esquinas opuestas y distritos temáticos."
+      "description": "Laberinto de 128 × 128 celdas con bases en esquinas opuestas y distritos temáticos.",
+      "preview": "maps/previews/laberinto.png"
     }
   ]
 }

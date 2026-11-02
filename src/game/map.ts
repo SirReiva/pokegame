@@ -21,6 +21,8 @@ export interface MapIndexEntry {
   name: string;
   file: string;
   description?: string;
+  /** Ruta de la imagen cenital generada por `pnpm maps:previews`. */
+  preview?: string;
 }
 
 interface MapIndexFile {
@@ -65,7 +67,8 @@ export async function loadMapIndex(): Promise<MapIndexEntry[]> {
       id,
       name: name || id,
       file,
-      description: typeof entry.description === 'string' ? entry.description : undefined
+      description: typeof entry.description === 'string' ? entry.description : undefined,
+      preview: typeof entry.preview === 'string' ? entry.preview : undefined
     };
   });
 }

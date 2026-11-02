@@ -227,7 +227,7 @@ El modo `once` solo desactiva la repetición del clip de preparación mientras e
 
 ## Mapas definidos por JSON
 
-Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos. La elección vive solo en memoria, no en la URL, y al recargar se vuelve al primer mapa del índice.
+Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos con un slider de vistas previas. La elección vive solo en memoria, no en la URL, y al recargar se vuelve al primer mapa del índice.
 
 Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, separadores (cordilleras y muros) y ajustes de cámara:
 
@@ -273,6 +273,8 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
   ]
 }
 ```
+
+Los previews del slider se generan con `pnpm maps:previews`: el script lee cada archivo del índice, dibuja la rejilla con la paleta del editor y guarda `public/maps/previews/<id>.png`, actualizando el campo `preview` de `index.json`. Hay que volver a ejecutarlo al añadir o editar un mapa.
 
 ## Editor de mapas
 
@@ -534,10 +536,12 @@ lift = max(0, bottom - anchor.y)
 
 ```
 scripts/import-sprites.mjs   descarga, validación, anclas y manifiesto
+scripts/generate-map-previews.mjs  renderiza los PNG del slider de mapas
 public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS.md
 public/maps/
-  index.json                 lista de mapas disponibles
+  index.json                 lista de mapas disponibles y ruta de su preview
   map.schema.json            esquema JSON para validar los mapas
+  previews/                  vistas cenitales PNG generadas para el lobby
   arena.json                 mapa por defecto en rejilla + respawns + separadores
   laberinto.json             laberinto 128 × 128 con bases en esquinas opuestas
 src/game/
