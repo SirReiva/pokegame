@@ -373,7 +373,7 @@ Algunos ejemplos con el roster actual: Squirtle nada más rápido en aguas somer
 
 ### Niebla de guerra y visión
 
-Cada vista del splitscreen tiene su propia niebla. No es un estado global del mapa: es lo que ve el Pokémon de ese jugador. Dentro de su radio de visión el mundo se dibuja normal; fuera, un degradado oscurece el terreno y los Pokémon que no se ven se ocultan. La visibilidad de cada Pokémon es binaria (visible u oculto); el degradado es solo la lectura visual del borde, no una tercera transición de juego.
+Cada vista del splitscreen tiene su propia niebla. No es un estado global del mapa: es lo que ve el Pokémon de ese jugador. Dentro de su radio de visión el mundo se dibuja normal; fuera, un degradado oscurece el terreno y los Pokémon que no se ven se ocultan. La visibilidad de cada Pokémon es binaria (visible u oculto); el degradado es solo la lectura visual del borde, no una tercera transición de juego. Los proyectiles ignoran la ocultación del terreno: siguen viéndose mientras cruzan hierba alta, aunque los muros y montañas sí les cortan la línea de visión.
 
 Los rangos base viven en `POKEMON_VISION` (`src/game/vision.ts`):
 

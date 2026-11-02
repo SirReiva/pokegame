@@ -214,8 +214,11 @@ export class Game {
     this.worldLayerId = worldLayerId;
     // Los FX preguntan en qué capas de vista deben dibujarse; el resolvedor usa
     // la misma visibilidad que la niebla de los actores.
-    this.combatFx = new CombatFx(this.app, worldLayerId, (x, z) =>
-      this.fxLayersAt(x, z)
+    this.combatFx = new CombatFx(
+      this.app,
+      worldLayerId,
+      (x, z, ignoreTerrainConcealment) =>
+        this.fxLayersAt(x, z, ignoreTerrainConcealment)
     );
     this.damageNumbers = new DamageNumbers(this.app);
 
@@ -2204,21 +2207,34 @@ export class Game {
    * tapa también proyectiles, haces, áreas e impactos, no solo los sprites.
    * Devuelve `[]` cuando ninguna vista lo ve: el efecto no se dibuja.
    */
-  private fxLayersAt(x: number, z: number): number[] {
+  private fxLayersAt(
+    x: number,
+    z: number,
+    ignoreTerrainConcealment = false
+  ): number[] {
     if (this.mode !== 'match' || this.matchPlayers.length === 0) {
       return [this.worldLayerId];
     }
     const colliders = this.world.colliders;
     // La ocultación del punto sale del terreno, pero si el ancla cae sobre un
     // Pokémon se usa la suya (terreno + tipos): así el FX se oculta exactamente
-    // cuando se oculta su sprite, incluso en hierba alta o ciénaga.
-    let concealment = terrainConcealment(terrainAt(x, z), NO_TYPES).value;
-    for (const player of this.matchPlayers) {
-      if (!player.alive) continue;
-      if (Math.hypot(player.x - x, player.z - z) > CONFIG.player.radius + 0.1) {
-        continue;
+    // cuando se oculta su sprite, incluso en hierba alta o ciénaga. Los
+    // proyectiles ignoran esa ocultación: deben verse mientras cruzan la
+    // vegetación, aunque la línea de visión siga limitada por muros y montañas.
+    let concealment = ignoreTerrainConcealment
+      ? 0
+      : terrainConcealment(terrainAt(x, z), NO_TYPES).value;
+    if (!ignoreTerrainConcealment) {
+      for (const player of this.matchPlayers) {
+        if (!player.alive) continue;
+        if (
+          Math.hypot(player.x - x, player.z - z) >
+          CONFIG.player.radius + 0.1
+        ) {
+          continue;
+        }
+        concealment = Math.max(concealment, player.concealment.value);
       }
-      concealment = Math.max(concealment, player.concealment.value);
     }
     const layers: number[] = [];
     this.matchPlayers.forEach((observer, index) => {

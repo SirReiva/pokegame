@@ -42,7 +42,11 @@ export interface EffectHandle {
  * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
  * Devuelve un array vacío si ninguna vista lo ve.
  */
-export type FxLayerResolver = (x: number, z: number) => readonly number[];
+export type FxLayerResolver = (
+  x: number,
+  z: number,
+  ignoreTerrainConcealment?: boolean
+) => readonly number[];
 
 /** Puntos que anclan un efecto para decidir en qué vistas se dibuja. */
 type FxAnchors = ReadonlyArray<readonly [number, number]>;
@@ -1513,10 +1517,14 @@ export class CombatFx {
    * guarda las capas por componente (`render` y `particlesystem`), así que hay
    * que recorrer los hijos además del nodo raíz.
    */
-  private applyVisibility(entity: pc.Entity, anchors: FxAnchors): void {
+  private applyVisibility(
+    entity: pc.Entity,
+    anchors: FxAnchors,
+    ignoreTerrainConcealment = false
+  ): void {
     const layers: number[] = [];
     for (const [x, z] of anchors) {
-      for (const id of this.resolveLayers(x, z)) {
+      for (const id of this.resolveLayers(x, z, ignoreTerrainConcealment)) {
         if (!layers.includes(id)) layers.push(id);
       }
     }
@@ -1560,20 +1568,15 @@ export class CombatFx {
     }
     if (!visual) return handle;
 
-    this.applyVisibility(visual.entity, [[x, z]]);
+    this.applyVisibility(visual.entity, [[x, z]], true);
 
-    // El proyectil se mueve: al alejarse lo suficiente se recalculan las capas
-    // para que entre o salga de la niebla de cada vista sin quedarse pegado a
-    // la visibilidad del punto de lanzamiento.
-    let lastX = x;
-    let lastZ = z;
+    // Capas recalculadas en cada paso: así el proyectil se oculta en cuanto un
+    // separador corta la línea de visión, sin esperar a recorrer 0,4 u. La
+    // ocultación por terreno (hierba alta) sí se ignora a propósito.
     const setPosition = handle.setPosition;
     handle.setPosition = (nextX, nextZ) => {
       setPosition(nextX, nextZ);
-      if (Math.hypot(nextX - lastX, nextZ - lastZ) < 0.4) return;
-      lastX = nextX;
-      lastZ = nextZ;
-      this.applyVisibility(visual.entity, [[nextX, nextZ]]);
+      this.applyVisibility(visual.entity, [[nextX, nextZ]], true);
     };
     return handle;
   }
