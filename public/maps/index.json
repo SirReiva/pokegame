@@ -6,19 +6,10 @@
       "file": "arena.json"
     },
     {
-      "id": "lago",
-      "name": "Lago central",
-      "file": "lago.json"
-    },
-    {
-      "id": "mi-mapa",
-      "name": "Test",
-      "file": "mi-mapa.json"
-    },
-    {
-      "id": "jose",
-      "name": "jose",
-      "file": "jose.json"
+      "id": "laberinto",
+      "name": "Laberinto de las Esquinas",
+      "file": "laberinto.json",
+      "description": "Laberinto de 128 × 128 celdas con bases en esquinas opuestas y distritos temáticos."
     }
   ]
 }

@@ -536,7 +536,7 @@ public/maps/
   index.json                 lista de mapas disponibles
   map.schema.json            esquema JSON para validar los mapas
   arena.json                 mapa por defecto en rejilla + respawns + separadores
-  lago.json                  segundo mapa de ejemplo
+  laberinto.json             laberinto 128 × 128 con bases en esquinas opuestas
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla y visión
   types.ts                   tipos del manifiesto y del estado del juego
