@@ -342,7 +342,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             : 0;
       if (delta === 0) return;
 
-      const nextIndex = Math.max(0, Math.min(list.length - 1, index + delta));
+      // El carrusel es circular: al pasar del último vuelve al primero y al
+      // retroceder desde el primero salta al último.
+      const nextIndex = (index + delta + list.length) % list.length;
       if (nextIndex === index) return;
       commitPlayers(
         current.map((entry) =>

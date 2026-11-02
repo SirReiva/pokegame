@@ -507,6 +507,7 @@ function PokemonRail({
   onPick: (pokemonId: string) => void;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
+  const previousIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     const rail = railRef.current;
@@ -514,8 +515,20 @@ function PokemonRail({
     const current = rail.querySelector<HTMLElement>('[data-current="true"]');
     if (!current) return;
     const left = current.offsetLeft - rail.clientWidth / 2 + current.clientWidth / 2;
-    rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-  }, [currentId]);
+
+    // Al hacer loop (último → primero o primero → último) saltamos sin animar
+    // para no recorrer toda la lista de lado a lado.
+    const index = entries.findIndex((entry) => entry.id === currentId);
+    const previous = previousIndexRef.current;
+    const wrapped =
+      previous !== null &&
+      entries.length > 1 &&
+      ((previous === entries.length - 1 && index === 0) ||
+        (previous === 0 && index === entries.length - 1));
+    previousIndexRef.current = index;
+
+    rail.scrollTo({ left: Math.max(0, left), behavior: wrapped ? 'auto' : 'smooth' });
+  }, [currentId, entries]);
 
   return (
     <div

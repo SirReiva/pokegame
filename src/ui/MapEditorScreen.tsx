@@ -82,7 +82,7 @@ interface Cell {
 }
 
 const DRAFT_KEY = 'newpoke.map-editor.draft.v1';
-const SIZE_PRESETS = [16, 24, 32, 48, 64, 76];
+const SIZE_PRESETS = [16, 24, 32, 48, 64, 76, 128];
 const DEFAULT_MOUNTAIN_WIDTH = 2.2;
 const MOUNTAIN_COLOR = 'rgba(216, 199, 170, 0.9)';
 const WALL_COLOR = 'rgba(184, 196, 210, 0.92)';
