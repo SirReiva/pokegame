@@ -109,7 +109,8 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
   return (
     <RosterScreen
       manifest={manifest}
-      players={session.players}
+      players={session.players.filter((player) => !player.isBot)}
+      botCount={session.players.filter((player) => player.isBot).length}
       flipped={flipped}
       onPick={handlePick}
       onFlip={toggleFlip}
@@ -129,7 +130,7 @@ function RosterGuard() {
   const { manifest, players } = useSession();
   const readyForRoster =
     manifest !== null &&
-    players.length > 0 &&
+    players.some((player) => !player.isBot) &&
     players.every((player) => player.teamReady);
 
   if (!readyForRoster || !manifest) return <Redirect to="/lobby" />;

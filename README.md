@@ -48,7 +48,7 @@ La navegación usa **wouter**. El estado compartido (manifiesto, mapas y jugador
 
 ## Controles
 
-El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cada dispositivo que pulsa confirmar se convierte en un jugador independiente.
+El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bots. Cada dispositivo que pulsa confirmar se convierte en un jugador independiente; los bots se añaden desde `/lobby` y no ocupan panel de pantalla.
 
 | Acción | Mando | Teclado |
 | --- | --- | --- |
@@ -300,6 +300,25 @@ El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de
 
 > **Rendimiento**: cada vista vuelve a dibujar el mundo completo y sus actores. Con 7-8 jugadores el coste es alto; la demo baja el `maxPixelRatio` automáticamente a partir de 5 vistas. Si necesitas 8 vistas fluidas, reduce la calidad de sombras o el detalle de vegetación en `world.ts`.
 
+## Bots
+
+La sala de equipos (`/lobby`) permite añadir **bots** para completar los equipos sin necesidad de más mandos. El panel **Añadir IA** tiene un selector de dificultad (`Fácil`, `Normal`, `Difícil`), un botón por equipo y **Rellenar equipos** para completar ambos bandos hasta cuatro jugadores. Los bots eligen Pokémon con moveset, instinto común y se marcan listos solos; se pueden quitar con el mismo botón que un jugador humano.
+
+Los bots **no ocupan un panel del splitscreen**: solo los jugadores humanos tienen cámara, capa y niebla propias. Un humano contra tres bots se sigue viendo a pantalla completa, y los bots aparecen como actores en esa vista. El motor separa `matchPlayers` (todos) de `views` (solo humanos) en `src/game/game.ts`; las copias de sprite se indexan por vista, no por jugador.
+
+### Cómo juega la IA
+
+Cada bot produce el mismo `DeviceInputSnapshot` que un mando (`src/game/bot.ts`) y pasa por `stepPlayer`, así que comparte habilidades, cooldowns, colisiones, tiempos de casteo, daño y reglas de respawn con los humanos. La IA se divide en:
+
+- **Percepción** (`vision.ts`): solo ve rivales dentro de su rango efectivo, con la ocultación del terreno y la línea de visión. Recuerda la última posición vista unos segundos según la dificultad.
+- **Navegación** (`botNav.ts`): rasteriza colliders y agua profunda sobre la rejilla del mapa y usa A* con simplificación de ruta. Si el objetivo está a la vista y en línea recta, va directo.
+- **Combate** (`bot.ts`): elige objetivo (prefiere heridos y mantiene el foco), selecciona habilidad por rango, forma, cooldown y situación, y usa el instinto común (Protección o Impulso) según la vida y la distancia.
+- **Movimiento**: mantiene la distancia de su kit, se acerca para encarar antes de lanzar y se separa de sus aliados para no amontonarse.
+
+El apuntado es **fiel al juego**: `facing` se deriva de la velocidad, igual que para un humano. Para disparar, el bot avanza un frame hacia el objetivo y lanza en ese mismo frame; no hay aim assist ni un `facing` artificial. Las habilidades de área se usan cuando el rival cae dentro del centro real del área (`range` por delante del lanzador), no cuando simplemente está cerca. Los bots no usan `Explosión` con poca vida y no curan a vida casi llena.
+
+Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y camina; `Normal` y `Difícil` corren, reaccionan antes, predicen proyectiles y usan más el instinto común.
+
 ## Qué demuestra
 
 - **Billboard vertical**: el plano del sprite solo gira en Y para mirar a la cámara; no se inclina, así que el personaje permanece de pie sobre el terreno. El billboard no implica que el personaje “mire a cámara”: solo mantiene el plano visible.
@@ -318,6 +337,7 @@ El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando. El páramo añade rayos con luz azul y chispas crepitando entre la hierba seca.
 - **Terrenos tipados**: la arena tiene quince terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios y un team deathmatch a 15 KO con reaparición.
+- **Bots con input virtual**: la IA produce los mismos snapshots que un mando y pasa por el mismo `stepPlayer`; navega con A*, respeta la niebla y no consume una vista del splitscreen.
 - **Combate direccional**: habilidades en cono, proyectiles, haces, áreas y dashes que salen hacia el `facing` del Pokémon, con daño oficial de Pokémon, tipos, STAB, precisión, críticos, vida, enfriamientos y pantalla de victoria.
 - **UI en español** con menú principal, pantalla de opciones, selector de equipos, selector de Pokémon por jugador, HUD de telemetría y combate por vista (terreno, tipo, velocidad, multiplicador, vida y habilidades), controles y créditos.
 
@@ -531,6 +551,8 @@ src/game/
   typeChart.ts               tabla de tipos completa y STAB
   abilities.ts               builder, catálogo de habilidades y movesets por Pokémon
   abilityExecutors.ts        estrategias de ejecución por forma de habilidad
+  bot.ts                     IA: percepción, objetivo, habilidades y snapshots virtuales
+  botNav.ts                  rejilla de navegación y A* sobre el mapa activo
   matchState.ts              estado mutable de jugadores, proyectiles, áreas y dash
   effects.ts                 composición de efectos al lanzar (buffs, curación)
   combat.ts                  fórmula de daño, decoradores, precisión y geometría
@@ -602,7 +624,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 
 - El catálogo de habilidades cubre 14 de las 23 especies: Eevee, Onix, Zapdos, Raikou, Entei, Suicune, Lugia, Ho-Oh y Celebi todavía no tienen moveset y entran con los cuatro huecos vacíos. Cada habilidad se define en `src/game/abilities.ts` y se asigna por Pokémon en `MOVESETS`. No hay captura, objetos ni estados alterados más allá de la ralentización.
 - El multijugador local es un **team deathmatch a 15 KO**; no hay súbditos, torretas ni otros objetivos MOBA.
-- No hay bots: para que haya combate hace falta al menos un jugador en cada equipo.
+- Los bots cubren las plazas que no ocupan mandos, pero **no sustituyen a una vista humana**: la partida necesita al menos un jugador local. Su IA es deliberadamente sencilla (percepción, A*, rotación de habilidades y huida) y solo usan las 14 especies con moveset definido.
 - La selección de Pokémon permite repetir especie aunque hay 23 especies para hasta 8 jugadores.
 - La niebla exterior es un círculo de pantalla por vista; los separadores añaden un decal de sombra fijo en el mundo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).

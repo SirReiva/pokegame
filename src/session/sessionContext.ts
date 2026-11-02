@@ -2,7 +2,7 @@ import { createContext } from 'react';
 import type { CommonAbilityId } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
-import type { LobbyPlayer, MatchPlayerConfig } from '../game/multiplayer';
+import type { LobbyPlayer, BotDifficulty, MatchPlayerConfig } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
 
@@ -19,6 +19,10 @@ export interface SessionValue {
   players: LobbyPlayer[];
   matchConfigs: MatchPlayerConfig[] | null;
   joinDevice: (device: InputDeviceInfo) => void;
+  addBot: (team: Team) => void;
+  fillBots: () => void;
+  botDifficulty: BotDifficulty;
+  setBotDifficulty: (difficulty: BotDifficulty) => void;
   setPlayerTeam: (slot: number, team: Team) => void;
   toggleTeamReady: (slot: number) => void;
   leavePlayer: (slot: number) => void;

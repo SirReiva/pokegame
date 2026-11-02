@@ -22,6 +22,8 @@ import { TypeBadge } from './TypeBadge';
 interface RosterScreenProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
+  /** Número de bots que completan los equipos y no ocupan panel. */
+  botCount?: number;
   /** deviceId -> id del Pokémon cuya cara trasera está visible. */
   flipped: Record<string, string>;
   onPick: (slot: number, pokemonId: string) => void;
@@ -74,6 +76,7 @@ const teamCardReady =
 export function RosterScreen({
   manifest,
   players,
+  botCount = 0,
   flipped,
   onPick,
   onFlip,
@@ -194,6 +197,9 @@ export function RosterScreen({
                 <span className="text-muted">
                   {players.filter((player) => player.rosterReady).length} / {players.length} listos
                 </span>
+              )}
+              {botCount > 0 && (
+                <span className="text-steel-600"> · {botCount} bots listos</span>
               )}
             </div>
             <button

@@ -76,8 +76,10 @@ export function ControlsPanel() {
       </section>
 
       <p className={`${note} col-span-full`}>
-        La pantalla se reparte en una vista por jugador. Cada equipo aparece en su base (azul o
-        roja) y se mueve libremente. Los mandos se detectan automáticamente al pulsar un botón.
+        La pantalla se reparte en una vista por jugador humano. Cada equipo aparece en su base
+        (azul o roja) y se mueve libremente. Los mandos se detectan automáticamente al pulsar un
+        botón. En el lobby puedes añadir bots para completar los equipos: juegan en la misma
+        arena, pero no ocupan una vista del splitscreen.
       </p>
     </div>
   );

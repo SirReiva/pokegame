@@ -9,15 +9,18 @@ import {
 import {
   COMMON_ABILITY_OPTIONS,
   DEFAULT_COMMON_ABILITY,
+  MOVESETS,
   type CommonAbilityId
 } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
 import {
+  BOT_DIFFICULTY_LABEL,
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
   countTeams,
   nextFreeSlot,
+  type BotDifficulty,
   type LobbyPlayer,
   type MatchPlayerConfig
 } from '../game/multiplayer';
@@ -47,6 +50,42 @@ function writeMapInUrl(id: string): void {
   window.history.replaceState(null, '', url);
 }
 
+/** Pokémon que pueden usar los bots: los que tienen un moveset real. */
+function botPokemonPool(manifest: SpriteManifest) {
+  const withKit = manifest.pokemon.filter((entry) =>
+    MOVESETS[entry.id]?.some((abilityId) => abilityId !== null)
+  );
+  return withKit.length > 0 ? withKit : manifest.pokemon;
+}
+
+function makeBotPlayer(
+  manifest: SpriteManifest,
+  slot: number,
+  team: Team,
+  difficulty: BotDifficulty
+): LobbyPlayer {
+  const pool = botPokemonPool(manifest);
+  const entry = pool[Math.floor(Math.random() * pool.length)];
+  // Las pasivas no le sirven a una IA que no sabe esconderse a propósito.
+  const commonAbilityId: CommonAbilityId =
+    Math.random() < 0.5 ? 'proteccion' : 'impulso';
+  return {
+    slot,
+    name: `Bot ${slot}`,
+    deviceId: `bot-${slot}`,
+    deviceKind: 'gamepad',
+    deviceFamily: null,
+    deviceLabel: `Bot · ${BOT_DIFFICULTY_LABEL[difficulty]}`,
+    team,
+    teamReady: true,
+    pokemonId: entry?.id ?? manifest.pokemon[0]?.id ?? '',
+    commonAbilityId,
+    rosterReady: true,
+    isBot: true,
+    botDifficulty: difficulty
+  };
+}
+
 /**
  * Estado que sobrevive al cambio de ruta: manifiesto, mapas y jugadores.
  * El motor de PlayCanvas no vive aquí; solo se crea al montar `/play`.
@@ -59,6 +98,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [maps, setMaps] = useState<MapIndexEntry[]>([]);
   const [mapId, setMapIdState] = useState('');
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
+  const [botDifficulty, setBotDifficultyState] = useState<BotDifficulty>('normal');
 
   const manifestRef = useRef<SpriteManifest | null>(null);
   const mapsRef = useRef<MapIndexEntry[]>([]);
@@ -167,8 +207,59 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       commitPlayers(
         current.map((entry) =>
           entry.slot === slot && entry.team !== team
-            ? { ...entry, team, teamReady: false }
+            ? { ...entry, team, teamReady: entry.isBot ? true : false }
             : entry
+        )
+      );
+    },
+    [commitPlayers]
+  );
+
+  const addBot = useCallback(
+    (team: Team) => {
+      const current = playersRef.current;
+      const manifest = manifestRef.current;
+      if (!manifest || manifest.pokemon.length === 0) return;
+      if (current.length >= MAX_PLAYERS) return;
+      if (countTeams(current)[team] >= MAX_TEAM_SIZE) return;
+      const slot = nextFreeSlot(current);
+      if (slot === null) return;
+      commitPlayers([
+        ...current,
+        makeBotPlayer(manifest, slot, team, botDifficulty)
+      ]);
+    },
+    [botDifficulty, commitPlayers]
+  );
+
+  const fillBots = useCallback(() => {
+    const current = playersRef.current;
+    const manifest = manifestRef.current;
+    if (!manifest || manifest.pokemon.length === 0) return;
+
+    const next = [...current];
+    for (const team of ['blue', 'red'] as const) {
+      while (next.length < MAX_PLAYERS && countTeams(next)[team] < MAX_TEAM_SIZE) {
+        const slot = nextFreeSlot(next);
+        if (slot === null) break;
+        next.push(makeBotPlayer(manifest, slot, team, botDifficulty));
+      }
+    }
+    if (next.length !== current.length) commitPlayers(next);
+  }, [botDifficulty, commitPlayers]);
+
+  const setBotDifficulty = useCallback(
+    (difficulty: BotDifficulty) => {
+      setBotDifficultyState(difficulty);
+      commitPlayers(
+        playersRef.current.map((player) =>
+          player.isBot
+            ? {
+                ...player,
+                botDifficulty: difficulty,
+                deviceLabel: `Bot · ${BOT_DIFFICULTY_LABEL[difficulty]}`
+              }
+            : player
         )
       );
     },
@@ -177,6 +268,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const toggleTeamReady = useCallback(
     (slot: number) => {
+      const player = playersRef.current.find((entry) => entry.slot === slot);
+      if (!player || player.isBot) return;
       commitPlayers(
         playersRef.current.map((entry) =>
           entry.slot === slot ? { ...entry, teamReady: !entry.teamReady } : entry
@@ -198,6 +291,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (current.length === 0 || !current.every((player) => player.teamReady)) {
       return false;
     }
+    // Una partida siempre necesita al menos una vista humana.
+    if (!current.some((player) => !player.isBot)) return false;
 
     const firstPokemon = manifestRef.current?.pokemon[0]?.id ?? '';
     commitPlayers(
@@ -205,7 +300,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ...player,
         pokemonId: player.pokemonId || firstPokemon,
         commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
-        rosterReady: false
+        // Los bots ya están listos: no deben bloquear el paso al roster ni la
+        // partida, y su selección no se toca al volver a elegir humanos.
+        teamReady: player.isBot ? true : player.teamReady,
+        rosterReady: player.isBot ? true : false
       }))
     );
     return true;
@@ -305,7 +403,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const resetRosterReady = useCallback(() => {
     commitPlayers(
-      playersRef.current.map((player) => ({ ...player, rosterReady: false }))
+      playersRef.current.map((player) =>
+        player.isBot ? player : { ...player, rosterReady: false }
+      )
     );
   }, [commitPlayers]);
 
@@ -318,7 +418,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (devices.length === 0) return;
       const connected = new Set(devices.map((device) => device.id));
       const current = playersRef.current;
-      const kept = current.filter((player) => connected.has(player.deviceId));
+      const kept = current.filter(
+        (player) => player.isBot || connected.has(player.deviceId)
+      );
       if (kept.length !== current.length) commitPlayers(kept);
     },
     [commitPlayers]
@@ -326,6 +428,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const matchConfigs = useMemo<MatchPlayerConfig[] | null>(() => {
     if (players.length === 0) return null;
+    if (!players.some((player) => !player.isBot)) return null;
     if (!players.every((player) => player.rosterReady && player.pokemonId)) return null;
     return players.map((player) => ({
       slot: player.slot,
@@ -334,7 +437,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       deviceKind: player.deviceKind,
       team: player.team,
       pokemonId: player.pokemonId,
-      commonAbilityId: player.commonAbilityId
+      commonAbilityId: player.commonAbilityId,
+      isBot: player.isBot,
+      botDifficulty: player.botDifficulty
     }));
   }, [players]);
 
@@ -350,6 +455,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       players,
       matchConfigs,
       joinDevice,
+      addBot,
+      fillBots,
+      botDifficulty,
+      setBotDifficulty,
       setPlayerTeam,
       toggleTeamReady,
       leavePlayer,
@@ -375,6 +484,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       players,
       matchConfigs,
       joinDevice,
+      addBot,
+      fillBots,
+      botDifficulty,
+      setBotDifficulty,
       setPlayerTeam,
       toggleTeamReady,
       leavePlayer,

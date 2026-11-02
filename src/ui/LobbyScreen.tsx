@@ -3,11 +3,14 @@ import { commonAbilityOption } from '../game/abilities';
 import type { InputDeviceInfo } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
 import {
+  BOT_DIFFICULTIES,
+  BOT_DIFFICULTY_LABEL,
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
   TEAM_INFO,
   TEAM_ORDER,
   countTeams,
+  type BotDifficulty,
   type LobbyPlayer
 } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
@@ -23,7 +26,11 @@ interface LobbyScreenProps {
   devices: InputDeviceInfo[];
   maps: MapIndexEntry[];
   mapId: string;
+  botDifficulty: BotDifficulty;
   onChangeMap: (mapId: string) => void;
+  onChangeBotDifficulty: (difficulty: BotDifficulty) => void;
+  onAddBot: (team: Team) => void;
+  onFillBots: () => void;
   onJoin: (device: InputDeviceInfo) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
@@ -88,6 +95,11 @@ function TeamColumn({
               <span className="font-display text-16.8 font-extrabold text-(--team)">
                 {player.name}
               </span>
+              {player.isBot && (
+                <span className="rounded-full border border-line px-1.5 py-px font-mono text-8 tracking-[0.08em] uppercase text-steel-400">
+                  BOT
+                </span>
+              )}
               <span className="flex min-w-0 flex-1 items-center gap-1.5 text-11.2 text-steel-500">
                 <DeviceIcon
                   kind={player.deviceKind}
@@ -116,16 +128,17 @@ function TeamColumn({
               <button
                 type="button"
                 className={btnClass(player.teamReady ? 'accent' : 'neutral', 'tiny')}
+                disabled={player.isBot}
                 onClick={() => onReady(player.slot)}
               >
-                {player.teamReady ? '✓ Listo' : 'Marcar listo'}
+                {player.isBot ? '✓ Bot listo' : player.teamReady ? '✓ Listo' : 'Marcar listo'}
               </button>
               <button
                 type="button"
                 className={btnClass('ghost', 'tiny')}
                 onClick={() => onLeave(player.slot)}
               >
-                Salir
+                {player.isBot ? 'Quitar' : 'Salir'}
               </button>
             </div>
           </article>
@@ -140,7 +153,11 @@ export function LobbyScreen({
   devices,
   maps,
   mapId,
+  botDifficulty,
   onChangeMap,
+  onChangeBotDifficulty,
+  onAddBot,
+  onFillBots,
   onJoin,
   onReady,
   onLeave,
@@ -150,10 +167,13 @@ export function LobbyScreen({
   onEditor
 }: LobbyScreenProps) {
   const counts = countTeams(players);
-  const allReady = players.length > 0 && players.every((player) => player.teamReady);
+  const hasHuman = players.some((player) => !player.isBot);
+  const allReady = hasHuman && players.every((player) => player.teamReady);
   const joined = new Set(players.map((player) => player.deviceId));
   const available = devices.filter((device) => !joined.has(device.id));
   const full = players.length >= MAX_PLAYERS;
+  const bots = players.filter((player) => player.isBot).length;
+  const canFill = !full && (counts.blue < MAX_TEAM_SIZE || counts.red < MAX_TEAM_SIZE);
 
   return (
     <div className={overlay}>
@@ -187,7 +207,8 @@ export function LobbyScreen({
             <p className="mt-2 max-w-[46ch] text-14.4 leading-[1.55] text-muted">
               Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
               <strong>Espacio</strong> en el teclado) para unirte. Después cambia de lado con{' '}
-              <strong>← →</strong> y marca listo. Hasta 4 jugadores por equipo.
+              <strong>← →</strong> y marca listo. También puedes añadir bots para completar
+              los equipos: hasta 4 jugadores por bando.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
@@ -249,6 +270,63 @@ export function LobbyScreen({
                 </p>
               </div>
             )}
+
+            <div className="mb-4 border-b border-dashed border-line pb-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className={eyebrow}>Bots</span>
+                {bots > 0 && (
+                  <span className="font-mono text-9.6 text-steel-500">
+                    {bots} en partida
+                  </span>
+                )}
+              </div>
+              <h3 className="mt-0.5 text-19.2">Añadir IA</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {BOT_DIFFICULTIES.map((difficulty) => (
+                  <button
+                    key={difficulty}
+                    type="button"
+                    className={btnClass(
+                      difficulty === botDifficulty ? 'accent' : 'ghost',
+                      'tiny'
+                    )}
+                    disabled={difficulty === botDifficulty}
+                    onClick={() => onChangeBotDifficulty(difficulty)}
+                  >
+                    {BOT_DIFFICULTY_LABEL[difficulty]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  className={btnClass('ghost', 'tiny')}
+                  disabled={counts.blue >= MAX_TEAM_SIZE || full}
+                  onClick={() => onAddBot('blue')}
+                >
+                  + Azul
+                </button>
+                <button
+                  type="button"
+                  className={btnClass('ghost', 'tiny')}
+                  disabled={counts.red >= MAX_TEAM_SIZE || full}
+                  onClick={() => onAddBot('red')}
+                >
+                  + Rojo
+                </button>
+              </div>
+              <button
+                type="button"
+                className={`${btnClass('neutral', 'tiny')} mt-1.5 w-full`}
+                disabled={!canFill}
+                onClick={onFillBots}
+              >
+                Rellenar equipos
+              </button>
+              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
+                Los bots eligen Pokémon solos y no ocupan panel de pantalla.
+              </p>
+            </div>
 
             <span className={eyebrow}>Dispositivos detectados</span>
             <h3 className="mt-0.5 text-19.2">Unirse</h3>

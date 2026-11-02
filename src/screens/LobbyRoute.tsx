@@ -78,7 +78,11 @@ function LobbyContent() {
       devices={devices}
       maps={session.maps}
       mapId={session.mapId}
+      botDifficulty={session.botDifficulty}
       onChangeMap={session.setMapId}
+      onChangeBotDifficulty={session.setBotDifficulty}
+      onAddBot={session.addBot}
+      onFillBots={session.fillBots}
       onJoin={session.joinDevice}
       onReady={session.toggleTeamReady}
       onLeave={session.leavePlayer}

@@ -17,6 +17,8 @@ import {
   type AbilityExecutorDeps
 } from './abilityExecutors';
 import { Actor } from './actor';
+import { BotController, createBotSquad } from './bot';
+import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
   KO_TARGET,
@@ -168,6 +170,13 @@ export class Game {
   private readonly assets = new Map<string, SpriteAsset>();
 
   private matchPlayers: MatchPlayerState[] = [];
+  /**
+   * Vistas locales (cámaras/paneles). Los bots juegan en `matchPlayers` pero no
+   * consumen una vista: así un humano contra tres bots no parte la pantalla en
+   * cuatro ni renderiza el mundo cuatro veces.
+   */
+  private views: MatchPlayerState[] = [];
+  private bots = new Map<number, BotController>();
   private viewLayers: pc.Layer[] = [];
   /** Proyectiles activos de todas las vistas. */
   private projectiles: Projectile[] = [];
@@ -383,6 +392,14 @@ export class Game {
     const valid = configs.slice(0, MAX_PLAYERS);
     if (valid.length === 0) return false;
 
+    // Una partida necesita al menos una vista humana. Los bots completan los
+    // equipos, pero no sustituyen al jugador local.
+    const humanConfigs = valid.filter((config) => !config.isBot);
+    if (humanConfigs.length === 0) {
+      this.callbacks.onError('Añade al menos un jugador humano antes de empezar.');
+      return false;
+    }
+
     this.mode = 'match';
     this.paused = false;
     this.statsTimer = 0;
@@ -390,16 +407,22 @@ export class Game {
     this.menuCamera.setEnabled(false);
     this.app.graphicsDevice.maxPixelRatio = Math.min(
       window.devicePixelRatio || 1,
-      valid.length > 4 ? 1.2 : 1.5
+      humanConfigs.length > 4 ? 1.2 : 1.5
     );
 
-    const layout = computeSplitLayout(valid.length);
+    const layout = computeSplitLayout(humanConfigs.length);
+    const hasBots = valid.some((config) => config.isBot);
+    const botNav = hasBots ? new BotNavGrid(this.world.colliders) : null;
+    const botSquad = hasBots ? createBotSquad() : null;
     const teamIndex: Record<Team, number> = { blue: 0, red: 0 };
+    let viewIndex = 0;
 
-    valid.forEach((config, index) => {
+    valid.forEach((config) => {
       const asset = this.assets.get(config.pokemonId);
       if (!asset) return;
 
+      const isBot = config.isBot === true;
+      const currentView = isBot ? -1 : viewIndex++;
       const indexInTeam = teamIndex[config.team];
       const spawn = spawnForTeam(config.team, indexInTeam);
       teamIndex[config.team] += 1;
@@ -411,29 +434,41 @@ export class Game {
         ? config.commonAbilityId
         : DEFAULT_COMMON_ABILITY;
 
-      const layer = new pc.Layer({ name: `match-view-${index + 1}` });
-      const layerComposition = this.app.scene.layers;
-      const worldLayer = layerComposition.getLayerByName('World');
-      // El cuerpo del sprite es opaco (alphaTest): debe ir antes de las
-      // transparencias del mundo (agua, partículas) para que el agua pueda
-      // taparle las piernas al sumergirse. El anillo y la sombra son
-      // transparentes y van al final, por encima del agua.
-      const worldTransparent = worldLayer ? layerComposition.getTransparentIndex(worldLayer) : -1;
-      layerComposition.insertOpaque(
-        layer,
-        worldTransparent >= 0 ? worldTransparent : layerComposition.layerList.length
-      );
-      layerComposition.pushTransparent(layer);
-      this.viewLayers.push(layer);
+      let layer: pc.Layer | null = null;
+      if (!isBot) {
+        layer = new pc.Layer({ name: `match-view-${currentView + 1}` });
+        const layerComposition = this.app.scene.layers;
+        const worldLayer = layerComposition.getLayerByName('World');
+        // El cuerpo del sprite es opaco (alphaTest): debe ir antes de las
+        // transparencias del mundo (agua, partículas) para que el agua pueda
+        // taparle las piernas al sumergirse. El anillo y la sombra son
+        // transparentes y van al final, por encima del agua.
+        const worldTransparent = worldLayer
+          ? layerComposition.getTransparentIndex(worldLayer)
+          : -1;
+        layerComposition.insertOpaque(
+          layer,
+          worldTransparent >= 0 ? worldTransparent : layerComposition.layerList.length
+        );
+        layerComposition.pushTransparent(layer);
+        this.viewLayers.push(layer);
+      }
 
       const camera = new CameraRig(this.app, spawn);
-      camera.setViewport(layout[index]);
-      camera.setLayers([...this.baseCameraLayers, layer.id]);
+      if (layer) {
+        camera.setViewport(layout[currentView]);
+        camera.setLayers([...this.baseCameraLayers, layer.id]);
+        camera.setEnabled(true);
+      } else {
+        // Los bots conservan una cámara deshabilitada porque `stepPlayer` usa
+        // su yaw para convertir la entrada en movimiento relativo.
+        camera.setEnabled(false);
+      }
       camera.yaw = cameraYawForTeam(config.team);
-      camera.distance = CONFIG.camera.distance * (valid.length > 2 ? 1.12 : 1);
-      camera.setEnabled(true);
+      camera.distance =
+        CONFIG.camera.distance * (humanConfigs.length > 2 ? 1.12 : 1);
 
-      this.matchPlayers.push({
+      const player: MatchPlayerState = {
         ...config,
         commonAbilityId,
         types: asset.entry.types,
@@ -455,7 +490,7 @@ export class Game {
         enemiesSeeing: 0,
         camera,
         copies: [],
-        viewport: layout[index],
+        viewport: layer ? layout[currentView] : { x: 0, y: 0, w: 1, h: 1 },
         spawn,
         combat,
         hp: combat.hp,
@@ -489,28 +524,54 @@ export class Game {
         slowEffects: [],
         slowMultiplier: 1,
         abilityIds: [...moveset, commonAbilityId]
-      });
+      };
+      this.matchPlayers.push(player);
 
-      this.fogViews.push(
-        new FogView(this.app.graphicsDevice, this.ensureFogMesh(), camera.entity, layer.id, index)
-      );
-      this.fogDecals.push(
-        new FogDecal(
-          this.app.graphicsDevice,
-          this.app.root,
-          this.ensureFogDecalMesh(),
-          layer.id,
-          index,
-          this.sightOccluders
-        )
-      );
+      if (isBot) {
+        if (botNav && botSquad) {
+          this.bots.set(
+            config.slot,
+            new BotController(
+              config.slot,
+              config.botDifficulty ?? 'normal',
+              botNav,
+              botSquad
+            )
+          );
+        }
+      } else {
+        this.views.push(player);
+      }
+
+      if (layer) {
+        this.fogViews.push(
+          new FogView(
+            this.app.graphicsDevice,
+            this.ensureFogMesh(),
+            camera.entity,
+            layer.id,
+            currentView
+          )
+        );
+        this.fogDecals.push(
+          new FogDecal(
+            this.app.graphicsDevice,
+            this.app.root,
+            this.ensureFogDecalMesh(),
+            layer.id,
+            currentView,
+            this.sightOccluders
+          )
+        );
+      }
     });
 
-    // Rejilla N x N: cada jugador tiene una copia visible en cada viewport.
-    this.matchPlayers.forEach((player, playerIndex) => {
+    // Cada actor tiene una copia por vista (no por jugador): los bots se ven
+    // en las pantallas humanas, pero no generan una vista propia.
+    this.matchPlayers.forEach((player) => {
       const asset = this.assets.get(player.pokemonId);
       if (!asset) return;
-      this.matchPlayers.forEach((_, viewIndex) => {
+      this.views.forEach((viewer, viewIndex) => {
         const copy = new Actor(
           this.app,
           asset,
@@ -518,7 +579,7 @@ export class Game {
           { x: player.x, z: player.z },
           player.facing,
           true,
-          viewIndex === playerIndex,
+          viewer.slot === player.slot,
           TEAM_INFO[player.team].accent
         );
         const layer = this.viewLayers[viewIndex];
@@ -573,6 +634,8 @@ export class Game {
     }
     for (const layer of this.viewLayers) this.app.scene.layers.remove(layer);
     this.matchPlayers = [];
+    this.views = [];
+    this.bots.clear();
     this.viewLayers = [];
   }
 
@@ -677,7 +740,7 @@ export class Game {
   private updateMatch(dt: number, frame: InputFrame): void {
     // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
     // es despreciable y evita un frame de movimiento fantasma.
-    for (const player of this.matchPlayers) {
+    for (const player of this.views) {
       const snapshot = frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
       if (snapshot.startPressed || snapshot.cancel) {
         this.setPaused(true);
@@ -687,11 +750,11 @@ export class Game {
     }
 
     for (const player of this.matchPlayers) {
-      this.stepPlayer(
-        player,
-        frame.snapshots.get(player.deviceId) ?? IDLE_INPUT,
-        dt
-      );
+      const bot = player.isBot ? this.bots.get(player.slot) : null;
+      const input = bot
+        ? bot.update(dt, player, this.matchPlayers, this.world.colliders)
+        : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
+      this.stepPlayer(player, input, dt);
       // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
       // el resto de jugadores no debería seguir actuando.
       if (this.matchOver) break;
@@ -712,7 +775,7 @@ export class Game {
 
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
     // la cámara del viewport que la va a dibujar.
-    this.matchPlayers.forEach((cameraOwner, viewIndex) => {
+    this.views.forEach((cameraOwner, viewIndex) => {
       const cameraPosition = cameraOwner.camera.position;
       this.matchPlayers.forEach((player) => {
         const copy = player.copies[viewIndex];
@@ -1832,7 +1895,7 @@ export class Game {
       0.2;
 
     const views: DamageNumberView[] = [];
-    this.matchPlayers.forEach((viewer, viewIndex) => {
+    this.views.forEach((viewer, viewIndex) => {
       const copy = target.copies[viewIndex];
       const camera = viewer.camera.entity.camera;
       const layer = this.viewLayers[viewIndex];
@@ -2348,7 +2411,7 @@ export class Game {
   }
 
   private emitMatchStats(): void {
-    const stats: PlayerMatchStats[] = this.matchPlayers.map((player, index) => {
+    const stats: PlayerMatchStats[] = this.views.map((player, index) => {
       const own = player.copies[index] ?? player.copies[0];
       const row = own?.billboard.currentRow ?? 0;
       const terrain = TERRAINS[player.terrain];
@@ -2447,7 +2510,7 @@ export class Game {
     z: number,
     ignoreTerrainConcealment = false
   ): number[] {
-    if (this.mode !== 'match' || this.matchPlayers.length === 0) {
+    if (this.mode !== 'match' || this.views.length === 0) {
       return [this.worldLayerId];
     }
     const colliders = this.world.colliders;
@@ -2472,7 +2535,7 @@ export class Game {
       }
     }
     const layers: number[] = [];
-    this.matchPlayers.forEach((observer, index) => {
+    this.views.forEach((observer, index) => {
       const layer = this.viewLayers[index];
       if (!layer) return;
       if (isTargetVisible(observer, { x, z }, concealment, colliders)) {
@@ -2491,7 +2554,7 @@ export class Game {
     const colliders = this.world.colliders;
     for (const player of this.matchPlayers) player.enemiesSeeing = 0;
 
-    this.matchPlayers.forEach((observer, viewIndex) => {
+    this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
       const camera = observer.camera.entity.camera;
       if (fog && camera) {
@@ -2538,6 +2601,26 @@ export class Game {
         }
       }
     });
+
+    // Los bots también son observadores: si te ven, cuentan para
+    // `enemiesSeeing` y cortan la Regeneración aunque no tengan panel propio.
+    for (const observer of this.matchPlayers) {
+      if (!observer.isBot || !observer.alive) continue;
+      for (const target of this.matchPlayers) {
+        if (target === observer || !target.alive) continue;
+        if (observer.team === target.team) continue;
+        if (
+          isTargetVisible(
+            observer,
+            target,
+            target.concealment.value,
+            colliders
+          )
+        ) {
+          target.enemiesSeeing += 1;
+        }
+      }
+    }
   }
 
   private resolvePosition(

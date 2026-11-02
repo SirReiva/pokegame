@@ -230,7 +230,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
           {hudVisible && (
             <MatchHud
               manifest={manifest}
-              players={players}
+              players={players.filter((player) => !player.isBot)}
               stats={stats}
               onPause={() => setPaused(true)}
             />

@@ -1,0 +1,851 @@
+/**
+ * Controlador de un jugador bot.
+ *
+ * El bot no mueve actores directamente: produce el mismo `DeviceInputSnapshot`
+ * que un mando o el teclado. Así pasa por `stepPlayer`, comparte cooldowns,
+ * colisiones, tiempos de casteo y reglas de combate con los humanos.
+ *
+ * La IA se divide en cuatro capas:
+ * 1. Percepción: visión, ocultación, línea de visión y memoria de la última
+ *    posición conocida.
+ * 2. Navegación: A* sobre `BotNavGrid` y seguimiento de waypoints.
+ * 3. Combate: elección de objetivo y de habilidad por rango, cooldown y estado.
+ * 4. Movimiento: mantiene la distancia, se acerca para apuntar y se separa de
+ *    sus aliados.
+ *
+ * El apuntado es fiel al juego: `facing` solo cambia al moverse, así que el bot
+ * gira hacia el objetivo avanzando en esa dirección antes de lanzar.
+ */
+
+import { ABILITIES, type AbilityDef } from './abilities';
+import { BotNavGrid, type NavPoint } from './botNav';
+import { CONFIG } from './config';
+import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
+import type { MatchPlayerState } from './matchState';
+import { otherTeam, type BotDifficulty } from './multiplayer';
+import { respawnsForTeam } from './terrain';
+import { isTargetVisible, lineOfSightBlocked } from './vision';
+import type { Collider } from './world';
+
+interface BotTuning {
+  /** Tiempo que debe ver a un objetivo antes de atacarlo. */
+  reaction: number;
+  /** Cada cuánto reevalúa objetivo y habilidad. */
+  decision: number;
+  /** Error angular máximo para considerar que está encarado. */
+  aimTolerance: number;
+  /** Multiplicador sobre el rango de visión de la especie. */
+  visionFactor: number;
+  /** Vida por debajo de la cual huye. */
+  retreatHp: number;
+  /** Segundos que recuerda la última posición vista. */
+  memory: number;
+  /** Cuánto adelanta el disparo a un objetivo en movimiento (0-1). */
+  lead: number;
+  /** Probabilidad de usar el instinto común cuando toca. */
+  commonChance: number;
+  /** Cada cuánto recalcula la ruta. */
+  pathInterval: number;
+}
+
+const TUNING: Record<BotDifficulty, BotTuning> = {
+  easy: {
+    reaction: 0.55,
+    decision: 0.45,
+    aimTolerance: 0.34,
+    visionFactor: 0.82,
+    retreatHp: 0.22,
+    memory: 2.2,
+    lead: 0.1,
+    commonChance: 0.35,
+    pathInterval: 0.9
+  },
+  normal: {
+    reaction: 0.3,
+    decision: 0.26,
+    aimTolerance: 0.2,
+    visionFactor: 0.96,
+    retreatHp: 0.3,
+    memory: 3.6,
+    lead: 0.65,
+    commonChance: 0.65,
+    pathInterval: 0.65
+  },
+  hard: {
+    reaction: 0.14,
+    decision: 0.15,
+    aimTolerance: 0.1,
+    visionFactor: 1.04,
+    retreatHp: 0.36,
+    memory: 5,
+    lead: 0.95,
+    commonChance: 0.9,
+    pathInterval: 0.45
+  }
+};
+
+interface Vec2 {
+  x: number;
+  z: number;
+}
+
+/** Foco compartido por los bots de un mismo equipo. */
+export interface BotFocus {
+  slot: number | null;
+  /** Reloj del bot en el que caduca el foco. */
+  until: number;
+}
+
+export interface BotSquad {
+  blue: BotFocus;
+  red: BotFocus;
+}
+
+export function createBotSquad(): BotSquad {
+  return {
+    blue: { slot: null, until: 0 },
+    red: { slot: null, until: 0 }
+  };
+}
+
+function normalizeAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function directionTo(from: Vec2, to: Vec2): Vec2 {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const length = Math.hypot(dx, dz);
+  if (length < 0.0001) return { x: 0, z: 0 };
+  return { x: dx / length, z: dz / length };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export class BotController {
+  readonly slot: number;
+  readonly difficulty: BotDifficulty;
+
+  private readonly tuning: BotTuning;
+  private readonly nav: BotNavGrid;
+  private readonly squad: BotSquad;
+
+  private clock = 0;
+  private target: MatchPlayerState | null = null;
+  private targetVisible = false;
+  private visibleTimer = 0;
+  private lastSeen: { x: number; z: number; at: number } | null = null;
+
+  private decisionTimer = 0;
+  private abilitySlot: number | null = null;
+  private useCommon = false;
+  private retreat = false;
+  private goal: Vec2 = { x: 0, z: 0 };
+
+  private path: NavPoint[] = [];
+  private pathGoal: Vec2 = { x: 0, z: 0 };
+  private pathTimer = 0;
+
+  private patrolTimer = 0;
+  private orbitSide = 1;
+  private orbitTimer = 0;
+
+  private lastX = 0;
+  private lastZ = 0;
+  private stuckTimer = 0;
+  private detourTimer = 0;
+  private detour: Vec2 = { x: 0, z: 0 };
+
+  constructor(
+    slot: number,
+    difficulty: BotDifficulty,
+    nav: BotNavGrid,
+    squad: BotSquad
+  ) {
+    this.slot = slot;
+    this.difficulty = difficulty;
+    this.tuning = TUNING[difficulty];
+    this.nav = nav;
+    this.squad = squad;
+    this.orbitSide = slot % 2 === 0 ? 1 : -1;
+  }
+
+  update(
+    dt: number,
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
+  ): DeviceInputSnapshot {
+    this.clock += dt;
+    if (!self.alive) {
+      this.resetCombatState();
+      return { ...IDLE_INPUT };
+    }
+
+    this.updateTarget(dt, self, players, colliders);
+
+    // Durante una preparación, dash o hitstun no se puede decidir nada: el
+    // motor ya consume el frame. Devolver un snapshot idle evita pulsar
+    // habilidades que el propio motor va a rechazar.
+    if (
+      self.pendingCast !== null ||
+      self.dash !== null ||
+      self.stunTimer > 0 ||
+      self.hurtTimer > 0
+    ) {
+      return { ...IDLE_INPUT };
+    }
+
+    this.decisionTimer -= dt;
+    if (this.decisionTimer <= 0) {
+      this.decisionTimer = this.tuning.decision;
+      this.decide(self, players);
+    }
+
+    return this.drive(dt, self, players, colliders);
+  }
+
+  private resetCombatState(): void {
+    this.target = null;
+    this.targetVisible = false;
+    this.visibleTimer = 0;
+    this.lastSeen = null;
+    this.abilitySlot = null;
+    this.useCommon = false;
+    this.retreat = false;
+    this.path = [];
+    this.stuckTimer = 0;
+    this.detourTimer = 0;
+  }
+
+  private updateTarget(
+    dt: number,
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
+  ): void {
+    let best: MatchPlayerState | null = null;
+    let bestScore = Infinity;
+    const focus = this.squad[self.team];
+    if (focus.until <= this.clock) focus.slot = null;
+
+    for (const enemy of players) {
+      if (enemy === self || enemy.team === self.team || !enemy.alive) continue;
+      const wasVisible = this.target === enemy && this.targetVisible;
+      const visible = isTargetVisible(
+        {
+          x: self.x,
+          z: self.z,
+          visionRange: self.visionRange * this.tuning.visionFactor
+        },
+        enemy,
+        enemy.concealment.value,
+        colliders,
+        wasVisible
+      );
+      if (!visible) continue;
+
+      const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
+      const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
+      // Los remates valen más que perseguir al tanque lleno. El pequeño sesgo
+      // por distancia evita que dos bots crucen el mapa por el mismo herido.
+      let score = distance + hpFraction * 7 - (1 - hpFraction) * 4;
+      if (this.target === enemy) score -= 1.5;
+      // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
+      // visible, en vez de repartirse al azar por el mapa.
+      if (focus.slot === enemy.slot) score -= 3.5;
+      if (score < bestScore) {
+        bestScore = score;
+        best = enemy;
+      }
+    }
+
+    if (best !== this.target) {
+      this.visibleTimer = 0;
+      this.abilitySlot = null;
+    }
+    this.target = best;
+    this.targetVisible = best !== null;
+
+    if (best) {
+      if (focus.slot === best.slot) {
+        focus.until = this.clock + 2;
+      } else {
+        focus.slot = best.slot;
+        focus.until = this.clock + 2;
+      }
+      this.visibleTimer += dt;
+      this.lastSeen = { x: best.x, z: best.z, at: this.clock };
+    } else if (
+      this.lastSeen &&
+      this.clock - this.lastSeen.at > this.tuning.memory
+    ) {
+      this.lastSeen = null;
+    }
+  }
+
+  private decide(self: MatchPlayerState, players: readonly MatchPlayerState[]): void {
+    const target = this.target;
+    const targetIsVisible = target !== null && this.targetVisible && target.alive;
+    const distance = target ? Math.hypot(target.x - self.x, target.z - self.z) : Infinity;
+    const hpFraction = self.hp / Math.max(1, self.maxHp);
+
+    this.abilitySlot = null;
+    this.useCommon = false;
+
+    // Huida: solo se planta a curarse si la habilidad de curación está lista y
+    // el rival no está encima. Si no, corre hacia su base.
+    this.retreat = targetIsVisible && hpFraction < this.tuning.retreatHp;
+    if (this.retreat) {
+      const healSlot = this.findHealSlot(self);
+      if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
+      this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
+      this.setGoal(self.spawn);
+      return;
+    }
+
+    if (targetIsVisible && this.visibleTimer >= this.tuning.reaction) {
+      this.abilitySlot = this.chooseAbility(self, target, distance, players);
+      this.useCommon = this.shouldUseCommon(self, distance, false, hpFraction);
+      return;
+    }
+
+    if (this.lastSeen && this.clock - this.lastSeen.at <= this.tuning.memory) {
+      this.setGoal({ x: this.lastSeen.x, z: this.lastSeen.z });
+      return;
+    }
+
+    this.updatePatrol(self);
+  }
+
+  private setGoal(goal: Vec2): void {
+    if (Math.hypot(goal.x - this.goal.x, goal.z - this.goal.z) > 1.2) {
+      this.path = [];
+      this.pathTimer = 0;
+    }
+    this.goal = goal;
+  }
+
+  private updatePatrol(self: MatchPlayerState): void {
+    if (this.clock < this.patrolTimer) return;
+    this.patrolTimer = this.clock + 2.5 + Math.random() * 2.5;
+    const base = respawnsForTeam(otherTeam(self.team))[0];
+    const centerX = base?.x ?? 0;
+    const centerZ = base?.z ?? 0;
+    this.setGoal({
+      x: centerX + (Math.random() - 0.5) * 5,
+      z: centerZ + (Math.random() - 0.5) * 5
+    });
+  }
+
+  private drive(
+    dt: number,
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
+  ): DeviceInputSnapshot {
+    const snapshot: DeviceInputSnapshot = { ...IDLE_INPUT };
+    const target = this.target;
+    const targetIsVisible = target !== null && this.targetVisible && target.alive;
+    let desired: Vec2 = { x: 0, z: 0 };
+    let casting = false;
+
+    if (this.retreat) {
+      desired = this.moveTowards(self, this.goal, dt);
+      if (
+        this.abilitySlot !== null &&
+        self.cooldowns[this.abilitySlot] <= 0.001 &&
+        this.canCast(self)
+      ) {
+        casting = this.pulseAbility(snapshot, this.abilitySlot);
+      }
+      if (this.useCommon) {
+        if (self.commonAbilityId === 'impulso' && target) {
+          // Para huir con Impulso hay que estar mirando en la dirección
+          // contraria; si no, el dash metería al bot todavía más en la pelea.
+          const away = directionTo(target, self);
+          const error = Math.abs(
+            normalizeAngle(Math.atan2(away.x, away.z) - self.facing)
+          );
+          if (error <= this.tuning.aimTolerance + 0.08) {
+            this.pulseCommon(snapshot, self, true);
+            desired = away;
+          } else {
+            desired = away;
+          }
+        } else {
+          this.pulseCommon(snapshot, self, true);
+        }
+      }
+    } else if (targetIsVisible && target) {
+      const distance = Math.hypot(target.x - self.x, target.z - self.z);
+      const def = this.selectedDef(self);
+      const aim = this.aimPoint(target, distance, def);
+      const facingError = Math.abs(
+        normalizeAngle(
+          Math.atan2(aim.x - self.x, aim.z - self.z) - self.facing
+        )
+      );
+
+      const inRange = def ? this.inRange(def, distance) : false;
+      const ready =
+        this.abilitySlot !== null &&
+        self.cooldowns[this.abilitySlot] <= 0.001;
+      const hasLine =
+        !lineOfSightBlocked(self.x, self.z, target.x, target.z, colliders);
+      if (
+        this.abilitySlot !== null &&
+        ready &&
+        def &&
+        inRange &&
+        hasLine &&
+        facingError <= this.tuning.aimTolerance &&
+        this.canCast(self)
+      ) {
+        casting = this.pulseAbility(snapshot, this.abilitySlot);
+        // Avanzar un frame hacia el objetivo fija el `facing` antes de que
+        // `stepPlayer` ejecute la habilidad: el bot apunta moviéndose.
+        desired = directionTo(self, aim);
+      } else {
+        desired = this.combatMove(self, target, distance, def, facingError, dt);
+      }
+
+      if (this.useCommon) {
+        const commonId = self.commonAbilityId;
+        if (commonId === 'proteccion') {
+          this.pulseCommon(snapshot, self, false);
+        } else if (commonId === 'impulso') {
+          const dashDir = this.retreat
+            ? directionTo(target, self)
+            : directionTo(self, target);
+          const dashError = Math.abs(
+            normalizeAngle(
+              Math.atan2(dashDir.x, dashDir.z) - self.facing
+            )
+          );
+          if (dashError <= this.tuning.aimTolerance + 0.08) {
+            this.pulseCommon(snapshot, self, false);
+            desired = dashDir;
+          } else {
+            desired = dashDir;
+          }
+        }
+      }
+    } else {
+      // Sin objetivo visible: ir a la última posición conocida o patrullar.
+      desired = this.moveTowards(self, this.goal, dt);
+      if (this.useCommon) this.pulseCommon(snapshot, self, true);
+    }
+
+    desired = this.addSeparation(self, players, desired);
+    if (this.detourTimer > 0) {
+      this.detourTimer = Math.max(0, this.detourTimer - dt);
+      desired = this.detour;
+    }
+
+    const speed = Math.hypot(self.vx, self.vz);
+    const moved = Math.hypot(self.x - this.lastX, self.z - this.lastZ);
+    this.lastX = self.x;
+    this.lastZ = self.z;
+    const wantsToMove = Math.hypot(desired.x, desired.z) > 0.05;
+    if (wantsToMove && !casting && speed < 0.22 && moved < 0.004) {
+      this.stuckTimer += dt;
+      if (this.stuckTimer > 0.45) {
+        this.stuckTimer = 0;
+        const side = this.orbitSide;
+        this.detour = { x: -desired.z * side, z: desired.x * side };
+        this.detourTimer = 0.4;
+        this.path = [];
+        this.pathTimer = 0;
+      }
+    } else if (moved > 0.01 || casting) {
+      this.stuckTimer = 0;
+    }
+
+    this.applyMovement(snapshot, self, desired);
+    snapshot.run = !casting && this.difficulty !== 'easy';
+
+    this.orbitTimer += dt;
+    if (this.orbitTimer > 2.4) {
+      this.orbitTimer = 0;
+      this.orbitSide *= -1;
+    }
+
+    return snapshot;
+  }
+
+  private applyMovement(
+    snapshot: DeviceInputSnapshot,
+    self: MatchPlayerState,
+    direction: Vec2
+  ): void {
+    const length = Math.hypot(direction.x, direction.z);
+    if (length < 0.0001) return;
+
+    const dx = direction.x / length;
+    const dz = direction.z / length;
+    // La entrada es relativa a la cámara del jugador, igual que un stick.
+    const yaw = self.camera.yaw;
+    const forwardX = -Math.sin(yaw);
+    const forwardZ = -Math.cos(yaw);
+    const rightX = Math.cos(yaw);
+    const rightZ = -Math.sin(yaw);
+    snapshot.moveX = clamp(dx * rightX + dz * rightZ, -1, 1);
+    snapshot.moveY = clamp(dx * forwardX + dz * forwardZ, -1, 1);
+  }
+
+  private pulseAbility(snapshot: DeviceInputSnapshot, slot: number): boolean {
+    switch (slot) {
+      case 0:
+        snapshot.ability1 = true;
+        return true;
+      case 1:
+        snapshot.ability2 = true;
+        return true;
+      case 2:
+        snapshot.ability3 = true;
+        return true;
+      case 3:
+        snapshot.ability4 = true;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private pulseCommon(
+    snapshot: DeviceInputSnapshot,
+    self: MatchPlayerState,
+    clearRequest: boolean
+  ): void {
+    if (self.commonAbilityId === 'regeneracion') return;
+    if (self.cooldowns[4] > 0.001 || self.damageReductionTimer > 0) return;
+    snapshot.commonAbility = true;
+    if (clearRequest) this.useCommon = false;
+  }
+
+  private canCast(self: MatchPlayerState): boolean {
+    return (
+      self.castLockTimer <= 0.001 &&
+      self.damageReductionTimer <= 0 &&
+      // No gastar la invulnerabilidad de spawn en un ataque inmediato.
+      self.invulnerableTimer <= 0.35
+    );
+  }
+
+  private selectedDef(self: MatchPlayerState): AbilityDef | null {
+    if (this.abilitySlot === null) return null;
+    const id = self.abilityIds[this.abilitySlot];
+    return id ? ABILITIES[id] ?? null : null;
+  }
+
+  private findHealSlot(self: MatchPlayerState): number | null {
+    for (let slot = 0; slot < 4; slot++) {
+      if (self.cooldowns[slot] > 0.001) continue;
+      const id = self.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (def && def.healSelf > 0) return slot;
+    }
+    return null;
+  }
+
+  private chooseAbility(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    distance: number,
+    players: readonly MatchPlayerState[]
+  ): number | null {
+    let bestSlot: number | null = null;
+    let bestScore = -Infinity;
+
+    for (let slot = 0; slot < 4; slot++) {
+      if (self.cooldowns[slot] > 0.001) continue;
+      const id = self.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def) continue;
+      if (!this.inRange(def, distance)) continue;
+      if (def.selfDamage > 0 && self.hp / Math.max(1, self.maxHp) < 0.52) {
+        continue;
+      }
+
+      const score = this.scoreAbility(self, target, def, slot, distance, players);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSlot = slot;
+      }
+    }
+
+    return bestSlot;
+  }
+
+  private scoreAbility(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef,
+    slot: number,
+    distance: number,
+    players: readonly MatchPlayerState[]
+  ): number {
+    const hpFraction = self.hp / Math.max(1, self.maxHp);
+    const hasEffect =
+      def.power > 0 ||
+      def.healSelf > 0 ||
+      def.slow !== null ||
+      def.buffs.length > 0 ||
+      def.shield ||
+      def.shape === 'dash';
+    if (!hasEffect) return -Infinity;
+
+    let score = def.power;
+
+    if (def.healSelf > 0) {
+      score += 70 + (1 - hpFraction) * 130;
+      // No gastar la curación a vida casi llena.
+      if (hpFraction > 0.8) score -= 220;
+    }
+    if (def.shield) score += 55 + (1 - hpFraction) * 70;
+    if (def.buffs.length > 0) score += 35;
+    if (def.slow) score += 22;
+
+    switch (def.shape) {
+      case 'melee':
+        score += 12;
+        break;
+      case 'projectile':
+      case 'beam':
+        score += distance > 2.5 ? 16 : 0;
+        break;
+      case 'dash':
+        score += 10;
+        if (def.power === 0) score += 35; // reposicionamiento / huida
+        break;
+      case 'aoe': {
+        const extra = this.countEnemiesNear(
+          players,
+          self.team,
+          target.x,
+          target.z,
+          def.radius
+        );
+        score += 12 + Math.max(0, extra - 1) * 32;
+        break;
+      }
+      case 'self':
+        score += 28;
+        break;
+    }
+
+    // La definitiva se guarda para cuando el objetivo ya está tocado o hay
+    // varios rivales en el área; si no, se usa la rotación corta.
+    const targetHp = target.hp / Math.max(1, target.maxHp);
+    if (slot === 3 && targetHp > 0.65) score -= 14;
+    if (slot === 0) score += 8;
+    return score;
+  }
+
+  private countEnemiesNear(
+    players: readonly MatchPlayerState[],
+    team: MatchPlayerState['team'],
+    x: number,
+    z: number,
+    radius: number
+  ): number {
+    let count = 0;
+    for (const player of players) {
+      if (!player.alive || player.team === team) continue;
+      if (Math.hypot(player.x - x, player.z - z) <= radius + CONFIG.player.radius) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private inRange(def: AbilityDef, distance: number): boolean {
+    switch (def.shape) {
+      case 'melee':
+        return distance <= def.range + 0.35;
+      case 'projectile':
+      case 'beam':
+        return distance <= def.range;
+      case 'dash':
+        return distance >= 0.4 && distance <= def.dashDistance + 0.4;
+      case 'aoe':
+        // El centro del área se fija a `range` por delante del lanzador.
+        if (def.range <= 0.1) return distance <= def.radius + 0.35;
+        return Math.abs(distance - def.range) <= def.radius + 0.4;
+      case 'self':
+        return distance <= Math.max(2.5, def.radius + 2) && distance <= 8;
+    }
+  }
+
+  private shouldUseCommon(
+    self: MatchPlayerState,
+    distance: number,
+    retreating: boolean,
+    hpFraction: number
+  ): boolean {
+    if (self.commonAbilityId === 'regeneracion') return false;
+    if (self.cooldowns[4] > 0.001 || self.damageReductionTimer > 0) return false;
+    if (Math.random() > this.tuning.commonChance) return false;
+
+    if (self.commonAbilityId === 'proteccion') {
+      return hpFraction < 0.58 && distance < 5.5;
+    }
+    if (self.commonAbilityId === 'impulso') {
+      if (retreating) return distance < 4.2;
+      return distance > 2.2 && distance < 5.2;
+    }
+    return false;
+  }
+
+  private combatMove(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    distance: number,
+    def: AbilityDef | null,
+    facingError: number,
+    dt: number
+  ): Vec2 {
+    const preferred = this.preferredRange(self, def);
+
+    // Si hay una habilidad elegida pero aún no está encarado, avanzar hacia el
+    // objetivo es la forma de girar: el juego deriva `facing` de la velocidad.
+    if (def && facingError > this.tuning.aimTolerance) {
+      return this.moveTowards(self, target, dt);
+    }
+
+    if (!def) {
+      if (distance > preferred + 0.8) return this.moveTowards(self, target, dt);
+      if (distance < preferred - 1.2) return directionTo(target, self);
+      return this.orbit(target, self);
+    }
+
+    if (distance > preferred + 0.6) return this.moveTowards(self, target, dt);
+    if (distance < preferred - 1.5) {
+      // Alejarse del objetivo sin perderlo de vista: el movimiento de huida
+      // cambia el rumbo, así que se alterna con el acercamiento al apuntar.
+      return directionTo(target, self);
+    }
+    return this.orbit(target, self);
+  }
+
+  /** Dirección perpendicular alrededor del objetivo para no quedarse quieto. */
+  private orbit(target: Vec2, self: Vec2): Vec2 {
+    const dir = directionTo(self, target);
+    if (Math.hypot(dir.x, dir.z) < 0.001) return { x: 0, z: 0 };
+    return {
+      x: -dir.z * this.orbitSide * 0.85 + dir.x * 0.15,
+      z: dir.x * this.orbitSide * 0.85 + dir.z * 0.15
+    };
+  }
+
+  private preferredRange(self: MatchPlayerState, def: AbilityDef | null): number {
+    if (def) {
+      switch (def.shape) {
+        case 'melee':
+          return Math.max(1.1, def.range * 0.7);
+        case 'projectile':
+        case 'beam':
+          return Math.max(2, def.range * 0.72);
+        case 'dash':
+          return Math.max(2, def.dashDistance * 0.55);
+        case 'aoe':
+          return def.range > 0.1 ? def.range : Math.max(1, def.radius * 0.6);
+        case 'self':
+          return 2;
+      }
+    }
+
+    let longest = 0;
+    for (let slot = 0; slot < 4; slot++) {
+      const id = self.abilityIds[slot];
+      const ability = id ? ABILITIES[id] : null;
+      if (!ability) continue;
+      const reach =
+        ability.shape === 'dash'
+          ? ability.dashDistance
+          : ability.shape === 'aoe'
+            ? ability.range + ability.radius
+            : ability.range;
+      longest = Math.max(longest, reach);
+    }
+    return clamp(longest * 0.6, 1.4, 6.5);
+  }
+
+  private aimPoint(
+    target: MatchPlayerState,
+    distance: number,
+    def: AbilityDef | null
+  ): Vec2 {
+    const travel =
+      def && def.shape === 'projectile' && def.projectileSpeed > 0
+        ? distance / def.projectileSpeed
+        : 0;
+    const lead = travel * this.tuning.lead;
+    return {
+      x: target.x + target.vx * lead,
+      z: target.z + target.vz * lead
+    };
+  }
+
+  private moveTowards(self: MatchPlayerState, goal: Vec2, dt: number): Vec2 {
+    const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
+    if (distance < 0.12) return { x: 0, z: 0 };
+    // A corta distancia el steering local basta: el objetivo puede estar en
+    // una celda marcada como bloqueada por un árbol cercano y A* nunca llegaría
+    // a él. `resolvePosition` sigue impidiendo atravesar el collider real.
+    if (distance < 1.6) return directionTo(self, goal);
+    if (this.nav.lineClear(self.x, self.z, goal.x, goal.z)) {
+      this.path = [];
+      this.pathTimer = 0;
+      return directionTo(self, goal);
+    }
+    return this.followPath(self, goal, dt);
+  }
+
+  private followPath(self: MatchPlayerState, goal: Vec2, dt: number): Vec2 {
+    this.pathTimer += dt;
+    const goalMoved = Math.hypot(goal.x - this.pathGoal.x, goal.z - this.pathGoal.z);
+    if (goalMoved > 1.2 || this.pathTimer > this.tuning.pathInterval) {
+      this.path = this.nav.findPath(self.x, self.z, goal.x, goal.z);
+      this.pathGoal = { ...goal };
+      this.pathTimer = 0;
+    } else if (this.path.length === 0) {
+      // Ruta vacía reciente: el destino es inalcanzable. Se avanza en línea
+      // recta hasta el siguiente intento para no recalcular A* cada frame.
+      return directionTo(self, goal);
+    }
+
+    while (this.path.length > 0) {
+      const waypoint = this.path[0];
+      if (Math.hypot(waypoint.x - self.x, waypoint.z - self.z) > 0.55) break;
+      this.path.shift();
+    }
+
+    if (this.path.length === 0) return directionTo(self, goal);
+    return directionTo(self, this.path[0]);
+  }
+
+  private addSeparation(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    direction: Vec2
+  ): Vec2 {
+    let x = direction.x;
+    let z = direction.z;
+    for (const other of players) {
+      if (other === self || !other.alive || other.team !== self.team) continue;
+      const dx = self.x - other.x;
+      const dz = self.z - other.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < 1.15 && distance > 0.001) {
+        const push = (1.15 - distance) * 0.9;
+        x += (dx / distance) * push;
+        z += (dz / distance) * push;
+      }
+    }
+    return { x, z };
+  }
+}

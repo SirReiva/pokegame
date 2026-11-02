@@ -17,6 +17,17 @@ export const MAX_PLAYERS = 8;
 /** Tope por equipo para que las dos mitades quepan en la pantalla. */
 export const MAX_TEAM_SIZE = 4;
 
+/** Nivel de la IA. Compartido entre el lobby, el motor y el controlador. */
+export type BotDifficulty = 'easy' | 'normal' | 'hard';
+
+export const BOT_DIFFICULTIES: readonly BotDifficulty[] = ['easy', 'normal', 'hard'];
+
+export const BOT_DIFFICULTY_LABEL: Record<BotDifficulty, string> = {
+  easy: 'Fácil',
+  normal: 'Normal',
+  hard: 'Difícil'
+};
+
 export interface TeamInfo {
   label: string;
   short: string;
@@ -180,6 +191,10 @@ export interface LobbyPlayer {
   pokemonId: string;
   commonAbilityId: CommonAbilityId;
   rosterReady: boolean;
+  /** `true` si la plaza la controla la IA en vez de un dispositivo. */
+  isBot?: boolean;
+  /** Nivel de la IA; solo tiene sentido con `isBot`. */
+  botDifficulty?: BotDifficulty;
 }
 
 export interface MatchPlayerConfig {
@@ -190,6 +205,8 @@ export interface MatchPlayerConfig {
   team: Team;
   pokemonId: string;
   commonAbilityId: CommonAbilityId;
+  isBot?: boolean;
+  botDifficulty?: BotDifficulty;
 }
 
 /** Estado de una habilidad para el HUD de cada vista. */
