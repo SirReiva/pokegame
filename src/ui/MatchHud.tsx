@@ -4,6 +4,7 @@ import {
   TEAM_INFO,
   computeSplitLayout,
   splitRectToStyle,
+  type KillFeedEntry,
   type LobbyPlayer,
   type PlayerMatchStats
 } from '../game/multiplayer';
@@ -40,6 +41,73 @@ function hpColorFor(pct: number): string {
 }
 
 /**
+ * Feed de KOs de una vista. Cada jugador recibe la misma lista global de la
+ * partida, pero la pinta dentro de su propio viewport para no compartir un
+ * único panel entre todas las cámaras del splitscreen.
+ */
+function KillFeed({
+  entries,
+  compact,
+  pokemonNames
+}: {
+  entries: readonly KillFeedEntry[];
+  compact: boolean;
+  pokemonNames: ReadonlyMap<string, string>;
+}) {
+  const visible = entries.slice(0, compact ? 3 : 4);
+  if (visible.length === 0) return null;
+
+  return (
+    <ol
+      className={`pointer-events-none absolute right-2 top-1/4 z-10 flex max-w-[64%] flex-col items-end gap-1`}
+      aria-label="Últimos KOs"
+    >
+      {visible.map((entry) => {
+        const killerColor = TEAM_INFO[entry.killerTeam].color;
+        const victimColor = TEAM_INFO[entry.victimTeam].color;
+        const killerPokemon =
+          pokemonNames.get(entry.killerPokemonId) ?? entry.killerPokemonId;
+        const victimPokemon =
+          pokemonNames.get(entry.victimPokemonId) ?? entry.victimPokemonId;
+        return (
+          <li
+            key={entry.id}
+            className={`flex max-w-full animate-fade-in items-center gap-1.5 rounded-md border border-line bg-night-850/80 px-1.5 py-0.5 shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
+              compact ? 'text-7.36' : 'text-8.32'
+            }`}
+            title={`${entry.killerName} (${killerPokemon}) eliminó a ${entry.victimName} (${victimPokemon})`}
+          >
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: killerColor }}
+            />
+            <span
+              className="min-w-0 truncate font-mono font-semibold"
+              style={{ color: killerColor }}
+            >
+              {entry.killerName}
+            </span>
+            <span className="shrink-0 font-mono text-6.4 font-bold tracking-[0.08em] text-steel-450 uppercase">
+              KO
+            </span>
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: victimColor }}
+            />
+            <span
+              className="min-w-0 truncate font-mono"
+              style={{ color: victimColor }}
+            >
+              {entry.victimName}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
  * Capa HTML del splitscreen. Los viewports 3D los dibuja PlayCanvas debajo;
  * aquí solo van los bordes de equipo y las etiquetas de cada jugador, alineadas
  * con el mismo reparto normalizado que usan las cámaras.
@@ -47,6 +115,9 @@ function hpColorFor(pct: number): string {
 export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
   const layout = computeSplitLayout(players.length);
   const statsBySlot = new Map(stats.map((entry) => [entry.slot, entry]));
+  const pokemonNames = new Map(
+    manifest.pokemon.map((pokemon) => [pokemon.id, pokemon.name])
+  );
   const scoreBlue = stats[0]?.blueScore ?? 0;
   const scoreRed = stats[0]?.redScore ?? 0;
 
@@ -372,6 +443,12 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                 </div>
               )}
             </div>
+
+            <KillFeed
+              entries={playerStats?.feed ?? []}
+              compact={compact}
+              pokemonNames={pokemonNames}
+            />
 
             {playerStats && !playerStats.alive && (
               <div className="absolute inset-0 grid place-items-center bg-night-950/46">

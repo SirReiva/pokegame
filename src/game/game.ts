@@ -67,6 +67,7 @@ import {
   syncTeamsWithMap,
   type MatchEndResult,
   type MatchPlayerConfig,
+  type KillFeedEntry,
   type PlayerMatchStats
 } from './multiplayer';
 import { baseStatsFor, combatStatsFor } from './pokedex';
@@ -190,6 +191,9 @@ export class Game {
   private pendingInstantHits: PendingInstantHit[] = [];
   /** Marcador de la partida; gana el primero que llegue a `KO_TARGET`. */
   private teamScores: Record<Team, number> = { blue: 0, red: 0 };
+  /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
+  private killFeed: KillFeedEntry[] = [];
+  private killFeedSeq = 0;
   private matchOver = false;
   private winner: Team | null = null;
   private readonly combatFx: CombatFx;
@@ -621,6 +625,8 @@ export class Game {
     this.combatFx.clear();
     this.damageNumbers.clear();
     this.teamScores = { blue: 0, red: 0 };
+    this.killFeed = [];
+    this.killFeedSeq = 0;
     this.matchOver = false;
     this.winner = null;
 
@@ -1955,6 +1961,8 @@ export class Game {
     target.playback = 1;
     for (const copy of target.copies) copy.play(target.animation, true);
 
+    this.pushKillFeed(killer, target);
+
     if (killer.team !== target.team) {
       killer.kills += 1;
       this.teamScores[killer.team] += 1;
@@ -1970,6 +1978,24 @@ export class Game {
       }
     }
     this.emitMatchStats();
+  }
+
+  /**
+   * Guarda el KO para el feed de las vistas. Se conservan los cuatro últimos y
+   * se reemplaza el array en vez de mutarlo para que React reciba una lista
+   * nueva en cada emisión de estadísticas.
+   */
+  private pushKillFeed(killer: MatchPlayerState, victim: MatchPlayerState): void {
+    const entry: KillFeedEntry = {
+      id: ++this.killFeedSeq,
+      killerName: killer.name,
+      killerTeam: killer.team,
+      killerPokemonId: killer.pokemonId,
+      victimName: victim.name,
+      victimTeam: victim.team,
+      victimPokemonId: victim.pokemonId
+    };
+    this.killFeed = [entry, ...this.killFeed].slice(0, 4);
   }
 
   private updateProjectiles(dt: number): void {
@@ -2489,6 +2515,7 @@ export class Game {
               description: commonOption.description
             }
           : null,
+        feed: this.killFeed,
         blueScore: this.teamScores.blue,
         redScore: this.teamScores.red,
         winner: this.winner

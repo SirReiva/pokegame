@@ -292,10 +292,24 @@ export interface PlayerMatchStats {
   shieldActive: boolean;
   /** Instinto común elegido por este Pokémon. */
   commonAbility: CommonAbilityHud | null;
+  /** Últimos KOs de la partida, el más reciente primero. */
+  feed: KillFeedEntry[];
   /** Marcador de equipo, repetido en cada entrada para pintar el HUD. */
   blueScore: number;
   redScore: number;
   winner: Team | null;
+}
+
+/** Un KO reciente para el feed de cada vista. */
+export interface KillFeedEntry {
+  /** Identificador creciente para animar solo las entradas nuevas. */
+  id: number;
+  killerName: string;
+  killerTeam: Team;
+  killerPokemonId: string;
+  victimName: string;
+  victimTeam: Team;
+  victimPokemonId: string;
 }
 
 /** Resultado final que React usa para mostrar la pantalla de victoria. */
