@@ -37,7 +37,7 @@ import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { applyHealSelf, CAST_EFFECTS } from './effects';
-import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
+import { FogDecal, FogMask, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
 import {
   IDLE_INPUT,
   Input,
@@ -218,6 +218,13 @@ export class Game {
   /** Decals de sombra de cordillera en el suelo, uno por vista. */
   private fogDecals: FogDecal[] = [];
   private fogDecalMesh: pc.Mesh | null = null;
+  /**
+   * Máscara de visibilidad world-space por equipo. Es independiente de la
+   * cámara, así que todas las vistas del mismo equipo comparten la suya.
+   */
+  private readonly fogMasks = new Map<Team, FogMask>();
+  /** Buffers de círculos por vista, para poner el observador local primero. */
+  private readonly viewCircles: VisionCircle[][] = [];
   /** Tramos de cordillera que proyectan sombra dentro de la niebla. */
   private sightOccluders: SightOccluder[] = [];
   /**
@@ -594,7 +601,7 @@ export class Game {
             this.ensureFogDecalMesh(),
             layer.id,
             currentView,
-            this.sightOccluders
+            this.ensureFogMask(config.team)
           )
         );
       }
@@ -669,6 +676,9 @@ export class Game {
     this.fogViews = [];
     for (const decal of this.fogDecals) decal.destroy();
     this.fogDecals = [];
+    for (const mask of this.fogMasks.values()) mask.destroy();
+    this.fogMasks.clear();
+    this.viewCircles.length = 0;
     this.visibleByTeam = { blue: new Set(), red: new Set() };
 
     for (const player of this.matchPlayers) {
@@ -696,6 +706,23 @@ export class Game {
   private ensureFogDecalMesh(): pc.Mesh {
     if (!this.fogDecalMesh) this.fogDecalMesh = createFogDecalMesh(this.app.graphicsDevice);
     return this.fogDecalMesh;
+  }
+
+  /**
+   * Máscara world-space del equipo. Se crea una sola vez por equipo y la
+   * comparten todas sus vistas: el resultado no depende de la cámara.
+   */
+  private ensureFogMask(team: Team): FogMask {
+    let mask = this.fogMasks.get(team);
+    if (!mask) {
+      mask = new FogMask(
+        this.app.graphicsDevice,
+        this.sightOccluders,
+        `fog-mask-${team}`
+      );
+      this.fogMasks.set(team, mask);
+    }
+    return mask;
   }
 
   setPaused(paused: boolean): void {
@@ -2694,6 +2721,9 @@ export class Game {
       current[observer.team].add(observer.slot);
       for (const target of this.matchPlayers) {
         if (target === observer) continue;
+        // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
+        // que comprobar rivales y aliados que acaban de caer.
+        if (target.alive && target.team === observer.team) continue;
         // Un KO deja ver la animación de daño un instante; el cuerpo sigue
         // siendo visible para el equipo que lo vio caer.
         if (!target.alive && target.deathFade <= 0) continue;
@@ -2714,10 +2744,42 @@ export class Game {
     }
     this.visibleByTeam = current;
 
+    // Círculos de visión por equipo: se calculan una vez por frame y se
+    // reutilizan en todas sus vistas. Un humano KO conserva su círculo porque
+    // su cámara sigue al cuerpo hasta reaparecer; un bot KO no aporta visión.
+    const circlesByTeam = new Map<Team, VisionCircle[]>();
+    const localCircleBySlot = new Map<number, VisionCircle>();
+    for (const player of this.matchPlayers) {
+      if (!player.alive && player.isBot) continue;
+      const circle: VisionCircle = {
+        x: player.x,
+        z: player.z,
+        visionRange: player.visionRange
+      };
+      localCircleBySlot.set(player.slot, circle);
+      let circles = circlesByTeam.get(player.team);
+      if (!circles) {
+        circles = [];
+        circlesByTeam.set(player.team, circles);
+      }
+      circles.push(circle);
+    }
+
+    // La máscara world-space se compone una sola vez por equipo, aunque haya
+    // varias vistas suyas en pantalla.
+    const noCircles: readonly VisionCircle[] = [];
+    for (const [team, mask] of this.fogMasks) {
+      mask.update(circlesByTeam.get(team) ?? noCircles);
+    }
+
     this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
       const camera = observer.camera.entity.camera;
-      const circles = this.visionCirclesFor(observer);
+      const circles = this.circlesForView(
+        viewIndex,
+        localCircleBySlot.get(observer.slot),
+        circlesByTeam.get(observer.team) ?? noCircles
+      );
       if (fog && camera) {
         fog.update(
           camera,
@@ -2730,7 +2792,7 @@ export class Game {
       const decal = this.fogDecals[viewIndex];
       if (decal) {
         const screenFog = fog && camera ? fog.screenFog : null;
-        decal.update(circles, screenFog);
+        decal.update(screenFog);
       }
 
       const visibleSlots = current[observer.team];
@@ -2753,17 +2815,24 @@ export class Game {
   }
 
   /**
-   * Círculos de visión que comparte una vista: el del jugador local y los de
-   * sus aliados vivos (incluidos los bots). Se usan tanto para la niebla de
-   * pantalla como para componer la máscara de visibilidad del decal.
+   * Círculos de una vista con su propio observador primero: `FogView` muestrea
+   * con más detalle el primer círculo de la unión. Reutiliza el buffer de la
+   * vista para no asignar memoria en cada frame.
    */
-  private visionCirclesFor(observer: MatchPlayerState): VisionCircle[] {
-    const circles: VisionCircle[] = [
-      { x: observer.x, z: observer.z, visionRange: observer.visionRange }
-    ];
-    for (const ally of this.matchPlayers) {
-      if (ally === observer || !ally.alive || ally.team !== observer.team) continue;
-      circles.push({ x: ally.x, z: ally.z, visionRange: ally.visionRange });
+  private circlesForView(
+    viewIndex: number,
+    local: VisionCircle | undefined,
+    teamCircles: readonly VisionCircle[]
+  ): readonly VisionCircle[] {
+    let circles = this.viewCircles[viewIndex];
+    if (!circles) {
+      circles = [];
+      this.viewCircles[viewIndex] = circles;
+    }
+    circles.length = 0;
+    if (local) circles.push(local);
+    for (const circle of teamCircles) {
+      if (circle !== local) circles.push(circle);
     }
     return circles;
   }

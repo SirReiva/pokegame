@@ -409,41 +409,30 @@ export class FogView {
 }
 
 /**
- * Sombra de cordillera fija en el mundo. La máscara se dibuja en coordenadas
- * XZ del mapa y el plano vive en la capa de la vista; la cámara solo lo mira,
- * no lo deforma. Se dibuja sin test de profundidad para que la cuña tiña también
- * la vegetación y las decoraciones, y usa una máscara de esténcil para excluir
- * a los separadores y no sombrear su cara visible.
+ * Máscara world-space de visibilidad de un equipo. No depende de la cámara, así
+ * que se comparte entre todas las vistas del mismo equipo: se redibuja y se
+ * sube a GPU una sola vez aunque haya varios viewports en pantalla.
  *
  * La máscara no es solo la sombra: se compone la visibilidad de todo el equipo
  * (círculo de cada observador menos sus cuñas), de modo que una sombra solo
  * oscurece los puntos que no ve ningún aliado.
  */
-export class FogDecal {
-  readonly entity: pc.Entity;
+export class FogMask {
+  readonly texture: pc.Texture;
 
-  private readonly material: pc.ShaderMaterial;
   private readonly occluders: readonly SightOccluder[];
   private readonly maskCanvas: HTMLCanvasElement;
   private readonly maskContext: CanvasRenderingContext2D;
-  private readonly maskTexture: pc.Texture;
   /** Lienzo auxiliar donde se compone la visibilidad de cada observador. */
   private readonly observerCanvas: HTMLCanvasElement;
   private readonly observerContext: CanvasRenderingContext2D;
-  private readonly screenCenters = new Float32Array(MAX_VISION_CIRCLES * 2);
-  private readonly screenRadii = new Float32Array(MAX_VISION_CIRCLES * 2);
-  private screenFeather: number = CONFIG.vision.fogFeather;
-  private screenOpacity = 0;
-  /** Observadores del último frame, para no redibujar la máscara sin cambios. */
+  /** Observadores del último dibujo, para no redibujar la máscara sin cambios. */
   private readonly lastCircles: VisionCircle[] = [];
 
   constructor(
     device: pc.GraphicsDevice,
-    root: pc.Entity,
-    mesh: pc.Mesh,
-    layerId: number,
-    index: number,
-    occluders: readonly SightOccluder[]
+    occluders: readonly SightOccluder[],
+    name: string
   ) {
     this.occluders = occluders;
 
@@ -465,15 +454,8 @@ export class FogDecal {
     if (!observerContext) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.observerContext = observerContext;
 
-    // Sin observadores todavía: centros lejanos y radios nulos para que el
-    // decal no oscurezca nada hasta el primer `update`.
-    for (let circleIndex = 0; circleIndex < MAX_VISION_CIRCLES; circleIndex++) {
-      this.screenCenters[circleIndex * 2] = -1000;
-      this.screenCenters[circleIndex * 2 + 1] = -1000;
-    }
-
-    this.maskTexture = new pc.Texture(device, {
-      name: `fog-decal-mask-${index + 1}`,
+    this.texture = new pc.Texture(device, {
+      name,
       width: MASK_SIZE,
       height: MASK_SIZE,
       format: pc.PIXELFORMAT_RGBA8,
@@ -484,95 +466,14 @@ export class FogDecal {
       addressV: pc.ADDRESS_CLAMP_TO_EDGE,
       srgb: false
     });
-    this.maskTexture.setSource(this.maskCanvas);
-
-    this.material = new pc.ShaderMaterial({
-      uniqueName: 'fog-of-war-decal',
-      vertexGLSL: DECAL_VERTEX_SHADER,
-      fragmentGLSL: DECAL_FRAGMENT_SHADER,
-      attributes: {
-        aPosition: pc.SEMANTIC_POSITION,
-        aUv0: pc.SEMANTIC_TEXCOORD0
-      }
-    });
-    this.material.blendType = pc.BLEND_NORMAL;
-    // Sin test de profundidad: la cuña de sombra también tiñe la vegetación y
-    // las decoraciones que sobresalen del suelo, no solo la losa del terreno.
-    // La máscara de esténcil (ver `world.ts`) deja fuera a los separadores para
-    // que su cara visible no se oscurezca cuando la cámara los alinea con la
-    // zona de sombra.
-    this.material.depthTest = false;
-    this.material.depthWrite = false;
-    this.material.cull = pc.CULLFACE_NONE;
-    this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
-    this.material.setParameter('uFogMask', this.maskTexture);
-    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
-    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
-    this.material.setParameter('uScreenFeather', this.screenFeather);
-    this.material.setParameter('uScreenOpacity', this.screenOpacity);
-    this.material.update();
-
-    const instance = new pc.MeshInstance(mesh, this.material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
-    instance.drawOrder = 1;
-    // Solo donde el mundo escribió esténcil 1 (terreno, decoraciones y props);
-    // los separadores escriben 0 para no recibir sombra en su cara visible.
-    // Sin esténcil en el dispositivo, el decal se dibuja como antes.
-    if (device.supportsStencil) {
-      const stencil = new pc.StencilParameters({
-        func: pc.FUNC_EQUAL,
-        ref: 1,
-        readMask: 0xff,
-        writeMask: 0x00,
-        fail: pc.STENCILOP_KEEP,
-        zfail: pc.STENCILOP_KEEP,
-        zpass: pc.STENCILOP_KEEP
-      });
-      instance.stencilFront = stencil;
-      instance.stencilBack = stencil;
-    }
-
-    this.entity = new pc.Entity(`fog-decal-${index + 1}`);
-    this.entity.setPosition(0, 0.02, 0);
-    const halfX = mapHalfWidth();
-    const halfZ = mapHalfDepth();
-    this.entity.setLocalScale(halfX, 1, halfZ);
-    this.entity.addComponent('render');
-    const render = this.entity.render!;
-    render.meshInstances = [instance];
-    render.castShadows = false;
-    render.receiveShadows = false;
-    render.layers = [layerId];
-    root.addChild(this.entity);
+    this.texture.setSource(this.maskCanvas);
   }
 
-  /**
-   * @param circles Observadores vivos del equipo, con el jugador local primero.
-   * La máscara world-space es la unión de lo que ve cada uno; el óvalo de
-   * pantalla es la unión de sus círculos. La máscara solo se redibuja cuando
-   * cambia la posición o el rango de algún observador.
-   */
-  update(circles: readonly VisionCircle[], screen: ScreenFog | null): void {
-    this.syncScreenFog(screen);
+  /** Recompone la máscara si cambió la posición o el rango de algún observador. */
+  update(circles: readonly VisionCircle[]): void {
     if (!this.circlesChanged(circles)) return;
     this.rememberCircles(circles);
     this.updateMask(circles);
-  }
-
-  private syncScreenFog(screen: ScreenFog | null): void {
-    if (screen) {
-      this.screenCenters.set(screen.centers);
-      this.screenRadii.set(screen.radii);
-      this.screenFeather = screen.feather;
-      this.screenOpacity = screen.opacity;
-    } else {
-      this.screenOpacity = 0;
-    }
-    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
-    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
-    this.material.setParameter('uScreenFeather', this.screenFeather);
-    this.material.setParameter('uScreenOpacity', this.screenOpacity);
   }
 
   private circlesChanged(circles: readonly VisionCircle[]): boolean {
@@ -654,7 +555,7 @@ export class FogDecal {
     }
 
     context.globalCompositeOperation = 'source-over';
-    this.maskTexture.upload();
+    this.texture.upload();
   }
 
   /** Pinta las cuñas de sombra que proyecta un observador desde su posición. */
@@ -755,8 +656,131 @@ export class FogDecal {
   }
 
   destroy(): void {
+    this.texture.destroy();
+  }
+}
+
+/**
+ * Sombra de cordillera fija en el mundo. El plano vive en la capa de la vista;
+ * la cámara solo lo mira, no lo deforma. Se dibuja sin test de profundidad para
+ * que la cuña tiña también la vegetación y las decoraciones, y usa una máscara
+ * de esténcil para excluir a los separadores y no sombrear su cara visible.
+ *
+ * La visibilidad world-space la aporta una `FogMask` compartida por todas las
+ * vistas del mismo equipo; el decal solo añade el borde suave de pantalla de su
+ * propia cámara.
+ */
+export class FogDecal {
+  readonly entity: pc.Entity;
+
+  private readonly material: pc.ShaderMaterial;
+  private readonly screenCenters = new Float32Array(MAX_VISION_CIRCLES * 2);
+  private readonly screenRadii = new Float32Array(MAX_VISION_CIRCLES * 2);
+  private screenFeather: number = CONFIG.vision.fogFeather;
+  private screenOpacity = 0;
+
+  constructor(
+    device: pc.GraphicsDevice,
+    root: pc.Entity,
+    mesh: pc.Mesh,
+    layerId: number,
+    index: number,
+    mask: FogMask
+  ) {
+    // Sin observadores todavía: centros lejanos y radios nulos para que el
+    // decal no oscurezca nada hasta el primer `update`.
+    for (let circleIndex = 0; circleIndex < MAX_VISION_CIRCLES; circleIndex++) {
+      this.screenCenters[circleIndex * 2] = -1000;
+      this.screenCenters[circleIndex * 2 + 1] = -1000;
+    }
+
+    this.material = new pc.ShaderMaterial({
+      uniqueName: 'fog-of-war-decal',
+      vertexGLSL: DECAL_VERTEX_SHADER,
+      fragmentGLSL: DECAL_FRAGMENT_SHADER,
+      attributes: {
+        aPosition: pc.SEMANTIC_POSITION,
+        aUv0: pc.SEMANTIC_TEXCOORD0
+      }
+    });
+    this.material.blendType = pc.BLEND_NORMAL;
+    // Sin test de profundidad: la cuña de sombra también tiñe la vegetación y
+    // las decoraciones que sobresalen del suelo, no solo la losa del terreno.
+    // La máscara de esténcil (ver `world.ts`) deja fuera a los separadores para
+    // que su cara visible no se oscurezca cuando la cámara los alinea con la
+    // zona de sombra.
+    this.material.depthTest = false;
+    this.material.depthWrite = false;
+    this.material.cull = pc.CULLFACE_NONE;
+    this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
+    this.material.setParameter('uFogMask', mask.texture);
+    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
+    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
+    this.material.setParameter('uScreenFeather', this.screenFeather);
+    this.material.setParameter('uScreenOpacity', this.screenOpacity);
+    this.material.update();
+
+    const instance = new pc.MeshInstance(mesh, this.material);
+    instance.castShadow = false;
+    instance.receiveShadow = false;
+    instance.drawOrder = 1;
+    // Solo donde el mundo escribió esténcil 1 (terreno, decoraciones y props);
+    // los separadores escriben 0 para no recibir sombra en su cara visible.
+    // Sin esténcil en el dispositivo, el decal se dibuja como antes.
+    if (device.supportsStencil) {
+      const stencil = new pc.StencilParameters({
+        func: pc.FUNC_EQUAL,
+        ref: 1,
+        readMask: 0xff,
+        writeMask: 0x00,
+        fail: pc.STENCILOP_KEEP,
+        zfail: pc.STENCILOP_KEEP,
+        zpass: pc.STENCILOP_KEEP
+      });
+      instance.stencilFront = stencil;
+      instance.stencilBack = stencil;
+    }
+
+    this.entity = new pc.Entity(`fog-decal-${index + 1}`);
+    this.entity.setPosition(0, 0.02, 0);
+    const halfX = mapHalfWidth();
+    const halfZ = mapHalfDepth();
+    this.entity.setLocalScale(halfX, 1, halfZ);
+    this.entity.addComponent('render');
+    const render = this.entity.render!;
+    render.meshInstances = [instance];
+    render.castShadows = false;
+    render.receiveShadows = false;
+    render.layers = [layerId];
+    root.addChild(this.entity);
+  }
+
+  /**
+   * Solo sincroniza el borde de pantalla de esta vista. La visibilidad
+   * world-space la actualiza la `FogMask` compartida del equipo una vez por
+   * frame, no cada decal.
+   */
+  update(screen: ScreenFog | null): void {
+    this.syncScreenFog(screen);
+  }
+
+  private syncScreenFog(screen: ScreenFog | null): void {
+    if (screen) {
+      this.screenCenters.set(screen.centers);
+      this.screenRadii.set(screen.radii);
+      this.screenFeather = screen.feather;
+      this.screenOpacity = screen.opacity;
+    } else {
+      this.screenOpacity = 0;
+    }
+    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
+    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
+    this.material.setParameter('uScreenFeather', this.screenFeather);
+    this.material.setParameter('uScreenOpacity', this.screenOpacity);
+  }
+
+  destroy(): void {
     this.entity.destroy();
     this.material.destroy();
-    this.maskTexture.destroy();
   }
 }
