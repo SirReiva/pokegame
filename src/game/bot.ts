@@ -127,6 +127,15 @@ const BACK_OFF_SECONDS = 0.9;
 /** Distancia que se retrocede por el rastro para salir de un bloqueo. */
 const BACK_OFF_DISTANCE = 1.6;
 
+/** Radio en el que un rival cercano justifica huir con poca vida. */
+const RETREAT_DANGER_RADIUS = 9;
+/** Tiempo máximo de una huida antes de volver a la acción. */
+const RETREAT_MAX_SECONDS = 6;
+/** Distancia al punto de aparición que cuenta como "ya en la base". */
+const RETREAT_ARRIVE_DISTANCE = 2.5;
+/** Espera antes de poder volver a huir tras llegar a la base sin curación. */
+const RETREAT_COOLDOWN_SECONDS = 4;
+
 /** Foco compartido por los bots de un mismo equipo. */
 export interface BotFocus {
   slot: number | null;
@@ -193,6 +202,10 @@ export class BotController {
   private abilitySlot: number | null = null;
   private useCommon = false;
   private retreat = false;
+  /** Momento en el que una huida larga se da por terminada. */
+  private retreatUntil = 0;
+  /** Tras una huida infructuosa, espera antes de volver a intentarlo. */
+  private retreatCooldownUntil = 0;
   private goal: Vec2 = { x: 0, z: 0 };
 
   private path: NavPoint[] = [];
@@ -284,6 +297,8 @@ export class BotController {
     this.abilitySlot = null;
     this.useCommon = false;
     this.retreat = false;
+    this.retreatUntil = 0;
+    this.retreatCooldownUntil = 0;
     this.path = [];
     this.stuckTimer = 0;
     this.detourTimer = 0;
@@ -570,9 +585,43 @@ export class BotController {
     this.abilitySlot = null;
     this.useCommon = false;
 
-    // Huida: solo se planta a curarse si la habilidad de curación está lista y
-    // el rival no está encima. Si no, corre hacia su base.
-    this.retreat = targetIsVisible && hpFraction < this.tuning.retreatHp;
+    // La visión es compartida: un rival al otro lado del mapa visto por un
+    // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
+    const nearestEnemy = this.nearestVisibleEnemyDistance(self);
+    const lowHp = hpFraction < this.tuning.retreatHp;
+    const atBase =
+      Math.hypot(self.x - self.spawn.x, self.z - self.spawn.z) <=
+      RETREAT_ARRIVE_DISTANCE;
+    const canRecover =
+      self.commonAbilityId === 'regeneracion' || this.findHealSlot(self) !== null;
+
+    if (this.retreat) {
+      if (!lowHp || nearestEnemy > RETREAT_DANGER_RADIUS) {
+        // El peligro ya pasó: vuelve a la acción sin esperar.
+        this.stopRetreat(false);
+      } else if (atBase && !canRecover) {
+        // La base no cura por sí sola. Quedarse plantado allí solo regala una
+        // baja; es mejor volver a patrullar y buscar una pelea favorable.
+        this.stopRetreat(true);
+      } else if (this.clock >= this.retreatUntil) {
+        // Una huida eterna deja al equipo en inferioridad.
+        this.stopRetreat(true);
+      }
+    }
+
+    if (
+      !this.retreat &&
+      lowHp &&
+      nearestEnemy <= RETREAT_DANGER_RADIUS &&
+      this.clock >= this.retreatCooldownUntil &&
+      !(atBase && !canRecover)
+    ) {
+      this.retreat = true;
+      this.retreatUntil = this.clock + RETREAT_MAX_SECONDS;
+    }
+
+    // Huida: se planta a curarse si tiene una habilidad de curación lista y el
+    // rival no está encima. Si no, corre hacia su base.
     if (this.retreat) {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
@@ -593,6 +642,32 @@ export class BotController {
     }
 
     this.updatePatrol(self);
+  }
+
+  /**
+   * Cierra la huida. Si fue por llegar a la base sin curación o por agotarse el
+   * tiempo, deja un enfriamiento para no volver a plantarse allí enseguida.
+   * También olvida la última posición vista para no lanzarse a perseguir justo
+   * después de retroceder.
+   */
+  private stopRetreat(cooldown: boolean): void {
+    this.retreat = false;
+    if (cooldown) this.retreatCooldownUntil = this.clock + RETREAT_COOLDOWN_SECONDS;
+    this.lastSeen = null;
+    this.patrolTimer = 0;
+    this.path = [];
+    this.pathTimer = 0;
+  }
+
+  /** Distancia al rival visible más cercano, o `Infinity` si no hay ninguno. */
+  private nearestVisibleEnemyDistance(self: MatchPlayerState): number {
+    let nearest = Infinity;
+    for (const enemy of this.visibleEnemies) {
+      if (!enemy.alive || enemy.team === self.team) continue;
+      const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
+      if (distance < nearest) nearest = distance;
+    }
+    return nearest;
   }
 
   private setGoal(goal: Vec2): void {
