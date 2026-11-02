@@ -152,6 +152,8 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   terrainSpeedReason: TerrainSpeedReason;
   visionRange: number;
   concealment: Concealment;
+  /** Color representativo del Pokémon (`accent` del manifiesto). */
+  accent: [number, number, number];
   /** Nº de rivales vivos que te ven ahora mismo (se recalcula cada frame). */
   enemiesSeeing: number;
   camera: CameraRig;
@@ -166,6 +168,20 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   combat: CombatStats;
   hp: number;
   maxHp: number;
+  /** Fracción de daño reducida por Protección (0-1). */
+  damageReduction: number;
+  /** Multiplicador de velocidad normal mientras Protección está activa. */
+  shieldSpeedMultiplier: number;
+  /** Segundos restantes de Protección. */
+  damageReductionTimer: number;
+  /** Segundos seguidos oculto para Regeneración. */
+  hiddenTimer: number;
+  /** Gracia antes de resetear el contador al perder visibilidad. */
+  regenGraceTimer: number;
+  /** Acumulador para curar 1 PV entero por segundo. */
+  regenAccumulator: number;
+  /** `true` cuando Regeneración está curando en este frame. */
+  regenerating: boolean;
   alive: boolean;
   /** Segundos restantes hasta reaparecer. */
   respawnTimer: number;
@@ -215,6 +231,9 @@ export interface MatchPlayerState extends MatchPlayerConfig {
    * recalcula a partir de `slowEffects`; no se asigna a mano.
    */
   slowMultiplier: number;
-  /** Ids de las cuatro habilidades; `null` deja el hueco vacío. */
+  /**
+   * Ids de las cuatro habilidades del Pokémon y, al final, el instinto común.
+   * `null` deja un hueco vacío.
+   */
   abilityIds: (string | null)[];
 }

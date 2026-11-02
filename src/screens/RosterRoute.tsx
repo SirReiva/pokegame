@@ -83,6 +83,16 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
         return;
       }
 
+      // Con la card girada, izquierda/derecha cambian el instinto en vez de
+      // mover el carrusel de Pokémon.
+      if (
+        flipped[player.deviceId] === player.pokemonId &&
+        (action === 'left' || action === 'right')
+      ) {
+        session.cycleCommonAbility(player.slot, action === 'left' ? -1 : 1);
+        return;
+      }
+
       clearFlip(player.slot);
       session.moveCursor(player.slot, action);
     },
@@ -103,6 +113,7 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
       flipped={flipped}
       onPick={handlePick}
       onFlip={toggleFlip}
+      onSelectCommon={session.selectCommonAbility}
       onToggleReady={session.toggleRosterReady}
       onStart={() => navigate('/play')}
       onBack={() => {

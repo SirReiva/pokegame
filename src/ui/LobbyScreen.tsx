@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { commonAbilityOption } from '../game/abilities';
 import type { InputDeviceInfo } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
 import {
@@ -101,6 +102,13 @@ function TeamColumn({
                 }`}
               >
                 {player.teamReady ? 'Listo' : 'Eligiendo'}
+              </span>
+            </div>
+
+            <div className="mt-1 font-mono text-8.96 text-steel-650">
+              Instinto:{' '}
+              <span className="text-steel-350">
+                {commonAbilityOption(player.commonAbilityId)?.name ?? '—'}
               </span>
             </div>
 

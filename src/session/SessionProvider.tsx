@@ -6,6 +6,11 @@ import {
   useState,
   type ReactNode
 } from 'react';
+import {
+  COMMON_ABILITY_OPTIONS,
+  DEFAULT_COMMON_ABILITY,
+  type CommonAbilityId
+} from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
 import {
@@ -144,6 +149,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           team,
           teamReady: false,
           pokemonId: firstPokemon,
+          commonAbilityId: DEFAULT_COMMON_ABILITY,
           rosterReady: false
         }
       ]);
@@ -198,6 +204,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       current.map((player) => ({
         ...player,
         pokemonId: player.pokemonId || firstPokemon,
+        commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
         rosterReady: false
       }))
     );
@@ -247,6 +254,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     },
     [commitPlayers]
+  );
+
+  const selectCommonAbility = useCallback(
+    (slot: number, abilityId: CommonAbilityId) => {
+      commitPlayers(
+        playersRef.current.map((entry) =>
+          entry.slot === slot && entry.commonAbilityId !== abilityId
+            ? { ...entry, commonAbilityId: abilityId, rosterReady: false }
+            : entry
+        )
+      );
+    },
+    [commitPlayers]
+  );
+
+  const cycleCommonAbility = useCallback(
+    (slot: number, delta: number) => {
+      const player = playersRef.current.find((entry) => entry.slot === slot);
+      if (!player || delta === 0) return;
+      const index = Math.max(
+        0,
+        COMMON_ABILITY_OPTIONS.findIndex((option) => option.id === player.commonAbilityId)
+      );
+      const next = (index + delta + COMMON_ABILITY_OPTIONS.length) % COMMON_ABILITY_OPTIONS.length;
+      selectCommonAbility(slot, COMMON_ABILITY_OPTIONS[next].id);
+    },
+    [selectCommonAbility]
   );
 
   const setRosterReady = useCallback(
@@ -299,7 +333,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       deviceId: player.deviceId,
       deviceKind: player.deviceKind,
       team: player.team,
-      pokemonId: player.pokemonId
+      pokemonId: player.pokemonId,
+      commonAbilityId: player.commonAbilityId
     }));
   }, [players]);
 
@@ -321,6 +356,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       continueToRoster,
       moveCursor,
       selectPokemon,
+      selectCommonAbility,
+      cycleCommonAbility,
       setRosterReady,
       toggleRosterReady,
       resetRosterReady,
@@ -344,6 +381,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       continueToRoster,
       moveCursor,
       selectPokemon,
+      selectCommonAbility,
+      cycleCommonAbility,
       setRosterReady,
       toggleRosterReady,
       resetRosterReady,

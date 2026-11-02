@@ -77,6 +77,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
         const playerStats = statsBySlot.get(player.slot);
         const entry = manifest.pokemon.find((pokemon) => pokemon.id === player.pokemonId);
         const compact = players.length > 4;
+        const common = playerStats?.commonAbility ?? null;
         const hpPct = playerStats
           ? Math.max(0, Math.min(100, (playerStats.hp / Math.max(1, playerStats.maxHp)) * 100))
           : 0;
@@ -283,11 +284,17 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                         <div
                           key={ability.slot}
                           className={`relative flex min-w-10 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
-                            ready && ability.id
-                              ? 'border-[color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
-                              : 'border-line opacity-75'
+                            playerStats.shieldActive
+                              ? 'opacity-40'
+                              : ready && ability.id
+                                ? 'border-[color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
+                                : 'border-line opacity-75'
                           }`}
-                          title={`${ability.name}${ability.type ? ` · ${typeLabel} · ${categoryLabel}` : ''}`}
+                          title={
+                            playerStats.shieldActive
+                              ? 'Protección activa: no puedes usar otras habilidades'
+                              : `${ability.name}${ability.type ? ` · ${typeLabel} · ${categoryLabel}` : ''}`
+                          }
                         >
                           <span className="flex items-center justify-between gap-1">
                             <span className="font-mono text-7.04 tracking-[0.06em] text-(--team)">
@@ -321,6 +328,46 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                         </div>
                       );
                     })}
+                    {common && (
+                      <div
+                        className={`relative flex min-w-9 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
+                          common.passive
+                            ? common.active
+                              ? 'border-[color-mix(in_srgb,#8ee08a_55%,var(--color-line))]'
+                              : 'border-line opacity-80'
+                            : common.cooldown <= 0.001
+                              ? 'border-[color-mix(in_srgb,var(--team)_55%,var(--color-line))]'
+                              : 'border-line opacity-75'
+                        }`}
+                        title={`${common.name} · Instinto común · ${common.description}`}
+                      >
+                        <span className="flex items-center justify-between gap-1">
+                          <span className="font-mono text-7.04 tracking-[0.06em] text-(--team)">
+                            {common.passive ? 'PAS' : playerStats.gamepad ? 'RT' : 'I'}
+                          </span>
+                          {common.passive && common.active && (
+                            <span className="shrink-0 rounded-full bg-success-deep/70 px-1 font-mono text-5.44 font-bold uppercase text-accent-soft">
+                              ACT
+                            </span>
+                          )}
+                        </span>
+                        <span className="truncate font-mono text-7.36 text-steel-250">
+                          {common.short}
+                        </span>
+                        {!common.passive && common.cooldown > 0.001 && (
+                          <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
+                            {common.cooldown.toFixed(1)}
+                          </span>
+                        )}
+                        {common.passive &&
+                          playerStats &&
+                          playerStats.hp < playerStats.maxHp && (
+                            <span className="absolute inset-0 grid place-items-center bg-night-950/55 font-mono text-8.32 font-bold text-steel-100">
+                              {common.active ? 'ACT' : `${common.readyIn.toFixed(1)}s`}
+                            </span>
+                          )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

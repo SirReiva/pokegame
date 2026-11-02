@@ -44,6 +44,7 @@ export interface AbilityExecutorDeps {
   readonly combatFx: CombatFx;
   readonly world: World;
   readonly matchPlayers: MatchPlayerState[];
+  spawnShield(player: MatchPlayerState, def: AbilityDef): void;
   canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean;
   /**
    * Aplica daño y devuelve `true` solo si el golpe quitó vida de verdad
@@ -310,9 +311,39 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   }
 };
 
+/**
+ * Distancia máxima del dash antes de chocar con un enemigo. Se descuenta el
+ * radio de ambos cuerpos para que el desplazamiento se detenga al contacto.
+ */
+function dashEnemyLimit(
+  player: MatchPlayerState,
+  dirX: number,
+  dirZ: number,
+  maxDistance: number,
+  deps: AbilityExecutorDeps
+): number {
+  let limit = maxDistance;
+  const clearance = CONFIG.player.radius * 2;
+  for (const target of deps.matchPlayers) {
+    if (target === player || !target.alive || target.team === player.team) continue;
+    const dx = target.x - player.x;
+    const dz = target.z - player.z;
+    const projection = dx * dirX + dz * dirZ;
+    if (projection <= 0 || projection > maxDistance + clearance) continue;
+    const perpendicular = Math.abs(dx * dirZ - dz * dirX);
+    if (perpendicular > clearance) continue;
+    limit = Math.min(limit, Math.max(0, projection - clearance));
+  }
+  return limit;
+}
+
 const executeDash: AbilityExecutor = (player, def, deps) => {
   const dirX = Math.sin(player.facing);
   const dirZ = Math.cos(player.facing);
+  const dashDistance = def.dashBlocksOnEnemies
+    ? dashEnemyLimit(player, dirX, dirZ, def.dashDistance, deps)
+    : def.dashDistance;
+  if (dashDistance <= 0.01) return;
   // El desplazamiento real se reparte en `stepDash` durante la animación.
   const resolved = deps.dashPosition(
     player,
@@ -320,16 +351,16 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
     player.z,
     dirX,
     dirZ,
-    def.dashDistance
+    dashDistance
   );
   const distance = Math.hypot(resolved.x - player.x, resolved.z - player.z);
   // La animación dura lo que tarda en recorrer la distancia real. Si un
   // obstáculo acorta el dash, también se acorta QuickStrike.
   const duration =
-    distance > 0.01 && def.dashDistance > 0.01
+    distance > 0.01 && dashDistance > 0.01
       ? Math.max(
           0.08,
-          Math.min(def.castTime, (distance / def.dashDistance) * def.castTime)
+          Math.min(def.castTime, (distance / dashDistance) * def.castTime)
         )
       : 0.08;
   const speed = distance > 0.01 ? distance / duration : 0;
@@ -365,6 +396,13 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeSelf: AbilityExecutor = (player, def, deps) => {
+  if (def.shield) {
+    player.damageReductionTimer = def.shieldDuration;
+    player.damageReduction = Math.min(0.65, Math.max(0, def.damageReduction));
+    player.shieldSpeedMultiplier = Math.max(0.1, def.shieldSpeedMultiplier);
+    deps.spawnShield(player, def);
+    return;
+  }
   // Recuperación ya tiene su propio estallido de curación.
   if (def.healSelf <= 0) {
     deps.combatFx.spawnBuff(

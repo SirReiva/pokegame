@@ -59,27 +59,38 @@ El modo local admite **hasta ocho jugadores en total**: un teclado y mandos. Cad
 | Girar la card del Pokémon | `X` / `Y` | `Tab` / `F` |
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
 | Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
-| Zoom | Gatillos `L2` / `R2` o stick derecho vertical | Rueda |
+| Zoom | Gatillo `L2` o stick derecho vertical | Rueda |
 | Correr | `L3` | `Shift` |
 | Habilidad básica | `X` | `J` |
 | Habilidad 1 | `Y` | `K` |
 | Habilidad 2 | `RB` | `L` |
 | Habilidad 3 | `LB` | `U` |
+| Instinto común | `RT` | `I` |
 | Pausa | `Start` / `B` | `Esc` |
 | Ocultar HUD | — | `H` |
 
 La configuración tiene dos rutas:
 
 1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
-2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veintitrés especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
+2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veintitrés especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (azul o roja). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo.
 
 ## Combate
 
-La partida es un **team deathmatch a 15 KO**: cada baja suma un punto al equipo que la consigue y gana el primero que llegue al objetivo. Al morir se reaparece en la base a los 5 s, con 2 s de invulnerabilidad. El HUD muestra el marcador, la vida, los KO/muertes y los enfriamientos de las cuatro habilidades de cada jugador.
+La partida es un **team deathmatch a 15 KO**: cada baja suma un punto al equipo que la consigue y gana el primero que llegue al objetivo. Al morir se reaparece en la base a los 5 s, con 2 s de invulnerabilidad. El HUD muestra el marcador, la vida, los KO/muertes y los enfriamientos de las cuatro habilidades y del instinto común de cada jugador.
 
 Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`), sin ayuda de apuntado: el jugador apunta colocándose y girando con el movimiento. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
+
+### Instintos comunes
+
+Cada Pokémon elige **uno de tres instintos** en la card del roster:
+
+- **Protección** (`I` / `RT`): 2 s con un 40 % menos de daño recibido, un 20 % menos de velocidad y sin poder usar otras habilidades mientras está activa. Genera un escudo esférico del color `accent` de la especie.
+- **Impulso** (`I` / `RT`): dash de 2,2 u que no hace daño y se detiene en enemigos y separadores.
+- **Regeneración** (pasiva): tras 3 s sin ser visto, recupera 1 PV/s mientras siga oculto y muestra un `+1` flotante por cada PV. Se corta al perder HP, atacar o usar una habilidad.
+
+Los activos comparten el bloqueo global de casteo y solo se pueden usar si no estás casteando, en dash o en hitstun. La selección se hace por Pokémon, se puede cambiar en el roster y se muestra en el lobby.
 
 Las habilidades `melee` tienen un **lock de movimiento**: al ejecutarse, el clip de ataque y el bloqueo duran exactamente lo mismo (`animationTime = moveLock`, la mitad de `castTime` por defecto) e ignoran el input de desplazamiento para que el golpe se comprometa. La cámara sigue girando y el resto de habilidades siguen disponibles. El valor se puede ajustar con `.moveLock(segundos)` en el builder.
 
@@ -102,7 +113,7 @@ Cada impacto muestra la **cantidad de daño en rojo** sobre la cabeza del objeti
 
 Los golpes aplican **0,15 s de hitstun** y algunas habilidades empujan al objetivo (Placaje, 0,6 u). Si dos golpes melee rivales conectan en el mismo frame, se resuelve un **choque**: ninguno recibe daño, ambos reciben 0,25 s de stun y retroceden 1 u. Así dos Placajes simultáneos no se intercambian gratis y se evita el stun-lock con el enfriamiento corto de Placaje.
 
-El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo.
+El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Los **instintos comunes** viven en `COMMON_ABILITY_OPTIONS` y `COMMON_ABILITIES`, se eligen por Pokémon en `LobbyPlayer.commonAbilityId` y no forman parte de `MOVESETS`. Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo.
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,5 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,22 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
@@ -431,7 +442,7 @@ La ocultación se evalúa en el terreno del **objetivo**, no en el del observado
 
 La línea de visión la bloquean los **separadores** (cordilleras y muros) y los **árboles** (incluidos los árboles secos del bosque umbrío). Para ello, sus colliders llevan un `sightRadius` mayor que el radio de colisión de los árboles, de modo que la copa tapa aunque el tronco sea fino. Los cactus y los adornos de las bases no bloquean. El chequeo es una distancia segmento-segmento/círculo en `vision.ts`, sin raycasts contra mallas.
 
-El HUD de cada vista muestra el rango base de la especie, la ocultación actual y el radio al que te detectaría un observador con tu mismo rango; el motivo y el desglose (base × multiplicador) aparecen en el `title` del bloque de visión. Además, el panel inferior de cada vista resume tu estado frente al otro equipo: **Oculto** si ningún rival vivo te ve y **Descubierto** (con el número de rivales que te ven) en cuanto alguno te detecta; se recalcula cada frame con la misma visibilidad que oculta las copias de los actores. Ese mismo panel reúne la identidad del jugador, la vida, la visión, el terreno y las cuatro habilidades, dejando el resto de la pantalla libre para el mundo 3D. El sombreado se resuelve en el motor: cada vista monta un quad pegado a su cámara, en su propia capa de render, con un `ShaderMaterial` que recibe por uniformes el centro y los radios del círculo de visión (`src/game/fog.ts`). Se dibuja al final de las transparencias y sin `depthTest`, así que cubre el mundo de esa vista pero no el HUD de React. No hay capa HTML de niebla.
+El HUD de cada vista muestra el rango base de la especie, la ocultación actual y el radio al que te detectaría un observador con tu mismo rango; el motivo y el desglose (base × multiplicador) aparecen en el `title` del bloque de visión. Además, el panel inferior de cada vista resume tu estado frente al otro equipo: **Oculto** si ningún rival vivo te ve y **Descubierto** (con el número de rivales que te ven) en cuanto alguno te detecta; se recalcula cada frame con la misma visibilidad que oculta las copias de los actores. Ese mismo panel reúne la identidad del jugador, la vida, la visión, el terreno, las cuatro habilidades y el instinto común, dejando el resto de la pantalla libre para el mundo 3D. El sombreado se resuelve en el motor: cada vista monta un quad pegado a su cámara, en su propia capa de render, con un `ShaderMaterial` que recibe por uniformes el centro y los radios del círculo de visión (`src/game/fog.ts`). Se dibuja al final de las transparencias y sin `depthTest`, así que cubre el mundo de esa vista pero no el HUD de React. No hay capa HTML de niebla.
 
 Los **separadores** proyectan además una cuña de sombra como **decal en el suelo**. La máscara se dibuja en coordenadas XZ del mapa y el plano vive en la capa de esa vista; la cámara solo lo mira, no lo deforma. Se dibuja **sin test de profundidad** para que la cuña tiña también la vegetación y el resto de decoraciones que sobresalen del suelo, no solo la losa del terreno. El mundo escribe una **máscara de esténcil** (1 para terreno, decoraciones y props; 0 para los separadores) y el decal solo se dibuja donde vale 1: así la cara visible del propio separador nunca queda sombreada, aunque la cámara la alinee con la cuña. El shader del decal recibe también el óvalo de pantalla de la niebla circular y calcula el alfa necesario para que las dos capas se fundan exactamente por **máximo**: dentro del radio de visión la cuña oscurece el terreno, y al acercarse al borde la niebla la absorbe hasta que ambas valen lo mismo, de modo que no hay costura, ni hueco claro, ni borde sumado. Los árboles siguen bloqueando la línea de visión de los actores, pero de momento solo los separadores sombrean el terreno.
 

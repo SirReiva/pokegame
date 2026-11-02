@@ -6,7 +6,7 @@
  * viewports y las cuentas de equipo sin levantar el motor.
  */
 
-import type { AbilitySlot } from './abilities';
+import type { AbilitySlot, CommonAbilityId } from './abilities';
 import type { InputDeviceInfo } from './input';
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
@@ -178,6 +178,7 @@ export interface LobbyPlayer {
   team: Team;
   teamReady: boolean;
   pokemonId: string;
+  commonAbilityId: CommonAbilityId;
   rosterReady: boolean;
 }
 
@@ -188,6 +189,7 @@ export interface MatchPlayerConfig {
   deviceKind: InputDeviceInfo['kind'];
   team: Team;
   pokemonId: string;
+  commonAbilityId: CommonAbilityId;
 }
 
 /** Estado de una habilidad para el HUD de cada vista. */
@@ -201,6 +203,23 @@ export interface AbilityHud {
   cooldown: number;
   /** Enfriamiento total, en segundos. */
   duration: number;
+}
+
+/** Estado del instinto común para el HUD. */
+export interface CommonAbilityHud {
+  id: CommonAbilityId;
+  name: string;
+  short: string;
+  passive: boolean;
+  /** Cooldown restante (0 en pasivas). */
+  cooldown: number;
+  /** Cooldown total (0 en pasivas). */
+  duration: number;
+  /** Segundos que faltan para que empiece la regeneración pasiva. */
+  readyIn: number;
+  /** `true` si la regeneración pasiva está curando ahora mismo. */
+  active: boolean;
+  description: string;
 }
 
 export interface PlayerMatchStats {
@@ -250,6 +269,10 @@ export interface PlayerMatchStats {
   kills: number;
   deaths: number;
   abilities: AbilityHud[];
+  /** `true` mientras Protección bloquea el uso de otras habilidades. */
+  shieldActive: boolean;
+  /** Instinto común elegido por este Pokémon. */
+  commonAbility: CommonAbilityHud | null;
   /** Marcador de equipo, repetido en cada entrada para pintar el HUD. */
   blueScore: number;
   redScore: number;

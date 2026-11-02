@@ -936,6 +936,35 @@ export class CombatFx {
   }
 
   /**
+   * Material translúcido para el escudo esférico. Usa mezcla normal para el
+   * volumen y aditiva para el halo exterior.
+   */
+  private createShieldMaterial(
+    color: readonly [number, number, number],
+    opacity: number,
+    blendType: number
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      color[0] / 255,
+      color[1] / 255,
+      color[2] / 255
+    );
+    material.emissiveIntensity = 1.05;
+    material.opacity = opacity;
+    material.blendType = blendType;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /**
    * Material de llama: la textura procedural ya trae el degradado de color y la
    * silueta; el tinte solo sirve para dar variantes más cálidas o más rojas.
    */
@@ -5497,6 +5526,61 @@ export class CombatFx {
         material.opacity = 0.8 * (1 - t);
       },
       [[x, z]]
+    );
+  }
+
+  /**
+   * Escudo esférico de Protección. Sigue al Pokémon, usa su color accent y
+   * mantiene la esfera centrada en el cuerpo durante toda la duración. No
+   * dibuja anillo horizontal: solo la esfera y su halo.
+   */
+  spawnProtectionShield(
+    position: { x: number; z: number },
+    color: readonly [number, number, number],
+    radius: number,
+    centerY: number,
+    duration: number
+  ): void {
+    const root = new pc.Entity('protection-shield');
+    root.setPosition(position.x, centerY, position.z);
+    this.app.root.addChild(root);
+
+    const baseMaterial = this.createShieldMaterial(color, 0.12, pc.BLEND_NORMAL);
+    const glowMaterial = this.createShieldMaterial(
+      color,
+      0.1,
+      pc.BLEND_ADDITIVEALPHA
+    );
+
+    const base = this.createEntity(this.sphereMesh, [baseMaterial], root);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    const baseScale = radius * 2;
+    base.setLocalScale(baseScale, baseScale, baseScale);
+    glow.setLocalScale(baseScale * 1.06, baseScale * 1.06, baseScale * 1.06);
+
+    const anchor: [number, number] = [position.x, position.z];
+    this.addEffect(
+      root,
+      [baseMaterial, glowMaterial],
+      duration,
+      (t) => {
+        anchor[0] = position.x;
+        anchor[1] = position.z;
+        root.setPosition(position.x, centerY, position.z);
+        const fadeIn = Math.min(1, t * 10);
+        const fadeOut = t > 0.8 ? Math.max(0, (1 - t) / 0.2) : 1;
+        const fade = fadeIn * fadeOut;
+        const pulse = 1 + Math.sin(t * Math.PI * 8) * 0.015;
+        baseMaterial.opacity = 0.12 * fade;
+        glowMaterial.opacity = 0.1 * fade;
+        base.setLocalScale(baseScale * pulse, baseScale * pulse, baseScale * pulse);
+        glow.setLocalScale(
+          baseScale * 1.06 * pulse,
+          baseScale * 1.06 * pulse,
+          baseScale * 1.06 * pulse
+        );
+      },
+      [anchor]
     );
   }
 

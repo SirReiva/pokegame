@@ -2,7 +2,11 @@ import * as pc from 'playcanvas';
 import {
   ABILITIES,
   ABILITY_SLOTS,
+  DEFAULT_COMMON_ABILITY,
   MOVESETS,
+  commonAbilityOption,
+  commonAnimationFor,
+  isCommonAbilityId,
   type AbilityDef,
   type AbilitySlot,
   type BuffStat,
@@ -114,6 +118,17 @@ function angleLerp(current: number, target: number, t: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
+}
+
+/** Convierte el `accent` hexadecimal del manifiesto a 0-255. */
+function hexToRgb(hex: string): [number, number, number] {
+  const value = hex.replace('#', '');
+  if (value.length !== 6) return [255, 255, 255];
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16)
+  ];
 }
 
 /** Tipos vacíos: la ocultación de un punto usa solo el terreno, sin especie. */
@@ -392,6 +407,9 @@ export class Game {
       const terrain = terrainAt(spawn.x, spawn.z);
       const combat = combatStatsFor(baseStatsFor(config.pokemonId));
       const moveset = MOVESETS[config.pokemonId] ?? [null, null, null, null];
+      const commonAbilityId = isCommonAbilityId(config.commonAbilityId)
+        ? config.commonAbilityId
+        : DEFAULT_COMMON_ABILITY;
 
       const layer = new pc.Layer({ name: `match-view-${index + 1}` });
       const layerComposition = this.app.scene.layers;
@@ -417,7 +435,9 @@ export class Game {
 
       this.matchPlayers.push({
         ...config,
+        commonAbilityId,
         types: asset.entry.types,
+        accent: hexToRgb(asset.entry.accent),
         maxSpeed: speedForPokemon(config.pokemonId),
         x: spawn.x,
         z: spawn.z,
@@ -440,6 +460,13 @@ export class Game {
         combat,
         hp: combat.hp,
         maxHp: combat.hp,
+        damageReduction: 0,
+        shieldSpeedMultiplier: 1,
+        damageReductionTimer: 0,
+        hiddenTimer: 0,
+        regenGraceTimer: 0,
+        regenAccumulator: 0,
+        regenerating: false,
         alive: true,
         respawnTimer: 0,
         invulnerableTimer: 0,
@@ -456,11 +483,11 @@ export class Game {
         deathFade: 0,
         kills: 0,
         deaths: 0,
-        cooldowns: [0, 0, 0, 0],
+        cooldowns: [0, 0, 0, 0, 0],
         buffs: [],
         slowEffects: [],
         slowMultiplier: 1,
-        abilityIds: [...moveset]
+        abilityIds: [...moveset, commonAbilityId]
       });
 
       this.fogViews.push(
@@ -723,6 +750,7 @@ export class Game {
     // La niebla se resuelve después de mover a todos: cada copia se oculta en
     // las vistas que no la ven y cada cámara recibe su círculo de visión.
     this.updateVision();
+    this.updateRegeneration(dt);
 
     this.world.update(dt);
     this.combatFx.update(dt);
@@ -751,6 +779,10 @@ export class Game {
     }
     if (player.invulnerableTimer > 0) {
       player.invulnerableTimer = Math.max(0, player.invulnerableTimer - dt);
+    }
+    if (player.damageReductionTimer > 0) {
+      player.damageReductionTimer = Math.max(0, player.damageReductionTimer - dt);
+      if (player.damageReductionTimer === 0) player.shieldSpeedMultiplier = 1;
     }
     if (player.stunTimer > 0) {
       player.stunTimer = Math.max(0, player.stunTimer - dt);
@@ -817,12 +849,15 @@ export class Game {
     );
     player.terrainMultiplier = terrainEffect.multiplier;
     player.terrainSpeedReason = terrainEffect.reason;
+    const shieldSpeed =
+      player.damageReductionTimer > 0 ? player.shieldSpeedMultiplier : 1;
     const maxSpeed =
       player.maxSpeed *
       terrainEffect.multiplier *
       (input.run ? CONFIG.player.runMultiplier : 1) *
       this.buffMultiplier(player, 'speed') *
-      player.slowMultiplier;
+      player.slowMultiplier *
+      shieldSpeed;
 
     const targetSpeed = maxSpeed * Math.min(1, magnitude);
     const currentSpeed = Math.hypot(player.vx, player.vz);
@@ -943,6 +978,9 @@ export class Game {
     if (input.ability2) this.castAbility(player, 1);
     if (input.ability3) this.castAbility(player, 2);
     if (input.ability4) this.castAbility(player, 3);
+    if (input.commonAbility && player.commonAbilityId !== 'regeneracion') {
+      this.castAbility(player, 4);
+    }
 
     this.updateCamera(player, input, dt);
   }
@@ -1076,7 +1114,10 @@ export class Game {
     dash.traveled += moved;
 
     const dashReach = Math.max(0.5, dash.def.radius) + CONFIG.player.radius;
-    for (const target of this.matchPlayers) {
+    // Impulso no hace daño ni aplica control: es solo desplazamiento. Los
+    // demás dash conservan su golpe al paso.
+    const dashCanHit = dash.def.power > 0 || dash.def.slow !== null;
+    for (const target of dashCanHit ? this.matchPlayers : []) {
       if (dash.hit.has(target) || !this.canHit(player, target)) continue;
       const distance = pointSegmentDistance(
         target.x,
@@ -1213,10 +1254,14 @@ export class Game {
     player.dash = null;
     this.cancelPendingCast(player);
     player.deathFade = 0;
-    player.cooldowns = [0, 0, 0, 0];
+    player.cooldowns = [0, 0, 0, 0, 0];
     player.buffs = [];
     player.slowEffects = [];
     player.slowMultiplier = 1;
+    player.damageReductionTimer = 0;
+    player.damageReduction = 0;
+    player.shieldSpeedMultiplier = 1;
+    this.breakRegen(player);
     player.animation = 'idle';
     player.playback = 1;
     // El HUD lee estos campos hasta el primer frame de movimiento: deben
@@ -1228,6 +1273,56 @@ export class Game {
     player.concealment = terrainConcealment(player.terrain, player.types);
     player.submerge = 0;
     this.combatFx.spawnBuff(player.x, player.z, [255, 255, 255], 1.1);
+  }
+
+  /** Reinicia el estado de la regeneración pasiva. */
+  private breakRegen(player: MatchPlayerState): void {
+    player.hiddenTimer = 0;
+    player.regenGraceTimer = 0;
+    player.regenAccumulator = 0;
+    player.regenerating = false;
+  }
+
+  /**
+   * Regeneración: tras 3 s sin ser visto, cura 1 PV/s. Usa `enemiesSeeing`, que
+   * se acaba de recalcular en `updateVision`, y una gracia de 0,2 s para que un
+   * frame de visibilidad en el borde no reinicie el contador.
+   */
+  private updateRegeneration(dt: number): void {
+    for (const player of this.matchPlayers) {
+      if (!player.alive || player.commonAbilityId !== 'regeneracion') {
+        this.breakRegen(player);
+        continue;
+      }
+
+      if (player.enemiesSeeing > 0) {
+        player.regenGraceTimer += dt;
+        if (player.regenGraceTimer >= 0.2) {
+          player.hiddenTimer = 0;
+          player.regenAccumulator = 0;
+          player.regenerating = false;
+        }
+        continue;
+      }
+
+      player.regenGraceTimer = 0;
+      player.hiddenTimer += dt;
+      if (player.hiddenTimer < 3 || player.hp >= player.maxHp) {
+        player.regenerating = false;
+        continue;
+      }
+
+      player.regenerating = true;
+      player.regenAccumulator += dt;
+      const whole = Math.floor(player.regenAccumulator);
+      if (whole <= 0) continue;
+      player.regenAccumulator -= whole;
+      const before = player.hp;
+      player.hp = Math.min(player.maxHp, player.hp + whole);
+      const healed = player.hp - before;
+      if (healed > 0) this.showHealPopup(player, healed);
+      if (player.hp >= player.maxHp) player.regenerating = false;
+    }
   }
 
   /** Cancela una habilidad en preparación y retira su marca de área. */
@@ -1248,10 +1343,28 @@ export class Game {
     if (player.castLockTimer > 0) return;
     const abilityId = player.abilityIds[slotIndex];
     if (!abilityId) return;
-    const def = ABILITIES[abilityId];
-    if (!def) return;
+    const baseDef = ABILITIES[abilityId];
+    if (!baseDef) return;
     if (player.cooldowns[slotIndex] > 0.0001) return;
+    // Mientras Protección está activa no se puede usar ninguna otra habilidad.
+    if (player.damageReductionTimer > 0) return;
 
+    // Los instintos comunes pueden sobrescribir su animación por Pokémon sin
+    // tocar el resto de la definición.
+    const def =
+      slotIndex === 4
+        ? {
+            ...baseDef,
+            animation: commonAnimationFor(
+              player.pokemonId,
+              player.commonAbilityId,
+              baseDef
+            )
+          }
+        : baseDef;
+
+    // Cualquier habilidad usada corta la regeneración pasiva.
+    this.breakRegen(player);
     player.cooldowns[slotIndex] = def.cooldown;
     // Recuperación global: tras lanzar una habilidad no melee no se puede
     // encadenar otra hasta que pase su `castTime`. Las melee se limitan con su
@@ -1267,8 +1380,13 @@ export class Game {
     player.actionHold = false;
     if (def.animation !== null) player.animation = def.animation;
     player.playback = 1;
-    player.vx = 0;
-    player.vz = 0;
+    // Las habilidades pensadas para usarse en movimiento conservan la inercia:
+    // poner la velocidad a cero producía un frenazo brusco y luego el jugador
+    // volvía a acelerar, justo el efecto que no queremos en Protección.
+    if (!def.preserveMomentum) {
+      player.vx = 0;
+      player.vz = 0;
+    }
 
     if (def.windup > 0) {
       // La pose inicial de la preparación también usa su animación propia, así
@@ -1423,6 +1541,7 @@ export class Game {
       combatFx: this.combatFx,
       world: this.world,
       matchPlayers: this.matchPlayers,
+      spawnShield: (source, ability) => this.spawnProtectionShield(source, ability),
       canHit: (attacker, target) => this.canHit(attacker, target),
       applyAbilityDamage: (attacker, target, ability, options) =>
         this.applyAbilityDamage(attacker, target, ability, options),
@@ -1456,8 +1575,30 @@ export class Game {
     const amount = Math.min(raw, Math.max(0, player.hp - 1));
     if (amount <= 0) return;
     player.hp -= amount;
+    this.breakRegen(player);
     player.hurtTimer = Math.max(player.hurtTimer, 0.25);
     this.showDamagePopup(player, amount, false, 1);
+  }
+
+  /** Genera el escudo esférico de Protección con el accent del Pokémon. */
+  private spawnProtectionShield(
+    player: MatchPlayerState,
+    def: AbilityDef
+  ): void {
+    const asset = this.assets.get(player.pokemonId);
+    const idle = asset?.entry.animations.idle;
+    const anchorY = idle?.anchors[0]?.y ?? (idle?.frameHeight ?? 32) * 0.75;
+    const spriteHeight =
+      anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
+    const radius = Math.min(1.5, Math.max(0.65, spriteHeight * 0.55));
+    const centerY = Math.max(radius + 0.15, spriteHeight * 0.55);
+    this.combatFx.spawnProtectionShield(
+      player,
+      player.accent,
+      radius,
+      centerY,
+      def.shieldDuration
+    );
   }
 
   private canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean {
@@ -1594,6 +1735,9 @@ export class Game {
 
     // La inmunidad ya se ha descartado arriba, así que un golpe dañino válido
     // siempre resta al menos 1 PV y puede mostrar su impacto y su número.
+    const reduction =
+      target.damageReductionTimer > 0 ? target.damageReduction : 0;
+    const finalDamage = Math.max(1, Math.round(result.damage * (1 - reduction)));
     this.combatFx.spawnImpact(
       options.impactX ?? target.x,
       options.impactZ ?? target.z,
@@ -1601,14 +1745,15 @@ export class Game {
       result.effectiveness,
       def.impactStyle
     );
-    this.showDamagePopup(target, result.damage, result.critical, result.effectiveness);
+    this.showDamagePopup(target, finalDamage, result.critical, result.effectiveness);
 
     // Los ticks de un área no controlan al objetivo: solo restan vida y
     // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
     const control = options.control ?? true;
     this.applyHitControl(attacker, target, def, control);
 
-    target.hp = Math.max(0, target.hp - result.damage);
+    target.hp = Math.max(0, target.hp - finalDamage);
+    this.breakRegen(target);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
     if (target.hp <= 0) this.knockOut(target, attacker);
 
@@ -1722,6 +1867,10 @@ export class Game {
     target.buffs = [];
     target.slowEffects = [];
     target.slowMultiplier = 1;
+    target.damageReductionTimer = 0;
+    target.damageReduction = 0;
+    target.shieldSpeedMultiplier = 1;
+    this.breakRegen(target);
     target.animation = entry?.animations.faint ? 'faint' : 'hurt';
     target.playback = 1;
     for (const copy of target.copies) copy.play(target.animation, true);
@@ -2143,6 +2292,8 @@ export class Game {
       const own = player.copies[index] ?? player.copies[0];
       const row = own?.billboard.currentRow ?? 0;
       const terrain = TERRAINS[player.terrain];
+      const commonOption = commonAbilityOption(player.commonAbilityId);
+      const commonDef = ABILITIES[player.commonAbilityId];
       return {
         slot: player.slot,
         name: player.name,
@@ -2178,7 +2329,7 @@ export class Game {
         invulnerable: player.invulnerableTimer > 0,
         kills: player.kills,
         deaths: player.deaths,
-        abilities: player.abilityIds.map((id, abilityIndex) => {
+        abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
           const def = id ? ABILITIES[id] : null;
           return {
             slot: ABILITY_SLOTS[abilityIndex] as AbilitySlot,
@@ -2190,6 +2341,22 @@ export class Game {
             duration: def?.cooldown ?? 0
           };
         }),
+        shieldActive: player.damageReductionTimer > 0,
+        commonAbility: commonOption
+          ? {
+              id: commonOption.id,
+              name: commonOption.name,
+              short: commonOption.short,
+              passive: commonOption.passive,
+              cooldown: player.cooldowns[4] ?? 0,
+              duration: commonDef?.cooldown ?? 0,
+              readyIn: commonOption.passive
+                ? Math.max(0, 3 - player.hiddenTimer)
+                : 0,
+              active: commonOption.passive ? player.regenerating : false,
+              description: commonOption.description
+            }
+          : null,
         blueScore: this.teamScores.blue,
         redScore: this.teamScores.red,
         winner: this.winner

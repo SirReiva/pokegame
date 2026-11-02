@@ -75,6 +75,8 @@ export interface DeviceInputSnapshot {
   ability2: boolean;
   ability3: boolean;
   ability4: boolean;
+  /** Instinto común activo: I o RT. */
+  commonAbility: boolean;
   navX: -1 | 0 | 1;
   navY: -1 | 0 | 1;
 }
@@ -105,8 +107,14 @@ const NAV_KEYS = {
 /** Teclas de las cuatro habilidades, en orden de slot. */
 const KEYBOARD_ABILITY_KEYS = ['j', 'k', 'l', 'u'] as const;
 
+/** Tecla del instinto común activo. */
+const KEYBOARD_COMMON_KEY = 'i' as const;
+
 /** Botones de mando de las cuatro habilidades: X, Y, RB y LB. */
 const PAD_ABILITY_BUTTONS = [2, 3, 5, 4] as const;
+
+/** Gatillo derecho del mando para el instinto común. */
+const PAD_COMMON_BUTTON = 7 as const;
 
 /** Orden de prioridad cuando varias acciones de menú coinciden. */
 const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
@@ -299,6 +307,7 @@ export class Input {
       tapped('tab') || tapped('f') || tapped('x') || tapped('y');
     const [ability1, ability2, ability3, ability4] =
       KEYBOARD_ABILITY_KEYS.map(tapped);
+    const commonAbility = tapped(KEYBOARD_COMMON_KEY);
 
     const action = resolveMenuAction({
       confirm,
@@ -326,6 +335,7 @@ export class Input {
       ability2,
       ability3,
       ability4,
+      commonAbility,
       navX: left ? -1 : right ? 1 : 0,
       navY: up ? 1 : down ? -1 : 0
     };
@@ -384,6 +394,7 @@ export class Input {
     // X, Y, RB y LB. El botón B sigue reservado para pausa/volver.
     const [ability1, ability2, ability3, ability4] =
       PAD_ABILITY_BUTTONS.map(edge);
+    const commonAbility = edge(PAD_COMMON_BUTTON);
 
     state.buttons = pad.buttons.map((button) => button.pressed);
     state.nav = navNow;
@@ -398,9 +409,9 @@ export class Input {
       right
     });
 
+    // RT queda reservado para el instinto común; LT sigue alejando la cámara.
     const zoom =
-      -applyDeadzone(axes[3] ?? 0) +
-      (pad.buttons[7]?.value ?? 0) * 0.75 -
+      -applyDeadzone(axes[3] ?? 0) -
       (pad.buttons[6]?.value ?? 0) * 0.75;
 
     const snapshot: DeviceInputSnapshot = {
@@ -420,6 +431,7 @@ export class Input {
       ability2,
       ability3,
       ability4,
+      commonAbility,
       navX: left ? -1 : right ? 1 : 0,
       navY: up ? 1 : down ? -1 : 0
     };
@@ -488,6 +500,7 @@ export const IDLE_INPUT: DeviceInputSnapshot = {
   ability2: false,
   ability3: false,
   ability4: false,
+  commonAbility: false,
   navX: 0,
   navY: 0
 };

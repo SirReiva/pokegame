@@ -215,6 +215,16 @@ export interface AbilityDef {
    * 0, se queda con 1 PV.
    */
   selfDamage: number;
+  /** Si es `true`, el lanzador gana un escudo esférico y reducción de daño. */
+  shield: boolean;
+  /** Duración del escudo en segundos. */
+  shieldDuration: number;
+  /** Fracción de daño reducida mientras el escudo está activo (0-1). */
+  damageReduction: number;
+  /** Multiplicador de velocidad normal mientras el escudo está activo. */
+  shieldSpeedMultiplier: number;
+  /** Si es `true`, el dash se detiene al chocar con enemigos. */
+  dashBlocksOnEnemies: boolean;
   /** Color del efecto, en 0-255. */
   color: [number, number, number];
   /** Duración de la animación de ataque, en segundos. */
@@ -252,6 +262,12 @@ export interface AbilityDef {
    * zona mientras la marca sigue en el suelo. Sin efecto si `windup` es 0.
    */
   moveWhileWindup: boolean;
+  /**
+   * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
+   * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
+   * frenazo de las habilidades instantáneas que se pueden usar en movimiento.
+   */
+  preserveMomentum: boolean;
   /** Texto corto para el HUD y la descripción de la habilidad. */
   description: string;
 }
@@ -286,6 +302,12 @@ export const DEFAULT_ABILITY: Omit<
   healSelf: 0,
   healOnHit: false,
   selfDamage: 0,
+  shield: false,
+  shieldDuration: 0,
+  damageReduction: 0,
+  shieldSpeedMultiplier: 1,
+  dashBlocksOnEnemies: false,
+  preserveMomentum: false,
   color: [255, 255, 255],
   castTime: 0.45,
   animationTime: 0.45,
@@ -425,6 +447,28 @@ export class AbilityBuilder {
     return this;
   }
 
+  /** El dash deja de atravesar enemigos: se detiene en el primero que encuentra. */
+  dashBlocksOnEnemies(): this {
+    this.draft.dashBlocksOnEnemies = true;
+    return this;
+  }
+
+  /**
+   * Escudo esférico con reducción de daño durante `duration` segundos.
+   * `speedMultiplier` se aplica a la velocidad normal mientras está activo.
+   */
+  shield(
+    duration: number,
+    reduction: number,
+    speedMultiplier = 0.8
+  ): this {
+    this.draft.shield = true;
+    this.draft.shieldDuration = duration;
+    this.draft.damageReduction = reduction;
+    this.draft.shieldSpeedMultiplier = speedMultiplier;
+    return this;
+  }
+
   knockback(value: number): this {
     this.draft.knockback = value;
     return this;
@@ -500,6 +544,15 @@ export class AbilityBuilder {
   }
 
   /**
+   * Lanzar la habilidad no detiene el movimiento actual. Pensado para
+   * instantes que se usan en carrera, como Protección.
+   */
+  preserveMomentum(): this {
+    this.draft.preserveMomentum = true;
+    return this;
+  }
+
+  /**
    * Animación de lanzamiento. Omitirla (o pasar `null`) deja la habilidad sin
    * animación propia: el Pokémon mantiene su reposo o su caminar.
    */
@@ -535,6 +588,118 @@ export function registerAbility(builder: AbilityBuilder): AbilityDef {
   ABILITIES[def.id] = def;
   return def;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Instintos comunes                                                         */
+/* ------------------------------------------------------------------------- */
+
+export type CommonAbilityId = 'proteccion' | 'impulso' | 'regeneracion';
+
+export const DEFAULT_COMMON_ABILITY: CommonAbilityId = 'proteccion';
+
+export interface CommonAbilityOption {
+  id: CommonAbilityId;
+  name: string;
+  /** Nombre corto para el HUD. */
+  short: string;
+  /** `true` si no ocupa tecla y se resuelve solo. */
+  passive: boolean;
+  /** Cooldown para el HUD; 0 en pasivas. */
+  cooldown: number;
+  description: string;
+}
+
+export const COMMON_ABILITY_OPTIONS: readonly CommonAbilityOption[] = [
+  {
+    id: 'proteccion',
+    name: 'Protección',
+    short: 'Protección',
+    passive: false,
+    cooldown: 8,
+    description:
+      'Reduce un 40 % todo el daño recibido durante 2 s, ralentiza un 20 % y te impide usar otras habilidades mientras está activo. Genera un escudo esférico del color del Pokémon.'
+  },
+  {
+    id: 'impulso',
+    name: 'Impulso',
+    short: 'Impulso',
+    passive: false,
+    cooldown: 7,
+    description:
+      'Dash corto de 2,2 u hacia delante. Se detiene en enemigos y separadores.'
+  },
+  {
+    id: 'regeneracion',
+    name: 'Regeneración',
+    short: 'Regeneración',
+    passive: true,
+    cooldown: 0,
+    description:
+      'Tras 3 s oculto, recupera 1 PV/s mientras siga oculto. Se corta al perder HP, ser visto, atacar o usar una habilidad.'
+  }
+];
+
+export function commonAbilityOption(
+  id: CommonAbilityId
+): CommonAbilityOption | null {
+  return COMMON_ABILITY_OPTIONS.find((option) => option.id === id) ?? null;
+}
+
+export function isCommonAbilityId(value: string): value is CommonAbilityId {
+  return COMMON_ABILITY_OPTIONS.some((option) => option.id === value);
+}
+
+/**
+ * Habilidades comunes activas. `regeneracion` es pasiva y no tiene definición
+ * de casteo; su lógica vive en el bucle de `Game`.
+ */
+/**
+ * Overrides de animación por Pokémon. Sin entrada se usa la animación de la
+ * definición; `null` desactiva la animación. Por defecto está vacío: Protección
+ * no reproduce ninguna y Impulso usa `quickstrike`.
+ */
+export const COMMON_ANIMATION_OVERRIDES: Record<
+  string,
+  Partial<Record<CommonAbilityId, AnimationName | null>>
+> = {};
+
+export function commonAnimationFor(
+  pokemonId: string,
+  abilityId: CommonAbilityId,
+  def: AbilityDef
+): AnimationName | null {
+  const override = COMMON_ANIMATION_OVERRIDES[pokemonId]?.[abilityId];
+  return override === undefined ? def.animation : override;
+}
+
+export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
+  proteccion: registerAbility(
+    ability('proteccion', 'Protección', 'Normal', 'status', 'self')
+      .cooldown(8)
+      .radius(1)
+      .cast(0.15)
+      .shield(2, 0.4, 0.8)
+      .preserveMomentum()
+      .animation(null)
+      .color(220, 240, 255)
+      .description(
+        'Reduce un 40 % todo el daño recibido durante 2 s, ralentiza un 20 % y bloquea el uso de otras habilidades mientras está activo. El escudo esférico usa el color del Pokémon.'
+      )
+  ),
+  impulso: registerAbility(
+    ability('impulso', 'Impulso', 'Normal', 'status', 'dash')
+      .cooldown(7)
+      .dash(2.2)
+      .dashBlocksOnEnemies()
+      .cast(0.2)
+      .animation('quickstrike')
+      .color(210, 235, 255)
+      .description(
+        'Dash corto de 2,2 u hacia delante. No hace daño y se detiene al chocar con enemigos o separadores.'
+      )
+  ),
+  regeneracion: null
+};
 
 /* ------------------------------------------------------------------------- */
 /* Pikachu                                                                   */

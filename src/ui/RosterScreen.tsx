@@ -2,7 +2,10 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import {
   ABILITY_SLOTS,
   ABILITY_SLOT_LABEL,
+  COMMON_ABILITY_OPTIONS,
   abilityForSlot,
+  commonAbilityOption,
+  type CommonAbilityId,
   type DamageCategory
 } from '../game/abilities';
 import { baseStatsFor, combatStatsFor } from '../game/pokedex';
@@ -23,6 +26,7 @@ interface RosterScreenProps {
   flipped: Record<string, string>;
   onPick: (slot: number, pokemonId: string) => void;
   onFlip: (slot: number) => void;
+  onSelectCommon: (slot: number, abilityId: CommonAbilityId) => void;
   onToggleReady: (slot: number) => void;
   onStart: () => void;
   onBack: () => void;
@@ -37,6 +41,7 @@ interface PlayerPanelProps {
   flipped: boolean;
   onPick: (slot: number, pokemonId: string) => void;
   onFlip: (slot: number) => void;
+  onSelectCommon: (slot: number, abilityId: CommonAbilityId) => void;
   onToggleReady: (slot: number) => void;
 }
 
@@ -72,6 +77,7 @@ export function RosterScreen({
   flipped,
   onPick,
   onFlip,
+  onSelectCommon,
   onToggleReady,
   onStart,
   onBack,
@@ -152,6 +158,7 @@ export function RosterScreen({
                 flipped={flipped[player.deviceId] === player.pokemonId}
                 onPick={onPick}
                 onFlip={onFlip}
+                onSelectCommon={onSelectCommon}
                 onToggleReady={onToggleReady}
                 index={index}
               />
@@ -169,6 +176,9 @@ export function RosterScreen({
             </span>
             <span className="flex items-center gap-2">
               <KeyPill>X / Y / Tab</KeyPill> girar card
+            </span>
+            <span className="flex items-center gap-2">
+              <KeyPill>← / →</KeyPill> instinto (card girada)
             </span>
             <span className="flex items-center gap-2">
               <KeyPill>B / Esc</KeyPill> volver
@@ -209,6 +219,7 @@ function PlayerPanel({
   flipped,
   onPick,
   onFlip,
+  onSelectCommon,
   onToggleReady,
   index
 }: PlayerPanelProps & { index: number }) {
@@ -216,6 +227,7 @@ function PlayerPanel({
   const choices = players.filter((entryPlayer) => entryPlayer.pokemonId === entry.id);
   const stats = combatStatsFor(baseStatsFor(entry.id));
   const speed = speedForPokemon(entry.id);
+  const common = commonAbilityOption(player.commonAbilityId);
 
   return (
     <article
@@ -316,6 +328,9 @@ function PlayerPanel({
               <span className="font-mono text-9.92 tracking-wider uppercase text-steel-600">
                 Vel. {speed.toFixed(1)} u/s
               </span>
+              <span className="font-mono text-8.96 tracking-[0.08em] uppercase text-accent-soft">
+                Instinto: {common?.name ?? '—'}
+              </span>
             </div>
 
             <button
@@ -353,6 +368,45 @@ function PlayerPanel({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="mb-1.5 rounded-lg border border-line bg-night-820/70 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-8 tracking-[0.12em] uppercase text-steel-600">
+                    Instinto
+                  </span>
+                  <span className="font-mono text-7.36 tracking-[0.06em] uppercase text-steel-700">
+                    ← / → cambiar
+                  </span>
+                </div>
+                <div className="mt-1 grid grid-cols-3 gap-1">
+                  {COMMON_ABILITY_OPTIONS.map((option) => {
+                    const selected = option.id === player.commonAbilityId;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => onSelectCommon(player.slot, option.id)}
+                        title={option.description}
+                        className={`rounded-md border px-1 py-1 text-left transition-colors ${
+                          selected
+                            ? 'border-accent/70 bg-accent/12'
+                            : 'border-line bg-white/3 hover:border-line-strong hover:bg-white/6'
+                        }`}
+                      >
+                        <strong className="block truncate font-display text-9.6 text-ink">
+                          {option.name}
+                        </strong>
+                        <span className="block font-mono text-7.36 tracking-[0.06em] uppercase text-steel-650">
+                          {option.passive ? 'Pasivo' : `${option.cooldown} s`}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-8.96 leading-[1.35] text-steel-450">
+                  {common?.description ?? ''}
+                </p>
+              </div>
+
               <ul className="m-0 flex list-none flex-col gap-1 p-0">
                 {ABILITY_SLOTS.map((slot, slotIndex) => {
                   const ability = abilityForSlot(entry.id, slotIndex);

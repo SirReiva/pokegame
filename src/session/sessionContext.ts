@@ -1,4 +1,5 @@
 import { createContext } from 'react';
+import type { CommonAbilityId } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
 import type { LobbyPlayer, MatchPlayerConfig } from '../game/multiplayer';
@@ -24,6 +25,8 @@ export interface SessionValue {
   continueToRoster: () => boolean;
   moveCursor: (slot: number, action: MenuAction) => void;
   selectPokemon: (slot: number, pokemonId: string) => void;
+  selectCommonAbility: (slot: number, abilityId: CommonAbilityId) => void;
+  cycleCommonAbility: (slot: number, delta: number) => void;
   setRosterReady: (slot: number, ready: boolean) => void;
   toggleRosterReady: (slot: number) => void;
   resetRosterReady: () => void;
