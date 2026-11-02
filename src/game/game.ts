@@ -37,7 +37,7 @@ import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { applyHealSelf, CAST_EFFECTS } from './effects';
-import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder } from './fog';
+import { FogDecal, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
 import {
   IDLE_INPUT,
   Input,
@@ -214,6 +214,14 @@ export class Game {
   private fogDecalMesh: pc.Mesh | null = null;
   /** Tramos de cordillera que proyectan sombra dentro de la niebla. */
   private sightOccluders: SightOccluder[] = [];
+  /**
+   * Slots visibles para cada equipo en el frame anterior. La visión es
+   * compartida, así que la histéresis también se guarda por equipo.
+   */
+  private visibleByTeam: Record<Team, Set<number>> = {
+    blue: new Set(),
+    red: new Set()
+  };
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -642,6 +650,7 @@ export class Game {
     this.fogViews = [];
     for (const decal of this.fogDecals) decal.destroy();
     this.fogDecals = [];
+    this.visibleByTeam = { blue: new Set(), red: new Set() };
 
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
@@ -830,7 +839,8 @@ export class Game {
     });
 
     // La niebla se resuelve después de mover a todos: cada copia se oculta en
-    // las vistas que no la ven y cada cámara recibe su círculo de visión.
+    // las vistas que no la ven y cada cámara recibe la unión de círculos del
+    // equipo.
     this.updateVision();
     this.updateRegeneration(dt);
 
@@ -2582,45 +2592,103 @@ export class Game {
       }
     }
     const layers: number[] = [];
+    // La visión es de equipo: un FX se dibuja si lo ve cualquier Pokémon vivo
+    // del equipo de esa vista, incluidos los bots. Los equipos suelen tener
+    // varias vistas, así que el chequeo se hace una sola vez por equipo.
+    const seenTeams = new Set<Team>();
     this.views.forEach((observer, index) => {
       const layer = this.viewLayers[index];
       if (!layer) return;
-      if (isTargetVisible(observer, { x, z }, concealment, colliders)) {
-        layers.push(layer.id);
+      if (!seenTeams.has(observer.team)) {
+        if (this.teamSeesPoint(observer.team, x, z, concealment, colliders)) {
+          seenTeams.add(observer.team);
+        }
       }
+      if (seenTeams.has(observer.team)) layers.push(layer.id);
     });
     return layers;
   }
 
+  /** ¿Ve algún Pokémon vivo del equipo el punto `(x, z)`? */
+  private teamSeesPoint(
+    team: Team,
+    x: number,
+    z: number,
+    concealment: number,
+    colliders: readonly Collider[]
+  ): boolean {
+    const point = { x, z };
+    for (const observer of this.matchPlayers) {
+      if (!observer.alive || observer.team !== team) continue;
+      if (isTargetVisible(observer, point, concealment, colliders)) return true;
+    }
+    return false;
+  }
+
   /**
    * Resuelve la niebla de cada vista: oculta las copias que no se ven y coloca
-   * el degradado fuera del círculo de visión. La ocultación del objetivo se
-   * calcula con el terreno que pisa, no con el del observador.
+   * el degradado fuera de la unión de círculos del equipo. La visión es
+   * compartida: cada vista revela lo que ven todos sus Pokémon vivos, humanos
+   * y bots. La ocultación del objetivo se calcula con el terreno que pisa, no
+   * con el del observador.
    */
   private updateVision(): void {
     const colliders = this.world.colliders;
     for (const player of this.matchPlayers) player.enemiesSeeing = 0;
 
+    // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
+    // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
+    const previous = this.visibleByTeam;
+    const current: Record<Team, Set<number>> = {
+      blue: new Set(),
+      red: new Set()
+    };
+
+    for (const observer of this.matchPlayers) {
+      if (!observer.alive) continue;
+      current[observer.team].add(observer.slot);
+      for (const target of this.matchPlayers) {
+        if (target === observer) continue;
+        // Un KO deja ver la animación de daño un instante; el cuerpo sigue
+        // siendo visible para el equipo que lo vio caer.
+        if (!target.alive && target.deathFade <= 0) continue;
+        const visible = isTargetVisible(
+          observer,
+          target,
+          target.concealment.value,
+          colliders,
+          previous[observer.team].has(target.slot)
+        );
+        if (!visible) continue;
+        current[observer.team].add(target.slot);
+        // Un rival vivo que te ve te deja "descubierto" para su equipo.
+        if (target.alive && observer.team !== target.team) {
+          target.enemiesSeeing += 1;
+        }
+      }
+    }
+    this.visibleByTeam = current;
+
     this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
       const camera = observer.camera.entity.camera;
+      const circles = this.visionCirclesFor(observer);
       if (fog && camera) {
         fog.update(
           camera,
           observer.viewport,
           observer.camera.yaw,
-          observer.x,
-          observer.z,
-          observer.visionRange
+          circles
         );
       }
 
       const decal = this.fogDecals[viewIndex];
       if (decal) {
         const screenFog = fog && camera ? fog.screenFog : null;
-        decal.update(observer.x, observer.z, observer.visionRange, screenFog);
+        decal.update(circles, screenFog);
       }
 
+      const visibleSlots = current[observer.team];
       for (const target of this.matchPlayers) {
         const copy = target.copies[viewIndex];
         if (!copy) continue;
@@ -2634,40 +2702,25 @@ export class Game {
           copy.setVisible(true);
           continue;
         }
-        const visible = isTargetVisible(
-          observer,
-          target,
-          target.concealment.value,
-          colliders,
-          copy.isVisible
-        );
-        copy.setVisible(visible);
-        // Un rival vivo que te ve te deja "descubierto" para su equipo.
-        if (visible && observer.alive && target.alive && observer.team !== target.team) {
-          target.enemiesSeeing += 1;
-        }
+        copy.setVisible(visibleSlots.has(target.slot));
       }
     });
+  }
 
-    // Los bots también son observadores: si te ven, cuentan para
-    // `enemiesSeeing` y cortan la Regeneración aunque no tengan panel propio.
-    for (const observer of this.matchPlayers) {
-      if (!observer.isBot || !observer.alive) continue;
-      for (const target of this.matchPlayers) {
-        if (target === observer || !target.alive) continue;
-        if (observer.team === target.team) continue;
-        if (
-          isTargetVisible(
-            observer,
-            target,
-            target.concealment.value,
-            colliders
-          )
-        ) {
-          target.enemiesSeeing += 1;
-        }
-      }
+  /**
+   * Círculos de visión que comparte una vista: el del jugador local y los de
+   * sus aliados vivos (incluidos los bots). Se usan tanto para la niebla de
+   * pantalla como para componer la máscara de visibilidad del decal.
+   */
+  private visionCirclesFor(observer: MatchPlayerState): VisionCircle[] {
+    const circles: VisionCircle[] = [
+      { x: observer.x, z: observer.z, visionRange: observer.visionRange }
+    ];
+    for (const ally of this.matchPlayers) {
+      if (ally === observer || !ally.alive || ally.team !== observer.team) continue;
+      circles.push({ x: ally.x, z: ally.z, visionRange: ally.visionRange });
     }
+    return circles;
   }
 
   private resolvePosition(

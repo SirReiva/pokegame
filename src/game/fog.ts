@@ -1,16 +1,28 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
-import type { SplitRect } from './multiplayer';
+import { MAX_TEAM_SIZE, type SplitRect } from './multiplayer';
 import { mapHalfDepth, mapHalfWidth } from './terrain';
 
 /**
  * Niebla de guerra dibujada por el motor.
  *
  * Hay dos piezas:
- * - `FogView`: quad pegado a la cámara que sombrea fuera del círculo de visión.
- * - `FogDecal`: plano horizontal en el mundo con la sombra que proyectan las
- *   cordilleras. Al estar fijo en el mapa, esa sombra no depende de la cámara.
+ * - `FogView`: quad pegado a la cámara que sombrea fuera de la unión de los
+ *   círculos de visión del equipo.
+ * - `FogDecal`: plano horizontal en el mundo con la visibilidad del equipo y
+ *   las sombras que proyectan las cordilleras. Al estar fijo en el mapa, no
+ *   depende de la cámara.
  */
+
+/** Círculo de visión de un Pokémon, en coordenadas de mundo. */
+export interface VisionCircle {
+  x: number;
+  z: number;
+  visionRange: number;
+}
+
+/** Tope de círculos que puede revelar una vista (un equipo completo). */
+const MAX_VISION_CIRCLES = MAX_TEAM_SIZE;
 
 const VERTEX_SHADER = `
 attribute vec3 aPosition;
@@ -49,14 +61,20 @@ const FRAGMENT_SHADER = `
 varying vec2 vUv;
 uniform vec3 uFogColor;
 uniform float uFogOpacity;
-uniform vec2 uFogCenter;
-uniform vec2 uFogRadius;
+uniform vec2 uFogCenter[${MAX_VISION_CIRCLES}];
+uniform vec2 uFogRadius[${MAX_VISION_CIRCLES}];
 uniform float uFogFeather;
 
 void main(void) {
-  vec2 offset = (vUv - uFogCenter) / max(uFogRadius, vec2(0.0001));
-  float alpha = smoothstep(1.0 - uFogFeather, 1.0, length(offset)) * uFogOpacity;
-  gl_FragColor = vec4(uFogColor, alpha);
+  // La visión es de equipo: el alfa es el mínimo de todos los círculos, así
+  // que basta con estar dentro de uno para que el mundo se dibuje normal.
+  // Los círculos sin usar se envían con radio 0 y no revelan nada.
+  float alpha = 1.0;
+  for (int i = 0; i < ${MAX_VISION_CIRCLES}; i++) {
+    vec2 offset = (vUv - uFogCenter[i]) / max(uFogRadius[i], vec2(0.0001));
+    alpha = min(alpha, smoothstep(1.0 - uFogFeather, 1.0, length(offset)));
+  }
+  gl_FragColor = vec4(uFogColor, alpha * uFogOpacity);
 }
 `;
 
@@ -64,25 +82,29 @@ const DECAL_FRAGMENT_SHADER = `
 varying vec2 vUv;
 varying vec4 vClip;
 uniform vec3 uFogColor;
-uniform float uFogOpacity;
 uniform sampler2D uFogMask;
-uniform vec2 uScreenCenter;
-uniform vec2 uScreenRadius;
+uniform vec2 uScreenCenter[${MAX_VISION_CIRCLES}];
+uniform vec2 uScreenRadius[${MAX_VISION_CIRCLES}];
 uniform float uScreenFeather;
 uniform float uScreenOpacity;
 
 void main(void) {
-  float shadow = (1.0 - texture2D(uFogMask, vUv).r) * uFogOpacity;
+  // La máscara ya codifica la visibilidad del equipo: blanco donde ve algún
+  // Pokémon vivo (dentro de su círculo y sin un separador de por medio) y
+  // negro donde no ve ninguno. El decal solo oscurece esa parte oculta.
+  float hidden = (1.0 - texture2D(uFogMask, vUv).r) * uScreenOpacity;
 
-  // Mismo óvalo de pantalla que dibuja FogView. Al resolverlo aquí, el decal
-  // compensa la niebla circular que se dibuja encima: la suma de las dos capas
-  // queda exactamente en max(circle, shadow). Fuera del radio de visión ambas
-  // valen lo mismo (uFogOpacity), así que la cuña se funde con la niebla sin
-  // costura y sin oscurecer dos veces la zona de solape.
+  // Misma unión de óvalos y mismo degradado que dibuja FogView. Al compartir
+  // el borde, la sombra se funde con la niebla en lugar de cortarse.
   vec2 clipUv = vClip.xy / vClip.w * 0.5 + 0.5;
-  vec2 offset = (clipUv - uScreenCenter) / max(uScreenRadius, vec2(0.0001));
-  float circle = smoothstep(1.0 - uScreenFeather, 1.0, length(offset)) * uScreenOpacity;
-  float target = max(circle, shadow);
+  float circle = 1.0;
+  for (int i = 0; i < ${MAX_VISION_CIRCLES}; i++) {
+    vec2 offset = (clipUv - uScreenCenter[i]) / max(uScreenRadius[i], vec2(0.0001));
+    circle = min(circle, smoothstep(1.0 - uScreenFeather, 1.0, length(offset)));
+  }
+  circle *= uScreenOpacity;
+
+  float target = max(circle, hidden);
   float alpha = clamp(
     (target - circle) / max(1.0 - circle, 0.001),
     0.0,
@@ -106,18 +128,21 @@ export interface SightOccluder {
 }
 
 /**
- * Óvalo de visión ya proyectado a UV de la vista. Lo calcula `FogView` y lo
- * consume `FogDecal` para que ambas capas de niebla compartan el mismo borde.
+ * Círculos de visión ya proyectados a UV de la vista. Los calcula `FogView` y
+ * los consume `FogDecal` para que ambas capas de niebla compartan el mismo
+ * borde y la misma unión de visibilidad del equipo.
  */
 export interface ScreenFog {
-  center: Float32Array;
-  radius: Float32Array;
+  centers: Float32Array;
+  radii: Float32Array;
   feather: number;
   opacity: number;
 }
 
 const MASK_SIZE = 192;
 const SHADOW_LENGTH = 40;
+/** Margen (u) del círculo en la máscara para tapar el borde suave de FogView. */
+const MASK_CIRCLE_MARGIN = 0.75;
 /** Extensión de la banda cuando el jugador está pegado a la cresta. */
 const INSIDE_EDGE_EXTENSION = 0.05;
 
@@ -154,14 +179,14 @@ export function createFogDecalMesh(device: pc.GraphicsDevice): pc.Mesh {
   return mesh;
 }
 
-/** Niebla de pantalla de una vista: círculo de visión y sombreado exterior. */
+/** Niebla de pantalla de una vista: unión de círculos del equipo y sombreado exterior. */
 export class FogView {
   readonly entity: pc.Entity;
 
-  /** Óvalo de visión en UV de la vista; lo comparte el decal de cordillera. */
+  /** Unión de círculos en UV de la vista; la comparte el decal de cordillera. */
   readonly screenFog: ScreenFog = {
-    center: new Float32Array(2),
-    radius: new Float32Array(2),
+    centers: new Float32Array(MAX_VISION_CIRCLES * 2),
+    radii: new Float32Array(MAX_VISION_CIRCLES * 2),
     feather: CONFIG.vision.fogFeather,
     opacity: 0
   };
@@ -169,21 +194,11 @@ export class FogView {
   private readonly device: pc.GraphicsDevice;
   private readonly material: pc.ShaderMaterial;
 
-  /** Vectores reutilizados para proyectar el círculo de visión a pantalla. */
+  /** Vectores reutilizados para proyectar los círculos de visión a pantalla. */
   private readonly worldPoints = {
-    center: new pc.Vec3(),
-    left: new pc.Vec3(),
-    right: new pc.Vec3(),
-    near: new pc.Vec3(),
-    far: new pc.Vec3(),
     probe: new pc.Vec3()
   };
   private readonly screenPoints = {
-    center: new pc.Vec3(),
-    left: new pc.Vec3(),
-    right: new pc.Vec3(),
-    near: new pc.Vec3(),
-    far: new pc.Vec3(),
     probe: new pc.Vec3()
   };
 
@@ -195,6 +210,13 @@ export class FogView {
     index: number
   ) {
     this.device = device;
+
+    // Los círculos sin usar se mandan lejos y con radio 0 para que el shader
+    // no revele nada hasta que `update` reciba los observadores reales.
+    for (let index = 0; index < MAX_VISION_CIRCLES; index++) {
+      this.screenFog.centers[index * 2] = -1000;
+      this.screenFog.centers[index * 2 + 1] = -1000;
+    }
 
     this.material = new pc.ShaderMaterial({
       uniqueName: 'fog-of-war',
@@ -212,8 +234,8 @@ export class FogView {
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
     this.material.setParameter('uFogOpacity', this.screenFog.opacity);
     this.material.setParameter('uFogFeather', this.screenFog.feather);
-    this.material.setParameter('uFogCenter', this.screenFog.center);
-    this.material.setParameter('uFogRadius', this.screenFog.radius);
+    this.material.setParameter('uFogCenter[0]', this.screenFog.centers);
+    this.material.setParameter('uFogRadius[0]', this.screenFog.radii);
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
@@ -232,19 +254,21 @@ export class FogView {
   }
 
   /**
-   * Recoloca el quad para cubrir el viewport y le pasa al shader el centro y
-   * los radios proyectados del círculo de visión. Se proyectan el centro, los
-   * extremos horizontales y los extremos cercano/lejano del círculo en el
-   * suelo; el centro vertical del óvalo es el punto medio entre estos dos
-   * últimos porque la perspectiva hace que el lado cercano ocupe más pantalla.
+   * Recoloca el quad para cubrir el viewport y le pasa al shader la unión de
+   * los círculos de visión del equipo, proyectados a UV de esta vista. La
+   * unión queda en `screenFog` para que el decal de sombra compense la niebla
+   * con los mismos óvalos.
+   *
+   * Cada círculo se proyecta muestreando su perímetro en el suelo y tomando la
+   * caja envolvente en pantalla. Si parte del círculo queda detrás de la
+   * cámara, el borde inferior se prolonga hasta el final del panel; si no cae
+   * nada delante, el círculo no revela nada.
    */
   update(
     camera: pc.CameraComponent,
     viewport: SplitRect,
     yaw: number,
-    x: number,
-    z: number,
-    visionRange: number
+    circles: readonly VisionCircle[]
   ): void {
     const { width: canvasWidth, height: canvasHeight } = this.device.clientRect;
     const rectWidth = viewport.w * canvasWidth;
@@ -265,114 +289,111 @@ export class FogView {
     const rectLeft = viewport.x * canvasWidth;
     const rectTop = (1 - viewport.y - viewport.h) * canvasHeight;
 
-    const rightX = Math.cos(yaw);
-    const rightZ = -Math.sin(yaw);
     const forwardX = -Math.sin(yaw);
     const forwardZ = -Math.cos(yaw);
+    const cameraPosition = camera.entity.getPosition();
+    const pitch = CONFIG.camera.pitch * DEG;
+    const cosPitch = Math.cos(pitch);
+    const sinPitch = Math.sin(pitch);
     const world = this.worldPoints;
     const screen = this.screenPoints;
 
-    const center = camera.worldToScreen(world.center.set(x, 0, z), screen.center);
-    const left = camera.worldToScreen(
-      world.left.set(x - rightX * visionRange, 0, z - rightZ * visionRange),
-      screen.left
-    );
-    const right = camera.worldToScreen(
-      world.right.set(x + rightX * visionRange, 0, z + rightZ * visionRange),
-      screen.right
-    );
-    // `forward` apunta hacia el fondo del mapa (lejos de la cámara).
-    const far = camera.worldToScreen(
-      world.far.set(x + forwardX * visionRange, 0, z + forwardZ * visionRange),
-      screen.far
-    );
-
-    // El extremo cercano puede quedar por debajo del encuadre, pero se puede
-    // proyectar mientras esté delante del plano de cámara. Solo se descarta si
-    // queda detrás; en ese caso el óvalo se prolonga hasta el borde inferior.
-    const cameraPosition = camera.entity.getPosition();
-    const cameraDepth = (x - cameraPosition.x) * forwardX + (z - cameraPosition.z) * forwardZ;
-    const pitch = CONFIG.camera.pitch * DEG;
-    const nearDepth3D = cameraDepth * Math.cos(pitch) + cameraPosition.y * Math.sin(pitch);
-    const nearInFront = nearDepth3D > camera.nearClip;
-    const near = nearInFront
-      ? camera.worldToScreen(
-          world.near.set(x - forwardX * visionRange, 0, z - forwardZ * visionRange),
-          screen.near
-        )
-      : null;
-
     const toX = (screenX: number) => ((screenX - rectLeft) / rectWidth) * 100;
     const toY = (screenY: number) => ((screenY - rectTop) / rectHeight) * 100;
-    const clampPct = (value: number) => Math.min(400, Math.max(1, value));
+    const clampX = (value: number) => Math.min(400, Math.max(-200, value));
+    const clampY = (value: number) => Math.min(160, Math.max(-20, value));
 
-    const centerX = toX(center.x);
-    const centerY = toY(center.y);
-    // El círculo de visión proyectado no es más ancho en sus extremos
-    // izquierdo/derecho "puros": con perspectiva, el máximo horizontal cae en
-    // un punto algo más cercano a la cámara. Proyectar solo los extremos laterales
-    // dejaba el óvalo un 10-15 % estrecho y el rayo (11 u reales) parecía salirse
-    // de la visión. Se muestrea el círculo para obtener el semieje real.
-    const cameraDepthToPlayer =
-      (x - cameraPosition.x) * forwardX + (z - cameraPosition.z) * forwardZ;
-    const probeSteps = 32;
-    let halfSpan = 0;
-    for (let step = 0; step <= probeSteps; step++) {
-      const along = -visionRange + (step / probeSteps) * visionRange * 2;
-      // Los puntos que quedan por detrás de la cámara no se pueden proyectar.
-      if (cameraDepthToPlayer + along <= 0.05) continue;
-      const across = Math.sqrt(
-        Math.max(0, visionRange * visionRange - along * along)
-      );
-      for (let side = -1; side <= 1; side += 2) {
+    for (let index = 0; index < MAX_VISION_CIRCLES; index++) {
+      const slot = index * 2;
+      const circle = circles[index];
+      if (!circle || circle.visionRange <= 0.0001) {
+        this.screenFog.centers[slot] = -1000;
+        this.screenFog.centers[slot + 1] = -1000;
+        this.screenFog.radii[slot] = 0;
+        this.screenFog.radii[slot + 1] = 0;
+        continue;
+      }
+
+      const { x, z, visionRange } = circle;
+      // El círculo local se muestrea fino para conservar su borde suave; los
+      // aliados usan menos muestras porque su óvalo suele quedar más lejos.
+      const probeSteps = index === 0 ? 32 : 16;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      let behindCamera = false;
+
+      for (let step = 0; step < probeSteps; step++) {
+        const angle = (step / probeSteps) * Math.PI * 2;
+        const probeX = x + Math.cos(angle) * visionRange;
+        const probeZ = z + Math.sin(angle) * visionRange;
+        // Profundidad real aproximada con el pitch de la cámara: los puntos
+        // que quedan detrás no se pueden proyectar y se descartan.
+        const depth =
+          (probeX - cameraPosition.x) * forwardX +
+          (probeZ - cameraPosition.z) * forwardZ;
+        const depth3D = depth * cosPitch + cameraPosition.y * sinPitch;
+        if (depth3D <= camera.nearClip) {
+          behindCamera = true;
+          continue;
+        }
+
         const probe = camera.worldToScreen(
-          world.probe.set(
-            x + forwardX * along + rightX * across * side,
-            0,
-            z + forwardZ * along + rightZ * across * side
-          ),
+          world.probe.set(probeX, 0, probeZ),
           screen.probe
         );
-        const offset = Math.abs(toX(probe.x) - centerX);
-        if (Number.isFinite(offset)) halfSpan = Math.max(halfSpan, offset);
+        const screenX = toX(probe.x);
+        const screenY = toY(probe.y);
+        if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) continue;
+        minX = Math.min(minX, screenX);
+        maxX = Math.max(maxX, screenX);
+        minY = Math.min(minY, screenY);
+        maxY = Math.max(maxY, screenY);
       }
+
+      // Ningún punto del círculo cae delante de la cámara: no revela nada.
+      if (minX === Infinity) {
+        this.screenFog.centers[slot] = -1000;
+        this.screenFog.centers[slot + 1] = -1000;
+        this.screenFog.radii[slot] = 0;
+        this.screenFog.radii[slot + 1] = 0;
+        continue;
+      }
+
+      // El lado cercano del círculo se sale por abajo del panel; prolongar el
+      // óvalo hasta el borde evita un hueco de niebla junto a la cámara.
+      if (behindCamera) maxY = Math.max(maxY, 160);
+
+      minX = clampX(minX);
+      maxX = clampX(maxX);
+      minY = clampY(minY);
+      maxY = clampY(maxY);
+
+      // Círculo completamente fuera del panel: tampoco puede revelar nada.
+      if (maxX < 0 || minX > 100 || maxY < 0 || minY > 100) {
+        this.screenFog.centers[slot] = -1000;
+        this.screenFog.centers[slot + 1] = -1000;
+        this.screenFog.radii[slot] = 0;
+        this.screenFog.radii[slot + 1] = 0;
+        continue;
+      }
+
+      const centerX = (minX + maxX) * 0.5;
+      const centerY = (minY + maxY) * 0.5;
+      const radiusX = Math.max(0.5, (maxX - minX) * 0.5);
+      const radiusY = Math.max(0.5, (maxY - minY) * 0.5);
+
+      // La UV del quad tiene el origen abajo; el centro calculado viene del
+      // origen superior de la pantalla.
+      this.screenFog.centers[slot] = centerX / 100;
+      this.screenFog.centers[slot + 1] = 1 - centerY / 100;
+      this.screenFog.radii[slot] = radiusX / 100;
+      this.screenFog.radii[slot + 1] = radiusY / 100;
     }
-    const radiusX = clampPct(
-      halfSpan > 0.0001
-        ? halfSpan
-        : Math.abs(toX(right.x) - toX(left.x)) * 0.5
-    );
-    const rawFarY = toY(far.y);
-    const rawNearY = near ? toY(near.y) : 160;
-    // Acotar los extremos un poco más allá del panel evita que un punto muy
-    // lejano empuje el centro del degradado fuera del lienzo y oscurezca todo.
-    const farY = Math.max(Math.min(rawFarY, 160), -20);
-    const nearY = Math.max(Math.min(rawNearY, 160), -20);
-    const topY = Math.min(farY, nearY);
-    const bottomY = Math.max(farY, nearY);
-    const radiusY = clampPct((bottomY - topY) * 0.5);
-    const gradientY = (topY + bottomY) * 0.5;
 
-    if (
-      !Number.isFinite(centerX) ||
-      !Number.isFinite(centerY) ||
-      !Number.isFinite(radiusX) ||
-      !Number.isFinite(radiusY) ||
-      !Number.isFinite(gradientY)
-    ) {
-      this.setOpacity(0);
-      return;
-    }
-
-    // La UV del quad tiene el origen abajo; el centro calculado viene del
-    // origen superior de la pantalla.
-    this.screenFog.center[0] = centerX / 100;
-    this.screenFog.center[1] = 1 - gradientY / 100;
-    this.screenFog.radius[0] = radiusX / 100;
-    this.screenFog.radius[1] = radiusY / 100;
-
-    this.material.setParameter('uFogCenter', this.screenFog.center);
-    this.material.setParameter('uFogRadius', this.screenFog.radius);
+    this.material.setParameter('uFogCenter[0]', this.screenFog.centers);
+    this.material.setParameter('uFogRadius[0]', this.screenFog.radii);
     this.setOpacity(CONFIG.vision.fogOpacity);
   }
 
@@ -393,6 +414,10 @@ export class FogView {
  * no lo deforma. Se dibuja sin test de profundidad para que la cuña tiña también
  * la vegetación y las decoraciones, y usa una máscara de esténcil para excluir
  * a los separadores y no sombrear su cara visible.
+ *
+ * La máscara no es solo la sombra: se compone la visibilidad de todo el equipo
+ * (círculo de cada observador menos sus cuñas), de modo que una sombra solo
+ * oscurece los puntos que no ve ningún aliado.
  */
 export class FogDecal {
   readonly entity: pc.Entity;
@@ -402,13 +427,15 @@ export class FogDecal {
   private readonly maskCanvas: HTMLCanvasElement;
   private readonly maskContext: CanvasRenderingContext2D;
   private readonly maskTexture: pc.Texture;
-  private readonly screenCenter = new Float32Array(2);
-  private readonly screenRadius = new Float32Array(2);
+  /** Lienzo auxiliar donde se compone la visibilidad de cada observador. */
+  private readonly observerCanvas: HTMLCanvasElement;
+  private readonly observerContext: CanvasRenderingContext2D;
+  private readonly screenCenters = new Float32Array(MAX_VISION_CIRCLES * 2);
+  private readonly screenRadii = new Float32Array(MAX_VISION_CIRCLES * 2);
   private screenFeather: number = CONFIG.vision.fogFeather;
   private screenOpacity = 0;
-  private lastX = Number.NaN;
-  private lastZ = Number.NaN;
-  private lastVision = Number.NaN;
+  /** Observadores del último frame, para no redibujar la máscara sin cambios. */
+  private readonly lastCircles: VisionCircle[] = [];
 
   constructor(
     device: pc.GraphicsDevice,
@@ -426,8 +453,24 @@ export class FogDecal {
     const context = this.maskCanvas.getContext('2d');
     if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.maskContext = context;
+    // Antes del primer update la máscara es blanca (nada oculto): así el decal
+    // no oscurece nada si se renderiza un frame antes de recibir observadores.
     context.fillStyle = '#fff';
     context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
+
+    this.observerCanvas = document.createElement('canvas');
+    this.observerCanvas.width = MASK_SIZE;
+    this.observerCanvas.height = MASK_SIZE;
+    const observerContext = this.observerCanvas.getContext('2d');
+    if (!observerContext) throw new Error('No se pudo crear el contexto 2D de la niebla');
+    this.observerContext = observerContext;
+
+    // Sin observadores todavía: centros lejanos y radios nulos para que el
+    // decal no oscurezca nada hasta el primer `update`.
+    for (let circleIndex = 0; circleIndex < MAX_VISION_CIRCLES; circleIndex++) {
+      this.screenCenters[circleIndex * 2] = -1000;
+      this.screenCenters[circleIndex * 2 + 1] = -1000;
+    }
 
     this.maskTexture = new pc.Texture(device, {
       name: `fog-decal-mask-${index + 1}`,
@@ -462,10 +505,9 @@ export class FogDecal {
     this.material.depthWrite = false;
     this.material.cull = pc.CULLFACE_NONE;
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
-    this.material.setParameter('uFogOpacity', CONFIG.vision.fogOpacity);
     this.material.setParameter('uFogMask', this.maskTexture);
-    this.material.setParameter('uScreenCenter', this.screenCenter);
-    this.material.setParameter('uScreenRadius', this.screenRadius);
+    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
+    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
     this.material.setParameter('uScreenFeather', this.screenFeather);
     this.material.setParameter('uScreenOpacity', this.screenOpacity);
     this.material.update();
@@ -506,59 +548,128 @@ export class FogDecal {
   }
 
   /**
-   * @param screen Óvalo de la niebla circular de esta vista. Se sincroniza en
-   * cada frame porque depende de la cámara; la máscara de la sombra, en cambio,
-   * solo se redibuja cuando cambia el jugador o su rango.
+   * @param circles Observadores vivos del equipo, con el jugador local primero.
+   * La máscara world-space es la unión de lo que ve cada uno; el óvalo de
+   * pantalla es la unión de sus círculos. La máscara solo se redibuja cuando
+   * cambia la posición o el rango de algún observador.
    */
-  update(
-    playerX: number,
-    playerZ: number,
-    visionRange: number,
-    screen: ScreenFog | null
-  ): void {
+  update(circles: readonly VisionCircle[], screen: ScreenFog | null): void {
     this.syncScreenFog(screen);
-
-    if (
-      playerX === this.lastX &&
-      playerZ === this.lastZ &&
-      visionRange === this.lastVision
-    ) {
-      return;
-    }
-    this.lastX = playerX;
-    this.lastZ = playerZ;
-    this.lastVision = visionRange;
-
-    this.updateMask(playerX, playerZ, visionRange);
+    if (!this.circlesChanged(circles)) return;
+    this.rememberCircles(circles);
+    this.updateMask(circles);
   }
 
   private syncScreenFog(screen: ScreenFog | null): void {
     if (screen) {
-      this.screenCenter[0] = screen.center[0];
-      this.screenCenter[1] = screen.center[1];
-      this.screenRadius[0] = screen.radius[0];
-      this.screenRadius[1] = screen.radius[1];
+      this.screenCenters.set(screen.centers);
+      this.screenRadii.set(screen.radii);
       this.screenFeather = screen.feather;
       this.screenOpacity = screen.opacity;
     } else {
       this.screenOpacity = 0;
     }
-    this.material.setParameter('uScreenCenter', this.screenCenter);
-    this.material.setParameter('uScreenRadius', this.screenRadius);
+    this.material.setParameter('uScreenCenter[0]', this.screenCenters);
+    this.material.setParameter('uScreenRadius[0]', this.screenRadii);
     this.material.setParameter('uScreenFeather', this.screenFeather);
     this.material.setParameter('uScreenOpacity', this.screenOpacity);
   }
 
-  private updateMask(playerX: number, playerZ: number, visionRange: number): void {
+  private circlesChanged(circles: readonly VisionCircle[]): boolean {
+    if (circles.length !== this.lastCircles.length) return true;
+    for (let index = 0; index < circles.length; index++) {
+      const next = circles[index];
+      const prev = this.lastCircles[index];
+      if (
+        next.x !== prev.x ||
+        next.z !== prev.z ||
+        next.visionRange !== prev.visionRange
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private rememberCircles(circles: readonly VisionCircle[]): void {
+    this.lastCircles.length = 0;
+    for (const circle of circles) {
+      this.lastCircles.push({
+        x: circle.x,
+        z: circle.z,
+        visionRange: circle.visionRange
+      });
+    }
+  }
+
+  /**
+   * Compone la máscara de visibilidad del equipo. Para cada observador se pinta
+   * su círculo de blanco y sus cuñas de separador de negro; después se
+   * superpone cada máscara con `lighter` (unión). El resultado es blanco donde
+   * ve al menos un Pokémon del equipo y negro donde no ve ninguno. Así una
+   * sombra de cordillera solo oscurece si tapa a todos los aliados que podrían
+   * ver ese punto.
+   */
+  private updateMask(circles: readonly VisionCircle[]): void {
     const context = this.maskContext;
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.globalCompositeOperation = 'source-over';
     context.fillStyle = '#000';
+    context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
 
     const halfX = mapHalfWidth();
     const halfZ = mapHalfDepth();
     const toCanvasX = (x: number) => ((x + halfX) / (halfX * 2)) * MASK_SIZE;
     const toCanvasY = (z: number) => ((z + halfZ) / (halfZ * 2)) * MASK_SIZE;
+
+    for (const circle of circles) {
+      const observer = this.observerContext;
+      observer.setTransform(1, 0, 0, 1, 0, 0);
+      observer.globalCompositeOperation = 'source-over';
+      observer.fillStyle = '#fff';
+      observer.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
+      this.drawShadowWedges(observer, circle.x, circle.z, circle.visionRange);
+
+      // Un pequeño margen evita que la cuantización de la textura recorte el
+      // interior del círculo que FogView dibuja con su borde suave.
+      const radius = circle.visionRange + MASK_CIRCLE_MARGIN;
+      const radiusX = Math.max(0.5, (radius / (halfX * 2)) * MASK_SIZE);
+      const radiusY = Math.max(0.5, (radius / (halfZ * 2)) * MASK_SIZE);
+
+      context.save();
+      context.beginPath();
+      context.ellipse(
+        toCanvasX(circle.x),
+        toCanvasY(circle.z),
+        radiusX,
+        radiusY,
+        0,
+        0,
+        Math.PI * 2
+      );
+      context.clip();
+      context.globalCompositeOperation = 'lighter';
+      context.drawImage(this.observerCanvas, 0, 0);
+      context.restore();
+    }
+
+    context.globalCompositeOperation = 'source-over';
+    this.maskTexture.upload();
+  }
+
+  /** Pinta las cuñas de sombra que proyecta un observador desde su posición. */
+  private drawShadowWedges(
+    context: CanvasRenderingContext2D,
+    playerX: number,
+    playerZ: number,
+    visionRange: number
+  ): void {
+    const halfX = mapHalfWidth();
+    const halfZ = mapHalfDepth();
+    const toCanvasX = (x: number) => ((x + halfX) / (halfX * 2)) * MASK_SIZE;
+    const toCanvasY = (z: number) => ((z + halfZ) / (halfZ * 2)) * MASK_SIZE;
+
+    context.fillStyle = '#000';
 
     const candidates: Array<SightOccluder & { distance: number }> = [];
     for (const occluder of this.occluders) {
@@ -641,8 +752,6 @@ export class FogDecal {
       context.closePath();
       context.fill();
     }
-
-    this.maskTexture.upload();
   }
 
   destroy(): void {

@@ -10092,9 +10092,9 @@ export class CombatFx {
   }
 
   update(dt: number): void {
-    // Recalcular la niebla cuesta una prueba de línea de visión por vista; con
-    // 0,1 s de margen basta para que los efectos entren y salgan de la niebla
-    // sin repetir el cálculo en cada frame.
+    // Recalcular la niebla cuesta una prueba de línea de visión por cada
+    // Pokémon vivo del equipo; con 0,1 s de margen basta para que los efectos
+    // entren y salgan de la niebla sin repetir el cálculo en cada frame.
     this.visibilityTimer += dt;
     const refreshVisibility = this.visibilityTimer >= 0.1;
     if (refreshVisibility) this.visibilityTimer = 0;

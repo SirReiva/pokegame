@@ -273,17 +273,27 @@ export class BotController {
     for (const enemy of players) {
       if (enemy === self || enemy.team === self.team || !enemy.alive) continue;
       const wasVisible = this.target === enemy && this.targetVisible;
-      const visible = isTargetVisible(
-        {
-          x: self.x,
-          z: self.z,
-          visionRange: self.visionRange * this.tuning.visionFactor
-        },
-        enemy,
-        enemy.concealment.value,
-        colliders,
-        wasVisible
-      );
+      // La visión es compartida por equipo: el bot también explota lo que ve
+      // cualquier aliado vivo. Su propio observador conserva el factor de
+      // visión de la dificultad; los aliados usan su rango real.
+      const visible = players.some((ally) => {
+        if (!ally.alive || ally.team !== self.team) return false;
+        const observer =
+          ally === self
+            ? {
+                x: self.x,
+                z: self.z,
+                visionRange: self.visionRange * this.tuning.visionFactor
+              }
+            : ally;
+        return isTargetVisible(
+          observer,
+          enemy,
+          enemy.concealment.value,
+          colliders,
+          wasVisible
+        );
+      });
       if (!visible) continue;
       this.visibleEnemies.push(enemy);
 
