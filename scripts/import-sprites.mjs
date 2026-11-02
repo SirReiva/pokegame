@@ -55,7 +55,8 @@ const ROSTER = [
   { id: '0245', name: 'Suicune', types: ['Water'], accent: '#4f9fd4' },
   { id: '0249', name: 'Lugia', types: ['Psychic', 'Flying'], accent: '#8aa9e8' },
   { id: '0250', name: 'Ho-Oh', types: ['Fire', 'Flying'], accent: '#d9a441' },
-  { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' }
+  { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' },
+  { id: '0383', name: 'Groudon', types: ['Ground'], accent: '#e2bf65', actions: ['Hop'] }
 ];
 
 // Faint, QuickStrike, Shock, Shoot, Charge, Strike, Twirl, Shake y Punch son

@@ -49,7 +49,8 @@ export const POKEMON_VISION: Record<string, number> = {
   '0245': 11.6, // Suicune: vigila y purifica las aguas a su paso
   '0249': 12.4, // Lugia: guardián de los mares, el que más lejos percibe
   '0250': 11.9, // Ho-Oh: vista larga desde las alturas
-  '0251': 11.7 // Celebi: siente el bosque y el tiempo a su alrededor
+  '0251': 11.7, // Celebi: siente el bosque y el tiempo a su alrededor
+  '0383': 10.6 // Groudon: siente las vibraciones del suelo, pero su altura le limita
 };
 
 export const DEFAULT_VISION = 9.5;

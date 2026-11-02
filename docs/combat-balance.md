@@ -32,10 +32,10 @@ especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
 
 Los cinco hallazgos más importantes:
 
-1. **9 de las 23 especies seleccionables no tienen ninguna habilidad.** Eevee,
+1. **9 de las 24 especies seleccionables no tienen ninguna habilidad.** Eevee,
    Onix, Zapdos, Raikou, Entei, Suicune, Lugia, Ho-Oh y Celebi se pueden elegir
    en `/roster`, pero entran a la partida con los cuatro huecos vacíos. Las
-   otras 14, incluido Tyranitar, sí tienen moveset.
+   otras 15, incluidos Tyranitar y Groudon, sí tienen moveset.
 2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
    jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
    nunca.
@@ -172,7 +172,7 @@ cobertura de tipos.
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 9 de 23 especies siguen sin habilidades. |
+| 3.1 Cobertura de movesets | **pendiente** | 9 de 24 especies siguen sin habilidades. |
 | 3.2 DoT precisión/+2 por tick | **pendiente** | Sin cambios. |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas, casts encolados y golpes de dash. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
@@ -184,8 +184,8 @@ cobertura de tipos.
 
 ### 3.1. Cobertura: 9 especies sin moveset (crítico)
 
-`MOVESETS` solo define 14 ids (`src/game/abilities.ts:1738-1777`). El roster
-muestra las 23 especies de `public/sprites/manifest.json` y
+`MOVESETS` solo define 15 ids (`src/game/abilities.ts`). El roster
+muestra las 24 especies de `public/sprites/manifest.json` y
 `src/ui/RosterScreen.tsx:86-89, 485-489` no filtra ni avisa.
 
 `src/game/game.ts:409` hace:

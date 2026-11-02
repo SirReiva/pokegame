@@ -1731,6 +1731,48 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Groudon                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('cuchillada', 'Cuchillada', 'Normal', 'physical', 'melee')
+    .power(55)
+    .accuracy(100)
+    .cooldown(0.6)
+    .range(2.2)
+    .radius(0.85)
+    .halfAngle(55)
+    .knockback(0.4)
+    .cast(0.4)
+    .animation('attack')
+    .impact('slash')
+    .color(226, 191, 101)
+    .description(
+      'Zarpazo amplio de sus garras. Golpe cuerpo a cuerpo fiable. Ataque básico de Groudon.'
+    )
+);
+
+registerAbility(
+  ability('filoAbismo', 'Filo del Abismo', 'Ground', 'physical', 'aoe')
+    .power(130)
+    .accuracy(90)
+    .cooldown(15)
+    .range(4.5)
+    .radius(3.2)
+    .area('ground', 'instant', 0.9)
+    .radial(0.35)
+    .knockback(0.6)
+    .windup(0.7, { animation: 'charge' })
+    .cast(0.7)
+    .animation(null)
+    .impact('ground')
+    .color(214, 170, 88)
+    .description(
+      'Definitiva: abre una falla de 3,2 u a 4,5 u de distancia. Golpea una vez con 130 de potencia, el 100 % en el centro y el 35 % en el borde, y empuja a los alcanzados.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1774,6 +1816,7 @@ MOVESETS['0151'] = [
 ];
 MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
 MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
+MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];
 
 export function abilityForSlot(
   pokemonId: string,

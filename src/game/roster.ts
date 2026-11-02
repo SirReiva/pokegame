@@ -30,7 +30,8 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0245': 7.0, // Suicune: se desliza ligero, con la elegancia del agua
   '0249': 7.5, // Lugia: guardián de los mares, se impulsa con poder psíquico
   '0250': 6.9, // Ho-Oh: envergadura inmensa, arranque pausado
-  '0251': 7.1 // Celebi: viaja en el tiempo con un vuelo juguetón
+  '0251': 7.1, // Celebi: viaja en el tiempo con un vuelo juguetón
+  '0383': 5.6 // Groudon: coloso de tierra, avanza con peso sísmico
 };
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */

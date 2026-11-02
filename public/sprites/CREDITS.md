@@ -182,3 +182,10 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/credits.txt
 
+## Groudon (#0383)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/credits.txt
+
