@@ -328,7 +328,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                         </div>
                       );
                     })}
-                    {common && (
+                    {common && !common.hidden && (
                       <div
                         className={`relative flex min-w-9 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
                           common.passive

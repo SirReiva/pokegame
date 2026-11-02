@@ -463,6 +463,7 @@ export class Game {
         damageReduction: 0,
         shieldSpeedMultiplier: 1,
         damageReductionTimer: 0,
+        shieldFx: null,
         hiddenTimer: 0,
         regenGraceTimer: 0,
         regenAccumulator: 0,
@@ -1231,7 +1232,10 @@ export class Game {
     return multiplier;
   }
 
-  /** Reaparece en el punto de origen del equipo, con 2 s de invulnerabilidad. */
+  /**
+   * Reaparece en el punto de origen del equipo con 2 s de invulnerabilidad.
+   * Los cooldowns del kit no se reinician: solo el del instinto activo.
+   */
   private respawnPlayer(player: MatchPlayerState): void {
     const resolved = this.resolvePosition(player, player.spawn.x, player.spawn.z);
     player.x = resolved.x;
@@ -1254,7 +1258,10 @@ export class Game {
     player.dash = null;
     this.cancelPendingCast(player);
     player.deathFade = 0;
-    player.cooldowns = [0, 0, 0, 0, 0];
+    // Los enfriamientos del kit siguen corriendo durante los 5 s de muerte: no
+    // se reinician al reaparecer. El instinto activo sí se resetea, como pide
+    // `docs/common-abilities.md` (sección Respawn).
+    player.cooldowns[4] = 0;
     player.buffs = [];
     player.slowEffects = [];
     player.slowMultiplier = 1;
@@ -1365,6 +1372,12 @@ export class Game {
 
     // Cualquier habilidad usada corta la regeneración pasiva.
     this.breakRegen(player);
+    // Atacar desde la protección de spawn la retira: la invulnerabilidad
+    // defensiva no debe servir para lanzar gratis una rotación ofensiva. Los
+    // buffs y dash de estado (Protección, Impulso, Agilidad) no la rompen.
+    if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null)) {
+      player.invulnerableTimer = 0;
+    }
     player.cooldowns[slotIndex] = def.cooldown;
     // Recuperación global: tras lanzar una habilidad no melee no se puede
     // encadenar otra hasta que pase su `castTime`. Las melee se limitan con su
@@ -1592,7 +1605,8 @@ export class Game {
       anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
     const radius = Math.min(1.5, Math.max(0.65, spriteHeight * 0.55));
     const centerY = Math.max(radius + 0.15, spriteHeight * 0.55);
-    this.combatFx.spawnProtectionShield(
+    player.shieldFx?.destroy();
+    player.shieldFx = this.combatFx.spawnProtectionShield(
       player,
       player.accent,
       radius,
@@ -1870,6 +1884,8 @@ export class Game {
     target.damageReductionTimer = 0;
     target.damageReduction = 0;
     target.shieldSpeedMultiplier = 1;
+    target.shieldFx?.destroy();
+    target.shieldFx = null;
     this.breakRegen(target);
     target.animation = entry?.animations.faint ? 'faint' : 'hurt';
     target.playback = 1;
@@ -1916,6 +1932,7 @@ export class Game {
       projectile.visual.setPosition(projectile.x, projectile.z);
       projectile.visual.update(dt);
       const bounds = this.world.bounds;
+      const padding = Math.max(0.05, projectile.def.radius);
       // Se comprueba todo el tramo recorrido, no solo la posición final: a
       // 20 FPS (dt 0,05) el shuriken de Greninja avanza 1 u por frame y podía
       // atravesar un árbol de ~0,22 u de radio sin que el punto final tocara
@@ -1926,51 +1943,54 @@ export class Game {
         projectile.x,
         projectile.z,
         this.world.colliders,
-        Math.max(0.05, projectile.def.radius)
+        padding
       );
+      const travelX = projectile.x - previousX;
+      const travelZ = projectile.z - previousZ;
+      const travelLength = Math.hypot(travelX, travelZ);
+
+      // Punto de estallido del obstáculo. Se calcula aparte de los objetivos
+      // porque el impacto se resuelve por el primer evento del tramo.
+      let obstacleImpactX = projectile.x;
+      let obstacleImpactZ = projectile.z;
       if (blocked) {
         // La piedra, el orbe o el shuriken también deben estallar al chocar con
         // un separador, muro, roca o árbol. Se busca el primer punto de
         // contacto dentro del tramo, pero se retrasa un poco hacia el lanzador:
         // así el estallido queda fuera del radio de ocultación de la cordillera
         // y se ve, en vez de desaparecer dentro de la niebla del separador.
-        const padding = Math.max(0.05, projectile.def.radius);
         const impactPadding = padding + 0.6;
-        const dx = projectile.x - previousX;
-        const dz = projectile.z - previousZ;
-        const travel = Math.hypot(dx, dz);
         const contact = raycastColliderDistance(
           previousX,
           previousZ,
-          dx,
-          dz,
-          travel,
+          travelX,
+          travelZ,
+          travelLength,
           this.world.colliders,
           impactPadding
         );
-        const ratio = travel > 0.000001 ? contact / travel : 0;
-        this.combatFx.spawnImpact(
-          previousX + dx * ratio,
-          previousZ + dz * ratio,
-          projectile.def.color,
-          1,
-          projectile.def.impactStyle
-        );
-        this.removeProjectile(index);
-        continue;
+        const ratio = travelLength > 0.000001 ? contact / travelLength : 0;
+        obstacleImpactX = previousX + travelX * ratio;
+        obstacleImpactZ = previousZ + travelZ * ratio;
       }
+
       if (
-        Math.abs(projectile.x) > bounds.x ||
-        Math.abs(projectile.z) > bounds.z
+        !blocked &&
+        (Math.abs(projectile.x) > bounds.x ||
+          Math.abs(projectile.z) > bounds.z)
       ) {
         this.removeProjectile(index);
         continue;
       }
 
       const hitRadius = CONFIG.player.radius + projectile.def.radius;
-      let removed = false;
+      const hits: Array<{
+        target: MatchPlayerState;
+        distance: number;
+        impactX: number;
+        impactZ: number;
+      }> = [];
       for (const target of this.matchPlayers) {
-        if (this.matchOver) break;
         if (!this.canHit(projectile.owner, target)) continue;
         if (projectile.hit.has(target)) continue;
         // La distancia se mide contra todo el tramo recorrido, no solo contra
@@ -2011,13 +2031,11 @@ export class Game {
           continue;
         }
 
-        projectile.hit.add(target);
         // El estallido se dibuja en la superficie de entrada del proyectil, no
         // en el centro del objetivo. Cerca de un separador, ese centro puede
-        // caer dentro de su radio de niebla y el impacto desaparecía.
-        const travelX = projectile.x - previousX;
-        const travelZ = projectile.z - previousZ;
-        const travelLength = Math.hypot(travelX, travelZ);
+        // caer dentro de su radio de niebla y el impacto desaparecía. La misma
+        // distancia de entrada ordena los objetivos dentro del tramo.
+        let entryDistance = 0;
         let impactX = target.x;
         let impactZ = target.z;
         if (travelLength > 0.0001) {
@@ -2035,17 +2053,46 @@ export class Game {
               hitRadius * hitRadius - perpendicular * perpendicular
             )
           );
-          const entry = Math.min(
+          entryDistance = Math.min(
             travelLength,
             Math.max(0, along - entryOffset)
           );
-          impactX = previousX + unitX * entry;
-          impactZ = previousZ + unitZ * entry;
+          impactX = previousX + unitX * entryDistance;
+          impactZ = previousZ + unitZ * entryDistance;
         }
-        this.applyAbilityDamage(projectile.owner, target, projectile.def, {
-          healToken: projectile.healToken,
+        // Si hay un collider entre el inicio del tramo y la superficie de
+        // entrada del objetivo, el obstáculo es anterior: no se puede golpear
+        // primero al rival que queda detrás.
+        if (
+          blocked &&
+          segmentBlockedByColliders(
+            previousX,
+            previousZ,
+            impactX,
+            impactZ,
+            this.world.colliders,
+            padding
+          )
+        ) {
+          continue;
+        }
+        hits.push({
+          target,
+          distance: entryDistance,
           impactX,
           impactZ
+        });
+      }
+      hits.sort((a, b) => a.distance - b.distance);
+
+      let removed = false;
+      for (const hit of hits) {
+        if (this.matchOver) break;
+        projectile.hit.add(hit.target);
+        this.applyAbilityDamage(projectile.owner, hit.target, projectile.def, {
+          healToken: projectile.healToken,
+          impactX: hit.impactX,
+          impactZ: hit.impactZ
         });
         if (projectile.pierce > 0) {
           projectile.pierce -= 1;
@@ -2055,7 +2102,20 @@ export class Game {
           break;
         }
       }
-      if (removed) continue;
+      if (removed || this.matchOver) continue;
+
+      if (blocked) {
+        this.combatFx.spawnImpact(
+          obstacleImpactX,
+          obstacleImpactZ,
+          projectile.def.color,
+          1,
+          projectile.def.impactStyle
+        );
+        this.removeProjectile(index);
+        continue;
+      }
+
       // El alcance se agota después de revisar el tramo final, no antes.
       if (exhausted) this.removeProjectile(index);
     }
@@ -2354,6 +2414,14 @@ export class Game {
                 ? Math.max(0, 3 - player.hiddenTimer)
                 : 0,
               active: commonOption.passive ? player.regenerating : false,
+              // El icono de Regeneración solo describe el estado real: si el
+              // jugador está KO, lo ve un rival o está a vida máxima, no se
+              // dibuja (docs/common-abilities.md, HUD).
+              hidden:
+                commonOption.passive &&
+                (!player.alive ||
+                  player.enemiesSeeing > 0 ||
+                  player.hp >= player.maxHp),
               description: commonOption.description
             }
           : null,

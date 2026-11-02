@@ -219,6 +219,8 @@ export interface CommonAbilityHud {
   readyIn: number;
   /** `true` si la regeneración pasiva está curando ahora mismo. */
   active: boolean;
+  /** `true` si el icono pasivo debe ocultarse (KO, visto o vida máxima). */
+  hidden: boolean;
   description: string;
 }
 

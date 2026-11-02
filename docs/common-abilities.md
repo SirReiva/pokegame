@@ -336,6 +336,8 @@ Implementado:
 - **Protección:** reducción del 40 % durante 2 s, −20 % de velocidad, bloqueo de otras habilidades, tope del 65 %, escudo esférico con el `accent` del Pokémon y sin animación por defecto.
 - **Impulso:** dash de 2,2 u sin daño, con colisión contra enemigos y separadores.
 - **Regeneración:** 3 s oculto, 1 PV/s con acumulador entero, gracia de 0,2 s y cortes por daño, visibilidad, ataque o habilidad.
+- **HUD de Regeneración:** el icono pasivo se oculta si el jugador está KO, lo ve algún rival o está a vida máxima.
+- **Escudo tras KO:** el VFX se destruye con el jugador mediante el handle `shieldFx`; no queda la esfera sobre el cadáver.
 - Overrides de animación por Pokémon mediante `COMMON_ANIMATION_OVERRIDES`; el mapa está vacío por ahora.
 
 Pendiente:

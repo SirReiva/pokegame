@@ -38,6 +38,11 @@ export interface EffectHandle {
   destroy(): void;
 }
 
+/** Handle mínimo de un efecto activo: solo permite cancelarlo antes de tiempo. */
+export interface FxHandle {
+  destroy(): void;
+}
+
 /**
  * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
  * Devuelve un array vacío si ninguna vista lo ve.
@@ -1509,21 +1514,32 @@ export class CombatFx {
     duration: number,
     update: (t: number, dt: number) => void,
     anchors?: FxAnchors
-  ): void {
+  ): FxHandle {
     // Solo las vistas que ven el origen (o el destino) del efecto lo dibujan.
     const points =
       anchors ??
       this.pendingAnchors ??
       ([[entity.getPosition().x, entity.getPosition().z]] as FxAnchors);
     this.applyVisibility(entity, points);
-    this.effects.push({
+    const effect: ActiveEffect = {
       entity,
       materials,
       duration,
       elapsed: 0,
       anchors: points,
       update
-    });
+    };
+    this.effects.push(effect);
+    return { destroy: () => this.disposeEffect(effect) };
+  }
+
+  /** Cancela un efecto concreto y libera su entidad y materiales. */
+  private disposeEffect(effect: ActiveEffect): void {
+    const index = this.effects.indexOf(effect);
+    if (index < 0) return;
+    this.effects.splice(index, 1);
+    effect.entity.destroy();
+    for (const material of effect.materials) material.destroy();
   }
 
   /**
@@ -5540,7 +5556,7 @@ export class CombatFx {
     radius: number,
     centerY: number,
     duration: number
-  ): void {
+  ): FxHandle {
     const root = new pc.Entity('protection-shield');
     root.setPosition(position.x, centerY, position.z);
     this.app.root.addChild(root);
@@ -5559,7 +5575,7 @@ export class CombatFx {
     glow.setLocalScale(baseScale * 1.06, baseScale * 1.06, baseScale * 1.06);
 
     const anchor: [number, number] = [position.x, position.z];
-    this.addEffect(
+    return this.addEffect(
       root,
       [baseMaterial, glowMaterial],
       duration,
@@ -10116,9 +10132,7 @@ export class CombatFx {
       for (const material of effect.materials) material.update();
       if (effect.elapsed < effect.duration) continue;
 
-      effect.entity.destroy();
-      for (const material of effect.materials) material.destroy();
-      this.effects.splice(index, 1);
+      this.disposeEffect(effect);
     }
   }
 
@@ -10128,11 +10142,9 @@ export class CombatFx {
       this.disposeTelegraph(telegraph);
     }
 
-    for (const effect of this.effects) {
-      effect.entity.destroy();
-      for (const material of effect.materials) material.destroy();
+    for (const effect of [...this.effects]) {
+      this.disposeEffect(effect);
     }
-    this.effects.length = 0;
 
     for (const visual of this.projectiles) {
       visual.entity.destroy();

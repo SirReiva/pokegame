@@ -7,7 +7,7 @@
 import type { AbilityDef, BuffStat } from './abilities';
 import type { Actor } from './actor';
 import type { CameraRig } from './camera';
-import type { EffectHandle, TelegraphHandle } from './combatFx';
+import type { EffectHandle, FxHandle, TelegraphHandle } from './combatFx';
 import type { MatchPlayerConfig, SplitRect } from './multiplayer';
 import type { CombatStats } from './pokedex';
 import type { TerrainId } from './terrain';
@@ -174,6 +174,8 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   shieldSpeedMultiplier: number;
   /** Segundos restantes de Protección. */
   damageReductionTimer: number;
+  /** VFX del escudo de Protección, para retirarlo si el jugador muere. */
+  shieldFx: FxHandle | null;
   /** Segundos seguidos oculto para Regeneración. */
   hiddenTimer: number;
   /** Gracia antes de resetear el contador al perder visibilidad. */
