@@ -51,8 +51,9 @@ interface DamageTexture {
 const LIFETIME = 0.9;
 const FADE_START = 0.45;
 /** Tamaño objetivo en píxeles, independiente del viewport y del zoom. */
-const TARGET_PIXELS = 38;
-const TARGET_PIXELS_CRITICAL = 52;
+const TARGET_PIXELS = 28;
+const TARGET_PIXELS_CRITICAL = 38;
+const TARGET_PIXELS_HEAL = 24;
 
 /** Énfasis tipográfico: tamaño, margen y contorno. */
 interface NumberEmphasis {
@@ -236,7 +237,8 @@ export class DamageNumbers {
     x: number,
     y: number,
     z: number,
-    critical: boolean
+    critical: boolean,
+    heal: boolean
   ): number {
     const { height: canvasHeight } = this.device.clientRect;
     const viewportHeight = Math.max(1, camera.rect.w * Math.max(1, canvasHeight));
@@ -247,7 +249,11 @@ export class DamageNumbers {
     );
     const visibleHeight = 2 * Math.tan((camera.fov * DEG) / 2) * distance;
     const worldPerPixel = visibleHeight / viewportHeight;
-    const targetPixels = critical ? TARGET_PIXELS_CRITICAL : TARGET_PIXELS;
+    const targetPixels = heal
+      ? TARGET_PIXELS_HEAL
+      : critical
+        ? TARGET_PIXELS_CRITICAL
+        : TARGET_PIXELS;
     return pc.math.clamp(targetPixels * worldPerPixel, 0.16, 3);
   }
 
@@ -296,7 +302,8 @@ export class DamageNumbers {
         options.x,
         options.y,
         options.z,
-        options.critical
+        options.critical,
+        options.heal ?? false
       );
       const width = height * (textureWidth / textureHeight);
       entity.setLocalScale(width, height, 1);
