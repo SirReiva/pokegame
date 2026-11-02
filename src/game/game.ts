@@ -1922,6 +1922,7 @@ export class Game {
     const reduction =
       target.damageReductionTimer > 0 ? target.damageReduction : 0;
     const finalDamage = Math.max(1, Math.round(result.damage * (1 - reduction)));
+    const lethal = finalDamage >= target.hp;
     this.combatFx.spawnImpact(
       options.impactX ?? target.x,
       options.impactZ ?? target.z,
@@ -1929,7 +1930,13 @@ export class Game {
       result.effectiveness,
       def.impactStyle
     );
-    this.showDamagePopup(target, finalDamage, result.critical, result.effectiveness);
+    this.showDamagePopup(
+      target,
+      finalDamage,
+      result.critical,
+      result.effectiveness,
+      lethal
+    );
 
     // Los ticks de un área no controlan al objetivo: solo restan vida y
     // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
@@ -1962,13 +1969,15 @@ export class Game {
     target: MatchPlayerState,
     amount: number,
     critical: boolean,
-    effectiveness: number
+    effectiveness: number,
+    lethal = false
   ): void {
     this.spawnNumberPopup(target, {
       amount,
       critical,
       effectiveness,
-      heal: false
+      heal: false,
+      lethal
     });
   }
 
@@ -1978,7 +1987,8 @@ export class Game {
       amount,
       critical: false,
       effectiveness: 1,
-      heal: true
+      heal: true,
+      lethal: false
     });
   }
 
@@ -1989,6 +1999,7 @@ export class Game {
       critical: boolean;
       effectiveness: number;
       heal: boolean;
+      lethal: boolean;
     }
   ): void {
     const asset = this.assets.get(target.pokemonId);
@@ -2019,6 +2030,7 @@ export class Game {
       critical: options.critical,
       effectiveness: options.effectiveness,
       heal: options.heal,
+      lethal: options.lethal,
       views
     });
   }

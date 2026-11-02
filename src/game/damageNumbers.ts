@@ -24,6 +24,8 @@ export interface DamageNumberOptions {
   effectiveness: number;
   /** `true` dibuja el número como curación (prefijo + y tono verde). */
   heal?: boolean;
+  /** `true` añade una calavera al número: el golpe ha dejado al objetivo a 0 PV. */
+  lethal?: boolean;
   views: DamageNumberView[];
 }
 
@@ -78,6 +80,10 @@ const LABELS: Record<
   normal: (amount) => `${amount}`
 };
 
+/** Calavera que marca un golpe mortal. */
+const SKULL = '💀';
+const SKULL_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
 /** Estrategias de color de relleno del número. */
 const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
   heal: '#6dff8e',
@@ -93,8 +99,11 @@ const GLOW_COLORS: Record<'heal' | 'damage', string> = {
 };
 
 function labelFor(options: DamageNumberOptions): string {
-  const key = options.heal ? 'heal' : options.critical ? 'critical' : 'normal';
-  return LABELS[key](options.amount);
+  if (options.heal) return LABELS.heal(options.amount);
+  const base = options.critical
+    ? LABELS.critical(options.amount)
+    : LABELS.normal(options.amount);
+  return options.lethal ? `${base} ${SKULL}` : base;
 }
 
 function fillFor(
@@ -149,19 +158,32 @@ export class DamageNumbers {
     label: string,
     critical: boolean,
     effectiveness: number,
-    heal: boolean
+    heal: boolean,
+    lethal: boolean
   ): DamageTexture {
     const emphasis = critical ? EMPHASIS.critical : EMPHASIS.normal;
     const { fontSize, paddingX } = emphasis;
     const font = `900 ${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
+    // La calavera se dibuja aparte para no aplicarle el contorno grueso del
+    // número, que emborronaría el emoji.
+    const suffix = ` ${SKULL}`;
+    const text = lethal && label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
 
     const measureCanvas = document.createElement('canvas');
     const measure = measureCanvas.getContext('2d');
     if (!measure) throw new Error('No se pudo medir el texto de daño');
     measure.font = font;
-    const textWidth = measure.measureText(label).width;
+    const textWidth = measure.measureText(text).width;
+    const skullFont = `${fontSize}px ${SKULL_FONT}`;
+    let skullWidth = 0;
+    const gap = lethal ? fontSize * 0.1 : 0;
+    if (lethal) {
+      measure.font = skullFont;
+      skullWidth = measure.measureText(SKULL).width;
+    }
+    const contentWidth = textWidth + (lethal ? gap + skullWidth : 0);
 
-    const width = Math.max(72, Math.ceil(textWidth + paddingX * 2));
+    const width = Math.max(72, Math.ceil(contentWidth + paddingX * 2));
     const height = Math.ceil(fontSize * 1.38);
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -171,7 +193,7 @@ export class DamageNumbers {
 
     context.clearRect(0, 0, width, height);
     context.font = font;
-    context.textAlign = 'center';
+    context.textAlign = 'left';
     context.textBaseline = 'middle';
     context.lineJoin = 'round';
     context.miterLimit = 2;
@@ -180,12 +202,20 @@ export class DamageNumbers {
     context.shadowColor = heal ? GLOW_COLORS.heal : GLOW_COLORS.damage;
     context.shadowBlur = emphasis.shadowBlur;
 
-    const centerX = width / 2;
     const centerY = height / 2 + 2;
-    context.strokeText(label, centerX, centerY);
+    const startX = width / 2 - contentWidth / 2;
+    context.strokeText(text, startX, centerY);
     context.shadowBlur = 0;
     context.fillStyle = fillFor(critical, effectiveness, heal);
-    context.fillText(label, centerX, centerY);
+    context.fillText(text, startX, centerY);
+
+    if (lethal) {
+      context.font = skullFont;
+      context.shadowColor = GLOW_COLORS.damage;
+      context.shadowBlur = emphasis.shadowBlur;
+      context.fillText(SKULL, startX + textWidth + gap, centerY);
+      context.shadowBlur = 0;
+    }
 
     const texture = new pc.Texture(this.device, {
       name: `damage-${label}`,
@@ -283,7 +313,8 @@ export class DamageNumbers {
           label,
           options.critical,
           options.effectiveness,
-          options.heal ?? false
+          options.heal ?? false,
+          options.lethal ?? false
         );
       const material = this.createMaterial(texture);
       const entity = new pc.Entity('damage-number');
