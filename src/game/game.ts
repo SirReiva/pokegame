@@ -676,6 +676,14 @@ export class Game {
     this.fogViews = [];
     for (const decal of this.fogDecals) decal.destroy();
     this.fogDecals = [];
+    // Las vistas y los decals comparten estas mallas. Al destruir sus
+    // instancias, PlayCanvas libera la malla cuando se queda sin referencias,
+    // así que no se pueden conservar para la revancha: se recrean al empezar
+    // la siguiente partida.
+    this.fogMesh?.destroy();
+    this.fogMesh = null;
+    this.fogDecalMesh?.destroy();
+    this.fogDecalMesh = null;
     for (const mask of this.fogMasks.values()) mask.destroy();
     this.fogMasks.clear();
     this.viewCircles.length = 0;
