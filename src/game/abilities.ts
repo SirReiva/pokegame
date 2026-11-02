@@ -74,6 +74,7 @@ export type ImpactStyle =
   | 'steel'
   | 'fighting'
   | 'dark'
+  | 'jaw'
   | 'shuriken'
   | 'ghost'
   | 'air'
@@ -1501,7 +1502,7 @@ registerAbility(
     .knockback(0.35)
     .cast(0.42)
     .animation('attack')
-    .impact('dark')
+    .impact('jaw')
     .color(126, 98, 166)
     .description(
       'Mordisco de mandíbula brutal. Golpe cuerpo a cuerpo lento pero muy contundente. Ataque básico de Tyranitar.'

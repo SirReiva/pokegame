@@ -24,6 +24,7 @@ const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   steel: 0.12,
   fighting: 0.2,
   dark: 0.1,
+  jaw: 0.3,
   shuriken: 0.14,
   ghost: 0.12,
   air: 0.16,
@@ -810,6 +811,8 @@ export class CombatFx {
         this.spawnFightingBurst(x, z, color, effectiveness),
       dark: (x, z, color, effectiveness) =>
         this.spawnDarkBurst(x, z, color, effectiveness),
+      jaw: (x, z, _color, effectiveness) =>
+        this.spawnJawBurst(x, z, effectiveness),
       shuriken: (x, z, color, effectiveness) =>
         this.spawnShurikenBurst(x, z, color, effectiveness),
       ghost: (x, z, color, effectiveness) =>
@@ -2598,13 +2601,33 @@ export class CombatFx {
     color: readonly [number, number, number],
     style: ImpactStyle = 'hit'
   ): void {
+    // La mordida materializa una mandíbula 3D en el centro del cono, pero
+    // mantiene el arco melee como guía del área de golpe.
+    if (style === 'jaw') {
+      const forward = range * 0.3;
+      const centerX = x + Math.sin(yaw) * forward;
+      const centerZ = z + Math.cos(yaw) * forward;
+      this.withAnchors(
+        [
+          [x, z],
+          [centerX, centerZ]
+        ],
+        () => {
+          this.spawnJawBite(centerX, centerZ, yaw, range * 0.56, 1);
+        }
+      );
+    }
+
     const mesh = createArcMesh(
       this.device,
       range,
       Math.max(8, halfAngleDeg) * DEG,
       18
     );
-    const material = this.createMaterial(color, 0.85);
+    // La mordida mantiene el cono como guía, pero en blanco como los colmillos.
+    const arcColor: readonly [number, number, number] =
+      style === 'jaw' ? [255, 255, 255] : color;
+    const material = this.createMaterial(arcColor, 0.85);
     const entity = this.createEntity(mesh, [material]);
     entity.setPosition(x, 0.35, z);
     entity.setEulerAngles(0, yaw / DEG, 0);
@@ -6356,6 +6379,231 @@ export class CombatFx {
       ringMaterial.opacity = 0.6 * (1 - t);
       wispMaterial.opacity = 0.45 * (1 - t);
       smokeMaterial.opacity = 0.4 * (1 - t);
+    });
+  }
+
+  /**
+   * Mandíbula espectral: dos filas de colmillos 3D que giran sobre una bisagra
+   * en la garganta, así que la boca se abre y se cierra como una mordida de
+   * verdad. Los dientes reutilizan el cono compartido de roca y el efecto es
+   * barato.
+   */
+  private spawnJawBite(
+    x: number,
+    z: number,
+    yaw: number,
+    radius: number,
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('jaw-bite');
+    root.setPosition(x, 0, z);
+    root.setEulerAngles(0, yaw / DEG, 0);
+    this.app.root.addChild(root);
+
+    const power = effectiveness > 1 ? 1.16 : effectiveness < 1 ? 0.9 : 1;
+    const size = Math.max(0.5, radius * power);
+    const arcRadius = size * 0.72;
+    const arcCenterZ = size * 0.12;
+    const halfAngle = 0.95;
+    const hinge = size * 0.16;
+
+    // Colmillos blancos con facetas: emisión alta para que no se apaguen a gris
+    // en las caras en sombra.
+    const toothMaterial = this.createRockMaterial([255, 255, 255], 1);
+    toothMaterial.emissive = new pc.Color(0.88, 0.88, 0.92);
+    toothMaterial.emissiveIntensity = 1;
+    toothMaterial.update();
+    const materials = [toothMaterial];
+
+    const mouth = new pc.Entity('jaw-mouth');
+    root.addChild(mouth);
+    mouth.setLocalPosition(0, 1.02, 0);
+    // La abertura se inclina un poco hacia la cámara para que las dos filas de
+    // colmillos se lean como una boca abierta y no solo su canto superior.
+    mouth.setLocalEulerAngles(-18, 0, 0);
+
+    const upper = new pc.Entity('jaw-upper');
+    const lower = new pc.Entity('jaw-lower');
+    // Las filas se separan un poco en profundidad: así los colmillos se
+    // intercalan al cerrarse en vez de atravesarse.
+    upper.setLocalPosition(0, hinge, size * 0.03);
+    lower.setLocalPosition(0, -hinge, -size * 0.03);
+    mouth.addChild(upper);
+    mouth.addChild(lower);
+
+    const addToothRow = (row: pc.Entity, facingUp: boolean): void => {
+      // La fila inferior va desfasada media pieza para que los colmillos se
+      // intercalen al cerrarse, como una cremallera.
+      const count = facingUp ? 10 : 11;
+      const step = (2 * halfAngle) / 10;
+      const start = facingUp ? -halfAngle + step * 0.5 : -halfAngle;
+      for (let index = 0; index < count; index++) {
+        const angle = start + step * index;
+        if (Math.abs(angle) > halfAngle + 0.001) continue;
+        const center = 1 - Math.abs(angle) / halfAngle;
+        const length = size * (0.25 + center * 0.1 + (index % 2) * 0.02);
+        const width = size * (0.095 + center * 0.04);
+        const tooth = this.createEntity(
+          this.rockSpikeMesh,
+          [toothMaterial],
+          row
+        );
+        tooth.setLocalPosition(
+          Math.sin(angle) * arcRadius,
+          (facingUp ? 1 : -1) * length * 0.5,
+          arcCenterZ + Math.cos(angle) * arcRadius
+        );
+        tooth.setLocalScale(width, length, width);
+        // Los colmillos se abren en abanico hacia fuera de la boca.
+        const fan = (angle / DEG) * 0.35;
+        tooth.setLocalEulerAngles(facingUp ? 0 : 180, 0, -fan);
+      }
+    };
+    addToothRow(upper, false);
+    addToothRow(lower, true);
+
+    this.addEffect(root, materials, 0.5, (t) => {
+      const grow = Math.min(1, t / 0.14);
+      const scale = 0.5 + grow * 0.5;
+      mouth.setLocalScale(scale, scale, scale);
+
+      // Se abre del todo y se cierra de golpe al tercio del efecto. Después
+      // rebota un poco, como una mandíbula que acaba de triturar.
+      let open: number;
+      if (t < 0.18) open = 0.55 + (0.45 * t) / 0.18;
+      else if (t < 0.3) {
+        const close = (t - 0.18) / 0.12;
+        open = 1 - close * close;
+      } else if (t < 0.38) {
+        open = -0.05 * Math.sin(((t - 0.3) / 0.08) * Math.PI);
+      } else {
+        open = 0;
+      }
+      upper.setLocalEulerAngles((-0.66 * open) / DEG, 0, 0);
+      lower.setLocalEulerAngles((0.6 * open) / DEG, 0, 0);
+
+      const shake = t > 0.3 && t < 0.42 ? Math.sin(t * 260) * 0.012 : 0;
+      mouth.setLocalPosition(
+        shake,
+        1.02 + Math.sin(t * 46) * 0.008,
+        Math.sin(t * 37) * 0.006
+      );
+
+      const fade = t < 0.62 ? 1 : 1 - (t - 0.62) / 0.38;
+      // Blanco ligeramente translúcido: conserva el volumen sin verse macizo.
+      toothMaterial.opacity = 0.8 * fade;
+    });
+  }
+
+  /**
+   * Impacto de mordida: tres marcas de colmillos cruzadas y esquirlas blancas.
+   * Sin núcleos, aros ni destellos, para conservar la paleta limpia.
+   */
+  private spawnJawBurst(
+    x: number,
+    z: number,
+    effectiveness: number
+  ): void {
+    const root = new pc.Entity('jaw-impact');
+    root.setPosition(x, 0.65, z);
+    this.app.root.addChild(root);
+
+    const power = effectiveness > 1 ? 1.2 : effectiveness < 1 ? 0.9 : 1;
+    const shardMaterial = this.createRockMaterial([255, 255, 255], 1);
+    shardMaterial.emissive = new pc.Color(0.88, 0.88, 0.92);
+    shardMaterial.emissiveIntensity = 1;
+    shardMaterial.update();
+    const streakMaterial = this.createWaterMaterial([255, 255, 255], 0.9);
+    const materials = [shardMaterial, streakMaterial];
+
+    const streaks: {
+      entity: pc.Entity;
+      yaw: number;
+      roll: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const streak = this.createEntity(this.boxMesh, [streakMaterial], root);
+      streaks.push({
+        entity: streak,
+        yaw: index * 60 + 30,
+        roll: (index - 1) * 26,
+        delay: index * 0.03
+      });
+    }
+
+    const shards: {
+      entity: pc.Entity;
+      angle: number;
+      rise: number;
+      distance: number;
+      length: number;
+      spin: number;
+      delay: number;
+    }[] = [];
+    const count = 7;
+    for (let index = 0; index < count; index++) {
+      const shard = this.createEntity(
+        this.rockSpikeMesh,
+        [shardMaterial],
+        root
+      );
+      const length = (0.2 + (index % 3) * 0.06) * power;
+      shard.setLocalScale(0.09 * power, length, 0.09 * power);
+      shards.push({
+        entity: shard,
+        angle: (index / count) * Math.PI * 2 + 0.35,
+        rise: 0.5 + (index % 2) * 0.35,
+        distance: 0.55 + (index % 3) * 0.16,
+        length,
+        spin: (index % 2 === 0 ? 1 : -1) * (260 + index * 40),
+        delay: index * 0.02
+      });
+    }
+
+    this.addEffect(root, materials, 0.38, (t) => {
+      const fade = Math.max(0, 1 - t);
+
+      for (const streak of streaks) {
+        const local = Math.min(
+          1,
+          Math.max(0, (t - streak.delay) / 0.35)
+        );
+        const length = (0.45 + local * 1.35) * power;
+        const thickness = 0.09 * (1 - local * 0.35);
+        streak.entity.setLocalScale(thickness, thickness, length);
+        streak.entity.setLocalEulerAngles(
+          0,
+          streak.yaw + local * 20,
+          streak.roll + local * 32
+        );
+      }
+      streakMaterial.opacity = 0.62 * fade;
+
+      for (const shard of shards) {
+        const shardT = Math.min(
+          1,
+          Math.max(0, (t - shard.delay) / 0.7)
+        );
+        const travel = 1 - (1 - shardT) * (1 - shardT);
+        shard.entity.setLocalPosition(
+          Math.cos(shard.angle) * shard.distance * travel,
+          0.1 + shard.rise * travel,
+          Math.sin(shard.angle) * shard.distance * travel
+        );
+        shard.entity.setLocalEulerAngles(
+          (shardT * 320) % 360,
+          (shardT * shard.spin) % 360,
+          (shardT * 180) % 360
+        );
+        const grow = 1 - shardT * 0.6;
+        shard.entity.setLocalScale(
+          0.09 * power * grow,
+          shard.length * grow,
+          0.09 * power * grow
+        );
+      }
+      shardMaterial.opacity = fade;
     });
   }
 

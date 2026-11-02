@@ -30,6 +30,9 @@ export interface AbilityDamageOptions {
   control?: boolean;
   /** Token compartido del lanzamiento para curar como máximo una vez. */
   healToken?: HealOnHitToken;
+  /** Punto donde dibujar el impacto si no coincide con el centro del objetivo. */
+  impactX?: number;
+  impactZ?: number;
 }
 
 /**

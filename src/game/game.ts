@@ -1547,6 +1547,8 @@ export class Game {
       power?: number;
       control?: boolean;
       healToken?: HealOnHitToken;
+      impactX?: number;
+      impactZ?: number;
     } = {}
   ): boolean {
     const power = options.power ?? def.power;
@@ -1590,8 +1592,8 @@ export class Game {
     // La inmunidad ya se ha descartado arriba, así que un golpe dañino válido
     // siempre resta al menos 1 PV y puede mostrar su impacto y su número.
     this.combatFx.spawnImpact(
-      target.x,
-      target.z,
+      options.impactX ?? target.x,
+      options.impactZ ?? target.z,
       def.color,
       result.effectiveness,
       def.impactStyle
@@ -1774,10 +1776,40 @@ export class Game {
         this.world.colliders,
         Math.max(0.05, projectile.def.radius)
       );
+      if (blocked) {
+        // La piedra, el orbe o el shuriken también deben estallar al chocar con
+        // un separador, muro, roca o árbol. Se busca el primer punto de
+        // contacto dentro del tramo, pero se retrasa un poco hacia el lanzador:
+        // así el estallido queda fuera del radio de ocultación de la cordillera
+        // y se ve, en vez de desaparecer dentro de la niebla del separador.
+        const padding = Math.max(0.05, projectile.def.radius);
+        const impactPadding = padding + 0.6;
+        const dx = projectile.x - previousX;
+        const dz = projectile.z - previousZ;
+        const travel = Math.hypot(dx, dz);
+        const contact = raycastColliderDistance(
+          previousX,
+          previousZ,
+          dx,
+          dz,
+          travel,
+          this.world.colliders,
+          impactPadding
+        );
+        const ratio = travel > 0.000001 ? contact / travel : 0;
+        this.combatFx.spawnImpact(
+          previousX + dx * ratio,
+          previousZ + dz * ratio,
+          projectile.def.color,
+          1,
+          projectile.def.impactStyle
+        );
+        this.removeProjectile(index);
+        continue;
+      }
       if (
         Math.abs(projectile.x) > bounds.x ||
-        Math.abs(projectile.z) > bounds.z ||
-        blocked
+        Math.abs(projectile.z) > bounds.z
       ) {
         this.removeProjectile(index);
         continue;
@@ -1828,8 +1860,40 @@ export class Game {
         }
 
         projectile.hit.add(target);
+        // El estallido se dibuja en la superficie de entrada del proyectil, no
+        // en el centro del objetivo. Cerca de un separador, ese centro puede
+        // caer dentro de su radio de niebla y el impacto desaparecía.
+        const travelX = projectile.x - previousX;
+        const travelZ = projectile.z - previousZ;
+        const travelLength = Math.hypot(travelX, travelZ);
+        let impactX = target.x;
+        let impactZ = target.z;
+        if (travelLength > 0.0001) {
+          const unitX = travelX / travelLength;
+          const unitZ = travelZ / travelLength;
+          const toTargetX = target.x - previousX;
+          const toTargetZ = target.z - previousZ;
+          const along = toTargetX * unitX + toTargetZ * unitZ;
+          const perpendicular = Math.abs(
+            toTargetX * unitZ - toTargetZ * unitX
+          );
+          const entryOffset = Math.sqrt(
+            Math.max(
+              0,
+              hitRadius * hitRadius - perpendicular * perpendicular
+            )
+          );
+          const entry = Math.min(
+            travelLength,
+            Math.max(0, along - entryOffset)
+          );
+          impactX = previousX + unitX * entry;
+          impactZ = previousZ + unitZ * entry;
+        }
         this.applyAbilityDamage(projectile.owner, target, projectile.def, {
-          healToken: projectile.healToken
+          healToken: projectile.healToken,
+          impactX,
+          impactZ
         });
         if (projectile.pierce > 0) {
           projectile.pierce -= 1;
