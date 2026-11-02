@@ -88,8 +88,8 @@ const SILHOUETTE_DRAW_ORDER = 4;
  * tamaño del sprite, con un mínimo en unidades de mundo para que las especies
  * pequeñas también se distingan.
  */
-const OUTLINE_SCALE = 0.045;
-const OUTLINE_MIN_GROW = 0.03;
+const OUTLINE_SCALE = 0.06;
+const OUTLINE_MIN_GROW = 0.04;
 /**
  * El contorno vive un poco por detrás del cuerpo en el plano del billboard.
  * Así el cuerpo lo tapa por dentro pase lo que pase con el orden de dibujado:
