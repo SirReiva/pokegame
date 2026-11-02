@@ -320,6 +320,8 @@ export interface PlayerMatchStats {
 export interface KillFeedEntry {
   /** Identificador creciente para animar solo las entradas nuevas. */
   id: number;
+  /** Momento de la partida (s) en el que se registró el KO. */
+  at: number;
   killerName: string;
   killerTeam: Team;
   killerPokemonId: string;

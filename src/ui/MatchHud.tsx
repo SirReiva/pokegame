@@ -54,7 +54,7 @@ function KillFeed({
   compact: boolean;
   pokemonNames: ReadonlyMap<string, string>;
 }) {
-  const visible = entries.slice(0, compact ? 3 : 4);
+  const visible = entries.slice(0, 4);
   if (visible.length === 0) return null;
 
   return (
@@ -72,7 +72,7 @@ function KillFeed({
         return (
           <li
             key={entry.id}
-            className={`flex max-w-full animate-fade-in items-center gap-1.5 rounded-md border border-line bg-night-850/80 px-1.5 py-0.5 shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
+            className={`flex max-w-full animate-fade-in items-center gap-1.5 rounded-md border border-line bg-night-850/80 px-1.5 py-0.5 leading-none shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
               compact ? 'text-7.36' : 'text-8.32'
             }`}
             title={`${entry.killerName} (${killerPokemon}) eliminó a ${entry.victimName} (${victimPokemon})`}

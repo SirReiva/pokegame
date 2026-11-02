@@ -137,6 +137,11 @@ function hexToRgb(hex: string): [number, number, number] {
 /** Tipos vacíos: la ocultación de un punto usa solo el terreno, sin especie. */
 const NO_TYPES: readonly string[] = [];
 
+/** Segundos que cada KO permanece en el feed antes de desaparecer. */
+const KILL_FEED_TTL_SECONDS = 6;
+/** Tope de entradas del feed; al llenarse se descarta la más antigua. */
+const KILL_FEED_MAX_ENTRIES = 4;
+
 /**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
  * partida y recibe eventos de entrada y telemetría por callbacks.
@@ -194,6 +199,8 @@ export class Game {
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
   private killFeed: KillFeedEntry[] = [];
   private killFeedSeq = 0;
+  /** Tiempo de simulación de la partida, usado para caducar el feed. */
+  private matchElapsed = 0;
   private matchOver = false;
   private winner: Team | null = null;
   private readonly combatFx: CombatFx;
@@ -627,6 +634,7 @@ export class Game {
     this.teamScores = { blue: 0, red: 0 };
     this.killFeed = [];
     this.killFeedSeq = 0;
+    this.matchElapsed = 0;
     this.matchOver = false;
     this.winner = null;
 
@@ -756,6 +764,8 @@ export class Game {
         return;
       }
     }
+
+    this.matchElapsed += dt;
 
     for (const player of this.matchPlayers) {
       const bot = player.isBot ? this.bots.get(player.slot) : null;
@@ -1981,13 +1991,13 @@ export class Game {
   }
 
   /**
-   * Guarda el KO para el feed de las vistas. Se conservan los cuatro últimos y
-   * se reemplaza el array en vez de mutarlo para que React reciba una lista
-   * nueva en cada emisión de estadísticas.
+   * Guarda el KO para el feed de las vistas. Se conservan los últimos
+   * `KILL_FEED_MAX_ENTRIES`; al entrar uno nuevo se descarta el más antiguo.
    */
   private pushKillFeed(killer: MatchPlayerState, victim: MatchPlayerState): void {
     const entry: KillFeedEntry = {
       id: ++this.killFeedSeq,
+      at: this.matchElapsed,
       killerName: killer.name,
       killerTeam: killer.team,
       killerPokemonId: killer.pokemonId,
@@ -1995,7 +2005,15 @@ export class Game {
       victimTeam: victim.team,
       victimPokemonId: victim.pokemonId
     };
-    this.killFeed = [entry, ...this.killFeed].slice(0, 4);
+    this.killFeed = [entry, ...this.killFeed].slice(0, KILL_FEED_MAX_ENTRIES);
+  }
+
+  /** Retira del feed los KOs que ya superaron su tiempo de vida. */
+  private pruneKillFeed(): void {
+    if (this.killFeed.length === 0) return;
+    const oldestVisible = this.matchElapsed - KILL_FEED_TTL_SECONDS;
+    const fresh = this.killFeed.filter((entry) => entry.at >= oldestVisible);
+    if (fresh.length !== this.killFeed.length) this.killFeed = fresh;
   }
 
   private updateProjectiles(dt: number): void {
@@ -2438,6 +2456,7 @@ export class Game {
   }
 
   private emitMatchStats(): void {
+    this.pruneKillFeed();
     const stats: PlayerMatchStats[] = this.views.map((player, index) => {
       const own = player.copies[index] ?? player.copies[0];
       const row = own?.billboard.currentRow ?? 0;
