@@ -50,7 +50,8 @@ export class Actor {
     facing: number,
     withMarker = false,
     silhouette = false,
-    accent: readonly [number, number, number] = [255, 224, 102]
+    accent: readonly [number, number, number] = [255, 224, 102],
+    withOutline = false
   ) {
     this.asset = asset;
     this.position = { ...position };
@@ -70,7 +71,9 @@ export class Actor {
       silhouette,
       // La silueta que asoma tras los árboles usa el color del equipo, igual
       // que el anillo de rumbo.
-      silhouetteColor: accent
+      silhouetteColor: accent,
+      // El resto de Pokémon de la vista llevan un borde de su color de equipo.
+      outlineColor: withOutline ? accent : null
     });
     this.billboard.setFacing(facing);
 

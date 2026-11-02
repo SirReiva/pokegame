@@ -580,7 +580,9 @@ export class Game {
           player.facing,
           true,
           viewer.slot === player.slot,
-          TEAM_INFO[player.team].accent
+          TEAM_INFO[player.team].accent,
+          // Solo el Pokémon que controla este viewport va sin contorno.
+          viewer.slot !== player.slot
         );
         const layer = this.viewLayers[viewIndex];
         if (layer) copy.setLayer(layer.id);
