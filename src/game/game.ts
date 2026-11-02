@@ -1007,8 +1007,8 @@ export class Game {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    // El bloqueo de las melee ignora el input de movimiento, pero deja girar la
-    // cámara y lanzar otras habilidades.
+    // El bloqueo de las melee ignora el input de movimiento y también impide
+    // lanzar otra habilidad hasta que el clip termina; la cámara sigue girando.
     const moveX = player.moveLockTimer > 0 ? 0 : input.moveX;
     const moveY = player.moveLockTimer > 0 ? 0 : input.moveY;
     const desiredX = rightX * moveX + forwardX * moveY;
@@ -1523,6 +1523,11 @@ export class Game {
     // Bloqueo global de casteo: durante la recuperación de la habilidad
     // anterior no se puede lanzar otra, sea cual sea el hueco.
     if (player.castLockTimer > 0) return;
+    // Las melee no usan `castLockTimer` (su cadencia la marca el cooldown),
+    // pero sí comprometen el golpe: no se puede encadenar otra habilidad hasta
+    // que termine su clip/`moveLock`. Sin esto, un haz podía empezar a cargarse
+    // con la animación melee a medias y ocultarla.
+    if (player.moveLockTimer > 0) return;
     const abilityId = player.abilityIds[slotIndex];
     if (!abilityId) return;
     const baseDef = ABILITIES[abilityId];

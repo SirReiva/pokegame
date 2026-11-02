@@ -991,6 +991,8 @@ export class BotController {
   private canCast(self: MatchPlayerState): boolean {
     return (
       self.castLockTimer <= 0.001 &&
+      // Las melee bloquean el casteo hasta que termina su clip.
+      self.moveLockTimer <= 0.001 &&
       self.damageReductionTimer <= 0 &&
       // No gastar la invulnerabilidad de spawn en un ataque inmediato.
       self.invulnerableTimer <= 0.35

@@ -119,7 +119,8 @@ stats legendarios sean intrínsecamente más fuertes antes de mirar habilidades.
 ### Formas y reglas
 
 - **melee**: cono con `range` y `halfAngle`. Bloquea movimiento `moveLock` = 0,5
-  × `castTime` por defecto.
+  × `castTime` por defecto y también impide lanzar otra habilidad hasta que
+  termina el clip (`moveLockTimer`).
 - **projectile**: avanza a `projectileSpeed`, se detiene en colliders y a
   `range`.
 - **beam**: instantáneo, se corta en el primer collider y atraviesa a todos los
@@ -748,7 +749,8 @@ así que se pueden añadir tests baratos:
   o volver, no quedar inmóvil como objetivo.
 - **GCD**: dos habilidades no melee distintas en frames consecutivos: la segunda
   no debe ejecutarse hasta que termine el `castTime` de la primera. Las melee
-  conservan su cadencia de cooldown/`moveLock`.
+  conservan su cadencia de cooldown/`moveLock` y bloquean cualquier otra
+  habilidad mientras dura su `moveLock`.
 - **Speed/dash**: un dash con slow, terreno hostil o buff de velocidad debe
   respetar (o documentar) los modificadores.
 - **Animación**: Ataque Celeste debe reproducir `charge` durante 0,8 s y

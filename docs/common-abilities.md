@@ -16,7 +16,7 @@
 | Movimiento | **No corta** la regeneración mientras siga oculto |
 | Base | **Misma regla**: si ningún enemigo te ve, cuenta como oculto. Al reaparecer la vida ya está al máximo |
 | Icono | **Solo lo ve el jugador**. El rival nunca lo ve mientras regenera: si lo ve, la regeneración ya está cortada |
-| Uso de activos | Solo si **no estás casteando, ni en dash, ni en hitstun** |
+| Uso de activos | Solo si **no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee** |
 | Bloqueo de casteo | Comparten el mismo `castLockTimer` que una habilidad no melee |
 | Protección | Reduce un 40 % **todo el daño recibido** durante 2 s, incluidos DoT y áreas; no el autodaño. Ralentiza un 20 % y bloquea otras habilidades mientras está activa |
 | Animación de Protección | **Ninguna por defecto**; cada Pokémon puede definir una o no. El escudo esférico siempre aparece |
@@ -61,7 +61,7 @@ La diferencia con la antigua «Recuperación» es importante: aquella era un bot
 - **Mientras está activa no se puede usar ninguna otra habilidad**, incluida la básica.
 - La reducción de velocidad se mantiene **todo el tiempo que el escudo está activo**, no solo al lanzarlo.
 - Afecta a la velocidad de movimiento normal; los dash de kit conservan su distancia.
-- Solo se puede usar si no estás casteando, ni en dash, ni en hitstun.
+- Solo se puede usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 - Se puede usar mientras se mueve.
 - Lanzarla **no frena al Pokémon**: conserva su inercia (`preserveMomentum`) y solo se ajusta al multiplicador 0,8× mientras dura el escudo.
 - Comparte el mismo `castLockTimer` que una habilidad no melee.
@@ -132,7 +132,7 @@ El color del escudo no necesita tabla nueva: se toma de `SpriteAsset.entry.accen
 - No cancela animaciones ni `windup`.
 - No atraviesa enemigos ni separadores: se detiene en el primer choque.
 - Distancia y duración fijas; no escalan con la velocidad ni con slows.
-- Solo se puede usar si no estás casteando, ni en dash, ni en hitstun.
+- Solo se puede usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 - Comparte el mismo `castLockTimer` que una habilidad no melee.
 - Animación: `quickstrike`; si la especie no la tiene, el sprite cae a `attack`/`idle`.
 
@@ -304,7 +304,7 @@ Riesgos:
 - **Impulso:** reutilizar el dash actual con colisión contra enemigos y separadores.
 - **Regeneración:** `hiddenTimer`, `regenerating` y `regenAccumulator`; comprobación de visibilidad con `isTargetVisible`; gracia de 0,2 s; tick de 1 PV/s en el bucle de `src/game/game.ts`.
 - **Cortes de Regeneración:** un helper `breakRegen(player)` que ponga `hiddenTimer = 0`, `regenerating = false` y `regenAccumulator = 0`, llamado desde pérdida de HP, ataque, casteo de cualquier habilidad, muerte y respawn.
-- **Activos:** Protección e Impulso comparten el `castLockTimer` de una habilidad no melee y solo se pueden usar si no estás casteando, ni en dash, ni en hitstun.
+- **Activos:** Protección e Impulso comparten el `castLockTimer` de una habilidad no melee y solo se pueden usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 
 ### Input y HUD
 

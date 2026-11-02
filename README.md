@@ -91,7 +91,7 @@ Cada Pokémon elige **uno de tres instintos** en la card del roster:
 
 Los activos comparten el bloqueo global de casteo y solo se pueden usar si no estás casteando, en dash o en hitstun. La selección se hace por Pokémon, se puede cambiar en el roster y se muestra en el lobby. Si el Pokémon muere con Protección activa, el escudo desaparece con él.
 
-Las habilidades `melee` tienen un **lock de movimiento**: al ejecutarse, el clip de ataque y el bloqueo duran exactamente lo mismo (`animationTime = moveLock`, la mitad de `castTime` por defecto) e ignoran el input de desplazamiento para que el golpe se comprometa. La cámara sigue girando y el resto de habilidades siguen disponibles. El valor se puede ajustar con `.moveLock(segundos)` en el builder.
+Las habilidades `melee` tienen un **lock de movimiento**: al ejecutarse, el clip de ataque y el bloqueo duran exactamente lo mismo (`animationTime = moveLock`, la mitad de `castTime` por defecto) e ignoran el input de desplazamiento para que el golpe se comprometa. La cámara sigue girando, pero no se puede lanzar otra habilidad hasta que el clip termina. El valor se puede ajustar con `.moveLock(segundos)` en el builder.
 
 Los haces (como `Rayo`) se detienen en el primer separador, muro o roca: ni el visual ni el daño atraviesan obstáculos. Su efecto son **dos rayos zigzagueantes que giran en sentidos opuestos** y se cruzan mientras el haz avanza desde el lanzador.
 
