@@ -4,6 +4,7 @@ import { Game } from '../game/game';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
   TEAM_INFO,
+  TEAM_ORDER,
   type LobbyPlayer,
   type MatchEndResult,
   type MatchPlayerConfig,
@@ -378,7 +379,9 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
 
       {!error && playing && matchResult && (
         <div className="fixed inset-0 z-14 flex animate-fade-in items-center justify-center bg-night-950/78 backdrop-blur-sm">
-          <div className={`${panel} w-[min(560px,100%)] animate-rise-in p-[clamp(20px,3vw,30px)]`}>
+          <div
+            className={`${panel} max-h-[92vh] w-[min(760px,100%)] animate-rise-in overflow-y-auto p-[clamp(20px,3vw,30px)]`}
+          >
             <div className="text-center">
               <span className={eyebrow}>Fin de la partida</span>
               <h2
@@ -391,6 +394,13 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
                 {matchResult.blueScore} KO azules · {matchResult.redScore} KO rojos
               </p>
             </div>
+
+            <MatchScoreboard
+              manifest={manifest}
+              players={players}
+              stats={stats}
+              result={matchResult}
+            />
 
             <div className="mt-6 grid grid-cols-2 gap-2">
               <button
@@ -414,6 +424,132 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       {modal && (
         <InfoDialog kind={modal} manifest={manifest} onClose={() => setModal(null)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Marcador final con las estadísticas de cada Pokémon. Se agrupa por equipo y
+ * ordena por KOs para que la aportación de cada jugador se lea de un vistazo.
+ */
+function MatchScoreboard({
+  manifest,
+  players,
+  stats,
+  result
+}: {
+  manifest: SpriteManifest;
+  players: LobbyPlayer[];
+  stats: PlayerMatchStats[];
+  result: MatchEndResult;
+}) {
+  const entriesById = new Map(
+    manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])
+  );
+  const scoreFor = (team: MatchEndResult['winner']) =>
+    team === 'blue' ? result.blueScore : result.redScore;
+  // Al terminar la partida los stats llegan en el mismo frame que el
+  // resultado. Si por cualquier motivo aún no están, se muestra la plantilla
+  // con cero KOs para no dejar el marcador vacío.
+  const rowsSource: Array<
+    Pick<
+      PlayerMatchStats,
+      'slot' | 'name' | 'team' | 'pokemonId' | 'kills' | 'deaths'
+    >
+  > =
+    stats.length > 0
+      ? stats
+      : players.map((player) => ({
+          slot: player.slot,
+          name: player.name,
+          team: player.team,
+          pokemonId: player.pokemonId,
+          kills: 0,
+          deaths: 0
+        }));
+
+  return (
+    <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+      {TEAM_ORDER.map((team) => {
+        const info = TEAM_INFO[team];
+        const rows = rowsSource
+          .filter((entry) => entry.team === team)
+          .sort(
+            (a, b) =>
+              b.kills - a.kills || a.deaths - b.deaths || a.slot - b.slot
+          );
+        return (
+          <section
+            key={team}
+            className="overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--team)_34%,var(--color-line))] bg-night-900/55"
+            style={{ '--team': info.color } as CSSProperties}
+          >
+            <header className="flex items-center justify-between gap-2 border-b border-line/70 px-3 py-2">
+              <span className="flex items-center gap-1.5 font-mono text-10.24 font-semibold tracking-widest text-(--team) uppercase">
+                <span className="size-2 rounded-full bg-(--team)" />
+                {info.label}
+              </span>
+              <span className="font-display text-16.8 font-extrabold tabular-nums text-(--team)">
+                {scoreFor(team)}
+              </span>
+            </header>
+
+            <ol className="divide-y divide-line/60">
+              {rows.map((row) => {
+                const entry = entriesById.get(row.pokemonId);
+                return (
+                  <li
+                    key={row.slot}
+                    className="flex items-center gap-2 px-2.5 py-1.75"
+                  >
+                    <span className="grid size-5 shrink-0 place-items-center rounded bg-(--team) font-display text-10.24 font-extrabold text-ink-dark-strong">
+                      {row.slot}
+                    </span>
+                    <span className="grid size-8 shrink-0 place-items-center">
+                      {entry ? (
+                        <PokemonPortrait entry={entry} height={30} />
+                      ) : (
+                        <span className="text-11.2 text-steel-600">—</span>
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col leading-[1.08]">
+                      <strong className="truncate font-mono text-9.6 tracking-[0.06em] uppercase">
+                        {row.name}
+                      </strong>
+                      <span className="truncate text-10.24 text-steel-400">
+                        {entry?.name ?? row.pokemonId}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-baseline gap-2.5 font-mono tabular-nums">
+                      <span className="flex flex-col items-end leading-none">
+                        <strong className="text-13.6 text-steel-150">
+                          {row.kills}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          KO
+                        </span>
+                      </span>
+                      <span className="flex flex-col items-end leading-none">
+                        <strong className="text-13.6 text-steel-300">
+                          {row.deaths}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          Muertes
+                        </span>
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+              {rows.length === 0 && (
+                <li className="p-3 text-center font-mono text-9.6 text-steel-600">
+                  Sin Pokémon
+                </li>
+              )}
+            </ol>
+          </section>
+        );
+      })}
     </div>
   );
 }

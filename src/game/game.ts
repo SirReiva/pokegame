@@ -2597,8 +2597,13 @@ export class Game {
 
   private emitMatchStats(): void {
     this.pruneKillFeed();
-    const stats: PlayerMatchStats[] = this.views.map((player, index) => {
-      const own = player.copies[index] ?? player.copies[0];
+    // Se emiten todos los combatientes, no solo las vistas humanas: la pantalla
+    // final y cualquier marcador necesitan también las estadísticas de los bots.
+    const stats: PlayerMatchStats[] = this.matchPlayers.map((player) => {
+      // Cada humano tiene una copia por vista y su brújula usa la de su propia
+      // vista. Los bots no generan vista: se leen de la primera pantalla.
+      const viewIndex = player.isBot ? 0 : this.views.indexOf(player);
+      const own = player.copies[viewIndex] ?? player.copies[0];
       const row = own?.billboard.currentRow ?? 0;
       const terrain = TERRAINS[player.terrain];
       const commonOption = commonAbilityOption(player.commonAbilityId);
