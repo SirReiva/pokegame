@@ -15,6 +15,7 @@ import { ErrorScreen, LoadingScreen } from '../ui/BootScreen';
 import { btnClass } from '../ui/buttonStyles';
 import { InfoDialog, type InfoKind } from '../ui/InfoDialog';
 import { KeyPill } from '../ui/KeyPill';
+import { MatchCountdown } from '../ui/MatchCountdown';
 import { MatchHud } from '../ui/MatchHud';
 import { PokemonPortrait } from '../ui/PokemonPortrait';
 import { eyebrow } from '../ui/styles';
@@ -41,6 +42,7 @@ interface PlayHandlers {
   onPauseRequest: () => void;
   onMatchStats: (stats: PlayerMatchStats[]) => void;
   onMatchEnd: (result: MatchEndResult) => void;
+  onCountdown: (remaining: number | null) => void;
 }
 
 interface PlayScreenProps {
@@ -69,6 +71,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
   const [hudVisible, setHudVisible] = useState(true);
   const [stats, setStats] = useState<PlayerMatchStats[]>([]);
   const [matchResult, setMatchResult] = useState<MatchEndResult | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     configsRef.current = configs;
@@ -98,7 +101,8 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       },
       onPauseRequest: () => setPaused(true),
       onMatchStats: (next) => setStats(next),
-      onMatchEnd: (result) => setMatchResult(result)
+      onMatchEnd: (result) => setMatchResult(result),
+      onCountdown: (remaining) => setCountdown(remaining)
     };
   });
 
@@ -133,6 +137,9 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
         },
         onMatchEnd: (result) => {
           if (!disposed) handlersRef.current?.onMatchEnd(result);
+        },
+        onCountdown: (remaining) => {
+          if (!disposed) handlersRef.current?.onCountdown(remaining);
         }
       },
       { mapId, manifest }
@@ -272,6 +279,10 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
             </span>
           </div>
         </>
+      )}
+
+      {!error && playing && countdown !== null && !paused && !matchResult && (
+        <MatchCountdown remaining={countdown} />
       )}
 
       {!error && playing && paused && !modal && (

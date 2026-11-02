@@ -225,7 +225,7 @@ El modo `once` solo desactiva la repetición del clip de preparación mientras e
 
 ## Mapas definidos por JSON
 
-Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos y `?map=<id>` conserva la elección al recargar.
+Cada mapa vive en `public/maps/` y se carga con `fetch` al arrancar, así que se puede editar sin recompilar. `public/maps/index.json` lista los mapas disponibles: la ruta `/lobby` permite cambiar entre ellos. La elección vive solo en memoria, no en la URL, y al recargar se vuelve al primer mapa del índice.
 
 Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, separadores (cordilleras y muros) y ajustes de cámara:
 

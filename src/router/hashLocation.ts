@@ -8,9 +8,9 @@ function currentPath(): string {
 }
 
 function subscribe(onChange: () => void): () => void {
-  // El hook de wouter solo escucha `hashchange`, pero al retroceder entre
-  // entradas que también cambian la query (por ejemplo `?map=...`) el navegador
-  // únicamente emite `popstate`. Escuchamos ambos para que atrás/adelante repinte.
+  // El hook de wouter solo escucha `hashchange`, pero el historial también
+  // cambia la ruta con `popstate` (atrás/adelante). Escuchamos ambos para que
+  // el repintado sea inmediato.
   window.addEventListener('hashchange', onChange);
   window.addEventListener('popstate', onChange);
   return () => {

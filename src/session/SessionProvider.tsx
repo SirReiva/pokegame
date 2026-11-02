@@ -47,12 +47,6 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'No se pudo preparar la sesión';
 }
 
-function writeMapInUrl(id: string): void {
-  const url = new URL(window.location.href);
-  url.searchParams.set('map', id);
-  window.history.replaceState(null, '', url);
-}
-
 /** Pokémon que pueden usar los bots: los que tienen un moveset real. */
 function botPokemonPool(manifest: SpriteManifest) {
   const withKit = manifest.pokemon.filter((entry) =>
@@ -119,8 +113,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const spriteManifest = await loadManifest();
         if (cancelled) return;
 
-        const requested = new URLSearchParams(window.location.search).get('map');
-        const active = mapList.find((entry) => entry.id === requested) ?? mapList[0];
+        const active = mapList[0];
 
         mapsRef.current = mapList;
         manifestRef.current = spriteManifest;
@@ -157,7 +150,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!mapsRef.current.some((entry) => entry.id === next)) return;
     mapIdRef.current = next;
     setMapIdState(next);
-    writeMapInUrl(next);
   }, []);
 
   const joinDevice = useCallback(

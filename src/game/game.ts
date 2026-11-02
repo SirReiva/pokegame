@@ -102,6 +102,8 @@ export interface GameCallbacks {
   onPauseRequest(): void;
   onMatchStats(stats: PlayerMatchStats[]): void;
   onMatchEnd(result: MatchEndResult): void;
+  /** Segundos restantes de la cuenta atrás inicial; `null` al terminar. */
+  onCountdown(remaining: number | null): void;
 }
 
 export interface GameOptions {
@@ -141,6 +143,10 @@ const NO_TYPES: readonly string[] = [];
 const KILL_FEED_TTL_SECONDS = 6;
 /** Tope de entradas del feed; al llenarse se descarta la más antigua. */
 const KILL_FEED_MAX_ENTRIES = 4;
+/** Cuenta atrás antes de que los jugadores puedan moverse al empezar. */
+const MATCH_COUNTDOWN_SECONDS = 5;
+/** Tiempo que se mantiene el cartel de salida después de la cuenta atrás. */
+const MATCH_COUNTDOWN_GO_SECONDS = 0.8;
 
 /**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
@@ -226,6 +232,12 @@ export class Game {
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
   private paused = false;
+  /** Segundos restantes de la cuenta atrás inicial. */
+  private countdown = 0;
+  /** Tiempo que queda mostrando el cartel de salida. */
+  private countdownGo = 0;
+  /** Último segundo enviado a React, para no repetir el callback cada frame. */
+  private countdownShown: number | null = null;
   private disposed = false;
 
   private statsTimer = 0;
@@ -273,10 +285,9 @@ export class Game {
     try {
       this.callbacks.onProgress({ loaded: 0, total: 13, label: 'Cargando mapas' });
       this.mapIndex = await loadMapIndex();
-      const requested =
-        this.options.mapId ?? new URLSearchParams(window.location.search).get('map');
       const entry =
-        this.mapIndex.find((candidate) => candidate.id === requested) ?? this.mapIndex[0];
+        this.mapIndex.find((candidate) => candidate.id === this.options.mapId) ??
+        this.mapIndex[0];
       const map = await loadMap(entry);
       this.applyMap(map);
 
@@ -423,6 +434,10 @@ export class Game {
     this.paused = false;
     this.statsTimer = 0;
     this.fps = 0;
+    this.countdown = MATCH_COUNTDOWN_SECONDS;
+    this.countdownGo = 0;
+    this.countdownShown = MATCH_COUNTDOWN_SECONDS;
+    this.callbacks.onCountdown(MATCH_COUNTDOWN_SECONDS);
     this.menuCamera.setEnabled(false);
     this.app.graphicsDevice.maxPixelRatio = Math.min(
       window.devicePixelRatio || 1,
@@ -628,6 +643,7 @@ export class Game {
     this.menuCamera.setEnabled(true);
     this.refreshSunShadows();
     this.callbacks.onMatchStats([]);
+    this.callbacks.onCountdown(null);
   }
 
   private clearMatch(): void {
@@ -645,6 +661,9 @@ export class Game {
     this.matchElapsed = 0;
     this.matchOver = false;
     this.winner = null;
+    this.countdown = 0;
+    this.countdownGo = 0;
+    this.countdownShown = null;
 
     for (const fog of this.fogViews) fog.destroy();
     this.fogViews = [];
@@ -753,8 +772,32 @@ export class Game {
       return;
     }
 
+    // Cuenta atrás inicial: los jugadores ya ven el mapa y su HUD, pero la
+    // simulación sigue congelada hasta que llega a cero.
+    if (this.countdown > 0) {
+      this.tickCountdown(frameDt);
+      this.updateMatch(frameDt, frame, true);
+      return;
+    }
+
+    if (this.countdownGo > 0) {
+      this.countdownGo = Math.max(0, this.countdownGo - frameDt);
+      if (this.countdownGo === 0) this.callbacks.onCountdown(null);
+    }
+
     this.updateMatch(frameDt, frame);
   };
+
+  /** Avanza la cuenta atrás y avisa a React cuando cambia el segundo visible. */
+  private tickCountdown(dt: number): void {
+    this.countdown = Math.max(0, this.countdown - dt);
+    const second = this.countdown > 0 ? Math.ceil(this.countdown) : 0;
+    if (second !== this.countdownShown) {
+      this.countdownShown = second;
+      this.callbacks.onCountdown(second);
+    }
+    if (this.countdown === 0) this.countdownGo = MATCH_COUNTDOWN_GO_SECONDS;
+  }
 
   private updateMenu(dt: number): void {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
@@ -762,7 +805,7 @@ export class Game {
     this.world.update(dt);
   }
 
-  private updateMatch(dt: number, frame: InputFrame): void {
+  private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
     // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
     // es despreciable y evita un frame de movimiento fantasma.
     for (const player of this.views) {
@@ -774,30 +817,32 @@ export class Game {
       }
     }
 
-    this.matchElapsed += dt;
+    if (!frozen) {
+      this.matchElapsed += dt;
 
-    for (const player of this.matchPlayers) {
-      const bot = player.isBot ? this.bots.get(player.slot) : null;
-      const input = bot
-        ? bot.update(dt, player, this.matchPlayers, this.world.colliders)
-        : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
-      this.stepPlayer(player, input, dt);
-      // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
-      // el resto de jugadores no debería seguir actuando.
-      if (this.matchOver) break;
-    }
+      for (const player of this.matchPlayers) {
+        const bot = player.isBot ? this.bots.get(player.slot) : null;
+        const input = bot
+          ? bot.update(dt, player, this.matchPlayers, this.world.colliders)
+          : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
+        this.stepPlayer(player, input, dt);
+        // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
+        // el resto de jugadores no debería seguir actuando.
+        if (this.matchOver) break;
+      }
 
-    // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
-    // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
-    if (!this.matchOver) {
-      // Las acciones instantáneas (haces, áreas, melee y dashes) se resuelven
-      // aquí, después de que todos los jugadores hayan avanzado su turno: el
-      // orden de `matchPlayers` ya no decide quién golpea primero.
-      this.resolveQueuedCasts();
-      if (!this.matchOver) this.resolveInstantHits();
-      if (!this.matchOver) this.resolveMeleeHits();
-      if (!this.matchOver) this.updateProjectiles(dt);
-      if (!this.matchOver) this.updateActiveAoes(dt);
+      // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
+      // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
+      if (!this.matchOver) {
+        // Las acciones instantáneas (haces, áreas, melee y dashes) se resuelven
+        // aquí, después de que todos los jugadores hayan avanzado su turno: el
+        // orden de `matchPlayers` ya no decide quién golpea primero.
+        this.resolveQueuedCasts();
+        if (!this.matchOver) this.resolveInstantHits();
+        if (!this.matchOver) this.resolveMeleeHits();
+        if (!this.matchOver) this.updateProjectiles(dt);
+        if (!this.matchOver) this.updateActiveAoes(dt);
+      }
     }
 
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
@@ -842,7 +887,7 @@ export class Game {
     // las vistas que no la ven y cada cámara recibe la unión de círculos del
     // equipo.
     this.updateVision();
-    this.updateRegeneration(dt);
+    if (!frozen) this.updateRegeneration(dt);
 
     this.world.update(dt);
     this.combatFx.update(dt);

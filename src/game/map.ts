@@ -202,8 +202,8 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
   if (tileSize <= 0) throw new Error('"tileSize" debe ser mayor que cero');
 
   return {
-    // El índice es la identidad canónica: así el selector y `?map=` siempre
-    // coinciden aunque el archivo cambie su `id` interno.
+    // El índice es la identidad canónica: así el selector del lobby y la
+    // partida siempre coinciden aunque el archivo cambie su `id` interno.
     id: entry.id,
     name: typeof value.name === 'string' ? value.name : entry.name,
     tileSize,
