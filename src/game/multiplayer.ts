@@ -16,6 +16,22 @@ import type { AnimationName, DirectionName } from './types';
 export const MAX_PLAYERS = 8;
 /** Tope por equipo para que las dos mitades quepan en la pantalla. */
 export const MAX_TEAM_SIZE = 4;
+/** Longitud máxima del nombre visible de un jugador. */
+export const PLAYER_NAME_MAX_LENGTH = 16;
+
+/** Nombre por defecto de una plaza humana cuando no se escribe ninguno. */
+export function defaultPlayerName(slot: number): string {
+  return `J${slot}`;
+}
+
+/**
+ * Limpia el nombre antes de llevarlo al motor: colapsa espacios, recorta y cae
+ * al nombre por defecto si el campo se quedó vacío.
+ */
+export function normalizePlayerName(name: string, slot: number): string {
+  const clean = name.replace(/\s+/g, ' ').trim().slice(0, PLAYER_NAME_MAX_LENGTH);
+  return clean || defaultPlayerName(slot);
+}
 
 /** Nivel de la IA. Compartido entre el lobby, el motor y el controlador. */
 export type BotDifficulty = 'easy' | 'normal' | 'hard';

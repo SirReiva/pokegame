@@ -70,7 +70,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 
 La configuración tiene dos rutas:
 
-1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. Cuando todos marcan listo, se continúa con `A`.
+1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
 2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veintitrés especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (azul o roja). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.

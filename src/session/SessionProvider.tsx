@@ -18,8 +18,11 @@ import {
   BOT_DIFFICULTY_LABEL,
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
+  PLAYER_NAME_MAX_LENGTH,
   countTeams,
+  defaultPlayerName,
   nextFreeSlot,
+  normalizePlayerName,
   type BotDifficulty,
   type LobbyPlayer,
   type MatchPlayerConfig
@@ -181,7 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ...current,
         {
           slot,
-          name: `J${slot}`,
+          name: defaultPlayerName(slot),
           deviceId: device.id,
           deviceKind: device.kind,
           deviceFamily: device.family,
@@ -193,6 +196,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           rosterReady: false
         }
       ]);
+    },
+    [commitPlayers]
+  );
+
+  const setPlayerName = useCallback(
+    (slot: number, name: string) => {
+      const current = playersRef.current;
+      const player = current.find((entry) => entry.slot === slot);
+      if (!player || player.isBot) return;
+      const nextName = name.slice(0, PLAYER_NAME_MAX_LENGTH);
+      if (player.name === nextName) return;
+      commitPlayers(
+        current.map((entry) =>
+          entry.slot === slot ? { ...entry, name: nextName } : entry
+        )
+      );
     },
     [commitPlayers]
   );
@@ -298,6 +317,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     commitPlayers(
       current.map((player) => ({
         ...player,
+        name: player.isBot
+          ? player.name
+          : normalizePlayerName(player.name, player.slot),
         pokemonId: player.pokemonId || firstPokemon,
         commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
         // Los bots ya están listos: no deben bloquear el paso al roster ni la
@@ -432,7 +454,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!players.every((player) => player.rosterReady && player.pokemonId)) return null;
     return players.map((player) => ({
       slot: player.slot,
-      name: player.name,
+      name: normalizePlayerName(player.name, player.slot),
       deviceId: player.deviceId,
       deviceKind: player.deviceKind,
       team: player.team,
@@ -459,6 +481,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       fillBots,
       botDifficulty,
       setBotDifficulty,
+      setPlayerName,
       setPlayerTeam,
       toggleTeamReady,
       leavePlayer,
@@ -488,6 +511,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       fillBots,
       botDifficulty,
       setBotDifficulty,
+      setPlayerName,
       setPlayerTeam,
       toggleTeamReady,
       leavePlayer,

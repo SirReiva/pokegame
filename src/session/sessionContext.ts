@@ -23,6 +23,7 @@ export interface SessionValue {
   fillBots: () => void;
   botDifficulty: BotDifficulty;
   setBotDifficulty: (difficulty: BotDifficulty) => void;
+  setPlayerName: (slot: number, name: string) => void;
   setPlayerTeam: (slot: number, team: Team) => void;
   toggleTeamReady: (slot: number) => void;
   leavePlayer: (slot: number) => void;

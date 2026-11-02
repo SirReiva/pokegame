@@ -7,9 +7,11 @@ import {
   BOT_DIFFICULTY_LABEL,
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
+  PLAYER_NAME_MAX_LENGTH,
   TEAM_INFO,
   TEAM_ORDER,
   countTeams,
+  defaultPlayerName,
   type BotDifficulty,
   type LobbyPlayer
 } from '../game/multiplayer';
@@ -32,6 +34,7 @@ interface LobbyScreenProps {
   onAddBot: (team: Team) => void;
   onFillBots: () => void;
   onJoin: (device: InputDeviceInfo) => void;
+  onRename: (slot: number, name: string) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
   onContinue: () => void;
@@ -50,11 +53,13 @@ const emptyTeam =
 function TeamColumn({
   team,
   players,
+  onRename,
   onReady,
   onLeave
 }: {
   team: Team;
   players: LobbyPlayer[];
+  onRename: (slot: number, name: string) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
 }) {
@@ -92,29 +97,51 @@ function TeamColumn({
             }`}
           >
             <div className="flex items-center gap-2">
-              <span className="font-display text-16.8 font-extrabold text-(--team)">
-                {player.name}
-              </span>
+              {player.isBot ? (
+                <span className="min-w-0 flex-1 truncate font-display text-16.8 font-extrabold text-(--team)">
+                  {player.name}
+                </span>
+              ) : (
+                <input
+                  type="text"
+                  value={player.name}
+                  maxLength={PLAYER_NAME_MAX_LENGTH}
+                  aria-label={`Nombre del jugador ${player.slot}`}
+                  title="Escribe el nombre que verás en el HUD y en el kill feed"
+                  placeholder={defaultPlayerName(player.slot)}
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-px font-display text-16.8 font-extrabold text-(--team) outline-none transition-colors placeholder:text-steel-700 focus:border-(--team) focus:bg-night-950/40"
+                  onChange={(event) => onRename(player.slot, event.target.value)}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === 'Escape') {
+                      event.currentTarget.blur();
+                    }
+                  }}
+                />
+              )}
               {player.isBot && (
                 <span className="rounded-full border border-line px-1.5 py-px font-mono text-8 tracking-[0.08em] uppercase text-steel-400">
                   BOT
                 </span>
               )}
-              <span className="flex min-w-0 flex-1 items-center gap-1.5 text-11.2 text-steel-500">
-                <DeviceIcon
-                  kind={player.deviceKind}
-                  family={player.deviceFamily}
-                  className="size-3.5 flex-none"
-                />
-                <span className="truncate">{player.deviceLabel}</span>
-              </span>
               <span
-                className={`font-mono text-8.96 tracking-[0.08em] uppercase ${
+                className={`ml-auto shrink-0 font-mono text-8.96 tracking-[0.08em] uppercase ${
                   player.teamReady ? 'text-accent-soft' : 'text-steel-650'
                 }`}
               >
                 {player.teamReady ? 'Listo' : 'Eligiendo'}
               </span>
+            </div>
+
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-11.2 text-steel-500">
+              <DeviceIcon
+                kind={player.deviceKind}
+                family={player.deviceFamily}
+                className="size-3.5 flex-none"
+              />
+              <span className="truncate">{player.deviceLabel}</span>
             </div>
 
             <div className="mt-1 font-mono text-8.96 text-steel-650">
@@ -159,6 +186,7 @@ export function LobbyScreen({
   onAddBot,
   onFillBots,
   onJoin,
+  onRename,
   onReady,
   onLeave,
   onContinue,
@@ -207,8 +235,9 @@ export function LobbyScreen({
             <p className="mt-2 max-w-[46ch] text-14.4 leading-[1.55] text-muted">
               Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
               <strong>Espacio</strong> en el teclado) para unirte. Después cambia de lado con{' '}
-              <strong>← →</strong> y marca listo. También puedes añadir bots para completar
-              los equipos: hasta 4 jugadores por bando.
+              <strong>← →</strong> y marca listo. Puedes escribir el nombre de cada jugador en su
+              tarjeta con el teclado. También puedes añadir bots para completar los equipos:
+              hasta 4 jugadores por bando.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
@@ -241,6 +270,7 @@ export function LobbyScreen({
                 key={team}
                 team={team}
                 players={players}
+                onRename={onRename}
                 onReady={onReady}
                 onLeave={onLeave}
               />

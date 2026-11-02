@@ -84,6 +84,7 @@ function LobbyContent() {
       onAddBot={session.addBot}
       onFillBots={session.fillBots}
       onJoin={session.joinDevice}
+      onRename={session.setPlayerName}
       onReady={session.toggleTeamReady}
       onLeave={session.leavePlayer}
       onContinue={() => {
