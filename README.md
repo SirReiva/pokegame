@@ -313,6 +313,7 @@ Cada bot produce el mismo `DeviceInputSnapshot` que un mando (`src/game/bot.ts`)
 - **Navegación** (`botNav.ts`): rasteriza colliders y agua profunda sobre la rejilla del mapa y usa A* con simplificación de ruta. Si el objetivo está a la vista y en línea recta, va directo.
 - **Combate** (`bot.ts`): elige objetivo (prefiere heridos y mantiene el foco), selecciona habilidad por rango, forma, cooldown y situación, y usa el instinto común (Protección o Impulso) según la vida y la distancia.
 - **Movimiento**: mantiene la distancia de su kit, se acerca para encarar antes de lanzar y se separa de sus aliados para no amontonarse.
+- **Búsqueda**: sin rival visible, elige celdas transitables por el mapa, prefiere la mitad rival y evita las inmediaciones de ambas bases. En cuanto llega a un punto elige otro, así que no se queda esperando respawns ni acampa en la base enemiga.
 
 El apuntado es **fiel al juego**: `facing` se deriva de la velocidad, igual que para un humano. Para disparar, el bot avanza un frame hacia el objetivo y lanza en ese mismo frame; no hay aim assist ni un `facing` artificial. Las habilidades de área se usan cuando el rival cae dentro del centro real del área (`range` por delante del lanzador), no cuando simplemente está cerca. Los bots no usan `Explosión` con poca vida y no curan a vida casi llena.
 

@@ -99,6 +99,17 @@ interface Vec2 {
   z: number;
 }
 
+/**
+ * Radio extra alrededor de cualquier base que los bots evitan al buscar
+ * enemigos. Si patrullan dentro del respawn rival se quedan esperando a que
+ * aparezca alguien; buscando por el mapa encuentran la pelea antes.
+ */
+const SEARCH_BASE_MARGIN = 6;
+/** Distancia a la que se considera alcanzado un punto de búsqueda. */
+const SEARCH_ARRIVE_DISTANCE = 2.2;
+/** Separación mínima entre el bot y su siguiente punto de búsqueda. */
+const SEARCH_MIN_DISTANCE = 7;
+
 /** Foco compartido por los bots de un mismo equipo. */
 export interface BotFocus {
   slot: number | null;
@@ -532,15 +543,82 @@ export class BotController {
   }
 
   private updatePatrol(self: MatchPlayerState): void {
-    if (this.clock < this.patrolTimer) return;
-    this.patrolTimer = this.clock + 2.5 + Math.random() * 2.5;
-    const base = respawnsForTeam(otherTeam(self.team))[0];
-    const centerX = base?.x ?? 0;
-    const centerZ = base?.z ?? 0;
-    this.setGoal({
-      x: centerX + (Math.random() - 0.5) * 5,
-      z: centerZ + (Math.random() - 0.5) * 5
-    });
+    const goalDistance = Math.hypot(this.goal.x - self.x, this.goal.z - self.z);
+    // Al llegar al punto no se queda plantado esperando: en cuanto lo pisa
+    // elige otro y sigue barriendo el mapa. El temporizador solo evita que un
+    // destino inalcanzable lo deje bloqueado para siempre.
+    if (goalDistance > SEARCH_ARRIVE_DISTANCE && this.clock < this.patrolTimer) {
+      return;
+    }
+    this.patrolTimer = this.clock + 4.5 + Math.random() * 3.5;
+    this.setGoal(this.pickSearchPoint(self));
+  }
+
+  /**
+   * Elige una celda transitable para buscar rivales. Se descartan las
+   * inmediaciones de ambas bases (allí solo se esperaría un respawn) y se
+   * favorece la mitad rival, para que los bots crucen el mapa en busca de
+   * pelea en vez de quedarse orbitando su propia zona.
+   */
+  private pickSearchPoint(self: MatchPlayerState): Vec2 {
+    const ownBases = respawnsForTeam(self.team);
+    const enemyBases = respawnsForTeam(otherTeam(self.team));
+    const bases = [...ownBases, ...enemyBases];
+    const ownBase = ownBases[0] ?? self.spawn;
+    const enemyBase = enemyBases[0];
+
+    let best: Vec2 | null = null;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const row = Math.floor(Math.random() * this.nav.rows);
+      const col = Math.floor(Math.random() * this.nav.cols);
+      if (!this.nav.isWalkable(row, col)) continue;
+
+      const point = this.nav.cellCenter(row, col);
+      const distanceFromSelf = Math.hypot(point.x - self.x, point.z - self.z);
+      if (distanceFromSelf < SEARCH_MIN_DISTANCE) continue;
+
+      let nearBase = false;
+      for (const base of bases) {
+        const distanceToBase = Math.hypot(point.x - base.x, point.z - base.z);
+        if (distanceToBase < base.radius + SEARCH_BASE_MARGIN) {
+          nearBase = true;
+          break;
+        }
+      }
+      if (nearBase) continue;
+
+      let score = Math.random() * 3;
+      if (enemyBase) {
+        const ownDistance = Math.hypot(point.x - ownBase.x, point.z - ownBase.z);
+        const enemyDistance = Math.hypot(
+          point.x - enemyBase.x,
+          point.z - enemyBase.z
+        );
+        if (enemyDistance < ownDistance) score += 4;
+        // Evita los extremos del mapa: los mejores cruces están entre ambas
+        // bases, no pegados a una esquina.
+        score -= Math.abs(enemyDistance - ownDistance) * 0.015;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = point;
+      }
+    }
+
+    if (best) return best;
+
+    // Sin candidatos válidos (mapa minúsculo o muy bloqueado): ir al centro
+    // transitable en vez de volver a una base.
+    const centerCell = this.nav.nearestWalkable(
+      Math.floor(this.nav.rows / 2),
+      Math.floor(this.nav.cols / 2)
+    );
+    return centerCell
+      ? this.nav.cellCenter(centerCell.row, centerCell.col)
+      : { ...self.spawn };
   }
 
   private drive(
