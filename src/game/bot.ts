@@ -110,6 +110,23 @@ const SEARCH_ARRIVE_DISTANCE = 2.2;
 /** Separación mínima entre el bot y su siguiente punto de búsqueda. */
 const SEARCH_MIN_DISTANCE = 7;
 
+/** Distancia a la que dos aliados empiezan a empujarse para no solaparse. */
+const ALLY_SEPARATION_RADIUS = 1.15;
+/** Distancia a la que un aliado en frente empieza a desviar el rumbo. */
+const ALLY_AVOID_RADIUS = 1.7;
+/** Fuerza del desvío lateral al rodear a un aliado. */
+const ALLY_AVOID_STRENGTH = 1.1;
+/** Distancia a la que el bot con menos prioridad cede el paso de frente. */
+const ALLY_YIELD_RADIUS = 1.25;
+/** Tiempo que se mantiene la cesión aunque el aliado se aleje un poco. */
+const ALLY_YIELD_HOLD = 0.6;
+/** Distancia a la que se deja de ceder el paso. */
+const ALLY_YIELD_RELEASE = 2.6;
+/** Segundos de retroceso cuando el desvío lateral no basta. */
+const BACK_OFF_SECONDS = 0.9;
+/** Distancia que se retrocede por el rastro para salir de un bloqueo. */
+const BACK_OFF_DISTANCE = 1.6;
+
 /** Foco compartido por los bots de un mismo equipo. */
 export interface BotFocus {
   slot: number | null;
@@ -191,6 +208,19 @@ export class BotController {
   private stuckTimer = 0;
   private detourTimer = 0;
   private detour: Vec2 = { x: 0, z: 0 };
+  /** Lado que se prueba al desatascarse; se alterna en cada intento. */
+  private detourSide = 1;
+  /** Intentos de desvío seguidos sin progreso; a partir del segundo se retrocede. */
+  private stuckCount = 0;
+  private lastStuckAt = -Infinity;
+  /** Posiciones recientes para poder deshacer el camino si queda bloqueado. */
+  private readonly trail: Vec2[] = [];
+  private trailTimer = 0;
+  private backOffTimer = 0;
+  private backOffGoal: Vec2 = { x: 0, z: 0 };
+  /** Aliado al que se le está cediendo el paso y hasta cuándo. */
+  private yieldSource: MatchPlayerState | null = null;
+  private yieldUntil = 0;
 
   constructor(
     slot: number,
@@ -218,6 +248,7 @@ export class BotController {
       return { ...IDLE_INPUT };
     }
 
+    this.recordTrail(dt, self);
     this.updateTarget(dt, self, players, colliders);
     this.updateThreat(self);
 
@@ -256,6 +287,26 @@ export class BotController {
     this.path = [];
     this.stuckTimer = 0;
     this.detourTimer = 0;
+    this.stuckCount = 0;
+    this.lastStuckAt = -Infinity;
+    this.trail.length = 0;
+    this.trailTimer = 0;
+    this.backOffTimer = 0;
+    this.yieldSource = null;
+    this.yieldUntil = 0;
+  }
+
+  /**
+   * Guarda posiciones recientes. Si el bot se queda bloqueado, retroceder por
+   * este rastro le permite salir de un pasillo o de un choque de frente sin
+   * quedarse empujando contra el obstáculo.
+   */
+  private recordTrail(dt: number, self: MatchPlayerState): void {
+    this.trailTimer -= dt;
+    if (this.trailTimer > 0) return;
+    this.trailTimer = 0.15;
+    this.trail.push({ x: self.x, z: self.z });
+    if (this.trail.length > 24) this.trail.shift();
   }
 
   private updateTarget(
@@ -759,7 +810,10 @@ export class BotController {
     }
 
     desired = this.addSeparation(self, players, desired);
-    if (this.detourTimer > 0) {
+    if (this.backOffTimer > 0) {
+      this.backOffTimer = Math.max(0, this.backOffTimer - dt);
+      desired = directionTo(self, this.backOffGoal);
+    } else if (this.detourTimer > 0) {
       this.detourTimer = Math.max(0, this.detourTimer - dt);
       desired = this.detour;
     }
@@ -769,17 +823,32 @@ export class BotController {
     this.lastX = self.x;
     this.lastZ = self.z;
     const wantsToMove = Math.hypot(desired.x, desired.z) > 0.05;
-    if (wantsToMove && !casting && speed < 0.22 && moved < 0.004) {
+    // La velocidad (`vx`/`vz`) es la intención de movimiento, no el avance real:
+    // contra otro jugador o una pared sigue siendo alta aunque el cuerpo no se
+    // mueva. Por eso el atasco se mide comparando lo recorrido con lo esperado.
+    const expected = speed * dt;
+    const blocked = wantsToMove && !casting && expected > 0.002 && moved < expected * 0.3;
+    if (blocked) {
       this.stuckTimer += dt;
-      if (this.stuckTimer > 0.45) {
+      if (this.stuckTimer > 0.4) {
         this.stuckTimer = 0;
-        const side = this.orbitSide;
-        this.detour = { x: -desired.z * side, z: desired.x * side };
-        this.detourTimer = 0.4;
+        this.stuckCount = this.clock - this.lastStuckAt < 2 ? this.stuckCount + 1 : 1;
+        this.lastStuckAt = this.clock;
         this.path = [];
         this.pathTimer = 0;
+        if (this.stuckCount >= 2) {
+          // Dos desvíos seguidos sin avanzar: volver por donde vino. Es lo
+          // único que funciona en un pasillo donde dos aliados no caben.
+          this.stuckCount = 0;
+          this.backOffGoal = this.trailBackOff(self);
+          this.backOffTimer = BACK_OFF_SECONDS;
+        } else {
+          this.detourSide *= -1;
+          this.detour = this.pickDetour(self, desired);
+          this.detourTimer = 0.5;
+        }
       }
-    } else if (moved > 0.01 || casting) {
+    } else if (moved > Math.max(0.004, expected * 0.5) || casting || !wantsToMove) {
       this.stuckTimer = 0;
     }
 
@@ -1162,6 +1231,14 @@ export class BotController {
     return directionTo(self, this.path[0]);
   }
 
+  /**
+   * Evita que los aliados se bloqueen entre ellos. Hay tres capas:
+   * 1. Empuje radial para no solaparse.
+   * 2. Desvío lateral hacia el lado libre cuando un aliado va delante.
+   * 3. Cesión de paso si van de frente: el bot con la plaza más alta retrocede
+   *    hasta que el otro pase. Sin esto, la colisión física los deja apoyados
+   *    el uno contra el otro sin que ninguno pueda avanzar.
+   */
   private addSeparation(
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
@@ -1169,17 +1246,139 @@ export class BotController {
   ): Vec2 {
     let x = direction.x;
     let z = direction.z;
+    const length = Math.hypot(x, z);
+    if (length < 0.0001) return { x, z };
+    const dirX = x / length;
+    const dirZ = z / length;
+
+    let yieldSource: MatchPlayerState | null = null;
+
     for (const other of players) {
       if (other === self || !other.alive || other.team !== self.team) continue;
       const dx = self.x - other.x;
       const dz = self.z - other.z;
       const distance = Math.hypot(dx, dz);
-      if (distance < 1.15 && distance > 0.001) {
-        const push = (1.15 - distance) * 0.9;
+      if (distance <= 0.001) continue;
+
+      if (distance < ALLY_SEPARATION_RADIUS) {
+        const push = (ALLY_SEPARATION_RADIUS - distance) * 0.9;
         x += (dx / distance) * push;
         z += (dz / distance) * push;
       }
+
+      const toX = -dx;
+      const toZ = -dz;
+      const ahead = toX * dirX + toZ * dirZ;
+      if (ahead <= 0.05 || distance > ALLY_AVOID_RADIUS) continue;
+
+      // Choque frontal contra un aliado con prioridad: se aparta hacia atrás
+      // en diagonal para abrirle el paso en vez de empujarse mutuamente.
+      const otherSpeed = Math.hypot(other.vx, other.vz);
+      const approaching =
+        otherSpeed > 0.2 &&
+        (other.vx * dirX + other.vz * dirZ) / otherSpeed < -0.35;
+      if (
+        !this.targetVisible &&
+        approaching &&
+        self.slot > other.slot &&
+        distance < ALLY_YIELD_RADIUS
+      ) {
+        yieldSource = other;
+        continue;
+      }
+
+      // Desviarse al lado contrario al que ocupa el aliado. En un choque
+      // frontal exacto ambos usan su misma perpendicular relativa, que en
+      // coordenadas absolutas apunta a lados opuestos, así que se cruzan.
+      let perpX = -dirZ;
+      let perpZ = dirX;
+      const side = toX * perpX + toZ * perpZ;
+      if (side > 0.12) {
+        perpX = -perpX;
+        perpZ = -perpZ;
+      }
+      const proximity = 1 - distance / ALLY_AVOID_RADIUS;
+      const strength = proximity * ALLY_AVOID_STRENGTH;
+      x += perpX * strength;
+      z += perpZ * strength;
     }
+
+    if (yieldSource) {
+      this.yieldSource = yieldSource;
+      this.yieldUntil = this.clock + ALLY_YIELD_HOLD;
+    }
+
+    const active = this.yieldSource;
+    if (active && active.alive && this.clock < this.yieldUntil) {
+      const dx = self.x - active.x;
+      const dz = self.z - active.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > 0.001 && distance < ALLY_YIELD_RELEASE) {
+        const awayX = dx / distance;
+        const awayZ = dz / distance;
+        let sideX = -awayZ * this.orbitSide;
+        let sideZ = awayX * this.orbitSide;
+        if (!this.sideOpen(self, sideX, sideZ)) {
+          sideX = -sideX;
+          sideZ = -sideZ;
+        }
+        return { x: awayX + sideX * 0.55, z: awayZ + sideZ * 0.55 };
+      }
+    }
+
     return { x, z };
+  }
+
+  /** Dirección perpendicular libre para intentar salir de un bloqueo. */
+  private pickDetour(self: MatchPlayerState, desired: Vec2): Vec2 {
+    const length = Math.hypot(desired.x, desired.z);
+    if (length < 0.0001) return { x: -this.orbitSide, z: 0 };
+    const dx = desired.x / length;
+    const dz = desired.z / length;
+    const side = this.detourSide;
+    const first = { x: -dz * side, z: dx * side };
+    const second = { x: dz * side, z: -dx * side };
+    if (this.sideOpen(self, first.x, first.z)) return first;
+    if (this.sideOpen(self, second.x, second.z)) return second;
+    return first;
+  }
+
+  /** ¿Hay sitio transitable para desplazarse un poco en esta dirección? */
+  private sideOpen(self: MatchPlayerState, x: number, z: number): boolean {
+    const length = Math.hypot(x, z);
+    if (length < 0.0001) return false;
+    const dx = x / length;
+    const dz = z / length;
+    return this.nav.lineClear(
+      self.x,
+      self.z,
+      self.x + dx * 1.4,
+      self.z + dz * 1.4
+    );
+  }
+
+  /**
+   * Punto del rastro reciente a unos 1,6 unidades por detrás. Retroceder por
+   * el camino ya recorrido es la salida más fiable cuando dos aliados se
+   * encuentran de frente en un paso estrecho.
+   */
+  private trailBackOff(self: MatchPlayerState): Vec2 {
+    let previousX = self.x;
+    let previousZ = self.z;
+    let travelled = 0;
+    for (let index = this.trail.length - 1; index >= 0; index--) {
+      const point = this.trail[index];
+      travelled += Math.hypot(point.x - previousX, point.z - previousZ);
+      previousX = point.x;
+      previousZ = point.z;
+      if (travelled >= BACK_OFF_DISTANCE) {
+        return { x: point.x, z: point.z };
+      }
+    }
+    const away = directionTo(this.goal, { x: self.x, z: self.z });
+    return {
+      x: self.x + away.x * BACK_OFF_DISTANCE,
+      z: self.z + away.z * BACK_OFF_DISTANCE
+    };
   }
 }
