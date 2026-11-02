@@ -60,7 +60,6 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
 | Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
 | Zoom | Gatillo `L2` o stick derecho vertical | Rueda |
-| Correr | `L3` | `Shift` |
 | Habilidad básica | `X` | `J` |
 | Habilidad 1 | `Y` | `K` |
 | Habilidad 2 | `RB` | `L` |
@@ -319,7 +318,7 @@ El apuntado es **fiel al juego**: `facing` se deriva de la velocidad, igual que 
 
 Los bots también **juegan con los windups**. Si un rival visible está preparando un área, un cono o una línea que les va a alcanzar, intentan salir del área o de la línea; si tienen una habilidad rápida que puede impactar antes de que termine la preparación, la usan para **interrumpir** el lanzamiento (un golpe cancela el `pendingCast`). Si el rival está clavado preparando algo que no les amenaza, lo priorizan como objetivo y prefieren ataques instantáneos frente a preparaciones largas. Durante sus propios `windup` móviles siguen reposicionándose, pero no encadenan otra habilidad mientras canalizan.
 
-Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y camina; `Normal` y `Difícil` corren, reaccionan antes al windup rival, predicen proyectiles y usan más el instinto común.
+Dificultades: `Fácil` reacciona más tarde, apunta con más error y ve algo menos; `Normal` y `Difícil` reaccionan antes al windup rival, predicen proyectiles y usan más el instinto común.
 
 ## Qué demuestra
 

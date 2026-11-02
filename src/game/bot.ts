@@ -696,7 +696,6 @@ export class BotController {
     }
 
     this.applyMovement(snapshot, self, desired);
-    snapshot.run = !casting && this.difficulty !== 'easy';
 
     this.orbitTimer += dt;
     if (this.orbitTimer > 2.4) {

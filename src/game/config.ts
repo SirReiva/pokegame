@@ -70,7 +70,6 @@ export const CONFIG = {
   },
   player: {
     speed: 5.4,
-    runMultiplier: 1.55,
     radius: 0.42,
     acceleration: 16,
     deceleration: 20,

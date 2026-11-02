@@ -918,7 +918,6 @@ export class Game {
     const maxSpeed =
       player.maxSpeed *
       terrainEffect.multiplier *
-      (input.run ? CONFIG.player.runMultiplier : 1) *
       this.buffMultiplier(player, 'speed') *
       player.slowMultiplier *
       shieldSpeed;

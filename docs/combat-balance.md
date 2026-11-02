@@ -327,7 +327,7 @@ parte del combate; la velocidad de movimiento sale de `POKEMON_SPEEDS`
 (`roster.ts`). El stat de Speed de la Pokédex es, por tanto, decorativo.
 
 Además, `stepDash` usa `dash.speed` calculado en `executeDash` sin aplicar
-`slowMultiplier`, `terrainMultiplier`, `buffMultiplier('speed')` ni `run`
+`slowMultiplier`, `terrainMultiplier` ni `buffMultiplier('speed')`
 (`abilityExecutors.ts:359-366`, `game.ts:1102-1103`): un Pokémon ralentizado o
 en terreno hostil hace el dash a la misma velocidad. Es una decisión de diseño,
 pero conviene documentarla o aplicar los modificadores al dash.

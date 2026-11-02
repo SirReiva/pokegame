@@ -63,7 +63,6 @@ export interface DeviceInputSnapshot {
   cameraX: number;
   zoom: number;
   wheel: number;
-  run: boolean;
   pointerYaw: number;
   gamepad: boolean;
   startPressed: boolean;
@@ -325,7 +324,6 @@ export class Input {
       cameraX: (has('e') ? 1 : 0) - (has('q') ? 1 : 0),
       zoom: 0,
       wheel: this.wheel,
-      run: has('shift'),
       pointerYaw: this.pointerYaw,
       gamepad: false,
       startPressed: false,
@@ -420,8 +418,6 @@ export class Input {
       cameraX: applyDeadzone(axes[2] ?? 0),
       zoom,
       wheel: 0,
-      // L3 para correr; RB queda libre para la tercera habilidad.
-      run: pressed(10),
       pointerYaw: 0,
       gamepad: true,
       startPressed,
@@ -490,7 +486,6 @@ export const IDLE_INPUT: DeviceInputSnapshot = {
   cameraX: 0,
   zoom: 0,
   wheel: 0,
-  run: false,
   pointerYaw: 0,
   gamepad: false,
   startPressed: false,
