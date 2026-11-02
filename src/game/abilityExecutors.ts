@@ -22,6 +22,7 @@ import type {
   PendingMeleeHit,
   Projectile
 } from './matchState';
+import { TEAM_INFO } from './multiplayer';
 import type { AnimationName } from './types';
 import type { World } from './world';
 
@@ -106,7 +107,8 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
     def.range + CONFIG.player.radius,
     def.halfAngle,
     def.color,
-    def.impactStyle
+    def.impactStyle,
+    TEAM_INFO[player.team].accent
   );
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
@@ -180,24 +182,51 @@ const executeProjectile: AbilityExecutor = (player, def, deps) => {
   });
 };
 
-const executeBeam: AbilityExecutor = (player, def, deps) => {
-  const dirX = Math.sin(player.facing);
-  const dirZ = Math.cos(player.facing);
-  // El haz se corta en el primer separador, muro o roca: ni el visual ni el
-  // daño atraviesan obstáculos.
-  const distance = Math.max(
-    0.1,
-    raycastColliderDistance(
-      player.x,
-      player.z,
-      dirX,
-      dirZ,
-      def.range,
-      deps.world.colliders
-    )
-  );
+const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
+  let dirX = Math.sin(player.facing);
+  let dirZ = Math.cos(player.facing);
+  let distance: number;
+  if (targetX !== undefined && targetZ !== undefined) {
+    // Extremo fijado al empezar el windup: el haz termina donde se dibujó el
+    // carril, aunque el lanzador se haya movido durante la carga.
+    const toX = targetX - player.x;
+    const toZ = targetZ - player.z;
+    distance = Math.max(0.1, Math.hypot(toX, toZ));
+    if (distance > 0.001) {
+      dirX = toX / distance;
+      dirZ = toZ / distance;
+    }
+  } else {
+    // El haz se corta en el primer separador, muro o roca: ni el visual ni el
+    // daño atraviesan obstáculos.
+    distance = Math.max(
+      0.1,
+      raycastColliderDistance(
+        player.x,
+        player.z,
+        dirX,
+        dirZ,
+        def.range,
+        deps.world.colliders
+      )
+    );
+  }
   const endX = player.x + dirX * distance;
   const endZ = player.z + dirZ * distance;
+  // Los haces con windup ya dibujaron su carril al empezar la carga. Los
+  // instantáneos lo crean aquí para que también se vea hasta el final del haz.
+  if (def.windup <= 0) {
+    deps.combatFx.spawnBeamLane(
+      player.x,
+      player.z,
+      endX,
+      endZ,
+      def.radius + CONFIG.player.radius,
+      TEAM_INFO[player.team].accent,
+      0,
+      def.beamStyle
+    );
+  }
   deps.combatFx.spawnBeam(
     player.x,
     player.z,

@@ -98,7 +98,7 @@ export interface TelegraphHandle {
   destroy(): void;
 }
 
-interface AoeTelegraph {
+interface GroundTelegraph {
   entity: pc.Entity;
   materials: pc.StandardMaterial[];
   elapsed: number;
@@ -664,7 +664,22 @@ export class CombatFx {
   private readonly rockChunkMesh: pc.Mesh;
   /** Textura de polvo para las partículas de roca y tierra. */
   private readonly dustTexture: pc.Texture;
-  private readonly telegraphs = new Set<AoeTelegraph>();
+  private readonly telegraphs = new Set<GroundTelegraph>();
+  /**
+   * Duración del efecto visual de cada haz. El carril del suelo se mantiene
+   * vivo lo que dura el propio haz para que ambos desaparezcan a la vez.
+   */
+  private readonly beamDurations: Record<BeamStyle, number> = {
+    electric: 0.34,
+    fire: 0.45,
+    psychic: 0.42,
+    water: 0.55,
+    dark: 0.48,
+    ghost: 0.48,
+    air: 0.46,
+    ice: 0.48,
+    rock: 0.62
+  };
 
   /** Fábricas de VFX por estilo: evitan cadenas de `if` en cada spawn. */
   private readonly impactEffects: Record<
@@ -2639,7 +2654,11 @@ export class CombatFx {
     };
   }
 
-  /** Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor. */
+  /**
+   * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
+   * `markerColor` tiñe solo la guía del área (el cono); el resto del efecto
+   * conserva el color de la habilidad.
+   */
   spawnMelee(
     x: number,
     z: number,
@@ -2647,7 +2666,8 @@ export class CombatFx {
     range: number,
     halfAngleDeg: number,
     color: readonly [number, number, number],
-    style: ImpactStyle = 'hit'
+    style: ImpactStyle = 'hit',
+    markerColor?: readonly [number, number, number]
   ): void {
     // La mordida materializa una mandíbula 3D en el centro del cono, pero
     // mantiene el arco melee como guía del área de golpe.
@@ -2673,8 +2693,10 @@ export class CombatFx {
       18
     );
     // La mordida mantiene el cono como guía, pero en blanco como los colmillos.
+    // Si llega el color del equipo, manda sobre ambos: la guía del área debe
+    // identificar al lanzador.
     const arcColor: readonly [number, number, number] =
-      style === 'jaw' ? [255, 255, 255] : color;
+      markerColor ?? (style === 'jaw' ? [255, 255, 255] : color);
     const material = this.createMaterial(arcColor, 0.85);
     const entity = this.createEntity(mesh, [material]);
     entity.setPosition(x, 0.35, z);
@@ -5080,7 +5102,7 @@ export class CombatFx {
     const sweep = this.createEntity(this.discMesh, [sweepMaterial], root);
     sweep.setLocalScale(0.01, 1, 0.01);
 
-    const record: AoeTelegraph = {
+    const record: GroundTelegraph = {
       entity: root,
       materials,
       elapsed: 0,
@@ -5113,12 +5135,120 @@ export class CombatFx {
     return { destroy: () => this.disposeTelegraph(record) };
   }
 
-  private disposeTelegraph(telegraph: AoeTelegraph): void {
+  private disposeTelegraph(telegraph: GroundTelegraph): void {
     if (!telegraph.active) return;
     telegraph.active = false;
     this.telegraphs.delete(telegraph);
     telegraph.entity.destroy();
     for (const material of telegraph.materials) material.destroy();
+  }
+
+  /**
+   * Carril de un haz en el suelo. Los raíles muestran el ancho real de impacto
+   * desde el primer frame del `windup`; el relleno crece desde el lanzador y se
+   * completa al disparar. Después permanece encendido hasta que termina el
+   * efecto visual del haz, de modo que el aviso y el golpe se solapan.
+   */
+  spawnBeamLane(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    halfWidth: number,
+    color: readonly [number, number, number],
+    windup: number,
+    style: BeamStyle
+  ): TelegraphHandle {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const width = Math.max(0.12, halfWidth * 2);
+    const beamDuration = this.beamDurations[style] ?? 0.5;
+    const total = Math.max(0.05, windup) + beamDuration;
+
+    const root = new pc.Entity('beam-lane');
+    // Mismo plano que la marca de área para no pelearse con el terreno.
+    root.setPosition(x1, 0.07, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const hot: [number, number, number] = [
+      Math.round(color[0] + (255 - color[0]) * 0.62),
+      Math.round(color[1] + (255 - color[1]) * 0.62),
+      Math.round(color[2] + (255 - color[2]) * 0.62)
+    ];
+    const fillMaterial = this.createMaterial(color, 0.08);
+    const railMaterial = this.createMaterial(color, 0.45);
+    const edgeMaterial = this.createMaterial(hot, 0.8);
+    const materials = [fillMaterial, railMaterial, edgeMaterial];
+
+    // Relleno que avanza desde el lanzador: marca el carril y su dirección.
+    const fill = this.createEntity(this.boxMesh, [fillMaterial], root);
+    fill.setLocalScale(width, 0.01, 0.01);
+    fill.setLocalPosition(0, 0.002, 0.005);
+
+    // Raíles completos desde el primer frame: el rival ve el ancho real.
+    const railWidth = Math.max(0.04, width * 0.06);
+    const railOffset = Math.max(0, width / 2 - railWidth / 2);
+    for (const side of [-1, 1]) {
+      const rail = this.createEntity(this.boxMesh, [railMaterial], root);
+      rail.setLocalScale(railWidth, 0.012, length);
+      rail.setLocalPosition(side * railOffset, 0.006, length / 2);
+    }
+
+    // Remate del extremo para leer hasta dónde llega el haz.
+    const cap = this.createEntity(this.boxMesh, [edgeMaterial], root);
+    cap.setLocalScale(width, 0.014, Math.max(0.05, railWidth * 1.4));
+    cap.setLocalPosition(0, 0.008, length);
+
+    const perpX = -dz / length;
+    const perpZ = dx / length;
+    const midX = (x1 + x2) / 2;
+    const midZ = (z1 + z2) / 2;
+    const anchors: FxAnchors = [
+      [x1, z1],
+      [midX + perpX * halfWidth, midZ + perpZ * halfWidth],
+      [midX, midZ],
+      [midX - perpX * halfWidth, midZ - perpZ * halfWidth],
+      [x2, z2]
+    ];
+
+    const record: GroundTelegraph = {
+      entity: root,
+      materials,
+      elapsed: 0,
+      duration: total,
+      active: true,
+      anchors,
+      update: (_progress, elapsed) => {
+        const firing = elapsed >= windup;
+        const sinceFire = firing ? elapsed - windup : 0;
+        const charge = Math.min(1, elapsed / Math.max(0.001, windup));
+        const visibleLength = Math.max(0.02, length * (firing ? 1 : charge));
+        fill.setLocalScale(width, 0.01, visibleLength);
+        fill.setLocalPosition(0, 0.002, visibleLength / 2);
+
+        const pulse = 0.5 + Math.sin(elapsed * 14) * 0.2;
+        // Destello al disparar y permanencia hasta el final del haz.
+        const flash = firing ? Math.max(0, 1 - sinceFire / 0.14) : 0;
+        const fadeStart = beamDuration * 0.5;
+        const fade = firing
+          ? 1 -
+            Math.max(
+              0,
+              Math.min(1, (sinceFire - fadeStart) / (beamDuration - fadeStart))
+            )
+          : 1;
+        fillMaterial.opacity =
+          (firing ? 0.2 + flash * 0.18 : 0.06 + charge * 0.1) * fade;
+        railMaterial.opacity = (0.35 + pulse * 0.2 + flash * 0.4) * fade;
+        edgeMaterial.opacity = (0.6 + pulse * 0.22 + flash * 0.4) * fade;
+      }
+    };
+
+    this.applyVisibility(root, anchors);
+    this.telegraphs.add(record);
+    return { destroy: () => this.disposeTelegraph(record) };
   }
 
   /**

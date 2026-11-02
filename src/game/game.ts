@@ -1240,7 +1240,11 @@ export class Game {
     player.concealment = terrainConcealment(terrain, player.types);
 
     if (pending.elapsed >= pending.windup) {
-      this.cancelPendingCast(player);
+      // La marca del área termina justo al impactar; el carril del haz debe
+      // seguir visible mientras se reproduce el haz, así que se deja que se
+      // autodestruya al acabar su efecto.
+      pending.marker?.destroy();
+      player.pendingCast = null;
       this.queueCast(player, pending.def, pending.targetX, pending.targetZ);
     }
 
@@ -1502,9 +1506,10 @@ export class Game {
     }
   }
 
-  /** Cancela una habilidad en preparación y retira su marca de área. */
+  /** Cancela una habilidad en preparación y retira sus marcas del suelo. */
   private cancelPendingCast(player: MatchPlayerState): void {
     player.pendingCast?.marker?.destroy();
+    player.pendingCast?.lane?.destroy();
     player.pendingCast = null;
   }
 
@@ -1592,7 +1597,8 @@ export class Game {
       const dirX = Math.sin(player.facing);
       const dirZ = Math.cos(player.facing);
       // Las habilidades de área no se pueden colocar detrás de un obstáculo:
-      // el centro se detiene antes del primer collider.
+      // el centro se detiene antes del primer collider. Los haces hacen lo
+      // mismo para que el carril y el haz terminen en el mismo punto.
       const reach =
         def.shape === 'aoe'
           ? raycastColliderDistance(
@@ -1604,9 +1610,24 @@ export class Game {
               this.world.colliders,
               CONFIG.combat.aoeSightPadding
             )
-          : def.range;
+          : def.shape === 'beam'
+            ? Math.max(
+                0.1,
+                raycastColliderDistance(
+                  player.x,
+                  player.z,
+                  dirX,
+                  dirZ,
+                  def.range,
+                  this.world.colliders
+                )
+              )
+            : def.range;
       const targetX = player.x + dirX * reach;
       const targetZ = player.z + dirZ * reach;
+      // Las marcas de área usan el color del equipo del lanzador: así se
+      // distingue de inmediato a quién pertenece el aviso.
+      const teamAccent = TEAM_INFO[player.team].accent;
       // Las habilidades de área fijan su centro al empezar el retardo y
       // muestran la marca en el suelo hasta el impacto. La marca incluye el
       // radio del jugador porque el daño también lo suma: así el borde dibujado
@@ -1617,8 +1638,24 @@ export class Game {
               targetX,
               targetZ,
               def.radius + CONFIG.player.radius,
-              def.color,
+              teamAccent,
               def.windup
+            )
+          : null;
+      // Los haces muestran su carril desde el inicio del windup. El ancho es el
+      // real de impacto (radio del haz + radio del jugador) y el carril se
+      // mantiene hasta que termina el efecto visual del haz.
+      const lane =
+        def.shape === 'beam'
+          ? this.combatFx.spawnBeamLane(
+              player.x,
+              player.z,
+              targetX,
+              targetZ,
+              def.radius + CONFIG.player.radius,
+              teamAccent,
+              def.windup,
+              def.beamStyle
             )
           : null;
       player.pendingCast = {
@@ -1627,6 +1664,7 @@ export class Game {
         elapsed: 0,
         windup: def.windup,
         marker,
+        lane,
         targetX,
         targetZ
       };

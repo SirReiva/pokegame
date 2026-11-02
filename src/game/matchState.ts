@@ -115,7 +115,12 @@ export interface PendingCast {
   windup: number;
   /** Marca en el suelo de las habilidades de área; `null` en las demás. */
   marker: TelegraphHandle | null;
-  /** Centro del área fijado al empezar el lanzamiento. */
+  /**
+   * Carril en el suelo de los haces. Sobrevive al disparo y se autodestruye
+   * cuando termina el efecto del haz; `null` en las demás formas.
+   */
+  lane: TelegraphHandle | null;
+  /** Centro del área o extremo del haz fijado al empezar el lanzamiento. */
   targetX: number;
   targetZ: number;
 }
