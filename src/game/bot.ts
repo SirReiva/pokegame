@@ -19,7 +19,7 @@
 
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
-import { CONFIG } from './config';
+import { CONFIG, DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
@@ -46,6 +46,10 @@ interface BotTuning {
   commonChance: number;
   /** Cada cuánto recalcula la ruta. */
   pathInterval: number;
+  /** Antelación con la que reacciona a un windup rival. */
+  evadeWindow: number;
+  /** Cuánto prioriza a un rival que está preparando una habilidad. */
+  punishBonus: number;
 }
 
 const TUNING: Record<BotDifficulty, BotTuning> = {
@@ -58,7 +62,9 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     memory: 2.2,
     lead: 0.1,
     commonChance: 0.35,
-    pathInterval: 0.9
+    pathInterval: 0.9,
+    evadeWindow: 0.28,
+    punishBonus: 1.5
   },
   normal: {
     reaction: 0.3,
@@ -69,7 +75,9 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     memory: 3.6,
     lead: 0.65,
     commonChance: 0.65,
-    pathInterval: 0.65
+    pathInterval: 0.65,
+    evadeWindow: 0.44,
+    punishBonus: 3
   },
   hard: {
     reaction: 0.14,
@@ -80,7 +88,9 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     memory: 5,
     lead: 0.95,
     commonChance: 0.9,
-    pathInterval: 0.45
+    pathInterval: 0.45,
+    evadeWindow: 0.62,
+    punishBonus: 4.5
   }
 };
 
@@ -106,6 +116,17 @@ export function createBotSquad(): BotSquad {
     blue: { slot: null, until: 0 },
     red: { slot: null, until: 0 }
   };
+}
+
+/** Amenaza inmediata creada por el windup visible de un rival. */
+interface IncomingThreat {
+  source: MatchPlayerState;
+  /** Segundos que faltan para que la habilidad rival se ejecute. */
+  remaining: number;
+  /** Dirección recomendada para salir del área/línea de peligro. */
+  evade: Vec2;
+  /** Cuanto más alto, más urgente es responder. */
+  severity: number;
 }
 
 function normalizeAngle(angle: number): number {
@@ -136,6 +157,8 @@ export class BotController {
   private target: MatchPlayerState | null = null;
   private targetVisible = false;
   private visibleTimer = 0;
+  private visibleEnemies: MatchPlayerState[] = [];
+  private threat: IncomingThreat | null = null;
   private lastSeen: { x: number; z: number; at: number } | null = null;
 
   private decisionTimer = 0;
@@ -185,15 +208,17 @@ export class BotController {
     }
 
     this.updateTarget(dt, self, players, colliders);
+    this.updateThreat(self);
 
-    // Durante una preparación, dash o hitstun no se puede decidir nada: el
-    // motor ya consume el frame. Devolver un snapshot idle evita pulsar
-    // habilidades que el propio motor va a rechazar.
+    // Un dash, hitstun o una preparación que clava al lanzador consumen el
+    // frame: el snapshot idle evita pulsar habilidades que el motor rechaza.
+    // Las preparaciones con `moveWhileWindup` sí llegan a `drive`, que deja
+    // mover al bot pero no dispara otra habilidad mientras canaliza.
     if (
-      self.pendingCast !== null ||
       self.dash !== null ||
       self.stunTimer > 0 ||
-      self.hurtTimer > 0
+      self.hurtTimer > 0 ||
+      (self.pendingCast !== null && !self.pendingCast.def.moveWhileWindup)
     ) {
       return { ...IDLE_INPUT };
     }
@@ -211,6 +236,8 @@ export class BotController {
     this.target = null;
     this.targetVisible = false;
     this.visibleTimer = 0;
+    this.visibleEnemies = [];
+    this.threat = null;
     this.lastSeen = null;
     this.abilitySlot = null;
     this.useCommon = false;
@@ -228,6 +255,7 @@ export class BotController {
   ): void {
     let best: MatchPlayerState | null = null;
     let bestScore = Infinity;
+    this.visibleEnemies = [];
     const focus = this.squad[self.team];
     if (focus.until <= this.clock) focus.slot = null;
 
@@ -246,6 +274,7 @@ export class BotController {
         wasVisible
       );
       if (!visible) continue;
+      this.visibleEnemies.push(enemy);
 
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
       const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
@@ -256,6 +285,19 @@ export class BotController {
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
       // visible, en vez de repartirse al azar por el mapa.
       if (focus.slot === enemy.slot) score -= 3.5;
+
+      const pending = enemy.pendingCast;
+      if (pending) {
+        const remaining = pending.windup - pending.elapsed;
+        if (remaining > 0) {
+          // Un rival preparando una habilidad es una ventana: si está clavado,
+          // se convierte en el objetivo prioritario. La amenaza concreta se
+          // resuelve aparte en `updateThreat`.
+          score -= this.tuning.punishBonus;
+          if (!pending.def.moveWhileWindup) score -= 1.5;
+        }
+      }
+
       if (score < bestScore) {
         bestScore = score;
         best = enemy;
@@ -284,6 +326,167 @@ export class BotController {
     ) {
       this.lastSeen = null;
     }
+  }
+
+  /**
+   * Detecta el windup visible más urgente. Solo cuenta como amenaza si el bot
+   * está dentro del área, cono o línea que va a golpear; si está fuera, el
+   * rival queda como objetivo para castigarlo.
+   */
+  private updateThreat(self: MatchPlayerState): void {
+    let best: IncomingThreat | null = null;
+    for (const enemy of this.visibleEnemies) {
+      const threat = this.threatFrom(self, enemy);
+      if (threat && (!best || threat.severity > best.severity)) best = threat;
+    }
+    this.threat = best;
+  }
+
+  private threatFrom(self: MatchPlayerState, enemy: MatchPlayerState): IncomingThreat | null {
+    const pending = enemy.pendingCast;
+    if (!pending) return null;
+    const remaining = pending.windup - pending.elapsed;
+    if (remaining <= 0.02) return null;
+    const def = pending.def;
+    if (def.power <= 0 && def.slow === null && def.selfDamage <= 0) return null;
+
+    const playerRadius = CONFIG.player.radius;
+    const toSelfX = self.x - enemy.x;
+    const toSelfZ = self.z - enemy.z;
+    const distance = Math.hypot(toSelfX, toSelfZ);
+    const dirX = Math.sin(enemy.facing);
+    const dirZ = Math.cos(enemy.facing);
+
+    if (def.shape === 'aoe') {
+      const dx = self.x - pending.targetX;
+      const dz = self.z - pending.targetZ;
+      const fromCenter = Math.hypot(dx, dz);
+      const dangerRadius = def.radius + playerRadius + 0.1;
+      if (fromCenter > dangerRadius) return null;
+
+      // Cuánto se tarda en salir del círculo; los bots difíciles reaccionan
+      // antes y los fáciles esperan demasiado.
+      const escapeTime =
+        (dangerRadius - fromCenter) / Math.max(2.5, self.maxSpeed) + 0.08;
+      if (remaining > Math.max(this.tuning.evadeWindow, escapeTime)) return null;
+
+      let evadeX = dx;
+      let evadeZ = dz;
+      if (fromCenter < 0.15) {
+        evadeX = -dirX;
+        evadeZ = -dirZ;
+      }
+      const length = Math.hypot(evadeX, evadeZ) || 1;
+      return {
+        source: enemy,
+        remaining,
+        evade: { x: evadeX / length, z: evadeZ / length },
+        severity: def.power + 20 + (1 - fromCenter / dangerRadius) * 30
+      };
+    }
+
+    if (remaining > this.tuning.evadeWindow) return null;
+
+    if (def.shape === 'melee') {
+      const angle = Math.abs(
+        normalizeAngle(Math.atan2(toSelfX, toSelfZ) - enemy.facing)
+      );
+      const reach = def.range + playerRadius + 0.2;
+      if (distance > reach) return null;
+      if (angle > def.halfAngle * DEG + 0.12) return null;
+
+      const away =
+        distance > 0.001
+          ? { x: toSelfX / distance, z: toSelfZ / distance }
+          : { x: -dirX, z: -dirZ };
+      const side = { x: -dirZ * this.orbitSide, z: dirX * this.orbitSide };
+      const evadeX = away.x + side.x * 0.8;
+      const evadeZ = away.z + side.z * 0.8;
+      const length = Math.hypot(evadeX, evadeZ) || 1;
+      return {
+        source: enemy,
+        remaining,
+        evade: { x: evadeX / length, z: evadeZ / length },
+        severity: def.power + 15
+      };
+    }
+
+    if (def.shape === 'projectile' || def.shape === 'beam' || def.shape === 'dash') {
+      const reach =
+        def.shape === 'dash' ? def.dashDistance : def.range;
+      const projection = toSelfX * dirX + toSelfZ * dirZ;
+      if (projection < 0 || projection > reach + 0.3) return null;
+
+      const perpX = toSelfX - dirX * projection;
+      const perpZ = toSelfZ - dirZ * projection;
+      const perpendicular = Math.hypot(perpX, perpZ);
+      const width = playerRadius + (def.shape === 'projectile' ? 0.5 : 0.25);
+      if (perpendicular > width) return null;
+
+      let evadeX = perpX;
+      let evadeZ = perpZ;
+      if (perpendicular < 0.05) {
+        evadeX = -dirZ * this.orbitSide;
+        evadeZ = dirX * this.orbitSide;
+      }
+      const length = Math.hypot(evadeX, evadeZ) || 1;
+      return {
+        source: enemy,
+        remaining,
+        evade: { x: evadeX / length, z: evadeZ / length },
+        severity: def.power + (1 - perpendicular / width) * 18
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Habilidad que puede golpear al lanzador rival antes de que termine su
+   * windup. Un impacto cancela la preparación en `game.ts`.
+   */
+  private findInterruptSlot(
+    self: MatchPlayerState,
+    source: MatchPlayerState,
+    remaining: number
+  ): number | null {
+    if (!this.canCast(self)) return null;
+    const distance = Math.hypot(source.x - self.x, source.z - self.z);
+    let bestSlot: number | null = null;
+    let bestDelay = Infinity;
+    let bestPower = -Infinity;
+
+    for (let slot = 0; slot < 4; slot++) {
+      if (self.cooldowns[slot] > 0.001) continue;
+      const id = self.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def) continue;
+      if (def.shape === 'aoe' || def.shape === 'self') continue;
+      if (def.shape === 'dash' && def.power <= 0) continue;
+
+      const reach =
+        def.shape === 'melee'
+          ? def.range + 0.35
+          : def.shape === 'dash'
+            ? def.dashDistance
+            : def.range;
+      if (distance > reach) continue;
+
+      const travel =
+        def.shape === 'projectile'
+          ? distance / Math.max(1, def.projectileSpeed)
+          : 0;
+      const delay = def.windup + travel;
+      if (delay > remaining + 0.03) continue;
+
+      if (delay < bestDelay || (delay === bestDelay && def.power > bestPower)) {
+        bestSlot = slot;
+        bestDelay = delay;
+        bestPower = def.power;
+      }
+    }
+
+    return bestSlot;
   }
 
   private decide(self: MatchPlayerState, players: readonly MatchPlayerState[]): void {
@@ -349,19 +552,46 @@ export class BotController {
     const snapshot: DeviceInputSnapshot = { ...IDLE_INPUT };
     const target = this.target;
     const targetIsVisible = target !== null && this.targetVisible && target.alive;
+    const channeling = self.pendingCast !== null;
     let desired: Vec2 = { x: 0, z: 0 };
     let casting = false;
 
-    if (this.retreat) {
+    if (this.threat) {
+      const threat = this.threat;
+      const interrupt = channeling
+        ? null
+        : this.findInterruptSlot(self, threat.source, threat.remaining);
+      if (interrupt !== null) {
+        // Interrumpir el windup rival es la mejor jugada: un golpe cancela la
+        // habilidad y evita el daño. Se prioriza sobre la huida.
+        const aim = { x: threat.source.x, z: threat.source.z };
+        const error = Math.abs(
+          normalizeAngle(Math.atan2(aim.x - self.x, aim.z - self.z) - self.facing)
+        );
+        this.abilitySlot = interrupt;
+        if (error <= this.tuning.aimTolerance && this.canCast(self)) {
+          casting = this.pulseAbility(snapshot, interrupt);
+        }
+        desired = directionTo(self, aim);
+      } else {
+        // Sin interrupción posible, salir del área/línea. Protección reduce el
+        // daño si el bot la tiene disponible.
+        desired = threat.evade;
+        if (!channeling && this.useCommon && self.commonAbilityId === 'proteccion') {
+          this.pulseCommon(snapshot, self, true);
+        }
+      }
+    } else if (this.retreat) {
       desired = this.moveTowards(self, this.goal, dt);
       if (
+        !channeling &&
         this.abilitySlot !== null &&
         self.cooldowns[this.abilitySlot] <= 0.001 &&
         this.canCast(self)
       ) {
         casting = this.pulseAbility(snapshot, this.abilitySlot);
       }
-      if (this.useCommon) {
+      if (!channeling && this.useCommon) {
         if (self.commonAbilityId === 'impulso' && target) {
           // Para huir con Impulso hay que estar mirando en la dirección
           // contraria; si no, el dash metería al bot todavía más en la pelea.
@@ -396,6 +626,7 @@ export class BotController {
       const hasLine =
         !lineOfSightBlocked(self.x, self.z, target.x, target.z, colliders);
       if (
+        !channeling &&
         this.abilitySlot !== null &&
         ready &&
         def &&
@@ -412,7 +643,7 @@ export class BotController {
         desired = this.combatMove(self, target, distance, def, facingError, dt);
       }
 
-      if (this.useCommon) {
+      if (!channeling && this.useCommon) {
         const commonId = self.commonAbilityId;
         if (commonId === 'proteccion') {
           this.pulseCommon(snapshot, self, false);
@@ -436,7 +667,7 @@ export class BotController {
     } else {
       // Sin objetivo visible: ir a la última posición conocida o patrullar.
       desired = this.moveTowards(self, this.goal, dt);
-      if (this.useCommon) this.pulseCommon(snapshot, self, true);
+      if (!channeling && this.useCommon) this.pulseCommon(snapshot, self, true);
     }
 
     desired = this.addSeparation(self, players, desired);
@@ -635,6 +866,22 @@ export class BotController {
       case 'self':
         score += 28;
         break;
+    }
+
+    // Aprovechar el windup rival: las habilidades instantáneas pueden cancelar
+    // su preparación; las que tardan más que el rival llegan tarde y además
+    // dejan al bot plantado.
+    const pending = target.pendingCast;
+    if (pending) {
+      const remaining = pending.windup - pending.elapsed;
+      if (remaining > 0) {
+        if (def.windup <= remaining) score += 18;
+        else score -= 22;
+        if (def.shape === 'melee' || def.shape === 'projectile' || def.shape === 'beam') {
+          score += 10;
+        }
+        if (!pending.def.moveWhileWindup) score += 8;
+      }
     }
 
     // La definitiva se guarda para cuando el objetivo ya está tocado o hay

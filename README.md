@@ -317,7 +317,9 @@ Cada bot produce el mismo `DeviceInputSnapshot` que un mando (`src/game/bot.ts`)
 
 El apuntado es **fiel al juego**: `facing` se deriva de la velocidad, igual que para un humano. Para disparar, el bot avanza un frame hacia el objetivo y lanza en ese mismo frame; no hay aim assist ni un `facing` artificial. Las habilidades de área se usan cuando el rival cae dentro del centro real del área (`range` por delante del lanzador), no cuando simplemente está cerca. Los bots no usan `Explosión` con poca vida y no curan a vida casi llena.
 
-Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y camina; `Normal` y `Difícil` corren, reaccionan antes, predicen proyectiles y usan más el instinto común.
+Los bots también **juegan con los windups**. Si un rival visible está preparando un área, un cono o una línea que les va a alcanzar, intentan salir del área o de la línea; si tienen una habilidad rápida que puede impactar antes de que termine la preparación, la usan para **interrumpir** el lanzamiento (un golpe cancela el `pendingCast`). Si el rival está clavado preparando algo que no les amenaza, lo priorizan como objetivo y prefieren ataques instantáneos frente a preparaciones largas. Durante sus propios `windup` móviles siguen reposicionándose, pero no encadenan otra habilidad mientras canalizan.
+
+Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y camina; `Normal` y `Difícil` corren, reaccionan antes al windup rival, predicen proyectiles y usan más el instinto común.
 
 ## Qué demuestra
 
