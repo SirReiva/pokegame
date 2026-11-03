@@ -872,9 +872,12 @@ export class Game {
       // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
       // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
       if (!this.matchOver) {
-        // Las acciones instantáneas (haces, áreas, melee y dashes) se resuelven
-        // aquí, después de que todos los jugadores hayan avanzado su turno: el
-        // orden de `matchPlayers` ya no decide quién golpea primero.
+        // Las acciones se resuelven aquí, después de que todos los jugadores
+        // hayan avanzado su turno. El orden es fijo y reproducible: casts
+        // instantáneos (haces y áreas sin retardo) → golpes de dash → melee →
+        // proyectiles → áreas. Dentro de cada fase se respeta el orden de
+        // lanzamiento/creación. Si varios golpes son letales para el mismo
+        // objetivo en este frame, el KO queda para el primero de ese orden.
         this.resolveQueuedCasts();
         if (!this.matchOver) this.resolveInstantHits();
         if (!this.matchOver) this.resolveMeleeHits();
@@ -1666,8 +1669,9 @@ export class Game {
       // muestran la marca en el suelo hasta que termina el efecto. El aro
       // (color del equipo) es persistente; el relleno de carga solo dura el
       // `windup`. La marca incluye el mayor hurtbox del roster porque el daño
-      // suma el radio del objetivo: así ningún Pokémon puede quedar golpeado
-      // fuera del borde dibujado.
+      // suma el radio del objetivo. Es un aviso conservador a propósito: contra
+      // un cuerpo pequeño la zona real es algo menor, pero ningún objetivo
+      // queda golpeado fuera del borde dibujado.
       const marker =
         def.shape === 'aoe'
           ? this.combatFx.spawnAoeTelegraph(
@@ -1679,9 +1683,9 @@ export class Game {
               Math.max(0.1, def.aoeDuration)
             )
           : null;
-      // Los haces muestran su carril desde el inicio del windup. El ancho es el
-      // real de impacto (radio del haz + el mayor hurtbox posible) y el carril
-      // se mantiene hasta que termina el efecto visual del haz.
+      // Los haces muestran su carril desde el inicio del windup. El ancho es un
+      // aviso conservador (radio del haz + el mayor hurtbox posible), así que el
+      // carril nunca queda por dentro del alcance real de ningún objetivo.
       const lane =
         def.shape === 'beam'
           ? this.combatFx.spawnBeamLane(
@@ -2226,10 +2230,13 @@ export class Game {
   private updateProjectiles(dt: number): void {
     // Un KO en un paso anterior del frame cancela los proyectiles restantes.
     if (this.matchOver) return;
-    for (let index = this.projectiles.length - 1; index >= 0; index--) {
+    // Se recorre en orden de creación, no del más nuevo al más antiguo: si dos
+    // proyectiles alcanzan al mismo objetivo en el mismo frame, el KO se
+    // atribuye al más antiguo y el recién creado no puede robarlo. Se usa una
+    // copia porque los proyectiles se retiran durante el recorrido.
+    for (const projectile of this.projectiles.slice()) {
       // Un impacto de este mismo frame pudo cerrar la partida.
       if (this.matchOver) return;
-      const projectile = this.projectiles[index];
       const previousX = projectile.x;
       const previousZ = projectile.z;
       // El último tramo se recorta al alcance restante para que el proyectil
@@ -2294,7 +2301,7 @@ export class Game {
         (Math.abs(projectile.x) > bounds.x ||
           Math.abs(projectile.z) > bounds.z)
       ) {
-        this.removeProjectile(index);
+        this.removeProjectile(projectile);
         continue;
       }
 
@@ -2416,7 +2423,7 @@ export class Game {
         if (projectile.pierce > 0) {
           projectile.pierce -= 1;
         } else {
-          this.removeProjectile(index);
+          this.removeProjectile(projectile);
           removed = true;
           break;
         }
@@ -2431,12 +2438,12 @@ export class Game {
           1,
           projectile.def.impactStyle
         );
-        this.removeProjectile(index);
+        this.removeProjectile(projectile);
         continue;
       }
 
       // El alcance se agota después de revisar el tramo final, no antes.
-      if (exhausted) this.removeProjectile(index);
+      if (exhausted) this.removeProjectile(projectile);
     }
   }
 
@@ -2449,8 +2456,11 @@ export class Game {
     // Si un tick de un área cierra la partida, las áreas restantes no siguen
     // repartiendo daño hasta el siguiente frame (que ya no se simula).
     if (this.matchOver) return;
-    for (let index = this.activeAoes.length - 1; index >= 0; index--) {
-      const aoe = this.activeAoes[index];
+    // Orden de creación, como los proyectiles: el área más antigua hace su tick
+    // antes y, si dos ticks son letales en el mismo frame, el KO no cambia
+    // según cuál se creó después. Se recorre una copia porque las áreas
+    // terminadas se retiran durante el recorrido.
+    for (const aoe of this.activeAoes.slice()) {
       aoe.elapsed += dt;
       aoe.tickTimer -= dt;
       // El primer tick cae al aparecer el área (tickTimer empieza en 0).
@@ -2465,7 +2475,8 @@ export class Game {
         aoe.tickTimer += aoe.tickInterval;
       }
       if (aoe.elapsed >= aoe.duration) {
-        this.activeAoes.splice(index, 1);
+        const index = this.activeAoes.indexOf(aoe);
+        if (index >= 0) this.activeAoes.splice(index, 1);
       }
     }
   }
@@ -2520,6 +2531,9 @@ export class Game {
     if (this.pendingInstantHits.length === 0) return;
     const hits = this.pendingInstantHits;
     this.pendingInstantHits = [];
+    // Los golpes se aplican en orden de lanzamiento. Si varios son letales en
+    // el mismo frame, el KO se atribuye al primero: es una regla explícita y
+    // reproducible, y ninguno de los posteriores puede robarlo.
     for (const hit of hits) {
       if (this.matchOver) break;
       if (!this.canHit(hit.attacker, hit.target)) continue;
@@ -2537,8 +2551,15 @@ export class Game {
       ) {
         continue;
       }
+      // El empuje de un golpe de dash sigue la dirección del desplazamiento, no
+      // la posición final del lanzador: si el dash termina más allá del
+      // objetivo, `target - attacker` puede apuntar hacia atrás y empujarlo en
+      // contra del dash. Se usa un origen justo detrás del objetivo sobre la
+      // dirección del dash; `applyKnockback` solo necesita el vector.
       this.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
-        healToken: hit.healToken
+        healToken: hit.healToken,
+        sourceX: hit.target.x - hit.dirX,
+        sourceZ: hit.target.z - hit.dirZ
       });
     }
   }
@@ -2640,6 +2661,8 @@ export class Game {
       );
     }
 
+    // Misma regla que en los golpes de dash: orden de lanzamiento y, si varios
+    // son letales en el mismo frame, el KO queda para el primero.
     for (const hit of hits) {
       // Un golpe anterior de esta misma tanda pudo cerrar la partida.
       if (this.matchOver) break;
@@ -2677,9 +2700,9 @@ export class Game {
     target.z = resolved.z;
   }
 
-  private removeProjectile(index: number): void {
-    const projectile = this.projectiles[index];
-    if (!projectile) return;
+  private removeProjectile(projectile: Projectile): void {
+    const index = this.projectiles.indexOf(projectile);
+    if (index < 0) return;
     projectile.visual.destroy();
     this.projectiles.splice(index, 1);
   }

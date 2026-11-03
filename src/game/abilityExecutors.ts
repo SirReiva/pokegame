@@ -104,9 +104,10 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
-  // El arco dibujado debe cubrir el mismo alcance que el golpe: el chequeo
-  // llega a centros hasta `range + hitRadius`, así que se usa el mayor hurtbox
-  // del roster para que el borde visible nunca quede por detrás del alcance.
+  // El arco dibujado es un aviso conservador: usa el mayor hurtbox del roster
+  // para que el borde visible nunca quede por dentro del alcance real de ningún
+  // objetivo. El golpe suma el hurtbox concreto de cada rival, así que contra
+  // cuerpos pequeños (Voltorb, Celebi) el arco queda algo por fuera a propósito.
   deps.combatFx.spawnMelee(
     player.x,
     player.z,

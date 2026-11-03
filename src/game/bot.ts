@@ -616,9 +616,9 @@ export class BotController {
 
       const reach =
         def.shape === 'melee'
-          ? def.range + 0.35
+          ? def.range + source.hitRadius
           : def.shape === 'dash'
-            ? def.dashDistance
+            ? def.dashDistance + Math.max(0.5, def.radius) + source.hitRadius
             : def.range;
       if (distance > reach) continue;
 
@@ -902,7 +902,7 @@ export class BotController {
         )
       );
 
-      const inRange = def ? this.inRange(def, distance) : false;
+      const inRange = def ? this.inRange(def, distance, target) : false;
       const ready =
         this.abilitySlot !== null &&
         self.cooldowns[this.abilitySlot] <= 0.001;
@@ -1098,7 +1098,7 @@ export class BotController {
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
-      if (!this.inRange(def, distance)) continue;
+      if (!this.inRange(def, distance, target)) continue;
       if (def.selfDamage > 0 && self.hp / Math.max(1, self.maxHp) < 0.52) {
         continue;
       }
@@ -1211,19 +1211,33 @@ export class BotController {
     return count;
   }
 
-  private inRange(def: AbilityDef, distance: number): boolean {
+  private inRange(
+    def: AbilityDef,
+    distance: number,
+    target: MatchPlayerState
+  ): boolean {
+    // El alcance real suma el hurtbox del objetivo: un Groudon (0,56 u) recibe
+    // antes que un Voltorb (0,34 u). Un radio fijo hacía que el bot llegase
+    // tarde contra los cuerpos grandes y pronto contra los pequeños.
+    const targetRadius = target.hitRadius;
     switch (def.shape) {
       case 'melee':
-        return distance <= def.range + 0.35;
+        return distance <= def.range + targetRadius;
       case 'projectile':
       case 'beam':
         return distance <= def.range;
       case 'dash':
-        return distance >= 0.4 && distance <= def.dashDistance + 0.4;
+        // El barrido del dash alcanza `distancia + max(0.5, radio del dash) +
+        // hurtbox del objetivo`; el 0,4 es solo el mínimo para no dashear pegado.
+        return (
+          distance >= 0.4 &&
+          distance <=
+            def.dashDistance + Math.max(0.5, def.radius) + targetRadius
+        );
       case 'aoe':
         // El centro del área se fija a `range` por delante del lanzador.
-        if (def.range <= 0.1) return distance <= def.radius + 0.35;
-        return Math.abs(distance - def.range) <= def.radius + 0.4;
+        if (def.range <= 0.1) return distance <= def.radius + targetRadius;
+        return Math.abs(distance - def.range) <= def.radius + targetRadius;
       case 'self':
         return distance <= Math.max(2.5, def.radius + 2) && distance <= 8;
     }
