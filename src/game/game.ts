@@ -259,6 +259,14 @@ export class Game {
     blue: new Set(),
     red: new Set()
   };
+  /**
+   * Objetos que cada equipo ve y si están disponibles. Solo contiene puntos
+   * visibles: los bots no pueden consultar el estado del resto.
+   */
+  private pickupKnowledge: Record<Team, Map<string, boolean>> = {
+    blue: new Map(),
+    red: new Map()
+  };
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -613,7 +621,10 @@ export class Game {
               config.slot,
               config.botDifficulty ?? 'normal',
               botNav,
-              botSquad
+              botSquad,
+              // Los bots conocen las posiciones de los objetos, pero no su
+              // estado disponible/usado.
+              getActiveMap().pickups
             )
           );
         }
@@ -732,6 +743,7 @@ export class Game {
     this.fogMasks.clear();
     this.viewCircles.length = 0;
     this.visibleByTeam = { blue: new Set(), red: new Set() };
+    this.pickupKnowledge = { blue: new Map(), red: new Map() };
 
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
@@ -903,7 +915,13 @@ export class Game {
       for (const player of this.matchPlayers) {
         const bot = player.isBot ? this.bots.get(player.slot) : null;
         const input = bot
-          ? bot.update(dt, player, this.matchPlayers, this.world.colliders)
+          ? bot.update(
+              dt,
+              player,
+              this.matchPlayers,
+              this.world.colliders,
+              this.pickupKnowledge[player.team]
+            )
           : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
         this.stepPlayer(player, input, dt);
         // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
@@ -3056,41 +3074,62 @@ export class Game {
       }
     });
 
-    this.updatePickupVisibility(colliders);
+    this.updatePickupKnowledge(colliders);
   }
 
   /**
-   * Oculta los objetos con la misma regla que los actores: la copia de una vista
-   * se ve si algún Pokémon vivo del equipo ve el punto, descontando la
-   * ocultación del terreno y respetando la línea de visión. La niebla deja de
-   * ser solo un tinte: el objeto desaparece por completo fuera de la visión.
+   * Calcula qué objetos ve cada equipo y cuáles están disponibles. La
+   * visibilidad usa la misma regla que los actores y la niebla (ocultación del
+   * terreno + línea de visión), pero el estado de disponibilidad solo se guarda
+   * para los puntos visibles: los bots no pueden consultar el resto.
+   *
+   * Se calcula para los dos equipos, aunque uno no tenga ninguna vista humana
+   * (por ejemplo, un equipo formado solo por bots).
    */
-  private updatePickupVisibility(colliders: readonly Collider[]): void {
-    if (!this.pickups) return;
+  private updatePickupKnowledge(colliders: readonly Collider[]): void {
+    const pickups = this.pickups;
+    if (!pickups) return;
+    const knowledge: Record<Team, Map<string, boolean>> = {
+      blue: new Map(),
+      red: new Map()
+    };
     const concealmentCache = new Map<string, number>();
     const seenCache = new Map<string, boolean>();
-    this.pickups.updateVisibility((spawn, viewIndex) => {
-      const observer = this.views[viewIndex];
-      if (!observer) return false;
+
+    const sees = (team: Team, spawn: { x: number; z: number }): boolean => {
       const pointKey = `${spawn.x}:${spawn.z}`;
-      let concealment = concealmentCache.get(pointKey);
-      if (concealment === undefined) {
-        concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
-        concealmentCache.set(pointKey, concealment);
-      }
-      const teamKey = `${observer.team}:${pointKey}`;
+      const teamKey = `${team}:${pointKey}`;
       let visible = seenCache.get(teamKey);
       if (visible === undefined) {
+        let concealment = concealmentCache.get(pointKey);
+        if (concealment === undefined) {
+          concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
+          concealmentCache.set(pointKey, concealment);
+        }
         visible = this.teamSeesPoint(
-          observer.team,
+          team,
           spawn.x,
           spawn.z,
           concealment,
           colliders
         );
         seenCache.set(teamKey, visible);
+        if (visible) {
+          knowledge[team].set(pointKey, pickups.isAvailableAt(spawn.x, spawn.z));
+        }
       }
       return visible;
+    };
+
+    pickups.forEachSpawn((spawn) => {
+      sees('blue', spawn);
+      sees('red', spawn);
+    });
+
+    this.pickupKnowledge = knowledge;
+    pickups.updateVisibility((spawn, viewIndex) => {
+      const observer = this.views[viewIndex];
+      return observer ? sees(observer.team, spawn) : false;
     });
   }
 

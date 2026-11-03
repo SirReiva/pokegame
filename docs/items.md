@@ -61,6 +61,11 @@ Para crear un objeto nuevo:
   su capa de render y solo se muestra si algún Pokémon vivo del equipo de esa
   vista ve el punto, con la ocultación del terreno y la línea de visión. Así en
   splitscreen un equipo puede verlo y el otro no.
+- Los bots conocen las posiciones de todos los objetos desde el inicio de la
+  partida, sin necesitar verlos, pero no su estado. Cuando bajan del 70% de vida
+  eligen destino puntuando curación, distancia, peligro junto a la base enemiga
+  y enemigos visibles en el trayecto. El estado usado/disponible solo se conoce
+  si el equipo ve el objeto; si lo ve usado, lo descarta sin ir hasta él.
 - Cada partida reinicia los cooldowns (`PickupField.reset()`).
 
 ## Arte

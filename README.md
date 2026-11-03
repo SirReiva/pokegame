@@ -315,6 +315,8 @@ Por defecto, **Poción** cura 50 PV con 20 s de cooldown y **Poción grande** cu
 
 Los objetos se ocultan con la niebla igual que los Pokémon: cada viewport tiene su propia copia en su capa de render y solo la muestra si algún Pokémon vivo de su equipo ve el punto, descontando la ocultación del terreno y respetando la línea de visión. En el menú se muestra una única copia sobre el mundo, sin niebla.
 
+Los bots conocen las posiciones de todos los objetos desde el inicio, sin necesitar verlos, pero no saben si están disponibles o usados hasta que su equipo los ve. Cuando su vida baja del 70%, eligen destino puntuando la curación que aporta cada objeto, la distancia, el peligro de acercarse a la base enemiga y los enemigos visibles en el trayecto. Si ven uno usado, lo descartan sin caminar hasta él.
+
 El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y Poción grande, llenas y vacías) sin dependencias externas. Para añadir un objeto nuevo basta con crear sus dos imágenes, añadir la definición a `ITEM_DEFINITIONS`, incluirlo en `ITEM_IDS` y usar su `type` en los mapas.
 
 ## Multijugador local

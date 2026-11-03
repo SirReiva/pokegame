@@ -427,6 +427,22 @@ export class PickupField {
     }
   }
 
+  /** Recorre los objetos existentes (posición y tipo), sin revelar su estado. */
+  forEachSpawn(visit: (spawn: PickupSpawn) => void): void {
+    for (const item of this.items) visit(item.spawn);
+  }
+
+  /**
+   * Disponibilidad de un objeto. Solo debe consultarse para puntos que el
+   * equipo ya ve; el estado de los objetos fuera de visión no se expone.
+   */
+  isAvailableAt(x: number, z: number): boolean {
+    for (const item of this.items) {
+      if (item.spawn.x === x && item.spawn.z === z) return item.available;
+    }
+    return false;
+  }
+
   /**
    * Recogida automática. Se recorre cada objeto disponible y se consume con el
    * primer jugador vivo que lo toque y pueda usarlo (por ejemplo, un Pokémon

@@ -6,8 +6,9 @@
  * colisiones, tiempos de casteo y reglas de combate con los humanos.
  *
  * La IA se divide en cuatro capas:
- * 1. Percepción: visión, ocultación, línea de visión y memoria de la última
- *    posición conocida.
+ * 1. Percepción: visión, ocultación, línea de visión, memoria de la última
+ *    posición conocida y posiciones de los objetos del mapa. El estado de un
+ *    objeto (disponible/usado) solo se conoce cuando el equipo lo ve.
  * 2. Navegación: A* sobre `BotNavGrid` y seguimiento de waypoints.
  * 3. Combate: elección de objetivo y de habilidad por rango, cooldown y estado.
  * 4. Movimiento: mantiene la distancia, se acerca para apuntar y se separa de
@@ -19,8 +20,10 @@
 
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
+import { pointSegmentDistance } from './combat';
 import { DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
+import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
 import { respawnsForTeam } from './terrain';
@@ -151,6 +154,19 @@ const RETREAT_ARRIVE_DISTANCE = 2.5;
 /** Espera antes de poder volver a huir tras llegar a la base sin curación. */
 const RETREAT_COOLDOWN_SECONDS = 4;
 
+/**
+ * Vida por debajo de la cual el bot busca una poción conocida. Los bots saben
+ * dónde están los objetos desde el inicio de la partida, pero no si están
+ * disponibles o usados hasta que su equipo los ve.
+ */
+const PICKUP_SEEK_HP = 0.7;
+/** Radio en el que un enemigo visible contamina el trayecto a un objeto. */
+const PICKUP_PATH_THREAT_RADIUS = 4;
+/** Distancia más allá del radio de la base enemiga que ya no se penaliza. */
+const PICKUP_BASE_THREAT_RANGE = 10;
+/** Sin información de visión, ningún objeto tiene estado conocido. */
+const NO_PICKUP_KNOWLEDGE: ReadonlyMap<string, boolean> = new Map();
+
 /** Foco compartido por los bots de un mismo equipo. */
 export interface BotFocus {
   slot: number | null;
@@ -240,6 +256,14 @@ export class BotController {
   private retreatCooldownUntil = 0;
   private goal: Vec2 = { x: 0, z: 0 };
 
+  /** Posiciones de objetos conocidas de antemano; nunca su estado. */
+  private readonly pickups: readonly PickupSpawn[];
+  /**
+   * Estado de los objetos que el equipo ve en este frame (`true` disponible,
+   * `false` usado). Los objetos fuera de visión no aparecen en el mapa.
+   */
+  private pickupKnowledge: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE;
+
   private path: NavPoint[] = [];
   private pathGoal: Vec2 = { x: 0, z: 0 };
   private pathTimer = 0;
@@ -271,13 +295,15 @@ export class BotController {
     slot: number,
     difficulty: BotDifficulty,
     nav: BotNavGrid,
-    squad: BotSquad
+    squad: BotSquad,
+    pickups: readonly PickupSpawn[] = []
   ) {
     this.slot = slot;
     this.difficulty = difficulty;
     this.tuning = TUNING[difficulty];
     this.nav = nav;
     this.squad = squad;
+    this.pickups = pickups;
     this.orbitSide = slot % 2 === 0 ? 1 : -1;
   }
 
@@ -285,8 +311,10 @@ export class BotController {
     dt: number,
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
-    colliders: readonly Collider[]
+    colliders: readonly Collider[],
+    knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE
   ): DeviceInputSnapshot {
+    this.pickupKnowledge = knownPickups;
     this.clock += dt;
     if (!self.alive) {
       this.resetCombatState();
@@ -644,7 +672,6 @@ export class BotController {
     const targetIsVisible = target !== null && this.targetVisible && target.alive;
     const distance = target ? Math.hypot(target.x - self.x, target.z - self.z) : Infinity;
     const hpFraction = self.hp / Math.max(1, self.maxHp);
-
     this.abilitySlot = null;
     this.useCommon = false;
 
@@ -657,6 +684,9 @@ export class BotController {
       RETREAT_ARRIVE_DISTANCE;
     const canRecover =
       self.commonAbilityId === 'regeneracion' || this.findHealSlot(self) !== null;
+    // Los objetos se conocen por posición desde el principio. Si el equipo ya
+    // ve uno usado, `pickupTarget` lo descarta sin necesidad de ir hasta él.
+    const pickup = hpFraction < PICKUP_SEEK_HP ? this.pickupTarget(self) : null;
 
     if (this.retreat) {
       if (!lowHp || nearestEnemy > RETREAT_DANGER_RADIUS) {
@@ -689,7 +719,15 @@ export class BotController {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
       this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
-      this.setGoal(self.spawn);
+      if (pickup) this.setGoal(pickup);
+      else this.setGoal(self.spawn);
+      return;
+    }
+
+    // Sin rival a la vista, un bot dañado prefiere acercarse a un objeto
+    // conocido antes que perseguir una posición recordada o patrullar.
+    if (!targetIsVisible && pickup) {
+      this.setGoal(pickup);
       return;
     }
 
@@ -731,6 +769,88 @@ export class BotController {
       if (distance < nearest) nearest = distance;
     }
     return nearest;
+  }
+
+  /**
+   * Elige el objeto conocido que más conviene. Puntúa la curación que aporta
+   * (según la vida que falta), la distancia, el peligro de acercarse a la base
+   * enemiga y los enemigos visibles cerca del trayecto.
+   *
+   * Si el equipo ya ve un objeto usado (`pickupKnowledge` = false), se descarta
+   * sin necesidad de caminar hasta él. Los objetos fuera de visión no tienen
+   * estado conocido y siguen siendo candidatos.
+   */
+  private pickupTarget(self: MatchPlayerState): PickupSpawn | null {
+    const hpFraction = self.hp / Math.max(1, self.maxHp);
+    const missingHp = self.maxHp - self.hp;
+    const enemyBases = respawnsForTeam(otherTeam(self.team));
+    let best: PickupSpawn | null = null;
+    let bestScore = -Infinity;
+
+    for (const pickup of this.pickups) {
+      const key = `${pickup.x}:${pickup.z}`;
+      const knownAvailable = this.pickupKnowledge.get(key);
+      // Ya lo ve y está usado: no merece la pena acercarse.
+      if (knownAvailable === false) continue;
+
+      const definition = ITEM_DEFINITIONS[pickup.type];
+      const heal = definition?.healHp ?? 0;
+      if (heal <= 0) continue;
+
+      const distance = Math.hypot(pickup.x - self.x, pickup.z - self.z);
+      // Con poca vida, cada unidad de distancia pesa más: llegar pronto importa.
+      const distanceCost = distance * (0.35 + (1 - hpFraction) * 0.65);
+
+      // Los objetos junto a la base enemiga son más peligrosos. Cuanto menos
+      // vida queda, más caro resulta asomarse allí.
+      let baseDanger = 0;
+      for (const base of enemyBases) {
+        const baseDistance = Math.hypot(pickup.x - base.x, pickup.z - base.z);
+        const danger = clamp(
+          1 - (baseDistance - base.radius) / PICKUP_BASE_THREAT_RANGE,
+          0,
+          1
+        );
+        if (danger > baseDanger) baseDanger = danger;
+      }
+      const baseCost = baseDanger * (3 + (1 - hpFraction) * 5);
+
+      // Enemigos visibles cuya posición queda cerca del trayecto recto. Es una
+      // aproximación barata: basta para evitar cruzar delante de un rival.
+      let pathDanger = 0;
+      for (const enemy of this.visibleEnemies) {
+        if (!enemy.alive) continue;
+        const pathDistance = pointSegmentDistance(
+          enemy.x,
+          enemy.z,
+          self.x,
+          self.z,
+          pickup.x,
+          pickup.z
+        );
+        if (pathDistance >= PICKUP_PATH_THREAT_RADIUS) continue;
+        const threat = 0.6 + 0.6 * (enemy.hp / Math.max(1, enemy.maxHp));
+        pathDanger +=
+          (1 - pathDistance / PICKUP_PATH_THREAT_RADIUS) *
+          threat *
+          (0.7 + (1 - hpFraction) * 0.8);
+      }
+
+      // La curación se mide por la fracción de vida que recupera: así una
+      // Poción grande vale más cuando falta mucha vida y menos cuando casi
+      // está lleno. Ver un objeto disponible garantiza que no está usado.
+      const healFraction = Math.min(heal, missingHp) / Math.max(1, self.maxHp);
+      const knownBonus = knownAvailable === true ? 2.5 : 0;
+      const score =
+        healFraction * 6 + knownBonus - distanceCost - baseCost - pathDanger;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = pickup;
+      }
+    }
+
+    return best;
   }
 
   private setGoal(goal: Vec2): void {
