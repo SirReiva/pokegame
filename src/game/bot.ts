@@ -50,6 +50,12 @@ interface BotTuning {
   evadeWindow: number;
   /** Cuánto prioriza a un rival que está preparando una habilidad. */
   punishBonus: number;
+  /** Probabilidad de darse cuenta y castigar un windup rival. */
+  punishChance: number;
+  /** Error al estimar cuánto le queda al windup rival (segundos). */
+  punishTimingError: number;
+  /** Reacción media antes de intentar interrumpir un windup (segundos). */
+  punishReaction: number;
 }
 
 const TUNING: Record<BotDifficulty, BotTuning> = {
@@ -64,7 +70,10 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     commonChance: 0.35,
     pathInterval: 0.9,
     evadeWindow: 0.28,
-    punishBonus: 1.5
+    punishBonus: 1.5,
+    punishChance: 0.25,
+    punishTimingError: 0.4,
+    punishReaction: 0.24
   },
   normal: {
     reaction: 0.3,
@@ -77,7 +86,10 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     commonChance: 0.65,
     pathInterval: 0.65,
     evadeWindow: 0.44,
-    punishBonus: 3
+    punishBonus: 3,
+    punishChance: 0.5,
+    punishTimingError: 0.22,
+    punishReaction: 0.15
   },
   hard: {
     reaction: 0.14,
@@ -90,7 +102,10 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     commonChance: 0.9,
     pathInterval: 0.45,
     evadeWindow: 0.62,
-    punishBonus: 4.5
+    punishBonus: 4.5,
+    punishChance: 0.72,
+    punishTimingError: 0.1,
+    punishReaction: 0.08
   }
 };
 
@@ -166,6 +181,21 @@ interface IncomingThreat {
   severity: number;
 }
 
+type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
+
+/**
+ * Lo que el bot cree saber de un windup rival. Se fija una sola vez por
+ * lanzamiento: si falla la tirada, no lo castiga; y el error de tiempo puede
+ * hacerle elegir una habilidad que llega tarde.
+ */
+interface PunishRead {
+  cast: PendingCastState;
+  commit: boolean;
+  remainingError: number;
+  /** Momento a partir del cual reacciona y puede intentar la interrupción. */
+  readyAt: number;
+}
+
 function normalizeAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
@@ -197,6 +227,8 @@ export class BotController {
   private visibleEnemies: MatchPlayerState[] = [];
   private threat: IncomingThreat | null = null;
   private lastSeen: { x: number; z: number; at: number } | null = null;
+  /** Lecturas por rival de su windup actual, para no volver a tirar cada frame. */
+  private punishReads = new Map<number, PunishRead>();
 
   private decisionTimer = 0;
   private abilitySlot: number | null = null;
@@ -294,6 +326,7 @@ export class BotController {
     this.visibleEnemies = [];
     this.threat = null;
     this.lastSeen = null;
+    this.punishReads.clear();
     this.abilitySlot = null;
     this.useCommon = false;
     this.retreat = false;
@@ -309,6 +342,34 @@ export class BotController {
     this.backOffTimer = 0;
     this.yieldSource = null;
     this.yieldUntil = 0;
+  }
+
+  /**
+   * Devuelve la lectura del windup actual del rival. La tirada se hace una vez
+   * por lanzamiento: el bot decide si lo castiga, con cuánto error calcula el
+   * tiempo restante y cuánto tarda en reaccionar. Un error positivo le hace
+   * creer que tiene más margen y puede lanzar una habilidad demasiado lenta;
+   * uno negativo puede hacerle descartar una interrupción que sí habría
+   * llegado. La reacción variable hace que una preparación corta le pille
+   * todavía empezando a reaccionar.
+   */
+  private readPunish(enemy: MatchPlayerState): PunishRead | null {
+    const pending = enemy.pendingCast;
+    if (!pending) return null;
+    const known = this.punishReads.get(enemy.slot);
+    if (known && known.cast === pending) return known;
+
+    const read: PunishRead = {
+      cast: pending,
+      commit: Math.random() < this.tuning.punishChance,
+      remainingError:
+        (Math.random() * 2 - 1) * this.tuning.punishTimingError,
+      readyAt:
+        this.clock +
+        this.tuning.punishReaction * (0.6 + Math.random() * 0.8)
+    };
+    this.punishReads.set(enemy.slot, read);
+    return read;
   }
 
   /**
@@ -376,10 +437,12 @@ export class BotController {
       const pending = enemy.pendingCast;
       if (pending) {
         const remaining = pending.windup - pending.elapsed;
-        if (remaining > 0) {
+        const read = this.readPunish(enemy);
+        if (remaining > 0 && read?.commit) {
           // Un rival preparando una habilidad es una ventana: si está clavado,
           // se convierte en el objetivo prioritario. La amenaza concreta se
-          // resuelve aparte en `updateThreat`.
+          // resuelve aparte en `updateThreat`. La tirada de `readPunish` hace
+          // que no todos los bots detecten o aprovechen cada windup.
           score -= this.tuning.punishBonus;
           if (!pending.def.moveWhileWindup) score -= 1.5;
         }
@@ -772,9 +835,15 @@ export class BotController {
 
     if (this.threat) {
       const threat = this.threat;
-      const interrupt = channeling
-        ? null
-        : this.findInterruptSlot(self, threat.source, threat.remaining);
+      const read = this.readPunish(threat.source);
+      const interrupt =
+        channeling || !read || !read.commit || this.clock < read.readyAt
+          ? null
+          : this.findInterruptSlot(
+              self,
+              threat.source,
+              Math.max(0.02, threat.remaining + read.remainingError)
+            );
       if (interrupt !== null) {
         // Interrumpir el windup rival es la mejor jugada: un golpe cancela la
         // habilidad y evita el daño. Se prioriza sobre la huida.
