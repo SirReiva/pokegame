@@ -30,10 +30,15 @@ attribute vec2 aUv0;
 uniform mat4 matrix_model;
 uniform mat4 matrix_viewProjection;
 varying vec2 vUv;
+varying vec3 vWorldPosition;
 
 void main(void) {
   vUv = aUv0;
-  gl_Position = matrix_viewProjection * matrix_model * vec4(aPosition, 1.0);
+  // Posición de mundo del quad (pegado a la cámara): sirve para reconstruir
+  // en el fragment el punto del suelo bajo cada píxel.
+  vec4 world = matrix_model * vec4(aPosition, 1.0);
+  vWorldPosition = world.xyz;
+  gl_Position = matrix_viewProjection * world;
 }
 `;
 
@@ -59,11 +64,15 @@ void main(void) {
 
 const FRAGMENT_SHADER = `
 varying vec2 vUv;
+varying vec3 vWorldPosition;
 uniform vec3 uFogColor;
 uniform float uFogOpacity;
 uniform vec2 uFogCenter[${MAX_VISION_CIRCLES}];
 uniform vec2 uFogRadius[${MAX_VISION_CIRCLES}];
 uniform float uFogFeather;
+uniform vec3 uCameraPosition;
+uniform vec2 uMapHalfSize;
+uniform float uMapEdgeFeather;
 
 void main(void) {
   // La visión es de equipo: el alfa es el mínimo de todos los círculos, así
@@ -74,7 +83,21 @@ void main(void) {
     vec2 offset = (vUv - uFogCenter[i]) / max(uFogRadius[i], vec2(0.0001));
     alpha = min(alpha, smoothstep(1.0 - uFogFeather, 1.0, length(offset)));
   }
-  gl_FragColor = vec4(uFogColor, alpha * uFogOpacity);
+
+  // La niebla solo sombrea el interior del mapa: la falda de césped exterior
+  // se deja limpia. Se interseca el rayo de cámara con el plano del suelo y
+  // se descarta lo que cae fuera de los límites, con un borde suave.
+  float mapMask = 0.0;
+  vec3 ray = vWorldPosition - uCameraPosition;
+  if (ray.y < -0.0001) {
+    float t = -uCameraPosition.y / ray.y;
+    vec2 ground = uCameraPosition.xz + ray.xz * t;
+    vec2 outside = abs(ground) - uMapHalfSize;
+    float distanceOutside = max(outside.x, outside.y);
+    mapMask = 1.0 - smoothstep(-uMapEdgeFeather, uMapEdgeFeather, distanceOutside);
+  }
+
+  gl_FragColor = vec4(uFogColor, alpha * uFogOpacity * mapMask);
 }
 `;
 
@@ -153,6 +176,8 @@ const INSIDE_EDGE_EXTENSION = 0.05;
  */
 const QUAD_MARGIN = 1.02;
 const UV_MARGIN = 0.01;
+/** Borde suave (u) con el que la niebla se apaga al llegar al límite del mapa. */
+const MAP_EDGE_FEATHER = 1.25;
 
 /** Quad unitario en el plano XY, con UV de pantalla. */
 export function createFogMesh(device: pc.GraphicsDevice): pc.Mesh {
@@ -182,6 +207,9 @@ export function createFogDecalMesh(device: pc.GraphicsDevice): pc.Mesh {
 /** Niebla de pantalla de una vista: unión de círculos del equipo y sombreado exterior. */
 export class FogView {
   readonly entity: pc.Entity;
+
+  /** Posición de cámara en un array reutilizable para el uniform del shader. */
+  private readonly cameraPosition = new Float32Array(3);
 
   /** Unión de círculos en UV de la vista; la comparte el decal de cordillera. */
   readonly screenFog: ScreenFog = {
@@ -234,6 +262,12 @@ export class FogView {
     this.material.setParameter('uFogColor', new Float32Array(CONFIG.vision.fogColor));
     this.material.setParameter('uFogOpacity', this.screenFog.opacity);
     this.material.setParameter('uFogFeather', this.screenFog.feather);
+    this.material.setParameter('uCameraPosition', this.cameraPosition);
+    this.material.setParameter(
+      'uMapHalfSize',
+      new Float32Array([mapHalfWidth(), mapHalfDepth()])
+    );
+    this.material.setParameter('uMapEdgeFeather', MAP_EDGE_FEATHER);
     this.material.setParameter('uFogCenter[0]', this.screenFog.centers);
     this.material.setParameter('uFogRadius[0]', this.screenFog.radii);
     this.material.update();
@@ -292,6 +326,10 @@ export class FogView {
     const forwardX = -Math.sin(yaw);
     const forwardZ = -Math.cos(yaw);
     const cameraPosition = camera.entity.getPosition();
+    // Se reutiliza en el fragment para recortar la niebla a los límites del mapa.
+    this.cameraPosition[0] = cameraPosition.x;
+    this.cameraPosition[1] = cameraPosition.y;
+    this.cameraPosition[2] = cameraPosition.z;
     const pitch = CONFIG.camera.pitch * DEG;
     const cosPitch = Math.cos(pitch);
     const sinPitch = Math.sin(pitch);
