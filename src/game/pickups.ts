@@ -43,6 +43,12 @@ export interface PickupHandlers {
   showHeal(player: MatchPlayerState, amount: number): void;
   /** Efecto opcional al consumir el objeto (aura, partículas...). */
   onCollected?(player: MatchPlayerState, definition: ItemDefinition): void;
+  /**
+   * ¿Puede el jugador ver y alcanzar el objeto? El juego comprueba aquí los
+   * colliders y la visibilidad del equipo; sin este handler la recogida vuelve
+   * a depender solo de la distancia.
+   */
+  canReach?(player: MatchPlayerState, spawn: PickupSpawn): boolean;
 }
 
 interface PickupInstance {
@@ -445,40 +451,57 @@ export class PickupField {
 
   /**
    * Recogida automática. Se recorre cada objeto disponible y se consume con el
-   * primer jugador vivo que lo toque y pueda usarlo (por ejemplo, un Pokémon
-   * con la vida completa no gasta una poción).
+   * jugador vivo más cercano que lo toque y pueda usarlo (por ejemplo, un
+   * Pokémon con la vida completa no gasta una poción). Si dos jugadores están a
+   * la misma distancia, gana el primero en `players` (orden estable de la
+   * partida). La comprobación de alcance usa el hurtbox de cada especie, no el
+   * radio de movimiento global.
    */
   collect(players: readonly MatchPlayerState[], handlers: PickupHandlers): void {
     for (const item of this.items) {
       if (!item.available) continue;
       const definition = item.definition;
 
+      let collector: MatchPlayerState | null = null;
+      let collectorPokemon: PokemonEntry | null = null;
+      let collectorDistanceSq = Infinity;
+
       for (const player of players) {
         if (!player.alive) continue;
-        const reach = definition.pickupRadius + CONFIG.player.radius;
+        const reach = definition.pickupRadius + player.hitRadius;
         const dx = player.x - item.spawn.x;
         const dz = player.z - item.spawn.z;
-        if (dx * dx + dz * dz > reach * reach) continue;
+        const distanceSq = dx * dx + dz * dz;
+        if (distanceSq > reach * reach) continue;
+        // El más cercano gana; el empate exacto se queda con el primero.
+        if (distanceSq >= collectorDistanceSq) continue;
 
         const pokemon = handlers.pokemonFor(player);
         if (!pokemon) continue;
 
         const pickupContext = { player, pokemon };
         if (!definition.canPickup(pickupContext)) continue;
+        if (handlers.canReach && !handlers.canReach(player, item.spawn)) continue;
 
-        const resolveContext: ItemResolveContext = {
-          ...pickupContext,
-          heal: (amount) => handlers.heal(player, amount),
-          showHeal: (amount) => handlers.showHeal(player, amount)
-        };
-        definition.resolve(resolveContext);
-
-        item.available = false;
-        item.cooldown = definition.cooldownSeconds;
-        this.setItemUsed(item, true);
-        handlers.onCollected?.(player, definition);
-        break;
+        collector = player;
+        collectorPokemon = pokemon;
+        collectorDistanceSq = distanceSq;
       }
+
+      if (!collector || !collectorPokemon) continue;
+
+      const resolveContext: ItemResolveContext = {
+        player: collector,
+        pokemon: collectorPokemon,
+        heal: (amount) => handlers.heal(collector, amount),
+        showHeal: (amount) => handlers.showHeal(collector, amount)
+      };
+      definition.resolve(resolveContext);
+
+      item.available = false;
+      item.cooldown = definition.cooldownSeconds;
+      this.setItemUsed(item, true);
+      handlers.onCollected?.(collector, definition);
     }
   }
 

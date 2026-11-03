@@ -202,6 +202,16 @@ export class Game {
     showHeal: (player, amount) => this.showHealPopup(player, amount),
     onCollected: (player, definition) => {
       this.combatFx.spawnBuff(player.x, player.z, hexToRgb(definition.color), 1.05);
+    },
+    canReach: (player, spawn) => {
+      const colliders = this.world.colliders;
+      // Los objetos no se recogen a través de muros, rocas ni árboles.
+      if (segmentBlockedByColliders(player.x, player.z, spawn.x, spawn.z, colliders)) {
+        return false;
+      }
+      // La niebla también cuenta: un objeto oculto para el equipo no se consume.
+      const concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
+      return this.teamSeesPoint(player.team, spawn.x, spawn.z, concealment, colliders);
     }
   };
 

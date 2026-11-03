@@ -109,6 +109,8 @@ function parsePickups(raw: unknown): PickupSpawn[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw new Error('"pickups" debe ser un array');
 
+  const seen = new Set<string>();
+
   return raw.map((entry, index) => {
     if (!entry || typeof entry !== 'object') {
       throw new Error(`El objeto ${index + 1} no es un objeto { type, x, z }`);
@@ -120,10 +122,20 @@ function parsePickups(raw: unknown): PickupSpawn[] {
           `Disponibles: ${ITEM_IDS.join(', ')}`
       );
     }
+    const x = number(value.x, `pickups[${index}].x`);
+    const z = number(value.z, `pickups[${index}].z`);
+    const key = `${x}:${z}`;
+    if (seen.has(key)) {
+      throw new Error(
+        `El objeto ${index + 1} duplica la posición (${x}, ${z}); ` +
+          'cada coordenada solo puede tener un objeto'
+      );
+    }
+    seen.add(key);
     return {
       type: value.type,
-      x: number(value.x, `pickups[${index}].x`),
-      z: number(value.z, `pickups[${index}].z`)
+      x,
+      z
     };
   });
 }
