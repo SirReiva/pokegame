@@ -71,7 +71,7 @@ import {
   type PlayerMatchStats
 } from './multiplayer';
 import { baseStatsFor, combatStatsFor } from './pokedex';
-import { speedForPokemon } from './roster';
+import { hitRadiusForPokemon, maxHitRadius, speedForPokemon } from './roster';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import {
   TERRAINS,
@@ -515,6 +515,7 @@ export class Game {
         types: asset.entry.types,
         accent: hexToRgb(asset.entry.accent),
         maxSpeed: speedForPokemon(config.pokemonId),
+        hitRadius: hitRadiusForPokemon(config.pokemonId),
         x: spawn.x,
         z: spawn.z,
         facing,
@@ -1320,12 +1321,13 @@ export class Game {
     const moved = Math.hypot(player.x - previousX, player.z - previousZ);
     dash.traveled += moved;
 
-    const dashReach = Math.max(0.5, dash.def.radius) + CONFIG.player.radius;
+    const dashBaseReach = Math.max(0.5, dash.def.radius);
     // Impulso no hace daño ni aplica control: es solo desplazamiento. Los
     // demás dash conservan su golpe al paso.
     const dashCanHit = dash.def.power > 0 || dash.def.slow !== null;
     for (const target of dashCanHit ? this.matchPlayers : []) {
       if (dash.hit.has(target) || !this.canHit(player, target)) continue;
+      const dashReach = dashBaseReach + target.hitRadius;
       if (
         !this.dashSweepHits(
           target,
@@ -1663,23 +1665,23 @@ export class Game {
       // Las habilidades de área fijan su centro al empezar el retardo y
       // muestran la marca en el suelo hasta que termina el efecto. El aro
       // (color del equipo) es persistente; el relleno de carga solo dura el
-      // `windup`. La marca incluye el radio del jugador porque el daño también
-      // lo suma: así el borde dibujado es el borde real y no se puede golpear a
-      // quien se ve claramente fuera.
+      // `windup`. La marca incluye el mayor hurtbox del roster porque el daño
+      // suma el radio del objetivo: así ningún Pokémon puede quedar golpeado
+      // fuera del borde dibujado.
       const marker =
         def.shape === 'aoe'
           ? this.combatFx.spawnAoeTelegraph(
               targetX,
               targetZ,
-              def.radius + CONFIG.player.radius,
+              def.radius + maxHitRadius(),
               teamAccent,
               def.windup,
               Math.max(0.1, def.aoeDuration)
             )
           : null;
       // Los haces muestran su carril desde el inicio del windup. El ancho es el
-      // real de impacto (radio del haz + radio del jugador) y el carril se
-      // mantiene hasta que termina el efecto visual del haz.
+      // real de impacto (radio del haz + el mayor hurtbox posible) y el carril
+      // se mantiene hasta que termina el efecto visual del haz.
       const lane =
         def.shape === 'beam'
           ? this.combatFx.spawnBeamLane(
@@ -1687,7 +1689,7 @@ export class Game {
               player.z,
               targetX,
               targetZ,
-              def.radius + CONFIG.player.radius,
+              def.radius + maxHitRadius(),
               teamAccent,
               def.windup,
               def.beamStyle
@@ -2296,7 +2298,6 @@ export class Game {
         continue;
       }
 
-      const hitRadius = CONFIG.player.radius + projectile.def.radius;
       const hits: Array<{
         target: MatchPlayerState;
         distance: number;
@@ -2306,6 +2307,7 @@ export class Game {
       for (const target of this.matchPlayers) {
         if (!this.canHit(projectile.owner, target)) continue;
         if (projectile.hit.has(target)) continue;
+        const hitRadius = target.hitRadius + projectile.def.radius;
         // La distancia se mide contra todo el tramo recorrido, no solo contra
         // la posición final: con pasos largos un roce lateral podía caer entre
         // dos muestras y perderse.
@@ -2478,7 +2480,7 @@ export class Game {
       if (this.matchOver) break;
       if (!this.canHit(aoe.owner, target)) continue;
       const distance = Math.hypot(target.x - aoe.x, target.z - aoe.z);
-      if (distance > aoe.radius + CONFIG.player.radius) continue;
+      if (distance > aoe.radius + target.hitRadius) continue;
       // El área se apoya en el suelo, pero sigue sin atravesar un obstáculo
       // entre su centro y el objetivo.
       if (
@@ -2558,7 +2560,7 @@ export class Game {
     const dx = target.x - attacker.x;
     const dz = target.z - attacker.z;
     const distance = Math.hypot(dx, dz);
-    if (distance > def.range + CONFIG.player.radius) return false;
+    if (distance > def.range + target.hitRadius) return false;
     if (distance >= 0.001) {
       const delta = Math.abs(angleDelta(Math.atan2(dx, dz), attacker.facing));
       if (delta > def.halfAngle * DEG) return false;
@@ -2808,7 +2810,7 @@ export class Game {
         if (!player.alive) continue;
         if (
           Math.hypot(player.x - x, player.z - z) >
-          CONFIG.player.radius + 0.1
+          player.hitRadius + 0.1
         ) {
           continue;
         }

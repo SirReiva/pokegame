@@ -71,6 +71,15 @@ export const CONFIG = {
   player: {
     speed: 5.4,
     radius: 0.42,
+    /**
+     * Si es true, cada especie usa su radio de impacto de `POKEMON_HIT_RADIUS`
+     * (`src/game/roster.ts`). Si es false, todo el roster comparte `radius`.
+     *
+     * Solo afecta a los golpes de habilidades (hurtbox). La colisión de
+     * movimiento, la separación entre cuerpos y la navegación de los bots
+     * siguen usando `radius` para todos.
+     */
+    perPokemonHitbox: true as boolean,
     acceleration: 16,
     deceleration: 20,
     /**

@@ -81,6 +81,8 @@ La partida es un **team deathmatch a 15 KO**: cada baja suma un punto al equipo 
 
 Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`), sin ayuda de apuntado: el jugador apunta colocándose y girando con el movimiento. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
 
+Cada especie tiene un **radio de impacto (hurtbox) propio** para las habilidades. No se deriva del sprite: los frames incluyen colas, alas y huecos que exagerarían el cuerpo. La tabla curada vive en `POKEMON_HIT_RADIUS` (`src/game/roster.ts`) y va de 0.34 u (Voltorb, Celebi) a 0.58 u (Onix, Lugia, Ho-Oh), con 0.42 u como referencia. Un hurtbox grande es una desventaja en un juego de skillshots, así que solo lo llevan especies con HP o defensas que lo compensan. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`: entonces todo el roster vuelve al radio único de `CONFIG.player.radius`. La colisión de movimiento, la separación entre cuerpos y la navegación de los bots no cambian.
+
 ### Instintos comunes
 
 Cada Pokémon elige **uno de tres instintos** en la card del roster:
@@ -619,6 +621,7 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `PITCH_DEG` (45) y `VERTICAL_STRETCH`: inclinación y corrección de píxeles.
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad. En partidas de 3-8 jugadores cada cámara arranca un 12 % más lejos para compensar el viewport estrecho.
 - `player.speed`, `acceleration`, `deceleration`, `turnRate`, `turnLerp`, `radius`: sensación de movimiento y colisión. `turnRate` (rad/s) controla con cuánta rapidez el rumbo de avance gira hacia la entrada; subirlo elimina el derrape al cambiar de dirección. `turnSnapAngle` (grados) marca a partir de qué giro (por defecto 135°) la velocidad se invierte en seco, para que un cambio a la dirección opuesta no trace un arco lateral. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
+- `player.perPokemonHitbox` (activado por defecto) y `POKEMON_HIT_RADIUS` en `src/game/roster.ts`: hurtbox de combate por especie. Desactivarlo devuelve a todo el roster al `player.radius` único. No cambia la colisión de movimiento ni la navegación de los bots.
 - `CONFIG.combat`: KO necesarios para ganar (15), segundos de reaparición (5), invulnerabilidad (2), hitstun (0,15 s), stun/empuje del choque melee (0,25 s / 1 u), probabilidad y multiplicador de crítico y rango del factor aleatorio de daño.
 - `POKEDEX_STATS` y `COMBAT_LEVEL` en `src/game/pokedex.ts`: stats base reales de cada especie y nivel de combate. `ABILITIES` y `MOVESETS` en `src/game/abilities.ts` deciden qué habilidades existen y quién las tiene.
 - `POKEMON_VISION`, `TERRAIN_CONCEALMENT` y `CONCEALMENT_TYPE_FACTOR` en `src/game/vision.ts`: rango base por especie, ocultación de cada terreno y cuánto la modulan los tipos. La fórmula y la oclusión están en el mismo módulo.

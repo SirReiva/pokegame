@@ -23,6 +23,7 @@ import type {
   Projectile
 } from './matchState';
 import { TEAM_INFO } from './multiplayer';
+import { maxHitRadius } from './roster';
 import type { AnimationName } from './types';
 import type { World } from './world';
 
@@ -104,13 +105,13 @@ export type AbilityExecutor = (
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
   // El arco dibujado debe cubrir el mismo alcance que el golpe: el chequeo
-  // llega a centros hasta `range + player.radius`, así que sin sumar el radio
-  // el borde visible quedaba 0,42 u por detrás del alcance real.
+  // llega a centros hasta `range + hitRadius`, así que se usa el mayor hurtbox
+  // del roster para que el borde visible nunca quede por detrás del alcance.
   deps.combatFx.spawnMelee(
     player.x,
     player.z,
     player.facing,
-    def.range + CONFIG.player.radius,
+    def.range + maxHitRadius(),
     def.halfAngle,
     def.color,
     def.impactStyle,
@@ -136,7 +137,7 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
     const dx = target.x - player.x;
     const dz = target.z - player.z;
     const distance = Math.hypot(dx, dz);
-    if (distance > def.range + CONFIG.player.radius) continue;
+    if (distance > def.range + target.hitRadius) continue;
     if (distance < 0.001) {
       deps.addPendingMeleeHit({
         attacker: player,
@@ -227,7 +228,7 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       player.z,
       endX,
       endZ,
-      def.radius + CONFIG.player.radius,
+      def.radius + maxHitRadius(),
       TEAM_INFO[player.team].accent,
       0,
       def.beamStyle
@@ -252,7 +253,7 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     const along = toX * dirX + toZ * dirZ;
     const lateral = Math.abs(toX * dirZ - toZ * dirX);
     if (along < 0 || along > distance) continue;
-    if (lateral > def.radius + CONFIG.player.radius) continue;
+    if (lateral > def.radius + target.hitRadius) continue;
     if (
       segmentBlockedByColliders(
         player.x,
@@ -300,20 +301,20 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     deps.combatFx.spawnAoeTelegraph(
       centerX,
       centerZ,
-      def.radius + CONFIG.player.radius,
+      def.radius + maxHitRadius(),
       TEAM_INFO[player.team].accent,
       0,
       duration
     );
   }
-  // La marca del suelo que se dibuja durante el windup añade el radio del
-  // jugador en `game.ts`: esa es la zona en la que el centro de un objetivo
-  // recibe el golpe. La explosión es una deflagración de volumen, así que su
-  // efecto usa ese mismo radio y llena el aro hasta el borde; el resto de
-  // áreas conserva el disco de `def.radius`.
+  // La marca del suelo que se dibuja durante el windup añade el mayor hurtbox
+  // del roster en `game.ts`: esa es la zona en la que el centro de cualquier
+  // objetivo puede recibir el golpe. La explosión es una deflagración de
+  // volumen, así que su efecto usa ese mismo radio y llena el aro hasta el
+  // borde; el resto de áreas conserva el disco de `def.radius`.
   const effectRadius =
     def.aoeStyle === 'explosion'
-      ? def.radius + CONFIG.player.radius
+      ? def.radius + maxHitRadius()
       : def.radius;
   deps.combatFx.spawnAoe(
     centerX,
@@ -342,7 +343,7 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     const distance = Math.hypot(target.x - centerX, target.z - centerZ);
-    if (distance > def.radius + CONFIG.player.radius) continue;
+    if (distance > def.radius + target.hitRadius) continue;
     // Un obstáculo entre el centro del área y el objetivo también corta el
     // golpe: el radio no debe atravesar un árbol, una roca o un muro.
     if (

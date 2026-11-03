@@ -19,7 +19,7 @@
 
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
-import { CONFIG, DEG } from './config';
+import { DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
@@ -500,7 +500,7 @@ export class BotController {
     const def = pending.def;
     if (def.power <= 0 && def.slow === null && def.selfDamage <= 0) return null;
 
-    const playerRadius = CONFIG.player.radius;
+    const selfRadius = self.hitRadius;
     const toSelfX = self.x - enemy.x;
     const toSelfZ = self.z - enemy.z;
     const distance = Math.hypot(toSelfX, toSelfZ);
@@ -511,7 +511,7 @@ export class BotController {
       const dx = self.x - pending.targetX;
       const dz = self.z - pending.targetZ;
       const fromCenter = Math.hypot(dx, dz);
-      const dangerRadius = def.radius + playerRadius + 0.1;
+      const dangerRadius = def.radius + selfRadius + 0.1;
       if (fromCenter > dangerRadius) return null;
 
       // Cuánto se tarda en salir del círculo; los bots difíciles reaccionan
@@ -541,7 +541,7 @@ export class BotController {
       const angle = Math.abs(
         normalizeAngle(Math.atan2(toSelfX, toSelfZ) - enemy.facing)
       );
-      const reach = def.range + playerRadius + 0.2;
+      const reach = def.range + selfRadius + 0.2;
       if (distance > reach) return null;
       if (angle > def.halfAngle * DEG + 0.12) return null;
 
@@ -570,7 +570,7 @@ export class BotController {
       const perpX = toSelfX - dirX * projection;
       const perpZ = toSelfZ - dirZ * projection;
       const perpendicular = Math.hypot(perpX, perpZ);
-      const width = playerRadius + (def.shape === 'projectile' ? 0.5 : 0.25);
+      const width = selfRadius + (def.shape === 'projectile' ? 0.5 : 0.25);
       if (perpendicular > width) return null;
 
       let evadeX = perpX;
@@ -1204,7 +1204,7 @@ export class BotController {
     let count = 0;
     for (const player of players) {
       if (!player.alive || player.team === team) continue;
-      if (Math.hypot(player.x - x, player.z - z) <= radius + CONFIG.player.radius) {
+      if (Math.hypot(player.x - x, player.z - z) <= radius + player.hitRadius) {
         count++;
       }
     }

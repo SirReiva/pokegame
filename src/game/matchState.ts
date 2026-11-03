@@ -157,6 +157,11 @@ export interface ActiveAoe {
 
 export interface MatchPlayerState extends MatchPlayerConfig {
   types: string[];
+  /**
+   * Radio de impacto contra habilidades (hurtbox). Puede diferir del radio de
+   * movimiento, que sigue siendo `CONFIG.player.radius` para todos.
+   */
+  hitRadius: number;
   maxSpeed: number;
   x: number;
   z: number;
