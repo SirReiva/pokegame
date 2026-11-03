@@ -191,8 +191,6 @@ export class Game {
   private readonly itemTextures: ItemTextureMap = new Map();
   /** Objetos del mapa activo; se reconstruyen al cambiar de mapa. */
   private pickups: PickupField | null = null;
-  /** Posición media de las cámaras para orientar los billboards de objetos. */
-  private readonly itemCameraPosition = new pc.Vec3();
   private readonly pickupHandlers: PickupHandlers = {
     pokemonFor: (player) => this.assets.get(player.pokemonId)?.entry ?? null,
     heal: (player, amount) => {
@@ -671,6 +669,10 @@ export class Game {
       });
     });
 
+    // Copias de los objetos por viewport: cada una vive en la capa de su vista
+    // y se muestra únicamente cuando el equipo de esa vista ve el objeto.
+    this.pickups?.setViewLayers(this.viewLayers.map((layer) => layer.id));
+
     // Con sombras del sol activas, el encuadre depende de la cámara: se
     // rehornean al empezar para cubrir las bases de ambos equipos.
     this.refreshSunShadows();
@@ -711,6 +713,8 @@ export class Game {
     this.countdown = 0;
     this.countdownGo = 0;
     this.countdownShown = null;
+
+    this.pickups?.clearViewLayers();
 
     for (const fog of this.fogViews) fog.destroy();
     this.fogViews = [];
@@ -878,7 +882,7 @@ export class Game {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
     this.menuCamera.update(dt, getActiveMap().spawn, 0, 0);
     this.world.update(dt);
-    this.pickups?.update(dt, this.menuCamera.position);
+    this.pickups?.update(dt, [this.menuCamera.position]);
   }
 
   private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
@@ -970,7 +974,10 @@ export class Game {
     if (!frozen) this.updateRegeneration(dt);
 
     this.world.update(dt);
-    this.pickups?.update(dt, this.pickupCamera());
+    this.pickups?.update(
+      dt,
+      this.views.map((view) => view.camera.position)
+    );
     this.combatFx.update(dt);
     this.damageNumbers.update(dt);
 
@@ -979,30 +986,6 @@ export class Game {
       this.statsTimer = 0;
       this.emitMatchStats();
     }
-  }
-
-  /**
-   * Posición media de las cámaras de las vistas. Los objetos son un billboard
-   * único compartido por todos los jugadores, así que se orienta hacia el punto
-   * medio en vez de hacia una vista concreta del splitscreen.
-   */
-  private pickupCamera(): pc.Vec3 {
-    if (this.views.length === 0) {
-      this.itemCameraPosition.copy(this.menuCamera.position);
-      return this.itemCameraPosition;
-    }
-    let x = 0;
-    let y = 0;
-    let z = 0;
-    for (const view of this.views) {
-      const position = view.camera.position;
-      x += position.x;
-      y += position.y;
-      z += position.z;
-    }
-    const count = this.views.length;
-    this.itemCameraPosition.set(x / count, y / count, z / count);
-    return this.itemCameraPosition;
   }
 
   private stepPlayer(player: MatchPlayerState, input: DeviceInputSnapshot, dt: number): void {
@@ -3071,6 +3054,43 @@ export class Game {
         }
         copy.setVisible(visibleSlots.has(target.slot));
       }
+    });
+
+    this.updatePickupVisibility(colliders);
+  }
+
+  /**
+   * Oculta los objetos con la misma regla que los actores: la copia de una vista
+   * se ve si algún Pokémon vivo del equipo ve el punto, descontando la
+   * ocultación del terreno y respetando la línea de visión. La niebla deja de
+   * ser solo un tinte: el objeto desaparece por completo fuera de la visión.
+   */
+  private updatePickupVisibility(colliders: readonly Collider[]): void {
+    if (!this.pickups) return;
+    const concealmentCache = new Map<string, number>();
+    const seenCache = new Map<string, boolean>();
+    this.pickups.updateVisibility((spawn, viewIndex) => {
+      const observer = this.views[viewIndex];
+      if (!observer) return false;
+      const pointKey = `${spawn.x}:${spawn.z}`;
+      let concealment = concealmentCache.get(pointKey);
+      if (concealment === undefined) {
+        concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
+        concealmentCache.set(pointKey, concealment);
+      }
+      const teamKey = `${observer.team}:${pointKey}`;
+      let visible = seenCache.get(teamKey);
+      if (visible === undefined) {
+        visible = this.teamSeesPoint(
+          observer.team,
+          spawn.x,
+          spawn.z,
+          concealment,
+          colliders
+        );
+        seenCache.set(teamKey, visible);
+      }
+      return visible;
     });
   }
 

@@ -57,6 +57,10 @@ Para crear un objeto nuevo:
 - El estado es global: un solo objeto compartido por todos los jugadores. Al
   recogerlo cambia a `usedImage`; al terminar `cooldownSeconds` vuelve a
   `unusedImage` en la misma posición.
+- La niebla también los oculta. Cada viewport recibe una copia del billboard en
+  su capa de render y solo se muestra si algún Pokémon vivo del equipo de esa
+  vista ve el punto, con la ocultación del terreno y la línea de visión. Así en
+  splitscreen un equipo puede verlo y el otro no.
 - Cada partida reinicia los cooldowns (`PickupField.reset()`).
 
 ## Arte

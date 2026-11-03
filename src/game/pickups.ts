@@ -48,7 +48,11 @@ export interface PickupHandlers {
 interface PickupInstance {
   spawn: PickupSpawn;
   definition: ItemDefinition;
-  view: PickupView;
+  textures: ItemTextures;
+  /** Vista del menú (capa World), visible solo fuera de partida. */
+  menuView: PickupView;
+  /** Una copia por viewport durante la partida, en su capa de render. */
+  views: PickupView[];
   cooldown: number;
   available: boolean;
 }
@@ -166,6 +170,7 @@ function createItemMaterial(texture: pc.Texture, name: string): pc.StandardMater
 export class PickupView {
   readonly root: pc.Entity;
   private readonly pivot: pc.Entity;
+  private readonly sprite: pc.Entity;
   private readonly shadow: pc.Entity;
   private readonly mesh: pc.Mesh;
   private readonly unusedMaterial: pc.StandardMaterial;
@@ -217,6 +222,7 @@ export class PickupView {
     this.instance.receiveShadow = false;
     render.meshInstances = [this.instance];
     this.pivot.addChild(entity);
+    this.sprite = entity;
 
     // Sombra de contacto compartida con el resto del mundo: ayuda a leer que el
     // objeto está apoyado en el suelo aunque el billboard flote un poco.
@@ -247,7 +253,22 @@ export class PickupView {
     this.instance.material = used ? this.usedMaterial : this.unusedMaterial;
   }
 
+  setVisible(visible: boolean): void {
+    if (this.root.enabled === visible) return;
+    this.root.enabled = visible;
+    this.shadow.enabled = visible;
+  }
+
+  /** Capa de render exclusiva del viewport que debe ver esta copia. */
+  setLayer(layerId: number): void {
+    const sprite = this.sprite.render;
+    if (sprite) sprite.layers = [layerId];
+    const shadow = this.shadow.render;
+    if (shadow) shadow.layers = [layerId];
+  }
+
   update(dt: number, cameraPosition: pc.Vec3): void {
+    if (!this.root.enabled) return;
     this.elapsed += dt;
     const bob = Math.sin(this.elapsed * 2.1) * 0.045;
     this.pivot.setLocalPosition(0, bob, 0);
@@ -283,6 +304,24 @@ export class PickupField {
     this.textures = textures;
   }
 
+  /** Crea una vista más del objeto (copia o vista del menú). */
+  private createView(item: PickupInstance, phase: number): PickupView {
+    return new PickupView(
+      this.app,
+      item.textures,
+      item.definition.height,
+      item.spawn.x,
+      item.spawn.z,
+      this.shadowMaterial,
+      phase
+    );
+  }
+
+  private setItemUsed(item: PickupInstance, used: boolean): void {
+    item.menuView.setUsed(used);
+    for (const view of item.views) view.setUsed(used);
+  }
+
   /** Reconstruye los objetos del mapa indicado. */
   setMap(map: GameMap): void {
     this.dispose();
@@ -293,22 +332,53 @@ export class PickupField {
         console.warn(`[items] Objeto sin definición o textura: ${spawn.type}`);
         return;
       }
+      const menuView = new PickupView(
+        this.app,
+        textures,
+        definition.height,
+        spawn.x,
+        spawn.z,
+        this.shadowMaterial,
+        index * 1.7
+      );
       this.items.push({
         spawn,
         definition,
-        view: new PickupView(
-          this.app,
-          textures,
-          definition.height,
-          spawn.x,
-          spawn.z,
-          this.shadowMaterial,
-          index * 1.7
-        ),
+        textures,
+        menuView,
+        views: [],
         cooldown: 0,
         available: true
       });
     });
+  }
+
+  /**
+   * Crea una copia del objeto por viewport, igual que los actores. Cada copia
+   * vive en la capa de render de su vista y solo se muestra cuando el equipo de
+   * esa vista ve el punto. La vista del menú se oculta durante la partida.
+   */
+  setViewLayers(layerIds: readonly number[]): void {
+    for (const item of this.items) {
+      for (const view of item.views) view.destroy();
+      item.views = layerIds.map((layerId, index) => {
+        const view = this.createView(item, index * 1.3);
+        view.setLayer(layerId);
+        view.setUsed(!item.available);
+        view.setVisible(false);
+        return view;
+      });
+      item.menuView.setVisible(false);
+    }
+  }
+
+  /** Vuelve a dejar solo la vista del menú (fin de partida o cambio de mapa). */
+  clearViewLayers(): void {
+    for (const item of this.items) {
+      for (const view of item.views) view.destroy();
+      item.views = [];
+      item.menuView.setVisible(true);
+    }
   }
 
   /** Devuelve todos los objetos a su estado disponible (nueva partida). */
@@ -316,21 +386,44 @@ export class PickupField {
     for (const item of this.items) {
       item.available = true;
       item.cooldown = 0;
-      item.view.setUsed(false);
+      this.setItemUsed(item, false);
     }
   }
 
-  /** Avanza cooldowns y anima los billboards hacia la cámara indicada. */
-  update(dt: number, cameraPosition: pc.Vec3): void {
+  /**
+   * Avanza cooldowns y anima los billboards. Cada copia se orienta hacia la
+   * cámara de su propio viewport; la vista del menú usa la primera cámara.
+   */
+  update(dt: number, cameraPositions: readonly pc.Vec3[]): void {
+    const first = cameraPositions[0];
+    if (!first) return;
     for (const item of this.items) {
       if (!item.available) {
         item.cooldown = Math.max(0, item.cooldown - dt);
         if (item.cooldown === 0) {
           item.available = true;
-          item.view.setUsed(false);
+          this.setItemUsed(item, false);
         }
       }
-      item.view.update(dt, cameraPosition);
+      item.menuView.update(dt, first);
+      item.views.forEach((view, index) => {
+        view.update(dt, cameraPositions[index] ?? first);
+      });
+    }
+  }
+
+  /**
+   * Aplica la visibilidad de cada copia según la niebla. El callback recibe el
+   * objeto y el índice de la vista; el juego decide qué equipos lo ven.
+   */
+  updateVisibility(
+    isVisible: (spawn: PickupSpawn, viewIndex: number) => boolean
+  ): void {
+    for (const item of this.items) {
+      if (item.views.length === 0) continue;
+      item.views.forEach((view, index) => {
+        view.setVisible(isVisible(item.spawn, index));
+      });
     }
   }
 
@@ -366,7 +459,7 @@ export class PickupField {
 
         item.available = false;
         item.cooldown = definition.cooldownSeconds;
-        item.view.setUsed(true);
+        this.setItemUsed(item, true);
         handlers.onCollected?.(player, definition);
         break;
       }
@@ -374,7 +467,10 @@ export class PickupField {
   }
 
   dispose(): void {
-    for (const item of this.items) item.view.destroy();
+    for (const item of this.items) {
+      item.menuView.destroy();
+      for (const view of item.views) view.destroy();
+    }
     this.items = [];
   }
 }
