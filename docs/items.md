@@ -82,4 +82,94 @@ Para crear un objeto nuevo:
 `pnpm items:art` genera los PNG de Poción y Poción grande con
 `scripts/generate-item-art.mjs`. El script dibuja en una rejilla lógica de píxel
 art y codifica el PNG RGBA sin dependencias externas. Se pueden sustituir los
-PNG por otro arte manteniendo los mismos nombres y transparencia.
+PNG por otro arte manteniendo los mismos nombres y transparencia. Los objetos
+nuevos necesitan su propio arte: amplía el script o dibuja los dos PNG a mano.
+
+## Hoja de ruta propuesta
+
+Nada de esta sección está implementado: es el catálogo que se propone para
+futuras versiones. Antes de añadir objetos conviene tener en cuenta el contrato
+actual:
+
+- `ItemResolveContext` solo expone `heal()` y `showHeal()`, así que cualquier
+  efecto que no cure exige ampliarlo, junto con `PickupHandlers` en
+  `pickups.ts` y los handlers que registra `game.ts`.
+- El estado es global por objeto, no por equipo.
+- `bot.ts` puntúa los objetos solo por curación (`pickupTarget`, umbral del 70%
+  de vida): un buff sin puntuación propia será ignorado por la IA.
+- El editor recorre `ITEM_IDS`, así que un objeto nuevo aparece solo en la
+  paleta de objetos.
+- Los objetos de esta lista usan `healHp: 0` salvo los de la fase 1.
+
+### Fase 1 · solo catálogo
+
+Se resuelven con `healingItem` y no requieren tocar nada más que `items.ts`, dos
+PNG y el array `pickups` de los mapas.
+
+| Objeto | Efecto | Cooldown | Nota de diseño |
+| --- | --- | --- | --- |
+| Baya Aranja | 30 PV | 12 s | Sustain barato y frecuente en los carriles. |
+| Baya Zidra | 25% de la vida máxima | 35 s | Escala con los tanques; usa `player.maxHp` en `resolve`. |
+| Poción Máxima | 200 PV, solo por debajo del 50% de vida | 60 s | El umbral va en `canPickup`; objeto de remontada. |
+
+### Fase 2 · contrato ampliado
+
+Reutilizan `ActiveBuff`, `BuffStat` y `slowEffects`, que ya existen para las
+habilidades. La ampliación mínima del contexto sería:
+
+```ts
+buff(stat: BuffStat, multiplier: number, duration: number): void;
+cleanseSlows(): void;
+reduceCooldowns(fraction: number): void;
+showText(text: string, color: string): void;
+```
+
+| Objeto | Efecto | Cooldown | Nota de diseño |
+| --- | --- | --- | --- |
+| Pañuelo Elegido | +30% de velocidad durante 20 s | 30 s | Cuidado con Greninja y Voltorb; tope recomendado +30%. |
+| Cinta Fuerte | +25% de ataque físico durante 20 s | 30 s | Sesgado a físicos; alternativa: +20% a ambos ataques. |
+| Gafas Especiales | +25% de ataque especial durante 20 s | 30 s | Equivalente para especiales. |
+| Chaleco Asalto | +30% de defensa especial durante 20 s | 30 s | Buen contra Mewtwo, Gengar y Articuno. |
+| Baya Ziuela | Limpia todas las ralentizaciones | 20 s | Solo útil contra el control; muy legible. |
+| Éter | Reduce un 50% los enfriamientos actuales | 45 s | Evita el doble definitiva de un reinicio completo. |
+| Proteína / Hierro | +10% permanente a un stat hasta morir | Una vez por partida | Requiere recalcular stats y resetearlos al morir. |
+
+### Fase 3 · hooks de daño y muerte
+
+| Objeto | Efecto | Cooldown | Dificultad |
+| --- | --- | --- | --- |
+| Banda Focus | Sobrevives a un golpe letal con 1 PV (una vez) | 60 s | Media: bandera en `MatchPlayerState` y chequeo en la fase de daño. |
+| Casco Dentado | Devuelve un 15% del daño melee recibido durante 20 s | 40 s | Media: buff `reflect` y hook en el daño. |
+| Pluma Fénix | Al morir, reapareces en 1 s (una vez por partida) | — | Media: hook en el flujo de KO y respawn. |
+| Revivir | Reduce un 50% el respawn del aliado caído más cercano | 60 s | Media: necesita acceso a la lista de jugadores, no solo al que recoge. |
+
+### Fase 4 · cambios de diseño mayores
+
+- **Mochila**: recoger guarda el objeto (un slot) y se usa con un botón. Resuelve
+  el desperdicio de pociones y habilita objetos tácticos. Toca input, HUD, bots
+  y `pickups.ts`.
+- **Objetos de equipo**: altar o tótem que da un buff a todo el equipo al
+  capturarlo. Hoy el estado es global; habría que hacerlo por equipo.
+- **Trampas**: red invisible que ralentiza un 60% durante 1,5 s. Requiere estado
+  y visibilidad por equipo.
+- **Objetivo de mapa**: huevo o bandera que se transporta a la base; es más un
+  modo de juego que un objeto.
+- **Objetos con cargas compartidas**: tres usos por equipo para convertir las
+  zonas en disputadas sin inundar el mapa.
+
+### Orden recomendado
+
+1. Baya Aranja, Baya Zidra y Poción Máxima, con el umbral de vida en
+   `canPickup`.
+2. Pañuelo Elegido y Baya Ziuela, que obligan a exponer `buff()` y
+   `cleanseSlows()` y son los de mayor impacto táctico.
+3. Banda Focus, como primer objeto con hook de daño.
+4. Mochila, solo si se quiere que los objetos dejen de ser automáticos.
+
+### Reglas de balance
+
+- Máximo dos o tres objetos por mitad del mapa.
+- Las curas deben seguir siendo contestables por la niebla.
+- Los buffs de velocidad llevan tope para no romper a las especies más rápidas.
+- Actualizar `pickupTarget` en `bot.ts` para que la IA no camine hacia un buff
+  que no sabe usar.
