@@ -10,7 +10,7 @@ info:
   description: "Demo técnica de sprites, cámara y multijugador local"
   copyright: "(c) 2026, NewPoke"
   comments: "Multijugador local de 1 a 8 jugadores"
-  version: "0.8.1"
+  version: "0.8.2"
 
 # Modo desarrollo: `wails3 dev` compila una vez, arranca Vite y lanza la app.
 # Solo se vigilan los archivos Go; el frontend lo recarga Vite.

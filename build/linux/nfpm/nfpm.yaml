@@ -6,7 +6,7 @@
 name: "newpoke"
 arch: ${GOARCH}
 platform: "linux"
-version: "0.8.1"
+version: "0.8.2"
 section: "games"
 priority: "optional"
 maintainer: "SirReiva <sirreiva@users.noreply.github.com>"
