@@ -4624,8 +4624,10 @@ export class CombatFx {
 
   /**
    * Explosión eléctrica: destello central, cúpula de energía, tres ondas de
-   * choque en el suelo, arcos que cruzan el área, escombros que salen
-   * despedidos y humo que se eleva. Todo son transformaciones sobre geometría
+   * choque en el suelo, arcos que cruzan el diámetro, escombros que salen
+   * despedidos y humo que se eleva. El relleno del suelo y la cúpula crecen
+   * hasta el radio completo para que la deflagración ocupe toda el área
+   * afectada, no solo el núcleo. Todo son transformaciones sobre geometría
    * estática; la silueta la marcan las ondas y los escombros.
    */
   private spawnExplosionAoe(
@@ -4643,12 +4645,16 @@ export class CombatFx {
     const coreMaterial = this.createMaterial([255, 255, 236], 0.95);
     const hotMaterial = this.createMaterial([255, 232, 128], 0.5);
     const arcMaterial = this.createMaterial([170, 232, 255], 0.95);
+    const fillMaterial = this.createWaterMaterial([255, 214, 92], 0.16);
+    const flashMaterial = this.createMaterial([255, 250, 220], 0.32);
     const debrisMaterial = this.createWaterMaterial([255, 186, 64], 0.95);
     const smokeMaterial = this.createWaterMaterial([92, 80, 72], 0.4);
     const materials = [
       coreMaterial,
       hotMaterial,
       arcMaterial,
+      fillMaterial,
+      flashMaterial,
       debrisMaterial,
       smokeMaterial
     ];
@@ -4658,6 +4664,14 @@ export class CombatFx {
 
     const dome = this.createEntity(this.sphereMesh, [hotMaterial], root);
     dome.setLocalPosition(0, 0.5, 0);
+
+    // Dos discos de suelo: el relleno tiñe todo el círculo de daño y el
+    // destello barre el área en el primer instante. Sin ellos la deflagración
+    // se quedaba concentrada en el centro y el borde del aro salía vacío.
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.02, 0);
+    const flashDisc = this.createEntity(this.discMesh, [flashMaterial], root);
+    flashDisc.setLocalPosition(0, 0.03, 0);
 
     const rings: {
       entity: pc.Entity;
@@ -4674,9 +4688,11 @@ export class CombatFx {
 
     const arcs: { entity: pc.Entity; yaw: number; speed: number }[] = [];
     for (let index = 0; index < 4; index++) {
+      // Cada arco cruza el diámetro completo: al girar barren todo el
+      // círculo, no solo el núcleo central.
       const mesh = createLightningMesh(
         this.device,
-        radius * 1.15,
+        radius * 2,
         Math.max(0.018, radius * 0.02),
         8,
         7000 + index * 6151
@@ -4706,7 +4722,7 @@ export class CombatFx {
       debris.push({
         entity: chunk,
         angle: (index / 14) * Math.PI * 2 + Math.random() * 0.4,
-        distance: radius * (0.55 + Math.random() * 0.6),
+        distance: radius * (0.68 + Math.random() * 0.55),
         rise: 0.35 + Math.random() * 0.85,
         size,
         yaw: Math.random() * 360,
@@ -4737,24 +4753,43 @@ export class CombatFx {
     this.addEffect(root, materials, life, (t) => {
       const ease = 1 - Math.pow(1 - t, 3);
       const flash = Math.max(0, 1 - t / 0.22);
+
+      // El relleno nace casi a tamaño completo para que el área afectada se
+      // lea entera desde el primer frame; el destello la recorre aún más
+      // rápido antes de apagarse.
+      const fillGrow = Math.min(1, t / 0.12);
+      const fillScale =
+        radius * 2 * (0.2 + (1 - Math.pow(1 - fillGrow, 3)) * 0.8);
+      fill.setLocalScale(fillScale, 1, fillScale);
+      const flashGrow = Math.min(1, t / 0.08);
+      const flashScale =
+        radius * 2 * (0.3 + (1 - Math.pow(1 - flashGrow, 2)) * 0.7);
+      flashDisc.setLocalScale(flashScale, 1, flashScale);
+
       const coreScale = radius * (0.32 + ease * 0.58);
       core.setLocalScale(coreScale, coreScale, coreScale);
-      const domeScale = radius * (0.4 + ease * 1);
-      dome.setLocalScale(domeScale, domeScale * 0.72, domeScale);
+      // La cúpula se abre hasta el borde del área y sigue visible mientras
+      // crece, no solo durante el fogonazo inicial.
+      const domeGrow = 1 - Math.pow(1 - Math.min(1, t / 0.45), 3);
+      const domeScale = radius * (0.4 + domeGrow * 1.6);
+      dome.setLocalScale(domeScale, domeScale * 0.6, domeScale);
 
       for (const ring of rings) {
         const local = Math.min(
           1,
-          Math.max(0, (t - ring.delay) / 0.42)
+          Math.max(0, (t - ring.delay) / 0.5)
         );
         const scale = radius * 2 * (0.14 + local * 0.86);
         ring.entity.setLocalScale(scale, 1, scale);
+        // La onda mantiene brillo casi hasta el borde y se apaga justo al
+        // cruzar el límite del área, para que el aro nunca quede vacío.
+        const ringFade = Math.min(1, Math.max(0, 1 - local) * 3.2);
         ring.material.opacity =
-          0.85 * Math.pow(Math.max(0, 1 - local), 1.4) * (1 - t * 0.4);
+          0.8 * ringFade * Math.max(0, 1 - t * 0.35);
       }
 
       const arcReveal = Math.min(1, t / 0.14);
-      const arcFade = Math.max(0, 1 - t / 0.42);
+      const arcFade = Math.max(0, 1 - t / 0.55);
       for (const arc of arcs) {
         arc.entity.setLocalEulerAngles(
           0,
@@ -4807,8 +4842,10 @@ export class CombatFx {
       }
 
       coreMaterial.opacity = 0.95 * flash;
-      hotMaterial.opacity = 0.45 * (1 - t) * (1 - t);
+      hotMaterial.opacity = 0.35 * Math.pow(1 - t, 1.2);
       arcMaterial.opacity = 0.95 * arcFade;
+      fillMaterial.opacity = 0.16 * (1 - t);
+      flashMaterial.opacity = 0.32 * flash * flash;
       debrisMaterial.opacity = 0.95 * (1 - t);
       smokeMaterial.opacity = 0.4 * (1 - t);
     });

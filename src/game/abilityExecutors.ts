@@ -306,14 +306,19 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       duration
     );
   }
-  // El efecto muestra el disco de daño real (`def.radius`). La marca del suelo
-  // que se dibuja durante el windup añade el radio del jugador en `game.ts`:
-  // esa es la zona en la que el centro de un objetivo recibe el golpe. Así el
-  // aviso nunca es más pequeño que la zona de impacto.
+  // La marca del suelo que se dibuja durante el windup añade el radio del
+  // jugador en `game.ts`: esa es la zona en la que el centro de un objetivo
+  // recibe el golpe. La explosión es una deflagración de volumen, así que su
+  // efecto usa ese mismo radio y llena el aro hasta el borde; el resto de
+  // áreas conserva el disco de `def.radius`.
+  const effectRadius =
+    def.aoeStyle === 'explosion'
+      ? def.radius + CONFIG.player.radius
+      : def.radius;
   deps.combatFx.spawnAoe(
     centerX,
     centerZ,
-    def.radius,
+    effectRadius,
     def.color,
     def.aoeStyle,
     duration
