@@ -4510,9 +4510,11 @@ export class CombatFx {
   }
 
   /**
-   * Área de esporas: nube baja que crece desde el suelo y se queda flotando.
-   * Se usa para habilidades de estado, así que no necesita lenguas de fuego:
-   * solo anillo, disco tenue, puffs y motas aditivas.
+   * Charco de lodo: anillo y disco tenue de veneno en el suelo, y burbujas 3D
+   * que nacen del charco, suben y revientan durante toda la duración del área.
+   * Cada burbuja es una esfera translúcida con dos brillos que giran sobre su
+   * superficie (así se lee el volumen) y al reventar deja un aro y gotas del
+   * color del veneno.
    */
   private spawnPoisonAoe(
     x: number,
@@ -4528,13 +4530,28 @@ export class CombatFx {
 
     const ringMaterial = this.createWaterMaterial(color, 0.45);
     const fillMaterial = this.createWaterMaterial(color, 0.1);
-    const puffColor: [number, number, number] = [
-      Math.min(255, color[0] + 46),
-      Math.min(255, color[1] + 46),
-      Math.min(255, color[2] + 46)
+    // Las burbujas aclaran el color del veneno para que el volumen se lea
+    // sobre el charco oscuro; los brillos casi blancos marcan el reflejo.
+    const bubbleColor: [number, number, number] = [
+      Math.min(255, color[0] + 52),
+      Math.min(255, color[1] + 44),
+      Math.min(255, color[2] + 48)
     ];
-    const puffMaterial = this.createWaterMaterial(puffColor, 0.18);
-    const materials = [ringMaterial, fillMaterial, puffMaterial];
+    const popColor: [number, number, number] = [
+      Math.min(255, color[0] + 88),
+      Math.min(255, color[1] + 76),
+      Math.min(255, color[2] + 72)
+    ];
+    const bubbleMaterial = this.createWaterMaterial(bubbleColor, 0.42);
+    const shineMaterial = this.createWaterMaterial([244, 224, 255], 0.9);
+    const dropMaterial = this.createWaterMaterial(popColor, 0.85);
+    const materials = [
+      ringMaterial,
+      fillMaterial,
+      bubbleMaterial,
+      shineMaterial,
+      dropMaterial
+    ];
 
     const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
     ring.setLocalPosition(0, 0.1, 0);
@@ -4544,50 +4561,84 @@ export class CombatFx {
     fill.setLocalPosition(0, 0.03, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
 
-    this.spawnSporeParticles(
-      root,
-      {
-        x: 0,
-        y: 0.14,
-        z: 0,
-        extents: [radius * 0.85, 0.12, radius * 0.85],
-        velocity: [0, 0.35, 0],
-        velocityEnd: [0, 1.15, 0],
-        radialSpeed: 0.12,
-        radialSpeedEnd: 0.55,
-        sizeStart: radius * 0.14,
-        sizeMid: radius * 0.3,
-        sizeEnd: radius * 0.12,
-        lifetime: 0.85,
-        rate: 0.02,
-        numParticles: 120,
-        localSpace: false
-      },
-      color
-    );
-
-    const puffs: {
-      entity: pc.Entity;
+    const bubbles: {
+      group: pc.Entity;
+      popRing: pc.Entity;
+      popMaterial: pc.StandardMaterial;
+      drops: pc.Entity[];
       baseX: number;
       baseZ: number;
-      baseY: number;
-      phase: number;
       size: number;
+      birth: number;
+      rise: number;
+      height: number;
+      wobble: number;
+      phase: number;
+      popX: number;
+      popY: number;
+      popZ: number;
     }[] = [];
-    for (let index = 0; index < 7; index++) {
-      const angle = (index / 7) * Math.PI * 2 + Math.random() * 0.6;
-      const dist = radius * (0.15 + Math.random() * 0.55);
-      const size = radius * (0.34 + Math.random() * 0.28);
-      const puff = this.createEntity(this.sphereMesh, [puffMaterial], root);
-      puff.setLocalPosition(Math.cos(angle) * dist, 0.3, Math.sin(angle) * dist);
-      puff.setLocalScale(size, size * 0.55, size);
-      puffs.push({
-        entity: puff,
-        baseX: Math.cos(angle) * dist,
-        baseZ: Math.sin(angle) * dist,
-        baseY: 0.28 + Math.random() * 0.25,
-        phase: Math.random() * Math.PI * 2,
-        size
+    const bubbleCount = Math.max(10, Math.round(radius * 8));
+    // Los nacimientos se reparten por toda la duración para que el charco
+    // burbujee sin pausas hasta el final.
+    const latestBirth = Math.max(0, life - 0.6);
+    for (let index = 0; index < bubbleCount; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = radius * Math.sqrt(Math.random()) * 0.82;
+      const baseX = Math.cos(angle) * distance;
+      const baseZ = Math.sin(angle) * distance;
+      const size = radius * (0.06 + Math.random() * 0.1);
+      const phase = Math.random() * Math.PI * 2;
+
+      const group = new pc.Entity('poison-bubble');
+      group.setLocalPosition(baseX, 0.05, baseZ);
+      group.setLocalScale(0, 0, 0);
+      root.addChild(group);
+
+      // Cuerpo translúcido + dos brillos: al girar el grupo los reflejos
+      // recorren la esfera y la burbuja se lee como volumen, no como un disco.
+      this.createEntity(this.sphereMesh, [bubbleMaterial], group);
+      const highlight = this.createEntity(
+        this.sphereMesh,
+        [shineMaterial],
+        group
+      );
+      highlight.setLocalPosition(-0.22, 0.3, -0.18);
+      highlight.setLocalScale(0.3, 0.3, 0.3);
+      const spark = this.createEntity(this.sphereMesh, [shineMaterial], group);
+      spark.setLocalPosition(0.2, -0.16, -0.22);
+      spark.setLocalScale(0.13, 0.13, 0.13);
+
+      // Aro y gotas de la explosión: se guardan ocultos hasta que la burbuja
+      // revienta, y cada aro tiene su propio material para desvanecerse solo.
+      const popMaterial = this.createWaterMaterial(popColor, 0.8);
+      materials.push(popMaterial);
+      const popRing = this.createEntity(this.torusMesh, [popMaterial], root);
+      popRing.setLocalScale(0, 0, 0);
+
+      const drops: pc.Entity[] = [];
+      for (let dropIndex = 0; dropIndex < 3; dropIndex++) {
+        const drop = this.createEntity(this.sphereMesh, [dropMaterial], root);
+        drop.setLocalScale(0, 0, 0);
+        drops.push(drop);
+      }
+
+      bubbles.push({
+        group,
+        popRing,
+        popMaterial,
+        drops,
+        baseX,
+        baseZ,
+        size,
+        birth: (index / bubbleCount) * latestBirth + Math.random() * 0.1,
+        rise: 0.62 + Math.random() * 0.4,
+        height: size * (1.8 + Math.random() * 2),
+        wobble: radius * (0.03 + Math.random() * 0.03),
+        phase,
+        popX: baseX,
+        popY: 0.05,
+        popZ: baseZ
       });
     }
 
@@ -4601,21 +4652,80 @@ export class CombatFx {
 
       ringMaterial.opacity = (0.35 + pulse * 0.15) * envelope;
       fillMaterial.opacity = (0.08 + pulse * 0.04) * envelope;
-      puffMaterial.opacity = (0.12 + pulse * 0.06) * envelope;
+      bubbleMaterial.opacity = (0.34 + pulse * 0.1) * envelope;
+      shineMaterial.opacity = 0.9 * envelope;
+      dropMaterial.opacity = 0.85 * envelope;
 
       const ringScale = radius * 2 * (0.96 + pulse * 0.05);
       ring.setLocalScale(ringScale, 1, ringScale);
 
-      for (const puff of puffs) {
-        const drift = Math.sin(time * 2.6 + puff.phase) * radius * 0.06;
-        puff.entity.setLocalPosition(
-          puff.baseX + drift,
-          puff.baseY + time * 0.22 + Math.sin(time * 3 + puff.phase) * 0.05,
-          puff.baseZ + Math.cos(time * 2.2 + puff.phase) * radius * 0.05
-        );
-        const scale = puff.size * (0.75 + 0.35 * Math.min(1, time / 0.4));
-        puff.entity.setLocalScale(scale, scale * 0.55, scale);
-        puff.entity.setLocalEulerAngles(0, time * 12 + puff.phase * 30, 0);
+      for (const bubble of bubbles) {
+        const local = time - bubble.birth;
+        if (local < 0) {
+          bubble.group.setLocalScale(0, 0, 0);
+          bubble.popRing.setLocalScale(0, 0, 0);
+          for (const drop of bubble.drops) drop.setLocalScale(0, 0, 0);
+          continue;
+        }
+
+        const riseT = local / bubble.rise;
+        if (riseT < 1) {
+          // Nace del charco, crece rápido y sube mientras se balancea.
+          const emerge = Math.min(1, local / 0.22);
+          const grow = 0.42 + 0.58 * (1 - Math.pow(1 - emerge, 2));
+          const breathe = 1 + Math.sin(time * 11 + bubble.phase) * 0.07;
+          const scale = bubble.size * grow * breathe;
+          bubble.group.setLocalScale(scale, scale, scale);
+
+          const height = bubble.height * Math.pow(riseT, 0.85);
+          const driftX =
+            Math.sin(time * 3.4 + bubble.phase) * bubble.wobble * riseT;
+          const driftZ =
+            Math.cos(time * 2.9 + bubble.phase) * bubble.wobble * riseT;
+          bubble.popX = bubble.baseX + driftX;
+          bubble.popY = 0.05 + height;
+          bubble.popZ = bubble.baseZ + driftZ;
+          bubble.group.setLocalPosition(bubble.popX, bubble.popY, bubble.popZ);
+          bubble.group.setLocalEulerAngles(
+            time * 95 + bubble.phase * 40,
+            time * 130 + bubble.phase * 30,
+            0
+          );
+
+          bubble.popRing.setLocalScale(0, 0, 0);
+          for (const drop of bubble.drops) drop.setLocalScale(0, 0, 0);
+          continue;
+        }
+
+        // Revienta: el cuerpo desaparece, un aro se abre en su sitio y tres
+        // gotas salen despedidas y caen. Todo en el color del veneno.
+        bubble.group.setLocalScale(0, 0, 0);
+        const popT = Math.min(1, (local - bubble.rise) / 0.3);
+        if (popT >= 1) {
+          bubble.popRing.setLocalScale(0, 0, 0);
+          for (const drop of bubble.drops) drop.setLocalScale(0, 0, 0);
+          continue;
+        }
+
+        const popScale = bubble.size * (1.4 + popT * 2.6);
+        bubble.popRing.setLocalPosition(bubble.popX, bubble.popY, bubble.popZ);
+        bubble.popRing.setLocalScale(popScale, 1, popScale);
+        bubble.popMaterial.opacity = 0.8 * (1 - popT) * envelope;
+
+        for (let dropIndex = 0; dropIndex < bubble.drops.length; dropIndex++) {
+          const drop = bubble.drops[dropIndex];
+          const dropAngle =
+            bubble.phase + (dropIndex / bubble.drops.length) * Math.PI * 2;
+          const spread = bubble.size * (0.8 + popT * 2.4);
+          const dropScale = bubble.size * 0.24 * (1 - popT);
+          drop.setLocalPosition(
+            bubble.popX + Math.cos(dropAngle) * spread,
+            bubble.popY +
+              Math.sin(popT * Math.PI) * bubble.size * 1.2,
+            bubble.popZ + Math.sin(dropAngle) * spread
+          );
+          drop.setLocalScale(dropScale, dropScale, dropScale);
+        }
       }
     };
     this.addEffect(root, materials, life, animate);
