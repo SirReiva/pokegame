@@ -7,6 +7,12 @@
       "preview": "maps/previews/arena.png"
     },
     {
+      "id": "arena2",
+      "name": "Arena 2 MOBA",
+      "file": "arena2.json",
+      "preview": "maps/previews/arena2.png"
+    },
+    {
       "id": "laberinto",
       "name": "Laberinto de las Esquinas",
       "file": "laberinto.json",
