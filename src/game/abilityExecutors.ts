@@ -34,6 +34,12 @@ export interface AbilityDamageOptions {
   /** Punto donde dibujar el impacto si no coincide con el centro del objetivo. */
   impactX?: number;
   impactZ?: number;
+  /**
+   * Origen del empuje. Un proyectil empuja desde su punto de entrada y un área
+   * desde su centro; sin él se usa la posición actual del atacante.
+   */
+  sourceX?: number;
+  sourceZ?: number;
 }
 
 /**
@@ -335,7 +341,10 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     const radial = deps.radialDamageMultiplier(def, distance, def.radius);
     deps.applyAbilityDamage(player, target, def, {
       power: def.power * radial,
-      healToken: deps.healToken
+      healToken: deps.healToken,
+      // El empuje radial sale del centro del área, no del lanzador.
+      sourceX: centerX,
+      sourceZ: centerZ
     });
   }
 };

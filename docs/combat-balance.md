@@ -4,24 +4,27 @@
 > juego. Los apartados ya corregidos se han retirado: este documento solo
 > enumera los fallos que siguen abiertos.
 >
-> Fecha: 2026-10-31 · Nivel de combate: 50 · IV 31 / EV 0 · naturaleza neutra.
+> Fecha base: 2026-10-31 · Nivel de combate: 50 · IV 31 / EV 0 · naturaleza neutra.
 >
-> **Actualización 2026-11-02**: revisado contra `83d196c` (instintos comunes),
-> además de `67b9f09` (`fix melee`), `f2a677b` (`fix inmune`), `fb3ee05`
-> (`balance info`), `ce2ef22` (`fix many bugs`), `c11e13f` (`fix moves`) y
-> `a8f2345` (`fix fog projectile`).
-> Esta revisión solo conserva los fallos que siguen abiertos: se han retirado
-> los apartados de implementación ya corregidos (melee/áreas/LOS y cono de
-> melee, túnel y alcance de los proyectiles, `healOnHit`, inmunidad, apilamiento
-> de ralentizaciones, bloqueo global de casteo, fin de partida, orden de las
-> acciones instantáneas, áreas `overTime` de estado, distancia del dash, FX
-> bajo la niebla, niebla con rango efectivo, animación de lanzamiento tras el
-> windup, validación de assets al empezar, reinicio del estado al reaparecer,
-> cooldowns que siguen corriendo durante la muerte, invulnerabilidad que se
-> rompe al atacar, orden de impactos de los proyectiles y HUD/VFX de los
-> instintos comunes) y se ha compactado la numeración.
-> Esta pasada no deja hallazgos nuevos: las antiguas §3.10 y §3.11 se han
-> corregido y sus secciones se han retirado.
+> **Actualización 2026-11-03**: revisado contra `86ec72c` (v0.5.0), que incluye
+> `83d196c` (instintos comunes), `5b7720b` (HUD y cooldowns), `18aec2c`/
+> `74ad8b1`/`9859936` (bots) y `8fba493` (carril de haz), además de `67b9f09`
+> (`fix melee`), `f2a677b` (`fix inmune`), `fb3ee05` (`balance info`),
+> `ce2ef22` (`fix many bugs`), `c11e13f` (`fix moves`) y `a8f2345`
+> (`fix fog projectile`).
+> Esta pasada conserva el fallo que sigue abierto: la colisión de los dashes
+> con jugadores (§3.10). Se han corregido el bloqueo global durante el windup, la
+> geometría de los golpes de dash, el origen del empuje, el nivel de combate
+> duplicado y la matriz de balance, que ahora incluye a Tyranitar y Groudon (§4).
+> Se han retirado los apartados de implementación ya corregidos (melee/áreas/LOS
+> y cono de melee, túnel y alcance de los proyectiles, `healOnHit`, inmunidad,
+> apilamiento de ralentizaciones, fin de partida, orden de las acciones
+> instantáneas, áreas `overTime` de estado,
+> distancia del dash, FX bajo la niebla, niebla con rango efectivo, animación de
+> lanzamiento tras el windup, validación de assets al empezar, reinicio del
+> estado al reaparecer, cooldowns que siguen corriendo durante la muerte,
+> invulnerabilidad que se rompe al atacar, orden de impactos de los proyectiles
+> y HUD/VFX de los instintos comunes) y se ha compactado la numeración.
 
 ## Resumen ejecutivo
 
@@ -43,17 +46,23 @@ Los cinco hallazgos más importantes:
    siguen dañando y puntuando.** `canHit` no mira `attacker.alive`: un caster
    muerto puede cerrar un KO, incluso con un lanzamiento encolado en el mismo
    frame, y sumar la baja a su marcador.
-4. **Hay una diferencia de poder de 3,5× entre el mejor y el peor combo**. Siete
-   personajes superan el 100 % de la vida media con una rotación, y Moltres y
-   Gengar pueden matar de 100-0 a los 12 rivales. Mewtwo, Moltres y Gengar son
-   los casos más extremos; Pikachu, Bulbasaur, Squirtle y Voltorb están muy por
-   debajo.
+4. **Hay una diferencia de poder de 5,3× entre el mejor y el peor combo** en la
+   matriz de §4.3 (15 especies, con Tyranitar y Groudon). Once personajes
+   superan el 100 % de la vida media con una rotación: Groudon mata de 100-0 a
+   los 14 rivales, y Tyranitar, Gengar y Moltres a 13. Groudon, Tyranitar y
+   Mewtwo son los casos más extremos; Pikachu, Bulbasaur, Mew y Squirtle están
+   por debajo del 100 %.
 5. **La visión no interviene en el combate**: se puede atacar y matar a un
    rival que no se ve, y no hay revelado al recibir daño.
 
-Además, **Mewtwo y Mew no pueden hacer daño a Greninja**: todo su kit ofensivo
-es Psíquico y Greninja es Agua/Siniestro (inmune a Psíquico). No hay movimientos
-de cobertura, así que la inmunidad es total.
+Esta pasada añade un fallo que no estaba documentado: todos los dashes se
+detienen en cualquier jugador, aunque `dashBlocksOnEnemies` solo esté activo en
+Impulso (§3.10). El bloqueo global durante el windup, la geometría de los golpes
+de dash y el origen del empuje ya se han corregido.
+
+Además, **Mewtwo y Mew no pueden hacer daño a Greninja ni a Tyranitar**: todo
+su kit ofensivo es Psíquico y ambos son Siniestro (inmune a Psíquico). No hay
+movimientos de cobertura, así que la inmunidad es total.
 
 ---
 
@@ -65,7 +74,8 @@ de cobertura, así que la inmunidad es total.
 input (edge) → castAbility()
   ├─ comprueba alive, pendingCast, dash, QueuedCast y castLockTimer
   ├─ inicia cooldown
-  ├─ fija actionTimer / animación y castLockTimer (solo no melee)
+  ├─ fija actionTimer / animación (el castLockTimer no melee se fija al
+  │  ejecutar, no al iniciar el windup)
   └─ si windup > 0:
         crea PendingCast (+ marca de área si shape === 'aoe')
         stepPendingCast() espera el windup
@@ -128,7 +138,10 @@ stats legendarios sean intrínsecamente más fuertes antes de mirar habilidades.
 - **aoe**: círculo centrado a `range` del lanzador. `instant` o `overTime`;
   `radialDamage` interpola del 100 % en el centro a `radialMinDamage` en el
   borde.
-- **dash**: se reparte en pasos y comprueba colliders por tramo.
+- **dash**: se reparte en pasos y comprueba colliders por tramo. Hoy también
+  choca con cualquier jugador vivo (aliado o rival); su golpe solo cuenta por
+  delante del origen y revalida el tramo al resolverse, pero queda el cabo de
+  colisión de §3.10.
 - **self**: buffs, curación o utilidad centrada en el lanzador.
 
 **Estados**: ralentización (`slow`) y buffs (`speed`, `attack`, etc.). No hay
@@ -142,7 +155,7 @@ con mínimo de 1 PV, así que un golpe de 1 PV sigue quitando 1 y uno de 2 tambi
 **Reaparición**: 5 s, 2 s de invulnerabilidad y vida al máximo. Los cooldowns
 del kit **siguen corriendo durante la muerte**; el del instinto activo se
 reinicia al reaparecer. Atacar retira la invulnerabilidad
-(`src/game/game.ts:1239-1283`).
+(`src/game/game.ts:1581-1588`).
 
 **KO**: 15 por equipo (`CONFIG.combat.koTarget`).
 
@@ -169,7 +182,7 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-02)
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-03)
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
@@ -181,24 +194,26 @@ cobertura de tipos.
 | 3.6 Validación de dos equipos | **pendiente** | Una partida 1v0 no puede terminar. |
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
 | 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
-| 3.9 Detalles menores | **pendiente** | Spawns con varios respawns y resolución del spawn inicial. |
+| 3.9 Detalles menores | **pendiente** | Spawns con varios respawns, spawn inicial y terreno inicial. |
+| 3.10 Colisión de dash | **nuevo** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
 
 ### 3.1. Cobertura: 9 especies sin moveset (crítico)
 
-`MOVESETS` solo define 15 ids (`src/game/abilities.ts`). El roster
-muestra las 24 especies de `public/sprites/manifest.json` y
-`src/ui/RosterScreen.tsx:86-89, 485-489` no filtra ni avisa.
+`MOVESETS` solo define 15 ids (`src/game/abilities.ts:1780-1819`). El roster
+muestra las 24 especies de `public/sprites/manifest.json`; la card enseña
+«Sin asignar» en los cuatro huecos (`src/ui/RosterScreen.tsx:416-455`), pero
+`src/ui/RosterScreen.tsx:90` y el carrusel (`RosterScreen.tsx:491-493`) no
+filtran, bloquean ni avisan de que esa especie no puede combatir.
 
-`src/game/game.ts:409` hace:
+`src/game/game.ts:473` hace:
 
 ```ts
 const moveset = MOVESETS[config.pokemonId] ?? [null, null, null, null];
 ```
 
-y `game.ts:491` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
-muestra cuatro veces
-«Sin asignar». Esas especies no pueden atacar, defenderse ni usar ninguna
-habilidad; solo caminan.
+y `game.ts:567` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
+muestra cuatro veces «Sin asignar». Esas especies no pueden atacar, defenderse
+ni usar ninguna habilidad; solo caminan.
 
 **Especies afectadas**: Eevee (0133), Onix (0095), Zapdos (0145), Raikou (0243),
 Entei (0244), Suicune (0245), Lugia (0249), Ho-Oh (0250), Celebi (0251).
@@ -215,7 +230,7 @@ volver a importar sprites para empezar.
 ### 3.2. DoT: precisión por tick y +2 plano por tick (medio)
 
 `tickAoe` llama a `applyAbilityDamage` por cada tick
-(`src/game/game.ts:2154-2188`). Eso implica:
+(`src/game/game.ts:2460-2501`). Eso implica:
 
 1. **La precisión se tira en cada tick**, no una vez por lanzamiento. Giro Fuego
    tiene 85 % de precisión nominal; con 6 ticks, el daño esperado es 6 × 0,85,
@@ -237,17 +252,19 @@ tick para que el total coincida con el nominal.
 
 ### 3.3. Proyectiles, áreas y golpes diferidos de jugadores muertos siguen dañando y puntuando (medio)
 
-`canHit` no comprueba `attacker.alive` (`game.ts:1618-1624`). `updateProjectiles`
-y `updateActiveAoes` tampoco, y `executeAbility` no valida que el lanzador siga
-vivo (`game.ts:1502-1575`). Un proyectil o un área lanzados antes de morir pueden
-matar después y sumar el KO al jugador muerto; lo mismo ocurre con un lanzamiento
-instantáneo ya encolado si otro jugador mata al lanzador en la misma tanda de
-resolución (`resolveQueuedCasts`, `game.ts:1490-1499`), o con un golpe de dash
-pendiente (`resolveInstantHits`, `game.ts:2196-2207`). Un área persistente puede
-seguir presionando una zona durante 2,5 s.
+`canHit` no comprueba `attacker.alive` (`game.ts:1861-1868`).
+`updateProjectiles` (`game.ts:2213-2429`) y `updateActiveAoes`
+(`game.ts:2435-2459`) tampoco, y `executeAbility` no valida que el lanzador siga
+vivo (`game.ts:1741-1824`). Un proyectil o un área lanzados
+antes de morir pueden matar después y sumar el KO al jugador muerto; lo mismo
+ocurre con un lanzamiento instantáneo ya encolado si otro jugador mata al
+lanzador en la misma tanda de resolución (`resolveQueuedCasts`,
+`game.ts:1729-1740`), o con un golpe de dash pendiente (`resolveInstantHits`,
+`game.ts:2506-2531`). Un área persistente puede seguir presionando una zona
+durante 2,5 s.
 
 La regla es además inconsistente: la melee sí revalida `attacker.alive`
-(`meleeHitValid`, `game.ts:2220-2239`) y las demás formas no.
+(`meleeHitValid`, `game.ts:2544-2569`) y las demás formas no.
 
 **Decisión pendiente**: si los proyectiles en vuelo deben sobrevivir al lanzador,
 hay que documentarlo y limitarlo a esas formas; si no, añadir `attacker.alive` a
@@ -256,9 +273,9 @@ muerto.
 
 ### 3.4. La visión no interviene en el combate (alto, diseño)
 
-`canHit` no consulta `isTargetVisible`. Las habilidades se lanzan por `facing` y
-pueden impactar a objetivos que el atacante no ve, y viceversa. La niebla es solo
-de render.
+`canHit` no consulta `isTargetVisible` (`game.ts:1861-1868`). Las habilidades se
+lanzan por `facing` y pueden impactar a objetivos que el atacante no ve, y
+viceversa. La niebla es solo de render.
 
 Esto crea ventajas difíciles de leer:
 
@@ -270,8 +287,9 @@ Esto crea ventajas difíciles de leer:
   atacante puede matar desde fuera de la pantalla del rival.
 
 **Decisión pendiente sobre los proyectiles**: desde `a8f2345`, los proyectiles
-ignoran la ocultación por terreno al calcular sus capas (`combatFx.ts:1616-1624`,
-`game.ts:2445-2483`). Esto evita que desaparezcan al cruzar hierba alta, pero un
+ignoran la ocultación por terreno al calcular sus capas
+(`combatFx.ts:1631-1640`, `game.ts:2776-2820`). Esto evita que desaparezcan al
+cruzar hierba alta, pero un
 disparo originado en una zona oculta se ve a través de la vegetación y puede
 delatar la dirección del tirador. Hay que decidir si es el comportamiento
 buscado o si solo debe revelarse el proyectil, no la posición del lanzador.
@@ -283,9 +301,10 @@ visión efectivo.
 ### 3.5. La Explosión de Voltorb es gratis a 1 PV (bajo)
 
 `applySelfDamage` calcula `amount = min(raw, max(0, hp - 1))` y no resta nada si
-estás a 1 PV (`game.ts:1582-1594`). Como el autodaño nunca mata, un Voltorb a
-1 PV puede usar Explosión sin coste. No es un exploit enorme, pero sí una
-inconsistencia: el coste desaparece justo cuando más debería importar.
+estás a 1 PV (`game.ts:1825-1839`). Como el autodaño nunca mata, un Voltorb a
+1 PV puede usar Explosión sin coste; a 2 PV solo paga 1. No es un exploit enorme,
+pero sí una inconsistencia: el coste desaparece justo cuando más debería
+importar.
 
 **Arreglo**: añadir un autodaño mínimo (p. ej., 5 PV), un autostun de 0,5 s tras
 Explosión, o aceptar que el 1 PV es una excepción documentada.
@@ -294,15 +313,16 @@ Explosión, o aceptar que el 1 PV es una excepción documentada.
 
 `LobbyScreen` y `RosterScreen` solo comprueban que todos estén listos
 (`allReady`), no que haya al menos un jugador en cada equipo
-(`LobbyScreen.tsx:153, 309-322`, `RosterScreen.tsx:86-87`). `startMatch` tampoco lo
-comprueba (`game.ts:363-384`).
+(`LobbyScreen.tsx:198-200`, `RosterScreen.tsx:90`). `continueToRoster` tampoco
+lo comprueba (`SessionProvider.tsx:300-324`) y `startMatch` solo valida que haya
+un humano y que los assets existan (`game.ts:409-640`).
 
 Un jugador solo puede empezar una partida 1v0: no hay rivales, no se puede
 conseguir ningún KO y la partida no termina nunca (no hay límite de tiempo ni
 condición de victoria alternativa). Lo mismo ocurre si todos los jugadores
 eligen el mismo equipo o si una desconexión vacía un equipo. `setPlayerTeam` y
 `leavePlayer` tampoco impiden dejar un equipo vacío
-(`src/session/SessionProvider.tsx:160-194`).
+(`SessionProvider.tsx:211-227, 293-298`).
 
 **Arreglo**: bloquear el inicio si algún equipo está vacío (o añadir un modo
 práctica explícito); añadir un límite de tiempo/condición de fin; validar
@@ -311,11 +331,11 @@ también `MAX_TEAM_SIZE` y los slots duplicados en `startMatch`.
 ### 3.7. La desconexión de un mando deja un jugador inmóvil en la partida (medio)
 
 `SessionProvider.syncDevices` elimina al jugador de la sesión cuando su mando
-desaparece (`src/session/SessionProvider.tsx:314-325`), pero `PlayScreen` registra
-`onDevicesChanged: () => {}` (`PlayScreen.tsx:89`) y `Game` no elimina ni
-congela al jugador de `matchPlayers`. El jugador sigue vivo, con su cámara y su
-vista, pero recibe `IDLE_INPUT` y se queda quieto; los rivales pueden matarlo
-repetidamente y farmear KOs.
+desaparece (`src/session/SessionProvider.tsx:430-443`), pero `PlayScreen` registra
+`onDevicesChanged: () => {}` (`src/screens/PlayScreen.tsx:93`) y `Game` no
+elimina ni congela al jugador de `matchPlayers`. El jugador sigue vivo, con su
+cámara y su vista, pero recibe `IDLE_INPUT` y se queda quieto; los rivales pueden
+matarlo repetidamente y farmear KOs.
 
 **Arreglo**: al detectar la desconexión, pausar la partida, eliminar al jugador
 (o sustituirlo por una IA/auto-return), o al menos conceder invulnerabilidad
@@ -323,15 +343,16 @@ hasta que vuelva a conectarse. No dejarlo como objetivo estático.
 
 ### 3.8. El stat Speed no se usa y el dash ignora slow/terreno/buffs (medio, diseño)
 
-`CombatStats.speed` se calcula (`pokedex.ts:73-88`) pero no se lee en ninguna
+`CombatStats.speed` se calcula (`pokedex.ts:75-88`) pero no se lee en ninguna
 parte del combate; la velocidad de movimiento sale de `POKEMON_SPEEDS`
-(`roster.ts`). El stat de Speed de la Pokédex es, por tanto, decorativo.
+(`roster.ts:10-42`). El stat de Speed de la Pokédex es, por tanto, decorativo.
 
 Además, `stepDash` usa `dash.speed` calculado en `executeDash` sin aplicar
 `slowMultiplier`, `terrainMultiplier` ni `buffMultiplier('speed')`
-(`abilityExecutors.ts:359-366`, `game.ts:1102-1103`): un Pokémon ralentizado o
-en terreno hostil hace el dash a la misma velocidad. Es una decisión de diseño,
-pero conviene documentarla o aplicar los modificadores al dash.
+(`abilityExecutors.ts:378-434`, `game.ts:1024-1031, 1308`): un Pokémon
+ralentizado o en terreno hostil hace el dash a la misma velocidad. Es una
+decisión de diseño, pero conviene documentarla o aplicar los modificadores al
+dash.
 
 También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 `Dragon`, `Flying`), así que Mewtwo, Mew, Lucario y Lugia nunca reciben el bonus
@@ -341,15 +362,45 @@ También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 
 - **Spawn/facing en mapas con varios respawns**: `facingToCenter(team)` y
   `cameraYawForTeam(team)` usan el **primer** respawn del equipo, no el spawn
-  real del jugador (`multiplayer.ts:101-110`). En mapas con varios respawns por
+  real del jugador (`multiplayer.ts:128-138`). En mapas con varios respawns por
   equipo, los jugadores de las otras bases miran (y arrancan la cámara) hacia
-  donde mira la primera base. `respawnPlayer` usa la misma función.
+  donde mira la primera base. `startMatch` y `respawnPlayer` usan la misma
+  función (`game.ts:470, 508, 1440`), aunque `spawnForTeam` sí reparte entre
+  varias bases (`multiplayer.ts:114-125`).
 - **Spawn inicial sin resolver**: `startMatch` coloca al jugador directamente en
-  `spawnForTeam` (`game.ts:404, 442-443`); `respawnPlayer` sí pasa por
-  `resolvePosition` (`game.ts:1240`). El primer `stepPlayer` vuelve a resolver,
+  `spawnForTeam` (`game.ts:468-470, 518-519`); `respawnPlayer` sí pasa por
+  `resolvePosition` (`game.ts:1437`). El primer `stepPlayer` vuelve a resolver,
   pero la cámara y la primera copia se crean en la posición sin corregir, así
   que en un mapa con un collider pegado a la base puede verse un frame dentro
   del árbol o del muro.
+- **Terreno inicial y multiplicador**: `startMatch` guarda
+  `terrainMultiplier: 1` y `terrainSpeedReason: 'neutral'` aunque el spawn tenga
+  bonus o penalización (`game.ts:526-530`). Como `stepPlayer` no corre durante
+  la cuenta atrás, el HUD muestra ×1,00 neutro durante los 5 s. Además, el
+  multiplicador se calcula antes de mover (`game.ts:1018-1031`) y no se
+  refresca tras el desplazamiento, así que el HUD puede mezclar el terreno nuevo
+  con el multiplicador anterior durante un frame.
+
+### 3.10. Todos los dashes se detienen en cualquier jugador (medio, diseño)
+
+`dashPosition` resuelve cada paso con `resolvePosition` (`game.ts:3055-3098`), y
+`resolvePosition` incluye a todos los jugadores vivos, sin filtrar equipo
+(`game.ts:3019-3035`). Además, el dash se corta cuando el paso avanza menos del
+35 % (`game.ts:3088-3093`). Por eso cualquier dash de kit se detiene al chocar
+con un rival o un aliado, aunque `dashBlocksOnEnemies` esté desactivado. El flag
+solo precalcula `dashEnemyLimit` en `executeDash`
+(`abilityExecutors.ts:356-434`), que acorta la distancia antes de empezar; en un
+choque frontal el resultado práctico es el mismo que la colisión. Impulso no es
+especial en esto:
+la descripción de que «se detiene en enemigos» vale para todos los dashes.
+
+`dashEnemyLimit` tampoco comprueba obstáculos ni línea de visión: un enemigo
+detrás de un árbol o un muro puede acortar el dash aunque el camino esté libre.
+
+**Arreglo**: decidir la regla. Si solo Impulso debe detenerse en enemigos,
+`dashPosition` necesita un flag para ignorar jugadores (o al menos aliados) y
+`dashEnemyLimit` debe comprobar LOS; si todos los dashes deben detenerse, quitar
+o documentar `dashBlocksOnEnemies` y unificar la distancia.
 
 ## 4. Estudio cuantitativo del balance
 
@@ -367,13 +418,14 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   suponiendo que todas conectan y que el rival no esquiva.
 - «Objetivo neutro» = defensor con 100 en todas las stats y sin tipos, para
   comparar habilidad contra habilidad sin que el tipo distorsione.
+- Las áreas se valoran con el objetivo en el centro (100 %); el multiplicador
+  radial reduce el daño según la distancia, así que el combo es una cota.
 - Los combos son una **cota superior** y una medida relativa, no una promesa de
   daño real: en la práctica hay rangos, windups, dashes y esquivas.
-- **Cobertura de esta simulación**: Tyranitar (0248) se añadió al roster y a
-  `MOVESETS` después de generar las tablas, así que no aparece en las matrices de
-  §4.3-§4.7. Los instintos comunes tampoco están simulados: Protección reduce
-  daño y Regeneración cura, pero no añaden potencia directa. Hay que regenerar la
-  matriz antes de tomar decisiones de balance finas.
+- **Cobertura de esta simulación**: incluye las 15 especies con `MOVESETS`,
+  Tyranitar (0248) y Groudon (0383) entre ellas. Los instintos comunes no están
+  simulados: Protección reduce daño y Regeneración cura, pero no añaden potencia
+  directa. Las tablas se regeneraron el 2026-11-03 con este modelo.
 
 ### 4.2. Cobertura y stats
 
@@ -388,6 +440,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Lucario | 145 | 130 | 90 | 135 | 90 | 110 | sí |
 | Greninja | 147 | 115 | 87 | 123 | 91 | 142 | sí |
 | Tyranitar | 175 | 154 | 130 | 115 | 120 | 81 | sí |
+| Groudon | 175 | 170 | 160 | 120 | 110 | 110 | sí |
 | Mewtwo | 181 | 130 | 110 | 174 | 110 | 150 | sí |
 | Mew | 175 | 120 | 120 | 120 | 120 | 120 | sí |
 | Scyther | 145 | 130 | 100 | 75 | 100 | 125 | sí |
@@ -409,38 +462,44 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 cooldown. `DPS sostenido` = suma de daño/cooldown de las cuatro habilidades
 (sin contar el bloqueo global de casteo; es una cota). `Combo neutro` = daño de
 las 4 habilidades contra el objetivo neutro. `% vida media` = combo medio contra
-las 12 especies
-jugables, dividido por su HP. `100-0` = número de rivales a los que el combo
-completo les quita toda la vida.
+las otras 14 especies jugables, dividido por su HP. `100-0` = número de rivales
+a los que el combo completo les quita toda la vida.
 
-La matriz se calculó con las 13 especies con moveset que existían entonces (12
-rivales por fila, sin contar el mirror). Tyranitar es la 14.ª y todavía no está
-incluida, así que los denominadores `x/12` hay que revisarlos al regenerarla.
+La matriz incluye las 15 especies con moveset (14 rivales por fila, sin contar
+el mirror). Las áreas se valoran con el objetivo en el centro; en el borde el
+daño radial es menor.
 
 | Pokémon | DPS básica | DPS sostenido | Combo neutro | % vida media | 100-0 | Sin daño |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Mewtwo | 102 | 126 | 294 | 249 % | 10/12 | 1 |
-| Moltres | 78 | 108 | 247 | 222 % | 12/12 | 0 |
-| Gengar | 35 | 61 | 244 | 197 % | 12/12 | 0 |
-| Greninja | 57 | 106 | 201 | 184 % | 10/12 | 0 |
-| Articuno | 67 | 86 | 212 | 173 % | 10/12 | 0 |
-| Scyther | 92 | 107 | 194 | 156 % | 8/12 | 0 |
-| Lucario | 74 | 97 | 222 | 148 % | 7/12 | 0 |
-| Charmander | 41 | 57 | 143 | 127 % | 7/12 | 0 |
-| Voltorb | 36 | 43 | 122 | 113 % | 5/12 | 0 |
-| Squirtle | 49 | 67 | 109 | 89 % | 4/12 | 0 |
-| Mew | 116 | 122 | 99 | 84 % | 5/12 | 1 |
-| Pikachu | 53 | 82 | 85 | 74 % | 3/12 | 0 |
-| Bulbasaur | 49 | 59 | 101 | 70 % | 4/12 | 0 |
+| Groudon | 67 | 97 | 322 | 366 % | 14/14 | 0 |
+| Tyranitar | 87 | 116 | 302 | 339 % | 13/14 | 0 |
+| Mewtwo | 102 | 125 | 294 | 241 % | 11/14 | 2 |
+| Moltres | 78 | 108 | 246 | 211 % | 13/14 | 0 |
+| Gengar | 36 | 62 | 244 | 188 % | 13/14 | 0 |
+| Greninja | 57 | 107 | 201 | 177 % | 11/14 | 0 |
+| Articuno | 67 | 86 | 212 | 176 % | 11/14 | 0 |
+| Lucario | 74 | 97 | 222 | 166 % | 8/14 | 0 |
+| Scyther | 93 | 108 | 194 | 155 % | 9/14 | 0 |
+| Charmander | 40 | 56 | 143 | 122 % | 7/14 | 0 |
+| Voltorb | 37 | 44 | 122 | 104 % | 5/14 | 0 |
+| Squirtle | 48 | 66 | 109 | 95 % | 5/14 | 0 |
+| Mew | 117 | 123 | 99 | 81 % | 5/14 | 2 |
+| Bulbasaur | 48 | 58 | 101 | 77 % | 4/14 | 0 |
+| Pikachu | 52 | 80 | 84 | 69 % | 3/14 | 0 |
 
 **Lectura**:
 
-- La diferencia entre el mejor combo medio (Mewtwo 249 %) y el peor (Bulbasaur
-  70 %) es de **3,5×**.
-- Moltres y Gengar pueden **matar de 100-0 a los 12 rivales** con una rotación.
-- Mewtwo, Greninja y Articuno pueden hacerlo contra 10 de 12.
-- Pikachu, Bulbasaur y Squirtle no llegan al 100 % de la vida media; necesitan
-  más de una rotación para matar a un rival medio.
+- La diferencia entre el mejor combo medio (Groudon 366 %) y el peor (Pikachu
+  69 %) es de **5,3×**.
+- Groudon puede **matar de 100-0 a los 14 rivales** con una rotación; Tyranitar,
+  Gengar y Moltres lo hacen contra 13 de 14.
+- Mewtwo, Greninja y Articuno llegan a 11 de 14.
+- Pikachu, Bulbasaur, Mew y Squirtle no alcanzan el 100 % de la vida media;
+  necesitan más de una rotación para matar a un rival medio.
+- Groudon y Tyranitar combinan 175 PV, defensa alta y ataque alto con un combo
+  de 302-322 de daño neutro. Groudon no tiene ningún matchup malo: su peor celda
+  es 119 % (Articuno), porque sus dos ataques de Tierra se anulan contra
+  Volador, pero Cuchillada y Avalancha siguen pegando.
 - Mew es un caso distinto: su combo es bajo porque dos slots son utilidad
   (Agilidad y Recuperación), pero su básica es la de mayor DPS y tiene 175 PV +
   curación. Es un duelista de sostén, no un burst.
@@ -464,16 +523,20 @@ Daño esperado contra el defensor neutro (100 en todo, sin tipos; STAB incluido)
 | Mewtwo | Telequinesis 61 | Teletransporte (estado) | Psíquico 104 | Psicoataque 129 |
 | Mew | Golpe Psíquico 35 | Agilidad (estado) | Premonición 64 | Recuperación (estado) |
 | Scyther | Golpe Furia 37 | Corte Aéreo 50 | Danza Espada (estado) | Tijera X 107 |
+| Tyranitar | Triturar 74 | Avalancha 66 | Terremoto 66 | Roca Afilada 96 |
+| Groudon | Cuchillada 40 | Terremoto 108 | Avalancha 49 | Filo del Abismo 125 |
 
 Dos observaciones:
 
 1. **Las básicas de los starters hacen 12-13 de daño neutro**, mientras Mewtwo
-   hace 61, Scyther 37, Greninja 37, Mew 35. El ataque básico más débil hace
-   ~5× menos daño por golpe que el más fuerte. La cadencia de Placaje (0,25 s)
-   compensa en DPS, pero no en burst, hitstun ni presión.
+   hace 61, Scyther 37, Greninja 37, Mew 35, Groudon 40 y Tyranitar 74. El
+   ataque básico más débil hace ~6× menos daño por golpe que el más fuerte. La
+   cadencia de Placaje (0,25 s) compensa en DPS, pero no en burst, hitstun ni
+   presión.
 2. **Las definitivas varían entre 48 (Anillo Ígneo) y 129 (Psicoataque)** contra
    el mismo objetivo neutro. La de Voltorb (83) cuesta 40 PV y 18 s; la de
-   Mewtwo (129) no cuesta nada y dura 15 s.
+   Mewtwo (129) no cuesta nada y dura 15 s; la de Groudon (125) tiene 90 % de
+   precisión y 15 s.
 
 ### 4.5. Matriz de combos (% de la vida del objetivo)
 
@@ -481,43 +544,51 @@ Cada celda es el daño de las 4 habilidades del atacante (fila) contra el rival
 (columna), como porcentaje de la vida máxima del rival. `—` es el mirror.
 
 ```
-Atacante     Pika Vol Geng Bulb Char Squi Luca Gren Arti Molt Mew2 Mew  Scyt
-Pikachu       —   66%  45%  60% 107% 144%  54% 107%  66%  83%  44%  43%  99%
-Voltorb      95%   —   83%  73% 156% 223%  86% 172%  99% 130%  61%  59% 156%
-Gengar      316% 287%   —  241% 302% 240% 136% 118% 104% 139% 212% 200% 168%
-Bulbasaur   139% 119%  36%   —   73% 187%  38% 143%  26%  20%  51%  49%  23%
-Charmander  197% 170% 108% 278%   —   77% 214%  58% 122%  44%  74%  72% 188%
-Squirtle    146% 126%  78%  63% 259%   —   77%  45%  49% 117%  55%  52%  75%
-Lucario     294% 248%  35% 168% 274% 202%   —  275% 128%  70%  73%  69%  73%
-Greninja    275% 236% 306% 196% 302% 178%  89%   —   92% 134% 183% 173% 138%
-Articuno    254% 228% 171% 430% 159% 124%  95%  95%   —  122% 108% 103% 292%
-Moltres     211% 181% 211% 544% 292% 217% 236% 168% 139%   —  125% 119% 340%
-Mewtwo      381% 340% 461% 577% 368% 295% 224%   0% 125% 171%   —   70% 203%
-Mew         129% 114% 156% 191% 124%  99%  75%   0%  41%  58%  24%   —   68%
-Scyther     252% 209%  78% 293% 168% 191%  65% 263%  61%  47% 170% 161%   —
+Atacante     Pika  Vol Geng Bulb Char Squi Luca Gren Arti Molt Mew2  Mew Scyt  Tyr Grou
+Pikachu         —  65%  45%  60% 107% 144%  53% 107%  65%  83%  44%  43%  99%  35%  10%
+Voltorb       95%    —  84%  73% 156% 223%  86% 172%  99% 130%  61%  58% 155%  54%   7%
+Gengar       316% 287%    — 242% 303% 240% 137% 118% 104% 139% 212% 199% 168%  57% 106%
+Bulbasaur    138% 118%  36%    —  73% 187%  38% 143%  25%  20%  51%  49%  23%  87%  89%
+Charmander   196% 169% 108% 278%    —  77% 214%  59% 121%  44%  74%  72% 188%  34%  74%
+Squirtle     145% 127%  79%  63% 259%    —  78%  44%  48% 117%  55%  53%  75%  94% 100%
+Lucario      295% 248%  35% 169% 275% 203%    — 275% 128%  70%  73%  70%  73% 320%  89%
+Greninja     275% 237% 306% 196% 302% 177%  89%    —  92% 134% 183% 173% 139%  71% 109%
+Articuno     254% 228% 170% 429% 159% 124%  94%  95%    — 122% 108% 103% 292%  93% 197%
+Moltres      212% 182% 210% 544% 292% 217% 235% 168% 139%    — 125% 119% 341%  55% 109%
+Mewtwo       381% 341% 461% 578% 368% 296% 224%   0% 125% 171%    —  70% 203%   0% 154%
+Mew          129% 115% 156% 191% 125%  99%  75%   0%  42%  58%  24%    —  68%   0%  51%
+Scyther      253% 209%  78% 293% 168% 192%  66% 263%  61%  47% 170% 161%    — 137%  71%
+Tyranitar    560% 461% 332% 265% 737% 297% 164% 207% 367% 404% 191% 183% 500%    —  81%
+Groudon      844% 692% 456% 358% 842% 318% 384% 254% 119% 132% 162% 155% 162% 245%    —
 ```
 
 **Casos extremos**:
 
-- **Mewtwo → Bulbasaur 577 %**, → Gengar 461 %, → Pikachu 381 %. Una rotación
-  mata a casi todo el roster.
-- **Moltres → Bulbasaur 544 %**, → Scyther 340 %, → Charmander 292 %.
-- **Gengar → Pikachu 316 %**, → Greninja 306 %, → Charmander 302 %. Gengar
-  mata de 100-0 a los 12 rivales.
+- **Groudon → Pikachu 844 %**, → Charmander 842 %, → Voltorb 692 %. Mata de
+  100-0 a los 14 rivales; su celda más baja es 119 % (Articuno).
+- **Tyranitar → Charmander 737 %**, → Pikachu 560 %, → Scyther 500 %. Solo
+  Groudon (81 %) le aguanta una rotación entera.
+- **Mewtwo → Bulbasaur 578 %**, → Gengar 461 %, → Pikachu 381 %.
+- **Moltres → Bulbasaur 544 %**, → Scyther 341 %, → Charmander 292 %.
+- **Gengar → Pikachu 316 %**, → Charmander 303 %, → Voltorb 287 %. Gengar mata
+  de 100-0 a 13 de 14.
 - **Greninja → Gengar 306 %**, → Charmander 302 %, → Pikachu 275 %.
-- **Scyther → Bulbasaur 293 %**, → Greninja 263 %, → Pikachu 252 %; pero solo
-  78 % a Gengar, 61 % a Articuno y 47 % a Moltres. Es muy polarizado.
+- **Scyther → Bulbasaur 293 %**, → Greninja 263 %, → Pikachu 253 %; pero solo
+  78 % a Gengar, 61 % a Articuno, 47 % a Moltres y 71 % a Groudon.
 - **Pikachu → Squirtle 144 %** y → Charmander 107 % / Greninja 107 %, pero solo
-  44-45 % a Mewtwo/Gengar. Es un counter de Agua/frágiles, no un personaje
-  generalista.
-- **Bulbasaur → Squirtle 187 %**, → Greninja 143 %, pero 20-36 % a Moltres/Gengar.
-- **Squirtle → Charmander 259 %**, pero 45-78 % a Greninja/Gengar/Bulbasaur.
-- **Voltorb → Squirtle 223 %**, → Greninja 172 %, pero 61-83 % a Mewtwo/Gengar.
+  44-45 % a Mewtwo/Gengar, 35 % a Tyranitar y 10 % a Groudon. Es un counter de
+  Agua/frágiles, no un personaje generalista.
+- **Bulbasaur → Squirtle 187 %**, → Greninja 143 %, pero 20-36 % a
+  Moltres/Gengar.
+- **Squirtle → Charmander 259 %**, pero 44-79 % a Greninja/Gengar/Bulbasaur.
+- **Voltorb → Squirtle 223 %**, → Greninja 172 %, pero 61-84 % a Mewtwo/Gengar y
+  7 % a Groudon.
 
 **Inmunidades totales**:
 
-- **Mewtwo y Mew no pueden dañar a Greninja** (todo su kit ofensivo es Psíquico
-  y Greninja es Agua/Siniestro; Psíquico → Siniestro = 0).
+- **Mewtwo y Mew no pueden dañar a Greninja ni a Tyranitar** (todo su kit
+  ofensivo es Psíquico; Greninja es Agua/Siniestro y Tyranitar Roca/Siniestro,
+  así que Psíquico → Siniestro = 0).
 - **Las básicas Normal de Pikachu, Bulbasaur, Squirtle y Charmander hacen 0 a
   Gengar** (Ghost inmune a Normal). Sus otras habilidades siguen funcionando,
   pero pierden su ataque de relleno.
@@ -525,22 +596,29 @@ Scyther     252% 209%  78% 293% 168% 191%  65% 263%  61%  47% 170% 161%   —
   su Esfera Aura y Combate Cercano son Fighting). Su combo contra Gengar es del
   35 %.
 - **Bomba Lodo (Veneno) hace 0 a Lucario (Acero)**: la inmunidad anula también
-  la ralentización. `Onda Trueno` tampoco ralentiza a un Pokémon de tipo
-  Tierra.
+  la ralentización. `Onda Trueno` tampoco ralentiza a Groudon (Tierra).
+- **El kit Eléctrico de Pikachu y Voltorb hace 0 a Groudon** (Eléctrico →
+  Tierra = 0): Pikachu solo le hace un 10 % con sus dos básicas Normal y Voltorb
+  un 7 % con Rollout.
+- **Los ataques de Tierra de Groudon hacen 0 a los Voladores** (Articuno,
+  Moltres y Scyther); su combo allí depende de Cuchillada y Avalancha, y aun así
+  queda en 119-197 %.
 - **Scyther contra Gengar/Moltres/Articuno** hace 0,25×-0,5× con su básica; es
   uno de sus peores matchups.
 
 ### 4.6. El problema de los windups
 
 Cualquier golpe que conecta (con daño o de estado) cancela el `PendingCast`
-(`applyHitControl`, `game.ts:1667-1682`). Las básicas más rápidas tienen
+(`applyHitControl`, `game.ts:1911-1928`). Las básicas más rápidas tienen
 cadencias de 0,25-0,4 s. Las definitivas con windup son:
 
 | Habilidad | Windup | Quién |
 | --- | ---: | --- |
 | Rayo | 0,50 s | Pikachu |
 | Giro Fuego | 0,50 s | Charmander |
+| Roca Afilada | 0,50 s | Tyranitar |
 | Explosión | 0,60 s | Voltorb |
+| Filo del Abismo | 0,70 s | Groudon |
 | Lluevehojas | 0,75 s | Bulbasaur |
 | Anillo Ígneo | 0,75 s | Charmander |
 | Ventisca | 0,75 s | Articuno |
@@ -576,10 +654,13 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 | Bulbasaur | 4,2 | 8,0 | no | 7,4 u área |
 | Squirtle | 4,8 | 8,5 | Acua Jet 4,2 u | 8,5 u haz |
 | Charmander | 5,4 | 9,5 | no | 9,5 u haz |
+| Tyranitar | 4,5 | 9,6 | no | 9 u haz / 8,5 u proyectil |
+| Groudon | 5,6 | 10,6 | no | 8,5 u proyectil / 7,7 u área |
 
-- Los personajes con más alcance también tienen más visión y, salvo Gengar,
-  buena velocidad. La combinación «te veo antes + te pego desde más lejos +
-  puedo escapar» no tiene contrapeso.
+- Los personajes con más alcance también tienen más visión; la mayoría combina
+  además buena velocidad, con Tyranitar y Groudon como excepción lenta. La
+  combinación «te veo antes + te pego desde más lejos + puedo escapar» no tiene
+  contrapeso en los rápidos.
 - Bulbasaur es el más lento, tiene la visión más baja, no tiene dash y su
   definitiva tarda 0,75 s. Es el caso más desfavorecido.
 - Charmander tampoco tiene dash y es frágil (114 PV, 63 Def).
@@ -593,9 +674,9 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 - Contra el objetivo neutro: **~83 de daño esperado**.
 - Autodaño: 35 % de 115 PV = **40 PV**.
 - Con 1 PV el autodaño es 0 (ver §3.5).
-- Su combo medio es 113 % de la vida media, pero gran parte viene de los
+- Su combo medio es 104 % de la vida media, pero gran parte viene de los
   matchups 2× contra Agua/Volador (Squirtle, Greninja, Moltres, Scyther). Contra
-  un objetivo neutro su DPS sostenido es el más bajo del roster (43).
+  un objetivo neutro su DPS sostenido es el más bajo del roster (44).
 
 Como definitiva de una rotación de 18 s, 83 de daño y 40 de autodaño no
 compensa; como herramienta de teamfight de 4,2 u sí puede ser útil, pero el
@@ -627,14 +708,15 @@ autodaño la convierte en una mala elección en 1v1.
    FX.
 6. **Cobertura de tipos**: dar al menos un movimiento de cobertura a cada
     Pokémon, o suavizar las inmunidades en PvP. Sin cobertura, Mewtwo/Mew vs
-    Greninja es un 0 % literal.
+    Greninja o Tyranitar es un 0 % literal.
 
 ### P2 — ajuste de balance
 
 7. **Presupuesto común de daño**: fijar objetivos, por ejemplo:
     - Básica: 40-75 DPS contra objetivo neutro, con las de rango/velocidad en la
       parte baja y las melee lentas en la alta.
-    - Combo completo: 90-140 % de la vida media (hoy hay 70-249 %).
+    - Combo completo: 90-140 % de la vida media (hoy hay 69-366 % en la matriz
+      actual).
     - Definitiva: 60-110 de daño neutro, 12-18 s de cooldown, con el daño extra
       compensado por utilidad/alcance/autodaño.
 8. **Básicas de los starters**: dar STAB a Pikachu/Bulbasaur/Squirtle/Charmander
@@ -664,19 +746,23 @@ autodaño la convierte en una mala elección en 1v1.
 19. **Voltorb**: Explosión 175 → 220, autodaño 0,35 → 0,25, cooldown 18 → 16;
     Chispa 65 → 70; añadir un autostun corto tras Explosión para que no sea un
     escape gratis.
-20. **Burst global (opcional)**: si se quiere alargar el TTK, aplicar un
+20. **Groudon y Tyranitar**: recortar Filo del Abismo 130 → 110 y Terremoto
+    40 → 30/s; Roca Afilada 125 → 105 y Triturar 75 → 65; o alargar sus
+    cooldowns. Con 175 PV, 130-160 de Def y un combo neutro de 302-322, sus
+    medias (339-366 %) quedan por encima de todo el roster.
+21. **Burst global (opcional)**: si se quiere alargar el TTK, aplicar un
     multiplicador global de daño de 0,85-0,90 en PvP o subir la vida un 10-15 %.
     Con los combos actuales, una rotación completa puede matar en ~1 s.
-21. **Desconexión**: pausar/eliminar/auto-return al jugador cuyo mando
+22. **Desconexión**: pausar/eliminar/auto-return al jugador cuyo mando
     desaparece; hoy queda inmóvil y se le puede farmear.
-22. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
+23. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
     `roster.ts`; valorar aplicar slow/terreno al dash.
-23. **Detalles menores**: usar el spawn real para
-    `facingToCenter`/`cameraYawForTeam` y resolver la posición también en el
-    spawn inicial de `startMatch`.
-24. **Matriz de balance**: regenerarla con Tyranitar y con los instintos comunes
-    antes de seguir ajustando números; las tablas actuales son de 13 especies y
-    no incluyen la mitigación/curación de los instintos.
+24. **Detalles menores**: usar el spawn real para
+    `facingToCenter`/`cameraYawForTeam`, resolver la posición y el
+    `terrainMultiplier` del spawn inicial de `startMatch`.
+25. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
+    o no; hacer que `dashBlocksOnEnemies` y `dashEnemyLimit` (con LOS) controlen
+    la regla, en vez de que `resolvePosition` detenga todas las dashes.
 
 > Los números son un punto de partida para una primera pasada, no una verdad
 > absoluta. Conviene cambiarlos de pocos en pocos y volver a ejecutar la matriz.
@@ -728,7 +814,8 @@ así que se pueden añadir tests baratos:
 - **Instintos comunes**: Protección reduce un 40 % los golpes y cada tick de
   área durante 2 s, no impide slow/stun, no reduce el autodaño y bloquea el resto
   de habilidades mientras está activa; Impulso se detiene en enemigos y
-  separadores y no hace daño; Regeneración empieza a los 3 s oculto, cura 1 PV/s,
+  separadores (hoy también en aliados, §3.10) y no hace daño; Regeneración
+  empieza a los 3 s oculto, cura 1 PV/s,
   se corta con daño/visibilidad/ataque/habilidad/muerte y no filtra el indicador
   al rival. Al morir con escudo, la esfera debe desaparecer.
 - **HUD de Regeneración**: no debe mostrar la cuenta atrás cuando el jugador está
@@ -751,12 +838,27 @@ así que se pueden añadir tests baratos:
   no debe ejecutarse hasta que termine el `castTime` de la primera. Las melee
   conservan su cadencia de cooldown/`moveLock` y bloquean cualquier otra
   habilidad mientras dura su `moveLock`.
+- **GCD y windup**: con una habilidad de windup largo (Ataque Celeste, Ventisca,
+  Psicoataque), el bloqueo global debe empezar al ejecutar y durar `castTime`
+  después del impacto, no antes. Un casteo interrumpido no debe dejar un
+  `castLockTimer` residual.
+- **Dash y colisión**: comprobar si un dash de kit atraviesa enemigos/aliados, si
+  `dashBlocksOnEnemies` cambia algo y si un enemigo detrás de un árbol acorta el
+  dash de Impulso sin línea de visión.
+- **Empuje**: un proyectil disparado y luego desplazado el tirador debe empujar
+  en la dirección del proyectil, y un área radial debe empujar desde su centro,
+  no desde el lanzador.
 - **Speed/dash**: un dash con slow, terreno hostil o buff de velocidad debe
   respetar (o documentar) los modificadores.
 - **Animación**: Ataque Celeste debe reproducir `charge` durante 0,8 s y
   `strike` después.
 - **Spawns**: en un mapa con varios respawns, cada jugador debe mirar al centro
-  desde su propio spawn.
+  desde su propio spawn. El spawn inicial debe pasar por `resolvePosition` y el
+  HUD debe mostrar el `terrainMultiplier` y el motivo del terreno del spawn
+  también durante la cuenta atrás.
+- **Balance**: la tabla de §4.2 debe incluir las 24 especies y la matriz de §4.3
+  debe seguir generándose con las 15 que tienen moveset, Tyranitar y Groudon
+  incluidos.
 
 Un script de balance como el usado para este informe se puede añadir a
 `scripts/balance-report.mjs` para regenerar las tablas tras cada cambio.
@@ -769,14 +871,17 @@ Un script de balance como el usado para este informe se puede añadir a
   estado) es clara y facilita el ajuste.
 - La fórmula oficial, el STAB, la tabla de tipos, el crítico, la precisión y el
   mínimo de 1 están correctamente implementados.
-- La lógica de dash por tramos, el choque de melees, la cancelación de windup,
-  la invulnerabilidad de respawn y la no-letalidad del autodaño son mecánicas
-  coherentes y bien encapsuladas.
+- La lógica de dash por tramos contra obstáculos, el choque de melees, la
+  cancelación de windup, la invulnerabilidad de respawn y la no-letalidad del
+  autodaño son mecánicas coherentes y bien encapsuladas; queda el cabo de
+  colisión de §3.10.
 - La variedad de formas y VFX es amplia; el problema no es la arquitectura, sino
   los números y unos pocos chequeos de orden.
 - El frame separa el turno de cada jugador de la resolución del combate: las
-  habilidades instantáneas y los golpes de dash se encolan y se aplican después
-  de todos los `stepPlayer`, así que el slot no decide quién golpea primero.
+  habilidades instantáneas se encolan y se aplican después de todos los
+  `stepPlayer`, así que el slot no decide quién golpea primero. Los golpes de
+  dash se encolan igual y revalidan el tramo guardado (distancia y línea de
+  visión) antes de aplicarse.
 - La curación por impacto está centralizada en `applyAbilityDamage` con un token
   por lanzamiento: funciona en todas las formas y no se multiplica por número de
   objetivos o de ticks.

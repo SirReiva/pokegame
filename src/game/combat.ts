@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config';
-import type { CombatStats } from './pokedex';
+import { COMBAT_LEVEL, type CombatStats } from './pokedex';
 import { isStab, typeEffectiveness } from './typeChart';
 
 /** KO necesarios para ganar la partida por equipo. */
@@ -88,13 +88,16 @@ export function decorateDamage(
 }
 
 /**
- * Fórmula oficial de daño a nivel 50:
+ * Fórmula oficial de daño (nivel `COMBAT_LEVEL`, 50 en la demo):
  *
  * ```
  * base = floor(floor((2 × nivel / 5 + 2) × potencia × ataque / defensa) / 50) + 2
  * daño = base × crítico × aleatorio × STAB × efectividad
  * ```
  *
+ * El divisor `/ 50` es una constante de la fórmula oficial y no depende del
+ * nivel; el nivel solo entra en `2 × nivel / 5 + 2`, que se lee de
+ * `COMBAT_LEVEL` en `pokedex.ts` para que stats y daño no se desincronicen.
  * La efectividad se aplica con `floor` después de cada modificador, como en el
  * juego. Un movimiento inmune hace 0; cualquier otro golpe válido hace al
  * menos 1 de daño.
@@ -107,7 +110,7 @@ export function computeDamage(input: DamageInput): DamageResult {
   const attack = Math.max(1, Math.floor(attackStat * (input.attackMultiplier ?? 1)));
   const defense = Math.max(1, Math.floor(defenseStat * (input.defenseMultiplier ?? 1)));
 
-  const levelFactor = Math.floor((2 * 50) / 5 + 2);
+  const levelFactor = Math.floor((2 * COMBAT_LEVEL) / 5 + 2);
   const base =
     Math.floor(
       Math.floor((levelFactor * input.power * attack) / defense) / 50

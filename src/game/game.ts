@@ -1255,6 +1255,37 @@ export class Game {
     return false;
   }
 
+  /**
+   * Comprueba si un objetivo cae dentro del barrido de un dash. Solo cuenta el
+   * tramo que queda por delante del punto de partida (`dirX/dirZ`): si no, el
+   * semicírculo trasero golpea a un rival que el dash ya está dejando atrás.
+   * También descarta los objetivos tapados por un obstáculo. Se usa al detectar
+   * el golpe y otra vez al resolverlo, por si el objetivo se ha movido.
+   */
+  private dashSweepHits(
+    target: MatchPlayerState,
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    dirX: number,
+    dirZ: number,
+    reach: number
+  ): boolean {
+    if ((target.x - ax) * dirX + (target.z - az) * dirZ < 0) return false;
+    if (pointSegmentDistance(target.x, target.z, ax, az, bx, bz) > reach) {
+      return false;
+    }
+    const closest = closestPointOnSegment(target.x, target.z, ax, az, bx, bz);
+    return !segmentBlockedByColliders(
+      closest.x,
+      closest.z,
+      target.x,
+      target.z,
+      this.world.colliders
+    );
+  }
+
   private stepDash(
     player: MatchPlayerState,
     input: DeviceInputSnapshot,
@@ -1294,32 +1325,16 @@ export class Game {
     const dashCanHit = dash.def.power > 0 || dash.def.slow !== null;
     for (const target of dashCanHit ? this.matchPlayers : []) {
       if (dash.hit.has(target) || !this.canHit(player, target)) continue;
-      const distance = pointSegmentDistance(
-        target.x,
-        target.z,
-        previousX,
-        previousZ,
-        player.x,
-        player.z
-      );
-      if (distance > dashReach) continue;
-      // El golpe no atraviesa un obstáculo que se interponga entre el tramo
-      // recorrido y el objetivo, aunque esté dentro del radio del dash.
-      const closest = closestPointOnSegment(
-        target.x,
-        target.z,
-        previousX,
-        previousZ,
-        player.x,
-        player.z
-      );
       if (
-        segmentBlockedByColliders(
-          closest.x,
-          closest.z,
-          target.x,
-          target.z,
-          this.world.colliders
+        !this.dashSweepHits(
+          target,
+          previousX,
+          previousZ,
+          player.x,
+          player.z,
+          dash.dirX,
+          dash.dirZ,
+          dashReach
         )
       ) {
         continue;
@@ -1327,12 +1342,20 @@ export class Game {
       dash.hit.add(target);
       // El impacto se aplica en la fase común: si este dash mata al rival
       // antes de que le toque actuar, el orden de los jugadores volvería a
-      // decidir el intercambio.
+      // decidir el intercambio. Se guarda el tramo del barrido para revalidar
+      // que el objetivo sigue dentro y sin obstáculos al resolverlo.
       this.pendingInstantHits.push({
         attacker: player,
         target,
         def: dash.def,
-        healToken: dash.healToken
+        healToken: dash.healToken,
+        ax: previousX,
+        az: previousZ,
+        bx: player.x,
+        bz: player.z,
+        dirX: dash.dirX,
+        dirZ: dash.dirZ,
+        reach: dashReach
       });
     }
 
@@ -1508,9 +1531,14 @@ export class Game {
 
   /** Cancela una habilidad en preparación y retira sus marcas del suelo. */
   private cancelPendingCast(player: MatchPlayerState): void {
-    player.pendingCast?.marker?.destroy();
-    player.pendingCast?.lane?.destroy();
+    if (!player.pendingCast) return;
+    player.pendingCast.marker?.destroy();
+    player.pendingCast.lane?.destroy();
     player.pendingCast = null;
+    // La recuperación global se fija al ejecutar; un casteo que nunca llega a
+    // ejecutarse no debe dejar al jugador bloqueado. Se limpia aquí para que
+    // una interrupción no arrastre el timer aunque cambie el orden de fases.
+    player.castLockTimer = 0;
   }
 
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
@@ -1559,12 +1587,10 @@ export class Game {
       player.invulnerableTimer = 0;
     }
     player.cooldowns[slotIndex] = def.cooldown;
-    // Recuperación global: tras lanzar una habilidad no melee no se puede
-    // encadenar otra hasta que pase su `castTime`. Las melee se limitan con su
-    // cooldown y `moveLock`, y no deben alargar su cadencia.
-    if (def.shape !== 'melee') {
-      player.castLockTimer = def.castTime;
-    }
+    // La recuperación global se cobra en `executeAbility`, cuando la habilidad
+    // se ejecuta de verdad. Durante el windup ya bloquea `pendingCast`; si el
+    // lanzamiento se interrumpe, no debe quedar un bloqueo que nunca se usó.
+    // Las melee se limitan con su cooldown y `moveLock`, y no usan este timer.
     // Solo las habilidades con animación propia ocupan el canal de acción;
     // sin animación el Pokémon conserva su reposo o su caminar.
     player.actionTimer = def.animation === null ? 0 : def.animationTime;
@@ -1718,12 +1744,13 @@ export class Game {
     targetX?: number,
     targetZ?: number
   ): void {
-    // El lock y el clip de ataque empiezan cuando la habilidad se ejecuta de
-    // verdad (tras el windup, si lo tiene). En las melee ambos duran lo mismo.
-    // Reiniciar el clip vale para todas las formas: si `windup > animationTime`
-    // (por ejemplo, Ataque Celeste), el temporizador arrancado en `castAbility`
-    // se agotaba durante la preparación y la animación de lanzamiento no
-    // llegaba a verse nunca.
+    // El lock de movimiento, la recuperación global y el clip de ataque
+    // empiezan cuando la habilidad se ejecuta de verdad (tras el windup, si lo
+    // tiene). En las melee el lock y el clip duran lo mismo. Reiniciar el clip
+    // vale para todas las formas: si `windup > animationTime` (por ejemplo,
+    // Ataque Celeste), el temporizador arrancado en `castAbility` se agotaba
+    // durante la preparación y la animación de lanzamiento no llegaba a verse
+    // nunca.
     const windupClip =
       def.windup > 0 ? def.windupAnimation ?? def.animation : null;
     // Si la preparación usó la misma animación que el lanzamiento, el clip ya
@@ -1732,6 +1759,9 @@ export class Game {
     const reusesWindupClip =
       windupClip !== null && windupClip === def.animation;
     player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
+    if (def.shape !== 'melee') {
+      player.castLockTimer = Math.max(player.castLockTimer, def.castTime);
+    }
     if (def.animation !== null) {
       player.actionTimer = def.animationTime;
       player.actionAnimation = def.animation;
@@ -1875,13 +1905,16 @@ export class Game {
    * Control de un golpe que conecta: cancela dash y preparación, bloquea el
    * movimiento un instante y empuja si la habilidad lo indica. Lo comparten las
    * habilidades dañinas y las de estado: en ambos casos el objetivo ha recibido
-   * un impacto válido.
+   * un impacto válido. El empuje sale de `sourceX/sourceZ` (punto de entrada del
+   * proyectil o centro del área); sin origen explícito, del atacante.
    */
   private applyHitControl(
     attacker: MatchPlayerState,
     target: MatchPlayerState,
     def: AbilityDef,
-    control: boolean
+    control: boolean,
+    sourceX = attacker.x,
+    sourceZ = attacker.z
   ): void {
     if (!control) return;
     target.actionTimer = 0;
@@ -1890,7 +1923,7 @@ export class Game {
     this.cancelPendingCast(target);
     target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
     if (def.knockback > 0) {
-      this.applyKnockback(target, attacker.x, attacker.z, def.knockback);
+      this.applyKnockback(target, sourceX, sourceZ, def.knockback);
     }
   }
 
@@ -1920,6 +1953,8 @@ export class Game {
       healToken?: HealOnHitToken;
       impactX?: number;
       impactZ?: number;
+      sourceX?: number;
+      sourceZ?: number;
     } = {}
   ): boolean {
     const power = options.power ?? def.power;
@@ -1939,7 +1974,14 @@ export class Game {
     // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:
     // cancela dash y preparación igual que una dañina, como describe el README.
     if (!damaging) {
-      this.applyHitControl(attacker, target, def, options.control ?? true);
+      this.applyHitControl(
+        attacker,
+        target,
+        def,
+        options.control ?? true,
+        options.sourceX,
+        options.sourceZ
+      );
       return false;
     }
 
@@ -1984,7 +2026,14 @@ export class Game {
     // Los ticks de un área no controlan al objetivo: solo restan vida y
     // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
     const control = options.control ?? true;
-    this.applyHitControl(attacker, target, def, control);
+    this.applyHitControl(
+      attacker,
+      target,
+      def,
+      control,
+      options.sourceX,
+      options.sourceZ
+    );
 
     target.hp = Math.max(0, target.hp - finalDamage);
     this.breakRegen(target);
@@ -2345,7 +2394,11 @@ export class Game {
         this.applyAbilityDamage(projectile.owner, hit.target, projectile.def, {
           healToken: projectile.healToken,
           impactX: hit.impactX,
-          impactZ: hit.impactZ
+          impactZ: hit.impactZ,
+          // El empuje nace donde entra el proyectil, no donde esté ahora el
+          // tirador: si se movió durante el vuelo, la dirección no cambia.
+          sourceX: hit.impactX,
+          sourceZ: hit.impactZ
         });
         if (projectile.pierce > 0) {
           projectile.pierce -= 1;
@@ -2436,15 +2489,19 @@ export class Game {
       this.applyAbilityDamage(aoe.owner, target, aoe.def, {
         power: basePower * radial,
         control: false,
-        healToken: aoe.healToken
+        healToken: aoe.healToken,
+        // Cada tick empuja desde el centro del área, no desde el lanzador.
+        sourceX: aoe.x,
+        sourceZ: aoe.z
       });
     }
   }
 
   /**
    * Aplica los golpes de dash del frame. La detección ya ocurrió durante el
-   * movimiento; aquí solo se revalida que el objetivo siga siendo golpeable y
-   * se aplica el daño, después de que todos los jugadores hayan actuado.
+   * movimiento, pero el objetivo pudo moverse después (actúa más tarde en
+   * `matchPlayers`) o quedar tras un obstáculo: se revalida el tramo guardado
+   * antes de aplicar el daño, igual que hace la melee.
    */
   private resolveInstantHits(): void {
     if (this.pendingInstantHits.length === 0) return;
@@ -2453,6 +2510,20 @@ export class Game {
     for (const hit of hits) {
       if (this.matchOver) break;
       if (!this.canHit(hit.attacker, hit.target)) continue;
+      if (
+        !this.dashSweepHits(
+          hit.target,
+          hit.ax,
+          hit.az,
+          hit.bx,
+          hit.bz,
+          hit.dirX,
+          hit.dirZ,
+          hit.reach
+        )
+      ) {
+        continue;
+      }
       this.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
         healToken: hit.healToken
       });

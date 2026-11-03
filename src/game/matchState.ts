@@ -87,6 +87,16 @@ export interface PendingInstantHit {
   target: MatchPlayerState;
   def: AbilityDef;
   healToken?: HealOnHitToken;
+  /** Tramo del dash que produjo el golpe (`ax/az` -> `bx/bz`). */
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  /** Dirección del dash: el barrido no se extiende hacia atrás. */
+  dirX: number;
+  dirZ: number;
+  /** Radio efectivo del golpe (radio del dash + radio del jugador). */
+  reach: number;
 }
 
 export interface PlayerDash {
