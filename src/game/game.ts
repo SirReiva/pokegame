@@ -1974,8 +1974,13 @@ export class Game {
 
     // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
     // impacto, ni control. Así `Onda Trueno` no ralentiza a un Pokémon de tipo
-    // Tierra ni `Bomba Lodo` ralentiza a Lucario aunque el daño sea 0.
-    if (typeEffectiveness(def.type, target.types) === 0) return false;
+    // Tierra ni `Bomba Lodo` ralentiza a Lucario aunque el daño sea 0. El golpe
+    // sí conecta, así que se muestra la marca 🚫 para explicar por qué no hizo
+    // nada.
+    if (typeEffectiveness(def.type, target.types) === 0) {
+      this.showImmunePopup(target);
+      return false;
+    }
 
     // La ralentización se aplica aunque la habilidad no haga daño (Paralizador).
     if (def.slow && target.alive) {
@@ -2101,6 +2106,18 @@ export class Game {
     });
   }
 
+  /** Marca de inmunidad cuando la habilidad conecta pero el tipo la anula. */
+  private showImmunePopup(target: MatchPlayerState): void {
+    this.spawnNumberPopup(target, {
+      amount: 0,
+      critical: false,
+      effectiveness: 1,
+      heal: false,
+      lethal: false,
+      immune: true
+    });
+  }
+
   private spawnNumberPopup(
     target: MatchPlayerState,
     options: {
@@ -2109,6 +2126,7 @@ export class Game {
       effectiveness: number;
       heal: boolean;
       lethal: boolean;
+      immune?: boolean;
     }
   ): void {
     const asset = this.assets.get(target.pokemonId);
@@ -2140,6 +2158,7 @@ export class Game {
       effectiveness: options.effectiveness,
       heal: options.heal,
       lethal: options.lethal,
+      immune: options.immune ?? false,
       views
     });
   }

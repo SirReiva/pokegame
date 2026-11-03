@@ -26,6 +26,8 @@ export interface DamageNumberOptions {
   heal?: boolean;
   /** `true` añade una calavera al número: el golpe ha dejado al objetivo a 0 PV. */
   lethal?: boolean;
+  /** `true` muestra la marca de inmunidad (🚫) en lugar de una cantidad. */
+  immune?: boolean;
   views: DamageNumberView[];
 }
 
@@ -82,23 +84,31 @@ const LABELS: Record<
 
 /** Calavera que marca un golpe mortal. */
 const SKULL = '💀';
-const SKULL_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+/** Marca que indica que el tipo del objetivo anula la habilidad. */
+const IMMUNE = '🚫';
+const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** Estrategias de color de relleno del número. */
-const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
+const FILL_COLORS: Record<
+  'heal' | 'weak' | 'critical' | 'normal' | 'immune',
+  string
+> = {
   heal: '#6dff8e',
   weak: '#d46a75',
   critical: '#ff2d55',
-  normal: '#ff4d5a'
+  normal: '#ff4d5a',
+  immune: '#e6e9ff'
 };
 
-/** Estrategias de resplandor: curación verde o daño rojo. */
-const GLOW_COLORS: Record<'heal' | 'damage', string> = {
+/** Estrategias de resplandor: curación verde, daño rojo o inmunidad azul. */
+const GLOW_COLORS: Record<'heal' | 'damage' | 'immune', string> = {
   heal: 'rgba(60, 255, 120, 0.9)',
-  damage: 'rgba(255, 40, 70, 0.85)'
+  damage: 'rgba(255, 40, 70, 0.85)',
+  immune: 'rgba(150, 180, 255, 0.9)'
 };
 
 function labelFor(options: DamageNumberOptions): string {
+  if (options.immune) return IMMUNE;
   if (options.heal) return LABELS.heal(options.amount);
   const base = options.critical
     ? LABELS.critical(options.amount)
@@ -109,16 +119,24 @@ function labelFor(options: DamageNumberOptions): string {
 function fillFor(
   critical: boolean,
   effectiveness: number,
-  heal: boolean
+  heal: boolean,
+  immune: boolean
 ): string {
-  const key = heal
-    ? 'heal'
-    : effectiveness < 1
-      ? 'weak'
-      : critical
-        ? 'critical'
-        : 'normal';
+  const key = immune
+    ? 'immune'
+    : heal
+      ? 'heal'
+      : effectiveness < 1
+        ? 'weak'
+        : critical
+          ? 'critical'
+          : 'normal';
   return FILL_COLORS[key];
+}
+
+function glowFor(heal: boolean, immune: boolean): string {
+  if (immune) return GLOW_COLORS.immune;
+  return heal ? GLOW_COLORS.heal : GLOW_COLORS.damage;
 }
 
 export class DamageNumbers {
@@ -159,13 +177,16 @@ export class DamageNumbers {
     critical: boolean,
     effectiveness: number,
     heal: boolean,
-    lethal: boolean
+    lethal: boolean,
+    immune: boolean
   ): DamageTexture {
     const emphasis = critical ? EMPHASIS.critical : EMPHASIS.normal;
     const { fontSize, paddingX } = emphasis;
-    const font = `900 ${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
-    // La calavera se dibuja aparte para no aplicarle el contorno grueso del
-    // número, que emborronaría el emoji.
+    // El emoji se dibuja con su propia fuente y sin el contorno grueso del
+    // número, que lo emborronaría.
+    const font = immune
+      ? `${fontSize}px ${EMOJI_FONT}`
+      : `900 ${fontSize}px "Trebuchet MS", "Segoe UI", sans-serif`;
     const suffix = ` ${SKULL}`;
     const text = lethal && label.endsWith(suffix) ? label.slice(0, -suffix.length) : label;
 
@@ -174,7 +195,7 @@ export class DamageNumbers {
     if (!measure) throw new Error('No se pudo medir el texto de daño');
     measure.font = font;
     const textWidth = measure.measureText(text).width;
-    const skullFont = `${fontSize}px ${SKULL_FONT}`;
+    const skullFont = `${fontSize}px ${EMOJI_FONT}`;
     let skullWidth = 0;
     const gap = lethal ? fontSize * 0.1 : 0;
     if (lethal) {
@@ -199,15 +220,17 @@ export class DamageNumbers {
     context.miterLimit = 2;
     context.lineWidth = emphasis.strokeWidth;
     context.strokeStyle = 'rgba(24, 4, 9, 0.96)';
-    context.shadowColor = heal ? GLOW_COLORS.heal : GLOW_COLORS.damage;
+    context.shadowColor = glowFor(heal, immune);
     context.shadowBlur = emphasis.shadowBlur;
 
     const centerY = height / 2 + 2;
     const startX = width / 2 - contentWidth / 2;
-    context.strokeText(text, startX, centerY);
-    context.shadowBlur = 0;
-    context.fillStyle = fillFor(critical, effectiveness, heal);
+    if (!immune) context.strokeText(text, startX, centerY);
+    // El emoji conserva el resplandor, pero no se rellena con el color del
+    // texto: sus glifos ya traen color propio.
+    context.fillStyle = fillFor(critical, effectiveness, heal, immune);
     context.fillText(text, startX, centerY);
+    context.shadowBlur = 0;
 
     if (lethal) {
       context.font = skullFont;
@@ -314,7 +337,8 @@ export class DamageNumbers {
           options.critical,
           options.effectiveness,
           options.heal ?? false,
-          options.lethal ?? false
+          options.lethal ?? false,
+          options.immune ?? false
         );
       const material = this.createMaterial(texture);
       const entity = new pc.Entity('damage-number');

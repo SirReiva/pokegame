@@ -970,4 +970,5 @@ Un script de balance como el usado para este informe se puede añadir a
 - Los commits `fix melee` y `fix inmune` van en la dirección correcta: la melee,
   las áreas, los dashes y los proyectiles comprueban todos los colliders, el
   proyectil barre también a los objetivos y el choque revalida los golpes. La inmunidad de tipo se comprueba antes de
-  cualquier efecto: no hay daño, ni estado, ni impacto, ni control.
+  cualquier efecto: no hay daño, ni estado, ni impacto, ni control; el golpe
+  conectado solo muestra la marca 🚫.

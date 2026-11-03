@@ -112,7 +112,7 @@ daño = base × crítico × aleatorio × STAB × efectividad de tipos
 
 Incluye separación físico/especial, STAB, tabla de tipos completa, precisión, crítico 1/24 y factor aleatorio 0,85–1,00. No hay fuego amigo: las habilidades solo dañan al equipo rival. Los stats de cada especie viven en `src/game/pokedex.ts`, la tabla de tipos en `src/game/typeChart.ts` y la fórmula en `src/game/combat.ts`.
 
-Cada impacto muestra la **cantidad de daño en rojo** sobre la cabeza del objetivo, en todas las vistas donde se le vea. El texto se genera en un canvas, se sube como textura y se dibuja con un quad de PlayCanvas en la capa de cada viewport; el propio motor anima la subida, el pequeño “pop” y el fadeout. Los críticos salen más grandes y con un `!`.
+Cada impacto muestra la **cantidad de daño en rojo** sobre la cabeza del objetivo, en todas las vistas donde se le vea. El texto se genera en un canvas, se sube como textura y se dibuja con un quad de PlayCanvas en la capa de cada viewport; el propio motor anima la subida, el pequeño “pop” y el fadeout. Los críticos salen más grandes y con un `!`. Si el tipo del objetivo es inmune a la habilidad, el golpe conecta pero no resta vida y muestra 🚫 en lugar de un número.
 
 Las estadísticas de daño cuentan **vida realmente descontada**: si un golpe letal hace más daño que la vida restante, solo se suma esa vida restante y el exceso no infla el marcador. El daño se acumula en `damageDealt` (solo contra rivales) y `damageTaken` (incluye el autodaño de habilidades como `Explosión`). Se emiten en `PlayerMatchStats` junto a los KO y las muertes.
 
