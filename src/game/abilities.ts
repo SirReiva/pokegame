@@ -1826,3 +1826,14 @@ export function abilityForSlot(
   const id = moveset?.[slotIndex] ?? null;
   return id ? (ABILITIES[id] ?? null) : null;
 }
+
+/**
+ * ¿El Pokémon tiene al menos una habilidad realmente definida en su moveset?
+ * Los que todavía no tienen movimientos asignados no se pueden elegir en el
+ * carrusel del roster.
+ */
+export function hasAssignedAbilities(pokemonId: string): boolean {
+  const moveset = MOVESETS[pokemonId];
+  if (!moveset) return false;
+  return moveset.some((id) => id !== null && ABILITIES[id] !== undefined);
+}

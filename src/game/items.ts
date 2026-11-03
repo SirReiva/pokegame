@@ -49,7 +49,7 @@ export interface ItemDefinition {
   usedImage: string;
   /** Segundos que el objeto permanece usado tras recogerse. */
   cooldownSeconds: number;
-  /** Distancia (u) desde la que se puede recoger, sin contar el radio del jugador. */
+  /** Distancia (u) desde la que se puede recoger, sin contar el hurtbox del jugador. */
   pickupRadius: number;
   /** Altura del billboard en unidades de mundo. */
   height: number;

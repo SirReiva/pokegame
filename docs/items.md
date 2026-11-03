@@ -51,9 +51,16 @@ Para crear un objeto nuevo:
 
 ## Comportamiento
 
-- La recogida es automática al entrar en `pickupRadius + CONFIG.player.radius`.
+- La recogida es automática al entrar en `pickupRadius + player.hitRadius` (el
+  hurtbox de la especie, no el radio de movimiento global).
 - `canPickup` se evalúa antes de consumir. Las pociones no se gastan con la vida
   completa.
+- La recogida no atraviesa colliders (muros, rocas, árboles ni bases) y exige
+  que el equipo vea el punto: un objeto oculto por la niebla o al otro lado de un
+  obstáculo no se consume.
+- Cada coordenada del mapa solo puede tener un objeto; `parsePickups` rechaza
+  duplicados exactos. Si varios jugadores tocan el mismo objeto en el mismo
+  frame, gana el vivo más cercano (empate: orden estable de la partida).
 - El estado es global: un solo objeto compartido por todos los jugadores. Al
   recogerlo cambia a `usedImage`; al terminar `cooldownSeconds` vuelve a
   `unusedImage` en la misma posición.
@@ -65,7 +72,9 @@ Para crear un objeto nuevo:
   partida, sin necesitar verlos, pero no su estado. Cuando bajan del 70% de vida
   eligen destino puntuando curación, distancia, peligro junto a la base enemiga
   y enemigos visibles en el trayecto. El estado usado/disponible solo se conoce
-  si el equipo ve el objeto; si lo ve usado, lo descarta sin ir hasta él.
+  si el equipo ve el objeto; si lo ve usado, lo descarta sin ir hasta él. La
+  elección no comprueba línea de visión ni alcanzabilidad: un objeto oculto o
+  inalcanzable puede hacerles perder tiempo.
 - Cada partida reinicia los cooldowns (`PickupField.reset()`).
 
 ## Arte

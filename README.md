@@ -311,7 +311,7 @@ El catálogo vive en `src/game/items.ts`. Cada definición declara:
 - `canPickup({ player, pokemon })`: condición previa. Las pociones no se gastan si el Pokémon tiene la vida completa.
 - `resolve({ player, pokemon, heal, showHeal })`: acción de resolución. Recibe el estado del jugador (`MatchPlayerState`) y la entrada del Pokémon (`PokemonEntry`), además de utilidades para curar y mostrar el número de curación.
 
-Por defecto, **Poción** cura 50 PV con 20 s de cooldown y **Poción grande** cura 120 PV con 45 s. La recogida es automática al pasar por encima y el estado es global: hay un solo objeto compartido por todos los jugadores. Al recogerlo se cambia a la imagen usada y, al terminar el cooldown, vuelve a la imagen disponible.
+Por defecto, **Poción** cura 50 PV con 20 s de cooldown y **Poción grande** cura 120 PV con 45 s. La recogida es automática al pasar por encima, exige que el equipo vea el punto y no atraviesa colliders; el estado es global: hay un solo objeto compartido por todos los jugadores. Al recogerlo se cambia a la imagen usada y, al terminar el cooldown, vuelve a la imagen disponible.
 
 Los objetos se ocultan con la niebla igual que los Pokémon: cada viewport tiene su propia copia en su capa de render y solo la muestra si algún Pokémon vivo de su equipo ve el punto, descontando la ocultación del terreno y respetando la línea de visión. En el menú se muestra una única copia sobre el mundo, sin niebla.
 

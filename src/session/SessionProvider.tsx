@@ -9,7 +9,7 @@ import {
 import {
   COMMON_ABILITY_OPTIONS,
   DEFAULT_COMMON_ABILITY,
-  MOVESETS,
+  hasAssignedAbilities,
   type CommonAbilityId
 } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
@@ -50,9 +50,19 @@ function errorMessage(cause: unknown): string {
 /** Pokémon que pueden usar los bots: los que tienen un moveset real. */
 function botPokemonPool(manifest: SpriteManifest) {
   const withKit = manifest.pokemon.filter((entry) =>
-    MOVESETS[entry.id]?.some((abilityId) => abilityId !== null)
+    hasAssignedAbilities(entry.id)
   );
   return withKit.length > 0 ? withKit : manifest.pokemon;
+}
+
+/** Primer Pokémon del manifiesto con habilidades definidas. */
+function firstPlayablePokemonId(manifest: SpriteManifest | null): string {
+  if (!manifest) return '';
+  return (
+    manifest.pokemon.find((entry) => hasAssignedAbilities(entry.id))?.id ??
+    manifest.pokemon[0]?.id ??
+    ''
+  );
 }
 
 function makeBotPlayer(
@@ -171,7 +181,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const slot = nextFreeSlot(current);
       if (slot === null) return;
 
-      const firstPokemon = manifestRef.current?.pokemon[0]?.id ?? '';
+      const firstPokemon = firstPlayablePokemonId(manifestRef.current);
       commitPlayers([
         ...current,
         {
@@ -305,7 +315,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // Una partida siempre necesita al menos una vista humana.
     if (!current.some((player) => !player.isBot)) return false;
 
-    const firstPokemon = manifestRef.current?.pokemon[0]?.id ?? '';
+    const firstPokemon = firstPlayablePokemonId(manifestRef.current);
     commitPlayers(
       current.map((player) => ({
         ...player,
@@ -343,9 +353,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (delta === 0) return;
 
       // El carrusel es circular: al pasar del último vuelve al primero y al
-      // retroceder desde el primero salta al último.
-      const nextIndex = (index + delta + list.length) % list.length;
-      if (nextIndex === index) return;
+      // retroceder desde el primero salta al último. Se saltan los Pokémon sin
+      // habilidades asignadas, que aparecen deshabilitados en el selector.
+      const step = delta > 0 ? 1 : -1;
+      let nextIndex = index;
+      for (let attempt = 0; attempt < list.length; attempt++) {
+        nextIndex = (nextIndex + step + list.length) % list.length;
+        if (hasAssignedAbilities(list[nextIndex].id)) break;
+      }
+      if (
+        nextIndex === index ||
+        !hasAssignedAbilities(list[nextIndex].id)
+      ) {
+        return;
+      }
       commitPlayers(
         current.map((entry) =>
           entry.slot === slot

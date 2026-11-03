@@ -5,6 +5,7 @@ import {
   COMMON_ABILITY_OPTIONS,
   abilityForSlot,
   commonAbilityOption,
+  hasAssignedAbilities,
   type CommonAbilityId,
   type DamageCategory
 } from '../game/abilities';
@@ -537,23 +538,47 @@ function PokemonRail({
     >
       {entries.map((entry) => {
         const selected = entry.id === currentId;
+        const available = hasAssignedAbilities(entry.id);
         return (
           <button
             key={entry.id}
             type="button"
             data-current={selected}
             aria-pressed={selected}
-            onClick={() => onPick(entry.id)}
-            className={`flex w-16.5 flex-none snap-center flex-col items-center gap-0.5 rounded-lg border px-1 py-1 transition-colors duration-150 ${
-              selected
-                ? 'border-[color-mix(in_srgb,var(--accent)_60%,var(--color-line))] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]'
-                : 'border-line bg-white/2.5 hover:border-line-strong hover:bg-white/6'
+            disabled={!available}
+            title={
+              available
+                ? entry.name
+                : `${entry.name} · Habilidades sin definir`
+            }
+            onClick={() => {
+              if (available) onPick(entry.id);
+            }}
+            className={`relative flex w-16.5 flex-none snap-center flex-col items-center gap-0.5 rounded-lg border px-1 py-1 transition-colors duration-150 ${
+              !available
+                ? 'cursor-not-allowed border-line/60 bg-white/1'
+                : selected
+                  ? 'border-[color-mix(in_srgb,var(--accent)_60%,var(--color-line))] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]'
+                  : 'border-line bg-white/2.5 hover:border-line-strong hover:bg-white/6'
             }`}
           >
-            <PokemonPortrait entry={entry} height={30} />
+            {!available && (
+              <span className="absolute top-0.5 right-0.5 z-1 rounded-full border border-warning/60 bg-night-900/90 px-1 py-px font-mono text-7.36 font-bold tracking-[0.08em] uppercase text-warning">
+                Soon
+              </span>
+            )}
+            <PokemonPortrait
+              entry={entry}
+              height={30}
+              className={available ? undefined : 'opacity-40'}
+            />
             <span
               className={`w-full truncate text-center font-mono text-8 leading-tight ${
-                selected ? 'text-ink' : 'text-steel-600'
+                !available
+                  ? 'text-steel-700'
+                  : selected
+                    ? 'text-ink'
+                    : 'text-steel-600'
               }`}
             >
               {entry.name}
