@@ -238,6 +238,10 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   deathFade: number;
   kills: number;
   deaths: number;
+  /** Daño real infligido a rivales (sin contar el exceso sobre la vida restante). */
+  damageDealt: number;
+  /** Daño real recibido de rivales y autodaño. */
+  damageTaken: number;
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
   buffs: ActiveBuff[];

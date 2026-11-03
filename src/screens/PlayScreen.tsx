@@ -34,6 +34,11 @@ const modalHead = 'flex items-center justify-between gap-4 border-b border-line 
 const modalClose =
   'size-[34px] cursor-pointer rounded-[9px] border border-transparent bg-transparent text-27.2 leading-none text-muted transition-colors duration-[120ms] hover:bg-white/[0.07] hover:text-ink';
 
+/** Formatea el daño con separador de miles para el marcador final. */
+function formatDamage(value: number): string {
+  return Math.round(value).toLocaleString('es-ES');
+}
+
 interface PlayHandlers {
   onReady: () => void;
   onProgress: (progress: LoadingProgress) => void;
@@ -380,7 +385,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       {!error && playing && matchResult && (
         <div className="fixed inset-0 z-14 flex animate-fade-in items-center justify-center bg-night-950/78 backdrop-blur-sm">
           <div
-            className={`${panel} max-h-[92vh] w-[min(760px,100%)] animate-rise-in overflow-y-auto p-[clamp(20px,3vw,30px)]`}
+            className={`${panel} max-h-[92vh] w-[min(900px,100%)] animate-rise-in overflow-y-auto p-[clamp(20px,3vw,30px)]`}
           >
             <div className="text-center">
               <span className={eyebrow}>Fin de la partida</span>
@@ -454,7 +459,14 @@ function MatchScoreboard({
   const rowsSource: Array<
     Pick<
       PlayerMatchStats,
-      'slot' | 'name' | 'team' | 'pokemonId' | 'kills' | 'deaths'
+      | 'slot'
+      | 'name'
+      | 'team'
+      | 'pokemonId'
+      | 'kills'
+      | 'deaths'
+      | 'damageDealt'
+      | 'damageTaken'
     >
   > =
     stats.length > 0
@@ -465,7 +477,9 @@ function MatchScoreboard({
           team: player.team,
           pokemonId: player.pokemonId,
           kills: 0,
-          deaths: 0
+          deaths: 0,
+          damageDealt: 0,
+          damageTaken: 0
         }));
 
   return (
@@ -520,7 +534,7 @@ function MatchScoreboard({
                         {entry?.name ?? row.pokemonId}
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-baseline gap-2.5 font-mono tabular-nums">
+                    <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
                       <span className="flex flex-col items-end leading-none">
                         <strong className="text-13.6 text-steel-150">
                           {row.kills}
@@ -535,6 +549,28 @@ function MatchScoreboard({
                         </strong>
                         <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
                           Muertes
+                        </span>
+                      </span>
+                      <span
+                        className="flex flex-col items-end leading-none"
+                        title="Daño hecho a rivales"
+                      >
+                        <strong className="text-13.6 text-accent-soft">
+                          {formatDamage(row.damageDealt)}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          Daño
+                        </span>
+                      </span>
+                      <span
+                        className="flex flex-col items-end leading-none"
+                        title="Daño recibido de rivales y autodaño"
+                      >
+                        <strong className="text-13.6 text-danger-100">
+                          {formatDamage(row.damageTaken)}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          Recibido
                         </span>
                       </span>
                     </span>

@@ -560,6 +560,8 @@ export class Game {
         deathFade: 0,
         kills: 0,
         deaths: 0,
+        damageDealt: 0,
+        damageTaken: 0,
         cooldowns: [0, 0, 0, 0, 0],
         buffs: [],
         slowEffects: [],
@@ -1831,6 +1833,7 @@ export class Game {
     const amount = Math.min(raw, Math.max(0, player.hp - 1));
     if (amount <= 0) return;
     player.hp -= amount;
+    player.damageTaken += amount;
     this.breakRegen(player);
     player.hurtTimer = Math.max(player.hurtTimer, 0.25);
     this.showDamagePopup(player, amount, false, 1);
@@ -2035,7 +2038,13 @@ export class Game {
       options.sourceZ
     );
 
+    // Solo cuenta el daño que descuenta vida real: el exceso de un golpe letal
+    // no infla las estadísticas. El autodaño de habilidades como Explosión sí
+    // suma como daño recibido del lanzador.
+    const appliedDamage = Math.min(finalDamage, target.hp);
     target.hp = Math.max(0, target.hp - finalDamage);
+    target.damageTaken += appliedDamage;
+    if (attacker.team !== target.team) attacker.damageDealt += appliedDamage;
     this.breakRegen(target);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
     if (target.hp <= 0) this.knockOut(target, attacker);
@@ -2719,6 +2728,8 @@ export class Game {
         invulnerable: player.invulnerableTimer > 0,
         kills: player.kills,
         deaths: player.deaths,
+        damageDealt: player.damageDealt,
+        damageTaken: player.damageTaken,
         abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
           const def = id ? ABILITIES[id] : null;
           return {

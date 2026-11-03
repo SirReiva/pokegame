@@ -40,6 +40,11 @@ function hpColorFor(pct: number): string {
   return `hsl(${(clamped * 1.2).toFixed(1)} 78% 52%)`;
 }
 
+/** Formatea contadores grandes con separador de miles. */
+function formatCount(value: number): string {
+  return Math.round(value).toLocaleString('es-ES');
+}
+
 /**
  * Feed de KOs de una vista. Cada jugador recibe la misma lista global de la
  * partida, pero la pinta dentro de su propio viewport para no compartir un
@@ -222,9 +227,20 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                     <span className="font-mono text-8 tabular-nums text-steel-250">
                       {Math.ceil(playerStats.hp)}/{playerStats.maxHp}
                     </span>
-                    <span className="font-mono text-8 tabular-nums text-steel-650">
+                    <span
+                      className="font-mono text-8 tabular-nums text-steel-650"
+                      title={`Daño hecho ${formatCount(playerStats.damageDealt)} · Daño recibido ${formatCount(playerStats.damageTaken)}`}
+                    >
                       K{playerStats.kills} D{playerStats.deaths}
                     </span>
+                    {!compact && (
+                      <span
+                        className="font-mono text-8 tabular-nums text-steel-500"
+                        title={`Daño hecho ${formatCount(playerStats.damageDealt)} · Daño recibido ${formatCount(playerStats.damageTaken)}`}
+                      >
+                        DÑO {formatCount(playerStats.damageDealt)}
+                      </span>
+                    )}
                     {playerStats.invulnerable && (
                       <span className="rounded bg-white/10 px-1 font-mono text-7.36 tracking-[0.06em] text-steel-150">
                         INV

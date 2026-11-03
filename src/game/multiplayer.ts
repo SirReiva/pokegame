@@ -303,6 +303,10 @@ export interface PlayerMatchStats {
   invulnerable: boolean;
   kills: number;
   deaths: number;
+  /** Daño real infligido a rivales en toda la partida. */
+  damageDealt: number;
+  /** Daño real recibido de rivales y autodaño en toda la partida. */
+  damageTaken: number;
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;
