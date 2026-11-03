@@ -293,6 +293,19 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const centerX = targetX ?? player.x + dirX * reach;
   const centerZ = targetZ ?? player.z + dirZ * reach;
   const duration = Math.max(0.1, def.aoeDuration);
+  // Las áreas sin preparación no pasan por la marca de `castAbility`: el aro
+  // del equipo se crea aquí junto al efecto para que el límite del área se vea
+  // durante toda la habilidad, no solo durante el impacto.
+  if (def.windup <= 0) {
+    deps.combatFx.spawnAoeTelegraph(
+      centerX,
+      centerZ,
+      def.radius + CONFIG.player.radius,
+      TEAM_INFO[player.team].accent,
+      0,
+      duration
+    );
+  }
   // El efecto muestra el disco de daño real (`def.radius`). La marca del suelo
   // que se dibuja durante el windup añade el radio del jugador en `game.ts`:
   // esa es la zona en la que el centro de un objetivo recibe el golpe. Así el

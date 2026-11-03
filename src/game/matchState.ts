@@ -123,7 +123,11 @@ export interface PendingCast {
   slotIndex: number;
   elapsed: number;
   windup: number;
-  /** Marca en el suelo de las habilidades de área; `null` en las demás. */
+  /**
+   * Marca en el suelo de las habilidades de área; `null` en las demás. El aro
+   * del equipo sobrevive al impacto y se autodestruye al terminar el efecto;
+   * el relleno de carga solo dura el `windup`.
+   */
   marker: TelegraphHandle | null;
   /**
    * Carril en el suelo de los haces. Sobrevive al disparo y se autodestruye

@@ -1242,10 +1242,9 @@ export class Game {
     player.concealment = terrainConcealment(terrain, player.types);
 
     if (pending.elapsed >= pending.windup) {
-      // La marca del área termina justo al impactar; el carril del haz debe
-      // seguir visible mientras se reproduce el haz, así que se deja que se
-      // autodestruya al acabar su efecto.
-      pending.marker?.destroy();
+      // La marca del área ya no se destruye al impactar: su aro sigue marcando
+      // el límite durante el efecto y se autodestruye al acabar. El carril del
+      // haz también sigue visible mientras se reproduce el haz.
       player.pendingCast = null;
       this.queueCast(player, pending.def, pending.targetX, pending.targetZ);
     }
@@ -1662,9 +1661,11 @@ export class Game {
       // distingue de inmediato a quién pertenece el aviso.
       const teamAccent = TEAM_INFO[player.team].accent;
       // Las habilidades de área fijan su centro al empezar el retardo y
-      // muestran la marca en el suelo hasta el impacto. La marca incluye el
-      // radio del jugador porque el daño también lo suma: así el borde dibujado
-      // es el borde real y no se puede golpear a quien se ve claramente fuera.
+      // muestran la marca en el suelo hasta que termina el efecto. El aro
+      // (color del equipo) es persistente; el relleno de carga solo dura el
+      // `windup`. La marca incluye el radio del jugador porque el daño también
+      // lo suma: así el borde dibujado es el borde real y no se puede golpear a
+      // quien se ve claramente fuera.
       const marker =
         def.shape === 'aoe'
           ? this.combatFx.spawnAoeTelegraph(
@@ -1672,7 +1673,8 @@ export class Game {
               targetZ,
               def.radius + CONFIG.player.radius,
               teamAccent,
-              def.windup
+              def.windup,
+              Math.max(0.1, def.aoeDuration)
             )
           : null;
       // Los haces muestran su carril desde el inicio del windup. El ancho es el

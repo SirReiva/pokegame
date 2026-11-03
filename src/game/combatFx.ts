@@ -5064,16 +5064,20 @@ export class CombatFx {
   }
 
   /**
-   * Marca de área para las habilidades con retardo: anillo discontinuo,
-   * relleno tenue y un disco de carga que crece hasta el radio real. El
-   * llamador la destruye justo antes de ejecutar el daño.
+   * Marca de área para las habilidades con retardo. El aro del borde (color
+   * del equipo) es la parte persistente: se mantiene desde el inicio de la
+   * preparación hasta que termina el efecto o se cancela el lanzamiento. El
+   * relleno, el disco de carga y el destello final solo acompañan al `windup`
+   * y desaparecen al impactar. Con `windup` 0 (áreas instantáneas) la marca
+   * nace directamente como aro.
    */
   spawnAoeTelegraph(
     x: number,
     z: number,
     radius: number,
     color: readonly [number, number, number],
-    duration: number
+    duration: number,
+    effectDuration = 0
   ): TelegraphHandle {
     const root = new pc.Entity('aoe-telegraph');
     root.setPosition(x, 0.08, z);
@@ -5102,30 +5106,47 @@ export class CombatFx {
     const sweep = this.createEntity(this.discMesh, [sweepMaterial], root);
     sweep.setLocalScale(0.01, 1, 0.01);
 
+    const charge = Math.max(0, duration);
+    const effect = Math.max(0, effectDuration);
+    const total = Math.max(0.05, charge + effect);
+
     const record: GroundTelegraph = {
       entity: root,
       materials,
       elapsed: 0,
-      duration: Math.max(0.05, duration),
+      duration: total,
       active: true,
       anchors: areaAnchors(x, z, radius),
-      update: (progress, elapsed) => {
+      update: (_progress, elapsed) => {
         const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
-        ringMaterial.opacity = 0.3 + pulse * 0.35;
-        dashMaterial.opacity = 0.55 + pulse * 0.35;
-        fillMaterial.opacity = 0.06 + pulse * 0.05;
+        // El aro se apaga en el último tramo del efecto, a la vez que el
+        // residuo visual del área, para que no desaparezca de golpe.
+        const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
+        ringMaterial.opacity = (0.3 + pulse * 0.35) * fade;
+        dashMaterial.opacity = (0.55 + pulse * 0.35) * fade;
+        fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
         dash.setLocalEulerAngles(0, -elapsed * 32, 0);
 
-        const sweepScale = Math.max(0.01, radius * 2 * progress);
-        sweep.setLocalScale(sweepScale, 1, sweepScale);
-        sweepMaterial.opacity = 0.34 * (1 - progress * 0.55);
+        const chargeProgress =
+          charge > 0 ? Math.min(1, elapsed / charge) : 1;
+        if (charge > 0 && elapsed < charge) {
+          // Durante la preparación el disco crece hasta el radio real.
+          const sweepScale = Math.max(0.01, radius * 2 * chargeProgress);
+          sweep.setLocalScale(sweepScale, 1, sweepScale);
+          sweepMaterial.opacity = 0.34 * (1 - chargeProgress * 0.55);
 
-        // Destello final: avisa del impacto inminente.
-        if (progress > 0.82) {
-          const flash = (progress - 0.82) / 0.18;
-          ringMaterial.opacity += flash * 0.45;
-          dashMaterial.opacity += flash * 0.35;
-          sweepMaterial.opacity += flash * 0.3;
+          // Destello final: avisa del impacto inminente.
+          if (chargeProgress > 0.82) {
+            const flash = (chargeProgress - 0.82) / 0.18;
+            ringMaterial.opacity += flash * 0.45 * fade;
+            dashMaterial.opacity += flash * 0.35 * fade;
+            sweepMaterial.opacity += flash * 0.3;
+          }
+        } else {
+          // Ya impactó: el aro queda solo como límite del área mientras dura
+          // el efecto, sin relleno de carga ni destello.
+          sweep.setLocalScale(0.01, 1, 0.01);
+          sweepMaterial.opacity = 0;
         }
       }
     };
