@@ -250,6 +250,10 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
     { "kind": "mountain", "width": 2.2, "points": [[-2, 0], [0, 1], [2, 0]] },
     { "kind": "wall", "width": 1.2, "points": [[-3, -3], [3, -3]] }
   ],
+  "pickups": [
+    { "type": "potion", "x": -1, "z": 1 },
+    { "type": "superPotion", "x": 2, "z": -2 }
+  ],
   "tiles": [
     ["jungle", "jungle", "lane", "jungle"],
     ["jungle", "waterLow", "waterLow", "jungle"],
@@ -264,6 +268,7 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
 - `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
 - `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra. `kind` elige el aspecto: `mountain` (picos de piedra, por defecto) o `wall` (sillería con almenas). La colisión y la visión son idénticas en ambos.
+- `pickups` coloca objetos recogibles en coordenadas de mundo. `type` referencia el catálogo de `src/game/items.ts` (`potion`, `superPotion`); la definición del objeto (imágenes, cooldown y efecto) no se duplica en el mapa. Al recogerlo se muestra su imagen usada y reaparece en el mismo sitio cuando termina el cooldown.
 - `spawn` es el punto al que mira la cámara mientras se carga la partida. Si falta, se usa el respawn azul.
 - Los calveros, el agua y su decoración 3D se derivan de las celdas: cada grupo conexo de un terreno decorativo se convierte en una región poligonal, y cada cuerpo de agua se triangula para colocar la lámina superficial.
 - `public/maps/map.schema.json` describe el formato para que el editor valide los archivos. Los mapas existentes lo referencian con `"$schema": "./map.schema.json"`.
@@ -288,11 +293,27 @@ El menú principal (`/`) y la sala de equipos (`/lobby`) enlazan a **Editor**, q
 2. **Dibujo**: rejilla 2D con los quince terrenos. Herramientas de lápiz (interpola al arrastrar para no dejar huecos), relleno, rectángulo y borrador. El clic derecho borra. `Ctrl+Z` / `Ctrl+Y` deshacen y rehacen.
 3. **Bases**: las herramientas de base azul y roja (teclas `1` y `2`) colocan cada respawn en el centro de una celda. El radio se ajusta en el panel derecho y se aplica a ambas bases.
 4. **Separadores**: la herramienta Separador (`M`) traza una polilínea haciendo clic en las celdas. En el panel derecho eliges si es cordillera o muro, y también puedes cambiar el tipo de uno ya existente. El doble clic o `Enter` cierra el trazado y el clic derecho quita el último punto. Los puntos se pueden arrastrar y las líneas admiten nuevos vértices con doble clic; el clic derecho sobre un punto lo elimina. El ancho se ajusta por separador en el panel derecho y `Supr` borra el seleccionado.
-5. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre, sin las dos bases o con separadores incompletos.
+5. **Objetos**: la herramienta Objeto (`P`) coloca la poción elegida en el centro de una celda. Puedes cambiar el tipo del objeto de una celda volviendo a hacer clic y el clic derecho lo elimina. El panel derecho lista los objetos colocados y permite borrarlos.
+6. **Exportación**: `Exportar JSON` descarga `<id>.json` y `Copiar JSON` lo pone en el portapapeles. La validación impide exportar sin id válido, sin nombre, sin las dos bases, con separadores incompletos o con objetos fuera de la rejilla.
 
 El borrador se guarda en `localStorage` (`newpoke.map-editor.draft.v1`) y se recupera al volver a abrir el editor. Para jugar el mapa, guarda el archivo en `public/maps/<id>.json` y añade su entrada a `public/maps/index.json`.
 
 El editor dibuja y edita separadores (`mountains`), pero no cambia el `spawn` de cámara, que conserva al importar y exportar. El ancho y el alto de la rejilla pueden ser distintos; al redimensionar, los separadores se desplazan con el terreno. Si un mapa importado declara varios respawns por equipo, el editor conserva el primero de cada uno.
+
+## Objetos recogibles
+
+El catálogo vive en `src/game/items.ts`. Cada definición declara:
+
+- `unusedImage` y `usedImage`: dos PNG en `public/items/` (disponible y en cooldown).
+- `cooldownSeconds`: tiempo que el objeto permanece usado antes de reaparecer en el mismo sitio.
+- `pickupRadius` y `height`: alcance de recogida y tamaño del billboard en el mundo.
+- `healHp`: PV fijos que cura; `0` en objetos que no curan.
+- `canPickup({ player, pokemon })`: condición previa. Las pociones no se gastan si el Pokémon tiene la vida completa.
+- `resolve({ player, pokemon, heal, showHeal })`: acción de resolución. Recibe el estado del jugador (`MatchPlayerState`) y la entrada del Pokémon (`PokemonEntry`), además de utilidades para curar y mostrar el número de curación.
+
+Por defecto, **Poción** cura 50 PV con 20 s de cooldown y **Poción grande** cura 120 PV con 45 s. La recogida es automática al pasar por encima y el estado es global: hay un solo objeto compartido por todos los jugadores. Al recogerlo se cambia a la imagen usada y, al terminar el cooldown, vuelve a la imagen disponible.
+
+El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y Poción grande, llenas y vacías) sin dependencias externas. Para añadir un objeto nuevo basta con crear sus dos imágenes, añadir la definición a `ITEM_DEFINITIONS`, incluirlo en `ITEM_IDS` y usar su `type` en los mapas.
 
 ## Multijugador local
 

@@ -15,6 +15,7 @@ import {
   type Team,
   type TerrainId
 } from './terrain';
+import { ITEM_IDS, isItemId, type PickupSpawn } from './items';
 
 export interface MapIndexEntry {
   id: string;
@@ -104,6 +105,29 @@ function parseRespawns(raw: unknown): RespawnPoint[] {
   });
 }
 
+function parsePickups(raw: unknown): PickupSpawn[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error('"pickups" debe ser un array');
+
+  return raw.map((entry, index) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error(`El objeto ${index + 1} no es un objeto { type, x, z }`);
+    }
+    const value = entry as Record<string, unknown>;
+    if (!isItemId(value.type)) {
+      throw new Error(
+        `El objeto ${index + 1} tiene un "type" desconocido: "${String(value.type)}". ` +
+          `Disponibles: ${ITEM_IDS.join(', ')}`
+      );
+    }
+    return {
+      type: value.type,
+      x: number(value.x, `pickups[${index}].x`),
+      z: number(value.z, `pickups[${index}].z`)
+    };
+  });
+}
+
 function parseMountains(raw: unknown): MountainRange[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw new Error('"mountains" debe ser un array');
@@ -184,6 +208,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
   const tiles = parseTiles(value.tiles ?? value.terrain);
   const respawns = parseRespawns(value.respawns ?? value.spawns);
   const mountains = parseMountains(value.mountains);
+  const pickups = parsePickups(value.pickups);
 
   const blue = respawns.find((respawn) => respawn.team === 'blue');
   const red = respawns.find((respawn) => respawn.team === 'red');
@@ -213,6 +238,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
     tiles,
     respawns,
     mountains,
+    pickups,
     spawn,
     waterHeight:
       value.waterHeight === undefined ? 0.3 : number(value.waterHeight, 'waterHeight')

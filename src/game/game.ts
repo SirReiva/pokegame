@@ -58,6 +58,13 @@ import type {
   SlowEffect
 } from './matchState';
 import {
+  PickupField,
+  disposeItemTextures,
+  loadItemTextures,
+  type ItemTextureMap,
+  type PickupHandlers
+} from './pickups';
+import {
   MAX_PLAYERS,
   TEAM_INFO,
   cameraYawForTeam,
@@ -180,6 +187,25 @@ export class Game {
 
   private manifest: SpriteManifest | null = null;
   private readonly assets = new Map<string, SpriteAsset>();
+  /** Texturas de los objetos recogibles, cargadas una vez por partida. */
+  private readonly itemTextures: ItemTextureMap = new Map();
+  /** Objetos del mapa activo; se reconstruyen al cambiar de mapa. */
+  private pickups: PickupField | null = null;
+  /** Posición media de las cámaras para orientar los billboards de objetos. */
+  private readonly itemCameraPosition = new pc.Vec3();
+  private readonly pickupHandlers: PickupHandlers = {
+    pokemonFor: (player) => this.assets.get(player.pokemonId)?.entry ?? null,
+    heal: (player, amount) => {
+      if (!player.alive) return 0;
+      const before = player.hp;
+      player.hp = Math.min(player.maxHp, player.hp + amount);
+      return player.hp - before;
+    },
+    showHeal: (player, amount) => this.showHealPopup(player, amount),
+    onCollected: (player, definition) => {
+      this.combatFx.spawnBuff(player.x, player.z, hexToRgb(definition.color), 1.05);
+    }
+  };
 
   private matchPlayers: MatchPlayerState[] = [];
   /**
@@ -290,12 +316,17 @@ export class Game {
 
   async init(): Promise<void> {
     try {
-      this.callbacks.onProgress({ loaded: 0, total: 13, label: 'Cargando mapas' });
+      this.callbacks.onProgress({ loaded: 0, total: 17, label: 'Cargando mapas' });
       this.mapIndex = await loadMapIndex();
       const entry =
         this.mapIndex.find((candidate) => candidate.id === this.options.mapId) ??
         this.mapIndex[0];
       const map = await loadMap(entry);
+
+      this.callbacks.onProgress({ loaded: 0, total: 17, label: 'Cargando objetos' });
+      const itemTextures = await loadItemTextures(this.app);
+      for (const [id, textures] of itemTextures) this.itemTextures.set(id, textures);
+
       this.applyMap(map);
 
       let manifest = this.options.manifest ?? null;
@@ -362,12 +393,16 @@ export class Game {
    */
   private applyMap(map: GameMap): void {
     this.clearMatch();
+    this.pickups?.dispose();
+    this.pickups = null;
     this.menuCamera?.dispose();
     this.world?.dispose();
 
     setActiveMap(map);
     syncTeamsWithMap();
     this.world = buildWorld(this.app);
+    this.pickups = new PickupField(this.app, this.world.shadowMaterial, this.itemTextures);
+    this.pickups.setMap(map);
     this.activeMapId = map.id;
     this.rebuildSightOccluders();
     this.menuCamera = new CameraRig(this.app, map.spawn);
@@ -424,6 +459,7 @@ export class Game {
     }
 
     this.clearMatch();
+    this.pickups?.reset();
 
     // El lobby ya limita el número de jugadores; se recorta por seguridad.
     const valid = configs.slice(0, MAX_PLAYERS);
@@ -646,6 +682,7 @@ export class Game {
   /** Vuelve al menú de selección y destruye la partida actual. */
   endMatch(): void {
     this.clearMatch();
+    this.pickups?.reset();
     this.mode = 'menu';
     this.paused = false;
     this.statsTimer = 0;
@@ -841,6 +878,7 @@ export class Game {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
     this.menuCamera.update(dt, getActiveMap().spawn, 0, 0);
     this.world.update(dt);
+    this.pickups?.update(dt, this.menuCamera.position);
   }
 
   private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
@@ -883,6 +921,7 @@ export class Game {
         if (!this.matchOver) this.resolveMeleeHits();
         if (!this.matchOver) this.updateProjectiles(dt);
         if (!this.matchOver) this.updateActiveAoes(dt);
+        if (!this.matchOver) this.pickups?.collect(this.matchPlayers, this.pickupHandlers);
       }
     }
 
@@ -931,6 +970,7 @@ export class Game {
     if (!frozen) this.updateRegeneration(dt);
 
     this.world.update(dt);
+    this.pickups?.update(dt, this.pickupCamera());
     this.combatFx.update(dt);
     this.damageNumbers.update(dt);
 
@@ -939,6 +979,30 @@ export class Game {
       this.statsTimer = 0;
       this.emitMatchStats();
     }
+  }
+
+  /**
+   * Posición media de las cámaras de las vistas. Los objetos son un billboard
+   * único compartido por todos los jugadores, así que se orienta hacia el punto
+   * medio en vez de hacia una vista concreta del splitscreen.
+   */
+  private pickupCamera(): pc.Vec3 {
+    if (this.views.length === 0) {
+      this.itemCameraPosition.copy(this.menuCamera.position);
+      return this.itemCameraPosition;
+    }
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    for (const view of this.views) {
+      const position = view.camera.position;
+      x += position.x;
+      y += position.y;
+      z += position.z;
+    }
+    const count = this.views.length;
+    this.itemCameraPosition.set(x / count, y / count, z / count);
+    return this.itemCameraPosition;
   }
 
   private stepPlayer(player: MatchPlayerState, input: DeviceInputSnapshot, dt: number): void {
@@ -3160,6 +3224,9 @@ export class Game {
     this.app.off('update', this.onUpdate);
     this.input.dispose();
     this.clearMatch();
+    this.pickups?.dispose();
+    this.pickups = null;
+    disposeItemTextures(this.itemTextures);
     this.combatFx.destroy();
     this.damageNumbers.destroy();
     this.fogMesh?.destroy();

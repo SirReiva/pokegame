@@ -20,6 +20,7 @@ import {
   cellCenter,
   cloneBases,
   cloneMountains,
+  clonePickups,
   cloneTiles,
   createEditorMap,
   editorMapFromJson,
@@ -37,8 +38,14 @@ import {
   type EditorMap,
   type EditorMapJson,
   type EditorMeta,
+  type EditorPickup,
   type EditorSnapshot
 } from '../game/mapEditor';
+import {
+  ITEM_DEFINITIONS,
+  ITEM_IDS,
+  type ItemId
+} from '../game/items';
 import {
   TERRAIN_IDS,
   TERRAINS,
@@ -58,7 +65,7 @@ interface MapEditorScreenProps {
   onExit: () => void;
 }
 
-type Tool = 'pencil' | 'fill' | 'rect' | 'eraser' | 'mountain' | 'base-blue' | 'base-red';
+type Tool = 'pencil' | 'fill' | 'rect' | 'eraser' | 'mountain' | 'pickup' | 'base-blue' | 'base-red';
 
 interface EditorState {
   map: EditorMap | null;
@@ -104,6 +111,12 @@ const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
     key: 'M',
     title: 'Cordilleras y muros: haz clic para añadir puntos; doble clic o Enter para cerrar'
   },
+  {
+    id: 'pickup',
+    label: 'Objeto',
+    key: 'P',
+    title: 'Coloca pociones en la rejilla; clic derecho elimina el objeto de la celda'
+  },
   { id: 'base-blue', label: 'Base azul', key: '1', title: 'Coloca o mueve la base del equipo azul' },
   { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' }
 ];
@@ -122,7 +135,7 @@ function loadDraft(): EditorState {
       const draft = readEditorDraft(parsed);
       if (draft) {
         return {
-          map: { ...draft, mountains: draft.mountains ?? [] },
+          map: { ...draft, mountains: draft.mountains ?? [], pickups: draft.pickups ?? [] },
           undo: [],
           redo: []
         };
@@ -172,6 +185,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
   const [tool, setTool] = useState<Tool>('pencil');
   const [terrain, setTerrain] = useState<TerrainId>(initial.map?.background ?? 'jungle');
+  const [pickupType, setPickupType] = useState<ItemId>('potion');
   const [zoom, setZoom] = useState(1);
   const [hover, setHover] = useState<Cell | null>(null);
   const [rect, setRect] = useState<{ rowA: number; colA: number; rowB: number; colB: number } | null>(
@@ -306,6 +320,44 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     return true;
   };
 
+  const mutatePickups = (
+    mutate: (pickups: EditorPickup[]) => boolean,
+    pushHistory = true
+  ): boolean => {
+    const current = stateRef.current.map;
+    if (!current) return false;
+    const pickups = clonePickups(current.pickups);
+    if (!mutate(pickups)) return false;
+    updateMap({ ...current, pickups }, pushHistory);
+    return true;
+  };
+
+  /** Coloca, cambia o elimina el objeto de una celda. */
+  const editPickupCell = (row: number, col: number, remove: boolean) => {
+    const current = stateRef.current.map;
+    if (!current) return;
+    mutatePickups((pickups) => {
+      const index = pickups.findIndex(
+        (pickup) => pickup.row === row && pickup.col === col
+      );
+      if (remove) {
+        if (index < 0) return false;
+        pickups.splice(index, 1);
+        setToast('Objeto eliminado.');
+        return true;
+      }
+      if (index >= 0) {
+        if (pickups[index].type === pickupType) return false;
+        pickups[index] = { type: pickupType, row, col };
+        setToast(`Celda cambiada a ${ITEM_DEFINITIONS[pickupType].name}.`);
+        return true;
+      }
+      pickups.push({ type: pickupType, row, col });
+      setToast(`${ITEM_DEFINITIONS[pickupType].name} colocado.`);
+      return true;
+    });
+  };
+
   const updateMeta = (patch: Partial<EditorMeta>) => {
     const current = stateRef.current.map;
     if (!current) return;
@@ -329,7 +381,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
    * flujo (arrastre y puntos), así que solo se registran aquí las que pintan
    * una celda directamente.
    */
-  type CellTool = Exclude<Tool, 'rect' | 'mountain'>;
+  type CellTool = Exclude<Tool, 'rect' | 'mountain' | 'pickup'>;
   const cellCommands: Record<
     CellTool,
     (row: number, col: number, current: EditorMap, pushHistory: boolean) => void
@@ -604,6 +656,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
 
+    if (tool === 'pickup') {
+      editPickupCell(cell.row, cell.col, event.button === 2);
+      return;
+    }
+
     if (tool === 'mountain') {
       const current = stateRef.current.map;
       if (!current) return;
@@ -801,7 +858,13 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
   const selectTerrain = (next: TerrainId) => {
     setTerrain(next);
-    if (tool === 'eraser' || tool === 'mountain' || tool === 'base-blue' || tool === 'base-red') {
+    if (
+      tool === 'eraser' ||
+      tool === 'mountain' ||
+      tool === 'pickup' ||
+      tool === 'base-blue' ||
+      tool === 'base-red'
+    ) {
       changeTool('pencil');
     }
   };
@@ -1002,11 +1065,13 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 ? 'eraser'
                 : key === 'm'
                   ? 'mountain'
-                  : key === '1'
-                    ? 'base-blue'
-                    : key === '2'
-                      ? 'base-red'
-                      : null;
+                  : key === 'p'
+                    ? 'pickup'
+                    : key === '1'
+                      ? 'base-blue'
+                      : key === '2'
+                        ? 'base-red'
+                        : null;
       if (nextTool) {
         if (nextTool !== 'mountain') setDraftPoints([]);
         setTool(nextTool);
@@ -1240,6 +1305,30 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
     if (map.bases.blue) drawBase(map.bases.blue);
     if (map.bases.red) drawBase(map.bases.red);
+
+    // --- Objetos recogibles --------------------------------------------------
+    map.pickups.forEach((pickup) => {
+      const definition = ITEM_DEFINITIONS[pickup.type];
+      const centerX = (pickup.col + 0.5) * cellSize;
+      const centerY = (pickup.row + 0.5) * cellSize;
+      const radius = Math.max(2.5, Math.min(cellSize * 0.7, 9));
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.fillStyle = definition.color;
+      context.globalAlpha = 0.92;
+      context.fill();
+      context.globalAlpha = 1;
+      context.lineWidth = Math.max(1, radius * 0.3);
+      context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
+      context.stroke();
+      if (cellSize >= 13) {
+        context.fillStyle = '#fff7ea';
+        context.font = `700 ${Math.max(7, Math.round(radius * 1.05))}px ui-monospace, monospace`;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(definition.shortLabel, centerX, centerY + 0.5);
+      }
+    });
 
     if (showMountainHandles) {
       map.mountains.forEach((range, index) => {
@@ -1576,7 +1665,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
             <span className="ml-auto">
               <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno · <KeyPill>R</KeyPill>{' '}
               rectángulo · <KeyPill>E</KeyPill> borrador · <KeyPill>M</KeyPill> separador ·{' '}
-              <KeyPill>Ctrl+Z</KeyPill> deshacer
+              <KeyPill>P</KeyPill> objeto · <KeyPill>Ctrl+Z</KeyPill> deshacer
             </span>
           </footer>
         </main>
@@ -1717,6 +1806,94 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 Mover roja
               </button>
             </div>
+          </section>
+
+          <section>
+            <h2 className={sectionTitle}>Objetos</h2>
+            <div className="flex flex-col gap-1">
+              {ITEM_IDS.map((id) => {
+                const definition = ITEM_DEFINITIONS[id];
+                const count = map
+                  ? map.pickups.filter((pickup) => pickup.type === id).length
+                  : 0;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`flex w-full cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-left transition-colors ${
+                      pickupType === id && tool === 'pickup'
+                        ? 'border-accent/70 bg-accent/10'
+                        : 'border-transparent hover:border-line hover:bg-white/4'
+                    }`}
+                    onClick={() => {
+                      setPickupType(id);
+                      changeTool('pickup');
+                    }}
+                    title={`${definition.description} Cooldown: ${definition.cooldownSeconds} s.`}
+                  >
+                    <span
+                      className="size-4 flex-none rounded-[3px] border border-black/40 shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]"
+                      style={{ background: definition.color }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs text-steel-200">
+                        {definition.name}
+                      </span>
+                      <span className="block font-mono text-9.28 text-steel-500">
+                        {definition.healHp} PV · {definition.cooldownSeconds} s
+                      </span>
+                    </span>
+                    <span className="w-8 text-right font-mono text-9.28 tabular-nums text-steel-800">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-10.88/normal text-muted">
+              Elige un objeto y haz clic en la rejilla para colocarlo. El clic derecho elimina el
+              objeto de esa celda.
+            </p>
+            {map && map.pickups.length > 0 ? (
+              <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
+                {map.pickups.map((pickup, index) => (
+                  <div
+                    key={`pickup-${pickup.row}-${pickup.col}`}
+                    className="flex items-center gap-1.5 rounded-[9px] border border-line bg-white/3 px-2 py-1.5"
+                  >
+                    <span
+                      className="size-2.5 flex-none rounded-full"
+                      style={{ background: ITEM_DEFINITIONS[pickup.type].color }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-11.2 text-steel-200">
+                      {ITEM_DEFINITIONS[pickup.type].name}
+                    </span>
+                    <span className="font-mono text-9.28 text-steel-450">
+                      {pickup.row} · {pickup.col}
+                    </span>
+                    <button
+                      type="button"
+                      className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-13.6 text-muted transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
+                      onClick={() =>
+                        mutatePickups((pickups) => {
+                          if (!pickups[index]) return false;
+                          pickups.splice(index, 1);
+                          return true;
+                        })
+                      }
+                      title="Eliminar objeto"
+                      aria-label={`Eliminar ${ITEM_DEFINITIONS[pickup.type].name} de la celda ${pickup.row} · ${pickup.col}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 rounded-[9px] border border-line bg-white/3 px-2.5 py-2 text-10.88/normal text-muted">
+                Sin objetos colocados.
+              </p>
+            )}
           </section>
 
           <section>
@@ -1896,6 +2073,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
               </li>
               <li className="flex items-center gap-2">
                 <KeyPill>1</KeyPill> base azul · <KeyPill>2</KeyPill> base roja
+              </li>
+              <li className="flex items-center gap-2">
+                <KeyPill>P</KeyPill> colocar objeto · clic derecho borra
               </li>
               <li className="flex items-center gap-2">
                 <KeyPill>M</KeyPill> separador · <KeyPill>Enter</KeyPill> cerrar trazado

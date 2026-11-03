@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "sprites": "node scripts/import-sprites.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",
+    "items:art": "node scripts/generate-item-art.mjs",
     "lint": "twlinter --fix --no-config --json && oxlint",
     "preview": "vite preview"
   },

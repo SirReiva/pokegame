@@ -46,6 +46,20 @@
         "additionalProperties": false
       }
     },
+    "pickups": {
+      "type": "array",
+      "description": "Objetos recogibles. La definición (imágenes, cooldown y efecto) vive en src/game/items.ts; aquí solo se indica el tipo y la posición.",
+      "items": {
+        "type": "object",
+        "required": ["type", "x", "z"],
+        "properties": {
+          "type": { "enum": ["potion", "superPotion"] },
+          "x": { "type": "number" },
+          "z": { "type": "number" }
+        },
+        "additionalProperties": false
+      }
+    },
     "tiles": {
       "type": "array",
       "minItems": 1,

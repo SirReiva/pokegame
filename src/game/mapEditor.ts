@@ -16,6 +16,7 @@ import {
   type Team,
   type TerrainId,
 } from "./terrain";
+import { ITEM_IDS, isItemId, type ItemId, type PickupSpawn } from "./items";
 
 export const EDITOR_MIN_SIZE = 64;
 export const EDITOR_MAX_SIZE = 4096;
@@ -55,6 +56,15 @@ export interface EditorBase {
 
 export type EditorBases = Partial<Record<Team, EditorBase>>;
 
+/** Objeto recogible colocado en una celda. */
+export interface EditorPickup {
+  type: ItemId;
+  /** Fila de la rejilla (0 = norte). */
+  row: number;
+  /** Columna de la rejilla (0 = oeste). */
+  col: number;
+}
+
 export interface EditorMeta {
   id: string;
   name: string;
@@ -75,6 +85,8 @@ export interface EditorMap {
   bases: EditorBases;
   /** Separadores del mapa (cordilleras y muros), en coordenadas de mundo. */
   mountains: MountainRange[];
+  /** Objetos recogibles colocados en celdas. */
+  pickups: EditorPickup[];
   /** Punto de cámara del menú importado. Si falta, se exporta la base azul. */
   spawn?: { x: number; z: number };
 }
@@ -86,6 +98,7 @@ export interface EditorSnapshot {
   tiles: TerrainId[][];
   bases: EditorBases;
   mountains: MountainRange[];
+  pickups: EditorPickup[];
 }
 
 export interface EditorMapJson {
@@ -97,6 +110,7 @@ export interface EditorMapJson {
   spawn: { x: number; z: number };
   respawns: RespawnPoint[];
   mountains?: MountainRange[];
+  pickups?: PickupSpawn[];
   tiles: TerrainId[][];
 }
 
@@ -130,6 +144,12 @@ export function cloneMountains(
   }));
 }
 
+export function clonePickups(
+  pickups: EditorPickup[] | undefined,
+): EditorPickup[] {
+  return (pickups ?? []).map((pickup) => ({ ...pickup }));
+}
+
 export function cloneEditorMap(map: EditorMap): EditorMap {
   return {
     meta: { ...map.meta },
@@ -139,6 +159,7 @@ export function cloneEditorMap(map: EditorMap): EditorMap {
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases),
     mountains: cloneMountains(map.mountains),
+    pickups: clonePickups(map.pickups),
     spawn: map.spawn ? { ...map.spawn } : undefined,
   };
 }
@@ -150,6 +171,7 @@ export function snapshotOf(map: EditorMap): EditorSnapshot {
     tiles: cloneTiles(map.tiles),
     bases: cloneBases(map.bases),
     mountains: cloneMountains(map.mountains),
+    pickups: clonePickups(map.pickups),
   };
 }
 
@@ -164,6 +186,7 @@ export function applySnapshot(
     tiles: cloneTiles(snapshot.tiles),
     bases: cloneBases(snapshot.bases),
     mountains: cloneMountains(snapshot.mountains),
+    pickups: clonePickups(snapshot.pickups),
   };
 }
 
@@ -213,6 +236,7 @@ export function createEditorMap(options: {
       red: { team: "red", row: redRow, col: redCol, radius: baseRadius },
     },
     mountains: [],
+    pickups: [],
   };
 }
 
@@ -262,7 +286,21 @@ export function resizeEditorMap(
     ),
   }));
 
-  return { ...map, cols: nextCols, rows: nextRows, tiles, bases, mountains };
+  // Los objetos viven en celdas: al recortar el mapa se descartan los que
+  // quedan fuera para no exportar coordenadas imposibles.
+  const pickups = clonePickups(map.pickups).filter(
+    (pickup) => pickup.row < nextRows && pickup.col < nextCols,
+  );
+
+  return {
+    ...map,
+    cols: nextCols,
+    rows: nextRows,
+    tiles,
+    bases,
+    mountains,
+    pickups,
+  };
 }
 
 export function paintCellInPlace(
@@ -444,6 +482,17 @@ export function editorMapToJson(map: EditorMap): EditorMapJson {
   };
   const mountains = cloneMountains(map.mountains);
   if (mountains.length > 0) json.mountains = mountains;
+  const pickups = map.pickups.map((pickup): PickupSpawn => {
+    const center = cellCenter(
+      map.cols,
+      map.rows,
+      map.meta.tileSize,
+      pickup.row,
+      pickup.col,
+    );
+    return { type: pickup.type, x: center.x, z: center.z };
+  });
+  if (pickups.length > 0) json.pickups = pickups;
   return json;
 }
 
@@ -498,6 +547,19 @@ export function editorMapFromJson(raw: unknown): EditorMap {
     }
   }
 
+  // Varios objetos del JSON pueden caer en la misma celda; el editor solo
+  // admite uno por celda, así que se conserva el primero.
+  const occupied = new Set<string>();
+  const pickups: EditorPickup[] = [];
+  for (const pickup of parsed.pickups) {
+    const row = toRow(pickup.z);
+    const col = toCol(pickup.x);
+    const key = `${row}:${col}`;
+    if (occupied.has(key)) continue;
+    occupied.add(key);
+    pickups.push({ type: pickup.type, row, col });
+  }
+
   return {
     meta: {
       id,
@@ -513,6 +575,7 @@ export function editorMapFromJson(raw: unknown): EditorMap {
     tiles: cloneTiles(parsed.tiles),
     bases,
     mountains: cloneMountains(parsed.mountains),
+    pickups,
     spawn: { ...parsed.spawn },
   };
 }
@@ -596,6 +659,34 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
       }
       return issues;
     }),
+  (map) => {
+    const issues: string[] = [];
+    const occupied = new Set<string>();
+    map.pickups.forEach((pickup, index) => {
+      if (!isItemId(pickup.type)) {
+        issues.push(
+          `El objeto ${index + 1} tiene un tipo desconocido. Disponibles: ${ITEM_IDS.join(", ")}.`,
+        );
+      }
+      if (
+        !Number.isInteger(pickup.row) ||
+        !Number.isInteger(pickup.col) ||
+        pickup.row < 0 ||
+        pickup.col < 0 ||
+        pickup.row >= map.rows ||
+        pickup.col >= map.cols
+      ) {
+        issues.push(`El objeto ${index + 1} está fuera de la rejilla.`);
+        return;
+      }
+      const key = `${pickup.row}:${pickup.col}`;
+      if (occupied.has(key)) {
+        issues.push(`Hay más de un objeto en la celda ${pickup.row} · ${pickup.col}.`);
+      }
+      occupied.add(key);
+    });
+    return issues;
+  },
   (map) =>
     map.tiles.length !== map.rows ||
     map.tiles.some(
@@ -670,6 +761,17 @@ const EDITOR_MAP_CHECKS: readonly EditorMapCheck[] = [
       typeof map.spawn === "object" &&
       typeof map.spawn.x === "number" &&
       typeof map.spawn.z === "number"),
+  (map) => {
+    if (map.pickups === undefined) return true;
+    if (!Array.isArray(map.pickups)) return false;
+    return map.pickups.every(
+      (pickup) =>
+        pickup &&
+        isItemId(pickup.type) &&
+        Number.isInteger(pickup.row) &&
+        Number.isInteger(pickup.col),
+    );
+  },
 ];
 
 /** Comprueba la forma mínima de un borrador guardado en localStorage. */
@@ -684,10 +786,13 @@ export function isEditorMap(value: unknown): value is EditorMap {
  * guardaban un único `size` cuadrado; ahora se usan `cols` y `rows`.
  */
 export function readEditorDraft(value: unknown): EditorMap | null {
-  if (isEditorMap(value)) return value;
+  if (isEditorMap(value)) {
+    return { ...value, pickups: clonePickups(value.pickups) };
+  }
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   if (typeof raw.size !== "number") return null;
   const migrated = { ...raw, cols: raw.size, rows: raw.size };
-  return isEditorMap(migrated) ? migrated : null;
+  if (!isEditorMap(migrated)) return null;
+  return { ...migrated, pickups: clonePickups(migrated.pickups) };
 }

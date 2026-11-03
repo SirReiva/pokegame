@@ -8,6 +8,8 @@
  * React.
  */
 
+import type { PickupSpawn } from './items';
+
 export type TerrainId =
   | 'jungle'
   | 'lane'
@@ -99,6 +101,8 @@ export interface GameMap {
   tiles: TerrainId[][];
   respawns: RespawnPoint[];
   mountains: MountainRange[];
+  /** Objetos recogibles repartidos por el mapa. */
+  pickups: PickupSpawn[];
   /** Punto al que mira la cámara del menú. */
   spawn: { x: number; z: number };
   /** Altura de la lámina de agua sobre el suelo. */
