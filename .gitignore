@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Wails / escritorio
+.task
+bin
+*.syso
+build/appicon.icns
+build/darwin
+build/ios
+build/linux/*.desktop
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

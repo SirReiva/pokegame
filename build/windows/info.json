@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.8.1"
+	},
+	"info": {
+		"0409": {
+			"ProductVersion": "0.8.1",
+			"CompanyName": "NewPoke",
+			"FileDescription": "Demo técnica de sprites, cámara y multijugador local",
+			"LegalCopyright": "(c) 2026, NewPoke",
+			"ProductName": "NewPoke",
+			"Comments": "Multijugador local de 1 a 8 jugadores"
+		}
+	}
+}

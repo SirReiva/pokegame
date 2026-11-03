@@ -10,6 +10,7 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 - **wouter**: router mínimo para el flujo entre menú, configuración y partida.
 - **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
 - **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
+- **Wails v3** (opcional): empaqueta el mismo frontend como app de escritorio para Windows y Linux.
 - **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike, Shock, Shoot, Charge, Strike, Twirl, Shake, Punch y Hop cuando existen).
 - Sin framework de UI 3D: React nunca toca la escena; habla con `Game` mediante callbacks.
 
@@ -30,6 +31,56 @@ pnpm sprites --force    # fuerza la descarga
 ```
 
 Requiere Node 18+ (el importador usa `fetch` y `zlib`).
+
+## Versión de escritorio (Wails)
+
+El mismo frontend se puede empaquetar como app nativa con [Wails v3](https://wails.io). El binario lleva dentro el contenido de `dist/` (incluidos los sprites, mapas y objetos de `public/`) y usa el WebView del sistema, así que no necesita un navegador ni un servidor. La versión web sigue funcionando exactamente igual.
+
+### Requisitos
+
+- **Go 1.26+** y el CLI de Wails v3:
+
+  ```bash
+  go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+  ```
+
+  Asegúrate de que `$(go env GOPATH)/bin` (en Windows, `%USERPROFILE%\go\bin`) esté en el `PATH`.
+
+- **Node 22+** y **pnpm** (los mismos que usa la versión web).
+- **Windows**: WebView2, incluido de serie en Windows 10/11.
+- **Linux**: GTK4 + WebKitGTK 6.0. En Ubuntu 24.04+ / Debian 13+:
+
+  ```bash
+  sudo apt install build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+  ```
+
+  En distribuciones que solo traen WebKit2GTK 4.1 (Ubuntu 22.04, Debian 12…) compila con el stack legacy:
+
+  ```bash
+  wails3 build GOOS=linux -tags gtk3
+  ```
+- **Compilar Linux desde Windows/macOS**: Docker y, una sola vez, `wails3 task setup:docker` (descarga ~800 MB).
+
+### Comandos
+
+```bash
+pnpm install
+
+pnpm desktop:dev             # app de escritorio con recarga en caliente
+pnpm desktop:build           # binario para el sistema actual
+pnpm desktop:build:windows   # bin/newpoke.exe
+pnpm desktop:build:linux     # bin/newpoke (usa Docker si no compilas en Linux)
+pnpm desktop:package         # instalador/paquete del sistema actual
+```
+
+Los artefactos quedan en `bin/`. En Windows, `package` crea un instalador NSIS (requiere `makensis`); en Linux crea AppImage, `.deb` y `.rpm`.
+
+La ventana y los metadatos viven en `main.go` y `build/config.yml`. El icono se genera desde `build/appicon.png` con `wails3 task common:generate:icons`.
+
+El workflow manual **Build desktop release** sube la versión (`patch`/`minor`/`major`), compila Windows y Linux y publica los binarios en una GitHub Release con el tag `vX.Y.Z`:
+
+- `newpoke-X.Y.Z-windows-amd64.exe`
+- `newpoke-X.Y.Z-linux-amd64.tar.gz`
 
 ## Flujo de pantallas
 

@@ -1,0 +1,75 @@
+version: '3'
+
+# Tareas comunes de Wails. A diferencia de la plantilla estándar, el frontend
+# está en la raíz del repositorio (no en `frontend/`), porque este proyecto ya
+# era una app Vite y la versión web se sigue publicando en GitHub Pages.
+
+tasks:
+  go:mod:tidy:
+    summary: Ejecuta `go mod tidy`
+    internal: true
+    run: once
+    cmds:
+      - go mod tidy
+
+  install:frontend:deps:
+    summary: Instala las dependencias del frontend
+    run: once
+    dir: .
+    sources:
+      - package.json
+      - pnpm-lock.yaml
+    generates:
+      - node_modules
+    cmds:
+      - pnpm install
+
+  build:frontend:
+    summary: Compila el frontend en `dist/`
+    label: build:frontend (DEV={{.DEV}})
+    run: once
+    dir: .
+    deps:
+      - task: install:frontend:deps
+    cmds:
+      - task: frontend:run
+        vars:
+          SCRIPT: '{{if eq .DEV "true"}}build:dev{{else}}build{{end}}'
+
+  frontend:run:
+    summary: Ejecuta un script de pnpm con el `base` de escritorio
+    cmds:
+      - node scripts/desktop-frontend.mjs {{.SCRIPT}}
+
+  generate:icons:
+    summary: Genera el icono `.ico` de Windows a partir de `build/appicon.png`
+    run: once
+    dir: build
+    sources:
+      - appicon.png
+    generates:
+      - windows/icon.ico
+    cmds:
+      - wails3 generate icons -input appicon.png -windowsfilename windows/icon.ico -macfilename appicon.icns
+
+  dev:frontend:
+    summary: Arranca el servidor de desarrollo de Vite
+    deps:
+      - task: install:frontend:deps
+    dir: .
+    cmds:
+      - node scripts/desktop-frontend.mjs dev --port {{.VITE_PORT}} --strictPort
+
+  update:build-assets:
+    summary: Regenera los assets de build desde `build/config.yml`
+    dir: build
+    cmds:
+      - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
+
+  setup:docker:
+    summary: Construye la imagen de Docker para compilación cruzada (~800 MB)
+    cmds:
+      - docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
+    preconditions:
+      - sh: docker info > /dev/null 2>&1
+        msg: "Docker es necesario para compilar Linux desde Windows. Instala Docker Desktop."

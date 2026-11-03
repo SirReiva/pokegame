@@ -7,6 +7,12 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc -b && vite build",
+    "build:dev": "vite build --mode development",
+    "desktop:dev": "wails3 dev",
+    "desktop:build": "wails3 build",
+    "desktop:build:windows": "wails3 build GOOS=windows",
+    "desktop:build:linux": "wails3 build GOOS=linux",
+    "desktop:package": "wails3 package",
     "sprites": "node scripts/import-sprites.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",
     "items:art": "node scripts/generate-item-art.mjs",

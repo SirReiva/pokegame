@@ -1,0 +1,42 @@
+version: '3'
+
+# Tareas de escritorio (Wails v3). El frontend vive en la raíz del repo, igual
+# que en la versión web, así que los comandos de pnpm se ejecutan desde ".".
+vars:
+  APP_NAME: "newpoke"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "pnpm"}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # Sistema destino de build/package/run. `wails3 build GOOS=linux` lo cambia.
+  GOOS: '{{.GOOS | default OS}}'
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+
+tasks:
+  build:
+    summary: Compila la app de escritorio para el sistema actual
+    cmds:
+      - task: "{{.GOOS}}:build"
+
+  package:
+    summary: Genera un instalador/paquete para el sistema actual
+    cmds:
+      - task: "{{.GOOS}}:package"
+
+  run:
+    summary: Ejecuta el binario compilado
+    cmds:
+      - task: "{{.GOOS}}:run"
+
+  dev:
+    summary: Ejecuta la app con recarga en caliente (Vite + Go)
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  setup:docker:
+    summary: Construye la imagen de Docker para compilar Linux desde Windows (~800 MB)
+    cmds:
+      - task: common:setup:docker

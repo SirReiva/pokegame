@@ -1,0 +1,47 @@
+# Configuración de la app de escritorio (Wails v3).
+# Si cambias `info`, ejecuta `wails3 task common:update:build-assets` para
+# regenerar los metadatos de Windows (build/windows/info.json) y los iconos.
+version: '3'
+
+info:
+  companyName: "NewPoke"
+  productName: "NewPoke"
+  productIdentifier: "com.sirreiva.newpoke"
+  description: "Demo técnica de sprites, cámara y multijugador local"
+  copyright: "(c) 2026, NewPoke"
+  comments: "Multijugador local de 1 a 8 jugadores"
+  version: "0.8.1"
+
+# Modo desarrollo: `wails3 dev` compila una vez, arranca Vite y lanza la app.
+# Solo se vigilan los archivos Go; el frontend lo recarga Vite.
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - dist
+      - bin
+      - public
+      - src
+      - docs
+      - scripts
+      - build
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+      - "*_test.go"
+    watched_extension:
+      - "*.go"
+    git_ignore: true
+  executes:
+    - cmd: wails3 build DEV=true
+      type: blocking
+    - cmd: wails3 task common:dev:frontend
+      type: background
+    - cmd: wails3 task run
+      type: primary
+      exit_policy: shutdown
