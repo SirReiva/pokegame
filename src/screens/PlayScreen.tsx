@@ -492,6 +492,17 @@ function MatchScoreboard({
             (a, b) =>
               b.kills - a.kills || a.deaths - b.deaths || a.slot - b.slot
           );
+        // Sumatorio del equipo: se calcula con las mismas filas que se pintan
+        // para que los totales cuadren siempre con la lista de arriba.
+        const totals = rows.reduce(
+          (acc, row) => ({
+            kills: acc.kills + row.kills,
+            deaths: acc.deaths + row.deaths,
+            damageDealt: acc.damageDealt + row.damageDealt,
+            damageTaken: acc.damageTaken + row.damageTaken
+          }),
+          { kills: 0, deaths: 0, damageDealt: 0, damageTaken: 0 }
+        );
         return (
           <section
             key={team}
@@ -583,6 +594,59 @@ function MatchScoreboard({
                 </li>
               )}
             </ol>
+
+            {rows.length > 0 && (
+              <footer className="flex items-center gap-2 border-t border-[color-mix(in_srgb,var(--team)_32%,var(--color-line))] bg-[color-mix(in_srgb,var(--team)_7%,transparent)] px-2.5 py-2">
+                <span className="flex min-w-0 flex-1 flex-col leading-[1.08]">
+                  <strong className="truncate font-mono text-9.6 tracking-[0.06em] text-(--team) uppercase">
+                    Total equipo
+                  </strong>
+                  <span className="truncate text-10.24 text-steel-400">
+                    {rows.length} Pokémon
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
+                  <span className="flex flex-col items-end leading-none">
+                    <strong className="text-13.6 text-(--team)">
+                      {totals.kills}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      KO
+                    </span>
+                  </span>
+                  <span className="flex flex-col items-end leading-none">
+                    <strong className="text-13.6 text-steel-300">
+                      {totals.deaths}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      Muertes
+                    </span>
+                  </span>
+                  <span
+                    className="flex flex-col items-end leading-none"
+                    title="Daño hecho a rivales"
+                  >
+                    <strong className="text-13.6 text-accent-soft">
+                      {formatDamage(totals.damageDealt)}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      Daño
+                    </span>
+                  </span>
+                  <span
+                    className="flex flex-col items-end leading-none"
+                    title="Daño recibido de rivales y autodaño"
+                  >
+                    <strong className="text-13.6 text-danger-100">
+                      {formatDamage(totals.damageTaken)}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      Recibido
+                    </span>
+                  </span>
+                </span>
+              </footer>
+            )}
           </section>
         );
       })}
