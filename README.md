@@ -75,7 +75,7 @@ pnpm desktop:package         # instalador/paquete del sistema actual
 
 Los artefactos quedan en `bin/`. En Windows, `package` crea un instalador NSIS (requiere `makensis`); en Linux crea AppImage, `.deb` y `.rpm`.
 
-La ventana y los metadatos viven en `main.go` y `build/config.yml`. El icono se genera desde `build/appicon.png` con `wails3 task common:generate:icons`.
+La ventana y los metadatos viven en `main.go` y `build/config.yml`. La app arranca a **pantalla completa** y con **aceleración por hardware**: en Windows se usa WebView2 con `--ignore-gpu-blocklist` y en Linux `WebviewGpuPolicyAlways`. En Windows el fullscreen se activa cuando la ventana ya está creada (evita el desplazamiento que produce `StartState`) y la ventana se mantiene por encima de la barra de tareas mientras la app tiene el foco. Si un equipo concreto tiene problemas de driver, quita `--ignore-gpu-blocklist` de `main.go`. El icono se genera desde `build/appicon.png` con `wails3 task common:generate:icons`.
 
 El workflow manual **Build desktop release** sube la versión (`patch`/`minor`/`major`), compila Windows y Linux y publica los binarios en una GitHub Release con el tag `vX.Y.Z`:
 
