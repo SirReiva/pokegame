@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Redirect, useLocation } from 'wouter';
 import { Game } from '../game/game';
+import { commonAbilityOption } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
   TEAM_INFO,
@@ -461,35 +462,47 @@ function MatchScoreboard({
   // Al terminar la partida los stats llegan en el mismo frame que el
   // resultado. Si por cualquier motivo aún no están, se muestra la plantilla
   // con cero KOs para no dejar el marcador vacío.
-  const rowsSource: Array<
-    Pick<
-      PlayerMatchStats,
-      | 'slot'
-      | 'name'
-      | 'team'
-      | 'pokemonId'
-      | 'kills'
-      | 'deaths'
-      | 'damageDealt'
-      | 'damageTaken'
-      | 'abilityHealing'
-      | 'pickupHealing'
-    >
-  > =
+  type ScoreboardRow = Pick<
+    PlayerMatchStats,
+    | 'slot'
+    | 'name'
+    | 'team'
+    | 'pokemonId'
+    | 'kills'
+    | 'deaths'
+    | 'damageDealt'
+    | 'damageTaken'
+    | 'abilityHealing'
+    | 'pickupHealing'
+  > & {
+    /** Nombre del instinto común elegido, o `null` si no se conoce. */
+    commonAbilityName: string | null;
+    commonAbilityDescription: string;
+  };
+  const rowsSource: ScoreboardRow[] =
     stats.length > 0
-      ? stats
-      : players.map((player) => ({
-          slot: player.slot,
-          name: player.name,
-          team: player.team,
-          pokemonId: player.pokemonId,
-          kills: 0,
-          deaths: 0,
-          damageDealt: 0,
-          damageTaken: 0,
-          abilityHealing: 0,
-          pickupHealing: 0
-        }));
+      ? stats.map((row) => ({
+          ...row,
+          commonAbilityName: row.commonAbility?.name ?? null,
+          commonAbilityDescription: row.commonAbility?.description ?? ''
+        }))
+      : players.map((player) => {
+          const option = commonAbilityOption(player.commonAbilityId);
+          return {
+            slot: player.slot,
+            name: player.name,
+            team: player.team,
+            pokemonId: player.pokemonId,
+            kills: 0,
+            deaths: 0,
+            damageDealt: 0,
+            damageTaken: 0,
+            abilityHealing: 0,
+            pickupHealing: 0,
+            commonAbilityName: option?.name ?? null,
+            commonAbilityDescription: option?.description ?? ''
+          };
+        });
 
   return (
     <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
@@ -562,6 +575,17 @@ function MatchScoreboard({
                       <span className="truncate text-10.24 text-steel-400">
                         {entry?.name ?? row.pokemonId}
                       </span>
+                      {row.commonAbilityName && (
+                        <span
+                          className="truncate text-9.28 text-steel-500"
+                          title={row.commonAbilityDescription}
+                        >
+                          Instinto:{' '}
+                          <span className="text-accent-soft">
+                            {row.commonAbilityName}
+                          </span>
+                        </span>
+                      )}
                     </span>
                     <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
                       <span className="flex flex-col items-end leading-none">
