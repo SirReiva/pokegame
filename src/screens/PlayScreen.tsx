@@ -583,15 +583,18 @@ function MatchScoreboard({
                     key={row.slot}
                     className="flex items-center gap-2 px-2.5 py-1.75"
                   >
-                    <span className="grid size-5 shrink-0 place-items-center rounded bg-(--team) font-display text-10.24 font-extrabold text-ink-dark-strong">
-                      {row.slot}
-                    </span>
-                    <span className="grid size-8 shrink-0 place-items-center">
+                    <span className="relative grid size-8 shrink-0 place-items-center">
                       {entry ? (
                         <PokemonPortrait entry={entry} height={30} />
                       ) : (
                         <span className="text-11.2 text-steel-600">—</span>
                       )}
+                      <span
+                        className="absolute -right-1.5 -bottom-2 rounded-full border border-night-950/80 bg-(--team) px-1.25 py-0.5 font-mono text-8 font-black leading-none text-ink-dark-strong shadow-[0_2px_6px_rgb(0_0_0/0.45)]"
+                        title={`Nivel ${row.level} · ${row.rank}`}
+                      >
+                        NV {row.level}
+                      </span>
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col leading-[1.08]">
                       <strong className="truncate font-mono text-9.6 tracking-[0.06em] uppercase">
@@ -602,11 +605,9 @@ function MatchScoreboard({
                       </span>
                       <span
                         className="truncate text-9.28 text-steel-500"
-                        title={`${formatDamage(row.xp)} XP acumulada`}
+                        title={`${row.rank} · Nivel ${row.level} · ${formatDamage(row.xp)} XP acumulada`}
                       >
-                        <span className="text-(--team)">
-                          {row.rank} · NV {row.level}
-                        </span>
+                        <span className="text-(--team)">{row.rank}</span>
                         {row.xp > 0 ? ` · ${formatDamage(row.xp)} XP` : ''}
                       </span>
                       {row.commonAbilityName && (
