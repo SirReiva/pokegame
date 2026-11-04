@@ -285,11 +285,14 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`grid place-items-center rounded-md bg-(--team) font-display font-extrabold text-ink-dark-strong ${
-                      compact ? 'size-5 text-10.88' : 'size-6 text-12.8'
+                    className={`grid shrink-0 place-items-center rounded-md bg-(--team) px-1 font-display font-extrabold leading-none text-ink-dark-strong ${
+                      compact
+                        ? 'h-5 min-w-7 text-8.32'
+                        : 'h-6 min-w-8 text-9.6'
                     }`}
+                    title={xpTitle}
                   >
-                    {player.slot}
+                    NV {playerStats?.level ?? 1}
                   </span>
                   {entry && <PokemonPortrait entry={entry} height={compact ? 22 : 28} />}
                   <span className="flex flex-col leading-[1.05]">
@@ -302,16 +305,6 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                       }`}
                     >
                       {entry?.name ?? '—'}
-                      {playerStats && (
-                        <span
-                          className={`rounded bg-white/10 px-1 py-px font-mono font-bold text-(--team) ${
-                            compact ? 'text-7.04' : 'text-7.68'
-                          }`}
-                          title={xpTitle}
-                        >
-                          NV {playerStats.level}
-                        </span>
-                      )}
                     </span>
                   </span>
                 </div>
