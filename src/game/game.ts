@@ -11,6 +11,7 @@ import {
   isCommonAbilityId,
   type AbilityDef,
   type AbilitySlot,
+  type BuffSpec,
   type BuffStat,
   type SlowSpec
 } from './abilities';
@@ -18,6 +19,13 @@ import {
   ABILITY_EXECUTORS,
   type AbilityExecutorDeps
 } from './abilityExecutors';
+import {
+  defaultAoeEffect,
+  type AoeEffectContext,
+  type AoeHitInput,
+  type AoeHitOptions,
+  type AoeTarget
+} from './aoeEffect';
 import { Actor } from './actor';
 import {
   configureAudio,
@@ -1917,8 +1925,6 @@ export class Game {
       canHit: (attacker, target) => this.canHit(attacker, target),
       applyAbilityDamage: (attacker, target, ability, options) =>
         this.applyAbilityDamage(attacker, target, ability, options),
-      radialDamageMultiplier: (ability, distance, radius) =>
-        this.radialDamageMultiplier(ability, distance, radius),
       dashPosition: (source, x, z, dirX, dirZ, distance) =>
         this.dashPosition(source, x, z, dirX, dirZ, distance),
       animationPlaybackFor: (source, animation, duration) =>
@@ -1926,6 +1932,7 @@ export class Game {
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
       addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
+      resolveAoeHit: (hit) => this.resolveAoeHit(hit),
       healToken
     };
 
@@ -2029,29 +2036,43 @@ export class Game {
     );
   }
 
-  /**
-   * Control de un golpe que conecta: cancela dash y preparación, bloquea el
-   * movimiento un instante y empuja si la habilidad lo indica. Lo comparten las
-   * habilidades dañinas y las de estado: en ambos casos el objetivo ha recibido
-   * un impacto válido. El empuje sale de `sourceX/sourceZ` (punto de entrada del
-   * proyectil o centro del área); sin origen explícito, del atacante.
-   */
-  private applyHitControl(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: AbilityDef,
-    control: boolean,
-    sourceX = attacker.x,
-    sourceZ = attacker.z
-  ): void {
-    if (!control) return;
+  /** Cancela dash, preparación y locks de acción de un objetivo. */
+  private interruptPlayer(target: MatchPlayerState): void {
     target.actionTimer = 0;
     target.moveLockTimer = 0;
     target.dash = null;
     this.cancelPendingCast(target);
-    target.stunTimer = Math.max(target.stunTimer, CONFIG.combat.hitstunSeconds);
-    if (def.knockback > 0) {
-      this.applyKnockback(target, sourceX, sourceZ, def.knockback);
+  }
+
+  /**
+   * Control de un golpe que conecta: puede cancelar dash/preparación, aplicar
+   * hitstun y empujar. Lo comparten las habilidades dañinas y las de estado: en
+   * ambos casos el objetivo ha recibido un impacto válido. El empuje sale de
+   * `sourceX/sourceZ` (punto de entrada del proyectil o centro del área); sin
+   * origen explícito, del atacante.
+   */
+  private applyHitControl(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    options: {
+      cancel: boolean;
+      hitstun: number;
+      knockback: number;
+      sourceX?: number;
+      sourceZ?: number;
+    }
+  ): void {
+    if (options.cancel) this.interruptPlayer(target);
+    if (options.hitstun > 0) {
+      target.stunTimer = Math.max(target.stunTimer, options.hitstun);
+    }
+    if (options.knockback > 0) {
+      this.applyKnockback(
+        target,
+        options.sourceX ?? attacker.x,
+        options.sourceZ ?? attacker.z,
+        options.knockback
+      );
     }
   }
 
@@ -2071,6 +2092,108 @@ export class Game {
     return 1 - (1 - min) * t;
   }
 
+  /**
+   * Reúne a todos los Pokémon vivos dentro del área (aliados, enemigos y el
+   * propio lanzador) y delega la aplicación de efectos en el callback de la
+   * habilidad. El motor solo aporta los datos y los servicios de golpe.
+   */
+  private resolveAoeHit(hit: AoeHitInput): void {
+    const targets: AoeTarget[] = [];
+    for (const player of this.matchPlayers) {
+      if (!player.alive) continue;
+      const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
+      if (distance > hit.radius + player.hitRadius) continue;
+      const radialMultiplier = this.radialDamageMultiplier(
+        hit.def,
+        distance,
+        hit.radius
+      );
+      targets.push({
+        player,
+        distance,
+        radialMultiplier,
+        damagePower: hit.power * radialMultiplier,
+        isAlly: player.team === hit.owner.team,
+        isEnemy: player.team !== hit.owner.team,
+        isSelf: player === hit.owner,
+        lineOfSight: !segmentBlockedByColliders(
+          hit.x,
+          hit.z,
+          player.x,
+          player.z,
+          this.world.colliders
+        ),
+        hittable: this.canHit(hit.owner, player)
+      });
+    }
+
+    const context: AoeEffectContext = {
+      caster: hit.owner,
+      def: hit.def,
+      x: hit.x,
+      z: hit.z,
+      radius: hit.radius,
+      mode: hit.mode,
+      tick: hit.tick,
+      elapsed: hit.elapsed,
+      power: hit.power,
+      targets,
+      applyHit: (target, options) => this.applyAoeHit(hit, target, options),
+      applyHitstun: (target, seconds, cancel = false) =>
+        this.applyAoeHitstun(target, seconds, cancel),
+      applyKnockback: (target, distance) =>
+        this.applyKnockback(target.player, hit.x, hit.z, distance),
+      applySlow: (target, slow) =>
+        this.applySlow(hit.owner, target.player, hit.def, slow, hit.def.color),
+      applyBuff: (target, buff) => this.applyAoeBuff(target, buff, hit.def),
+      isMatchOver: () => this.matchOver
+    };
+    (hit.def.aoeEffect ?? defaultAoeEffect)(context);
+  }
+
+  /** Ejecuta el golpe estándar de un área contra un objetivo concreto. */
+  private applyAoeHit(
+    hit: AoeHitInput,
+    target: AoeTarget,
+    options: AoeHitOptions = {}
+  ): boolean {
+    return this.applyAbilityDamage(hit.owner, target.player, hit.def, {
+      power: options.power ?? target.damagePower,
+      control: options.control ?? hit.mode === 'instant',
+      cancel: options.cancel,
+      hitstun: options.hitstun,
+      knockback: options.knockback,
+      slow: options.slow,
+      healToken: options.healToken ?? hit.healToken,
+      impactX: options.impactX,
+      impactZ: options.impactZ,
+      sourceX: options.sourceX ?? hit.x,
+      sourceZ: options.sourceZ ?? hit.z
+    });
+  }
+
+  /** Hitstun y cancelación opcional solicitados por un callback de área. */
+  private applyAoeHitstun(
+    target: AoeTarget,
+    seconds: number,
+    cancel: boolean
+  ): void {
+    if (cancel) this.interruptPlayer(target.player);
+    if (seconds > 0) {
+      target.player.stunTimer = Math.max(target.player.stunTimer, seconds);
+    }
+  }
+
+  /** Buff/debuff temporal aplicado a un objetivo por un callback de área. */
+  private applyAoeBuff(
+    target: AoeTarget,
+    buff: BuffSpec,
+    def: AbilityDef
+  ): void {
+    target.player.buffs.push({ ...buff, duration: buff.duration });
+    this.combatFx.spawnBuff(target.player.x, target.player.z, def.color, 0.95);
+  }
+
   private applyAbilityDamage(
     attacker: MatchPlayerState,
     target: MatchPlayerState,
@@ -2078,6 +2201,10 @@ export class Game {
     options: {
       power?: number;
       control?: boolean;
+      cancel?: boolean;
+      hitstun?: number;
+      knockback?: number | null;
+      slow?: SlowSpec | null;
       healToken?: HealOnHitToken;
       impactX?: number;
       impactZ?: number;
@@ -2087,6 +2214,17 @@ export class Game {
   ): boolean {
     const power = options.power ?? def.power;
     const damaging = power > 0 && def.category !== 'status';
+    const control = options.control ?? true;
+    const cancel = options.cancel ?? control;
+    const hitstun =
+      options.hitstun ?? (control ? CONFIG.combat.hitstunSeconds : 0);
+    const knockback =
+      options.knockback === undefined
+        ? control
+          ? def.knockback
+          : 0
+        : options.knockback ?? 0;
+    const slow = options.slow === undefined ? def.slow : options.slow;
     if (!rollAccuracy(def.accuracy)) return false;
 
     // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
@@ -2104,21 +2242,20 @@ export class Game {
     playAbilityImpact(effectiveness);
 
     // La ralentización se aplica aunque la habilidad no haga daño (Paralizador).
-    if (def.slow && target.alive) {
-      this.applySlow(attacker, target, def, def.slow, def.color);
+    if (slow && target.alive) {
+      this.applySlow(attacker, target, def, slow, def.color);
     }
 
     // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:
     // cancela dash y preparación igual que una dañina, como describe el README.
     if (!damaging) {
-      this.applyHitControl(
-        attacker,
-        target,
-        def,
-        options.control ?? true,
-        options.sourceX,
-        options.sourceZ
-      );
+      this.applyHitControl(attacker, target, {
+        cancel,
+        hitstun,
+        knockback,
+        sourceX: options.sourceX,
+        sourceZ: options.sourceZ
+      });
       return false;
     }
 
@@ -2160,17 +2297,15 @@ export class Game {
       lethal
     );
 
-    // Los ticks de un área no controlan al objetivo: solo restan vida y
-    // muestran el impacto. Los golpes normales sí cancelan dash/preparación.
-    const control = options.control ?? true;
-    this.applyHitControl(
-      attacker,
-      target,
-      def,
-      control,
-      options.sourceX,
-      options.sourceZ
-    );
+    // El control puede venir del `control` estándar o de los ajustes propios
+    // del callback de un área (cancel, hitstun y empuje por separado).
+    this.applyHitControl(attacker, target, {
+      cancel,
+      hitstun,
+      knockback,
+      sourceX: options.sourceX,
+      sourceZ: options.sourceZ
+    });
 
     // Solo cuenta el daño que descuenta vida real: el exceso de un golpe letal
     // no infla las estadísticas. El autodaño de habilidades como Explosión sí
@@ -2629,42 +2764,23 @@ export class Game {
 
   private tickAoe(aoe: ActiveAoe): void {
     const basePower = aoe.def.power * aoe.tickInterval;
-    // Un tick sin daño puede seguir aplicando un estado, como un charco que
-    // solo ralentiza. Solo se descarta si no queda nada que aplicar: antes
-    // `basePower <= 0` cortaba también esos efectos de estado.
-    if (basePower <= 0 && !aoe.def.slow) return;
-    for (const target of this.matchPlayers) {
-      if (this.matchOver) break;
-      if (!this.canHit(aoe.owner, target)) continue;
-      const distance = Math.hypot(target.x - aoe.x, target.z - aoe.z);
-      if (distance > aoe.radius + target.hitRadius) continue;
-      // El área se apoya en el suelo, pero sigue sin atravesar un obstáculo
-      // entre su centro y el objetivo.
-      if (
-        segmentBlockedByColliders(
-          aoe.x,
-          aoe.z,
-          target.x,
-          target.z,
-          this.world.colliders
-        )
-      ) {
-        continue;
-      }
-      const radial = this.radialDamageMultiplier(
-        aoe.def,
-        distance,
-        aoe.radius
-      );
-      this.applyAbilityDamage(aoe.owner, target, aoe.def, {
-        power: basePower * radial,
-        control: false,
-        healToken: aoe.healToken,
-        // Cada tick empuja desde el centro del área, no desde el lanzador.
-        sourceX: aoe.x,
-        sourceZ: aoe.z
-      });
-    }
+    // El callback de la habilidad decide qué se aplica en cada tick. El efecto
+    // por defecto conserva el comportamiento histórico: si no hay daño ni
+    // slow, el tick no hace nada, pero un callback propio puede seguir
+    // repartiendo buffs o debuffs.
+    this.resolveAoeHit({
+      owner: aoe.owner,
+      def: aoe.def,
+      x: aoe.x,
+      z: aoe.z,
+      radius: aoe.radius,
+      mode: 'overTime',
+      tick: aoe.tick,
+      elapsed: aoe.elapsed,
+      power: basePower,
+      healToken: aoe.healToken
+    });
+    aoe.tick += 1;
   }
 
   /**

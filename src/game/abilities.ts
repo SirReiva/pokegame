@@ -21,6 +21,7 @@
  * movimiento.
  */
 
+import type { AoeEffect } from './aoeEffect';
 import type { PokemonType } from './typeChart';
 import type { AnimationName } from './types';
 
@@ -188,6 +189,13 @@ export interface AbilityDef {
   aoeDuration: number;
   /** Intervalo entre golpes en modo `overTime` (segundos). */
   aoeTickInterval: number;
+  /**
+   * Callback opcional que decide qué efectos aplica cada golpe o tick del
+   * área. Recibe todos los Pokémon vivos dentro del radio (aliados, enemigos y
+   * el propio lanzador) y elige a quién aplica daño, hitstun, empuje, slow o
+   * buffs. Si se omite, se usa `defaultAoeEffect`.
+   */
+  aoeEffect?: AoeEffect;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
   pierce: number;
   /** Distancia del dash en unidades de mundo. */
@@ -427,6 +435,15 @@ export class AbilityBuilder {
     this.draft.aoeDamageMode = mode;
     this.draft.aoeDuration = duration;
     if (tickInterval !== undefined) this.draft.aoeTickInterval = tickInterval;
+    return this;
+  }
+
+  /**
+   * Define la aplicación de efectos propia del área. Sin este callback se usa
+   * el comportamiento estándar (daño a rivales + `slow` + control instantáneo).
+   */
+  aoeEffect(effect: AoeEffect): this {
+    this.draft.aoeEffect = effect;
     return this;
   }
 

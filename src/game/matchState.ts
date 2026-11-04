@@ -151,6 +151,8 @@ export interface ActiveAoe {
   tickInterval: number;
   /** Segundos restantes hasta el próximo golpe. */
   tickTimer: number;
+  /** Índice del próximo golpe: 0 para el primer tick. */
+  tick: number;
   /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
   healToken?: HealOnHitToken;
 }

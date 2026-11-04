@@ -7,7 +7,8 @@
  * `case` al orquestador.
  */
 
-import type { AbilityDef, AbilityShape } from './abilities';
+import type { AbilityDef, AbilityShape, SlowSpec } from './abilities';
+import type { AoeHitInput } from './aoeEffect';
 import { CONFIG, DEG } from './config';
 import {
   angleDelta,
@@ -29,7 +30,19 @@ import type { World } from './world';
 
 export interface AbilityDamageOptions {
   power?: number;
+  /** Control estándar: cancelar dash/preparación + hitstun + empuje. */
   control?: boolean;
+  /** Cancela dash y preparación. Por defecto, el valor de `control`. */
+  cancel?: boolean;
+  /** Segundos de hitstun. Por defecto, el global si `control`, o 0 si no. */
+  hitstun?: number;
+  /**
+   * Distancia de empuje. `null` lo desactiva. Por defecto, `def.knockback` si
+   * `control`, o 0 si no.
+   */
+  knockback?: number | null;
+  /** Ralentización. `null` la desactiva. Por defecto, `def.slow`. */
+  slow?: SlowSpec | null;
   /** Token compartido del lanzamiento para curar como máximo una vez. */
   healToken?: HealOnHitToken;
   /** Punto donde dibujar el impacto si no coincide con el centro del objetivo. */
@@ -66,11 +79,6 @@ export interface AbilityExecutorDeps {
     def: AbilityDef,
     options?: AbilityDamageOptions
   ): boolean;
-  radialDamageMultiplier(
-    def: AbilityDef,
-    distance: number,
-    radius: number
-  ): number;
   dashPosition(
     player: MatchPlayerState,
     x: number,
@@ -87,6 +95,11 @@ export interface AbilityExecutorDeps {
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
+  /**
+   * Resuelve el golpe de un área: reúne a todos los Pokémon dentro del radio y
+   * delega en el `aoeEffect` de la habilidad (o en el efecto por defecto).
+   */
+  resolveAoeHit(hit: AoeHitInput): void;
   /**
    * Token de `healOnHit` del lanzamiento en curso. Las formas que crean
    * proyectiles, áreas o golpes diferidos lo guardan para que la curación se
@@ -337,36 +350,25 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       duration,
       tickInterval,
       tickTimer: 0,
+      tick: 0,
       healToken: deps.healToken
     });
     return;
   }
-  for (const target of deps.matchPlayers) {
-    if (!deps.canHit(player, target)) continue;
-    const distance = Math.hypot(target.x - centerX, target.z - centerZ);
-    if (distance > def.radius + target.hitRadius) continue;
-    // Un obstáculo entre el centro del área y el objetivo también corta el
-    // golpe: el radio no debe atravesar un árbol, una roca o un muro.
-    if (
-      segmentBlockedByColliders(
-        centerX,
-        centerZ,
-        target.x,
-        target.z,
-        deps.world.colliders
-      )
-    ) {
-      continue;
-    }
-    const radial = deps.radialDamageMultiplier(def, distance, def.radius);
-    deps.applyAbilityDamage(player, target, def, {
-      power: def.power * radial,
-      healToken: deps.healToken,
-      // El empuje radial sale del centro del área, no del lanzador.
-      sourceX: centerX,
-      sourceZ: centerZ
-    });
-  }
+  // El área instantánea resuelve un único golpe. El callback de la habilidad
+  // decide qué efectos se aplican a cada Pokémon dentro del radio.
+  deps.resolveAoeHit({
+    owner: player,
+    def,
+    x: centerX,
+    z: centerZ,
+    radius: def.radius,
+    mode: 'instant',
+    tick: 0,
+    elapsed: 0,
+    power: def.power,
+    healToken: deps.healToken
+  });
 };
 
 /**
