@@ -182,15 +182,21 @@ const REGEN_SEGMENT_STEP = 0.4;
 const REGEN_MIN_CONCEALMENT = 0.12;
 
 /**
- * Vida por debajo de la cual el bot busca una poción conocida. Los bots saben
- * dónde están los objetos desde el inicio de la partida, pero no si están
- * disponibles o usados hasta que su equipo los ve.
+ * Vida por debajo de la cual el bot busca una poción conocida. Los bots solo
+ * consideran objetos que su equipo ve ahora o que ha visto hace poco.
  */
 const PICKUP_SEEK_HP = 0.7;
 /** Radio en el que un enemigo visible contamina el trayecto a un objeto. */
 const PICKUP_PATH_THREAT_RADIUS = 4;
 /** Distancia más allá del radio de la base enemiga que ya no se penaliza. */
 const PICKUP_BASE_THREAT_RANGE = 10;
+/**
+ * Segundos que se recuerda el último estado visto de un objeto. Pasado ese
+ * tiempo, si el equipo no vuelve a verlo, deja de ser candidato.
+ */
+const PICKUP_MEMORY_SECONDS = 10;
+/** Tiempo que se descarta un objeto tras quedarse atascado yendo hacia él. */
+const PICKUP_AVOID_SECONDS = 12;
 /** Sin información de visión, ningún objeto tiene estado conocido. */
 const NO_PICKUP_KNOWLEDGE: ReadonlyMap<string, boolean> = new Map();
 
@@ -298,6 +304,13 @@ export class BotController {
    * `false` usado). Los objetos fuera de visión no aparecen en el mapa.
    */
   private pickupKnowledge: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE;
+  /**
+   * Último estado visto de cada objeto, con el reloj en que se comprobó. Evita
+   * olvidar que un objeto está usado en cuanto sale de visión.
+   */
+  private readonly pickupMemory = new Map<string, { available: boolean; at: number }>();
+  /** Objetos descartados temporalmente tras un atasco camino de ellos. */
+  private readonly pickupAvoidUntil = new Map<string, number>();
 
   private path: NavPoint[] = [];
   private pathGoal: Vec2 = { x: 0, z: 0 };
@@ -349,8 +362,9 @@ export class BotController {
     colliders: readonly Collider[],
     knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE
   ): DeviceInputSnapshot {
-    this.pickupKnowledge = knownPickups;
     this.clock += dt;
+    this.pickupKnowledge = knownPickups;
+    this.rememberPickups(knownPickups);
     if (!self.alive) {
       this.resetCombatState();
       return { ...IDLE_INPUT };
@@ -380,6 +394,35 @@ export class BotController {
     }
 
     return this.drive(dt, self, players, colliders);
+  }
+
+  /** Guarda el estado visible de los objetos y descarta recuerdos caducados. */
+  private rememberPickups(knownPickups: ReadonlyMap<string, boolean>): void {
+    for (const [key, available] of knownPickups) {
+      this.pickupMemory.set(key, { available, at: this.clock });
+    }
+    for (const [key, entry] of this.pickupMemory) {
+      if (this.clock - entry.at > PICKUP_MEMORY_SECONDS) {
+        this.pickupMemory.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Tras varios atascos seguidos, descarta temporalmente el objeto que coincide
+   * con el destino actual. Así `pickupTarget` no vuelve a fijarlo y el bot
+   * regresa a patrullar en vez de empujar contra el obstáculo sin fin.
+   */
+  private avoidCurrentPickupGoal(): void {
+    for (const pickup of this.pickups) {
+      if (Math.hypot(pickup.x - this.goal.x, pickup.z - this.goal.z) > 1.2) {
+        continue;
+      }
+      this.pickupAvoidUntil.set(
+        `${pickup.x}:${pickup.z}`,
+        this.clock + PICKUP_AVOID_SECONDS
+      );
+    }
   }
 
   private resetCombatState(): void {
@@ -1028,9 +1071,10 @@ export class BotController {
    * (según la vida que falta), la distancia, el peligro de acercarse a la base
    * enemiga y los enemigos visibles cerca del trayecto.
    *
-   * Si el equipo ya ve un objeto usado (`pickupKnowledge` = false), se descarta
-   * sin necesidad de caminar hasta él. Los objetos fuera de visión no tienen
-   * estado conocido y siguen siendo candidatos.
+   * Solo se consideran objetos que el equipo ve ahora o que ha visto hace poco.
+   * Si el último estado conocido es «usado», se descarta sin caminar hasta él;
+   * así no persigue posiciones que nunca ha visto ni vuelve a por un objeto
+   * gastado que ya salió de visión.
    */
   private pickupTarget(self: MatchPlayerState): PickupSpawn | null {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
@@ -1041,9 +1085,21 @@ export class BotController {
 
     for (const pickup of this.pickups) {
       const key = `${pickup.x}:${pickup.z}`;
+      const avoidUntil = this.pickupAvoidUntil.get(key);
+      if (avoidUntil !== undefined) {
+        if (this.clock < avoidUntil) continue;
+        this.pickupAvoidUntil.delete(key);
+      }
       const knownAvailable = this.pickupKnowledge.get(key);
-      // Ya lo ve y está usado: no merece la pena acercarse.
-      if (knownAvailable === false) continue;
+      const remembered = this.pickupMemory.get(key);
+      const rememberedAvailable =
+        remembered && this.clock - remembered.at <= PICKUP_MEMORY_SECONDS
+          ? remembered.available
+          : undefined;
+      // Lo que ve el equipo manda sobre el recuerdo; sin ninguno de los dos, el
+      // objeto no es un destino válido.
+      const available = knownAvailable ?? rememberedAvailable;
+      if (available === undefined || !available) continue;
 
       const definition = ITEM_DEFINITIONS[pickup.type];
       const heal = definition?.healHp ?? 0;
@@ -1362,6 +1418,7 @@ export class BotController {
           // Dos desvíos seguidos sin avanzar: volver por donde vino. Es lo
           // único que funciona en un pasillo donde dos aliados no caben.
           this.stuckCount = 0;
+          this.avoidCurrentPickupGoal();
           this.backOffGoal = this.trailBackOff(self);
           this.backOffTimer = BACK_OFF_SECONDS;
         } else {
@@ -1739,10 +1796,17 @@ export class BotController {
   private moveTowards(self: MatchPlayerState, goal: Vec2, dt: number): Vec2 {
     const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
     if (distance < 0.12) return { x: 0, z: 0 };
-    // A corta distancia el steering local basta: el objetivo puede estar en
-    // una celda marcada como bloqueada por un árbol cercano y A* nunca llegaría
-    // a él. `resolvePosition` sigue impidiendo atravesar el collider real.
-    if (distance < 1.6) return directionTo(self, goal);
+    if (distance < 1.6) {
+      // El steering local solo vale si no hay un obstáculo entre medias. Si lo
+      // hay, se rodea con la navegación: atajar en línea recta dejaría al bot
+      // empujando contra un muro fino.
+      if (this.nav.lineClear(self.x, self.z, goal.x, goal.z)) {
+        this.path = [];
+        this.pathTimer = 0;
+        return directionTo(self, goal);
+      }
+      return this.followPath(self, goal, dt);
+    }
     if (this.nav.lineClear(self.x, self.z, goal.x, goal.z)) {
       this.path = [];
       this.pathTimer = 0;

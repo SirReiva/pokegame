@@ -73,6 +73,14 @@
 > el editor fusiona duplicados exactos al importar y avisa de objetos en agua
 > profunda, separadores o bases. También se movió a una celda válida la poción
 > del laberinto que estaba dentro de un muro.
+>
+> **Actualización 2026-11-04 (10)**: arreglado 3.13. `pickupTarget` solo elige
+> objetos que el equipo ve en ese frame o que ha visto en los últimos 10 s; cada
+> bot guarda el último estado con marca de tiempo y lo purga al caducar, así que
+> recuerda los objetos usados aunque salgan de visión. `moveTowards` ya no ataja
+> en línea recta a menos de 1,6 u cuando el segmento está bloqueado: rodea el
+> obstáculo con la navegación. Si aun así acumula dos atascos, descarta ese
+> objeto durante 12 s y vuelve a patrullar.
 
 ## Resumen ejecutivo
 
@@ -108,7 +116,8 @@ Desde v0.7.0 hay además un sistema de objetos recogibles (pociones de 50/120 PV
 que no entra en la simulación de §4. Su recogida automática ya comprueba
 obstáculos, visibilidad, hurtbox por especie y duplicados (§3.11); las posiciones
 se validan al cargar el mapa y cada jugador recoge como máximo un objeto por
-frame (§3.12). Los bots todavía pueden perseguir objetos que aún no ven (§3.13).
+frame (§3.12). Los bots solo persiguen objetos que ven o han visto hace poco y
+rodean los obstáculos (§3.13).
 
 Sigue abierto el fallo de la pasada anterior: todos los dashes se detienen en
 cualquier jugador, aunque `dashBlocksOnEnemies` solo esté activo en Impulso
@@ -270,7 +279,7 @@ cobertura de tipos.
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
 | 3.11 Objetos recogibles | **arreglado** | Recogida con colliders y visibilidad, `hitRadius` por especie, duplicados rechazados y reparto por distancia. |
 | 3.12 Posiciones de objetos | **arreglado** | Validación contra límites, agua y colliders al cargar, un objeto por jugador/frame y editor que fusiona duplicados y avisa de posiciones inválidas. |
-| 3.13 Bots y objetos no visibles | **nuevo** | Conocen todas las posiciones y pueden atascarse contra el obstáculo que oculta el objeto; olvidan el estado usado fuera de visión. |
+| 3.13 Bots y objetos no visibles | **arreglado** | Solo eligen objetos vistos o recordados (10 s), recuerdan el estado usado y rodean obstáculos en vez de atajar contra ellos. |
 
 ### 3.1. Cobertura: 9 especies sin moveset (crítico)
 
@@ -563,29 +572,31 @@ descartan antes de crear su billboard o de ofrecérselos a los bots:
 **Balance**: sin cambios. Los objetos siguen midiéndose aparte de la matriz de
 §4.
 
-### 3.13. Bots y objetos fuera de visión (bajo)
+### 3.13. Bots y objetos fuera de visión (arreglado)
 
-`pickupTarget` (`src/game/bot.ts:783-854`) conoce todas las posiciones válidas y
-solo descarta un objeto si `pickupKnowledge` lo marca explícitamente como usado.
-Los objetos no visibles siguen siendo candidatos. Desde el arreglo de §3.11,
-`collect` exige visibilidad, así que un bot puede caminar hacia un objeto que
-todavía no puede recoger. Si al acercarse queda a menos de 1,6 u, `moveTowards`
-va en línea recta sin consultar la navegación (`src/game/bot.ts:1476-1488`); un
-muro fino entre ambos puede dejarle empujando contra el obstáculo. Mientras
-siga por debajo del 70 % de vida y no haya un rival visible, `decide` vuelve a
-fijar el mismo objeto (`bot.ts:727-732`) y no llega a `updatePatrol`, así que
-puede quedarse atascado de forma indefinida. En huida también se prefiere el
-objeto a la base (`bot.ts:718-724`), de modo que el atasco puede impedirle
-volver a curarse.
+Los bots ya no persiguen objetos que no han visto y dejan de atajar contra los
+obstáculos:
 
-Además, `pickupKnowledge` solo guarda el estado de los puntos visibles
-(`game.ts:3099-3129`). Al salir de visión, un objeto usado desaparece del mapa
-de conocimiento y el bot puede volver a considerarlo; no es grave, pero explica
-persecuciones de objetos ya gastados.
+- `pickupTarget` (`src/game/bot.ts:1079-1162`) solo considera objetos que el
+  equipo ve en ese frame o que ha visto en los últimos `PICKUP_MEMORY_SECONDS`
+  (10 s, `bot.ts:197`). Si el último estado conocido es «usado», lo descarta; si
+  no hay estado visible ni recuerdo, la posición no es un destino válido.
+- `BotController.rememberPickups` (`src/game/bot.ts:400-409`) guarda ese estado
+  con marca de tiempo y purga los recuerdos caducados. Así un objeto usado no
+  reaparece en el conocimiento al salir de visión.
+- Si un objeto lleva al bot a dos atascos seguidos,
+  `avoidCurrentPickupGoal` (`bot.ts:416-427`) lo descarta durante
+  `PICKUP_AVOID_SECONDS` (12 s); `pickupTarget` lo ignora y el bot vuelve a
+  patrullar en vez de fijarlo indefinidamente.
+- `moveTowards` (`src/game/bot.ts:1796-1816`) solo ataja en línea recta si
+  `nav.lineClear` confirma que no hay obstáculo. Si lo hay, usa A* para rodearlo
+  también a menos de 1,6 u, que era el caso del muro fino con el objeto al otro
+  lado.
+- La memoria es por bot y no cambia la disponibilidad global ni el reparto de
+  `collect`; solo evita que el bot vuelva a fijar un objetivo ya gastado o que
+  nunca ha visto.
 
-**Arreglo**: que `pickupTarget` no elija destinos sin visibilidad/LOS (o que
-`moveTowards` no ataje en línea recta cuando el segmento está bloqueado) y
-guardar el último estado conocido con caducidad.
+**Balance**: sin cambios.
 
 ## 4. Estudio cuantitativo del balance
 
@@ -978,9 +989,9 @@ autodaño la convierte en una mala elección en 1v1.
 27. **Posiciones de objetos (hecho)**: los objetos se validan contra límites,
     agua y colliders al cargar el mapa, cada jugador recoge como máximo uno por
     frame y el editor fusiona duplicados y avisa de posiciones inválidas (§3.12).
-28. **Bots y objetos**: no elegir destinos sin visibilidad/LOS, evitar el atajo
-    en línea recta cuando el segmento está bloqueado y recordar con caducidad el
-    último estado usado de cada objeto (§3.13).
+28. **Bots y objetos (hecho)**: solo eligen objetos vistos o recordados, con
+    caducidad del último estado usado, y rodean los obstáculos con la
+    navegación en vez de atajar en línea recta (§3.13).
 
 > Los números son un punto de partida para una primera pasada, no una verdad
 > absoluta. Conviene cambiarlos de pocos en pocos y volver a ejecutar la matriz.
@@ -1159,8 +1170,9 @@ Un script de balance como el usado para este informe se puede añadir a
   disponibilidad de los puntos que ve su equipo. La recogida comprueba
   colliders y visibilidad, usa el `hitRadius` de la especie, rechaza duplicados
   y reparte por distancia (§3.11); las posiciones se validan al cargar y cada
-  jugador recoge como máximo un objeto por frame (§3.12). Queda la selección de
-  destinos de los bots (§3.13).
+  jugador recoge como máximo un objeto por frame (§3.12). Los bots solo fijan
+  objetos vistos o recordados, recuerdan el estado usado con caducidad y rodean
+  los obstáculos (§3.13).
 - Los commits `fix melee` y `fix inmune` van en la dirección correcta: la melee,
   las áreas, los dashes y los proyectiles comprueban todos los colliders, el
   proyectil barre también a los objetivos y el choque revalida los golpes. La inmunidad de tipo se comprueba antes de
