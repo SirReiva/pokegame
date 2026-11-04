@@ -81,6 +81,15 @@
 > en línea recta a menos de 1,6 u cuando el segmento está bloqueado: rodea el
 > obstáculo con la navegación. Si aun así acumula dos atascos, descarta ese
 > objeto durante 12 s y vuelve a patrullar.
+>
+> **Actualización 2026-11-04 (11)**: las telegrafías de melee, haz y área
+> dibujan ahora el radio máximo de golpe (`range`/`radius` + el mayor hurtbox del
+> roster) y la comprobación de impacto usa ese mismo valor. Antes el aviso se
+> dibujaba con el mayor hurtbox pero el golpe sumaba el hurtbox del objetivo:
+> contra cuerpos pequeños (Bulbasaur, Gengar) el cono cubría al rival pero su
+> centro quedaba fuera del alcance efectivo, no conectaba y tampoco aparecía la
+> marca 🚫. Al compartir el mismo radio, todo el interior del aviso es golpeable
+> y el borde coincide con el límite real.
 
 ## Resumen ejecutivo
 
@@ -194,12 +203,15 @@ stats legendarios sean intrínsecamente más fuertes antes de mirar habilidades.
 
 Desde `3bae0e9` cada especie tiene un radio de impacto propio
 (`POKEMON_HIT_RADIUS`, `src/game/roster.ts:58-83`), de 0,34 u (Voltorb, Celebi)
-a 0,58 u (Onix, Lugia, Ho-Oh), con 0,42 u de referencia. Se usa para los golpes
-de habilidades (melee, haz, área, proyectil y barrido de dash) y para las
-comprobaciones de rango de los bots. La colisión de movimiento, la separación
-entre cuerpos y la navegación de los bots siguen usando `CONFIG.player.radius`
-para todos. Las telegrafías dibujan el mayor hurtbox del roster como aviso
-conservador. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`.
+a 0,58 u (Onix, Lugia, Ho-Oh), con 0,42 u de referencia. Se usa para los
+proyectiles, el barrido de dash y las comprobaciones de rango de los bots. Las
+melee, los haces y las áreas usan el mayor hurtbox del roster
+(`MAX_HIT_RADIUS`) tanto para dibujar la telegrafía como para comprobar el
+golpe: el borde del arco, del carril o del aro es exactamente el límite de
+impacto y todo su interior es golpeable. La colisión de movimiento, la
+separación entre cuerpos y la navegación de los bots siguen usando
+`CONFIG.player.radius` para todos. Se puede desactivar con
+`CONFIG.player.perPokemonHitbox = false`.
 
 ### Formas y reglas
 
@@ -1079,13 +1091,13 @@ así que se pueden añadir tests baratos:
   en la dirección del proyectil, y un área radial debe empujar desde su centro,
   no desde el lanzador. Un dash que golpea lateralmente y termina más allá del
   objetivo debe empujarlo en la dirección del dash, no hacia el origen.
-- **Hurtbox**: un melee de alcance 2,2 u debe alcanzar el centro de un Groudon a
-  2,76 u y no el de un Voltorb a 2,55 u; un proyectil que roza el borde del
-  cuerpo de una especie grande debe golpear y el mismo roce contra una pequeña
-  no. Un bot debe iniciar el melee contra un Groudon desde más lejos que contra
-  un Voltorb. Comprobar también que desactivar `CONFIG.player.perPokemonHitbox`
-  devuelve todo el roster a 0,42 u y que las telegrafías nunca son menores que la
-  zona real de impacto.
+- **Hurtbox y telegrafías**: un melee de alcance 2,2 u golpea a cualquier especie
+  cuyo centro esté dentro de 2,2 + 0,58 = 2,78 u, y el borde del arco coincide
+  exactamente con ese límite: ningún centro dentro del cono queda sin golpe. Lo
+  mismo para el carril del haz y el aro del área. Los proyectiles y el barrido de
+  dash conservan el hurtbox por especie. Un bot debe iniciar el melee contra un
+  Groudon desde más lejos que contra un Voltorb. Comprobar también que desactivar
+  `CONFIG.player.perPokemonHitbox` devuelve todo el roster a 0,42 u.
 - **Orden de golpes simultáneos**: dos proyectiles creados en el mismo frame
   deben resolverse en orden de creación; si ambos son letales, el KO debe ir al
   más antiguo y repetir la prueba invirtiendo el orden de creación no debe

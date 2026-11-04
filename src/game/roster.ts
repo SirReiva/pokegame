@@ -85,7 +85,11 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
 /** Radio de respaldo si una especie no tiene entrada en la tabla. */
 export const DEFAULT_HIT_RADIUS = CONFIG.player.radius;
 
-/** Mayor hurtbox posible; las telegrafías compartidas deben cubrirlo. */
+/**
+ * Mayor hurtbox posible. Las telegrafías compartidas y la comprobación de golpe
+ * de melee, haz y área usan este mismo radio: así todo el interior del aviso es
+ * golpeable y el borde dibujado coincide con el límite real.
+ */
 export const MAX_HIT_RADIUS = Math.max(
   DEFAULT_HIT_RADIUS,
   ...Object.values(POKEMON_HIT_RADIUS)
@@ -97,7 +101,7 @@ export function hitRadiusForPokemon(id: string): number {
   return POKEMON_HIT_RADIUS[id] ?? DEFAULT_HIT_RADIUS;
 }
 
-/** Radio que debe cubrir una telegrafía que puede golpear a cualquier especie. */
+/** Radio que cubre a cualquier especie; lo comparten telegrafía y golpe. */
 export function maxHitRadius(): number {
   return CONFIG.player.perPokemonHitbox ? MAX_HIT_RADIUS : CONFIG.player.radius;
 }

@@ -1860,10 +1860,9 @@ export class Game {
       // Las habilidades de área fijan su centro al empezar el retardo y
       // muestran la marca en el suelo hasta que termina el efecto. El aro
       // (color del equipo) es persistente; el relleno de carga solo dura el
-      // `windup`. La marca incluye el mayor hurtbox del roster porque el daño
-      // suma el radio del objetivo. Es un aviso conservador a propósito: contra
-      // un cuerpo pequeño la zona real es algo menor, pero ningún objetivo
-      // queda golpeado fuera del borde dibujado.
+      // `windup`. El aro dibuja el radio máximo de golpe (área + mayor hurtbox)
+      // y la comprobación usa ese mismo valor: todo el interior es golpeable y
+      // el borde coincide con el límite real.
       const marker =
         def.shape === 'aoe'
           ? this.combatFx.spawnAoeTelegraph(
@@ -1875,9 +1874,9 @@ export class Game {
               Math.max(0.1, def.aoeDuration)
             )
           : null;
-      // Los haces muestran su carril desde el inicio del windup. El ancho es un
-      // aviso conservador (radio del haz + el mayor hurtbox posible), así que el
-      // carril nunca queda por dentro del alcance real de ningún objetivo.
+      // Los haces muestran su carril desde el inicio del windup. El ancho es el
+      // radio máximo de golpe (haz + mayor hurtbox), el mismo que usa la
+      // comprobación: todo el interior del carril es golpeable.
       const lane =
         def.shape === 'beam'
           ? this.combatFx.spawnBeamLane(
@@ -2184,7 +2183,7 @@ export class Game {
     for (const player of this.matchPlayers) {
       if (!player.alive) continue;
       const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
-      if (distance > hit.radius + player.hitRadius) continue;
+      if (distance > hit.radius + maxHitRadius()) continue;
       const radialMultiplier = this.radialDamageMultiplier(
         hit.def,
         distance,
@@ -2940,7 +2939,7 @@ export class Game {
     const dx = target.x - attacker.x;
     const dz = target.z - attacker.z;
     const distance = Math.hypot(dx, dz);
-    if (distance > def.range + target.hitRadius) return false;
+    if (distance > def.range + maxHitRadius()) return false;
     if (distance >= 0.001) {
       const delta = Math.abs(angleDelta(Math.atan2(dx, dz), attacker.facing));
       if (delta > def.halfAngle * DEG) return false;

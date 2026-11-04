@@ -117,10 +117,9 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
-  // El arco dibujado es un aviso conservador: usa el mayor hurtbox del roster
-  // para que el borde visible nunca quede por dentro del alcance real de ningún
-  // objetivo. El golpe suma el hurtbox concreto de cada rival, así que contra
-  // cuerpos pequeños (Voltorb, Celebi) el arco queda algo por fuera a propósito.
+  // El arco dibuja el radio máximo de golpe (`range` + el mayor hurtbox) y la
+  // comprobación usa ese mismo valor: todo el interior del cono es golpeable y
+  // el borde visible coincide con el límite real, sin franjas muertas.
   deps.combatFx.spawnMelee(
     player.x,
     player.z,
@@ -151,7 +150,7 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
     const dx = target.x - player.x;
     const dz = target.z - player.z;
     const distance = Math.hypot(dx, dz);
-    if (distance > def.range + target.hitRadius) continue;
+    if (distance > def.range + maxHitRadius()) continue;
     if (distance < 0.001) {
       deps.addPendingMeleeHit({
         attacker: player,
@@ -267,7 +266,7 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     const along = toX * dirX + toZ * dirZ;
     const lateral = Math.abs(toX * dirZ - toZ * dirX);
     if (along < 0 || along > distance) continue;
-    if (lateral > def.radius + target.hitRadius) continue;
+    if (lateral > def.radius + maxHitRadius()) continue;
     if (
       segmentBlockedByColliders(
         player.x,
@@ -321,19 +320,13 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       duration
     );
   }
-  // La marca del suelo que se dibuja durante el windup añade el mayor hurtbox
-  // del roster en `game.ts`: esa es la zona en la que el centro de cualquier
-  // objetivo puede recibir el golpe. La explosión es una deflagración de
-  // volumen, así que su efecto usa ese mismo radio y llena el aro hasta el
-  // borde; el resto de áreas conserva el disco de `def.radius`.
-  const effectRadius =
-    def.aoeStyle === 'explosion'
-      ? def.radius + maxHitRadius()
-      : def.radius;
+  // El aro y el efecto dibujan el radio máximo de golpe (área + el mayor
+  // hurtbox) y la comprobación usa el mismo valor: todo el interior del aro es
+  // golpeable y el borde coincide con el límite real.
   deps.combatFx.spawnAoe(
     centerX,
     centerZ,
-    effectRadius,
+    def.radius + maxHitRadius(),
     def.color,
     def.aoeStyle,
     duration
