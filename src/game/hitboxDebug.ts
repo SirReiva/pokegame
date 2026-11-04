@@ -158,3 +158,39 @@ export class HitboxDebug {
     this.ringMaterial.destroy();
   }
 }
+
+/**
+ * Cuelga un anillo de depuración de la raíz de un proyectil, a la altura del
+ * suelo. El radio es el de colisión del proyectil: cuando este anillo toca el
+ * círculo de hurtbox de un rival, el impacto está garantizado. Devuelve la
+ * función para liberar malla y material.
+ */
+export function attachProjectileHitbox(
+  app: pc.Application,
+  root: pc.Entity,
+  radius: number
+): () => void {
+  const device = app.graphicsDevice;
+  const band = Math.max(0.02, Math.min(0.05, radius * 0.18));
+  const mesh = createRingMesh(device, radius, band);
+  const material = createDebugMaterial(HITBOX_COLOR, RING_OPACITY);
+  const entity = new pc.Entity('projectile-hitbox-debug');
+  entity.addComponent('render');
+  const render = entity.render!;
+  render.castShadows = false;
+  render.receiveShadows = false;
+  const instance = new pc.MeshInstance(mesh, material);
+  instance.castShadow = false;
+  instance.receiveShadow = false;
+  instance.drawOrder = 5;
+  render.meshInstances = [instance];
+  // La raíz del proyectil vuela a ~0,7 u; el anillo debe quedar en el suelo.
+  const rootY = root.getPosition().y;
+  entity.setLocalPosition(0, HITBOX_HEIGHT - rootY, 0);
+  root.addChild(entity);
+  return () => {
+    entity.destroy();
+    mesh.destroy();
+    material.destroy();
+  };
+}

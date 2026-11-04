@@ -11,7 +11,8 @@
 
 import * as pc from 'playcanvas';
 import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilities';
-import { DEG } from './config';
+import { CONFIG, DEG } from './config';
+import { attachProjectileHitbox } from './hitboxDebug';
 import { createDustCanvas, createFlameCanvas, createFrostCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
 /** Opacidad base del arco melee según el estilo de impacto. */
@@ -1627,6 +1628,19 @@ export class CombatFx {
       }
     }
     if (!visual) return handle;
+
+    if (CONFIG.debug.showHitboxes) {
+      const cleanup = attachProjectileHitbox(this.app, visual.entity, radius);
+      const destroy = handle.destroy;
+      let disposed = false;
+      handle.destroy = () => {
+        if (!disposed) {
+          disposed = true;
+          cleanup();
+        }
+        destroy();
+      };
+    }
 
     this.applyVisibility(visual.entity, [[x, z]], true);
 
