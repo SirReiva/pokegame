@@ -58,9 +58,10 @@ interface PlayScreenProps {
   mapId: string;
   configs: MatchPlayerConfig[];
   players: LobbyPlayer[];
+  koTarget: number;
 }
 
-function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
+function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenProps) {
   const [, navigate] = useLocation();
   const { resetPlayers, resetRosterReady } = useSession();
 
@@ -150,7 +151,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
           if (!disposed) handlersRef.current?.onCountdown(remaining);
         }
       },
-      { mapId, manifest }
+      { mapId, manifest, koTarget }
     );
 
     gameRef.current = game;
@@ -161,7 +162,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       gameRef.current = null;
       game.dispose();
     };
-  }, [mapId, manifest]);
+  }, [mapId, manifest, koTarget]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused || modal !== null);
@@ -264,6 +265,7 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
               manifest={manifest}
               players={players.filter((player) => !player.isBot)}
               stats={stats}
+              koTarget={koTarget}
               onPause={() => setPaused(true)}
             />
           )}
@@ -758,7 +760,7 @@ function MatchScoreboard({
 }
 
 function PlayGuard() {
-  const { manifest, mapId, matchConfigs, players } = useSession();
+  const { manifest, mapId, matchConfigs, players, koTarget } = useSession();
 
   if (!manifest || !mapId) return <Redirect to="/lobby" />;
   if (!matchConfigs) return <Redirect to={players.length > 0 ? '/roster' : '/lobby'} />;
@@ -769,6 +771,7 @@ function PlayGuard() {
       mapId={mapId}
       configs={matchConfigs}
       players={players}
+      koTarget={koTarget}
     />
   );
 }

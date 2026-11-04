@@ -141,6 +141,8 @@ export interface GameOptions {
   mapId?: string;
   /** Manifiesto ya descargado por la sesión, para no pedirlo dos veces. */
   manifest?: SpriteManifest;
+  /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
+  koTarget?: number;
 }
 
 /** Cuánto se ensancha el radio de colisión de las cuñas de sombra. */
@@ -261,8 +263,10 @@ export class Game {
   private queuedCasts: QueuedCast[] = [];
   /** Golpes de dash detectados al moverse, resueltos con el resto del frame. */
   private pendingInstantHits: PendingInstantHit[] = [];
-  /** Marcador de la partida; gana el primero que llegue a `KO_TARGET`. */
+  /** Marcador de la partida; gana el primero que llegue a `koTarget`. */
   private teamScores: Record<Team, number> = { blue: 0, red: 0 };
+  /** Límite de KOs de esta partida, fijado al crearla. */
+  private readonly koTarget: number;
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
   private killFeed: KillFeedEntry[] = [];
   private killFeedSeq = 0;
@@ -322,6 +326,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks, options: GameOptions = {}) {
     this.callbacks = callbacks;
     this.options = options;
+    this.koTarget = Math.max(1, Math.floor(options.koTarget ?? KO_TARGET));
 
     this.app = new pc.Application(canvas, {
       graphicsDeviceOptions: {
@@ -2516,7 +2521,7 @@ export class Game {
   }
 
   private knockOut(target: MatchPlayerState, killer: MatchPlayerState): void {
-    // El fin de partida es idempotente: el primer KO que alcanza KO_TARGET
+    // El fin de partida es idempotente: el primer KO que alcanza `koTarget`
     // decide el ganador y los KO posteriores del mismo frame ni suman ni
     // vuelven a llamar a `onMatchEnd`.
     if (this.matchOver) return;
@@ -2558,7 +2563,7 @@ export class Game {
     if (killer.team !== target.team) {
       killer.kills += 1;
       this.teamScores[killer.team] += 1;
-      if (this.teamScores[killer.team] >= KO_TARGET) {
+      if (this.teamScores[killer.team] >= this.koTarget) {
         this.matchOver = true;
         this.winner = killer.team;
         // La partida termina aquí: el tema de combate no debe seguir bajo el

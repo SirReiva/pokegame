@@ -44,6 +44,9 @@ export const BOT_DIFFICULTY_LABEL: Record<BotDifficulty, string> = {
   hard: 'Difícil'
 };
 
+/** Límites de KOs que se pueden elegir en el lobby. */
+export const KO_TARGET_OPTIONS: readonly number[] = [15, 30, 50];
+
 export interface TeamInfo {
   label: string;
   short: string;

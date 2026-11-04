@@ -79,8 +79,10 @@ function LobbyContent() {
       maps={session.maps}
       mapId={session.mapId}
       botDifficulty={session.botDifficulty}
+      koTarget={session.koTarget}
       onChangeMap={session.setMapId}
       onChangeBotDifficulty={session.setBotDifficulty}
+      onChangeKoTarget={session.setKoTarget}
       onAddBot={session.addBot}
       onFillBots={session.fillBots}
       onJoin={session.joinDevice}

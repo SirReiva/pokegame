@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
 import type { BuffStat } from '../game/abilities';
-import { KO_TARGET } from '../game/combat';
 import {
   TEAM_INFO,
   computeSplitLayout,
@@ -19,6 +18,7 @@ interface MatchHudProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
   stats: PlayerMatchStats[];
+  koTarget: number;
   onPause: () => void;
 }
 
@@ -132,7 +132,7 @@ function KillFeed({
  * aquí solo van los bordes de equipo y las etiquetas de cada jugador, alineadas
  * con el mismo reparto normalizado que usan las cámaras.
  */
-export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
+export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchHudProps) {
   const layout = computeSplitLayout(players.length);
   const statsBySlot = new Map(stats.map((entry) => [entry.slot, entry]));
   const pokemonNames = new Map(
@@ -151,7 +151,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
           {scoreBlue}
         </span>
         <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
-          a {KO_TARGET}
+          a {koTarget}
         </span>
         <span
           className="font-display text-14.72 font-extrabold tabular-nums"

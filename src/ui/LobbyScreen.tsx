@@ -6,6 +6,7 @@ import { publicUrl } from '../game/publicUrl';
 import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
+  KO_TARGET_OPTIONS,
   MAX_PLAYERS,
   MAX_TEAM_SIZE,
   PLAYER_NAME_MAX_LENGTH,
@@ -30,8 +31,10 @@ interface LobbyScreenProps {
   maps: MapIndexEntry[];
   mapId: string;
   botDifficulty: BotDifficulty;
+  koTarget: number;
   onChangeMap: (mapId: string) => void;
   onChangeBotDifficulty: (difficulty: BotDifficulty) => void;
+  onChangeKoTarget: (value: number) => void;
   onAddBot: (team: Team) => void;
   onFillBots: () => void;
   onJoin: (device: InputDeviceInfo) => void;
@@ -182,8 +185,10 @@ export function LobbyScreen({
   maps,
   mapId,
   botDifficulty,
+  koTarget,
   onChangeMap,
   onChangeBotDifficulty,
+  onChangeKoTarget,
   onAddBot,
   onFillBots,
   onJoin,
@@ -373,6 +378,32 @@ export function LobbyScreen({
                 </p>
               </div>
             )}
+
+            <div className="mb-4 border-b border-dashed border-line pb-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className={eyebrow}>Puntuación</span>
+                <span className="font-mono text-9.6 text-steel-500">
+                  {koTarget} KO
+                </span>
+              </div>
+              <h3 className="mt-0.5 text-19.2">Límite de KOs</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {KO_TARGET_OPTIONS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={btnClass(value === koTarget ? 'accent' : 'ghost', 'tiny')}
+                    disabled={value === koTarget}
+                    onClick={() => onChangeKoTarget(value)}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
+                Gana el primer equipo que alcance el límite.
+              </p>
+            </div>
 
             <div className="mb-4 border-b border-dashed border-line pb-3.5">
               <div className="flex items-center justify-between gap-2">

@@ -16,6 +16,9 @@ export interface SessionValue {
   maps: MapIndexEntry[];
   mapId: string;
   setMapId: (id: string) => void;
+  /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
+  koTarget: number;
+  setKoTarget: (value: number) => void;
   players: LobbyPlayer[];
   matchConfigs: MatchPlayerConfig[] | null;
   joinDevice: (device: InputDeviceInfo) => void;

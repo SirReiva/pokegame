@@ -12,6 +12,7 @@ import {
   hasAssignedAbilities,
   type CommonAbilityId
 } from '../game/abilities';
+import { CONFIG } from '../game/config';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
 import {
@@ -107,6 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [manifest, setManifest] = useState<SpriteManifest | null>(null);
   const [maps, setMaps] = useState<MapIndexEntry[]>([]);
   const [mapId, setMapIdState] = useState('');
+  const [koTarget, setKoTargetState] = useState<number>(CONFIG.combat.koTarget);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [botDifficulty, setBotDifficultyState] = useState<BotDifficulty>('normal');
 
@@ -163,6 +165,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!mapsRef.current.some((entry) => entry.id === next)) return;
     mapIdRef.current = next;
     setMapIdState(next);
+  }, []);
+
+  const setKoTarget = useCallback((next: number) => {
+    if (!Number.isFinite(next) || next <= 0) return;
+    setKoTargetState(Math.floor(next));
   }, []);
 
   const joinDevice = useCallback(
@@ -492,6 +499,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       maps,
       mapId,
       setMapId,
+      koTarget,
+      setKoTarget,
       players,
       matchConfigs,
       joinDevice,
@@ -522,6 +531,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       maps,
       mapId,
       setMapId,
+      koTarget,
+      setKoTarget,
       players,
       matchConfigs,
       joinDevice,
