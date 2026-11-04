@@ -73,9 +73,12 @@ function makeBotPlayer(
 ): LobbyPlayer {
   const pool = botPokemonPool(manifest);
   const entry = pool[Math.floor(Math.random() * pool.length)];
-  // Las pasivas no le sirven a una IA que no sabe esconderse a propósito.
+  // Los bots reparten su instinto entre todas las opciones. Regeneración es
+  // pasiva, pero la IA sabe buscar cobertura y esperar oculta para curarse.
   const commonAbilityId: CommonAbilityId =
-    Math.random() < 0.5 ? 'proteccion' : 'impulso';
+    COMMON_ABILITY_OPTIONS[
+      Math.floor(Math.random() * COMMON_ABILITY_OPTIONS.length)
+    ].id;
   return {
     slot,
     name: `Bot ${slot}`,

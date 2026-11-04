@@ -154,6 +154,19 @@ const RETREAT_ARRIVE_DISTANCE = 2.5;
 /** Espera antes de poder volver a huir tras llegar a la base sin curación. */
 const RETREAT_COOLDOWN_SECONDS = 4;
 
+/** Vida por debajo de la cual un bot con Regeneración busca curarse oculto. */
+const REGEN_START_HP = 0.55;
+/** Vida a la que un bot con Regeneración empieza a retirarse de la pelea. */
+const REGEN_RETREAT_HP = 0.5;
+/** Vida a la que deja de esperar oculto. */
+const REGEN_STOP_HP = 0.8;
+/** Tiempo máximo que se queda oculto regenerando de una vez. */
+const REGEN_MAX_SECONDS = 7;
+/** Enfriamiento tras salir del modo de regeneración. */
+const REGEN_COOLDOWN_SECONDS = 4;
+/** Distancia a la que un rival visible impide esperar oculto. */
+const REGEN_DANGER_RADIUS = 4.5;
+
 /**
  * Vida por debajo de la cual el bot busca una poción conocida. Los bots saben
  * dónde están los objetos desde el inicio de la partida, pero no si están
@@ -254,6 +267,10 @@ export class BotController {
   private retreatUntil = 0;
   /** Tras una huida infructuosa, espera antes de volver a intentarlo. */
   private retreatCooldownUntil = 0;
+  /** `true` mientras espera oculto para curarse con Regeneración. */
+  private recovering = false;
+  private regenUntil = 0;
+  private regenCooldownUntil = 0;
   private goal: Vec2 = { x: 0, z: 0 };
 
   /** Posiciones de objetos conocidas de antemano; nunca su estado. */
@@ -360,6 +377,9 @@ export class BotController {
     this.retreat = false;
     this.retreatUntil = 0;
     this.retreatCooldownUntil = 0;
+    this.recovering = false;
+    this.regenUntil = 0;
+    this.regenCooldownUntil = 0;
     this.path = [];
     this.stuckTimer = 0;
     this.detourTimer = 0;
@@ -678,19 +698,49 @@ export class BotController {
     // La visión es compartida: un rival al otro lado del mapa visto por un
     // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
     const nearestEnemy = this.nearestVisibleEnemyDistance(self);
-    const lowHp = hpFraction < this.tuning.retreatHp;
+    const regenBot = self.commonAbilityId === 'regeneracion';
+    const lowHp =
+      hpFraction <
+      (regenBot
+        ? Math.max(this.tuning.retreatHp, REGEN_RETREAT_HP)
+        : this.tuning.retreatHp);
     const atBase =
       Math.hypot(self.x - self.spawn.x, self.z - self.spawn.z) <=
       RETREAT_ARRIVE_DISTANCE;
+    const hidden = self.enemiesSeeing === 0;
+    // Regeneración solo funciona si ningún rival le ve. Un windup visible que
+    // todavía puede alcanzarle también hace peligroso quedarse quieto.
+    const regenSafe =
+      hidden && nearestEnemy > REGEN_DANGER_RADIUS && this.threat === null;
     const canRecover =
-      self.commonAbilityId === 'regeneracion' || this.findHealSlot(self) !== null;
+      (regenBot && regenSafe) || this.findHealSlot(self) !== null;
     // Los objetos se conocen por posición desde el principio. Si el equipo ya
     // ve uno usado, `pickupTarget` lo descarta sin necesidad de ir hasta él.
     const pickup = hpFraction < PICKUP_SEEK_HP ? this.pickupTarget(self) : null;
 
+    if (this.recovering) {
+      // Deja de esperar si le ven, se acerca un rival, hay una amenaza en curso
+      // o ya ha recuperado suficiente vida. El tope de tiempo evita que un bot
+      // se quede escondido indefinidamente si la pelea está en otro sitio.
+      const done =
+        !regenBot ||
+        !regenSafe ||
+        hpFraction >= REGEN_STOP_HP ||
+        this.clock >= this.regenUntil;
+      if (done) {
+        this.recovering = false;
+        this.regenCooldownUntil = this.clock + REGEN_COOLDOWN_SECONDS;
+        this.lastSeen = null;
+        this.patrolTimer = 0;
+      }
+    }
+
     if (this.retreat) {
       if (!lowHp || nearestEnemy > RETREAT_DANGER_RADIUS) {
         // El peligro ya pasó: vuelve a la acción sin esperar.
+        this.stopRetreat(false);
+      } else if (regenBot && regenSafe && hpFraction < REGEN_STOP_HP) {
+        // Ya está oculto: mejor curarse aquí que seguir corriendo a la base.
         this.stopRetreat(false);
       } else if (atBase && !canRecover) {
         // La base no cura por sí sola. Quedarse plantado allí solo regala una
@@ -700,6 +750,30 @@ export class BotController {
         // Una huida eterna deja al equipo en inferioridad.
         this.stopRetreat(true);
       }
+    }
+
+    if (
+      !this.recovering &&
+      regenBot &&
+      regenSafe &&
+      self.pendingCast === null &&
+      hpFraction < REGEN_START_HP &&
+      this.clock >= this.regenCooldownUntil
+    ) {
+      this.recovering = true;
+      this.regenUntil = this.clock + REGEN_MAX_SECONDS;
+      this.retreat = false;
+      this.lastSeen = null;
+      this.path = [];
+      this.pathTimer = 0;
+    }
+
+    if (this.recovering) {
+      // Cualquier ataque o habilidad cortaría la regeneración: el bot se queda
+      // quieto y oculto hasta que termine o vuelva a ser descubierto.
+      this.abilitySlot = null;
+      this.useCommon = false;
+      return;
     }
 
     if (
@@ -947,6 +1021,10 @@ export class BotController {
     colliders: readonly Collider[]
   ): DeviceInputSnapshot {
     const snapshot: DeviceInputSnapshot = { ...IDLE_INPUT };
+    if (this.recovering) {
+      // No atacar ni usar habilidades: cualquier golpe corta la regeneración.
+      return snapshot;
+    }
     const target = this.target;
     const targetIsVisible = target !== null && this.targetVisible && target.alive;
     const channeling = self.pendingCast !== null;
