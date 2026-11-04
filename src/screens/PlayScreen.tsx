@@ -167,6 +167,23 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
     gameRef.current?.setPaused(paused || modal !== null);
   }, [paused, modal]);
 
+  // Si la ventana pierde el foco (alt-tab, minimizar o cambiar de pestaña)
+  // durante la partida, se pausa para no dejar la simulación corriendo a
+  // ciegas. Si ya está pausada o hay un modal abierto no se toca nada.
+  useEffect(() => {
+    if (!playing || paused || modal !== null || matchResult !== null) return;
+    const pauseOnFocusLoss = () => setPaused(true);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') pauseOnFocusLoss();
+    };
+    window.addEventListener('blur', pauseOnFocusLoss);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('blur', pauseOnFocusLoss);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [playing, paused, modal, matchResult]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === 'h' && !event.repeat) {

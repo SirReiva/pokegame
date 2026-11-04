@@ -389,7 +389,7 @@ El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y P
 - **Actores duplicados por viewport**: un billboard solo puede orientarse hacia una cámara y elegir una fila de dirección cada vez. Por eso cada jugador tiene una copia de cada actor en la capa de cada vista (`match-view-N`); la cámara N solo dibuja el mundo y su propia capa. Así los sprites miran bien desde los ocho ángulos.
 - **Identidad de equipo**: el anillo del suelo se genera con el color del equipo y cada vista lleva el nombre, el Pokémon y el terreno del jugador.
 - **Aparición en bases**: el equipo azul sale alrededor de su nexo en la esquina suroeste y el rojo en la noreste, mirando al centro del mapa. La cámara arranca detrás de cada jugador para que `W`/stick arriba avance hacia el centro.
-- **Pausa compartida**: `Start`, `B` o `Esc` congelan la partida. Desde la pausa se puede continuar, volver a elegir Pokémon, volver a elegir equipos o abrir controles y créditos.
+- **Pausa compartida**: `Start`, `B` o `Esc` congelan la partida. Si la ventana pierde el foco durante el combate (alt-tab, minimizar o cambiar de pestaña), la partida se pausa sola. Desde la pausa se puede continuar, volver a elegir Pokémon, volver a elegir equipos o abrir controles y créditos.
 
 > **Rendimiento**: cada vista vuelve a dibujar el mundo completo y sus actores. Con 7-8 jugadores el coste es alto; la demo baja el `maxPixelRatio` automáticamente a partir de 5 vistas. Si necesitas 8 vistas fluidas, reduce la calidad de sombras o el detalle de vegetación en `world.ts`.
 
