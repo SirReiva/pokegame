@@ -6,7 +6,7 @@
  * viewports y las cuentas de equipo sin levantar el motor.
  */
 
-import type { AbilitySlot, CommonAbilityId } from './abilities';
+import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
 import type { InputDeviceInfo } from './input';
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
@@ -243,6 +243,22 @@ export interface AbilityHud {
   duration: number;
 }
 
+/** Buff activo tal y como lo pinta el HUD. */
+export interface ActiveBuffHud {
+  stat: BuffStat;
+  multiplier: number;
+  /** Segundos restantes. */
+  remaining: number;
+}
+
+/** Ralentización (debuff) activa tal y como la pinta el HUD. */
+export interface ActiveSlowHud {
+  /** Multiplicador de velocidad: 0,55 = 45 % más lento. */
+  multiplier: number;
+  /** Segundos restantes. */
+  remaining: number;
+}
+
 /** Estado del instinto común para el HUD. */
 export interface CommonAbilityHud {
   id: CommonAbilityId;
@@ -316,6 +332,10 @@ export interface PlayerMatchStats {
   abilityHealing: number;
   /** PV reales curados por objetos recogibles. */
   pickupHealing: number;
+  /** Buffs de estadísticas activos. */
+  buffs: ActiveBuffHud[];
+  /** Ralentizaciones activas que afectan al jugador. */
+  slows: ActiveSlowHud[];
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;

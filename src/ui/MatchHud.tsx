@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import type { BuffStat } from '../game/abilities';
 import { KO_TARGET } from '../game/combat';
 import {
   TEAM_INFO,
@@ -44,6 +45,15 @@ function hpColorFor(pct: number): string {
 function formatCount(value: number): string {
   return Math.round(value).toLocaleString('es-ES');
 }
+
+/** Etiquetas cortas de las estadísticas que pueden llevar buff. */
+const BUFF_LABEL: Record<BuffStat, string> = {
+  speed: 'VEL',
+  attack: 'ATQ',
+  defense: 'DEF',
+  spAttack: 'ATQ.ESP',
+  spDefense: 'DEF.ESP'
+};
 
 /**
  * Feed de KOs de una vista. Cada jugador recibe la misma lista global de la
@@ -192,6 +202,55 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
               } as CSSProperties
             }
           >
+            {playerStats &&
+              (playerStats.buffs.length > 0 || playerStats.slows.length > 0) && (
+                <div className="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[72%] flex-wrap gap-1">
+                  {playerStats.buffs.map((buff, buffIndex) => {
+                    const delta = Math.round((buff.multiplier - 1) * 100);
+                    const positive = delta >= 0;
+                    return (
+                      <span
+                        key={`buff-${buff.stat}-${buffIndex}`}
+                        className={`flex items-center gap-1 rounded-md border bg-night-850/82 px-2 py-1 font-mono leading-none backdrop-blur-[6px] ${
+                          positive
+                            ? 'border-[color-mix(in_srgb,#8ee08a_45%,var(--color-line))]'
+                            : 'border-[color-mix(in_srgb,#ff5f63_45%,var(--color-line))]'
+                        } ${compact ? 'text-8.32' : 'text-9.6'}`}
+                        title={`${BUFF_LABEL[buff.stat]} ${positive ? '+' : ''}${delta}% durante ${buff.remaining.toFixed(1)} s`}
+                      >
+                        <span
+                          className={
+                            positive ? 'text-accent-soft' : 'text-danger-100'
+                          }
+                        >
+                          {BUFF_LABEL[buff.stat]} {positive ? '+' : ''}
+                          {delta}%
+                        </span>
+                        <span className="text-steel-500">
+                          {buff.remaining.toFixed(1)}s
+                        </span>
+                      </span>
+                    );
+                  })}
+                  {playerStats.slows.map((slow, slowIndex) => {
+                    const delta = Math.round((1 - slow.multiplier) * 100);
+                    return (
+                      <span
+                        key={`slow-${slow.multiplier}-${slowIndex}`}
+                        className={`flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,#ff5f63_45%,var(--color-line))] bg-night-850/82 px-2 py-1 font-mono leading-none backdrop-blur-[6px] ${
+                          compact ? 'text-8.32' : 'text-9.6'
+                        }`}
+                        title={`Ralentizado ${delta}% durante ${slow.remaining.toFixed(1)} s`}
+                      >
+                        <span className="text-danger-100">LENTO -{delta}%</span>
+                        <span className="text-steel-500">
+                          {slow.remaining.toFixed(1)}s
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             <div
               className={`pointer-events-none absolute flex flex-col rounded-[10px] border border-line bg-night-850/84 shadow-[0_10px_24px_rgb(0_0_0/0.4)] backdrop-blur-[7px] ${
                 compact

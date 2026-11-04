@@ -3118,6 +3118,15 @@ export class Game {
         damageTaken: player.damageTaken,
         abilityHealing: player.abilityHealing,
         pickupHealing: player.pickupHealing,
+        buffs: player.buffs.map((buff) => ({
+          stat: buff.stat,
+          multiplier: buff.multiplier,
+          remaining: buff.duration
+        })),
+        slows: player.slowEffects.map((effect) => ({
+          multiplier: effect.multiplier,
+          remaining: effect.remaining
+        })),
         abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
           const def = id ? ABILITIES[id] : null;
           return {
