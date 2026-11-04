@@ -22,7 +22,6 @@ import {
 } from './items';
 import type { MatchPlayerState } from './matchState';
 import { loadImage } from './sprite';
-import type { GameMap } from './terrain';
 import { textureFromCanvas } from './textures';
 import type { PokemonEntry } from './types';
 
@@ -329,9 +328,9 @@ export class PickupField {
   }
 
   /** Reconstruye los objetos del mapa indicado. */
-  setMap(map: GameMap): void {
+  setMap(spawns: readonly PickupSpawn[]): void {
     this.dispose();
-    map.pickups.forEach((spawn, index) => {
+    spawns.forEach((spawn, index) => {
       const definition = ITEM_DEFINITIONS[spawn.type];
       const textures = this.textures.get(spawn.type);
       if (!definition || !textures) {
@@ -455,9 +454,12 @@ export class PickupField {
    * Pokémon con la vida completa no gasta una poción). Si dos jugadores están a
    * la misma distancia, gana el primero en `players` (orden estable de la
    * partida). La comprobación de alcance usa el hurtbox de cada especie, no el
-   * radio de movimiento global.
+   * radio de movimiento global. Cada jugador consume como máximo un objeto por
+   * frame: los objetos solapados no se recogen en cadena y quedan disponibles
+   * para el siguiente frame o para otro jugador.
    */
   collect(players: readonly MatchPlayerState[], handlers: PickupHandlers): void {
+    const collectedSlots = new Set<number>();
     for (const item of this.items) {
       if (!item.available) continue;
       const definition = item.definition;
@@ -467,7 +469,7 @@ export class PickupField {
       let collectorDistanceSq = Infinity;
 
       for (const player of players) {
-        if (!player.alive) continue;
+        if (!player.alive || collectedSlots.has(player.slot)) continue;
         const reach = definition.pickupRadius + player.hitRadius;
         const dx = player.x - item.spawn.x;
         const dz = player.z - item.spawn.z;
@@ -501,6 +503,7 @@ export class PickupField {
       item.available = false;
       item.cooldown = definition.cooldownSeconds;
       this.setItemUsed(item, true);
+      collectedSlots.add(collector.slot);
       handlers.onCollected?.(collector, definition);
     }
   }

@@ -36,6 +36,11 @@ export interface AoeHitInput {
   power: number;
   /** Token compartido del lanzamiento para que `healOnHit` cure una sola vez. */
   healToken?: HealOnHitToken;
+  /**
+   * Slots que ya mostraron la marca de inmunidad en este lanzamiento. Las áreas
+   * persistentes lo comparten entre ticks para no repetir el aviso.
+   */
+  immuneMarked?: Set<number>;
 }
 
 /** Un Pokémon dentro del área en el momento del golpe. */

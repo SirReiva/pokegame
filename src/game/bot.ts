@@ -1603,6 +1603,10 @@ export class BotController {
       case 'melee':
         return distance <= def.range + targetRadius;
       case 'projectile':
+        // El motor mide el impacto contra el hurtbox del objetivo, así que el
+        // alcance útil también lo suma. Sin esto el bot se acercaba de más
+        // contra los cuerpos grandes en vez de aprovechar el alcance real.
+        return distance <= def.range + targetRadius;
       case 'beam':
         return distance <= def.range;
       case 'dash':

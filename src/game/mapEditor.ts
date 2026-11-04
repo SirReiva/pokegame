@@ -9,8 +9,10 @@
 
 import { parseMap } from "./map";
 import {
+  BASE_COLLIDER_RADIUS,
   TERRAIN_IDS,
   isTerrainId,
+  mountainRangeContains,
   type MountainRange,
   type RespawnPoint,
   type Team,
@@ -496,6 +498,37 @@ export function editorMapToJson(map: EditorMap): EditorMapJson {
   return json;
 }
 
+/**
+ * El editor admite un objeto por celda. `parseMap` rechaza los duplicados
+ * exactos, así que antes de validar se descartan para que los mapas antiguos
+ * con dos objetos en la misma coordenada se puedan importar (gana el primero).
+ */
+function dedupeRawPickups(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const value = raw as Record<string, unknown>;
+  const pickups = value.pickups;
+  if (!Array.isArray(pickups)) return raw;
+
+  const seen = new Set<string>();
+  const unique: unknown[] = [];
+  for (const entry of pickups) {
+    if (!entry || typeof entry !== "object") {
+      unique.push(entry);
+      continue;
+    }
+    const { x, z } = entry as Record<string, unknown>;
+    if (typeof x !== "number" || typeof z !== "number") {
+      unique.push(entry);
+      continue;
+    }
+    const key = `${x}:${z}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(entry);
+  }
+  return { ...value, pickups: unique };
+}
+
 /** Importa un mapa del juego (o exportado por el editor) y lo adapta al editor. */
 export function editorMapFromJson(raw: unknown): EditorMap {
   const value =
@@ -508,7 +541,11 @@ export function editorMapFromJson(raw: unknown): EditorMap {
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : id;
-  const parsed = parseMap(raw, { id, name, file: `${id}.json` });
+  const parsed = parseMap(dedupeRawPickups(raw), {
+    id,
+    name,
+    file: `${id}.json`,
+  });
 
   const cols = parsed.tiles[0]?.length ?? 0;
   const rows = parsed.tiles.length;
@@ -678,6 +715,43 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
       ) {
         issues.push(`El objeto ${index + 1} está fuera de la rejilla.`);
         return;
+      }
+      const center = cellCenter(
+        map.cols,
+        map.rows,
+        map.meta.tileSize,
+        pickup.row,
+        pickup.col,
+      );
+      if (map.tiles[pickup.row]?.[pickup.col] === "waterHigh") {
+        issues.push(
+          `El objeto ${index + 1} está en aguas profundas; no sería alcanzable.`,
+        );
+      }
+      if (
+        map.mountains.some((range) =>
+          mountainRangeContains(range, center.x, center.z),
+        )
+      ) {
+        issues.push(`El objeto ${index + 1} está dentro de un separador.`);
+      }
+      for (const base of [map.bases.blue, map.bases.red]) {
+        if (!base) continue;
+        const baseCenter = cellCenter(
+          map.cols,
+          map.rows,
+          map.meta.tileSize,
+          base.row,
+          base.col,
+        );
+        if (
+          Math.hypot(center.x - baseCenter.x, center.z - baseCenter.z) <
+          BASE_COLLIDER_RADIUS
+        ) {
+          issues.push(
+            `El objeto ${index + 1} está dentro del collider de una base.`,
+          );
+        }
       }
       const key = `${pickup.row}:${pickup.col}`;
       if (occupied.has(key)) {

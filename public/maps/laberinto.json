@@ -23,7 +23,7 @@
   }
  ],
  "pickups": [
-  { "type": "potion", "x": -9.5, "z": 9.5 },
+  { "type": "potion", "x": -9.25, "z": 8.25 },
   { "type": "potion", "x": 9.5, "z": -9.5 },
   { "type": "potion", "x": -9.5, "z": -9.5 },
   { "type": "superPotion", "x": 0, "z": 0 }

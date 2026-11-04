@@ -48,7 +48,7 @@
     },
     "pickups": {
       "type": "array",
-      "description": "Objetos recogibles. La definición (imágenes, cooldown y efecto) vive en src/game/items.ts; aquí solo se indica el tipo y la posición. Cada coordenada (x, z) solo puede aparecer una vez.",
+      "description": "Objetos recogibles. La definición (imágenes, cooldown y efecto) vive en src/game/items.ts; aquí solo se indica el tipo y la posición. Cada coordenada (x, z) solo puede aparecer una vez y debe caer dentro del mapa, fuera del agua profunda y de los colliders (muros, rocas, árboles y bases); si no, el objeto se descarta al cargar.",
       "items": {
         "type": "object",
         "required": ["type", "x", "z"],

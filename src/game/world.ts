@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import { CONFIG } from './config';
 import {
   BASES,
+  BASE_COLLIDER_RADIUS,
   MOUNTAINS,
   TERRAIN_ZONES,
   WATER_ZONES,
@@ -4082,7 +4083,12 @@ export function buildWorld(app: pc.Application): World {
     app.root.addChild(glow);
     created.push(glow);
 
-    colliders.push({ type: 'circle', x: base.x, z: base.z, radius: 0.85 });
+    colliders.push({
+      type: 'circle',
+      x: base.x,
+      z: base.z,
+      radius: BASE_COLLIDER_RADIUS
+    });
   }
 
   // --- Cielo ---------------------------------------------------------------

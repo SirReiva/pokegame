@@ -58,6 +58,21 @@
 > además de detalles nuevos en 3.2, 3.3 y 3.9: ticks de DoT dependientes del
 > framerate, control y buffs de lanzadores muertos, y HUD de terreno durante
 > dash/windup. Las referencias de línea se actualizan al commit actual.
+>
+> **Actualización 2026-11-04 (8)**: arreglado 3.9. El spawn inicial se resuelve
+> antes de crear la cámara y la primera copia, el facing y el yaw salen del
+> spawn real de cada jugador, el terreno inicial y su multiplicador se calculan
+> con `terrainSpeedEffect` y se refrescan tras cada movimiento, dash o windup, el
+> rango de `projectile` de los bots suma el hurtbox del objetivo y las áreas
+> `overTime` muestran una sola marca 🚫 por lanzamiento y objetivo.
+>
+> **Actualización 2026-11-04 (9)**: arreglado 3.12. Los objetos se validan contra
+> el mundo construido (límites, agua profunda y cualquier collider: muros,
+> rocas, árboles y bases); los inválidos se descartan antes de crear su billboard
+> y de pasarlos a los bots. Cada jugador recoge como máximo un objeto por frame,
+> el editor fusiona duplicados exactos al importar y avisa de objetos en agua
+> profunda, separadores o bases. También se movió a una celda válida la poción
+> del laberinto que estaba dentro de un muro.
 
 ## Resumen ejecutivo
 
@@ -91,9 +106,9 @@ Los cinco hallazgos más importantes:
 
 Desde v0.7.0 hay además un sistema de objetos recogibles (pociones de 50/120 PV)
 que no entra en la simulación de §4. Su recogida automática ya comprueba
-obstáculos, visibilidad, hurtbox por especie y duplicados (§3.11), pero el mapa
-todavía acepta posiciones fuera de límites o dentro de obstáculos y los bots
-pueden perseguir objetos que no pueden recoger (§3.12-§3.13).
+obstáculos, visibilidad, hurtbox por especie y duplicados (§3.11); las posiciones
+se validan al cargar el mapa y cada jugador recoge como máximo un objeto por
+frame (§3.12). Los bots todavía pueden perseguir objetos que aún no ven (§3.13).
 
 Sigue abierto el fallo de la pasada anterior: todos los dashes se detienen en
 cualquier jugador, aunque `dashBlocksOnEnemies` solo esté activo en Impulso
@@ -239,7 +254,7 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-03)
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-04)
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
@@ -251,10 +266,10 @@ cobertura de tipos.
 | 3.6 Validación de dos equipos | **pendiente** | Una partida 1v0 no puede terminar. |
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
 | 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
-| 3.9 Detalles menores | **pendiente** | Spawns con varios respawns, spawn inicial y terreno inicial. |
+| 3.9 Detalles menores | **arreglado** | Spawn resuelto, facing/yaw por spawn real, terreno inicial y su multiplicador sincronizados, hurtbox en proyectiles de bots y una marca 🚫 por lanzamiento. |
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
 | 3.11 Objetos recogibles | **arreglado** | Recogida con colliders y visibilidad, `hitRadius` por especie, duplicados rechazados y reparto por distancia. |
-| 3.12 Posiciones de objetos | **nuevo** | `parsePickups` no valida límites, colliders ni agua; un objeto inalcanzable puede atraer bots. |
+| 3.12 Posiciones de objetos | **arreglado** | Validación contra límites, agua y colliders al cargar, un objeto por jugador/frame y editor que fusiona duplicados y avisa de posiciones inválidas. |
 | 3.13 Bots y objetos no visibles | **nuevo** | Conocen todas las posiciones y pueden atascarse contra el obstáculo que oculta el objeto; olvidan el estado usado fuera de visión. |
 
 ### 3.1. Cobertura: 9 especies sin moveset (crítico)
@@ -434,41 +449,42 @@ También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 `Dragon`, `Flying`), así que Mewtwo, Mew, Lucario y Lugia nunca reciben el bonus
 `home` de 1,18× de velocidad/ocultación (`terrain.ts:35-51`).
 
-### 3.9. Varios detalles menores (bajo)
+### 3.9. Varios detalles menores (arreglado)
 
-- **Spawn/facing en mapas con varios respawns**: `facingToCenter(team)` y
-  `cameraYawForTeam(team)` usan el **primer** respawn del equipo, no el spawn
-  real del jugador (`multiplayer.ts:128-138`). En mapas con varios respawns por
-  equipo, los jugadores de las otras bases miran (y arrancan la cámara) hacia
-  donde mira la primera base. `startMatch` y `respawnPlayer` usan la misma
-  función (`game.ts:522, 560, 1521`), aunque `spawnForTeam` sí reparte entre
-  varias bases (`multiplayer.ts:114-125`). Hoy los tres mapas declaran un solo
-  respawn por equipo, así que el fallo está latente.
-- **Spawn inicial sin resolver**: `startMatch` coloca al jugador directamente en
-  `spawnForTeam` (`game.ts:520, 571-572`); `respawnPlayer` sí pasa por
-  `resolvePosition` (`game.ts:1517-1519`). El primer `stepPlayer` vuelve a resolver,
-  pero la cámara y la primera copia se crean en la posición sin corregir, así
-  que en un mapa con un collider pegado a la base puede verse un frame dentro
-  del árbol o del muro.
-- **Terreno inicial y multiplicador**: `startMatch` guarda
-  `terrainMultiplier: 1` y `terrainSpeedReason: 'neutral'` aunque el spawn tenga
-  bonus o penalización (`game.ts:580-581`). Como `stepPlayer` no corre durante
-  la cuenta atrás, el HUD muestra ×1,00 neutro durante los 5 s. Además, el
-  multiplicador se calcula antes de mover (`game.ts:1099-1112`) y no se
-  refresca tras el desplazamiento, así que el HUD puede mezclar el terreno nuevo
-  con el multiplicador anterior durante un frame.
-- **HUD de terreno durante dash/windup**: `stepDash` (`game.ts:1462-1464`) y
-  `stepPendingCast` (`game.ts:1319-1321`) actualizan `terrain` y `concealment`,
-  pero no `terrainMultiplier` ni `terrainSpeedReason`; durante el dash o la
-  preparación el HUD conserva el multiplicador del último paso normal.
-- **Rango de proyectiles de los bots**: `inRange` (`src/game/bot.ts:1334-1359`)
-  suma el hurtbox del objetivo en melee, dash y área, pero no en `projectile`.
-  El bot se acerca más de lo necesario contra cuerpos grandes; no impide
-  acertar, pero desaprovecha el alcance real que sí usa el motor.
-- **Inmunidad en áreas `overTime`**: `applyAbilityDamage` muestra la marca 🚫
-  en cada tick (`game.ts:2055-2057`). Un charco sobre un objetivo inmune puede
-  apilar varias marcas seguidas; si se considera ruido visual, conviene mostrar
-  una por lanzamiento y no por tick.
+Los seis cabos de la revisión anterior ya están corregidos:
+
+- **Spawn/facing en mapas con varios respawns**: `facingToCenter` y
+  `cameraYawForTeam` aceptan la posición real del jugador
+  (`src/game/multiplayer.ts:133,141`). `startMatch` les pasa el spawn resuelto
+  de cada uno (`game.ts:557,596`) y `respawnPlayer` hace lo mismo desde su
+  posición de reaparición (`game.ts:1577`). Los mapas actuales siguen
+  declarando un solo respawn por equipo, pero el arreglo ya cubre varios.
+- **Spawn inicial sin resolver**: `startMatch` resuelve el spawn con
+  `resolvePosition` antes de crear la cámara y el estado (`game.ts:551-559`);
+  la primera copia, el yaw, el terreno y su multiplicador usan ese punto. Ya no
+  puede nacer un frame dentro de un collider o del agua profunda.
+- **Terreno inicial y multiplicador**: `terrainMultiplier` y
+  `terrainSpeedReason` salen de `terrainSpeedEffect` aplicado al terreno del
+  spawn (`game.ts:559,616-617`), así que el HUD muestra el multiplicador real
+  durante la cuenta atrás. Además, `stepPlayer` lo recalcula tras el
+  desplazamiento (`game.ts:1260-1262`): terreno y multiplicador describen
+  siempre el mismo punto y no se mezcla el terreno nuevo con el valor anterior.
+- **HUD de terreno durante dash/windup**: `stepPendingCast`
+  (`game.ts:1370-1372`) y `stepDash` (`game.ts:1517-1519`) actualizan también
+  `terrainMultiplier` y `terrainSpeedReason`, no solo `terrain` y
+  `concealment`.
+- **Rango de proyectiles de los bots**: `inRange` suma el hurtbox del objetivo
+  también en `projectile` (`src/game/bot.ts:1605-1609`). El bot deja de
+  acercarse de más contra los cuerpos grandes y aprovecha el alcance que usa el
+  motor.
+- **Inmunidad en áreas `overTime`**: `ActiveAoe` guarda un `Set` con los slots ya
+  avisados (`src/game/matchState.ts:158-162`); `applyAbilityDamage` muestra la
+  marca 🚫 solo la primera vez por lanzamiento y objetivo
+  (`game.ts:2271-2273`) y las áreas lo comparten entre ticks
+  (`game.ts:2819`). Un charco sobre un inmune ya no apila marcas.
+
+**Balance**: sin cambios. Son correcciones de posición inicial, sincronización
+del HUD y precisión de los bots, no de daño ni de tiempos.
 
 ### 3.10. Todos los dashes se detienen en cualquier jugador (medio, diseño)
 
@@ -517,41 +533,41 @@ los cuatro cabos de la revisión anterior ya están corregidos:
 decisión explícita, no un cabo suelto: §4.1 lo indica y el TTK de los mapas con
 objetos debe leerse como vida efectiva adicional, no como el de la matriz.
 
-### 3.12. Posiciones de objetos sin validar (medio-bajo)
+### 3.12. Posiciones de objetos sin validar (arreglado)
 
-`parsePickups` (`src/game/map.ts:108-138`) valida el tipo y rechaza duplicados
-exactos, pero no comprueba que `(x, z)` caiga dentro del mapa, que no esté dentro
-de un collider (muro, árbol, roca o base) ni que no sea agua profunda para una
-especie sin `Water`. `PickupField.setMap` (`src/game/pickups.ts:326-354`) crea el
-billboard igualmente, y los bots reciben todas las posiciones del mapa
-(`game.ts:630-637`), no solo las que se pudieron crear.
+Los objetos se validan ahora contra el mundo ya construido y los inválidos se
+descartan antes de crear su billboard o de ofrecérselos a los bots:
 
-Un objeto fuera de `world.bounds` o dentro de un obstáculo es inalcanzable: no
-se puede recoger y un bot puede fijarlo como destino, chocar contra el límite o
-el collider y reintentar. El mapa actual no tiene ninguno, así que el fallo está
-latente, pero el editor y los mapas escritos a mano no tienen red de seguridad.
+- `Game.pickupPlacementIssue` (`src/game/game.ts:470-500`) comprueba que el
+  centro esté dentro de los límites del mapa, que su celda no sea `waterHigh` y
+  que no caiga dentro de ningún collider con `pointBlockedByColliders`. Como se
+  ejecuta después de `buildWorld`, cubre muros, cordilleras, bases y también los
+  props procedurales (árboles, rocas...) que no están en el JSON.
+- `applyMap` filtra `map.pickups` con ese criterio, avisa por consola y guarda
+  solo los aceptados en `pickupSpawns` (`src/game/game.ts:452-463`).
+  `PickupField.setMap` recibe ya la lista filtrada (`src/game/pickups.ts:331`) y
+  los bots solo conocen esas posiciones (`src/game/game.ts:723`). Un objeto
+  inalcanzable ya no atrae a ningún bot.
+- `PickupField.collect` limita la recogida a un objeto por jugador y frame
+  (`src/game/pickups.ts:461-506`). Si dos objetos solapados tocan al mismo
+  jugador, el segundo queda para el frame siguiente o para otro jugador.
+- El editor fusiona los duplicados exactos antes de `parseMap`
+  (`src/game/mapEditor.ts:506-544`), así que un mapa antiguo con dos objetos en
+  la misma coordenada se importa conservando el primero. Sus reglas de
+  validación avisan además de objetos en agua profunda, dentro de un separador o
+  dentro del collider de una base (`src/game/mapEditor.ts:719-755`).
+- Se corrigió el dato de `laberinto`: la poción que estaba dentro de un muro
+  (inalcanzable por la comprobación de LOS de §3.11) se movió a una celda válida
+  en `public/maps/laberinto.json`.
 
-Tampoco hay límite por jugador: `PickupField.collect` resuelve cada objeto por
-separado (`src/game/pickups.ts:460-505`). Dos objetos distintos pero muy
-próximos (menos que la suma de sus radios de recogida) pueden consumirse en el
-mismo frame por el mismo jugador. El arreglo de duplicados exactos no cubre ese
-solapamiento.
-
-**Arreglo**: validar `x/z` contra los límites y los colliders/terreno al cargar
-el mapa (o al guardar desde el editor), y decidir si un jugador puede recoger
-como máximo un objeto por frame.
-
-**Efecto colateral del arreglo de duplicados**: `editorMapFromJson`
-(`src/game/mapEditor.ts:511`) llama a `parseMap` antes de su propia deduplicación
-por celda (`mapEditor.ts:550-561`). Un mapa antiguo con dos objetos en la misma
-coordenada ahora falla al importarse en vez de conservar el primero; conviene
-capturar el error en el editor o fusionar duplicados durante la importación.
+**Balance**: sin cambios. Los objetos siguen midiéndose aparte de la matriz de
+§4.
 
 ### 3.13. Bots y objetos fuera de visión (bajo)
 
-`pickupTarget` (`src/game/bot.ts:783-854`) conoce todas las posiciones y solo
-descarta un objeto si `pickupKnowledge` lo marca explícitamente como usado. Los
-objetos no visibles siguen siendo candidatos. Desde el arreglo de §3.11,
+`pickupTarget` (`src/game/bot.ts:783-854`) conoce todas las posiciones válidas y
+solo descarta un objeto si `pickupKnowledge` lo marca explícitamente como usado.
+Los objetos no visibles siguen siendo candidatos. Desde el arreglo de §3.11,
 `collect` exige visibilidad, así que un bot puede caminar hacia un objeto que
 todavía no puede recoger. Si al acercarse queda a menos de 1,6 u, `moveTowards`
 va en línea recta sin consultar la navegación (`src/game/bot.ts:1476-1488`); un
@@ -948,9 +964,10 @@ autodaño la convierte en una mala elección en 1v1.
     desaparece; hoy queda inmóvil y se le puede farmear.
 23. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
     `roster.ts`; valorar aplicar slow/terreno al dash.
-24. **Detalles menores**: usar el spawn real para
-    `facingToCenter`/`cameraYawForTeam`, resolver la posición y el
-    `terrainMultiplier` del spawn inicial de `startMatch`.
+24. **Detalles menores (hecho)**: el spawn inicial pasa por `resolvePosition`, el
+    facing/yaw usan el spawn real de cada jugador y el `terrainMultiplier` del
+    spawn, del movimiento, del dash y del windup sale de `terrainSpeedEffect`
+    (§3.9).
 25. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
     o no; hacer que `dashBlocksOnEnemies` y `dashEnemyLimit` (con LOS) controlen
     la regla, en vez de que `resolvePosition` detenga todas las dashes.
@@ -958,9 +975,9 @@ autodaño la convierte en una mala elección en 1v1.
     visibilidad, usa el `hitRadius` de la especie, rechaza duplicados en
     `parsePickups` y reparte por distancia. Queda decidir si las pociones entran
     en §4; hoy la matriz mide combate sin objetos y §4.1 lo indica.
-27. **Posiciones de objetos**: validar límites, colliders y agua al cargar el
-    mapa; decidir si un jugador puede recoger más de un objeto por frame y cómo
-    importar mapas antiguos con duplicados en el editor (§3.12).
+27. **Posiciones de objetos (hecho)**: los objetos se validan contra límites,
+    agua y colliders al cargar el mapa, cada jugador recoge como máximo uno por
+    frame y el editor fusiona duplicados y avisa de posiciones inválidas (§3.12).
 28. **Bots y objetos**: no elegir destinos sin visibilidad/LOS, evitar el atajo
     en línea recta cuando el segmento está bloqueado y recordar con caducidad el
     último estado usado de cada objeto (§3.13).
@@ -1119,10 +1136,9 @@ Un script de balance como el usado para este informe se puede añadir a
   de creación, y el KO simultáneo sigue una regla explícita: gana el primero en
   el orden de resolución.
 - El hurtbox por especie está centralizado en `POKEMON_HIT_RADIUS` y se aplica a
-  todas las formas de golpe; en los bots cubre melee, dash y área, aunque el
-  rango de `projectile` todavía no suma el hurtbox del objetivo (detalle menor en
-  §3.9). La colisión de movimiento y la navegación de los bots quedan separadas
-  y se pueden revertir con un flag.
+  todas las formas de golpe; en los bots cubre melee, dash, área y también
+  `projectile` (§3.9). La colisión de movimiento y la navegación de los bots
+  quedan separadas y se pueden revertir con un flag.
 - Las estadísticas de daño distinguen daño real (sin sobrepasar la vida restante)
   de autodaño y se emiten con el resto de `PlayerMatchStats`; el marcador final
   y el HUD las consumen sin lógica duplicada.
@@ -1142,8 +1158,9 @@ Un script de balance como el usado para este informe se puede añadir a
   mapa; la niebla oculta sus billboards y los bots solo conocen la
   disponibilidad de los puntos que ve su equipo. La recogida comprueba
   colliders y visibilidad, usa el `hitRadius` de la especie, rechaza duplicados
-  y reparte por distancia (§3.11); quedan la validación de posiciones y la
-  selección de destinos de los bots (§3.12-§3.13).
+  y reparte por distancia (§3.11); las posiciones se validan al cargar y cada
+  jugador recoge como máximo un objeto por frame (§3.12). Queda la selección de
+  destinos de los bots (§3.13).
 - Los commits `fix melee` y `fix inmune` van en la dirección correcta: la melee,
   las áreas, los dashes y los proyectiles comprueban todos los colliders, el
   proyectil barre también a los objetivos y el choque revalida los golpes. La inmunidad de tipo se comprueba antes de

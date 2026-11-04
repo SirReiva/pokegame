@@ -351,7 +351,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       tickInterval,
       tickTimer: 0,
       tick: 0,
-      healToken: deps.healToken
+      healToken: deps.healToken,
+      immuneMarked: new Set()
     });
     return;
   }
@@ -367,7 +368,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     tick: 0,
     elapsed: 0,
     power: def.power,
-    healToken: deps.healToken
+    healToken: deps.healToken,
+    immuneMarked: new Set()
   });
 };
 

@@ -124,17 +124,22 @@ export function spawnForTeam(team: Team, indexInTeam: number): { x: number; z: n
   return { x: base.x + offset.x, z: base.z + offset.z };
 }
 
-/** Rumbo inicial hacia el centro del mapa (0 = sur, 90° = este). */
-export function facingToCenter(team: Team): number {
+/**
+ * Rumbo inicial hacia el centro del mapa (0 = sur, 90° = este). Si se indica
+ * una posición, se usa esa; si no, la primera base del equipo. En mapas con
+ * varios respawns hay que pasar el spawn real del jugador para que mire al
+ * centro desde su propia base.
+ */
+export function facingToCenter(team: Team, x?: number, z?: number): number {
   const base = respawnsForTeam(team)[0];
-  const x = base?.x ?? TEAM_INFO[team].x;
-  const z = base?.z ?? TEAM_INFO[team].z;
-  return Math.atan2(-x, -z);
+  const originX = x ?? base?.x ?? TEAM_INFO[team].x;
+  const originZ = z ?? base?.z ?? TEAM_INFO[team].z;
+  return Math.atan2(-originX, -originZ);
 }
 
 /** Cámara detrás del jugador, mirando hacia el centro. */
-export function cameraYawForTeam(team: Team): number {
-  return facingToCenter(team) + Math.PI;
+export function cameraYawForTeam(team: Team, x?: number, z?: number): number {
+  return facingToCenter(team, x, z) + Math.PI;
 }
 
 export function otherTeam(team: Team): Team {

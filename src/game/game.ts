@@ -46,6 +46,7 @@ import {
   closestPointOnCollider,
   closestPointOnSegment,
   computeDamage,
+  pointBlockedByColliders,
   pointSegmentDistance,
   raycastColliderDistance,
   rollAccuracy,
@@ -66,6 +67,7 @@ import {
   type InputFrame,
   type MenuAction
 } from './input';
+import type { PickupSpawn } from './items';
 import { loadMap, loadMapIndex, type MapIndexEntry } from './map';
 import type {
   ActiveAoe,
@@ -212,6 +214,8 @@ export class Game {
   private readonly itemTextures: ItemTextureMap = new Map();
   /** Objetos del mapa activo; se reconstruyen al cambiar de mapa. */
   private pickups: PickupField | null = null;
+  /** Objetos que superaron la validación de posición y se ofrecen a los bots. */
+  private pickupSpawns: readonly PickupSpawn[] = [];
   private readonly pickupHandlers: PickupHandlers = {
     pokemonFor: (player) => this.assets.get(player.pokemonId)?.entry ?? null,
     heal: (player, amount) => {
@@ -442,12 +446,57 @@ export class Game {
     setActiveMap(map);
     syncTeamsWithMap();
     this.world = buildWorld(this.app);
+    // Los objetos se validan contra el mundo ya construido: un centro fuera de
+    // los límites, en agua profunda o dentro de un collider (muro, roca, árbol,
+    // base...) no se crea y tampoco se ofrece a los bots.
+    this.pickupSpawns = map.pickups.filter((spawn) => {
+      const issue = this.pickupPlacementIssue(map, spawn);
+      if (issue) {
+        console.warn(
+          `[items] Se descarta ${spawn.type} en (${spawn.x}, ${spawn.z}): ${issue}.`
+        );
+        return false;
+      }
+      return true;
+    });
     this.pickups = new PickupField(this.app, this.world.shadowMaterial, this.itemTextures);
-    this.pickups.setMap(map);
+    this.pickups.setMap(this.pickupSpawns);
     this.activeMapId = map.id;
     this.rebuildSightOccluders();
     this.menuCamera = new CameraRig(this.app, map.spawn);
     this.refreshSunShadows();
+  }
+
+  /**
+   * Motivo por el que un objeto del mapa no sería alcanzable, o `null` si lo es.
+   * Se comprueba con el mundo ya construido, así que cubre también los props
+   * procedurales que no están declarados en el JSON.
+   */
+  private pickupPlacementIssue(map: GameMap, spawn: PickupSpawn): string | null {
+    const cols = map.tiles[0]?.length ?? 0;
+    const rows = map.tiles.length;
+    const tileSize = map.tileSize;
+    const halfX = (cols * tileSize) / 2;
+    const halfZ = (rows * tileSize) / 2;
+    if (
+      !Number.isFinite(spawn.x) ||
+      !Number.isFinite(spawn.z) ||
+      spawn.x < -halfX ||
+      spawn.x > halfX ||
+      spawn.z < -halfZ ||
+      spawn.z > halfZ
+    ) {
+      return 'fuera de los límites del mapa';
+    }
+    const col = Math.floor((spawn.x + halfX) / tileSize);
+    const row = Math.floor((spawn.z + halfZ) / tileSize);
+    if (map.tiles[row]?.[col] === 'waterHigh') {
+      return 'en aguas profundas';
+    }
+    if (pointBlockedByColliders(spawn.x, spawn.z, this.world?.colliders ?? [])) {
+      return 'dentro de un obstáculo';
+    }
+    return null;
   }
 
   /**
@@ -545,8 +594,18 @@ export class Game {
       const indexInTeam = teamIndex[config.team];
       const spawn = spawnForTeam(config.team, indexInTeam);
       teamIndex[config.team] += 1;
-      const facing = facingToCenter(config.team);
-      const terrain = terrainAt(spawn.x, spawn.z);
+      // El punto de aparición se resuelve también aquí, no solo al reaparecer:
+      // si un collider o el agua profunda invaden la base, la primera copia y
+      // la cámara deben nacer ya en una posición válida.
+      const resolvedSpawn = this.resolvePosition(
+        { types: asset.entry.types },
+        spawn.x,
+        spawn.z
+      );
+      const spawnPoint = { x: resolvedSpawn.x, z: resolvedSpawn.z };
+      const facing = facingToCenter(config.team, spawnPoint.x, spawnPoint.z);
+      const terrain = terrainAt(spawnPoint.x, spawnPoint.z);
+      const spawnTerrainEffect = terrainSpeedEffect(terrain, asset.entry.types);
       const combat = combatStatsFor(baseStatsFor(config.pokemonId));
       const moveset = MOVESETS[config.pokemonId] ?? [null, null, null, null];
       const commonAbilityId = isCommonAbilityId(config.commonAbilityId)
@@ -573,7 +632,7 @@ export class Game {
         this.viewLayers.push(layer);
       }
 
-      const camera = new CameraRig(this.app, spawn);
+      const camera = new CameraRig(this.app, spawnPoint);
       if (layer) {
         camera.setViewport(layout[currentView]);
         camera.setLayers([...this.baseCameraLayers, layer.id]);
@@ -583,7 +642,7 @@ export class Game {
         // su yaw para convertir la entrada en movimiento relativo.
         camera.setEnabled(false);
       }
-      camera.yaw = cameraYawForTeam(config.team);
+      camera.yaw = cameraYawForTeam(config.team, spawnPoint.x, spawnPoint.z);
       camera.distance =
         CONFIG.camera.distance * (humanConfigs.length > 2 ? 1.12 : 1);
 
@@ -594,8 +653,8 @@ export class Game {
         accent: hexToRgb(asset.entry.accent),
         maxSpeed: speedForPokemon(config.pokemonId),
         hitRadius: hitRadiusForPokemon(config.pokemonId),
-        x: spawn.x,
-        z: spawn.z,
+        x: spawnPoint.x,
+        z: spawnPoint.z,
         facing,
         vx: 0,
         vz: 0,
@@ -603,8 +662,8 @@ export class Game {
         animation: 'idle',
         playback: 1,
         terrain,
-        terrainMultiplier: 1,
-        terrainSpeedReason: 'neutral',
+        terrainMultiplier: spawnTerrainEffect.multiplier,
+        terrainSpeedReason: spawnTerrainEffect.reason,
         visionRange: visionForPokemon(config.pokemonId),
         concealment: terrainConcealment(terrain, asset.entry.types),
         enemiesSeeing: 0,
@@ -659,8 +718,9 @@ export class Game {
               botNav,
               botSquad,
               // Los bots conocen las posiciones de los objetos, pero no su
-              // estado disponible/usado.
-              getActiveMap().pickups
+              // estado disponible/usado. Solo reciben los que superaron la
+              // validación de posición del mapa.
+              this.pickupSpawns
             )
           );
         }
@@ -1244,6 +1304,12 @@ export class Game {
 
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
+    // La velocidad de este frame se calculó con el terreno de partida, pero el
+    // HUD debe mostrar el del punto al que se ha llegado: si no, durante un
+    // frame enseña el terreno nuevo con el multiplicador anterior.
+    const movedTerrainEffect = terrainSpeedEffect(terrain, player.types);
+    player.terrainMultiplier = movedTerrainEffect.multiplier;
+    player.terrainSpeedReason = movedTerrainEffect.reason;
     player.concealment = terrainConcealment(terrain, player.types);
     const targetSubmerge =
       terrain === 'waterHigh'
@@ -1349,6 +1415,11 @@ export class Game {
 
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
+    // El HUD también se actualiza durante la preparación: antes conservaba el
+    // multiplicador del último paso normal aunque el terreno ya hubiera cambiado.
+    const windupTerrainEffect = terrainSpeedEffect(terrain, player.types);
+    player.terrainMultiplier = windupTerrainEffect.multiplier;
+    player.terrainSpeedReason = windupTerrainEffect.reason;
     player.concealment = terrainConcealment(terrain, player.types);
 
     if (pending.elapsed >= pending.windup) {
@@ -1492,6 +1563,10 @@ export class Game {
 
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
+    // Durante el dash el HUD mantiene el terreno y su multiplicador sincronizados.
+    const dashTerrainEffect = terrainSpeedEffect(terrain, player.types);
+    player.terrainMultiplier = dashTerrainEffect.multiplier;
+    player.terrainSpeedReason = dashTerrainEffect.reason;
     player.concealment = terrainConcealment(terrain, player.types);
     const targetSubmerge =
       terrain === 'waterHigh'
@@ -1549,7 +1624,7 @@ export class Game {
     const resolved = this.resolvePosition(player, player.spawn.x, player.spawn.z);
     player.x = resolved.x;
     player.z = resolved.z;
-    player.facing = facingToCenter(player.team);
+    player.facing = facingToCenter(player.team, resolved.x, resolved.z);
     player.vx = 0;
     player.vz = 0;
     player.hp = player.maxHp;
@@ -2168,7 +2243,8 @@ export class Game {
       impactX: options.impactX,
       impactZ: options.impactZ,
       sourceX: options.sourceX ?? hit.x,
-      sourceZ: options.sourceZ ?? hit.z
+      sourceZ: options.sourceZ ?? hit.z,
+      immuneMarked: hit.immuneMarked
     });
   }
 
@@ -2210,6 +2286,12 @@ export class Game {
       impactZ?: number;
       sourceX?: number;
       sourceZ?: number;
+      /**
+       * Registro de la marca de inmunidad del lanzamiento. Si el objetivo ya
+       * está en el conjunto, no se repite el aviso (una marca por lanzamiento
+       * y objetivo, no una por tick).
+       */
+      immuneMarked?: Set<number>;
     } = {}
   ): boolean {
     const power = options.power ?? def.power;
@@ -2234,7 +2316,12 @@ export class Game {
     // nada.
     const effectiveness = typeEffectiveness(def.type, target.types);
     if (effectiveness === 0) {
-      this.showImmunePopup(target);
+      // En áreas persistentes el mismo rival inmune recibe un tick tras otro:
+      // la marca se muestra solo la primera vez para no apilar avisos.
+      if (!options.immuneMarked || !options.immuneMarked.has(target.slot)) {
+        this.showImmunePopup(target);
+        options.immuneMarked?.add(target.slot);
+      }
       return false;
     }
     // El impacto suena para cualquier golpe válido, también los de estado:
@@ -2778,7 +2865,8 @@ export class Game {
       tick: aoe.tick,
       elapsed: aoe.elapsed,
       power: basePower,
-      healToken: aoe.healToken
+      healToken: aoe.healToken,
+      immuneMarked: aoe.immuneMarked
     });
     aoe.tick += 1;
   }
@@ -3335,7 +3423,7 @@ export class Game {
   }
 
   private resolvePosition(
-    self: MatchPlayerState,
+    self: Pick<MatchPlayerState, 'types'>,
     x: number,
     z: number
   ): { x: number; z: number } {

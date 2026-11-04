@@ -271,9 +271,21 @@ export function cellAt(x: number, z: number): { row: number; col: number } | nul
   return { row, col };
 }
 
+/** Radio del collider circular que sella el centro de cada base. */
+export const BASE_COLLIDER_RADIUS = 0.85;
+
+/** Verdadero si el punto cae dentro del trazado suavizado de un separador. */
+export function mountainRangeContains(
+  range: MountainRange,
+  x: number,
+  z: number
+): boolean {
+  return distanceToPath(x, z, range.points) <= range.width / 2;
+}
+
 /** Verdadero si la posición cae dentro de un separador intransitable. */
 export function onMountain(x: number, z: number): boolean {
-  return MOUNTAINS.some((range) => distanceToPath(x, z, range.points) <= range.width / 2);
+  return MOUNTAINS.some((range) => mountainRangeContains(range, x, z));
 }
 
 /**
