@@ -10,6 +10,7 @@ import {
 } from '../game/multiplayer';
 import type { SpriteManifest } from '../game/types';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
+import { XP_SOURCE_LABELS } from '../game/xp';
 import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
 import { TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
@@ -44,6 +45,27 @@ function hpColorFor(pct: number): string {
 /** Formatea contadores grandes con separador de miles. */
 function formatCount(value: number): string {
   return Math.round(value).toLocaleString('es-ES');
+}
+
+/** Tooltip del nivel: rango, progreso y desglose de XP por fuente. */
+function xpTitleFor(stats: PlayerMatchStats | undefined): string | undefined {
+  if (!stats) return undefined;
+  const breakdown = (
+    Object.keys(stats.xpBreakdown) as (keyof PlayerMatchStats['xpBreakdown'])[]
+  )
+    .filter((source) => stats.xpBreakdown[source] >= 0.5)
+    .map(
+      (source) =>
+        `${XP_SOURCE_LABELS[source]}: ${formatCount(stats.xpBreakdown[source])}`
+    )
+    .join(' · ');
+  return (
+    `${stats.rank} · Nivel ${stats.level}/10 · ${formatCount(stats.xp)} XP` +
+    (stats.xpToNext > 0
+      ? ` · ${formatCount(stats.xpToNext - stats.xpIntoLevel)} XP para el siguiente`
+      : ' · Nivel máximo') +
+    (breakdown ? ` · ${breakdown}` : '')
+  );
 }
 
 /** Etiquetas cortas de las estadísticas que pueden llevar buff. */
@@ -189,6 +211,7 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
             `Curación con habilidades ${formatCount(playerStats.abilityHealing)} · ` +
             `Curación con objetos ${formatCount(playerStats.pickupHealing)}`
           : undefined;
+        const xpTitle = xpTitleFor(playerStats);
 
         return (
           <section
@@ -279,20 +302,41 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                       }`}
                     >
                       {entry?.name ?? '—'}
+                      {playerStats && (
+                        <span
+                          className={`rounded bg-white/10 px-1 py-px font-mono font-bold text-(--team) ${
+                            compact ? 'text-7.04' : 'text-7.68'
+                          }`}
+                          title={xpTitle}
+                        >
+                          NV {playerStats.level}
+                        </span>
+                      )}
                     </span>
                   </span>
                 </div>
 
                 {playerStats && (
                   <div className="flex min-w-30 flex-1 items-center gap-1.5">
-                    <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-black/60">
+                    <div className="flex min-w-12 flex-1 flex-col gap-0.5">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-black/60">
+                        <div
+                          className="h-full rounded-full transition-[width,background-color] duration-150"
+                          style={{
+                            width: `${hpPct}%`,
+                            backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
+                          }}
+                        />
+                      </div>
                       <div
-                        className="h-full rounded-full transition-[width,background-color] duration-150"
-                        style={{
-                          width: `${hpPct}%`,
-                          backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
-                        }}
-                      />
+                        className="h-0.75 overflow-hidden rounded-full bg-black/60"
+                        title={xpTitle}
+                      >
+                        <div
+                          className="h-full rounded-full bg-(--team) transition-[width] duration-200"
+                          style={{ width: `${playerStats.xpProgress * 100}%` }}
+                        />
+                      </div>
                     </div>
                     <span className="font-mono text-8 tabular-nums text-steel-250">
                       {Math.ceil(playerStats.hp)}/{playerStats.maxHp}

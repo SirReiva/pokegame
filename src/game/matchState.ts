@@ -14,6 +14,7 @@ import type { TerrainId } from './terrain';
 import type { TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName } from './types';
 import type { Concealment } from './vision';
+import type { XpBreakdown } from './xp';
 
 export interface ActiveBuff {
   stat: BuffStat;
@@ -41,6 +42,22 @@ export interface SlowEffect {
   source: string;
   multiplier: number;
   remaining: number;
+}
+
+/** Aportación de un rival al daño recibido en la vida actual, para asistencias. */
+export interface DamageContribution {
+  /** Daño real aplicado a la vida del objetivo. */
+  amount: number;
+  /** Último instante en el que aportó daño. */
+  at: number;
+  /** XP de daño ya concedida por este rival en esta vida. */
+  xp: number;
+}
+
+/** Bajas repetidas contra un mismo rival, para reducir la XP por farmeo. */
+export interface KillFarmRecord {
+  count: number;
+  at: number;
 }
 
 export interface Projectile {
@@ -262,6 +279,24 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   abilityHealing: number;
   /** PV reales curados por objetos recogibles (pociones). */
   pickupHealing: number;
+  /** XP acumulada de la partida. Solo decorativa: no altera el combate. */
+  xp: number;
+  /** Desglose de la XP por fuente, para el HUD y el marcador final. */
+  xpBreakdown: XpBreakdown;
+  /** Bajas seguidas sin morir; alimenta el shutdown y el multiplicador. */
+  killStreak: number;
+  /** Instantes de las últimas bajas, para detectar multibajas. */
+  recentKills: number[];
+  /** Daño real de cada rival en la vida actual, para repartir asistencias. */
+  damageContributors: Map<number, DamageContribution>;
+  /** Bajas repetidas contra cada víctima, para el XP decreciente. */
+  killFarm: Map<number, KillFarmRecord>;
+  /** Segundos vivos acumulados para la XP de participación. */
+  participationTimer: number;
+  /** XP de participación ya concedida (tope por partida). */
+  participationAwarded: number;
+  /** Último instante con una acción de combate (daño, curación, KO u objeto). */
+  lastActionAt: number;
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
   buffs: ActiveBuff[];

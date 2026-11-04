@@ -11,6 +11,7 @@ import type { InputDeviceInfo } from './input';
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, DirectionName } from './types';
+import type { XpBreakdown, XpRank } from './xp';
 
 /** 1 teclado + 7 mandos, u 8 mandos. */
 export const MAX_PLAYERS = 8;
@@ -335,6 +336,20 @@ export interface PlayerMatchStats {
   abilityHealing: number;
   /** PV reales curados por objetos recogibles. */
   pickupHealing: number;
+  /** XP acumulada en la partida. Solo decorativa: no altera el combate. */
+  xp: number;
+  /** Nivel 1-10 derivado de la XP. */
+  level: number;
+  /** Rango del nivel actual. */
+  rank: XpRank;
+  /** XP dentro del nivel actual. */
+  xpIntoLevel: number;
+  /** Coste del siguiente nivel; 0 en el nivel máximo. */
+  xpToNext: number;
+  /** Progreso 0-1 hacia el siguiente nivel; 1 en el máximo. */
+  xpProgress: number;
+  /** Desglose de la XP por fuente. */
+  xpBreakdown: XpBreakdown;
   /** Buffs de estadísticas activos. */
   buffs: ActiveBuffHud[];
   /** Ralentizaciones activas que afectan al jugador. */

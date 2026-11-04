@@ -104,6 +104,14 @@ import { hitRadiusForPokemon, maxHitRadius, speedForPokemon } from './roster';
 import { rumbleOnDamage } from './rumble';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import {
+  XP_REWARDS,
+  XP_RULES,
+  emptyXpBreakdown,
+  levelFromXp,
+  xpStatus,
+  type XpSource
+} from './xp';
+import {
   TERRAINS,
   getActiveMap,
   resolveDeepWater,
@@ -226,11 +234,15 @@ export class Game {
       player.hp = Math.min(player.maxHp, player.hp + amount);
       const healed = player.hp - before;
       player.pickupHealing += healed;
+      if (healed > 0) {
+        this.awardXp(player, 'healing', healed * XP_REWARDS.healingPerHp);
+      }
       return healed;
     },
     showHeal: (player, amount) => this.showHealPopup(player, amount),
     onCollected: (player, definition) => {
       this.combatFx.spawnBuff(player.x, player.z, hexToRgb(definition.color), 1.05);
+      this.awardXp(player, 'pickup', XP_REWARDS.pickup);
     },
     canReach: (player, spawn) => {
       const colliders = this.world.colliders;
@@ -709,6 +721,15 @@ export class Game {
         damageTaken: 0,
         abilityHealing: 0,
         pickupHealing: 0,
+        xp: 0,
+        xpBreakdown: emptyXpBreakdown(),
+        killStreak: 0,
+        recentKills: [],
+        damageContributors: new Map(),
+        killFarm: new Map(),
+        participationTimer: 0,
+        participationAwarded: 0,
+        lastActionAt: 0,
         cooldowns: [0, 0, 0, 0, 0],
         buffs: [],
         slowEffects: [],
@@ -1092,6 +1113,7 @@ export class Game {
         copy.setPlayback(player.playback);
         copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
+        copy.setLevel(levelFromXp(player.xp));
         copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
       });
@@ -1102,6 +1124,7 @@ export class Game {
     // equipo.
     this.updateVision();
     if (!frozen) this.updateRegeneration(dt);
+    if (!frozen) this.updateParticipation(dt);
 
     this.world.update(dt);
     this.pickups?.update(
@@ -1728,6 +1751,7 @@ export class Game {
       const healed = player.hp - before;
       if (healed > 0) {
         player.abilityHealing += healed;
+        this.awardXp(player, 'healing', healed * XP_REWARDS.healingPerHp);
         this.showHealPopup(player, healed);
       }
       if (player.hp >= player.maxHp) player.regenerating = false;
@@ -1996,7 +2020,10 @@ export class Game {
       player,
       def,
       combatFx: this.combatFx,
-      showHealPopup: (target, amount) => this.showHealPopup(target, amount)
+      showHealPopup: (target, amount) => {
+        this.showHealPopup(target, amount);
+        this.awardXp(target, 'healing', amount * XP_REWARDS.healingPerHp);
+      }
     });
 
     // Un solo token por lanzamiento: si la forma golpea a varios rivales o
@@ -2414,6 +2441,7 @@ export class Game {
     target.hp = Math.max(0, target.hp - finalDamage);
     target.damageTaken += appliedDamage;
     if (attacker.team !== target.team) attacker.damageDealt += appliedDamage;
+    this.awardCombatXp(attacker, target, appliedDamage, result.damage, finalDamage);
     this.breakRegen(target);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
     this.vibrateOnDamage(target, appliedDamage);
@@ -2425,9 +2453,10 @@ export class Game {
     // que un lanzamiento con varios impactos o ticks cure una sola vez.
     if (def.healOnHit && options.healToken && !options.healToken.healed) {
       options.healToken.healed = true;
-      applyHealSelf(attacker, def, this.combatFx, (healed, amount) =>
-        this.showHealPopup(healed, amount)
-      );
+      applyHealSelf(attacker, def, this.combatFx, (healed, amount) => {
+        this.showHealPopup(healed, amount);
+        this.awardXp(healed, 'healing', amount * XP_REWARDS.healingPerHp);
+      });
     }
     return true;
   }
@@ -2562,10 +2591,12 @@ export class Game {
 
     if (killer.team !== target.team) {
       killer.kills += 1;
+      this.awardKillXp(killer, target);
       this.teamScores[killer.team] += 1;
       if (this.teamScores[killer.team] >= this.koTarget) {
         this.matchOver = true;
         this.winner = killer.team;
+        this.awardMatchResult(killer.team);
         // La partida termina aquí: el tema de combate no debe seguir bajo el
         // modal de resultados.
         stopMatchMusic();
@@ -2577,6 +2608,13 @@ export class Game {
         this.callbacks.onMatchEnd(result);
       }
     }
+
+    // La víctima pierde la racha y las aportaciones de esta vida. Sus propias
+    // bajas repetidas se conservan: el castigo por farmeo es contra quien
+    // muere, no contra quien mata.
+    target.killStreak = 0;
+    target.recentKills = [];
+    target.damageContributors.clear();
     this.emitMatchStats();
   }
 
@@ -2606,6 +2644,192 @@ export class Game {
     const oldestVisible = this.matchElapsed - KILL_FEED_TTL_SECONDS;
     const fresh = this.killFeed.filter((entry) => entry.at >= oldestVisible);
     if (fresh.length !== this.killFeed.length) this.killFeed = fresh;
+  }
+
+  /**
+   * Suma XP decorativa. No toca vida, stats ni daño: solo alimenta el nivel y
+   * el desglose que se muestran en el HUD y en el marcador final.
+   */
+  private awardXp(
+    player: MatchPlayerState,
+    source: XpSource,
+    amount: number
+  ): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    player.xp += amount;
+    player.xpBreakdown[source] += amount;
+    // La participación se calcula a partir del tiempo y no debe renovar el
+    // contador de actividad que la habilita.
+    if (source !== 'participation' && source !== 'result') {
+      player.lastActionAt = this.matchElapsed;
+    }
+  }
+
+  /**
+   * XP por intercambio de daño. Se normaliza por la vida máxima del objetivo
+   * para que pelear contra un tanque no rinda más que contra un frágil, y se
+   * limita la XP de daño por víctima y vida para que una curación constante no
+   * convierta a un rival en una fuente infinita.
+   */
+  private awardCombatXp(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    appliedDamage: number,
+    rawDamage: number,
+    finalDamage: number
+  ): void {
+    if (
+      appliedDamage <= 0 ||
+      attacker === target ||
+      attacker.team === target.team
+    ) {
+      return;
+    }
+    const maxHp = Math.max(1, target.maxHp);
+
+    const contribution = target.damageContributors.get(attacker.slot) ?? {
+      amount: 0,
+      at: this.matchElapsed,
+      xp: 0
+    };
+    contribution.amount += appliedDamage;
+    contribution.at = this.matchElapsed;
+    target.damageContributors.set(attacker.slot, contribution);
+
+    const room = XP_REWARDS.damageCapPerVictim - contribution.xp;
+    if (room > 0) {
+      const gained = Math.min(
+        room,
+        (appliedDamage / maxHp) * XP_REWARDS.damagePerMaxHp
+      );
+      contribution.xp += gained;
+      this.awardXp(attacker, 'damage', gained);
+    }
+
+    this.awardXp(
+      target,
+      'taken',
+      (appliedDamage / maxHp) * XP_REWARDS.takenPerMaxHp
+    );
+
+    // Daño que Protección convirtió en nada: premia el bloqueo sin tocar la
+    // fórmula de combate.
+    const blocked = Math.max(0, rawDamage - finalDamage);
+    if (blocked > 0) {
+      this.awardXp(
+        target,
+        'blocked',
+        (blocked / maxHp) * XP_REWARDS.blockedPerMaxHp
+      );
+    }
+  }
+
+  /** XP de una baja: KO, shutdown, asistencias y multibajas. */
+  private awardKillXp(
+    killer: MatchPlayerState,
+    target: MatchPlayerState
+  ): void {
+    // Farmeo: matar una y otra vez al mismo rival rinde cada vez menos.
+    const farm = killer.killFarm.get(target.slot);
+    const repeated =
+      farm && this.matchElapsed - farm.at <= XP_RULES.killFarmWindowSeconds
+        ? farm.count
+        : 0;
+    const multiplier = repeated === 0 ? 1 : repeated === 1 ? 0.5 : 0.25;
+    killer.killFarm.set(target.slot, {
+      count: repeated + 1,
+      at: this.matchElapsed
+    });
+    this.awardXp(killer, 'ko', XP_REWARDS.ko * multiplier);
+
+    // Shutdown: la víctima venía en racha.
+    if (target.killStreak >= XP_RULES.shutdownStreak) {
+      this.awardXp(killer, 'shutdown', XP_REWARDS.shutdown);
+    }
+
+    // Asistencias: quien aportó al menos el 20 % de la vida de la víctima en
+    // los últimos 10 s. La ventana se mide contra la última aportación.
+    for (const [slot, contribution] of target.damageContributors) {
+      if (slot === killer.slot) continue;
+      if (
+        contribution.amount <
+        target.maxHp * XP_RULES.assistMinDamageFraction
+      ) {
+        continue;
+      }
+      if (
+        this.matchElapsed - contribution.at >
+        XP_RULES.assistWindowSeconds
+      ) {
+        continue;
+      }
+      const assistant = this.matchPlayers.find((player) => player.slot === slot);
+      if (!assistant || assistant.team === target.team) continue;
+      this.awardXp(assistant, 'assist', XP_REWARDS.assist);
+    }
+
+    // Multibajas: se premia la 2.ª, la 3.ª y la 4.ª baja de la cadena. Las
+    // siguientes ya no suman para no premiar una carnicería infinita.
+    killer.recentKills.push(this.matchElapsed);
+    killer.recentKills = killer.recentKills.filter(
+      (at) => this.matchElapsed - at <= XP_RULES.multikillWindowSeconds
+    );
+    const chain = killer.recentKills.length;
+    if (chain === 2) {
+      this.awardXp(killer, 'multikill', XP_REWARDS.multikill2);
+    } else if (chain === 3) {
+      this.awardXp(killer, 'multikill', XP_REWARDS.multikill3);
+    } else if (chain === 4) {
+      this.awardXp(killer, 'multikill', XP_REWARDS.multikill4);
+    }
+
+    killer.killStreak += 1;
+  }
+
+  /** Reparte la XP de victoria y derrota cuando termina la partida. */
+  private awardMatchResult(winner: Team): void {
+    for (const player of this.matchPlayers) {
+      this.awardXp(
+        player,
+        'result',
+        player.team === winner ? XP_REWARDS.win : XP_REWARDS.loss
+      );
+    }
+  }
+
+  /**
+   * Goteo de participación: 1 XP cada 10 s vivos, con un tope de 30 y solo si
+   * el jugador ha hecho algo de combate en los últimos 30 s. Es decorativo y
+   * está pensado para que un apoyo no termine la partida en nivel 1.
+   */
+  private updateParticipation(dt: number): void {
+    if (this.matchOver) return;
+    for (const player of this.matchPlayers) {
+      if (!player.alive) continue;
+      if (player.participationAwarded >= XP_REWARDS.participationCap) {
+        player.participationTimer = 0;
+        continue;
+      }
+      if (
+        this.matchElapsed - player.lastActionAt >
+        XP_RULES.participationIdleSeconds
+      ) {
+        continue;
+      }
+      player.participationTimer += dt;
+      while (
+        player.participationTimer >= XP_RULES.participationTickSeconds &&
+        player.participationAwarded < XP_REWARDS.participationCap
+      ) {
+        player.participationTimer -= XP_RULES.participationTickSeconds;
+        player.participationAwarded += XP_REWARDS.participationPerTick;
+        this.awardXp(
+          player,
+          'participation',
+          XP_REWARDS.participationPerTick
+        );
+      }
+    }
   }
 
   private updateProjectiles(dt: number): void {
@@ -3091,6 +3315,7 @@ export class Game {
       const terrain = TERRAINS[player.terrain];
       const commonOption = commonAbilityOption(player.commonAbilityId);
       const commonDef = ABILITIES[player.commonAbilityId];
+      const xp = xpStatus(player.xp);
       return {
         slot: player.slot,
         name: player.name,
@@ -3130,6 +3355,13 @@ export class Game {
         damageTaken: player.damageTaken,
         abilityHealing: player.abilityHealing,
         pickupHealing: player.pickupHealing,
+        xp: xp.xp,
+        level: xp.level,
+        rank: xp.rank,
+        xpIntoLevel: xp.intoLevel,
+        xpToNext: xp.toNext,
+        xpProgress: xp.progress,
+        xpBreakdown: { ...player.xpBreakdown },
         buffs: player.buffs.map((buff) => ({
           stat: buff.stat,
           multiplier: buff.multiplier,

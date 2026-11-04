@@ -93,7 +93,8 @@ export class Actor {
     this.healthBar = new HealthBar(app, this.billboard.root, {
       width: barWidth,
       height: Math.max(0.09, barWidth * 0.11),
-      y: spriteHeight + 0.14
+      y: spriteHeight + 0.18,
+      accent
     });
 
     const diameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
@@ -182,6 +183,11 @@ export class Actor {
   /** Actualiza la vida mostrada sobre el sprite (0 = KO, barra oculta). */
   setHealth(fraction: number): void {
     this.healthBar.setFraction(fraction);
+  }
+
+  /** Nivel de partida que se pinta delante de la barra de vida. */
+  setLevel(level: number): void {
+    this.healthBar.setLevel(level);
   }
 
   setLoop(loop: boolean): void {

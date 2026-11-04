@@ -493,6 +493,9 @@ function MatchScoreboard({
     | 'damageTaken'
     | 'abilityHealing'
     | 'pickupHealing'
+    | 'xp'
+    | 'level'
+    | 'rank'
   > & {
     /** Nombre del instinto común elegido, o `null` si no se conoce. */
     commonAbilityName: string | null;
@@ -518,6 +521,9 @@ function MatchScoreboard({
             damageTaken: 0,
             abilityHealing: 0,
             pickupHealing: 0,
+            xp: 0,
+            level: 1,
+            rank: 'Novato',
             commonAbilityName: option?.name ?? null,
             commonAbilityDescription: option?.description ?? ''
           };
@@ -593,6 +599,15 @@ function MatchScoreboard({
                       </strong>
                       <span className="truncate text-10.24 text-steel-400">
                         {entry?.name ?? row.pokemonId}
+                      </span>
+                      <span
+                        className="truncate text-9.28 text-steel-500"
+                        title={`${formatDamage(row.xp)} XP acumulada`}
+                      >
+                        <span className="text-(--team)">
+                          {row.rank} · NV {row.level}
+                        </span>
+                        {row.xp > 0 ? ` · ${formatDamage(row.xp)} XP` : ''}
                       </span>
                       {row.commonAbilityName && (
                         <span

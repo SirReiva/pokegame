@@ -144,6 +144,28 @@ Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`faci
 
 Cada especie tiene un **radio de impacto (hurtbox) propio**. No se deriva del sprite: los frames incluyen colas, alas y huecos que exagerarían el cuerpo. La tabla curada vive en `POKEMON_HIT_RADIUS` (`src/game/roster.ts`) y va de 0.34 u (Voltorb, Celebi) a 0.58 u (Onix, Lugia, Ho-Oh), con 0.42 u como referencia. Los proyectiles y el barrido de dash lo usan por especie; las melee, los haces y las áreas dibujan su telegrafía con el mayor del roster (`MAX_HIT_RADIUS`) y golpean cuando el hurtbox del rival toca su borde. Un hurtbox grande es una desventaja en un juego de skillshots, así que solo lo llevan especies con HP o defensas que lo compensan. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`: entonces todo el roster vuelve al radio único de `CONFIG.player.radius`. Para comprobarlo en partida, activa `CONFIG.debug.showHitboxes` y verás el círculo bajo cada Pokémon. Los bots usan el hurtbox del objetivo para decidir su rango de ataque; la colisión de movimiento, la separación entre cuerpos y la navegación siguen usando el radio global.
 
+### Experiencia (decorativa)
+
+Cada jugador acumula **XP de partida** y sube del **nivel 1 al 10**; al terminar, el contador se reinicia. La XP **no modifica vida, stats, daño ni cooldowns**: solo alimenta el nivel que se pinta delante de la barra de vida de PlayCanvas, el chip `NV` y la barra fina del HUD, y el rango del marcador final.
+
+La curva es aritmética: cada nivel cuesta 20 XP más que el anterior. El nivel 2 cuesta 40, el 7 llega a 540 (mitad de tabla) y el 10 exige 1080 XP acumulada.
+
+| Fuente | Valor |
+| --- | --- |
+| KO | 40 |
+| Asistencia (≥20 % de la vida del rival en 10 s) | 15 |
+| Daño hecho | 25 XP por barra de vida del rival |
+| Daño recibido | 10 XP por barra de vida |
+| Daño bloqueado con Protección | 10 XP por barra absorbida |
+| Curación | 1 XP por cada 15 PV |
+| Objeto recogido | 8 |
+| Cortar una racha de 3+ KOs | 25 |
+| Multibaja (2.ª / 3.ª / 4.ª) | 10 / 15 / 25 |
+| Victoria / derrota | 100 / 40 |
+| Participación | 1 XP cada 10 s vivos con actividad reciente (tope 30) |
+
+Para evitar farmeo, la XP de daño se normaliza por la vida máxima del objetivo, se limita a 35 por rival y vida, y matar repetidamente al mismo rival dentro de 180 s rinde 100 % → 50 % → 25 %. El autodaño, el daño a rivales invulnerables y el exceso de un golpe letal no cuentan. Toda la curva y los pesos viven en `src/game/xp.ts`.
+
 ### Instintos comunes
 
 Cada Pokémon elige **uno de tres instintos** en la card del roster:
