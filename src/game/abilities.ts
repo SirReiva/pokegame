@@ -738,7 +738,7 @@ registerAbility(
     .projectile('electric', 14)
     .impact('electric')
     .cast(0.34)
-    .windup(0.22, { mode: 'once' })
+    .windup(0.13, { mode: 'once' })
     .animation('shock')
     .color(247, 208, 44)
     .description('Proyectil eléctrico rápido. Ataque básico de Pikachu.')
