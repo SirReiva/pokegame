@@ -472,6 +472,8 @@ function MatchScoreboard({
       | 'deaths'
       | 'damageDealt'
       | 'damageTaken'
+      | 'abilityHealing'
+      | 'pickupHealing'
     >
   > =
     stats.length > 0
@@ -484,7 +486,9 @@ function MatchScoreboard({
           kills: 0,
           deaths: 0,
           damageDealt: 0,
-          damageTaken: 0
+          damageTaken: 0,
+          abilityHealing: 0,
+          pickupHealing: 0
         }));
 
   return (
@@ -504,9 +508,18 @@ function MatchScoreboard({
             kills: acc.kills + row.kills,
             deaths: acc.deaths + row.deaths,
             damageDealt: acc.damageDealt + row.damageDealt,
-            damageTaken: acc.damageTaken + row.damageTaken
+            damageTaken: acc.damageTaken + row.damageTaken,
+            abilityHealing: acc.abilityHealing + row.abilityHealing,
+            pickupHealing: acc.pickupHealing + row.pickupHealing
           }),
-          { kills: 0, deaths: 0, damageDealt: 0, damageTaken: 0 }
+          {
+            kills: 0,
+            deaths: 0,
+            damageDealt: 0,
+            damageTaken: 0,
+            abilityHealing: 0,
+            pickupHealing: 0
+          }
         );
         return (
           <section
@@ -589,6 +602,28 @@ function MatchScoreboard({
                           Recibido
                         </span>
                       </span>
+                      <span
+                        className="flex flex-col items-end leading-none"
+                        title="PV curados con habilidades propias y Regeneración"
+                      >
+                        <strong className="text-13.6 text-success">
+                          {formatDamage(row.abilityHealing)}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          Cur. hab.
+                        </span>
+                      </span>
+                      <span
+                        className="flex flex-col items-end leading-none"
+                        title="PV curados con objetos recogibles"
+                      >
+                        <strong className="text-13.6 text-success">
+                          {formatDamage(row.pickupHealing)}
+                        </strong>
+                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                          Cur. obj.
+                        </span>
+                      </span>
                     </span>
                   </li>
                 );
@@ -647,6 +682,28 @@ function MatchScoreboard({
                     </strong>
                     <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
                       Recibido
+                    </span>
+                  </span>
+                  <span
+                    className="flex flex-col items-end leading-none"
+                    title="PV curados con habilidades propias y Regeneración"
+                  >
+                    <strong className="text-13.6 text-success">
+                      {formatDamage(totals.abilityHealing)}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      Cur. hab.
+                    </span>
+                  </span>
+                  <span
+                    className="flex flex-col items-end leading-none"
+                    title="PV curados con objetos recogibles"
+                  >
+                    <strong className="text-13.6 text-success">
+                      {formatDamage(totals.pickupHealing)}
+                    </strong>
+                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+                      Cur. obj.
                     </span>
                   </span>
                 </span>

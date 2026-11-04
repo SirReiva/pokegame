@@ -222,7 +222,9 @@ export class Game {
       if (!player.alive) return 0;
       const before = player.hp;
       player.hp = Math.min(player.maxHp, player.hp + amount);
-      return player.hp - before;
+      const healed = player.hp - before;
+      player.pickupHealing += healed;
+      return healed;
     },
     showHeal: (player, amount) => this.showHealPopup(player, amount),
     onCollected: (player, definition) => {
@@ -700,6 +702,8 @@ export class Game {
         deaths: 0,
         damageDealt: 0,
         damageTaken: 0,
+        abilityHealing: 0,
+        pickupHealing: 0,
         cooldowns: [0, 0, 0, 0, 0],
         buffs: [],
         slowEffects: [],
@@ -1715,7 +1719,10 @@ export class Game {
       const before = player.hp;
       player.hp = Math.min(player.maxHp, player.hp + whole);
       const healed = player.hp - before;
-      if (healed > 0) this.showHealPopup(player, healed);
+      if (healed > 0) {
+        player.abilityHealing += healed;
+        this.showHealPopup(player, healed);
+      }
       if (player.hp >= player.maxHp) player.regenerating = false;
     }
   }
@@ -3107,6 +3114,8 @@ export class Game {
         deaths: player.deaths,
         damageDealt: player.damageDealt,
         damageTaken: player.damageTaken,
+        abilityHealing: player.abilityHealing,
+        pickupHealing: player.pickupHealing,
         abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
           const def = id ? ABILITIES[id] : null;
           return {

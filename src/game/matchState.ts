@@ -258,6 +258,10 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   damageDealt: number;
   /** Daño real recibido de rivales y autodaño. */
   damageTaken: number;
+  /** PV reales curados por habilidades propias y Regeneración. */
+  abilityHealing: number;
+  /** PV reales curados por objetos recogibles (pociones). */
+  pickupHealing: number;
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
   buffs: ActiveBuff[];

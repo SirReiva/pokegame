@@ -168,6 +168,12 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
             `${CONCEALMENT_REASON_LABEL[playerStats.concealmentReason]}). ` +
             `Con el mismo rango base, te detectan a ${playerStats.detectionRange.toFixed(1)} u.`
           : undefined;
+        const combatTitle = playerStats
+          ? `Daño hecho ${formatCount(playerStats.damageDealt)} · ` +
+            `Daño recibido ${formatCount(playerStats.damageTaken)} · ` +
+            `Curación con habilidades ${formatCount(playerStats.abilityHealing)} · ` +
+            `Curación con objetos ${formatCount(playerStats.pickupHealing)}`
+          : undefined;
 
         return (
           <section
@@ -229,16 +235,32 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
                     </span>
                     <span
                       className="font-mono text-8 tabular-nums text-steel-650"
-                      title={`Daño hecho ${formatCount(playerStats.damageDealt)} · Daño recibido ${formatCount(playerStats.damageTaken)}`}
+                      title={combatTitle}
                     >
                       K{playerStats.kills} D{playerStats.deaths}
                     </span>
                     {!compact && (
                       <span
                         className="font-mono text-8 tabular-nums text-steel-500"
-                        title={`Daño hecho ${formatCount(playerStats.damageDealt)} · Daño recibido ${formatCount(playerStats.damageTaken)}`}
+                        title={combatTitle}
                       >
                         DÑO {formatCount(playerStats.damageDealt)}
+                      </span>
+                    )}
+                    {!compact && (
+                      <span
+                        className="font-mono text-8 tabular-nums text-success"
+                        title={combatTitle}
+                      >
+                        CUR HAB {formatCount(playerStats.abilityHealing)}
+                      </span>
+                    )}
+                    {!compact && (
+                      <span
+                        className="font-mono text-8 tabular-nums text-success"
+                        title={combatTitle}
+                      >
+                        CUR OBJ {formatCount(playerStats.pickupHealing)}
                       </span>
                     )}
                     {playerStats.invulnerable && (

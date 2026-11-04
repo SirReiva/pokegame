@@ -54,6 +54,7 @@ export function applyHealSelf(
   const amount = Math.min(missing, Math.round(player.maxHp * def.healSelf));
   if (amount > 0) {
     player.hp += amount;
+    player.abilityHealing += amount;
     showHealPopup(player, amount);
   }
   combatFx.spawnHeal(

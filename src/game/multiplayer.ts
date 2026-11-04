@@ -312,6 +312,10 @@ export interface PlayerMatchStats {
   damageDealt: number;
   /** Daño real recibido de rivales y autodaño en toda la partida. */
   damageTaken: number;
+  /** PV reales curados por habilidades propias y Regeneración. */
+  abilityHealing: number;
+  /** PV reales curados por objetos recogibles. */
+  pickupHealing: number;
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;
