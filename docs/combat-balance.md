@@ -199,7 +199,7 @@ conservador. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`.
 quemadura, veneno, sueño ni parálisis completa; la «parálisis» de este juego es
 una ralentización.
 
-**Protección**: reduce un 40 % el daño durante 2 s. Se aplica sobre la fórmula
+**Protección**: reduce un 60 % el daño durante 2 s. Se aplica sobre la fórmula
 con mínimo de 1 PV, así que un golpe de 1 PV sigue quitando 1 y uno de 2 también
 1 (50 % efectivo en ese caso).
 
@@ -1013,11 +1013,11 @@ así que se pueden añadir tests baratos:
   mismo paso debe recibir el golpe; otro detrás del muro no. Con dos objetivos en
   línea y `pierce = 0` debe recibir el más cercano, sin depender del orden de
   `matchPlayers`. Repetir a 20 FPS y a 60 FPS.
-- **Instintos comunes**: Protección reduce un 40 % los golpes y cada tick de
+- **Instintos comunes**: Protección reduce un 60 % los golpes y cada tick de
   área durante 2 s, no impide slow/stun, no reduce el autodaño y bloquea el resto
   de habilidades mientras está activa; Impulso se detiene en enemigos y
   separadores (hoy también en aliados, §3.10) y no hace daño; Regeneración
-  empieza a los 3 s oculto, cura 1 PV/s,
+  empieza a los 2 s oculto, cura 5 PV/s,
   se corta con daño/visibilidad/ataque/habilidad/muerte y no filtra el indicador
   al rival. Al morir con escudo, la esfera debe desaparecer.
 - **HUD de Regeneración**: no debe mostrar la cuenta atrás cuando el jugador está

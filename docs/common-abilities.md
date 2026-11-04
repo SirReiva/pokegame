@@ -18,7 +18,7 @@
 | Icono | **Solo lo ve el jugador**. El rival nunca lo ve mientras regenera: si lo ve, la regeneración ya está cortada |
 | Uso de activos | Solo si **no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee** |
 | Bloqueo de casteo | Comparten el mismo `castLockTimer` que una habilidad no melee |
-| Protección | Reduce un 40 % **todo el daño recibido** durante 2 s, incluidos DoT y áreas; no el autodaño. Ralentiza un 20 % y bloquea otras habilidades mientras está activa |
+| Protección | Reduce un 60 % **todo el daño recibido** durante 2 s, incluidos DoT y áreas; no el autodaño. Ralentiza un 12 % y bloquea otras habilidades mientras está activa |
 | Animación de Protección | **Ninguna por defecto**; cada Pokémon puede definir una o no. El escudo esférico siempre aparece |
 | Color del escudo | **`accent` del Pokémon** en el manifiesto de sprites, no el color del equipo |
 | Impulso | Distancia fija; **no atraviesa enemigos ni separadores**; se detiene al chocar |
@@ -50,7 +50,7 @@ La diferencia con la antigua «Recuperación» es importante: aquella era un bot
 
 ### Protección
 
-**Efecto:** durante 2 s, el Pokémon recibe un 40 % menos de daño y su velocidad normal se multiplica por 0,8 (−20 %). Se aplica a todo el daño recibido, incluidos DoT y áreas, pero no al autodaño.
+**Efecto:** durante 2 s, el Pokémon recibe un 60 % menos de daño y su velocidad normal se multiplica por 0,88 (−12 %). Se aplica a todo el daño recibido, incluidos DoT y áreas, pero no al autodaño.
 
 **CD:** 8 s.
 
@@ -124,11 +124,11 @@ El color del escudo no necesita tabla nueva: se toma de `SpriteAsset.entry.accen
 
 **Efecto:** dash de 2,2 u en la dirección en la que mira el Pokémon. Sin daño, sin i-frames. Se detiene al chocar con muros, separadores o enemigos.
 
-**CD:** 7 s.
+**CD:** 3 s.
 
 **Reglas:**
 
-- Más corto y más débil que los dash de kit (4-5 u, 4-8 s).
+- Más corto que los dash de kit (4-5 u) y con un cooldown mucho menor (3 s frente a 4-8 s).
 - No cancela animaciones ni `windup`.
 - No atraviesa enemigos ni separadores: se detiene en el primer choque.
 - Distancia y duración fijas; no escalan con la velocidad ni con slows.
@@ -143,7 +143,7 @@ El color del escudo no necesita tabla nueva: se toma de `SpriteAsset.entry.accen
 | Palanca | Rango |
 |---|---|
 | Distancia | 1,8-2,5 u |
-| Cooldown | 6-9 s |
+| Cooldown | 3-6 s |
 | i-frames | 0-0,1 s |
 
 **Implementación:** reutiliza el sistema de dash existente, añadiendo colisión con enemigos.
@@ -152,14 +152,14 @@ El color del escudo no necesita tabla nueva: se toma de `SpriteAsset.entry.accen
 
 ### Efecto
 
-Si el Pokémon permanece **3 s oculto**, a partir de ese momento empieza a recuperar **1 PV por segundo** mientras siga oculto.
+Si el Pokémon permanece **2 s oculto**, a partir de ese momento empieza a recuperar **5 PV por segundo** mientras siga oculto.
 
 - Es un instinto **pasivo**: no tiene tecla ni cooldown.
-- No cura durante los primeros 3 s; solo a partir de ahí.
+- No cura durante los primeros 2 s; solo a partir de ahí.
 - Se detiene al llegar a la vida máxima.
 - No cura si el Pokémon está muerto.
-- No tiene tope: mientras siga oculto, sigue curando 1 PV/s.
-- Cada PV recuperado muestra un **número flotante verde `+1`**, igual que las curaciones de habilidad.
+- No tiene tope: mientras siga oculto, sigue curando 5 PV/s.
+- Cada tick de curación muestra un **número flotante verde** con los PV recuperados, igual que las curaciones de habilidad.
 
 ### Qué significa «oculto»
 
@@ -197,26 +197,26 @@ Regla cerrada: **cualquier pérdida de HP, ataque o habilidad corta la regenerac
 
 ### Números iniciales
 
-- Retardo: **3 s**.
-- Regeneración: **1 PV/s**.
+- Retardo: **2 s**.
+- Regeneración: **5 PV/s**.
 - Sin tope mientras siga oculto.
 
 Para ponerlo en contexto con la vida del juego:
 
-| Pokémon | Vida aproximada | 1 PV/s equivale a | 10 s oculto |
+| Pokémon | Vida aproximada | 5 PV/s equivale a | 10 s oculto |
 |---|---:|---:|---:|
-| Pikachu | ~110 PV | ~0,9 %/s | ~9 % de su vida |
-| Greninja | ~145 PV | ~0,7 %/s | ~7 % |
-| Mewtwo | ~181 PV | ~0,55 %/s | ~5,5 % |
+| Pikachu | ~110 PV | ~4,5 %/s | ~45 % de su vida |
+| Greninja | ~145 PV | ~3,4 %/s | ~34 % |
+| Mewtwo | ~181 PV | ~2,8 %/s | ~28 % |
 
-No es una curación rápida: es un premio por desaparecer, reposicionarse y volver. Al no tener tope, el límite real es **el tiempo que el jugador acepta dejar de presionar el mapa**.
+Es una curación considerable: tras el retardo, cada segundo oculto devuelve entre un 3 % y un 4,5 % de la vida típica. Al no tener tope, el límite real es **el tiempo que el jugador acepta dejar de presionar el mapa**.
 
 ### Contrajuego
 
 - **Revelar:** ataques en área, empujar hacia zonas visibles o perseguir hasta encontrar.
 - **Cortar la ocultación:** entrar en la hierba, rodear la montaña o forzar al Pokémon a salir de la zona oculta.
 - **Presión:** si se esconde, deja de presionar el mapa y de generar KO.
-- **Burst:** si pierde HP antes de los 3 s, el contador se reinicia.
+- **Burst:** si pierde HP antes de los 2 s, el contador se reinicia.
 - **DoT:** un charco de Bomba Lodo, un Terremoto o un Giro Fuego reinician el contador en cada tick. No se puede regenerar dentro de un área dañina.
 
 El coste real no es el cooldown: es **el tiempo que pasa sin participar**.
@@ -225,17 +225,17 @@ El coste real no es el cooldown: es **el tiempo que pasa sin participar**.
 
 | Palanca | Rango |
 |---|---|
-| Retardo | 2,5-4 s |
-| Regeneración | 1-2 PV/s |
+| Retardo | 2-4 s |
+| Regeneración | 3-6 PV/s |
 | Tope por ocultación | Sin tope por ahora; revisar si aparece stall |
 
 ### Implementación
 
-- Añadir al estado del jugador `hiddenTimer` (segundos oculto), `regenerating` (booleano para HUD) y `regenAccumulator` (para curar 1 PV entero por segundo).
+- Añadir al estado del jugador `hiddenTimer` (segundos oculto), `regenerating` (booleano para HUD) y `regenAccumulator` (PV fraccionarios acumulados).
 - En el bucle de actualización de `src/game/game.ts`:
   - comprobar si el jugador está oculto para todos los enemigos vivos;
   - si lo está, sumar `dt` a `hiddenTimer`; si la visibilidad parpadea, usar una gracia de `0,2 s` antes de resetear;
-  - si `hiddenTimer >= 3`, sumar `dt` a `regenAccumulator`; cuando llegue a 1, curar 1 PV y restar 1 al acumulador;
+  - si `hiddenTimer >= 2`, sumar `dt * 5` a `regenAccumulator`; curar los PV enteros acumulados y conservar la fracción;
   - si deja de estar oculto, poner `hiddenTimer = 0` y `regenAccumulator = 0`.
 - Reutilizar `isTargetVisible` de `src/game/vision.ts` para la comprobación.
 - Al perder HP, resetear `hiddenTimer` y `regenAccumulator` del objetivo. Esto cubre también los ticks de área y DoT.
@@ -247,7 +247,7 @@ El coste real no es el cooldown: es **el tiempo que pasa sin participar**.
 
 Al ser pasivo, no ocupa una tecla. Se muestra como **icono de estado** cerca de la barra de vida:
 
-- **Cuenta atrás de 3 s** mientras se acumula la ocultación;
+- **Cuenta atrás de 2 s** mientras se acumula la ocultación;
 - `Regeneración` cuando está activa;
 - se oculta cuando no está oculto o está a vida máxima.
 
@@ -282,7 +282,7 @@ Riesgos:
 
 ## Ritmo de combate
 
-- Protección e Impulso se usan 2-3 veces por pelea de 20 s.
+- Protección se usa 2-3 veces por pelea de 20 s; Impulso está disponible cada 3 s, así que su valor es reposicionar, no encadenar dashes.
 - Regeneración no se «usa»: se activa al romper la visión y desaparecer.
 - Como cualquier pérdida de HP, ataque o habilidad corta la regeneración, el instinto es **puramente de desenganche**: no sirve para curarse mientras se lucha.
 - El instinto pasivo no debe obligar a estar escondido toda la partida. Si el jugador pasa más de un tercio del tiempo oculto, hay que revisar el mapa, la visión o el valor de la regeneración.
@@ -302,14 +302,14 @@ Riesgos:
 - **Escudo de Protección:** `spawnProtectionShield(player, color)`; el color sale de `asset.entry.accent` y la esfera dura lo mismo que `damageReductionTimer`.
 - **Animación de Protección:** `COMMON_ANIMATION_OVERRIDES` por `pokemonId` y helper `commonAnimationFor`; usar el helper en todos los puntos donde hoy se lee `def.animation`. Por defecto devuelve `null`.
 - **Impulso:** reutilizar el dash actual con colisión contra enemigos y separadores.
-- **Regeneración:** `hiddenTimer`, `regenerating` y `regenAccumulator`; comprobación de visibilidad con `isTargetVisible`; gracia de 0,2 s; tick de 1 PV/s en el bucle de `src/game/game.ts`.
+- **Regeneración:** `hiddenTimer`, `regenerating` y `regenAccumulator`; comprobación de visibilidad con `isTargetVisible`; gracia de 0,2 s; tick de 5 PV/s en el bucle de `src/game/game.ts`.
 - **Cortes de Regeneración:** un helper `breakRegen(player)` que ponga `hiddenTimer = 0`, `regenerating = false` y `regenAccumulator = 0`, llamado desde pérdida de HP, ataque, casteo de cualquier habilidad, muerte y respawn.
 - **Activos:** Protección e Impulso comparten el `castLockTimer` de una habilidad no melee y solo se pueden usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 
 ### Input y HUD
 
 - Quinto slot en `src/ui/MatchHud.tsx` para los activos, con tecla **I** y botón **RT** del mando, y anillo de cooldown.
-- Para Regeneración, icono pasivo sin tecla, visible solo para el jugador, con cuenta atrás de 3 s y estado activo.
+- Para Regeneración, icono pasivo sin tecla, visible solo para el jugador, con cuenta atrás de 2 s y estado activo.
 - Selector de instinto por Pokémon en `src/ui/RosterScreen.tsx`, cambiable en el roster y visible para ambos equipos en el lobby; etiqueta «Activo» o «Pasivo».
 - Los activos **sí** comparten el `castLockTimer` global de una habilidad no melee.
 
@@ -333,9 +333,9 @@ Implementado:
 
 - Slot `common` por Pokémon, selector en el roster, vista en el lobby y quinta casilla del HUD.
 - Tecla `I` y botón `RT`, con el mismo `castLockTimer` que una habilidad no melee.
-- **Protección:** reducción del 40 % durante 2 s, −20 % de velocidad, bloqueo de otras habilidades, tope del 65 %, escudo esférico con el `accent` del Pokémon y sin animación por defecto.
+- **Protección:** reducción del 60 % durante 2 s, −12 % de velocidad, bloqueo de otras habilidades, escudo esférico con el `accent` del Pokémon y sin animación por defecto.
 - **Impulso:** dash de 2,2 u sin daño, con colisión contra enemigos y separadores.
-- **Regeneración:** 3 s oculto, 1 PV/s con acumulador entero, gracia de 0,2 s y cortes por daño, visibilidad, ataque o habilidad.
+- **Regeneración:** 2 s oculto, 5 PV/s con acumulador entero, gracia de 0,2 s y cortes por daño, visibilidad, ataque o habilidad.
 - **HUD de Regeneración:** el icono pasivo se oculta si el jugador está KO, lo ve algún rival o está a vida máxima.
 - **Escudo tras KO:** el VFX se destruye con el jugador mediante el handle `shieldFx`; no queda la esfera sobre el cadáver.
 - Overrides de animación por Pokémon mediante `COMMON_ANIMATION_OVERRIDES`; el mapa está vacío por ahora.
@@ -349,6 +349,6 @@ Pendiente:
 
 ## Resumen
 
-El set queda en **Protección, Impulso y Regeneración**: dos botones activos y una recompensa pasiva por romper la línea de visión. Protección reduce un 40 % todo el daño recibido (salvo el autodaño), ralentiza un 20 % y bloquea otras habilidades durante 2 s; Impulso es un dash corto que se detiene en enemigos y separadores; Regeneración premia estar 3 s oculto con 1 PV/s. Los activos solo se usan si no estás casteando, ni en dash, ni en hitstun, y comparten el bloqueo global. Cualquier pérdida de HP, ataque o habilidad corta la regeneración, así que el jugador tiene que elegir entre participar o recuperarse. Protección no tiene animación por defecto: siempre muestra un escudo esférico con el `accent` del Pokémon, y la animación es opcional por Pokémon. La clave es que esconderse cueste algo: tiempo, mapa y presión.
+El set queda en **Protección, Impulso y Regeneración**: dos botones activos y una recompensa pasiva por romper la línea de visión. Protección reduce un 60 % todo el daño recibido (salvo el autodaño), ralentiza un 12 % y bloquea otras habilidades durante 2 s; Impulso es un dash corto que se detiene en enemigos y separadores; Regeneración premia estar 2 s oculto con 5 PV/s. Los activos solo se usan si no estás casteando, ni en dash, ni en hitstun, y comparten el bloqueo global. Cualquier pérdida de HP, ataque o habilidad corta la regeneración, así que el jugador tiene que elegir entre participar o recuperarse. Protección no tiene animación por defecto: siempre muestra un escudo esférico con el `accent` del Pokémon, y la animación es opcional por Pokémon. La clave es que esconderse cueste algo: tiempo, mapa y presión.
 
 

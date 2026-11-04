@@ -4,6 +4,8 @@ import {
   ABILITY_SLOTS,
   DEFAULT_COMMON_ABILITY,
   MOVESETS,
+  REGENERATION_DELAY_SECONDS,
+  REGENERATION_HP_PER_SECOND,
   commonAbilityOption,
   commonAnimationFor,
   isCommonAbilityId,
@@ -1590,9 +1592,10 @@ export class Game {
   }
 
   /**
-   * Regeneración: tras 3 s sin ser visto, cura 1 PV/s. Usa `enemiesSeeing`, que
-   * se acaba de recalcular en `updateVision`, y una gracia de 0,2 s para que un
-   * frame de visibilidad en el borde no reinicie el contador.
+   * Regeneración: tras `REGENERATION_DELAY_SECONDS` sin ser visto, cura
+   * `REGENERATION_HP_PER_SECOND` PV/s. Usa `enemiesSeeing`, que se acaba de
+   * recalcular en `updateVision`, y una gracia de 0,2 s para que un frame de
+   * visibilidad en el borde no reinicie el contador.
    */
   private updateRegeneration(dt: number): void {
     for (const player of this.matchPlayers) {
@@ -1613,13 +1616,16 @@ export class Game {
 
       player.regenGraceTimer = 0;
       player.hiddenTimer += dt;
-      if (player.hiddenTimer < 3 || player.hp >= player.maxHp) {
+      if (
+        player.hiddenTimer < REGENERATION_DELAY_SECONDS ||
+        player.hp >= player.maxHp
+      ) {
         player.regenerating = false;
         continue;
       }
 
       player.regenerating = true;
-      player.regenAccumulator += dt;
+      player.regenAccumulator += dt * REGENERATION_HP_PER_SECOND;
       const whole = Math.floor(player.regenAccumulator);
       if (whole <= 0) continue;
       player.regenAccumulator -= whole;
@@ -2919,7 +2925,7 @@ export class Game {
               cooldown: player.cooldowns[4] ?? 0,
               duration: commonDef?.cooldown ?? 0,
               readyIn: commonOption.passive
-                ? Math.max(0, 3 - player.hiddenTimer)
+                ? Math.max(0, REGENERATION_DELAY_SECONDS - player.hiddenTimer)
                 : 0,
               active: commonOption.passive ? player.regenerating : false,
               // El icono de Regeneración solo describe el estado real: si el

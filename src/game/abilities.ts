@@ -597,6 +597,12 @@ export type CommonAbilityId = 'proteccion' | 'impulso' | 'regeneracion';
 
 export const DEFAULT_COMMON_ABILITY: CommonAbilityId = 'proteccion';
 
+/** Segundos oculto que exige Regeneración antes de empezar a curar. */
+export const REGENERATION_DELAY_SECONDS = 2;
+
+/** PV por segundo que recupera Regeneración mientras siga oculto. */
+export const REGENERATION_HP_PER_SECOND = 5;
+
 export interface CommonAbilityOption {
   id: CommonAbilityId;
   name: string;
@@ -617,14 +623,14 @@ export const COMMON_ABILITY_OPTIONS: readonly CommonAbilityOption[] = [
     passive: false,
     cooldown: 8,
     description:
-      'Reduce un 40 % todo el daño recibido durante 2 s, ralentiza un 20 % y te impide usar otras habilidades mientras está activo. Genera un escudo esférico del color del Pokémon.'
+      'Reduce un 60 % todo el daño recibido durante 2 s, ralentiza un 12 % y te impide usar otras habilidades mientras está activo. Genera un escudo esférico del color del Pokémon.'
   },
   {
     id: 'impulso',
     name: 'Impulso',
     short: 'Impulso',
     passive: false,
-    cooldown: 7,
+    cooldown: 3,
     description:
       'Dash corto de 2,2 u hacia delante. Se detiene en enemigos y separadores.'
   },
@@ -635,7 +641,7 @@ export const COMMON_ABILITY_OPTIONS: readonly CommonAbilityOption[] = [
     passive: true,
     cooldown: 0,
     description:
-      'Tras 3 s oculto, recupera 1 PV/s mientras siga oculto. Se corta al perder HP, ser visto, atacar o usar una habilidad.'
+      'Tras 2 s oculto, recupera 5 PV/s mientras siga oculto. Se corta al perder HP, ser visto, atacar o usar una habilidad.'
   }
 ];
 
@@ -678,17 +684,17 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
       .cooldown(8)
       .radius(1)
       .cast(0.15)
-      .shield(2, 0.4, 0.8)
+      .shield(2, 0.6, 0.88)
       .preserveMomentum()
       .animation(null)
       .color(220, 240, 255)
       .description(
-        'Reduce un 40 % todo el daño recibido durante 2 s, ralentiza un 20 % y bloquea el uso de otras habilidades mientras está activo. El escudo esférico usa el color del Pokémon.'
+        'Reduce un 60 % todo el daño recibido durante 2 s, ralentiza un 12 % y bloquea el uso de otras habilidades mientras está activo. El escudo esférico usa el color del Pokémon.'
       )
   ),
   impulso: registerAbility(
     ability('impulso', 'Impulso', 'Normal', 'status', 'dash')
-      .cooldown(7)
+      .cooldown(3)
       .dash(2.2)
       .dashBlocksOnEnemies()
       .cast(0.2)

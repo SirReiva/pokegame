@@ -204,7 +204,7 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   hiddenTimer: number;
   /** Gracia antes de resetear el contador al perder visibilidad. */
   regenGraceTimer: number;
-  /** Acumulador para curar 1 PV entero por segundo. */
+  /** Acumulador de PV fraccionarios para Regeneración. */
   regenAccumulator: number;
   /** `true` cuando Regeneración está curando en este frame. */
   regenerating: boolean;
