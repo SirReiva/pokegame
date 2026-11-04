@@ -27,7 +27,7 @@ function VolumeSlider(props: {
     <label className="flex flex-col gap-2">
       <span className="flex items-baseline justify-between gap-3 text-13.6 text-steel-200">
         {props.label}
-        <span className="font-mono text-11_52 text-muted">{percent(props.value)}</span>
+        <span className="font-mono text-11.52 text-muted">{percent(props.value)}</span>
       </span>
       <input
         type="range"
@@ -104,7 +104,7 @@ export function OptionsScreen() {
                 onChange={(music) => setAudioSettings({ music })}
               />
             </div>
-            <p className="mt-4 text-12.8 leading-[1.5] text-muted">
+            <p className="mt-4 text-12.8/normal text-muted">
               El volumen general multiplica también los efectos y la música. Los ajustes se guardan
               en este dispositivo.
             </p>
