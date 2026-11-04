@@ -53,18 +53,21 @@ function formatCount(value: number): string {
 function KillFeed({
   entries,
   compact,
-  pokemonNames
+  pokemonNames,
+  ownSlot
 }: {
   entries: readonly KillFeedEntry[];
   compact: boolean;
   pokemonNames: ReadonlyMap<string, string>;
+  /** Plaza del jugador de esta vista: su nombre se pinta en blanco. */
+  ownSlot: number;
 }) {
   const visible = entries.slice(0, 4);
   if (visible.length === 0) return null;
 
   return (
     <ol
-      className={`pointer-events-none absolute right-2 top-1/4 z-10 flex max-w-[64%] flex-col items-end gap-1`}
+      className={`pointer-events-none absolute right-2 top-1/4 z-10 flex max-w-[72%] flex-col items-end gap-1.5`}
       aria-label="Últimos KOs"
     >
       {visible.map((entry) => {
@@ -74,34 +77,36 @@ function KillFeed({
           pokemonNames.get(entry.killerPokemonId) ?? entry.killerPokemonId;
         const victimPokemon =
           pokemonNames.get(entry.victimPokemonId) ?? entry.victimPokemonId;
+        const killerIsOwn = entry.killerSlot === ownSlot;
+        const victimIsOwn = entry.victimSlot === ownSlot;
         return (
           <li
             key={entry.id}
-            className={`flex max-w-full animate-fade-in items-center gap-1.5 rounded-md border border-line bg-night-850/80 px-1.5 py-0.5 leading-none shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
-              compact ? 'text-7.36' : 'text-8.32'
+            className={`flex max-w-full animate-fade-in items-center gap-2 rounded-lg border border-line bg-night-850/80 px-2.5 py-1.5 leading-none shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
+              compact ? 'text-9.6' : 'text-11.2'
             }`}
             title={`${entry.killerName} (${killerPokemon}) eliminó a ${entry.victimName} (${victimPokemon})`}
           >
             <span
-              className="size-1.5 shrink-0 rounded-full"
+              className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: killerColor }}
             />
             <span
               className="min-w-0 truncate font-mono font-semibold"
-              style={{ color: killerColor }}
+              style={{ color: killerIsOwn ? '#ffffff' : killerColor }}
             >
               {entry.killerName}
             </span>
-            <span className="shrink-0 font-mono text-6.4 font-bold tracking-[0.08em] text-steel-450 uppercase">
+            <span className="shrink-0 font-mono text-7.36 font-bold tracking-[0.08em] text-steel-450 uppercase">
               KO
             </span>
             <span
-              className="size-1.5 shrink-0 rounded-full"
+              className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: victimColor }}
             />
             <span
               className="min-w-0 truncate font-mono"
-              style={{ color: victimColor }}
+              style={{ color: victimIsOwn ? '#ffffff' : victimColor }}
             >
               {entry.victimName}
             </span>
@@ -486,6 +491,7 @@ export function MatchHud({ manifest, players, stats, onPause }: MatchHudProps) {
               entries={playerStats?.feed ?? []}
               compact={compact}
               pokemonNames={pokemonNames}
+              ownSlot={player.slot}
             />
 
             {playerStats && !playerStats.alive && (

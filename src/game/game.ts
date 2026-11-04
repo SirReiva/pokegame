@@ -2584,9 +2584,11 @@ export class Game {
       at: this.matchElapsed,
       killerName: killer.name,
       killerTeam: killer.team,
+      killerSlot: killer.slot,
       killerPokemonId: killer.pokemonId,
       victimName: victim.name,
       victimTeam: victim.team,
+      victimSlot: victim.slot,
       victimPokemonId: victim.pokemonId
     };
     this.killFeed = [entry, ...this.killFeed].slice(0, KILL_FEED_MAX_ENTRIES);

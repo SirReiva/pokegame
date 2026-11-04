@@ -337,9 +337,11 @@ export interface KillFeedEntry {
   at: number;
   killerName: string;
   killerTeam: Team;
+  killerSlot: number;
   killerPokemonId: string;
   victimName: string;
   victimTeam: Team;
+  victimSlot: number;
   victimPokemonId: string;
 }
 
