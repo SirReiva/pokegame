@@ -25,7 +25,7 @@ export const CONFIG = {
      * usan los golpes). Solo para pruebas: no afecta al combate. Ponlo a `true`
      * para activarlo.
      */
-    showHitboxes: true as boolean,
+    showHitboxes: false as boolean,
   },
   sprite: {
     pixelScale: PIXEL_SCALE,
