@@ -180,6 +180,35 @@ export function angleDelta(a: number, b: number): number {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
 }
 
+/**
+ * `true` si el hurtbox circular de un objetivo solapa el sector de un golpe
+ * melee. El sector nace en `originX/originZ`, apunta a `facing` y tiene `radius`
+ * de alcance y `halfAngle` de semiángulo (radianes). El objetivo cuenta como
+ * tocado si su cuerpo (radio `targetRadius`) roza el borde, no solo si su centro
+ * cae dentro: así el borde dibujado de la telegrafía coincide con el primer
+ * punto de contacto.
+ */
+export function sectorOverlapsCircle(
+  originX: number,
+  originZ: number,
+  facing: number,
+  halfAngle: number,
+  radius: number,
+  targetX: number,
+  targetZ: number,
+  targetRadius: number
+): boolean {
+  const dx = targetX - originX;
+  const dz = targetZ - originZ;
+  const distance = Math.hypot(dx, dz);
+  if (distance > radius + targetRadius) return false;
+  // El cuerpo cubre el vértice del cono: cualquier ángulo vale.
+  if (distance <= targetRadius) return true;
+  const delta = Math.abs(angleDelta(Math.atan2(dx, dz), facing));
+  const angularRadius = Math.asin(Math.min(1, targetRadius / distance));
+  return delta <= halfAngle + angularRadius;
+}
+
 /** Distancia de un punto a un segmento en el plano XZ. */
 export function pointSegmentDistance(
   px: number,

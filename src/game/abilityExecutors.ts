@@ -11,8 +11,8 @@ import type { AbilityDef, AbilityShape, SlowSpec } from './abilities';
 import type { AoeHitInput } from './aoeEffect';
 import { CONFIG, DEG } from './config';
 import {
-  angleDelta,
   raycastColliderDistance,
+  sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
 import type { CombatFx } from './combatFx';
@@ -117,9 +117,10 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
-  // El arco dibuja el radio máximo de golpe (`range` + el mayor hurtbox) y la
-  // comprobación usa ese mismo valor: todo el interior del cono es golpeable y
-  // el borde visible coincide con el límite real, sin franjas muertas.
+  // El arco dibuja el radio máximo de golpe (`range` + el mayor hurtbox) y el
+  // golpe cuenta el cuerpo del rival desde el borde hacia dentro: si su hurtbox
+  // roza el cono, recibe daño. Así no hay franjas donde el aviso cubra al rival
+  // pero el centro quede fuera del alcance.
   deps.combatFx.spawnMelee(
     player.x,
     player.z,
@@ -147,28 +148,26 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
     ) {
       continue;
     }
-    const dx = target.x - player.x;
-    const dz = target.z - player.z;
-    const distance = Math.hypot(dx, dz);
-    if (distance > def.range + maxHitRadius()) continue;
-    if (distance < 0.001) {
-      deps.addPendingMeleeHit({
-        attacker: player,
-        target,
-        def,
-        healToken: deps.healToken
-      });
+    if (
+      !sectorOverlapsCircle(
+        player.x,
+        player.z,
+        player.facing,
+        def.halfAngle * DEG,
+        def.range + maxHitRadius(),
+        target.x,
+        target.z,
+        target.hitRadius
+      )
+    ) {
       continue;
     }
-    const delta = Math.abs(angleDelta(Math.atan2(dx, dz), player.facing));
-    if (delta <= def.halfAngle * DEG) {
-      deps.addPendingMeleeHit({
-        attacker: player,
-        target,
-        def,
-        healToken: deps.healToken
-      });
-    }
+    deps.addPendingMeleeHit({
+      attacker: player,
+      target,
+      def,
+      healToken: deps.healToken
+    });
   }
 };
 
@@ -259,14 +258,15 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     // Comprobación en el marco del haz: el objetivo debe estar delante del
-    // lanzador y dentro del tramo. Así nadie recibe el golpe por detrás ni más
-    // allá de la punta por el margen de radio.
+    // lanzador y dentro del tramo. El carril dibuja el radio máximo y el cuerpo
+    // del rival cuenta desde el borde hacia dentro: si su hurtbox roza el
+    // carril o la punta, recibe el golpe.
     const toX = target.x - player.x;
     const toZ = target.z - player.z;
     const along = toX * dirX + toZ * dirZ;
     const lateral = Math.abs(toX * dirZ - toZ * dirX);
-    if (along < 0 || along > distance) continue;
-    if (lateral > def.radius + maxHitRadius()) continue;
+    if (along < 0 || along > distance + target.hitRadius) continue;
+    if (lateral > def.radius + maxHitRadius() + target.hitRadius) continue;
     if (
       segmentBlockedByColliders(
         player.x,

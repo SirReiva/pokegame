@@ -42,7 +42,6 @@ import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
   KO_TARGET,
-  angleDelta,
   closestPointOnCollider,
   closestPointOnSegment,
   computeDamage,
@@ -52,6 +51,7 @@ import {
   rollAccuracy,
   rollCritical,
   rollRandomFactor,
+  sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
 import { CombatFx } from './combatFx';
@@ -2185,7 +2185,7 @@ export class Game {
     for (const player of this.matchPlayers) {
       if (!player.alive) continue;
       const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
-      if (distance > hit.radius + maxHitRadius()) continue;
+      if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
       const radialMultiplier = this.radialDamageMultiplier(
         hit.def,
         distance,
@@ -2938,13 +2938,19 @@ export class Game {
   private meleeHitValid(hit: PendingMeleeHit): boolean {
     const { attacker, target, def } = hit;
     if (!attacker.alive || !this.canHit(attacker, target)) return false;
-    const dx = target.x - attacker.x;
-    const dz = target.z - attacker.z;
-    const distance = Math.hypot(dx, dz);
-    if (distance > def.range + maxHitRadius()) return false;
-    if (distance >= 0.001) {
-      const delta = Math.abs(angleDelta(Math.atan2(dx, dz), attacker.facing));
-      if (delta > def.halfAngle * DEG) return false;
+    if (
+      !sectorOverlapsCircle(
+        attacker.x,
+        attacker.z,
+        attacker.facing,
+        def.halfAngle * DEG,
+        def.range + maxHitRadius(),
+        target.x,
+        target.z,
+        target.hitRadius
+      )
+    ) {
+      return false;
     }
     return !segmentBlockedByColliders(
       attacker.x,

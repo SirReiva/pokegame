@@ -83,13 +83,12 @@
 > objeto durante 12 s y vuelve a patrullar.
 >
 > **Actualización 2026-11-04 (11)**: las telegrafías de melee, haz y área
-> dibujan ahora el radio máximo de golpe (`range`/`radius` + el mayor hurtbox del
-> roster) y la comprobación de impacto usa ese mismo valor. Antes el aviso se
-> dibujaba con el mayor hurtbox pero el golpe sumaba el hurtbox del objetivo:
-> contra cuerpos pequeños (Bulbasaur, Gengar) el cono cubría al rival pero su
-> centro quedaba fuera del alcance efectivo, no conectaba y tampoco aparecía la
-> marca 🚫. Al compartir el mismo radio, todo el interior del aviso es golpeable
-> y el borde coincide con el límite real.
+> dibujan el radio máximo (`range`/`radius` + el mayor hurtbox del roster) y el
+> golpe se comprueba contra el hurtbox del objetivo: basta con que su cuerpo roce
+> el borde del arco, del carril o del aro. Antes el golpe comparaba solo el centro
+> del rival, así que contra cuerpos pequeños (Bulbasaur, Gengar) el cono cubría al
+> rival y su hurtbox tocaba el borde, pero el centro quedaba fuera del alcance y
+> no conectaba (ni aparecía la marca 🚫).
 
 ## Resumen ejecutivo
 
@@ -205,13 +204,14 @@ Desde `3bae0e9` cada especie tiene un radio de impacto propio
 (`POKEMON_HIT_RADIUS`, `src/game/roster.ts:58-83`), de 0,34 u (Voltorb, Celebi)
 a 0,58 u (Onix, Lugia, Ho-Oh), con 0,42 u de referencia. Se usa para los
 proyectiles, el barrido de dash y las comprobaciones de rango de los bots. Las
-melee, los haces y las áreas usan el mayor hurtbox del roster
-(`MAX_HIT_RADIUS`) tanto para dibujar la telegrafía como para comprobar el
-golpe: el borde del arco, del carril o del aro es exactamente el límite de
-impacto y todo su interior es golpeable. La colisión de movimiento, la
-separación entre cuerpos y la navegación de los bots siguen usando
-`CONFIG.player.radius` para todos. Se puede desactivar con
-`CONFIG.player.perPokemonHitbox = false`.
+melee, los haces y las áreas dibujan su telegrafía con el radio máximo
+(`range`/`radius` + `MAX_HIT_RADIUS`) y comprueban el solape con el hurtbox del
+objetivo: si su cuerpo toca el borde del arco, del carril o del aro, recibe el
+golpe. El alcance efectivo es `range/radius + MAX_HIT_RADIUS + hurtbox del
+objetivo`, de modo que todo lo que el aviso muestra como alcanzable lo es de
+verdad. La colisión de movimiento, la separación entre cuerpos y la navegación
+de los bots siguen usando `CONFIG.player.radius` para todos. Se puede desactivar
+con `CONFIG.player.perPokemonHitbox = false`.
 
 ### Formas y reglas
 
@@ -1091,13 +1091,14 @@ así que se pueden añadir tests baratos:
   en la dirección del proyectil, y un área radial debe empujar desde su centro,
   no desde el lanzador. Un dash que golpea lateralmente y termina más allá del
   objetivo debe empujarlo en la dirección del dash, no hacia el origen.
-- **Hurtbox y telegrafías**: un melee de alcance 2,2 u golpea a cualquier especie
-  cuyo centro esté dentro de 2,2 + 0,58 = 2,78 u, y el borde del arco coincide
-  exactamente con ese límite: ningún centro dentro del cono queda sin golpe. Lo
-  mismo para el carril del haz y el aro del área. Los proyectiles y el barrido de
-  dash conservan el hurtbox por especie. Un bot debe iniciar el melee contra un
-  Groudon desde más lejos que contra un Voltorb. Comprobar también que desactivar
-  `CONFIG.player.perPokemonHitbox` devuelve todo el roster a 0,42 u.
+- **Hurtbox y telegrafías**: con un melee de alcance 2,2 u el arco se dibuja a
+  2,2 + 0,58 = 2,78 u y golpea a un Bulbasaur (0,42 u) mientras el borde del arco
+  toque su hurtbox, es decir, hasta 3,2 u de centro a centro; ningún cuerpo que
+  roce el aviso queda sin golpe. Lo mismo para el carril del haz y el aro del
+  área. Los proyectiles y el barrido de dash conservan el hurtbox por especie. Un
+  bot debe iniciar el melee contra un Groudon desde más lejos que contra un
+  Voltorb. Comprobar también que desactivar `CONFIG.player.perPokemonHitbox`
+  devuelve todo el roster a 0,42 u.
 - **Orden de golpes simultáneos**: dos proyectiles creados en el mismo frame
   deben resolverse en orden de creación; si ambos son letales, el KO debe ir al
   más antiguo y repetir la prueba invirtiendo el orden de creación no debe
