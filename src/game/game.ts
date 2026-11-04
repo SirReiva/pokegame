@@ -17,6 +17,16 @@ import {
   type AbilityExecutorDeps
 } from './abilityExecutors';
 import { Actor } from './actor';
+import {
+  configureAudio,
+  disposeAudio,
+  pauseMatchMusic,
+  playAbilityCast,
+  playAbilityImpact,
+  resumeMatchMusic,
+  startMatchMusic,
+  stopMatchMusic
+} from './audio';
 import { BotController, createBotSquad } from './bot';
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
@@ -316,6 +326,10 @@ export class Game {
     const worldLayerId =
       this.app.scene.layers.getLayerByName('World')?.id ?? pc.LAYERID_WORLD;
     this.worldLayerId = worldLayerId;
+
+    // El SoundManager de PlayCanvas se crea con la aplicación; los sonidos se
+    // precargan en segundo plano mientras se construye el mapa.
+    configureAudio(this.app);
     // Los FX preguntan en qué capas de vista deben dibujarse; el resolvedor usa
     // la misma visibilidad que la niebla de los actores.
     this.combatFx = new CombatFx(
@@ -491,6 +505,7 @@ export class Game {
 
     this.mode = 'match';
     this.paused = false;
+    startMatchMusic();
     this.statsTimer = 0;
     this.fps = 0;
     this.countdown = MATCH_COUNTDOWN_SECONDS;
@@ -705,6 +720,7 @@ export class Game {
   /** Vuelve al menú de selección y destruye la partida actual. */
   endMatch(): void {
     this.clearMatch();
+    stopMatchMusic();
     this.pickups?.reset();
     this.mode = 'menu';
     this.paused = false;
@@ -801,6 +817,10 @@ export class Game {
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+    if (this.mode === 'match' && !this.matchOver) {
+      if (paused) pauseMatchMusic();
+      else resumeMatchMusic();
+    }
     if (!paused) return;
     for (const player of this.matchPlayers) {
       player.vx = 0;
@@ -1865,6 +1885,10 @@ export class Game {
       }
     }
 
+    // El sonido va con el efecto real, no con el inicio del windup: en
+    // habilidades cargadas el golpe suena cuando sale, no cuando se prepara.
+    playAbilityCast(def);
+
     CAST_EFFECTS({
       player,
       def,
@@ -2052,10 +2076,14 @@ export class Game {
     // Tierra ni `Bomba Lodo` ralentiza a Lucario aunque el daño sea 0. El golpe
     // sí conecta, así que se muestra la marca 🚫 para explicar por qué no hizo
     // nada.
-    if (typeEffectiveness(def.type, target.types) === 0) {
+    const effectiveness = typeEffectiveness(def.type, target.types);
+    if (effectiveness === 0) {
       this.showImmunePopup(target);
       return false;
     }
+    // El impacto suena para cualquier golpe válido, también los de estado:
+    // Paralizador u Onda Trueno chocan igual aunque no resten vida.
+    playAbilityImpact(effectiveness);
 
     // La ralentización se aplica aunque la habilidad no haga daño (Paralizador).
     if (def.slow && target.alive) {
@@ -2284,6 +2312,9 @@ export class Game {
       if (this.teamScores[killer.team] >= KO_TARGET) {
         this.matchOver = true;
         this.winner = killer.team;
+        // La partida termina aquí: el tema de combate no debe seguir bajo el
+        // modal de resultados.
+        stopMatchMusic();
         const result: MatchEndResult = {
           winner: killer.team,
           blueScore: this.teamScores.blue,
@@ -2532,6 +2563,8 @@ export class Game {
           1,
           projectile.def.impactStyle
         );
+        // Un proyectil que choca contra un muro también debe oírse.
+        playAbilityImpact(1);
         this.removeProjectile(projectile);
         continue;
       }
@@ -3306,6 +3339,9 @@ export class Game {
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();
     this.world?.dispose();
+    // El manager pertenece a la aplicación: se sueltan las referencias antes
+    // de destruirla para que ningún sonido tardío toque un contexto cerrado.
+    disposeAudio(this.app);
     this.app.destroy();
   }
 }

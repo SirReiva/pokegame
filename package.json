@@ -14,6 +14,7 @@
     "desktop:build:linux": "wails3 build GOOS=linux",
     "desktop:package": "wails3 package",
     "sprites": "node scripts/import-sprites.mjs",
+    "sfx": "node scripts/import-sfx.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",
     "items:art": "node scripts/generate-item-art.mjs",
     "lint": "twlinter --fix --no-config --json && oxlint",

@@ -30,7 +30,16 @@ pnpm sprites            # usa la caché local
 pnpm sprites --force    # fuerza la descarga
 ```
 
-Requiere Node 18+ (el importador usa `fetch` y `zlib`).
+Los efectos de sonido de las habilidades y el tema de combate también están incluidos en `public/audio/` y se reproducen con el `SoundManager` de PlayCanvas (`app.soundManager`). Para volver a descargarlos desde khinsider:
+
+```bash
+pnpm sfx            # descarga solo los sonidos usados por el juego
+pnpm sfx --force    # fuerza la descarga
+```
+
+Los volúmenes general, de efectos y de música se ajustan en **Opciones → Audio**.
+
+Requiere Node 18+ (los importadores usan `fetch` y `zlib`).
 
 ## Versión de escritorio (Wails)
 
@@ -616,8 +625,11 @@ lift = max(0, bottom - anchor.y)
 
 ```
 scripts/import-sprites.mjs   descarga, validación, anclas y manifiesto
+scripts/import-sfx.mjs       descarga los MP3 de habilidades e impactos
 scripts/generate-map-previews.mjs  renderiza los PNG del slider de mapas
 public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS.md
+public/audio/sfx/            MP3 de habilidades e impactos + CREDITS.md
+public/audio/music/          tema de combate de la partida
 public/maps/
   index.json                 lista de mapas disponibles y ruta de su preview
   map.schema.json            esquema JSON para validar los mapas
@@ -640,6 +652,9 @@ src/game/
   typeChart.ts               tabla de tipos completa y STAB
   abilities.ts               builder, catálogo de habilidades y movesets por Pokémon
   abilityExecutors.ts        estrategias de ejecución por forma de habilidad
+  abilitySounds.ts           mapa habilidad → MP3 y sonidos de impacto
+  audio.ts                   SoundManager de PlayCanvas, volumen y precarga
+  audioSettings.ts           ajustes de volumen persistidos (sin PlayCanvas)
   bot.ts                     IA: percepción, objetivo, habilidades y snapshots virtuales
   botNav.ts                  rejilla de navegación y A* sobre el mapa activo
   matchState.ts              estado mutable de jugadores, proyectiles, áreas y dash
