@@ -10,7 +10,10 @@
  *    posición conocida y posiciones de los objetos del mapa. El estado de un
  *    objeto (disponible/usado) solo se conoce cuando el equipo lo ve.
  * 2. Navegación: A* sobre `BotNavGrid` y seguimiento de waypoints.
- * 3. Combate: elección de objetivo y de habilidad por rango, cooldown y estado.
+ * 3. Combate: elección de objetivo y de habilidad por rango, cooldown, estado y
+ *    ventaja de tipos. Los bots prefieren rivales a los que pueden golpear
+ *    fuerte, desconfían de los que son eficaces contra ellos y evitan pelear
+ *    contra rivales inmunes a todo su daño.
  * 4. Movimiento: mantiene la distancia, se acerca para apuntar y se separa de
  *    sus aliados.
  *
@@ -27,6 +30,7 @@ import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
 import { respawnsForTeam, terrainAt } from './terrain';
+import { typeEffectiveness } from './typeChart';
 import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
 import type { Collider } from './world';
 
@@ -39,6 +43,8 @@ interface BotTuning {
   aimTolerance: number;
   /** Multiplicador sobre el rango de visión de la especie. */
   visionFactor: number;
+  /** Peso de las ventajas y desventajas de tipo al elegir objetivo. */
+  matchupWeight: number;
   /** Vida por debajo de la cual huye. */
   retreatHp: number;
   /** Segundos que recuerda la última posición vista. */
@@ -67,6 +73,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     decision: 0.45,
     aimTolerance: 0.34,
     visionFactor: 0.82,
+    matchupWeight: 0.55,
     retreatHp: 0.22,
     memory: 2.2,
     lead: 0.1,
@@ -83,6 +90,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     decision: 0.26,
     aimTolerance: 0.2,
     visionFactor: 0.96,
+    matchupWeight: 1,
     retreatHp: 0.3,
     memory: 3.6,
     lead: 0.65,
@@ -99,6 +107,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     decision: 0.15,
     aimTolerance: 0.1,
     visionFactor: 1.04,
+    matchupWeight: 1.35,
     retreatHp: 0.36,
     memory: 5,
     lead: 0.95,
@@ -144,6 +153,14 @@ const ALLY_YIELD_RELEASE = 2.6;
 const BACK_OFF_SECONDS = 0.9;
 /** Distancia que se retrocede por el rastro para salir de un bloqueo. */
 const BACK_OFF_DISTANCE = 1.6;
+
+/**
+ * Penalización para un rival inmune a todo el daño del bot. No lo convierte en
+ * objetivo mientras haya cualquier otra pelea posible.
+ */
+const IMMUNE_TARGET_PENALTY = 60;
+/** Vida por debajo de la cual una pelea con desventaja de tipo justifica huir. */
+const MATCHUP_RETREAT_HP = 0.6;
 
 /** Radio en el que un rival cercano justifica huir con poca vida. */
 const RETREAT_DANGER_RADIUS = 9;
@@ -272,6 +289,15 @@ export class BotController {
   private clock = 0;
   private target: MatchPlayerState | null = null;
   private targetVisible = false;
+  /**
+   * Mejor multiplicador de tipo del bot contra el objetivo y del objetivo
+   * contra el bot. Se calcula al elegir objetivo y guía tanto el ataque como
+   * la cautela al moverse.
+   */
+  private targetMatchupOffense = 1;
+  private targetMatchupDefense = 1;
+  /** `false` si el objetivo visible es inmune a todo el daño del bot. */
+  private engageTarget = true;
   private visibleTimer = 0;
   private visibleEnemies: MatchPlayerState[] = [];
   private threat: IncomingThreat | null = null;
@@ -428,6 +454,9 @@ export class BotController {
   private resetCombatState(): void {
     this.target = null;
     this.targetVisible = false;
+    this.targetMatchupOffense = 1;
+    this.targetMatchupDefense = 1;
+    this.engageTarget = true;
     this.visibleTimer = 0;
     this.visibleEnemies = [];
     this.threat = null;
@@ -503,8 +532,16 @@ export class BotController {
     players: readonly MatchPlayerState[],
     colliders: readonly Collider[]
   ): void {
+    // `best` agrupa a los rivales a los que el bot puede dañar; `immuneBest`
+    // queda como último recurso para no quedarse sin objetivo si todos los
+    // rivales visibles son inmunes a su daño.
     let best: MatchPlayerState | null = null;
     let bestScore = Infinity;
+    let bestOffense = 1;
+    let bestDefense = 1;
+    let immuneBest: MatchPlayerState | null = null;
+    let immuneScore = Infinity;
+    let immuneDefense = 1;
     this.visibleEnemies = [];
     const focus = this.squad[self.team];
     if (focus.until <= this.clock) focus.slot = null;
@@ -538,6 +575,9 @@ export class BotController {
 
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
       const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
+      const offense = this.bestTypeMultiplier(self, enemy);
+      const defense = this.bestTypeMultiplier(enemy, self);
+      const typeWeight = this.tuning.matchupWeight;
       // Los remates valen más que perseguir al tanque lleno. El pequeño sesgo
       // por distancia evita que dos bots crucen el mapa por el mismo herido.
       let score = distance + hpFraction * 7 - (1 - hpFraction) * 4;
@@ -545,6 +585,24 @@ export class BotController {
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
       // visible, en vez de repartirse al azar por el mapa.
       if (focus.slot === enemy.slot) score -= 3.5;
+
+      // Preferencia ofensiva: buscar al rival al que nuestros ataques le hacen
+      // más daño y evitar a los que resisten. La inmunidad se trata aparte.
+      if (offense >= 2) {
+        score -= (4 + (offense - 2) * 3) * typeWeight;
+      } else if (offense < 1) {
+        score += (1 - offense) * 4 * typeWeight;
+      }
+      // Cautela defensiva: un rival que nos pega súper eficaz es peligroso
+      // aunque esté herido. Si somos inmunes a su daño, es una pelea cómoda.
+      if (defense >= 2) {
+        score += (3 + (defense - 2) * 2) * typeWeight;
+      } else if (defense === 0) {
+        score -= 2.5 * typeWeight;
+      }
+      // Inmune a todo nuestro daño: mucho cuidado, solo se acepta si no hay
+      // ningún otro rival visible.
+      if (offense === 0) score += IMMUNE_TARGET_PENALTY;
 
       const pending = enemy.pendingCast;
       if (pending) {
@@ -560,28 +618,45 @@ export class BotController {
         }
       }
 
+      if (offense === 0) {
+        if (score < immuneScore) {
+          immuneScore = score;
+          immuneBest = enemy;
+          immuneDefense = defense;
+        }
+        continue;
+      }
+
       if (score < bestScore) {
         bestScore = score;
         best = enemy;
+        bestOffense = offense;
+        bestDefense = defense;
       }
     }
 
-    if (best !== this.target) {
+    const chosen = best ?? immuneBest;
+    const chosenOffense = best ? bestOffense : 0;
+    const chosenDefense = best ? bestDefense : immuneDefense;
+    this.targetMatchupOffense = chosen ? chosenOffense : 1;
+    this.targetMatchupDefense = chosen ? chosenDefense : 1;
+
+    if (chosen !== this.target) {
       this.visibleTimer = 0;
       this.abilitySlot = null;
     }
-    this.target = best;
-    this.targetVisible = best !== null;
+    this.target = chosen;
+    this.targetVisible = chosen !== null;
 
-    if (best) {
-      if (focus.slot === best.slot) {
+    if (chosen) {
+      if (focus.slot === chosen.slot) {
         focus.until = this.clock + 2;
       } else {
-        focus.slot = best.slot;
+        focus.slot = chosen.slot;
         focus.until = this.clock + 2;
       }
       this.visibleTimer += dt;
-      this.lastSeen = { x: best.x, z: best.z, at: this.clock };
+      this.lastSeen = { x: chosen.x, z: chosen.z, at: this.clock };
     } else if (
       this.lastSeen &&
       this.clock - this.lastSeen.at > this.tuning.memory
@@ -726,6 +801,10 @@ export class BotController {
       if (def.shape === 'aoe' || def.shape === 'self') continue;
       if (def.shape === 'dash' && def.power <= 0) continue;
 
+      // Un golpe inmune no interrumpe: el motor anula el impacto entero.
+      const effectiveness = typeEffectiveness(def.type, source.types);
+      if (effectiveness === 0) continue;
+
       const reach =
         def.shape === 'melee'
           ? def.range + source.hitRadius
@@ -741,10 +820,14 @@ export class BotController {
       const delay = def.windup + travel;
       if (delay > remaining + 0.03) continue;
 
-      if (delay < bestDelay || (delay === bestDelay && def.power > bestPower)) {
+      const weightedPower = def.power * effectiveness;
+      if (
+        delay < bestDelay ||
+        (delay === bestDelay && weightedPower > bestPower)
+      ) {
         bestSlot = slot;
         bestDelay = delay;
-        bestPower = def.power;
+        bestPower = weightedPower;
       }
     }
 
@@ -758,6 +841,20 @@ export class BotController {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     this.abilitySlot = null;
     this.useCommon = false;
+
+    // Lectura de tipos del objetivo: atacar solo si podemos dañarlo, y huir
+    // antes si nos supera claramente en efectividad.
+    const targetOffense = target ? this.targetMatchupOffense : 1;
+    const targetDefense = target ? this.targetMatchupDefense : 1;
+    const hopelessFight =
+      targetIsVisible && targetOffense === 0 && targetDefense > 0;
+    const outmatchedFight =
+      targetIsVisible && targetDefense >= 2 && targetDefense > targetOffense;
+    const badFight =
+      hopelessFight || (outmatchedFight && hpFraction < MATCHUP_RETREAT_HP);
+    // Un rival inmune a todo el daño del bot no merece perseguirlo: se patrulla
+    // por otra zona mientras no haya una pelea mejor.
+    this.engageTarget = !targetIsVisible || targetOffense > 0;
 
     // La visión es compartida: un rival al otro lado del mapa visto por un
     // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
@@ -803,7 +900,7 @@ export class BotController {
     }
 
     if (this.retreat) {
-      if (!lowHp || nearestEnemy > RETREAT_DANGER_RADIUS) {
+      if (!(lowHp || badFight) || nearestEnemy > RETREAT_DANGER_RADIUS) {
         // El peligro ya pasó: vuelve a la acción sin esperar.
         this.stopRetreat(false);
       } else if (regenBot && regenSafe && hpFraction < REGEN_STOP_HP) {
@@ -848,7 +945,7 @@ export class BotController {
 
     if (
       !this.retreat &&
-      lowHp &&
+      (lowHp || badFight) &&
       nearestEnemy <= RETREAT_DANGER_RADIUS &&
       this.clock >= this.retreatCooldownUntil &&
       !(atBase && !canRecover)
@@ -868,10 +965,17 @@ export class BotController {
       return;
     }
 
-    // Sin rival a la vista, un bot dañado prefiere acercarse a un objeto
+    // Sin rival útil a la vista, un bot dañado prefiere acercarse a un objeto
     // conocido antes que perseguir una posición recordada o patrullar.
-    if (!targetIsVisible && pickup) {
+    if (pickup && (!targetIsVisible || targetOffense === 0)) {
       this.setGoal(pickup);
+      return;
+    }
+
+    if (targetIsVisible && targetOffense === 0) {
+      // Todos sus ataques son inmunes al objetivo: mejor buscar otra pelea.
+      this.lastSeen = null;
+      this.updatePatrol(self);
       return;
     }
 
@@ -913,6 +1017,31 @@ export class BotController {
       if (distance < nearest) nearest = distance;
     }
     return nearest;
+  }
+
+  /**
+   * Mejor multiplicador de tipo que `attacker` puede aplicar a `defender` con
+   * sus habilidades dañinas. Si no tiene ninguna registrada, usa sus propios
+   * tipos como aproximación. Devuelve 0 cuando todo su daño es inmune.
+   */
+  private bestTypeMultiplier(
+    attacker: MatchPlayerState,
+    defender: MatchPlayerState
+  ): number {
+    let best = -1;
+    for (let slot = 0; slot < 4; slot++) {
+      const id = attacker.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def || def.power <= 0) continue;
+      best = Math.max(best, typeEffectiveness(def.type, defender.types));
+    }
+    if (best < 0) {
+      for (const type of attacker.types) {
+        best = Math.max(best, typeEffectiveness(type, defender.types));
+      }
+      if (best < 0) best = 1;
+    }
+    return best;
   }
 
   /**
@@ -1262,7 +1391,8 @@ export class BotController {
       return snapshot;
     }
     const target = this.target;
-    const targetIsVisible = target !== null && this.targetVisible && target.alive;
+    const targetIsVisible =
+      target !== null && this.targetVisible && target.alive && this.engageTarget;
     const channeling = self.pendingCast !== null;
     let desired: Vec2 = { x: 0, z: 0 };
     let casting = false;
@@ -1567,7 +1697,17 @@ export class BotController {
       def.shape === 'dash';
     if (!hasEffect) return -Infinity;
 
+    // La efectividad multiplica el daño real, así que pesa directamente en la
+    // puntuación. Una habilidad inmune no hace daño ni aplica control: nunca es
+    // una buena elección contra ese objetivo.
     let score = def.power;
+    if (def.power > 0) {
+      const effectiveness = typeEffectiveness(def.type, target.types);
+      if (effectiveness === 0) return -Infinity;
+      score *= effectiveness;
+    } else if (def.slow !== null) {
+      if (typeEffectiveness(def.type, target.types) === 0) return -Infinity;
+    }
 
     if (def.healSelf > 0) {
       score += 70 + (1 - hpFraction) * 130;
@@ -1711,7 +1851,29 @@ export class BotController {
     facingError: number,
     dt: number
   ): Vec2 {
-    const preferred = this.preferredRange(self, def);
+    let preferred = this.preferredRange(self, def);
+
+    // Cautela de tipos: contra un rival que nos pega súper eficaz se mantiene
+    // algo más de distancia; contra uno al que somos inmunes, se acorta. El
+    // ajuste nunca saca la distancia preferida del alcance de la habilidad.
+    const caution = this.targetMatchupDefense;
+    if (caution !== 1) {
+      const reach =
+        def === null
+          ? Infinity
+          : def.shape === 'dash'
+            ? def.dashDistance + Math.max(0.5, def.radius)
+            : def.shape === 'aoe'
+              ? def.range + def.radius
+              : def.range;
+      const maxPreferred =
+        def === null
+          ? Infinity
+          : Math.max(1, reach - target.hitRadius - 0.35);
+      const adjust =
+        caution === 0 ? -0.7 : Math.min(1.8, (caution - 1) * 0.7);
+      preferred = clamp(preferred + adjust, 0.9, maxPreferred);
+    }
 
     // Si hay una habilidad elegida pero aún no está encarado, avanzar hacia el
     // objetivo es la forma de girar: el juego deriva `facing` de la velocidad.
