@@ -771,7 +771,8 @@ export class Game {
           viewer.slot === player.slot,
           TEAM_INFO[player.team].accent,
           // Solo el Pokémon que controla este viewport va sin contorno.
-          viewer.slot !== player.slot
+          viewer.slot !== player.slot,
+          player.hitRadius
         );
         const layer = this.viewLayers[viewIndex];
         if (layer) copy.setLayer(layer.id);
@@ -1086,6 +1087,7 @@ export class Game {
         copy.setPlayback(player.playback);
         copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
+        copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
       });
     });

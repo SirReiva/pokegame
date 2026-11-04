@@ -19,6 +19,14 @@ export const PIXEL_SCALE = 0.045;
 export const VERTICAL_STRETCH = 1 / Math.cos(PITCH_DEG * DEG);
 
 export const CONFIG = {
+  debug: {
+    /**
+     * Dibuja bajo cada Pokémon un círculo con su hurtbox real (el radio que
+     * usan los golpes). Solo para pruebas: no afecta al combate. Ponlo a `true`
+     * para activarlo.
+     */
+    showHitboxes: true as boolean,
+  },
   sprite: {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,
@@ -30,7 +38,7 @@ export const CONFIG = {
      *   con LINEAR. Antialiasa el contorno 1-2 px sin emborronar el interior.
      * - 'linear': bilineal directo sobre la hoja original; el más borroso.
      */
-    filter: 'smooth' as 'nearest' | 'smooth' | 'linear',
+    filter: "smooth" as "nearest" | "smooth" | "linear",
     /**
      * Factor de precarga del modo 'smooth'. Más alto = contorno más nítido
      * (menos radio de suavizado) y más memoria de textura.
@@ -164,7 +172,7 @@ export const CONFIG = {
     critMultiplier: 1.5,
     /** Rango del factor aleatorio oficial de daño. */
     randomMin: 0.85,
-    randomMax: 1
+    randomMax: 1,
   },
   vision: {
     /**

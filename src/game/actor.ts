@@ -1,6 +1,7 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
 import { HealthBar } from './healthBar';
+import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
 import { SpriteBillboard, type SpriteAsset } from './sprite';
 import type { AnimationName } from './types';
@@ -24,11 +25,17 @@ const MARKER_FLOAT_SINK = 0.12;
  */
 export class Actor {
   readonly billboard: SpriteBillboard;
+  private readonly app: pc.Application;
   private readonly shadow: pc.Entity;
   /** Barra de vida flotante sobre el sprite. */
   private readonly healthBar: HealthBar;
   /** Anillo de rumbo; solo lo lleva el jugador. */
   private readonly marker: PlayerMarker | null;
+  /** Círculo de depuración del hurtbox; solo con `CONFIG.debug.showHitboxes`. */
+  private hitboxDebug: HitboxDebug | null = null;
+  private hitboxDebugEnabled = false;
+  private layerId: number | null = null;
+  private readonly hitRadius: number;
   readonly asset: SpriteAsset;
   /** Rumbo de reposo; los NPC vuelven a él cuando el jugador se aleja. */
   readonly homeFacing: number;
@@ -51,9 +58,12 @@ export class Actor {
     withMarker = false,
     silhouette = false,
     accent: readonly [number, number, number] = [255, 224, 102],
-    withOutline = false
+    withOutline = false,
+    hitRadius = 0
   ) {
+    this.app = app;
     this.asset = asset;
+    this.hitRadius = hitRadius;
     this.position = { ...position };
     this.facing = facing;
     this.homeFacing = facing;
@@ -109,6 +119,8 @@ export class Actor {
       : null;
     this.marker?.setFacing(facing);
 
+    this.setHitboxDebug(CONFIG.debug.showHitboxes);
+
     this.setPosition(position.x, position.z);
   }
 
@@ -150,6 +162,7 @@ export class Actor {
       this.marker.setHeight(rest + (surface - rest) * float);
       this.marker.setPosition(this.position.x, this.position.z);
     }
+    this.hitboxDebug?.setPosition(this.position.x, this.position.z);
   }
 
   setFacing(yaw: number): void {
@@ -185,6 +198,26 @@ export class Actor {
     this.billboard.setVisible(visible);
     this.shadow.enabled = visible && this.sink <= 0.001;
     this.marker?.setVisible(visible);
+    this.hitboxDebug?.setVisible(visible);
+  }
+
+  /**
+   * Activa o desactiva el círculo de depuración del hurtbox. Se puede llamar
+   * cada frame: solo hace trabajo cuando el estado cambia.
+   */
+  setHitboxDebug(enabled: boolean): void {
+    if (enabled === this.hitboxDebugEnabled) return;
+    this.hitboxDebugEnabled = enabled;
+    if (!enabled) {
+      this.hitboxDebug?.destroy();
+      this.hitboxDebug = null;
+      return;
+    }
+    if (this.hitRadius <= 0) return;
+    this.hitboxDebug = new HitboxDebug(this.app, this.hitRadius);
+    this.hitboxDebug.setPosition(this.position.x, this.position.z);
+    this.hitboxDebug.setVisible(this.visible);
+    if (this.layerId !== null) this.hitboxDebug.setLayer(this.layerId);
   }
 
   /** Estado actual, para la histéresis de la niebla de guerra. */
@@ -194,10 +227,12 @@ export class Actor {
 
   /** Capa de render exclusiva del viewport que debe ver esta copia. */
   setLayer(layerId: number): void {
+    this.layerId = layerId;
     this.billboard.setLayer(layerId);
     const shadowRender = this.shadow.render;
     if (shadowRender) shadowRender.layers = [layerId];
     this.marker?.setLayer(layerId);
+    this.hitboxDebug?.setLayer(layerId);
     this.healthBar.setLayer(layerId);
   }
 
@@ -206,5 +241,6 @@ export class Actor {
     this.billboard.destroy();
     this.shadow.destroy();
     this.marker?.destroy();
+    this.hitboxDebug?.destroy();
   }
 }
