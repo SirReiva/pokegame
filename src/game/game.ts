@@ -89,6 +89,7 @@ import {
 } from './multiplayer';
 import { baseStatsFor, combatStatsFor } from './pokedex';
 import { hitRadiusForPokemon, maxHitRadius, speedForPokemon } from './roster';
+import { rumbleOnDamage } from './rumble';
 import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
 import {
   TERRAINS,
@@ -1943,7 +1944,18 @@ export class Game {
     player.damageTaken += amount;
     this.breakRegen(player);
     player.hurtTimer = Math.max(player.hurtTimer, 0.25);
+    this.vibrateOnDamage(player, amount);
     this.showDamagePopup(player, amount, false, 1);
+  }
+
+  /**
+   * Vibra el mando del jugador humano que acaba de recibir daño. Los bots
+   * llevan `deviceKind: 'gamepad'` para compartir el modelo del lobby, pero no
+   * tienen un mando físico detrás, así que se descartan.
+   */
+  private vibrateOnDamage(target: MatchPlayerState, damage: number): void {
+    if (target.isBot || target.deviceKind !== 'gamepad') return;
+    rumbleOnDamage(target.deviceId, damage, target.maxHp);
   }
 
   /** Genera el escudo esférico de Protección con el accent del Pokémon. */
@@ -2163,6 +2175,7 @@ export class Game {
     if (attacker.team !== target.team) attacker.damageDealt += appliedDamage;
     this.breakRegen(target);
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
+    this.vibrateOnDamage(target, appliedDamage);
     if (target.hp <= 0) this.knockOut(target, attacker);
 
     // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida
