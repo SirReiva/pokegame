@@ -20,6 +20,7 @@ import { MatchCountdown } from '../ui/MatchCountdown';
 import { MatchHud } from '../ui/MatchHud';
 import { PokemonPortrait } from '../ui/PokemonPortrait';
 import { eyebrow } from '../ui/styles';
+import { VirtualMouseLayer } from '../ui/VirtualMouse';
 import { SessionGate } from './SessionGate';
 
 const DEFAULT_PROGRESS: LoadingProgress = {
@@ -429,6 +430,10 @@ function PlayScreen({ manifest, mapId, configs, players }: PlayScreenProps) {
       {modal && (
         <InfoDialog kind={modal} manifest={manifest} onClose={() => setModal(null)} />
       )}
+
+      <VirtualMouseLayer
+        enabled={!playing || paused || modal !== null || matchResult !== null}
+      />
     </div>
   );
 }

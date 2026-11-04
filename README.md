@@ -125,6 +125,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Habilidad 2 | `RB` | `L` |
 | Habilidad 3 | `LB` | `U` |
 | Instinto común | `RT` | `I` |
+| Cursor virtual y clic (menús) | Stick derecho + `RT` | Ratón |
 | Pausa | `Start` / `B` | `Esc` |
 | Ocultar HUD | — | `H` |
 

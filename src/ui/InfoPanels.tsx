@@ -28,6 +28,9 @@ export function ControlsPanel() {
             <KeyPill>Stick derecho</KeyPill> girar tu cámara
           </li>
           <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>Stick derecho + RT</KeyPill> cursor virtual y clic en los menús
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
             <KeyPill>L2 / R2</KeyPill> alejar / acercar
           </li>
           <li className="flex flex-wrap items-center gap-2">

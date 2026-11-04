@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Redirect, Route, Router, Switch } from 'wouter';
+import { Redirect, Route, Router, Switch, useLocation } from 'wouter';
 import { useHashLocation } from './router/hashLocation';
 import { HomeScreen } from './screens/HomeScreen';
 import { LobbyRoute } from './screens/LobbyRoute';
@@ -7,6 +7,7 @@ import { OptionsScreen } from './screens/OptionsScreen';
 import { RosterRoute } from './screens/RosterRoute';
 import { SessionProvider } from './session/SessionProvider';
 import { LoadingScreen } from './ui/BootScreen';
+import { VirtualMouseLayer } from './ui/VirtualMouse';
 
 // PlayCanvas y el editor solo se descargan al entrar en su ruta.
 const PlayRoute = lazy(async () => {
@@ -56,6 +57,12 @@ function AppRoutes() {
   );
 }
 
+/** Puntero virtual en todas las rutas salvo la partida en curso. */
+function RouteVirtualMouse() {
+  const [location] = useLocation();
+  return <VirtualMouseLayer enabled={location !== '/play'} />;
+}
+
 // Rutas con hash (#/roster): funcionan en GitHub Pages sin fallback 404 y
 // mantienen las URLs relativas al index aunque el sitio viva en /<repo>/.
 function App() {
@@ -63,6 +70,7 @@ function App() {
     <Router hook={useHashLocation}>
       <SessionProvider>
         <AppRoutes />
+        <RouteVirtualMouse />
       </SessionProvider>
     </Router>
   );
