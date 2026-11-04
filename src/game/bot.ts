@@ -26,8 +26,8 @@ import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
-import { respawnsForTeam } from './terrain';
-import { isTargetVisible, lineOfSightBlocked } from './vision';
+import { respawnsForTeam, terrainAt } from './terrain';
+import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
 import type { Collider } from './world';
 
 interface BotTuning {
@@ -166,6 +166,20 @@ const REGEN_MAX_SECONDS = 7;
 const REGEN_COOLDOWN_SECONDS = 4;
 /** Distancia a la que un rival visible impide esperar oculto. */
 const REGEN_DANGER_RADIUS = 4.5;
+/** Radio máximo al que se mueve un bot mientras regenera oculto. */
+const REGEN_ROAM_RADIUS = 4.5;
+/** Velocidad relativa al desplazarse en modo regeneración. */
+const REGEN_MOVE_SCALE = 0.45;
+/** Cada cuánto elige un nuevo punto oculto cercano. */
+const REGEN_ROAM_INTERVAL = 1.6;
+/** Cada cuánto comprueba que el punto elegido sigue siendo seguro. */
+const REGEN_CHECK_INTERVAL = 0.3;
+/** Espera antes de volver a buscar un punto oculto si no había ninguno. */
+const REGEN_RETRY_SECONDS = 0.7;
+/** Paso de muestreo al comprobar que el trayecto sigue oculto. */
+const REGEN_SEGMENT_STEP = 0.4;
+/** Ocultación mínima del destino cuando no hay rivales conocidos cerca. */
+const REGEN_MIN_CONCEALMENT = 0.12;
 
 /**
  * Vida por debajo de la cual el bot busca una poción conocida. Los bots saben
@@ -271,6 +285,10 @@ export class BotController {
   private recovering = false;
   private regenUntil = 0;
   private regenCooldownUntil = 0;
+  /** Punto cercano al que se desplaza con cautela mientras regenera. */
+  private regenGoal: Vec2 | null = null;
+  private regenGoalTimer = 0;
+  private regenCheckTimer = 0;
   private goal: Vec2 = { x: 0, z: 0 };
 
   /** Posiciones de objetos conocidas de antemano; nunca su estado. */
@@ -380,6 +398,9 @@ export class BotController {
     this.recovering = false;
     this.regenUntil = 0;
     this.regenCooldownUntil = 0;
+    this.regenGoal = null;
+    this.regenGoalTimer = 0;
+    this.regenCheckTimer = 0;
     this.path = [];
     this.stuckTimer = 0;
     this.detourTimer = 0;
@@ -730,6 +751,9 @@ export class BotController {
       if (done) {
         this.recovering = false;
         this.regenCooldownUntil = this.clock + REGEN_COOLDOWN_SECONDS;
+        this.regenGoal = null;
+        this.regenGoalTimer = 0;
+        this.regenCheckTimer = 0;
         this.lastSeen = null;
         this.patrolTimer = 0;
       }
@@ -762,6 +786,9 @@ export class BotController {
     ) {
       this.recovering = true;
       this.regenUntil = this.clock + REGEN_MAX_SECONDS;
+      this.regenGoal = null;
+      this.regenGoalTimer = 0;
+      this.regenCheckTimer = 0;
       this.retreat = false;
       this.lastSeen = null;
       this.path = [];
@@ -769,8 +796,8 @@ export class BotController {
     }
 
     if (this.recovering) {
-      // Cualquier ataque o habilidad cortaría la regeneración: el bot se queda
-      // quieto y oculto hasta que termine o vuelva a ser descubierto.
+      // Cualquier ataque o habilidad cortaría la regeneración: el bot se mueve
+      // despacio por cobertura y no dispara hasta que termine o lo descubran.
       this.abilitySlot = null;
       this.useCommon = false;
       return;
@@ -843,6 +870,157 @@ export class BotController {
       if (distance < nearest) nearest = distance;
     }
     return nearest;
+  }
+
+  /**
+   * Movimiento durante la regeneración: elige puntos cercanos que sigan ocultos
+   * para los rivales conocidos y avanza hacia ellos a media velocidad. Si no
+   * encuentra ninguno seguro, se queda quieto en vez de cruzar una zona vista.
+   */
+  private regenMove(
+    self: MatchPlayerState,
+    colliders: readonly Collider[],
+    dt: number
+  ): Vec2 {
+    this.regenGoalTimer -= dt;
+    this.regenCheckTimer -= dt;
+
+    if (this.regenGoal) {
+      const distance = Math.hypot(
+        this.regenGoal.x - self.x,
+        this.regenGoal.z - self.z
+      );
+      let unsafe = false;
+      if (this.regenCheckTimer <= 0) {
+        this.regenCheckTimer = REGEN_CHECK_INTERVAL;
+        unsafe = !this.regenPointSafe(self, this.regenGoal, colliders);
+      }
+      if (distance > 0.45 && !unsafe && this.regenGoalTimer > 0) {
+        return directionTo(self, this.regenGoal);
+      }
+    } else if (this.regenGoalTimer > 0) {
+      // Espera antes de volver a buscar; evita recalcular cada frame cuando no
+      // hay ningún punto oculto cerca.
+      return { x: 0, z: 0 };
+    }
+
+    this.regenGoal = this.pickRegenPoint(self, colliders);
+    this.regenGoalTimer = this.regenGoal
+      ? REGEN_ROAM_INTERVAL
+      : REGEN_RETRY_SECONDS;
+    this.regenCheckTimer = REGEN_CHECK_INTERVAL;
+    return this.regenGoal
+      ? directionTo(self, this.regenGoal)
+      : { x: 0, z: 0 };
+  }
+
+  /** Punto cercano y transitable que mantiene al bot oculto. */
+  private pickRegenPoint(
+    self: MatchPlayerState,
+    colliders: readonly Collider[]
+  ): Vec2 | null {
+    const enemies = this.visibleEnemies.filter(
+      (enemy) => enemy.alive && enemy.team !== self.team
+    );
+    let best: Vec2 | null = null;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 1.2 + Math.random() * (REGEN_ROAM_RADIUS - 1.2);
+      const x = self.x + Math.cos(angle) * distance;
+      const z = self.z + Math.sin(angle) * distance;
+      const cell = this.nav.worldToCell(x, z);
+      if (!this.nav.isWalkable(cell.row, cell.col)) continue;
+
+      const point = this.nav.cellCenter(cell.row, cell.col);
+      const realDistance = Math.hypot(point.x - self.x, point.z - self.z);
+      if (realDistance < 0.7 || realDistance > REGEN_ROAM_RADIUS) continue;
+      if (!this.regenPointSafe(self, point, colliders)) continue;
+
+      const concealment = terrainConcealment(
+        terrainAt(point.x, point.z),
+        self.types
+      ).value;
+      let nearestEnemy = Infinity;
+      for (const enemy of enemies) {
+        nearestEnemy = Math.min(
+          nearestEnemy,
+          Math.hypot(enemy.x - point.x, enemy.z - point.z)
+        );
+      }
+
+      // Preferir cobertura, no alejarse demasiado y mantener distancia.
+      let score = concealment * 3 - realDistance * 0.12 + Math.random() * 0.35;
+      if (nearestEnemy < Infinity) score += Math.min(nearestEnemy, 10) * 0.08;
+      if (score > bestScore) {
+        bestScore = score;
+        best = point;
+      }
+    }
+
+    return best;
+  }
+
+  /** ¿El punto y el trayecto hasta él siguen ocultos para los rivales vistos? */
+  private regenPointSafe(
+    self: MatchPlayerState,
+    point: Vec2,
+    colliders: readonly Collider[]
+  ): boolean {
+    const cell = this.nav.worldToCell(point.x, point.z);
+    if (!this.nav.isWalkable(cell.row, cell.col)) return false;
+    if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) return false;
+
+    const enemies = this.visibleEnemies.filter(
+      (enemy) => enemy.alive && enemy.team !== self.team
+    );
+    const concealment = terrainConcealment(
+      terrainAt(point.x, point.z),
+      self.types
+    ).value;
+
+    // Sin rivales conocidos, exige algo de cobertura para no pasearse por una
+    // zona completamente abierta.
+    if (enemies.length === 0 && concealment < REGEN_MIN_CONCEALMENT) {
+      return false;
+    }
+
+    for (const enemy of enemies) {
+      if (
+        Math.hypot(enemy.x - point.x, enemy.z - point.z) <
+        REGEN_DANGER_RADIUS
+      ) {
+        return false;
+      }
+    }
+
+    return this.regenSegmentHidden(self, point, colliders, enemies);
+  }
+
+  /** Comprueba el trayecto muestreando puntos intermedios. */
+  private regenSegmentHidden(
+    self: MatchPlayerState,
+    point: Vec2,
+    colliders: readonly Collider[],
+    enemies: readonly MatchPlayerState[]
+  ): boolean {
+    if (enemies.length === 0) return true;
+
+    const distance = Math.hypot(point.x - self.x, point.z - self.z);
+    const steps = Math.max(1, Math.ceil(distance / REGEN_SEGMENT_STEP));
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps;
+      const x = self.x + (point.x - self.x) * t;
+      const z = self.z + (point.z - self.z) * t;
+      const concealment = terrainConcealment(terrainAt(x, z), self.types).value;
+      for (const enemy of enemies) {
+        if (isTargetVisible(enemy, { x, z }, concealment, colliders, false)) {
+          return false;
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -1022,7 +1200,9 @@ export class BotController {
   ): DeviceInputSnapshot {
     const snapshot: DeviceInputSnapshot = { ...IDLE_INPUT };
     if (this.recovering) {
-      // No atacar ni usar habilidades: cualquier golpe corta la regeneración.
+      // Movimiento cauteloso: sigue oculto, no ataca y va a media velocidad.
+      const regenDirection = this.regenMove(self, colliders, dt);
+      this.applyMovement(snapshot, self, regenDirection, REGEN_MOVE_SCALE);
       return snapshot;
     }
     const target = this.target;
@@ -1208,7 +1388,8 @@ export class BotController {
   private applyMovement(
     snapshot: DeviceInputSnapshot,
     self: MatchPlayerState,
-    direction: Vec2
+    direction: Vec2,
+    scale = 1
   ): void {
     const length = Math.hypot(direction.x, direction.z);
     if (length < 0.0001) return;
@@ -1221,8 +1402,8 @@ export class BotController {
     const forwardZ = -Math.cos(yaw);
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
-    snapshot.moveX = clamp(dx * rightX + dz * rightZ, -1, 1);
-    snapshot.moveY = clamp(dx * forwardX + dz * forwardZ, -1, 1);
+    snapshot.moveX = clamp((dx * rightX + dz * rightZ) * scale, -1, 1);
+    snapshot.moveY = clamp((dx * forwardX + dz * forwardZ) * scale, -1, 1);
   }
 
   private pulseAbility(snapshot: DeviceInputSnapshot, slot: number): boolean {
