@@ -31,33 +31,44 @@ habilidad, prueba esta lista.
 | Celebi | **Futuro Siniestro** | 54 esquirlas en un lote | Mismo chequeo, con el radio y el color de Celebi. |
 | Articuno | **Ventisca** | 26 cristales, 26 puffs y 24 copos en lotes | Que los cristales caigan, se claven y se asienten; que los puffs de nieve aparezcan al impactar y que los copos caigan con deriva. |
 | Onix | **Fisura** | Grietas, losas, estalagmitas y piedras en lotes | Que las losas emerjan con retardos, las estalagmitas broten del suelo, las piedras salten y todo se hunda al final. |
+| Voltorb | **Explosión** | Escombros y humo en lotes; arcos cacheados | Que la deflagración llene el radio, que los escombros salgan despedidos y que los cuatro arcos giren sin geometría nueva. |
+| Gengar | **Bomba Lodo** | Burbujas, brillos, aros de pop y gotas en lotes | Que las burbujas nazcan, suban, revienten y dejen sus gotas; el charco debe seguir burbujeando hasta el final. |
+| Mew | **Recuperación** | 56 motas en un lote | Que las motas suban desde todo el círculo y se apaguen con el área. |
+| Celebi | **Deseo** | 56 motas en un lote | Mismo chequeo, con el color verde de Celebi. |
+| Moltres | **Ataque Celeste** | 8 aspas, 12 plumas y 6 brasas en lotes | Que las aspas giren, las plumas suban con su deriva y las brasas se apaguen. |
+| Articuno | **Viento Gélido** | 26 púas, 10 nieblas y 12 chispas en lotes | Que las púas broten del suelo, la niebla se abra y las chispas suban y se apaguen. |
+| Tyranitar | **Terremoto** | 28 rocas, 28 puffs y 14 grietas en lotes | Que las rocas caigan, levanten polvo y las grietas oscilen. |
+| Groudon | **Filo del Abismo** | 28 rocas, 28 puffs y 14 grietas en lotes | Mismo chequeo, con el radio y el color de Groudon. |
 | Mewtwo | **Telequinesis** | Onda psíquica deformada en vertex shader | Que la cinta del cono ondulo en altura y se retuerza entre borde interior y exterior, sin que la malla se quede plana. |
 | Mew | **Golpe Psíquico** | Onda psíquica deformada en vertex shader | Mismo chequeo, con el color y alcance de Mew. |
 | Pikachu | **Rayo** | Rayos unitarios cacheados y escalados | Que el haz siga avanzando desde el lanzador, que los dos rayos giren en sentidos opuestos y que no se vea estirado ni cortado. |
 
 ## Pruebas de estrés
 
-1. **Lluevehojas + Ciclón + Ventisca + Fisura** a la vez, con 8 jugadores.
-   Es el peor caso de partículas/instancias transparentes.
-2. **Marea + Onda Ígnea + Giro Fuego** en la misma zona. Comprueba que no se
-   dispara el tiempo de CPU al acumular áreas.
-3. **Rayo + Telequinesis + Golpe Psíquico** repetidos. Aquí se comprueban el
+1. **Bomba Lodo + Terremoto + Viento Gélido + Explosión** a la vez, con 8
+   jugadores. Es el peor caso de instancias transparentes y burbujas.
+2. **Lluevehojas + Ciclón + Ventisca + Fisura** en la misma zona. Comprueba que
+   no se dispara el tiempo de CPU al acumular áreas.
+3. **Marea + Onda Ígnea + Giro Fuego** en la misma zona.
+4. **Rayo + Telequinesis + Golpe Psíquico** repetidos. Aquí se comprueban el
    shader de la onda y la caché de rayos.
-4. Repite con **4 vistas** y con **8 vistas**; el número de capas por efecto es
+5. Repite con **4 vistas** y con **8 vistas**; el número de capas por efecto es
    lo que más multiplica los draw calls.
 
 ## Efectos que siguen en el camino anterior
 
-Estos no se han migrado en esta pasada; si algo falla en ellos, no es por los
-lotes instanciados:
+Ahora todas las áreas (`ring`, `grass`, `water`, `cyclone`, `heat`, `fire`,
+`whirl`, `psychic`, `blizzard`, `fissure`, `explosion`, `ghost`, `poison`,
+`ice`, `ground`, `air` y `recovery`) usan lotes o shaders de instancia.
 
-- Áreas `explosion`, `ghost`, `poison`, `ice`, `ground`, `air`, `recovery` y
-  `ring`.
+Siguen con entidades por elemento:
+
 - Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air`, `rock` y
   `psychic` (salvo el haz eléctrico cacheado).
 - Proyectiles e impactos pequeños.
 - Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
   demás golpes con pocas entidades.
+- La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.
 
 ## Señales de que algo va mal
 

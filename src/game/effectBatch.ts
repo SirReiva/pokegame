@@ -17,6 +17,7 @@ import * as pc from 'playcanvas';
 
 const ATTR_ANIM0 = pc.SEMANTIC_ATTR13;
 const ATTR_ANIM1 = pc.SEMANTIC_ATTR10;
+const ATTR_ANIM2 = pc.SEMANTIC_ATTR9;
 
 /** Datos de una instancia. Las componentes no indicadas usan su valor neutro. */
 export interface EffectBatchInstance {
@@ -32,6 +33,7 @@ export interface EffectBatchInstance {
   rz?: number;
   anim0?: readonly [number, number, number, number];
   anim1?: readonly [number, number, number, number];
+  anim2?: readonly [number, number, number, number];
 }
 
 export interface EffectBatchOptions {
@@ -48,7 +50,7 @@ export interface EffectBatchOptions {
   params?: readonly [number, number, number, number];
 }
 
-const INSTANCE_FLOATS = 16 + 4 + 4;
+const INSTANCE_FLOATS = 16 + 4 + 4 + 4;
 
 const instanceFormats = new WeakMap<pc.GraphicsDevice, pc.VertexFormat>();
 
@@ -63,7 +65,8 @@ function getInstanceFormat(device: pc.GraphicsDevice): pc.VertexFormat {
     { semantic: pc.SEMANTIC_ATTR15, components: 4, type: pc.TYPE_FLOAT32 },
     // Datos procedurales de la animación.
     { semantic: ATTR_ANIM0, components: 4, type: pc.TYPE_FLOAT32 },
-    { semantic: ATTR_ANIM1, components: 4, type: pc.TYPE_FLOAT32 }
+    { semantic: ATTR_ANIM1, components: 4, type: pc.TYPE_FLOAT32 },
+    { semantic: ATTR_ANIM2, components: 4, type: pc.TYPE_FLOAT32 }
   ]);
   instanceFormats.set(device, format);
   return format;
@@ -157,6 +160,7 @@ attribute vec4 instance_line3;
 attribute vec4 instance_line4;
 attribute vec4 instance_anim0;
 attribute vec4 instance_anim1;
+attribute vec4 instance_anim2;
 
 ${motion}
 
@@ -202,6 +206,7 @@ export function applyInstancedEffectShader(
 ): void {
   material.userAttributes.set(ATTR_ANIM0, 'instance_anim0');
   material.userAttributes.set(ATTR_ANIM1, 'instance_anim1');
+  material.userAttributes.set(ATTR_ANIM2, 'instance_anim2');
   material
     .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
     .set('transformCoreVS', instancedChunk(motion));
@@ -263,6 +268,7 @@ export class EffectBatch {
 
       const anim0 = instance.anim0 ?? [0, 0, 0, 0];
       const anim1 = instance.anim1 ?? [0, 0, 0, 0];
+      const anim2 = instance.anim2 ?? [0, 0, 0, 0];
       data[offset + 16] = anim0[0];
       data[offset + 17] = anim0[1];
       data[offset + 18] = anim0[2];
@@ -271,6 +277,10 @@ export class EffectBatch {
       data[offset + 21] = anim1[1];
       data[offset + 22] = anim1[2];
       data[offset + 23] = anim1[3];
+      data[offset + 24] = anim2[0];
+      data[offset + 25] = anim2[1];
+      data[offset + 26] = anim2[2];
+      data[offset + 27] = anim2[3];
     }
 
     this.buffer = new pc.VertexBuffer(device, getInstanceFormat(device), count, {
@@ -715,6 +725,457 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
     vec3(s),
     effectEuler(pitch, yaw, roll)
   );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Burbujas y brillos del charco de `Bomba Lodo`. */
+export const MOTION_POISON_BUBBLES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = uEffectTime - a0.w;
+  if (local < 0.0 || local >= a1.x) {
+    return base * effectScale(vec3(0.0001));
+  }
+  float riseT = local / max(0.0001, a1.x);
+  float emerge = min(1.0, local / 0.22);
+  float grow = 0.42 + 0.58 * (1.0 - pow(1.0 - emerge, 2.0));
+  float breathe = 1.0 + sin(uEffectTime * 11.0 + a1.w) * 0.07;
+  float scale = a0.z * grow * breathe;
+  float height = a1.y * pow(riseT, 0.85);
+  float driftX = sin(uEffectTime * 3.4 + a1.w) * a1.z * riseT;
+  float driftZ = cos(uEffectTime * 2.9 + a1.w) * a1.z * riseT;
+  vec3 pos = vec3(a0.x + driftX, 0.05 + height, a0.y + driftZ);
+  mat4 rot = effectEuler(
+    (uEffectTime * 95.0 + a1.w * 40.0) * EFFECT_DEG,
+    (uEffectTime * 130.0 + a1.w * 30.0) * EFFECT_DEG,
+    0.0
+  );
+  return effectTRS(pos, vec3(max(0.0001, scale)), rot) * base;
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Aros que se abren cuando revientan las burbujas de `Bomba Lodo`. */
+export const MOTION_POISON_POP_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = uEffectTime - a0.w;
+  if (local < a1.x || local >= a1.x + 0.3) {
+    return effectTRS(vec3(0.0), vec3(0.0001), effectRotY(0.0));
+  }
+  float popT = (local - a1.x) / 0.3;
+  float popTime = a0.w + a1.x;
+  float popX = a0.x + sin(popTime * 3.4 + a1.w) * a1.z;
+  float popZ = a0.y + cos(popTime * 2.9 + a1.w) * a1.z;
+  float popY = 0.05 + a1.y;
+  float scale = a0.z * (1.4 + popT * 2.6);
+  return effectTRS(
+    vec3(popX, popY, popZ),
+    vec3(max(0.001, scale), 1.0, max(0.001, scale)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Gotas que salen despedidas al reventar una burbuja de `Bomba Lodo`. */
+export const MOTION_POISON_DROPS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = uEffectTime - a0.w;
+  if (local < a1.x || local >= a1.x + 0.3) {
+    return effectTRS(vec3(0.0), vec3(0.0001), effectRotY(0.0));
+  }
+  float popT = (local - a1.x) / 0.3;
+  float popTime = a0.w + a1.x;
+  float popX = a0.x + sin(popTime * 3.4 + a1.w) * a1.z;
+  float popZ = a0.y + cos(popTime * 2.9 + a1.w) * a1.z;
+  float popY = 0.05 + a1.y;
+  float dropAngle = a1.w + (instance_anim2.x / 3.0) * 6.28318530718;
+  float spread = a0.z * (0.8 + popT * 2.4);
+  float dropScale = a0.z * 0.24 * (1.0 - popT);
+  vec3 pos = vec3(
+    popX + cos(dropAngle) * spread,
+    popY + sin(popT * EFFECT_PI) * a0.z * 1.2,
+    popZ + sin(dropAngle) * spread
+  );
+  return effectTRS(
+    pos,
+    vec3(max(0.001, dropScale)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Grietas del suelo de `Terremoto` y `Filo del Abismo`. */
+export const MOTION_GROUND_CRACKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float yaw = (a1.y + sin(uEffectTime * 2.0 + a1.z) * 1.4) * EFFECT_DEG;
+  return effectTRS(
+    vec3(a0.x, a0.y, a0.z),
+    vec3(a0.w, 0.02, a1.x),
+    effectRotY(yaw)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Rocas que caen en `Terremoto` y `Filo del Abismo`. */
+export const MOTION_GROUND_ROCKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = (uEffectTime - a0.w) / max(0.0001, a1.y);
+  if (local <= 0.0) {
+    return effectTRS(vec3(0.0), vec3(0.0001), effectRotY(0.0));
+  }
+  local = min(1.0, local);
+  float endFade = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.3));
+  float drop = local * local;
+  float scale = max(0.001, a0.z * (0.85 + local * 0.15) * endFade);
+  vec3 pos = vec3(
+    sin(a0.x) * a0.y,
+    a1.x * (1.0 - drop) + a0.z * 0.45,
+    cos(a0.x) * a0.y
+  );
+  float yaw = (a0.x / EFFECT_DEG + local * a1.z) * EFFECT_DEG;
+  return effectTRS(
+    pos,
+    vec3(scale, max(0.001, scale * 0.78), max(0.001, scale * 0.92)),
+    effectEuler(local * 320.0 * EFFECT_DEG, yaw, local * 210.0 * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Polvo que levantan las rocas al impactar en `Terremoto` y `Filo del Abismo`. */
+export const MOTION_GROUND_PUFFS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float puffLocal = clamp(
+    (uEffectTime - (a0.w + a1.x)) / 0.35,
+    0.0,
+    1.0
+  );
+  if (puffLocal <= 0.0) {
+    return effectTRS(vec3(0.0), vec3(0.0001), effectRotY(0.0));
+  }
+  float puffFade = max(0.0, 1.0 - puffLocal);
+  float envelope = effectEnvelope(0.16, 0.3);
+  float scale = max(
+    0.001,
+    a0.z * (0.5 + puffLocal * 1.2) * puffFade * envelope
+  );
+  vec3 pos = vec3(
+    sin(a0.x) * a0.y,
+    0.07 + puffLocal * 0.08,
+    cos(a0.x) * a0.y
+  );
+  return effectTRS(
+    pos,
+    vec3(scale, max(0.001, scale * 0.55), scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Motas de curación de `Recuperación` y `Deseo`. */
+export const MOTION_RECOVERY_MOTES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float span = max(0.05, uEffectLife - a0.z);
+  float local = clamp((uEffectTime - a0.z) / span, 0.0, 1.0);
+  float angle = a0.x + local * 0.45;
+  vec3 pos = vec3(
+    cos(angle) * a0.y,
+    0.12 + a0.w * local,
+    sin(angle) * a0.y
+  );
+  float fade = min(1.0, local / 0.15) * max(0.0, 1.0 - local);
+  float scale = max(
+    0.0001,
+    a1.x * (0.7 + sin(local * EFFECT_PI) * 0.6) * fade
+  );
+  return effectTRS(pos, vec3(scale), effectRotY(0.0));
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Púas de hielo de `Viento Gélido`. */
+export const MOTION_ICE_SPIKES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.w) / 0.22, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 3.0);
+  float height = a1.x * ease;
+  vec3 pos = vec3(a0.x, height * 0.5, a0.y);
+  return effectTRS(
+    pos,
+    vec3(max(0.001, a0.z), max(0.001, height), max(0.001, a0.z)),
+    effectEuler(
+      a1.y * EFFECT_DEG,
+      a1.z * EFFECT_DEG,
+      a1.w * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Niebla baja de `Viento Gélido`. */
+export const MOTION_ICE_MIST = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = min(1.0, uEffectTime / max(0.2, uEffectLife * 0.8));
+  float angle = a0.x + uEffectTime * 1.3;
+  float distance = a0.y * (0.5 + local * 0.7);
+  float scale = max(0.0001, a0.w * (0.7 + local * 0.8) * max(0.0, 1.0 - local));
+  vec3 pos = vec3(cos(angle) * distance, 0.15 + local * a0.z, sin(angle) * distance);
+  return effectTRS(
+    pos,
+    vec3(scale, max(0.0001, scale * 0.7), scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Chispas de `Viento Gélido`. */
+export const MOTION_ICE_SPARKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = min(1.0, uEffectTime / max(0.2, uEffectLife * 0.8));
+  float angle = a0.x + uEffectTime * 1.8;
+  vec3 pos = vec3(
+    cos(angle) * a0.y,
+    0.15 + local * a0.z,
+    sin(angle) * a0.y
+  );
+  float scale = max(0.0001, a0.w * max(0.0, 1.0 - local));
+  return effectTRS(pos, vec3(scale), effectRotY(0.0));
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Escombros de `Explosión`. */
+export const MOTION_EXPLOSION_DEBRIS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(0.0001, uEffectLife), 0.0, 1.0);
+  float local = clamp((t - 0.04) / 0.7, 0.0, 1.0);
+  float distance = a0.y * local;
+  vec3 pos = vec3(
+    cos(a0.x) * distance,
+    0.25 + sin(local * EFFECT_PI) * a0.z,
+    sin(a0.x) * distance
+  );
+  float fade = max(0.0, 1.0 - local);
+  return effectTRS(
+    pos,
+    vec3(
+      max(0.001, a0.w * 2.0 * fade),
+      max(0.001, a0.w * 1.2 * fade),
+      max(0.001, a0.w * 2.6 * fade)
+    ),
+    effectEuler(
+      (a1.x + t * 260.0) * EFFECT_DEG,
+      (a1.x + t * 190.0) * EFFECT_DEG,
+      (a1.y + t * 140.0) * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Humo de `Explosión`. */
+export const MOTION_EXPLOSION_SMOKE = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(0.0001, uEffectLife), 0.0, 1.0);
+  float local = min(1.0, t / 0.9);
+  float distance = a0.y * (0.35 + local * 1.2);
+  vec3 pos = vec3(
+    cos(a0.x) * distance,
+    0.35 + local * a0.z,
+    sin(a0.x) * distance
+  );
+  float grow = 0.85 + local * 1.1;
+  float fade = max(0.0, 1.0 - local);
+  return effectTRS(
+    pos,
+    vec3(
+      max(0.001, a0.w * grow * fade),
+      max(0.001, a0.w * 0.7 * grow * fade),
+      max(0.001, a0.w * grow * fade)
+    ),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Aspas de viento de `Ataque Celeste`. */
+export const MOTION_AIR_BLADES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float grow = 1.0 - pow(1.0 - min(1.0, uEffectTime / 0.35), 2.0);
+  float angle = a0.x + uEffectTime * a0.y;
+  float distance = a0.z * (0.7 + grow * 0.6);
+  vec3 pos = vec3(
+    cos(angle) * distance,
+    0.18 + sin(uEffectTime * 2.2 + a0.x) * 0.06,
+    sin(angle) * distance
+  );
+  float scale = a0.w * (0.7 + grow * 0.5);
+  return effectTRS(
+    pos,
+    vec3(max(0.0001, scale)),
+    effectEuler(
+      90.0 * EFFECT_DEG,
+      (angle / EFFECT_DEG + 90.0) * EFFECT_DEG,
+      sin(uEffectTime * 3.0 + a0.x) * 18.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Plumas de `Ataque Celeste`. */
+export const MOTION_AIR_FEATHERS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.w) / 1.15, 0.0, 1.0);
+  float distance = a0.y * (0.4 + local * 0.8);
+  float angle = a0.x + uEffectTime * 1.4 + a1.y * 0.2;
+  float envelope = effectEnvelope(0.16, 0.3);
+  float fade = max(0.0, 1.0 - local) * envelope;
+  vec3 pos = vec3(
+    cos(angle) * distance,
+    0.12 + local * a0.z,
+    sin(angle) * distance
+  );
+  return effectTRS(
+    pos,
+    vec3(
+      max(0.0001, a1.x * fade),
+      max(0.0001, a1.x * 2.4 * fade),
+      max(0.0001, a1.x * fade)
+    ),
+    effectEuler(
+      sin(uEffectTime * 4.0 + a1.y) * 35.0 * EFFECT_DEG,
+      (angle / EFFECT_DEG + uEffectTime * 120.0) * EFFECT_DEG,
+      cos(uEffectTime * 3.5 + a1.y) * 40.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Brasas de `Ataque Celeste`. */
+export const MOTION_AIR_EMBERS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float progress = min(1.0, uEffectTime / max(0.0001, uEffectLife));
+  float angle = a0.x + uEffectTime * 2.4;
+  vec3 pos = vec3(
+    cos(angle) * a0.y,
+    0.14 + progress * uEffectRadius * 0.55,
+    sin(angle) * a0.y
+  );
+  float scale = max(0.0001, uEffectRadius * 0.05 * (1.0 - progress * 0.7));
+  return effectTRS(pos, vec3(scale), effectRotY(0.0));
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Jirones del área fantasma. */
+export const MOTION_GHOST_WISPS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.z) / 1.2, 0.0, 1.0);
+  vec3 pos = vec3(
+    cos(a0.x) * a0.y,
+    0.1 + local * a0.w,
+    sin(a0.x) * a0.y
+  );
+  float fade = max(0.0, 1.0 - local);
+  return effectTRS(
+    pos,
+    vec3(
+      max(0.0001, a1.x * fade),
+      max(0.0001, a1.x * fade),
+      max(0.0001, a1.x * 3.4 * fade)
+    ),
+    effectEuler(
+      local * 60.0 * EFFECT_DEG,
+      a0.x / EFFECT_DEG,
+      local * 35.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Ojos que parpadean en el área fantasma. */
+export const MOTION_GHOST_EYES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float blink = sin(uEffectTime * 3.2 + a0.x) > 0.2 ? 0.09 : 0.02;
+  return effectTRS(
+    base[3].xyz,
+    vec3(blink, blink, blink * 0.6),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Anillo de área genérico (`ring`). */
+export const MOTION_RING = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float grow = 1.0 - pow(1.0 - min(1.0, uEffectTime / 0.3), 2.0);
+  float scale = max(0.2, uEffectRadius * 2.0) * (0.4 + 0.6 * grow);
+  return effectTRS(base[3].xyz, vec3(scale, 1.0, scale), effectRotY(0.0));
 }
 
 vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
