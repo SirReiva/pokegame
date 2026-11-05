@@ -361,7 +361,9 @@ export class Game {
       graphicsDeviceOptions: {
         antialias: true,
         alpha: false,
-        preserveDrawingBuffer: false
+        preserveDrawingBuffer: false,
+        // En portátiles híbridos fuerza la GPU dedicada en vez de la integrada.
+        powerPreference: "high-performance"
       }
     });
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
