@@ -27,9 +27,9 @@ import type { Collider } from './world';
  * y no en el manifiesto, porque `pnpm sprites` lo regenera.
  */
 export const POKEMON_VISION: Record<string, number> = {
-  '0001': 8.0, // Bulbasaur: bajo, pesado, poca altura de ojos
+  '0001': 8.8, // Bulbasaur: bajo, pesado, poca altura de ojos
   '0004': 9.5, // Charmander: la llama de la cola ilumina algo el entorno
-  '0007': 8.5, // Squirtle: vista corta pero constante
+  '0007': 9.2, // Squirtle: vista corta pero constante
   '0025': 11.0, // Pikachu: el más alerta, sentidos eléctricos
   '0094': 10.8, // Gengar: ve en la oscuridad y siente el miedo cercano
   '0100': 9.5, // Voltorb: rueda sin ojos, pero detecta la electricidad cercana

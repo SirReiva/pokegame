@@ -984,9 +984,10 @@ registerAbility(
     .cast(0.45)
     .area('whirl', 'overTime', 2.4, 0.4)
     .impact('fire')
+    .slow(0.8, 1.5)
     .color(255, 132, 40)
     .description(
-      'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s a quien siga dentro.'
+      'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
     )
 );
 
@@ -994,7 +995,7 @@ registerAbility(
   ability('lanzallamas', 'Lanzallamas', 'Fire', 'special', 'beam')
     .power(90)
     .accuracy(100)
-    .cooldown(7)
+    .cooldown(6.5)
     .range(9.5)
     .radius(0.4)
     .windup(0.35)
@@ -1029,7 +1030,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'physical', 'melee')
+  ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', 'melee')
     .power(60)
     .accuracy(100)
     .cooldown(5)
@@ -1049,7 +1050,7 @@ registerAbility(
   ability('paralizador', 'Paralizador', 'Grass', 'status', 'melee')
     .power(0)
     .accuracy(100)
-    .cooldown(10)
+    .cooldown(7)
     .range(3)
     .radius(0.9)
     .halfAngle(60)
@@ -1107,7 +1108,7 @@ registerAbility(
   ability('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', 'projectile')
     .power(65)
     .accuracy(100)
-    .cooldown(3.5)
+    .cooldown(3)
     .range(8)
     .radius(0.24)
     .projectile('water', 13)
