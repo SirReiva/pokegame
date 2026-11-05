@@ -132,7 +132,7 @@ import { typeEffectiveness } from './typeChart';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
-  isTargetVisible,
+  lineOfSightBlocked,
   terrainConcealment,
   visionForPokemon
 } from './vision';
@@ -3839,6 +3839,46 @@ export class Game {
     return layers;
   }
 
+  /**
+   * ¿La máscara de niebla del equipo deja ver el punto? Devuelve `null` si
+   * todavía no se ha compuesto; en ese caso se usa la geometría como respaldo.
+   */
+  private maskSeesPoint(team: Team, x: number, z: number): boolean | null {
+    const mask = this.fogMasks.get(team);
+    return mask ? mask.isVisibleAt(x, z) : null;
+  }
+
+  /**
+   * Visibilidad de un actor para un observador concreto.
+   *
+   * La niebla es la autoridad de la línea de visión: si la zona está iluminada
+   * para el equipo, el actor se dibuja; si está a oscuras, no. Así no puede
+   * desaparecer un Pokémon dentro de una zona que el jugador ve despejada por
+   * una diferencia de milímetros entre la cuña de sombra y la geometría.
+   * Después se aplica el radio efectivo del observador con la ocultación del
+   * terreno del objetivo. Sin máscara compuesta, se comprueba la geometría.
+   */
+  private observerSeesActor(
+    observer: MatchPlayerState,
+    target: MatchPlayerState,
+    alreadyVisible: boolean,
+    colliders: readonly Collider[],
+    maskVisible: boolean | null
+  ): boolean {
+    if (maskVisible === false) return false;
+    const distance = Math.hypot(target.x - observer.x, target.z - observer.z);
+    const effective = effectiveVisionRange(
+      observer.visionRange,
+      target.concealment.value
+    );
+    const limit = alreadyVisible ? effective + CONFIG.vision.hysteresis : effective;
+    if (distance > limit) return false;
+    if (maskVisible === null) {
+      return !lineOfSightBlocked(observer.x, observer.z, target.x, target.z, colliders);
+    }
+    return true;
+  }
+
   /** ¿Ve algún Pokémon vivo del equipo el punto `(x, z)`? */
   private teamSeesPoint(
     team: Team,
@@ -3847,10 +3887,15 @@ export class Game {
     concealment: number,
     colliders: readonly Collider[]
   ): boolean {
-    const point = { x, z };
+    const maskVisible = this.maskSeesPoint(team, x, z);
+    if (maskVisible === false) return false;
     for (const observer of this.matchPlayers) {
       if (!observer.alive || observer.team !== team) continue;
-      if (isTargetVisible(observer, point, concealment, colliders)) return true;
+      const distance = Math.hypot(x - observer.x, z - observer.z);
+      const effective = effectiveVisionRange(observer.visionRange, concealment);
+      if (distance > effective) continue;
+      if (maskVisible === true) return true;
+      if (!lineOfSightBlocked(observer.x, observer.z, x, z, colliders)) return true;
     }
     return false;
   }
@@ -3869,13 +3914,15 @@ export class Game {
     z: number,
     colliders: readonly Collider[]
   ): boolean {
-    const point = { x, z };
+    const maskVisible = this.maskSeesPoint(team, x, z);
+    if (maskVisible === false) return false;
     for (const observer of this.matchPlayers) {
       if (observer.team !== team) continue;
       if (!observer.alive && observer.isBot) continue;
-      if (isTargetVisible(observer, point, 0, colliders)) {
-        return true;
-      }
+      const distance = Math.hypot(x - observer.x, z - observer.z);
+      if (distance > effectiveVisionRange(observer.visionRange, 0)) continue;
+      if (maskVisible === true) return true;
+      if (!lineOfSightBlocked(observer.x, observer.z, x, z, colliders)) return true;
     }
     return false;
   }
@@ -3943,15 +3990,21 @@ export class Game {
         // siendo visible para el equipo que lo vio caer.
         if (!target.alive && target.deathFade <= 0) continue;
         const alreadyVisible = previous[observer.team].has(target.slot);
-        // Una sola comprobación geométrica: radio efectivo + línea de visión.
-        // Antes se consultaba además la máscara de niebla píxel a píxel, lo
-        // que forzaba un readback de canvas caro en cada frame.
-        const visible = isTargetVisible(
+        // La máscara de niebla del equipo decide la línea de visión; el radio
+        // efectivo con la ocultación del objetivo se aplica después. Leer un
+        // píxel de la máscara es barato: se copia solo al recomponerla, no en
+        // cada frame.
+        const maskVisible = this.maskSeesPoint(
+          observer.team,
+          target.x,
+          target.z
+        );
+        const visible = this.observerSeesActor(
           observer,
           target,
-          target.concealment.value,
+          alreadyVisible,
           colliders,
-          alreadyVisible
+          maskVisible
         );
         // El HUD "Descubierto" y la regeneración siguen contando la línea de
         // visión directa de cada rival vivo, no la visión compartida del equipo.
@@ -4037,9 +4090,9 @@ export class Game {
       const teamKey = `${team}:${pointKey}`;
       let visible = seenCache.get(teamKey);
       if (visible === undefined) {
-        // Misma visibilidad geométrica que los actores: círculo de visión y
-        // línea de visión. La máscara de niebla ya no expone píxeles, así que
-        // no se lee el canvas en cada frame.
+        // Misma regla que los actores: la máscara de niebla decide la línea de
+        // visión y el círculo efectivo del equipo decide el alcance. Los
+        // objetos no aplican la ocultación del terreno.
         visible = this.teamSeesPickupPoint(team, spawn.x, spawn.z, colliders);
         seenCache.set(teamKey, visible);
         if (visible) {

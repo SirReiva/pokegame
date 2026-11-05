@@ -214,6 +214,13 @@ function segmentSegmentDistanceSq(
  * `sightRadius` bloquean la visión; las rocas bajas, los cactus y los adornos
  * de las bases no cuentan. El radio de visión de los árboles es mayor que el de
  * colisión para cubrir la copa, no solo el tronco.
+ *
+ * Un oclusor solo tapa si está realmente *entre* los dos puntos. Si cualquiera
+ * de los extremos está dentro del volumen del oclusor (debajo de una copa, pegado
+ * a una cresta), el segmento lo atraviesa en su extremo, no por el medio: el
+ * Pokémon está delante del obstáculo, no detrás. Sin esta comprobación, dos
+ * Pokémon que se refugian junto a un árbol o una cordillera se volvían
+ * invisibles entre sí aunque la niebla pintara su zona como despejada.
  */
 export function lineOfSightBlocked(
   ax: number,
@@ -225,26 +232,54 @@ export function lineOfSightBlocked(
   for (const collider of colliders) {
     const sightRadius = collider.sightRadius;
     if (sightRadius === undefined) continue;
+    const radiusSq = sightRadius * sightRadius;
 
     if (collider.type === 'circle') {
-      // Si el observador está dentro de la copa, no se deja cegar por el árbol
-      // que tiene encima: debe poder ver hacia fuera.
+      // Si el observador o el objetivo están dentro de la copa, el árbol no
+      // queda entre ellos: no se deja cegar al que lo tiene encima ni se oculta
+      // al que está de pie bajo sus hojas.
       if (Math.hypot(ax - collider.x, az - collider.z) < sightRadius) continue;
+      if (Math.hypot(bx - collider.x, bz - collider.z) < sightRadius) continue;
       if (
-        pointSegmentDistanceSq(collider.x, collider.z, ax, az, bx, bz) <=
-        sightRadius * sightRadius
+        pointSegmentDistanceSq(collider.x, collider.z, ax, az, bx, bz) <= radiusSq
       ) {
         return true;
       }
     } else {
-      // Mismo caso para una cordillera: si el observador está pegado a su
-      // radio de visión, la cresta no le tapa todo el horizonte.
+      // Mismo caso para una cordillera: si cualquiera de los extremos está
+      // pegado a su radio de visión, la cresta no tapa el horizonte entre ellos.
       if (
         pointSegmentDistanceSq(ax, az, collider.ax, collider.az, collider.bx, collider.bz) <
-        sightRadius * sightRadius
+        radiusSq
       ) {
         continue;
       }
+      if (
+        pointSegmentDistanceSq(bx, bz, collider.ax, collider.az, collider.bx, collider.bz) <
+        radiusSq
+      ) {
+        continue;
+      }
+      // Si ambos puntos están del mismo lado de la cresta, la cresta no queda
+      // entre ellos: puede pasar cerca de su volumen de visión (por ejemplo, al
+      // correr junto a un muro) sin taparlos. Solo bloquea cuando los separa.
+      const sideA = orientation(
+        collider.ax,
+        collider.az,
+        collider.bx,
+        collider.bz,
+        ax,
+        az
+      );
+      const sideB = orientation(
+        collider.ax,
+        collider.az,
+        collider.bx,
+        collider.bz,
+        bx,
+        bz
+      );
+      if (sideA * sideB > 0) continue;
       if (
         segmentSegmentDistanceSq(
           ax,
@@ -256,7 +291,7 @@ export function lineOfSightBlocked(
           collider.bx,
           collider.bz
         ) <=
-        sightRadius * sightRadius
+        radiusSq
       ) {
         return true;
       }

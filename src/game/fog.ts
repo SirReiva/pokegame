@@ -481,6 +481,8 @@ export class FogMask {
   /** Oclusores del observador actual y sus distancias, reutilizados. */
   private readonly candidates: SightOccluder[] = [];
   private readonly candidateDistances: number[] = [];
+  /** Píxeles de la última máscara compuesta, para consultas puntuales. */
+  private visibilityPixels: Uint8ClampedArray | null = null;
   /** Rejilla de oclusores por celda, o `null` si está desactivada. */
   private occluderGrid: number[][] | null = null;
   private gridCols = 1;
@@ -510,10 +512,13 @@ export class FogMask {
     this.maskCanvas = document.createElement('canvas');
     this.maskCanvas.width = MASK_SIZE;
     this.maskCanvas.height = MASK_SIZE;
-    // La máscara solo se dibuja y se sube como textura; la visibilidad de
-    // actores y objetos se resuelve geométricamente en `Game`. Por eso no se
-    // lee con `getImageData` ni necesita `willReadFrequently`.
-    const context = this.maskCanvas.getContext('2d');
+    // La máscara se dibuja, se sube como textura y se consulta con
+    // `isVisibleAt` para que la niebla sea la autoridad de la línea de visión.
+    // Con `willReadFrequently` el navegador la mantiene en memoria de CPU y la
+    // lectura es barata; el dibujado va a 20 Hz como máximo.
+    const context = this.maskCanvas.getContext('2d', {
+      willReadFrequently: true
+    });
     if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.maskContext = context;
     // Antes del primer update la máscara es blanca (nada oculto): así el decal
@@ -591,6 +596,21 @@ export class FogMask {
     this.updateMask(circles);
     this.timeSinceUpdate = 0;
     this.dirty = false;
+  }
+
+  /**
+   * ¿La máscara pintada deja ver el punto? Devuelve `null` si todavía no se ha
+   * compuesto ninguna máscara (el canvas inicial es blanco y no oculta nada).
+   * La usan actores y objetos para que su visibilidad coincida exactamente con
+   * la zona que el decal pinta como despejada.
+   */
+  isVisibleAt(x: number, z: number): boolean | null {
+    const pixels = this.visibilityPixels;
+    if (!pixels) return null;
+    const px = Math.floor(x * this.maskScaleX + this.maskOffsetX);
+    const py = Math.floor(z * this.maskScaleY + this.maskOffsetY);
+    if (px < 0 || px >= MASK_SIZE || py < 0 || py >= MASK_SIZE) return false;
+    return (pixels[(py * MASK_SIZE + px) * 4] ?? 0) >= 128;
   }
 
   private circlesChanged(circles: readonly VisionCircle[]): boolean {
@@ -689,6 +709,16 @@ export class FogMask {
     }
 
     context.globalCompositeOperation = 'source-over';
+
+    // Copia para que la visibilidad de actores y objetos use la misma
+    // superficie que pinta el decal. Se relee solo al recomponer la máscara,
+    // no en cada frame.
+    this.visibilityPixels = context.getImageData(
+      0,
+      0,
+      MASK_SIZE,
+      MASK_SIZE
+    ).data;
 
     this.texture.upload();
   }
