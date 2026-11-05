@@ -102,7 +102,13 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   hojaMagica: 'abilities/hojaMagica.mp3',
   rayoSolar: 'abilities/rayoSolar.mp3',
   deseo: 'abilities/deseo.mp3',
-  futuroSiniestro: 'abilities/futuroSiniestro.mp3'
+  futuroSiniestro: 'abilities/futuroSiniestro.mp3',
+
+  // Lugia
+  ondaMental: 'abilities/ondaMental.mp3',
+  marea: 'abilities/marea.mp3',
+  ciclon: 'abilities/ciclon.mp3',
+  aerochorro: 'abilities/aerochorro.mp3'
 };
 
 /**

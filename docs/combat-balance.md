@@ -90,13 +90,15 @@
 > rival y su hurtbox tocaba el borde, pero el centro quedaba fuera del alcance y
 > no conectaba (ni aparecía la marca 🚫).
 >
-> **Actualización 2026-11-05**: Onix (v0.12.0) y Celebi ya tienen moveset. El
-> carrusel filtra las especies sin habilidades (`hasAssignedAbilities`), así que
-> las 7 que faltan no se pueden elegir. Las tablas de §4.3-§4.5 no se han
-> regenerado para incluir a Onix ni a Celebi; sus filas de §4.2 sí reflejan el
-> estado actual. Con el modelo de §4.1, la rotación completa de Celebi ronda el
-> 150 % de la vida media (cota superior, sin contar `Deseo`), en la banda de
-> Charmander y Lucario.
+> **Actualización 2026-11-05**: Onix (v0.12.0), Celebi y Lugia ya tienen
+> moveset. El carrusel filtra las especies sin habilidades
+> (`hasAssignedAbilities`), así que las 6 que faltan no se pueden elegir. Las
+> tablas de §4.3-§4.5 no se han regenerado para incluir a Onix, Celebi ni Lugia;
+> sus filas de §4.2 sí reflejan el estado actual. Con el modelo de §4.1, la
+> rotación completa de Celebi ronda el 150 % de la vida media (cota superior, sin
+> contar `Deseo`), en la banda de Charmander y Lucario; la de Lugia ronda el
+> 122 % de la vida media en la matriz de 15 rivales, lastrada por su papel de
+> tanque de control.
 
 ## Resumen ejecutivo
 
@@ -107,10 +109,10 @@ especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
 
 Los cinco hallazgos más importantes:
 
-1. **7 de las 24 especies del roster siguen sin ninguna habilidad.** Eevee,
-   Zapdos, Raikou, Entei, Suicune, Lugia y Ho-Oh no tienen moveset; el carrusel
-   ya las filtra. Las otras 17, incluidos Onix, Celebi, Tyranitar y Groudon, sí
-   tienen moveset.
+1. **6 de las 24 especies del roster siguen sin ninguna habilidad.** Eevee,
+   Zapdos, Raikou, Entei, Suicune y Ho-Oh no tienen moveset; el carrusel
+   ya las filtra. Las otras 18, incluidos Onix, Celebi, Lugia, Tyranitar y
+   Groudon, sí tienen moveset.
 2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
    jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
    nunca.
@@ -287,7 +289,7 @@ cobertura de tipos.
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 7 de 24 especies siguen sin habilidades. |
+| 3.1 Cobertura de movesets | **pendiente** | 6 de 24 especies siguen sin habilidades. |
 | 3.2 DoT precisión/+2 por tick | **pendiente** | Sin cambios. |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas, casts encolados, golpes de dash y formas `self`. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
@@ -301,12 +303,12 @@ cobertura de tipos.
 | 3.12 Posiciones de objetos | **arreglado** | Validación contra límites, agua y colliders al cargar, un objeto por jugador/frame y editor que fusiona duplicados y avisa de posiciones inválidas. |
 | 3.13 Bots y objetos no visibles | **arreglado** | Solo eligen objetos vistos o recordados (10 s), recuerdan el estado usado y rodean obstáculos en vez de atajar contra ellos. |
 
-### 3.1. Cobertura: 7 especies sin moveset (crítico)
+### 3.1. Cobertura: 6 especies sin moveset (crítico)
 
-`MOVESETS` define 17 ids (`src/game/abilities.ts`). El roster muestra las 24
+`MOVESETS` define 18 ids (`src/game/abilities.ts`). El roster muestra las 24
 especies de `public/sprites/manifest.json`, pero el carrusel ya filtra con
 `hasAssignedAbilities` (`src/session/SessionProvider.tsx`,
-`src/ui/RosterScreen.tsx`) y no deja elegir las 7 que no pueden combatir.
+`src/ui/RosterScreen.tsx`) y no deja elegir las 6 que no pueden combatir.
 
 `src/game/game.ts:473` hace:
 
@@ -319,7 +321,7 @@ muestra cuatro veces «Sin asignar». Esas especies no pueden atacar, defenderse
 ni usar ninguna habilidad; solo caminan.
 
 **Especies afectadas**: Eevee (0133), Zapdos (0145), Raikou (0243), Entei
-(0244), Suicune (0245), Lugia (0249) y Ho-Oh (0250).
+(0244), Suicune (0245) y Ho-Oh (0250).
 
 **Impacto**: partidas perdidas por elección, frustración y una parte importante
 del roster inutilizable.
@@ -639,12 +641,12 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   radial reduce el daño según la distancia, así que el combo es una cota.
 - Los combos son una **cota superior** y una medida relativa, no una promesa de
   daño real: en la práctica hay rangos, windups, dashes y esquivas.
-- **Cobertura de esta simulación**: incluye 15 de las 17 especies con
-  `MOVESETS` (Tyranitar y Groudon entre ellas). Onix y Celebi tienen moveset
-  desde el 2026-11-05, pero las tablas de §4.3-§4.5 no se han regenerado para
-  incluirlos. Los instintos comunes no están simulados: Protección reduce daño y
-  Regeneración cura, pero no añaden potencia directa. Las tablas se regeneraron
-  el 2026-11-03 con este modelo.
+- **Cobertura de esta simulación**: incluye 15 de las 18 especies con
+  `MOVESETS` (Tyranitar y Groudon entre ellas). Onix, Celebi y Lugia tienen
+  moveset desde el 2026-11-05, pero las tablas de §4.3-§4.5 no se han regenerado
+  para incluirlos. Los instintos comunes no están simulados: Protección reduce
+  daño y Regeneración cura, pero no añaden potencia directa. Las tablas se
+  regeneraron el 2026-11-03 con este modelo.
 - **Objetos recogibles**: las tablas tampoco simulan las pociones de v0.7.0
   (50/120 PV). Son vida efectiva adicional y pueden cambiar el TTK de los mapas
   que las incluyen; su recogida se detalla en §3.11-§3.13.
@@ -679,7 +681,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Raikou | 165 | 105 | 95 | 135 | 120 | 135 | 0,52 | **NO** |
 | Entei | 190 | 135 | 105 | 110 | 95 | 120 | 0,50 | **NO** |
 | Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,50 | **NO** |
-| Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | **NO** |
+| Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | sí |
 | Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | **NO** |
 | Celebi | 175 | 120 | 120 | 120 | 120 | 120 | 0,34 | sí |
 
@@ -699,8 +701,8 @@ las 4 habilidades contra el objetivo neutro. `% vida media` = combo medio contra
 las otras 14 especies jugables, dividido por su HP. `100-0` = número de rivales
 a los que el combo completo les quita toda la vida.
 
-La matriz incluye 15 de las 17 especies con moveset (14 rivales por fila, sin
-contar el mirror); Onix y Celebi quedan fuera de esta simulación. Las áreas se valoran con el objetivo en el centro; en el borde el
+La matriz incluye 15 de las 18 especies con moveset (14 rivales por fila, sin
+contar el mirror); Onix, Celebi y Lugia quedan fuera de esta simulación. Las áreas se valoran con el objetivo en el centro; en el borde el
 daño radial es menor.
 
 | Pokémon | DPS básica | DPS sostenido | Combo neutro | % vida media | 100-0 | Sin daño |
@@ -860,6 +862,7 @@ cadencias de 0,25-0,4 s. Las definitivas con windup son:
 | Recuperación | 0,75 s | Mew |
 | Ataque Celeste | 0,80 s | Moltres |
 | Psicoataque | 0,80 s | Mewtwo |
+| Aerochorro | 0,80 s | Lugia |
 | Premonición | 0,90 s | Mew |
 | Futuro Siniestro | 1,00 s | Celebi |
 
@@ -928,8 +931,8 @@ autodaño la convierte en una mala elección en 1v1.
 
 ### P0 — rompe la partida
 
-1. **Cobertura de movesets**: quedan 7 movesets por añadir (Eevee, Zapdos,
-   Raikou, Entei, Suicune, Lugia y Ho-Oh). El roster ya filtra las especies sin
+1. **Cobertura de movesets**: quedan 6 movesets por añadir (Eevee, Zapdos,
+   Raikou, Entei, Suicune y Ho-Oh). El roster ya filtra las especies sin
    habilidades, así que no se pueden seleccionar.
 2. **Validar dos equipos**: bloquear el inicio si un equipo está vacío (o añadir
    un modo práctica explícito) y añadir un límite de tiempo/condición de fin.
@@ -1142,7 +1145,7 @@ así que se pueden añadir tests baratos:
   de un área `overTime` debe ser reproducible (o al menos no perder ticks por el
   tope de 8) y el primer tick debe caer en el instante esperado.
 - **Balance**: la tabla de §4.2 debe incluir las 24 especies y su `hitRadius`, y
-  la matriz de §4.3 debe seguir generándose con las 15 que tienen moveset,
+  la matriz de §4.3 debe seguir generándose con las 18 que tienen moveset,
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
   menos imprimir el hurtbox junto al daño.
 

@@ -113,7 +113,8 @@ export type AoeStyle =
   | 'blizzard'
   | 'ground'
   | 'fissure'
-  | 'recovery';
+  | 'recovery'
+  | 'cyclone';
 
 /**
  * Reparto del daño de un área:
@@ -1976,6 +1977,86 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Lugia                                                                     */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('ondaMental', 'Onda Mental', 'Psychic', 'special', 'projectile')
+    .power(45)
+    .accuracy(100)
+    .cooldown(0.8)
+    .range(8.5)
+    .radius(0.28)
+    .projectile('psychic', 14)
+    .impact('psychic')
+    .cast(0.35)
+    .animation('shoot')
+    .color(138, 169, 232)
+    .description(
+      'Proyectil psíquico compacto de 8,5 u. 45 de potencia y cadencia alta. Ataque básico de Lugia.'
+    )
+);
+
+registerAbility(
+  ability('marea', 'Marea', 'Water', 'special', 'aoe')
+    .power(20)
+    .accuracy(95)
+    .cooldown(9)
+    .range(4.5)
+    .radius(3.2)
+    .windup(0.35, { animation: 'charge', move: true })
+    .cast(0.5)
+    .animation('shoot')
+    .area('water', 'overTime', 2.5, 0.5)
+    .slow(0.7, 1.2)
+    .impact('water')
+    .color(96, 178, 240)
+    .description(
+      'Extiende una marea de 3,2 u a 4,5 u de distancia que permanece 2,5 s: 20 de daño por segundo y ralentiza un 30 % durante 1,2 s a quien siga dentro.'
+    )
+);
+
+registerAbility(
+  ability('ciclon', 'Ciclón', 'Flying', 'special', 'aoe')
+    .power(30)
+    .accuracy(100)
+    .cooldown(12)
+    .range(0)
+    .radius(3.6)
+    .windup(0.3, { animation: 'charge' })
+    .cast(0.55)
+    .animation('attack')
+    .area('cyclone', 'instant', 1.2)
+    .knockback(2.6)
+    .slow(0.65, 1.5)
+    .impact('air')
+    .color(198, 224, 255)
+    .description(
+      'Golpe de ala que desata un ciclón de 3,6 u alrededor de Lugia: 30 de potencia, empuja 2,6 u y ralentiza un 35 % durante 1,5 s.'
+    )
+);
+
+registerAbility(
+  ability('aerochorro', 'Aerochorro', 'Flying', 'special', 'beam')
+    .power(110)
+    .accuracy(95)
+    .cooldown(16)
+    .range(11)
+    .radius(0.55)
+    .windup(0.8, { animation: 'charge' })
+    .cast(0.65)
+    .animation('shoot')
+    .beam('air')
+    .impact('air')
+    .knockback(2.2)
+    .slow(0.7, 2)
+    .color(138, 169, 232)
+    .description(
+      'Definitiva: carga 0,8 s y dispara un chorro de aire de 11 u que atraviesa a todos los rivales en línea. 110 de potencia, empuja 2,2 u y ralentiza un 30 % durante 2 s.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2022,6 +2103,7 @@ MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
 MOVESETS['0095'] = ['atadura', 'lanzarrocas', 'excavar', 'fisura'];
 MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];
 MOVESETS['0251'] = ['hojaMagica', 'rayoSolar', 'deseo', 'futuroSiniestro'];
+MOVESETS['0249'] = ['ondaMental', 'marea', 'ciclon', 'aerochorro'];
 
 export function abilityForSlot(
   pokemonId: string,

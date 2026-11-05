@@ -79,6 +79,23 @@ function sameLayers(current: readonly number[], next: readonly number[]): boolea
   return true;
 }
 
+/**
+ * Aclara un color hacia el blanco (`amount` 0-1). Los efectos de viento lo usan
+ * para derivar sus tintes del color de la habilidad: el mismo estilo se lee
+ * naranja en Moltres y azul plateado en Lugia sin duplicar la fábrica.
+ */
+function tintColor(
+  color: readonly [number, number, number],
+  amount: number
+): [number, number, number] {
+  const mix = Math.max(0, Math.min(1, amount));
+  return [
+    Math.round(color[0] + (255 - color[0]) * mix),
+    Math.round(color[1] + (255 - color[1]) * mix),
+    Math.round(color[2] + (255 - color[2]) * mix)
+  ];
+}
+
 interface ActiveEffect {
   entity: pc.Entity;
   materials: pc.StandardMaterial[];
@@ -520,10 +537,10 @@ function createLightningMesh(
 
 /**
  * Tres quads verticales cruzados a 60°, con la base en el origen y la punta en
- * +Y. Al no ser un billboard, la llama tiene volumen desde cualquier cámara del
- * splitscreen; con blending aditivo las intersecciones no se notan.
+ * +Y. Al no ser un billboard, el efecto tiene volumen desde cualquier cámara del
+ * splitscreen; el material decide cómo se funden las intersecciones.
  */
-function createFlameCrossMesh(device: pc.GraphicsDevice): pc.Mesh {
+function createCrossQuadMesh(device: pc.GraphicsDevice): pc.Mesh {
   const planes = 3;
   const positions: number[] = [];
   const normals: number[] = [];
@@ -552,6 +569,364 @@ function createFlameCrossMesh(device: pc.GraphicsDevice): pc.Mesh {
   mesh.setPositions(positions);
   mesh.setNormals(normals);
   mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Chorro de agua 3D: superficie de revolución con cuello estrecho que se abre
+ * en una corona ondulada, labio interior, charco bajo y tres gotas facetadas.
+ * El color va por vértice (azul medio → cian → blanco) y `seed` cambia la fase
+ * de las ondas para generar varias siluetas sin duplicar la geometría a mano.
+ */
+function createWaterJetMesh(device: pc.GraphicsDevice, seed: number): pc.Mesh {
+  type Vec3 = [number, number, number];
+  const radialSegments = 28;
+  const heightRings = 14;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const clamp255 = (value: number): number =>
+    Math.max(0, Math.min(255, Math.round(value)));
+  const mix = (a: Vec3, b: Vec3, t: number): Vec3 => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t
+  ];
+
+  const baseColor: Vec3 = [47, 159, 230];
+  const midColor: Vec3 = [63, 184, 244];
+  const topColor: Vec3 = [116, 211, 255];
+  const lightColor: Vec3 = [184, 238, 255];
+  const rimColor: Vec3 = [240, 253, 255];
+
+  const splashLobes: { center: number; radius: number; height: number }[] = [
+    { center: 0.6, radius: 0.08, height: 0.06 },
+    { center: 2.5, radius: 0.11, height: 0.08 },
+    { center: 4.7, radius: 0.06, height: 0.05 }
+  ];
+  const lobeAt = (angle: number, t: number): number => {
+    let value = 0;
+    for (const lobe of splashLobes) {
+      const delta = Math.atan2(
+        Math.sin(angle - lobe.center),
+        Math.cos(angle - lobe.center)
+      );
+      value +=
+        Math.exp(-(delta * delta) / 0.035) *
+        Math.pow(t, 3) *
+        lobe.radius;
+    }
+    return value;
+  };
+
+  const radiusAt = (t: number, angle: number): number => {
+    const neck = 0.075;
+    const toe = Math.max(0, 1 - t / 0.16);
+    const flare = Math.pow(Math.max(0, (t - 0.16) / 0.84), 4.2);
+    let radius = neck + 0.035 * toe * toe + 0.5 * flare;
+    radius *= 1 + 0.035 * Math.sin(angle * 5 + seed) * Math.pow(t, 1.5);
+    radius += 0.02 * Math.sin(angle * 9 + seed * 2.3) * Math.pow(t, 2);
+    radius += 0.035 * Math.sin(angle * 6 + seed * 1.1) * Math.pow(t, 4);
+    return radius + lobeAt(angle, t);
+  };
+
+  const heightAt = (t: number, angle: number): number => {
+    let y = t;
+    y += 0.06 * Math.sin(angle * 3 + seed * 1.7) * Math.pow(t, 4);
+    y += 0.05 * Math.sin(angle * 6 + seed * 2.1) * Math.pow(t, 4);
+    for (const lobe of splashLobes) {
+      const delta = Math.atan2(
+        Math.sin(angle - lobe.center),
+        Math.cos(angle - lobe.center)
+      );
+      y +=
+        Math.exp(-(delta * delta) / 0.035) *
+        Math.pow(t, 3) *
+        lobe.height;
+    }
+    return y;
+  };
+
+  const colorAt = (t: number, angle: number): Vec3 => {
+    let color: Vec3;
+    if (t < 0.45) color = mix(baseColor, midColor, t / 0.45);
+    else if (t < 0.82) color = mix(midColor, topColor, (t - 0.45) / 0.37);
+    else color = mix(topColor, lightColor, (t - 0.82) / 0.18);
+
+    const band = Math.exp(-Math.pow((t - 0.86) / 0.07, 2));
+    color = mix(color, lightColor, band * 0.55);
+    const rim = Math.max(0, (t - 0.93) / 0.07);
+    color = mix(color, rimColor, Math.min(1, rim));
+
+    const shade = 0.84 + 0.16 * Math.cos(angle - 0.8 + seed * 0.7);
+    const stripe = 0.5 + 0.5 * Math.sin(angle * 7 + t * 6 + seed);
+    color = mix(color, lightColor, stripe * 0.06);
+    return [
+      clamp255(color[0] * shade),
+      clamp255(color[1] * shade),
+      clamp255(color[2] * shade)
+    ];
+  };
+
+  const pushVertex = (position: Vec3, normal: Vec3, color: Vec3): void => {
+    positions.push(...position);
+    normals.push(...normal);
+    colors.push(color[0], color[1], color[2], 255);
+  };
+
+  const ringStride = radialSegments + 1;
+  for (let ring = 0; ring <= heightRings; ring++) {
+    const t = ring / heightRings;
+    for (let side = 0; side <= radialSegments; side++) {
+      const angle = (side / radialSegments) * Math.PI * 2;
+      const radius = radiusAt(t, angle);
+      const normalLength = Math.hypot(
+        Math.cos(angle),
+        0.35,
+        Math.sin(angle)
+      );
+      pushVertex(
+        [Math.cos(angle) * radius, heightAt(t, angle), Math.sin(angle) * radius],
+        [
+          Math.cos(angle) / normalLength,
+          0.35 / normalLength,
+          Math.sin(angle) / normalLength
+        ],
+        colorAt(t, angle)
+      );
+    }
+  }
+
+  for (let ring = 0; ring < heightRings; ring++) {
+    for (let side = 0; side < radialSegments; side++) {
+      const a = ring * ringStride + side;
+      const b = a + 1;
+      const c = a + ringStride;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  // Labio interior: da grosor al borde de la corona.
+  const topRingStart = heightRings * ringStride;
+  const lipStart = positions.length / 3;
+  for (let side = 0; side <= radialSegments; side++) {
+    const angle = (side / radialSegments) * Math.PI * 2;
+    const radius = radiusAt(1, angle) * 0.94;
+    const normalLength = Math.hypot(Math.cos(angle), 0.2, Math.sin(angle));
+    pushVertex(
+      [Math.cos(angle) * radius, heightAt(1, angle) - 0.035, Math.sin(angle) * radius],
+      [
+        Math.cos(angle) / normalLength,
+        0.2 / normalLength,
+        Math.sin(angle) / normalLength
+      ],
+      mix(rimColor, lightColor, 0.35)
+    );
+  }
+  const innerStart = positions.length / 3;
+  for (let side = 0; side <= radialSegments; side++) {
+    const angle = (side / radialSegments) * Math.PI * 2;
+    const radius = radiusAt(1, angle) * 0.84;
+    const normalLength = Math.hypot(Math.cos(angle), 0.2, Math.sin(angle));
+    pushVertex(
+      [Math.cos(angle) * radius, heightAt(1, angle) - 0.1, Math.sin(angle) * radius],
+      [
+        -Math.cos(angle) / normalLength,
+        0.2 / normalLength,
+        -Math.sin(angle) / normalLength
+      ],
+      mix(topColor, lightColor, 0.5)
+    );
+  }
+  for (let side = 0; side < radialSegments; side++) {
+    const a = topRingStart + side;
+    const b = a + 1;
+    const c = lipStart + side;
+    const d = c + 1;
+    indices.push(a, c, b, b, c, d);
+    const e = innerStart + side;
+    const f = e + 1;
+    indices.push(c, e, d, d, e, f);
+  }
+
+  // Cierre interior: evita que el chorro se vea hueco desde arriba.
+  const capCenter = positions.length / 3;
+  pushVertex(
+    [0, heightAt(1, 0) - 0.12, 0],
+    [0, 1, 0],
+    mix(topColor, rimColor, 0.5)
+  );
+  for (let side = 0; side < radialSegments; side++) {
+    const a = innerStart + side;
+    const b = a + 1;
+    indices.push(a, capCenter, b);
+  }
+
+  // Charco bajo y ondulado alrededor de la base.
+  const puddleSegments = 24;
+  const puddleInnerStart = positions.length / 3;
+  for (let side = 0; side <= puddleSegments; side++) {
+    const angle = (side / puddleSegments) * Math.PI * 2;
+    const radius = 0.11 + 0.01 * Math.sin(angle * 5 + seed);
+    pushVertex(
+      [Math.cos(angle) * radius, 0.015, Math.sin(angle) * radius],
+      [0, 1, 0],
+      mix(midColor, lightColor, 0.2)
+    );
+  }
+  const puddleOuterStart = positions.length / 3;
+  for (let side = 0; side <= puddleSegments; side++) {
+    const angle = (side / puddleSegments) * Math.PI * 2;
+    const radius =
+      0.28 +
+      0.04 * Math.sin(angle * 4 + seed * 1.3) +
+      0.02 * Math.sin(angle * 7 + seed);
+    pushVertex(
+      [Math.cos(angle) * radius, 0.012, Math.sin(angle) * radius],
+      [0, 1, 0],
+      mix(lightColor, rimColor, 0.5)
+    );
+  }
+  for (let side = 0; side < puddleSegments; side++) {
+    const a = puddleInnerStart + side;
+    const b = a + 1;
+    const c = puddleOuterStart + side;
+    const d = c + 1;
+    indices.push(a, c, b, b, c, d);
+  }
+
+  // Gotas facetadas desprendidas de la corona.
+  const droplets: { angle: number; radius: number; y: number; size: number }[] = [
+    { angle: 0.9 + seed * 0.1, radius: 0.72, y: 1.15, size: 0.06 },
+    { angle: 2.7 + seed * 0.07, radius: 0.8, y: 1.28, size: 0.052 },
+    { angle: 4.9 + seed * 0.05, radius: 0.64, y: 1.12, size: 0.046 }
+  ];
+  const dropSides = 6;
+  const dropProfile: [number, number][] = [
+    [-1, 0.12],
+    [-0.65, 0.55],
+    [0, 0.66],
+    [0.55, 0.38],
+    [1, 0]
+  ];
+  for (const drop of droplets) {
+    const centerX = Math.cos(drop.angle) * drop.radius;
+    const centerZ = Math.sin(drop.angle) * drop.radius;
+    const start = positions.length / 3;
+    for (let ring = 0; ring < dropProfile.length; ring++) {
+      const [dropY, dropRadius] = dropProfile[ring];
+      const color = mix(lightColor, rimColor, ring / (dropProfile.length - 1));
+      for (let side = 0; side <= dropSides; side++) {
+        const angle = (side / dropSides) * Math.PI * 2;
+        pushVertex(
+          [
+            centerX + Math.cos(angle) * dropRadius * drop.size,
+            drop.y + dropY * drop.size,
+            centerZ + Math.sin(angle) * dropRadius * drop.size
+          ],
+          [Math.cos(angle), 0, Math.sin(angle)],
+          color
+        );
+      }
+    }
+    for (let ring = 0; ring < dropProfile.length - 1; ring++) {
+      for (let side = 0; side < dropSides; side++) {
+        const a = start + ring * (dropSides + 1) + side;
+        const b = a + 1;
+        const c = a + (dropSides + 1);
+        const d = c + 1;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  // `setColors` espera floats 0-1; `setColors32` normaliza los 0-255.
+  mesh.setColors32(colors);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Brazo de huracán 3D: cinta espiral con sección abombada y borde ondulado.
+ * Se instancia varias veces con giros distintos para formar el vórtice; las
+ * nubes volumétricas se añaden aparte con esferas.
+ */
+function createCycloneArmMesh(device: pc.GraphicsDevice, seed: number): pc.Mesh {
+  type Vec3 = [number, number, number];
+  const steps = 30;
+  const turns = 1.5;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const cloudInner: Vec3 = [198, 230, 255];
+  const cloudMid: Vec3 = [248, 253, 255];
+  const cloudOuter: Vec3 = [170, 210, 245];
+
+  for (let step = 0; step <= steps; step++) {
+    const t = step / steps;
+    const angle = t * turns * Math.PI * 2;
+    const radius = 0.17 + 0.76 * t;
+    const half = 0.025 + 0.055 * t;
+    const y = 0.18 + 0.12 * t + 0.04 * Math.sin(t * Math.PI * 3 + seed);
+    const wobble = 0.018 * Math.sin(t * 9 + seed * 2.1);
+    const shade = 0.9 + 0.1 * Math.sin(t * 6 + seed);
+    const tint = (base: Vec3): Vec3 => [
+      Math.min(255, base[0] * shade),
+      Math.min(255, base[1] * shade),
+      Math.min(255, base[2] * shade)
+    ];
+    const cos = Math.cos(angle + wobble);
+    const sin = Math.sin(angle + wobble);
+    positions.push(cos * (radius - half), y, sin * (radius - half));
+    positions.push(cos * radius, y + 0.07, sin * radius);
+    positions.push(cos * (radius + half), y, sin * (radius + half));
+    normals.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+    const innerColor = tint(cloudInner);
+    const midColor = tint(cloudMid);
+    const outerColor = tint(cloudOuter);
+    colors.push(
+      ...innerColor,
+      255,
+      ...midColor,
+      255,
+      ...outerColor,
+      255
+    );
+  }
+
+  for (let step = 0; step < steps; step++) {
+    const base = step * 3;
+    const next = base + 3;
+    indices.push(
+      base,
+      next,
+      base + 1,
+      base + 1,
+      next,
+      next + 1,
+      base + 1,
+      next + 1,
+      base + 2,
+      base + 2,
+      next + 1,
+      next + 2
+    );
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setColors32(colors);
   mesh.setIndices(indices);
   mesh.update();
   return mesh;
@@ -657,6 +1032,10 @@ export class CombatFx {
   /** Mallas de la marca de área y marcas activas. */
   private readonly discMesh: pc.Mesh;
   private readonly dashRingMesh: pc.Mesh;
+  /** Variantes 3D del chorro de agua: cambian la fase de la corona ondulada. */
+  private readonly waterJetMeshes: pc.Mesh[];
+  /** Variantes 3D de los brazos espirales del huracán de `Ciclón`. */
+  private readonly cycloneArmMeshes: pc.Mesh[];
   /** Bipirámide compartida por proyectiles, impactos, haces y áreas de hielo. */
   private readonly iceCrystalMesh: pc.Mesh;
   /** Cono facetado compartido por los efectos de Roca y Tierra. */
@@ -738,6 +1117,12 @@ export class CombatFx {
       ringRadius: 0.5,
       tubeRadius: 0.05
     });
+    this.waterJetMeshes = [0, 1, 2, 3].map((variant) =>
+      createWaterJetMesh(this.device, variant * 1.7)
+    );
+    this.cycloneArmMeshes = [0, 1, 2].map((variant) =>
+      createCycloneArmMesh(this.device, variant * 1.9)
+    );
     this.flameTexture = textureFromCanvas(
       this.device,
       createFlameCanvas(),
@@ -748,7 +1133,7 @@ export class CombatFx {
         magFilter: pc.FILTER_LINEAR
       }
     );
-    this.flameMesh = createFlameCrossMesh(this.device);
+    this.flameMesh = createCrossQuadMesh(this.device);
     this.leafTexture = textureFromCanvas(
       this.device,
       createLeafParticleCanvas(),
@@ -771,7 +1156,7 @@ export class CombatFx {
       minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
       magFilter: pc.FILTER_LINEAR
     });
-    this.leafMesh = createFlameCrossMesh(this.device);
+    this.leafMesh = createCrossQuadMesh(this.device);
 
     // PlayCanvas destruye una malla cuando su último MeshInstance desaparece.
     // Estas mallas son compartidas por muchos efectos, así que reservamos una
@@ -780,6 +1165,8 @@ export class CombatFx {
     this.boxMesh.incRefCount();
     this.torusMesh.incRefCount();
     this.flameMesh.incRefCount();
+    for (const mesh of this.waterJetMeshes) mesh.incRefCount();
+    for (const mesh of this.cycloneArmMeshes) mesh.incRefCount();
     this.leafMesh.incRefCount();
     this.discMesh = createDiscMesh(this.device);
     this.dashRingMesh = createDashRingMesh(this.device);
@@ -928,6 +1315,8 @@ export class CombatFx {
         this.spawnGhostAoe(x, z, radius, color, duration),
       air: (x, z, radius, color, duration) =>
         this.spawnAirAoe(x, z, radius, color, duration),
+      cyclone: (x, z, radius, color, duration) =>
+        this.spawnCycloneAoe(x, z, radius, color, duration),
       heat: (x, z, radius, color, duration) =>
         this.spawnHeatAoe(x, z, radius, color, duration),
       ice: (x, z, radius, color, duration) =>
@@ -1071,6 +1460,30 @@ export class CombatFx {
       tint[2] / 255
     );
     material.emissiveIntensity = 1.05;
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_NORMAL;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /**
+   * Material con color por vértice y mezcla normal. Lo usan las mallas 3D de
+   * agua (chorros de `Marea`) y de nubes (brazos del huracán de `Ciclón`); la
+   * malla ya trae el degradado y el material solo controla la opacidad.
+   */
+  private createVertexColorMaterial(opacity: number): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(1, 1, 1);
+    material.emissiveIntensity = 1.05;
+    material.diffuseVertexColor = true;
+    material.emissiveVertexColor = true;
     material.opacity = opacity;
     material.blendType = pc.BLEND_NORMAL;
     material.depthWrite = false;
@@ -4430,8 +4843,12 @@ export class CombatFx {
   }
 
   /**
-   * Área de agua: olas concéntricas que se abren desde el centro y gotas que
-   * salpican. Se apoya en el suelo para leerse como una extensión de líquido.
+   * Área de agua: un disco tenue y un aro de borde marcan el radio, mientras
+   * varios chorros con silueta de salpicadura brotan repartidos por toda la
+   * superficie. La textura procedural dibuja la base estrecha, la corona
+   * ondulada, los brillos y las gotas; los quads cruzados mantienen el volumen
+   * desde cualquier cámara. Los chorros oscilan en altura y grosor con fases
+   * distintas para que el área nunca parezca estática.
    */
   private spawnWaterAoe(
     x: number,
@@ -4445,46 +4862,53 @@ export class CombatFx {
     root.setPosition(x, 0.03, z);
     this.app.root.addChild(root);
 
-    const fillMaterial = this.createWaterMaterial(color, 0.08);
-    const ringMaterial = this.createWaterMaterial([206, 241, 255], 0.55);
-    const dropMaterial = this.createWaterMaterial([226, 248, 255], 0.8);
-    const materials = [fillMaterial, ringMaterial, dropMaterial];
+    const fillMaterial = this.createWaterMaterial(color, 0.07);
+    const ringMaterial = this.createWaterMaterial(tintColor(color, 0.55), 0.4);
+    const jetMaterial = this.createVertexColorMaterial(0.92);
+    const materials = [fillMaterial, ringMaterial, jetMaterial];
 
     const fill = this.createEntity(this.discMesh, [fillMaterial], root);
-    fill.setLocalPosition(0, 0.02, 0);
+    fill.setLocalPosition(0, 0.01, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
 
-    const rings: pc.Entity[] = [];
-    const ringCount = 3;
-    for (let index = 0; index < ringCount; index++) {
-      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.09, 0);
-      ring.setLocalScale(0.2, 1, 0.2);
-      rings.push(ring);
-    }
+    const border = this.createEntity(this.torusMesh, [ringMaterial], root);
+    border.setLocalPosition(0, 0.08, 0);
+    border.setLocalScale(radius * 2, 1, radius * 2);
 
-    const drops: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
+    const jets: {
+      body: pc.Entity;
+      x: number;
+      z: number;
+      width: number;
       height: number;
-      size: number;
       phase: number;
       speed: number;
+      spin: number;
     }[] = [];
-    for (let index = 0; index < 16; index++) {
-      const drop = this.createEntity(this.sphereMesh, [dropMaterial], root);
-      const size = 0.07 + Math.random() * 0.07;
-      drop.setLocalScale(size, size, size);
-      drops.push({
-        entity: drop,
-        angle: Math.random() * Math.PI * 2,
-        distance: radius * (0.35 + Math.random() * 0.6),
-        height: 0.35 + Math.random() * 0.7,
-        size,
-        phase: Math.random(),
-        speed: 1.4 + Math.random() * 0.9
-      });
+
+    const jetCount = 18;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    for (let index = 0; index < jetCount; index++) {
+      // Reparto por área (sqrt) para que los chorros no se apelotonen en el centro.
+      const angle = index * goldenAngle + (Math.random() - 0.5) * 0.18;
+      const distance =
+        radius * (0.12 + Math.sqrt((index + 0.5) / jetCount) * 0.8);
+      const px = Math.cos(angle) * distance;
+      const pz = Math.sin(angle) * distance;
+      const width = radius * (0.19 + Math.random() * 0.06);
+      const height = radius * (0.35 + Math.random() * 0.18);
+      const phase = (index / jetCount) * Math.PI * 2 + Math.random() * 0.5;
+      // 2-3,2 ciclos/s: un sube y baja claramente más rápido que el respiradero
+      // lento original, pero sin parpadear.
+      const speed = 2 + Math.random() * 1.2;
+      const spin = Math.random() * Math.PI;
+
+      const body = this.createEntity(
+        this.waterJetMeshes[index % this.waterJetMeshes.length],
+        [jetMaterial],
+        root
+      );
+      jets.push({ body, x: px, z: pz, width, height, phase, speed, spin });
     }
 
     let time = 0;
@@ -4494,37 +4918,32 @@ export class CombatFx {
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.25));
       const envelope = Math.min(fadeIn, fadeOut);
 
-      fillMaterial.opacity = 0.07 * envelope;
-      const fillScale = radius * 2 * (0.96 + Math.sin(time * 6) * 0.03);
+      fillMaterial.opacity = 0.06 * envelope;
+      const fillScale = radius * 2 * (0.97 + Math.sin(time * 5) * 0.02);
       fill.setLocalScale(fillScale, 1, fillScale);
 
-      rings.forEach((ring, index) => {
-        const ringTime = time - index * 0.14;
-        const phase =
-          ringTime <= 0 ? 0 : (ringTime * 0.75) % 1;
-        const scale = radius * 2 * (0.14 + phase * 0.86);
-        ring.setLocalScale(scale, 1, scale);
-        ring.setLocalPosition(0, 0.09 + phase * 0.05, 0);
-      });
-      ringMaterial.opacity = 0.5 * envelope;
+      const borderScale = radius * 2 * (1 + Math.sin(time * 4) * 0.012);
+      border.setLocalScale(borderScale, 1, borderScale);
+      ringMaterial.opacity = (0.28 + Math.sin(time * 6) * 0.07) * envelope;
 
-      for (const drop of drops) {
-        const p = (drop.phase + time * drop.speed) % 1;
-        const distance = drop.distance * (0.2 + p * 0.8);
-        const rise = Math.sin(p * Math.PI) * drop.height;
-        drop.entity.setLocalPosition(
-          Math.cos(drop.angle) * distance,
-          0.1 + rise,
-          Math.sin(drop.angle) * distance
-        );
-        const fade = Math.max(0, 1 - p * 1.1);
-        drop.entity.setLocalScale(
-          drop.size * fade,
-          drop.size * fade,
-          drop.size * fade
+      for (const jet of jets) {
+        // Cada chorro respira en altura y grosor con su propia fase.
+        const wave =
+          0.5 + 0.5 * Math.sin(time * jet.speed * Math.PI * 2 + jet.phase);
+        const height = jet.height * (0.55 + 0.45 * wave);
+        const width = jet.width * (0.92 + 0.12 * wave);
+
+        jet.body.setLocalPosition(jet.x, 0, jet.z);
+        jet.body.setLocalScale(width, height, width);
+        // Girar la malla mueve la corona ondulada y las gotas.
+        jet.body.setLocalEulerAngles(
+          0,
+          jet.spin + Math.sin(time * 1.2 + jet.phase) * 5,
+          0
         );
       }
-      dropMaterial.opacity = 0.75 * envelope;
+
+      jetMaterial.opacity = 0.92 * envelope;
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
@@ -7808,11 +8227,11 @@ export class CombatFx {
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     this.app.root.addChild(root);
 
-    const coreMaterial = this.createWaterMaterial([255, 252, 240], 0.9);
+    const coreMaterial = this.createWaterMaterial(tintColor(color, 0.9), 0.9);
     const glowMaterial = this.createWaterMaterial(color, 0.16);
-    const bladeMaterial = this.createWaterMaterial([255, 240, 210], 0.62);
+    const bladeMaterial = this.createWaterMaterial(tintColor(color, 0.72), 0.62);
     const hotMaterial = this.createMaterial(color, 0.5);
-    const featherMaterial = this.createLeafMaterial([255, 228, 176], 0.85);
+    const featherMaterial = this.createLeafMaterial(tintColor(color, 0.52), 0.85);
     const materials = [
       coreMaterial,
       glowMaterial,
@@ -7954,11 +8373,11 @@ export class CombatFx {
     root.setPosition(x, 0, z);
     this.app.root.addChild(root);
 
-    const coreMaterial = this.createMaterial([255, 255, 244], 0.92);
+    const coreMaterial = this.createMaterial(tintColor(color, 0.92), 0.92);
     const glowMaterial = this.createWaterMaterial(color, 0.3);
-    const ringMaterial = this.createMaterial([255, 244, 214], 0.55);
-    const bladeMaterial = this.createWaterMaterial([255, 236, 198], 0.66);
-    const featherMaterial = this.createLeafMaterial([255, 224, 168], 0.85);
+    const ringMaterial = this.createMaterial(tintColor(color, 0.78), 0.55);
+    const bladeMaterial = this.createWaterMaterial(tintColor(color, 0.68), 0.66);
+    const featherMaterial = this.createLeafMaterial(tintColor(color, 0.52), 0.85);
     const materials = [
       coreMaterial,
       glowMaterial,
@@ -8116,10 +8535,10 @@ export class CombatFx {
     root.setPosition(x, 0.03, z);
     this.app.root.addChild(root);
 
-    const ringMaterial = this.createMaterial([255, 226, 178], 0.32);
-    const bladeMaterial = this.createWaterMaterial([255, 240, 208], 0.58);
+    const ringMaterial = this.createMaterial(tintColor(color, 0.6), 0.32);
+    const bladeMaterial = this.createWaterMaterial(tintColor(color, 0.78), 0.58);
     const hotMaterial = this.createMaterial(color, 0.4);
-    const featherMaterial = this.createLeafMaterial([255, 220, 160], 0.8);
+    const featherMaterial = this.createLeafMaterial(tintColor(color, 0.5), 0.8);
     const materials = [
       ringMaterial,
       bladeMaterial,
@@ -8281,6 +8700,190 @@ export class CombatFx {
         ember.entity.setLocalScale(scale, scale, scale);
       }
     });
+  }
+
+  /**
+   * Huracán de `Ciclón`: un vórtice de nubes 3D con ojo oscuro. Tres brazos
+   * espirales de cinta abombada giran alrededor del centro, reforzados por
+   * nubes volumétricas y una banda exterior. El ojo queda libre y se marca con
+   * un disco azul oscuro.
+   */
+  private spawnCycloneAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('cyclone-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const vortex = new pc.Entity('cyclone-vortex');
+    root.addChild(vortex);
+
+    const ribbonMaterial = this.createVertexColorMaterial(0.26);
+    const ribbonBrightMaterial = this.createVertexColorMaterial(0.2);
+    const puffMaterial = this.createWaterMaterial(tintColor(color, 0.84), 0.2);
+    const puffShadeMaterial = this.createWaterMaterial(
+      tintColor(color, 0.58),
+      0.16
+    );
+    const eyeMaterial = this.createWaterMaterial([18, 55, 92], 0.55);
+    const eyeRingMaterial = this.createMaterial(tintColor(color, 0.55), 0.32);
+    const outerRingMaterial = this.createWaterMaterial(
+      tintColor(color, 0.6),
+      0.16
+    );
+    const materials = [
+      ribbonMaterial,
+      ribbonBrightMaterial,
+      puffMaterial,
+      puffShadeMaterial,
+      eyeMaterial,
+      eyeRingMaterial,
+      outerRingMaterial
+    ];
+
+    // Ojo del huracán.
+    const eye = this.createEntity(this.discMesh, [eyeMaterial], root);
+    eye.setLocalPosition(0, 0.06, 0);
+    eye.setLocalScale(radius * 0.3, 1, radius * 0.3);
+    const eyeRing = this.createEntity(this.torusMesh, [eyeRingMaterial], root);
+    eyeRing.setLocalPosition(0, 0.07, 0);
+    eyeRing.setLocalScale(radius * 0.3, 1, radius * 0.3);
+
+    // Aro tenue para leer el radio del área.
+    const outerRing = this.createEntity(
+      this.torusMesh,
+      [outerRingMaterial],
+      root
+    );
+    outerRing.setLocalPosition(0, 0.06, 0);
+    outerRing.setLocalScale(radius * 2, 1, radius * 2);
+
+    const arms = 3;
+    for (let armIndex = 0; armIndex < arms; armIndex++) {
+      const arm = this.createEntity(
+        this.cycloneArmMeshes[armIndex % this.cycloneArmMeshes.length],
+        [ribbonMaterial],
+        vortex
+      );
+      arm.setLocalEulerAngles(0, (armIndex / arms) * 360, 0);
+      arm.setLocalScale(radius, 1, radius);
+
+      // Segunda capa más alta y girada: da volumen de nube al brazo.
+      const upperArm = this.createEntity(
+        this.cycloneArmMeshes[(armIndex + 1) % this.cycloneArmMeshes.length],
+        [ribbonBrightMaterial],
+        vortex
+      );
+      upperArm.setLocalEulerAngles(0, (armIndex / arms) * 360 + 24, 0);
+      upperArm.setLocalPosition(0, 0.12, 0);
+      upperArm.setLocalScale(radius * 0.84, 1, radius * 0.84);
+    }
+
+    // Nubes volumétricas a lo largo de los brazos y en la banda exterior.
+    const puffs: {
+      entity: pc.Entity;
+      x: number;
+      y: number;
+      z: number;
+      sx: number;
+      sy: number;
+      sz: number;
+      phase: number;
+    }[] = [];
+    const addPuff = (
+      angle: number,
+      distance: number,
+      y: number,
+      size: number,
+      shade: boolean
+    ): void => {
+      const puff = this.createEntity(
+        this.sphereMesh,
+        [shade ? puffShadeMaterial : puffMaterial],
+        vortex
+      );
+      const sx = size * (1.35 + Math.random() * 0.35);
+      const sy = size * (0.55 + Math.random() * 0.3);
+      const sz = size * (1.35 + Math.random() * 0.35);
+      const px = Math.cos(angle) * distance;
+      const pz = Math.sin(angle) * distance;
+      puff.setLocalPosition(px, y, pz);
+      puff.setLocalScale(sx, sy, sz);
+      puffs.push({
+        entity: puff,
+        x: px,
+        y,
+        z: pz,
+        sx,
+        sy,
+        sz,
+        phase: Math.random() * Math.PI * 2
+      });
+    };
+
+    const turns = 1.5;
+    for (let armIndex = 0; armIndex < arms; armIndex++) {
+      const baseAngle = (armIndex / arms) * Math.PI * 2;
+      for (let puffIndex = 0; puffIndex < 12; puffIndex++) {
+        const t =
+          0.16 + (puffIndex / 11) * 0.84 + (Math.random() - 0.5) * 0.03;
+        const angle = baseAngle + t * turns * Math.PI * 2;
+        const distance = (0.17 + 0.76 * t) * radius;
+        const y = 0.2 + 0.1 * t + Math.random() * 0.1;
+        const size = radius * (0.05 + Math.random() * 0.05);
+        addPuff(angle, distance, y, size, puffIndex % 3 === 0);
+      }
+    }
+    for (let index = 0; index < 24; index++) {
+      const angle = (index / 24) * Math.PI * 2 + Math.random() * 0.3;
+      const distance = radius * (0.8 + Math.random() * 0.2);
+      const y = 0.12 + Math.random() * 0.14;
+      const size = radius * (0.06 + Math.random() * 0.06);
+      addPuff(angle, distance, y, size, index % 2 === 0);
+    }
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.18);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const grow = 0.86 + 0.14 * Math.min(1, time / 0.35);
+
+      // El vórtice gira y crece; las nubes respiran encima.
+      vortex.setLocalEulerAngles(0, time * 300, 0);
+      vortex.setLocalScale(grow, 1, grow);
+
+      ribbonMaterial.opacity = 0.24 * envelope;
+      ribbonBrightMaterial.opacity = 0.18 * envelope;
+      puffMaterial.opacity = (0.18 + Math.sin(time * 4) * 0.03) * envelope;
+      puffShadeMaterial.opacity =
+        (0.14 + Math.sin(time * 3.4 + 1) * 0.025) * envelope;
+      eyeMaterial.opacity = 0.5 * envelope;
+      eyeRingMaterial.opacity = (0.24 + Math.sin(time * 6) * 0.06) * envelope;
+      outerRingMaterial.opacity = 0.13 * envelope;
+
+      const ringScale = radius * 2 * (0.94 + Math.sin(time * 3) * 0.02);
+      outerRing.setLocalScale(ringScale, 1, ringScale);
+
+      for (const puff of puffs) {
+        const bob = Math.sin(time * 2.6 + puff.phase) * 0.035;
+        const pulse = 0.9 + Math.sin(time * 3.2 + puff.phase) * 0.1;
+        puff.entity.setLocalPosition(puff.x, puff.y + bob, puff.z);
+        puff.entity.setLocalScale(
+          puff.sx * pulse,
+          puff.sy * pulse,
+          puff.sz * pulse
+        );
+      }
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
   }
 
   /**
@@ -8577,11 +9180,11 @@ export class CombatFx {
     this.app.root.addChild(root);
 
     const bodyMaterial = this.createWaterMaterial(color, 0.24);
-    const coreMaterial = this.createWaterMaterial([255, 250, 232], 0.52);
-    const ribbonMaterial = this.createWaterMaterial([255, 236, 196], 0.48);
+    const coreMaterial = this.createWaterMaterial(tintColor(color, 0.9), 0.52);
+    const ribbonMaterial = this.createWaterMaterial(tintColor(color, 0.68), 0.48);
     const hotMaterial = this.createMaterial(color, 0.42);
-    const ringMaterial = this.createMaterial([255, 242, 206], 0.42);
-    const featherMaterial = this.createLeafMaterial([255, 222, 164], 0.78);
+    const ringMaterial = this.createMaterial(tintColor(color, 0.78), 0.42);
+    const featherMaterial = this.createLeafMaterial(tintColor(color, 0.52), 0.78);
     const materials = [
       bodyMaterial,
       coreMaterial,

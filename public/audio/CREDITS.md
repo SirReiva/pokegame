@@ -82,6 +82,10 @@ este proyecto fan, no comercial, igual que los sprites.
 | Rayo Solar | Leaf Storm |
 | Deseo | Recover |
 | Futuro Siniestro | Future Sight |
+| Onda Mental | Psychic |
+| Marea | Water Pulse |
+| Ciclón | Air Slash |
+| Aerochorro | Sky Attack |
 | Protección | Protect |
 | Impulso | Quick Attack |
 
@@ -92,4 +96,5 @@ tipo en el momento del golpe.
 `Water Shuriken` y `Precipice Blades` no existen en la quinta generación: se
 usan `Water Pulse` y `Fissure` como equivalentes. `Magical Leaf` y `Solar Beam`
 tampoco están en el álbum, así que `Hoja Mágica` usa `Razor Leaf` y `Rayo Solar`
-usa `Leaf Storm`.
+usa `Leaf Storm`. `Aeroblast` tampoco aparece, así que `Aerochorro` reutiliza
+`Sky Attack`.

@@ -100,6 +100,11 @@ const ABILITY_TRACKS = {
   rayoSolar: 'Leaf Storm',
   deseo: 'Recover',
   futuroSiniestro: 'Future Sight',
+  // Lugia: el álbum no tiene Aeroblast; Sky Attack comparte la carga de viento.
+  ondaMental: 'Psychic',
+  marea: 'Water Pulse',
+  ciclon: 'Air Slash',
+  aerochorro: 'Sky Attack',
   proteccion: 'Protect',
   impulso: 'Quick Attack'
 };
