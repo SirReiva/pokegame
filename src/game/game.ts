@@ -1422,9 +1422,14 @@ export class Game {
         copy.update(dt, cameraPosition);
       });
       // El retrato de la marca de KO se mantiene de pie en cada vista aunque
-      // la cámara orbite alrededor del cuerpo.
-      this.deathMarkers.forEach((markers) => {
-        markers[viewIndex]?.faceCamera(cameraPosition);
+      // la cámara orbite alrededor del cuerpo. El centro muestra los segundos
+      // que faltan para que el Pokémon vuelva a la vida.
+      this.deathMarkers.forEach((markers, slot) => {
+        const marker = markers[viewIndex];
+        if (!marker) return;
+        marker.faceCamera(cameraPosition);
+        const target = this.matchPlayers.find((player) => player.slot === slot);
+        if (target) marker.setRespawnCountdown(target.respawnTimer);
       });
     });
 
@@ -2070,6 +2075,7 @@ export class Game {
         y,
         asset?.portrait ?? null
       );
+      marker.setRespawnCountdown(target.respawnTimer);
       marker.setLayer(layer.id);
       marker.faceCamera(viewer.camera.position);
       markers[index] = marker;

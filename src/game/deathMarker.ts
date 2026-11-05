@@ -1,6 +1,10 @@
 import * as pc from 'playcanvas';
 import { RAD } from './config';
-import { createDeathMarkerCanvas, textureFromCanvas } from './textures';
+import {
+  createDeathMarkerCanvas,
+  paintDeathMarkerCanvas,
+  textureFromCanvas
+} from './textures';
 
 /** Diámetro de la marca de KO en unidades de mundo. */
 const MARKER_DIAMETER = 1.05;
@@ -26,6 +30,10 @@ export class DeathMarker {
   private readonly mesh: pc.Mesh;
   private readonly material: pc.StandardMaterial;
   private readonly texture: pc.Texture;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly portrait: HTMLImageElement | null;
+  /** Último segundo pintado en el centro; evita redibujar cada frame. */
+  private countdownSeconds: number | null = null;
   private visible = true;
 
   constructor(
@@ -37,10 +45,12 @@ export class DeathMarker {
   ) {
     this.x = x;
     this.z = z;
+    this.portrait = portrait;
 
+    this.canvas = createDeathMarkerCanvas(portrait);
     this.texture = textureFromCanvas(
       app.graphicsDevice,
-      createDeathMarkerCanvas(portrait),
+      this.canvas,
       {
         name: 'death-marker',
         mipmaps: false,
@@ -101,6 +111,18 @@ export class DeathMarker {
     if (this.visible === visible) return;
     this.visible = visible;
     this.root.enabled = visible;
+  }
+
+  /**
+   * Pinta en el centro los segundos que faltan para reaparecer. Solo se
+   * redibuja cuando cambia el segundo mostrado.
+   */
+  setRespawnCountdown(seconds: number): void {
+    const shown = Math.max(0, Math.ceil(seconds));
+    if (shown === this.countdownSeconds) return;
+    this.countdownSeconds = shown;
+    paintDeathMarkerCanvas(this.canvas, this.portrait, shown);
+    this.texture.upload();
   }
 
   /**

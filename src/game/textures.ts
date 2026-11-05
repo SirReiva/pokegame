@@ -1578,12 +1578,41 @@ export const DEATH_MARKER_TEXTURE_SIZE = 80;
  * si se pasa un retrato, la imagen de la especie dentro del anillo. Se dibuja
  * con un contorno oscuro para que se lea sobre cualquier terreno y se resuelve
  * píxel a píxel, sin antialiasing, como el resto del arte.
+ *
+ * `countdown` pinta en el centro los segundos que faltan para reaparecer. Se
+ * redibuja la marca entera al cambiar el segundo para no dejar restos del
+ * número anterior sobre el retrato.
  */
 export function createDeathMarkerCanvas(
   portrait: HTMLImageElement | null = null,
   size = DEATH_MARKER_TEXTURE_SIZE,
+  countdown: number | null = null,
 ): HTMLCanvasElement {
   const ctx = canvas2d(size);
+  paintDeathMarker(ctx, size, portrait, countdown);
+  return ctx.canvas;
+}
+
+/**
+ * Redibuja la marca sobre el mismo canvas para poder subir después la misma
+ * textura, sin crear una nueva por cada segundo de la cuenta atrás.
+ */
+export function paintDeathMarkerCanvas(
+  canvas: HTMLCanvasElement,
+  portrait: HTMLImageElement | null = null,
+  countdown: number | null = null,
+): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No se pudo crear el contexto 2D');
+  paintDeathMarker(ctx, canvas.width, portrait, countdown);
+}
+
+function paintDeathMarker(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  portrait: HTMLImageElement | null,
+  countdown: number | null,
+): void {
   const image = ctx.createImageData(size, size);
   const data = image.data;
   const center = size / 2;
@@ -1666,7 +1695,33 @@ export function createDeathMarkerCanvas(
     );
   }
 
-  return ctx.canvas;
+  if (countdown !== null) {
+    drawDeathMarkerCountdown(ctx, size, countdown);
+  }
+}
+
+/**
+ * Segundos restantes en el centro de la marca. Sin fondo, solo el número con
+ * un contorno grueso para que se lea sobre el retrato y el terreno.
+ */
+function drawDeathMarkerCountdown(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  countdown: number,
+): void {
+  const center = size / 2;
+  const scale = size / DEATH_MARKER_TEXTURE_SIZE;
+  const label = String(Math.max(0, Math.ceil(countdown)));
+  const wide = label.length > 1;
+
+  ctx.font = `700 ${(wide ? 24 : 34) * scale}px ui-monospace, "Cascadia Mono", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(2, (wide ? 2.5 : 3.5) * scale);
+  ctx.strokeStyle = 'rgba(26, 16, 24, 1)';
+  ctx.fillStyle = '#ffe0d0';
+  ctx.strokeText(label, center, center + scale);
+  ctx.fillText(label, center, center + scale);
 }
 
 export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
