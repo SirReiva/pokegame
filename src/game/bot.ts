@@ -171,8 +171,13 @@ const BACK_OFF_SECONDS = 0.9;
 /** Distancia que se retrocede por el rastro para salir de un bloqueo. */
 const BACK_OFF_DISTANCE = 1.6;
 
-/** Velocidad real por debajo de la cual un aliado cuenta como detenido. */
-const ALLY_STILL_SPEED = 0.25;
+/**
+ * Desplazamiento neto máximo para seguir considerando parado a un aliado. Un
+ * bot empujado por otros puede moverse unos centímetros cada frame sin ir a
+ * ningún sitio; medir la posición desde un ancla evita confundirlo con uno que
+ * avanza de verdad.
+ */
+const ALLY_STILL_RADIUS = 0.35;
 /** Tiempo que un aliado debe permanecer casi inmóvil para considerarlo parado. */
 const ALLY_STILL_SECONDS = 0.35;
 /** Radio alrededor del destino en el que un aliado detenido lo ocupa. */
@@ -181,10 +186,12 @@ const GOAL_OCCUPIED_RADIUS = 0.9;
 const GOAL_ARRIVE_EPSILON = 0.5;
 /** Radio en el que un aliado cercano puede estar bloqueando el avance. */
 const ORBIT_ALLY_RADIUS = 2.2;
-/** Tiempo avanzando sin acercarse al destino que delata un giro alrededor de un aliado. */
-const ORBIT_PROGRESS_SECONDS = 1.1;
-/** Mejora de distancia que cuenta como progreso real hacia el destino. */
+/** Tiempo sin acercarse al destino que delata un giro alrededor de un aliado. */
+const ORBIT_PROGRESS_SECONDS = 1.5;
+/** Mejora neta de distancia que cuenta como progreso real hacia el destino. */
 const ORBIT_PROGRESS_GAIN = 0.35;
+/** Segundos que se mantiene el paso lateral al rodear a un aliado parado. */
+const ALLY_DETOUR_SECONDS = 0.75;
 
 /**
  * Penalización para un rival inmune a todo el daño del bot. No lo convierte en
@@ -396,10 +403,10 @@ export class BotController {
   /** Aliado al que se le está cediendo el paso y hasta cuándo. */
   private yieldSource: MatchPlayerState | null = null;
   private yieldUntil = 0;
-  /** Posición anterior de cada aliado para distinguir avance real de intención. */
+  /** Ancla de posición de cada aliado para distinguir avance real de intención. */
   private readonly allyMotion = new Map<
     number,
-    { x: number; z: number; stillFor: number }
+    { anchorX: number; anchorZ: number; stillFor: number }
   >();
   /** Destino con el que se está midiendo el progreso y mejor distancia vista. */
   private progressGoal: Vec2 = { x: Infinity, z: Infinity };
@@ -577,31 +584,42 @@ export class BotController {
    * intención de movimiento: un bot atascado contra una pared o contra otro
    * cuerpo puede tenerlas altas sin desplazarse. Sin esta distinción, sus
    * compañeros creen que se les echa encima y ceden el paso en bucle.
+   *
+   * Se compara con un ancla y no con el frame anterior: el cuerpo de un bot
+   * parado puede ser empujado unos milímetros por sus compañeros y, aun así,
+   * no está avanzando hacia ningún sitio.
    */
   private updateAllyMotion(
     dt: number,
     self: MatchPlayerState,
     players: readonly MatchPlayerState[]
   ): void {
-    const step = Math.max(dt, 0.0001);
     for (const other of players) {
       if (other === self || other.team !== self.team) continue;
+      if (!other.alive) {
+        this.allyMotion.delete(other.slot);
+        continue;
+      }
       const previous = this.allyMotion.get(other.slot);
       if (!previous) {
         this.allyMotion.set(other.slot, {
-          x: other.x,
-          z: other.z,
+          anchorX: other.x,
+          anchorZ: other.z,
           stillFor: 0
         });
         continue;
       }
-      const moved = Math.hypot(other.x - previous.x, other.z - previous.z);
-      previous.stillFor =
-        other.alive && moved < ALLY_STILL_SPEED * step
-          ? previous.stillFor + dt
-          : 0;
-      previous.x = other.x;
-      previous.z = other.z;
+      const drift = Math.hypot(
+        other.x - previous.anchorX,
+        other.z - previous.anchorZ
+      );
+      if (drift > ALLY_STILL_RADIUS) {
+        previous.anchorX = other.x;
+        previous.anchorZ = other.z;
+        previous.stillFor = 0;
+      } else {
+        previous.stillFor += dt;
+      }
     }
   }
 
@@ -611,20 +629,33 @@ export class BotController {
     return motion !== undefined && motion.stillFor >= ALLY_STILL_SECONDS;
   }
 
+  /** Aliado vivo más cercano, o `null` si no hay ninguno. */
+  private nearestAlly(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): MatchPlayerState | null {
+    let nearest: MatchPlayerState | null = null;
+    let best = Infinity;
+    for (const other of players) {
+      if (other === self || !other.alive || other.team !== self.team) continue;
+      const distance = Math.hypot(other.x - self.x, other.z - self.z);
+      if (distance < best) {
+        best = distance;
+        nearest = other;
+      }
+    }
+    return nearest;
+  }
+
   /** Distancia al aliado vivo más cercano, o `Infinity` si no hay ninguno. */
   private nearestAllyDistance(
     self: MatchPlayerState,
     players: readonly MatchPlayerState[]
   ): number {
-    let nearest = Infinity;
-    for (const other of players) {
-      if (other === self || !other.alive || other.team !== self.team) continue;
-      nearest = Math.min(
-        nearest,
-        Math.hypot(other.x - self.x, other.z - self.z)
-      );
-    }
-    return nearest;
+    const nearest = this.nearestAlly(self, players);
+    return nearest
+      ? Math.hypot(nearest.x - self.x, nearest.z - self.z)
+      : Infinity;
   }
 
   /**
@@ -678,10 +709,9 @@ export class BotController {
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
     steeringToGoal: boolean,
-    wantsToMove: boolean,
     casting: boolean
   ): boolean {
-    if (!steeringToGoal || casting || !wantsToMove) {
+    if (!steeringToGoal || casting) {
       this.resetProgress();
       return false;
     }
@@ -715,14 +745,18 @@ export class BotController {
       return false;
     }
 
-    if (goalDistance < this.progressDistance - ORBIT_PROGRESS_GAIN) {
-      this.progressDistance = goalDistance;
-      this.progressTimer = 0;
-      return false;
-    }
-
+    // Se mide el progreso neto de una ventana completa, no el mejor acercamiento
+    // visto. Al girar alrededor de un aliado la distancia al destino oscila: el
+    // punto más cercano de cada vuelta daba «progreso» y reiniciaba el contador
+    // antes de que la órbita se detectara.
     this.progressTimer += dt;
     if (this.progressTimer < ORBIT_PROGRESS_SECONDS) return false;
+
+    const gained = this.progressDistance - goalDistance;
+    this.progressDistance = goalDistance;
+    this.progressTimer = 0;
+    if (gained > ORBIT_PROGRESS_GAIN) return false;
+
     this.resetProgress();
     return true;
   }
@@ -1781,7 +1815,8 @@ export class BotController {
 
     // Un aliado puede dejar al bot girando a su alrededor a toda velocidad: se
     // mueve, así que no cuenta como bloqueo físico, pero no se acerca al
-    // destino. En ese caso se deshace el rastro para romper la órbita.
+    // destino. En ese caso se da un paso lateral comprometido (o se cambia de
+    // destino si el aliado lo ocupa) para romper la órbita.
     if (
       !steeringOverride &&
       !blocked &&
@@ -1790,16 +1825,33 @@ export class BotController {
         self,
         players,
         steeringToGoal,
-        wantsToMove,
         casting
       )
     ) {
       this.stuckCount = 0;
       this.path = [];
       this.pathTimer = 0;
-      this.backOffGoal = this.trailBackOff(self);
-      this.backOffTimer = BACK_OFF_SECONDS;
-      desired = directionTo(self, this.backOffGoal);
+      const blocker = this.nearestAlly(self, players);
+      if (
+        blocker &&
+        Math.hypot(blocker.x - this.goal.x, blocker.z - this.goal.z) <=
+          GOAL_OCCUPIED_RADIUS
+      ) {
+        // El destino es el propio aliado parado: no tiene sentido rodearlo
+        // para volver a él. Se elige otro punto de patrulla.
+        this.abandonGoal(self);
+      }
+      if (blocker) {
+        // Paso lateral comprometido: un vector fijo durante unas décimas evita
+        // que el desvío vuelva a curvarse en círculos alrededor del aliado.
+        this.detour = this.allySideStep(self, blocker, this.goal);
+        this.detourTimer = ALLY_DETOUR_SECONDS;
+        desired = this.detour;
+      } else {
+        this.backOffGoal = this.trailBackOff(self);
+        this.backOffTimer = BACK_OFF_SECONDS;
+        desired = directionTo(self, this.backOffGoal);
+      }
     }
 
     this.applyMovement(snapshot, self, desired);
@@ -2360,6 +2412,51 @@ export class BotController {
     if (this.sideOpen(self, first.x, first.z)) return first;
     if (this.sideOpen(self, second.x, second.z)) return second;
     return first;
+  }
+
+  /**
+   * Dirección de paso lateral para rodear a un aliado que bloquea el camino.
+   * Se elige el sentido de la tangente que más acerca al destino y se añade un
+   * poco de separación para no rozar el cuerpo. A diferencia del desvío normal,
+   * este vector se mantiene fijo durante `ALLY_DETOUR_SECONDS`: si se recalcula
+   * cada frame, el bot gira en círculo alrededor del aliado en vez de pasarlo.
+   */
+  private allySideStep(
+    self: MatchPlayerState,
+    ally: MatchPlayerState,
+    goal: Vec2
+  ): Vec2 {
+    const toX = ally.x - self.x;
+    const toZ = ally.z - self.z;
+    const distance = Math.hypot(toX, toZ);
+    if (distance < 0.001) return { x: -this.detourSide, z: 0 };
+    const nx = toX / distance;
+    const nz = toZ / distance;
+    let sideX = -nz;
+    let sideZ = nx;
+    const goalX = goal.x - self.x;
+    const goalZ = goal.z - self.z;
+    const towardGoal = sideX * goalX + sideZ * goalZ;
+    if (Math.abs(towardGoal) < 0.05) {
+      if (this.detourSide < 0) {
+        sideX = -sideX;
+        sideZ = -sideZ;
+      }
+    } else if (towardGoal < 0) {
+      sideX = -sideX;
+      sideZ = -sideZ;
+    }
+    // 90 % tangente + 45 % alejándose del aliado: pasa de largo sin quedar
+    // pegado a su cuerpo.
+    const x = sideX * 0.9 - nx * 0.45;
+    const z = sideZ * 0.9 - nz * 0.45;
+    const length = Math.hypot(x, z) || 1;
+    const step = { x: x / length, z: z / length };
+    // Si ese lado da contra una pared, se prueba el contrario.
+    if (!this.sideOpen(self, step.x, step.z)) {
+      return { x: -step.x, z: -step.z };
+    }
+    return step;
   }
 
   /** ¿Hay sitio transitable para desplazarse un poco en esta dirección? */
