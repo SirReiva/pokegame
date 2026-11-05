@@ -153,9 +153,6 @@ export interface GameOptions {
   koTarget?: number;
 }
 
-/** Cuánto se ensancha el radio de colisión de las cuñas de sombra. */
-const MOUNTAIN_SHADOW_RADIUS = 1.05;
-
 function angleLerp(current: number, target: number, t: number): number {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + delta * Math.min(1, Math.max(0, t));
@@ -250,9 +247,13 @@ export class Game {
       if (segmentBlockedByColliders(player.x, player.z, spawn.x, spawn.z, colliders)) {
         return false;
       }
-      // La niebla también cuenta: un objeto oculto para el equipo no se consume.
-      const concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
-      return this.teamSeesPoint(player.team, spawn.x, spawn.z, concealment, colliders);
+      // La niebla también cuenta: un objeto fuera de la visión del equipo no se
+      // consume. Se usa su máscara para que la visibilidad de recogida coincida
+      // con la que se pinta en pantalla; los objetos no aplican la ocultación
+      // del terreno, así que la máscara se consulta sin esa capa.
+      const mask = this.fogMasks.get(player.team);
+      if (mask) return mask.isVisibleAt(spawn.x, spawn.z);
+      return this.teamSeesPoint(player.team, spawn.x, spawn.z, 0, colliders);
     }
   };
 
@@ -302,7 +303,7 @@ export class Game {
   private readonly fogMasks = new Map<Team, FogMask>();
   /** Buffers de círculos por vista, para poner el observador local primero. */
   private readonly viewCircles: VisionCircle[][] = [];
-  /** Tramos de cordillera que proyectan sombra dentro de la niebla. */
+  /** Tramos de cordillera y árboles que proyectan sombra dentro de la niebla. */
   private sightOccluders: SightOccluder[] = [];
   /**
    * Slots visibles para cada equipo en el frame anterior. La visión es
@@ -532,18 +533,34 @@ export class Game {
 
   private rebuildSightOccluders(): void {
     this.sightOccluders = this.world.colliders.flatMap<SightOccluder>((collider) => {
-      if (collider.type !== 'segment' || collider.sightRadius === undefined) return [];
+      if (collider.sightRadius === undefined) return [];
+      if (collider.type === 'segment') {
+        return [
+          {
+            x: (collider.ax + collider.bx) / 2,
+            z: (collider.az + collider.bz) / 2,
+            // Mismo radio que usa la línea de visión: la sombra de la niebla
+            // cubre exactamente la zona en la que un actor queda oculto.
+            radius: collider.sightRadius,
+            ax: collider.ax,
+            az: collider.az,
+            bx: collider.bx,
+            bz: collider.bz
+          }
+        ];
+      }
+      // Árboles: oclusor puntual con el radio de la copa. Antes no proyectaban
+      // sombra y un Pokémon podía desaparecer detrás de ellos con la niebla
+      // despejada.
       return [
         {
-          x: (collider.ax + collider.bx) / 2,
-          z: (collider.az + collider.bz) / 2,
-          // Un poco más ancho que el radio de colisión del tramo para cubrir
-          // el volumen visible de los picos, sin abrir la cuña de más.
-          radius: collider.radius * MOUNTAIN_SHADOW_RADIUS,
-          ax: collider.ax,
-          az: collider.az,
-          bx: collider.bx,
-          bz: collider.bz
+          x: collider.x,
+          z: collider.z,
+          radius: collider.sightRadius,
+          ax: collider.x,
+          az: collider.z,
+          bx: collider.x,
+          bz: collider.z
         }
       ];
     });
@@ -806,6 +823,11 @@ export class Game {
         player.copies.push(copy);
       });
     });
+
+    // La máscara de niebla también alimenta la visibilidad de los objetos, así
+    // que debe existir para los dos equipos aunque uno no tenga vistas humanas.
+    this.ensureFogMask('blue');
+    this.ensureFogMask('red');
 
     // Copias de los objetos por viewport: cada una vive en la capa de su vista
     // y se muestra únicamente cuando el equipo de esa vista ve el objeto.
@@ -3514,6 +3536,56 @@ export class Game {
   }
 
   /**
+   * Visibilidad de un actor para un observador concreto. La primera puerta es
+   * la máscara de niebla del equipo (círculos + sombras de separadores y
+   * árboles); si el punto está tapado, el actor no se ve aunque esté cerca.
+   * Después se aplica la ocultación del terreno del objetivo sobre el radio de
+   * visión del observador.
+   */
+  private observerSeesActor(
+    observer: MatchPlayerState,
+    target: MatchPlayerState,
+    alreadyVisible: boolean
+  ): boolean {
+    const mask = this.fogMasks.get(observer.team);
+    if (mask && !mask.isVisibleAt(target.x, target.z)) return false;
+    const distance = Math.hypot(target.x - observer.x, target.z - observer.z);
+    const effective = effectiveVisionRange(
+      observer.visionRange,
+      target.concealment.value
+    );
+    const limit = alreadyVisible
+      ? effective + CONFIG.vision.hysteresis
+      : effective;
+    return distance <= limit;
+  }
+
+  /**
+   * ¿Ve el equipo el punto de un objeto? Los objetos no se esconden por la
+   * ocultación del terreno (arena, veneno, hierba alta...), solo por el radio
+   * de visión y por la línea de visión (separadores y árboles). Se usa el mismo
+   * conjunto de observadores que dibuja la niebla: un humano KO conserva su
+   * círculo porque su cámara sigue al cuerpo, así que los objetos de esa zona
+   * deben seguir viéndose.
+   */
+  private teamSeesPickupPoint(
+    team: Team,
+    x: number,
+    z: number,
+    colliders: readonly Collider[]
+  ): boolean {
+    const point = { x, z };
+    for (const observer of this.matchPlayers) {
+      if (observer.team !== team) continue;
+      if (!observer.alive && observer.isBot) continue;
+      if (isTargetVisible(observer, point, 0, colliders)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Resuelve la niebla de cada vista: oculta las copias que no se ven y coloca
    * el degradado fuera de la unión de círculos del equipo. La visión es
    * compartida: cada vista revela lo que ven todos sus Pokémon vivos, humanos
@@ -3523,42 +3595,6 @@ export class Game {
   private updateVision(): void {
     const colliders = this.world.colliders;
     for (const player of this.matchPlayers) player.enemiesSeeing = 0;
-
-    // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
-    // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
-    const previous = this.visibleByTeam;
-    const current: Record<Team, Set<number>> = {
-      blue: new Set(),
-      red: new Set()
-    };
-
-    for (const observer of this.matchPlayers) {
-      if (!observer.alive) continue;
-      current[observer.team].add(observer.slot);
-      for (const target of this.matchPlayers) {
-        if (target === observer) continue;
-        // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
-        // que comprobar rivales y aliados que acaban de caer.
-        if (target.alive && target.team === observer.team) continue;
-        // Un KO deja ver la animación de daño un instante; el cuerpo sigue
-        // siendo visible para el equipo que lo vio caer.
-        if (!target.alive && target.deathFade <= 0) continue;
-        const visible = isTargetVisible(
-          observer,
-          target,
-          target.concealment.value,
-          colliders,
-          previous[observer.team].has(target.slot)
-        );
-        if (!visible) continue;
-        current[observer.team].add(target.slot);
-        // Un rival vivo que te ve te deja "descubierto" para su equipo.
-        if (target.alive && observer.team !== target.team) {
-          target.enemiesSeeing += 1;
-        }
-      }
-    }
-    this.visibleByTeam = current;
 
     // Círculos de visión por equipo: se calculan una vez por frame y se
     // reutilizan en todas sus vistas. Un humano KO conserva su círculo porque
@@ -3582,11 +3618,57 @@ export class Game {
     }
 
     // La máscara world-space se compone una sola vez por equipo, aunque haya
-    // varias vistas suyas en pantalla.
+    // varias vistas suyas en pantalla. Debe actualizarse antes de decidir la
+    // visibilidad de los actores: la máscara es la primera puerta y la
+    // ocultación del terreno se aplica después.
     const noCircles: readonly VisionCircle[] = [];
     for (const [team, mask] of this.fogMasks) {
       mask.update(circlesByTeam.get(team) ?? noCircles);
     }
+
+    // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
+    // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
+    const previous = this.visibleByTeam;
+    const current: Record<Team, Set<number>> = {
+      blue: new Set(),
+      red: new Set()
+    };
+
+    for (const observer of this.matchPlayers) {
+      // Un humano KO conserva su cámara y su círculo de niebla; por tanto,
+      // también puede revelar actores en esa zona. Un bot KO no aporta visión.
+      if (!observer.alive && observer.isBot) continue;
+      if (observer.alive) current[observer.team].add(observer.slot);
+      for (const target of this.matchPlayers) {
+        if (target === observer) continue;
+        // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
+        // que comprobar rivales y aliados que acaban de caer.
+        if (target.alive && target.team === observer.team) continue;
+        // Un KO deja ver la animación de daño un instante; el cuerpo sigue
+        // siendo visible para el equipo que lo vio caer.
+        if (!target.alive && target.deathFade <= 0) continue;
+        const alreadyVisible = previous[observer.team].has(target.slot);
+        // El HUD "Descubierto" y la regeneración siguen contando la línea de
+        // visión directa de cada rival vivo, no la visión compartida del equipo.
+        if (
+          observer.alive &&
+          target.alive &&
+          observer.team !== target.team &&
+          isTargetVisible(
+            observer,
+            target,
+            target.concealment.value,
+            colliders,
+            alreadyVisible
+          )
+        ) {
+          target.enemiesSeeing += 1;
+        }
+        if (!this.observerSeesActor(observer, target, alreadyVisible)) continue;
+        current[observer.team].add(target.slot);
+      }
+    }
+    this.visibleByTeam = current;
 
     this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
@@ -3634,9 +3716,10 @@ export class Game {
 
   /**
    * Calcula qué objetos ve cada equipo y cuáles están disponibles. La
-   * visibilidad usa la misma regla que los actores y la niebla (ocultación del
-   * terreno + línea de visión), pero el estado de disponibilidad solo se guarda
-   * para los puntos visibles: los bots no pueden consultar el resto.
+   * visibilidad se toma de la máscara de niebla del equipo: círculos de visión,
+   * separadores y árboles (sin la ocultación del terreno). El estado de
+   * disponibilidad solo se guarda para los puntos visibles: los bots no pueden
+   * consultar el resto.
    *
    * Se calcula para los dos equipos, aunque uno no tenga ninguna vista humana
    * (por ejemplo, un equipo formado solo por bots).
@@ -3648,7 +3731,6 @@ export class Game {
       blue: new Map(),
       red: new Map()
     };
-    const concealmentCache = new Map<string, number>();
     const seenCache = new Map<string, boolean>();
 
     const sees = (team: Team, spawn: { x: number; z: number }): boolean => {
@@ -3656,18 +3738,14 @@ export class Game {
       const teamKey = `${team}:${pointKey}`;
       let visible = seenCache.get(teamKey);
       if (visible === undefined) {
-        let concealment = concealmentCache.get(pointKey);
-        if (concealment === undefined) {
-          concealment = terrainConcealment(terrainAt(spawn.x, spawn.z), NO_TYPES).value;
-          concealmentCache.set(pointKey, concealment);
-        }
-        visible = this.teamSeesPoint(
-          team,
-          spawn.x,
-          spawn.z,
-          concealment,
-          colliders
-        );
+        // La máscara de niebla es la fuente de verdad: si el decal pinta el
+        // punto como visible, el objeto se muestra. Así no puede quedarse
+        // oculto en una zona que el jugador ve despejada por unos píxeles de
+        // diferencia entre la comprobación geométrica y el render.
+        const mask = this.fogMasks.get(team);
+        visible = mask
+          ? mask.isVisibleAt(spawn.x, spawn.z)
+          : this.teamSeesPickupPoint(team, spawn.x, spawn.z, colliders);
         seenCache.set(teamKey, visible);
         if (visible) {
           knowledge[team].set(pointKey, pickups.isAvailableAt(spawn.x, spawn.z));

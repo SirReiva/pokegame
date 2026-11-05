@@ -65,9 +65,12 @@ Para crear un objeto nuevo:
   recogerlo cambia a `usedImage`; al terminar `cooldownSeconds` vuelve a
   `unusedImage` en la misma posición.
 - La niebla también los oculta. Cada viewport recibe una copia del billboard en
-  su capa de render y solo se muestra si algún Pokémon vivo del equipo de esa
-  vista ve el punto, con la ocultación del terreno y la línea de visión. Así en
-  splitscreen un equipo puede verlo y el otro no.
+  su capa de render y solo se muestra si la máscara de niebla del equipo deja
+  ver ese punto. La máscara incluye el radio de visión y las sombras de
+  separadores y árboles, pero no la ocultación del terreno: los objetos no se
+  esconden por arena, veneno o hierba alta. Así la poción aparece exactamente en
+  las zonas que el jugador ve despejadas. En splitscreen un equipo puede verla y
+  el otro no.
 - Los bots conocen las posiciones de todos los objetos desde el inicio de la
   partida, sin necesitar verlos, pero no su estado. Cuando bajan del 70% de vida
   eligen destino puntuando curación, distancia, peligro junto a la base enemiga
