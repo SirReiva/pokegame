@@ -932,7 +932,9 @@ export class CombatFx {
       blizzard: (x, z, radius, color, duration) =>
         this.spawnBlizzardAoe(x, z, radius, color, duration),
       ground: (x, z, radius, color, duration) =>
-        this.spawnGroundAoe(x, z, radius, color, duration)
+        this.spawnGroundAoe(x, z, radius, color, duration),
+      fissure: (x, z, radius, color, duration) =>
+        this.spawnFissureAoe(x, z, radius, color, duration)
     };
   }
 
@@ -10277,6 +10279,384 @@ export class CombatFx {
       animate,
       areaAnchors(x, z, radius)
     );
+    animate(0, 0);
+  }
+
+  /**
+   * Área de fisura: el suelo se parte desde el centro y se hunde. Varias ramas
+   * de grieta se abren hacia el borde con magma en el fondo, seguidas de
+   * estalagmitas, polvo y esquirlas. Es el visual de Fisura; a diferencia de
+   * Terremoto, no cae ninguna roca del cielo.
+   */
+  private spawnFissureAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.3, duration);
+    const root = new pc.Entity('fissure-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const pitMaterial = this.createWaterMaterial([34, 27, 22], 0.62);
+    const pitDeepMaterial = this.createWaterMaterial([18, 14, 12], 0.55);
+    const rimMaterial = this.createWaterMaterial(color, 0.45);
+    const magmaMaterial = this.createMaterial([255, 166, 62], 0.8);
+    const slabLight = this.createRockMaterial([116, 98, 74], 1);
+    const slabDark = this.createRockMaterial([74, 61, 46], 1);
+    const dustMaterial = this.createWaterMaterial([190, 170, 138], 0.32);
+    const pebbleLight = this.createRockMaterial([176, 156, 122], 1);
+    const pebbleDark = this.createRockMaterial([110, 92, 70], 1);
+    const materials = [
+      pitMaterial,
+      pitDeepMaterial,
+      rimMaterial,
+      magmaMaterial,
+      slabLight,
+      slabDark,
+      dustMaterial,
+      pebbleLight,
+      pebbleDark
+    ];
+
+    const pit = this.createEntity(this.discMesh, [pitMaterial], root);
+    pit.setLocalPosition(0, 0.005, 0);
+    pit.setLocalScale(radius * 2, 1, radius * 2);
+
+    const pitDeep = this.createEntity(this.discMesh, [pitDeepMaterial], root);
+    pitDeep.setLocalPosition(0, 0.006, 0);
+    pitDeep.setLocalScale(radius * 1.15, 1, radius * 1.15);
+
+    const rim = this.createEntity(this.torusMesh, [rimMaterial], root);
+    rim.setLocalPosition(0, 0.07, 0);
+    rim.setLocalScale(radius * 2, 1, radius * 2);
+
+    const branches: {
+      entity: pc.Entity;
+      glow: pc.Entity;
+      angle: number;
+      distance: number;
+      width: number;
+      length: number;
+      delay: number;
+      tilt: number;
+    }[] = [];
+    const addBranch = (
+      angle: number,
+      distance: number,
+      length: number,
+      width: number,
+      delay: number
+    ): void => {
+      const slab = this.createEntity(
+        this.boxMesh,
+        [branches.length % 4 === 0 ? slabLight : slabDark],
+        root
+      );
+      slab.setLocalPosition(
+        Math.sin(angle) * distance,
+        0.05,
+        Math.cos(angle) * distance
+      );
+      slab.setLocalEulerAngles(0, angle / DEG, 0);
+      slab.setLocalScale(width, 0.035, length);
+      const glow = this.createEntity(this.boxMesh, [magmaMaterial], root);
+      glow.setLocalPosition(
+        Math.sin(angle) * distance,
+        0.078,
+        Math.cos(angle) * distance
+      );
+      glow.setLocalEulerAngles(0, angle / DEG, 0);
+      glow.setLocalScale(width * 0.38, 0.012, length * 0.8);
+      branches.push({
+        entity: slab,
+        glow,
+        angle,
+        distance,
+        width,
+        length,
+        delay,
+        tilt: (Math.random() - 0.5) * 16
+      });
+    };
+
+    const mainBranches = 5;
+    for (let branch = 0; branch < mainBranches; branch++) {
+      const baseAngle =
+        (branch / mainBranches) * Math.PI * 2 + Math.random() * 0.55;
+      const segments = 3 + (branch % 2);
+      for (let index = 0; index < segments; index++) {
+        const t = (index + 0.5) / segments;
+        const angle = baseAngle + (Math.random() - 0.5) * 0.5;
+        addBranch(
+          angle,
+          radius * t * (0.82 + Math.random() * 0.14),
+          radius * (0.24 + Math.random() * 0.16),
+          radius * (0.035 + Math.random() * 0.035),
+          t * 0.2 + Math.random() * 0.02
+        );
+      }
+      // Bifurcación corta para que la grieta no parezca una estrella regular.
+      if (branch % 2 === 0) {
+        addBranch(
+          baseAngle + 0.5 + Math.random() * 0.4,
+          radius * (0.36 + Math.random() * 0.22),
+          radius * (0.18 + Math.random() * 0.12),
+          radius * (0.024 + Math.random() * 0.024),
+          0.14 + Math.random() * 0.08
+        );
+      }
+    }
+
+    const slabs: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      width: number;
+      length: number;
+      tilt: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 7; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = radius * (0.28 + Math.random() * 0.5);
+      const width = radius * (0.12 + Math.random() * 0.08);
+      const length = radius * (0.16 + Math.random() * 0.1);
+      const slab = this.createEntity(
+        this.boxMesh,
+        [index % 2 === 0 ? slabLight : slabDark],
+        root
+      );
+      slab.setLocalPosition(
+        Math.sin(angle) * distance,
+        0.05,
+        Math.cos(angle) * distance
+      );
+      slab.setLocalEulerAngles(0, angle / DEG, 0);
+      slab.setLocalScale(width, 0.07, length);
+      slabs.push({
+        entity: slab,
+        angle,
+        distance,
+        width,
+        length,
+        tilt: (8 + Math.random() * 10) * (index % 2 === 0 ? 1 : -1),
+        delay: 0.03 + Math.random() * 0.12
+      });
+    }
+
+    const spikes: {
+      entity: pc.Entity;
+      x: number;
+      z: number;
+      height: number;
+      width: number;
+      delay: number;
+      tilt: number;
+      yaw: number;
+    }[] = [];
+    for (let index = 0; index < 8; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = radius * (0.12 + Math.sqrt(Math.random()) * 0.62);
+      const height = radius * (0.18 + Math.random() * 0.2);
+      const width = radius * (0.045 + Math.random() * 0.035);
+      const spike = this.createEntity(
+        this.rockSpikeMesh,
+        [index % 3 === 0 ? slabDark : slabLight],
+        root
+      );
+      spike.setLocalScale(0.001, 0.001, 0.001);
+      spikes.push({
+        entity: spike,
+        x: Math.sin(angle) * distance,
+        z: Math.cos(angle) * distance,
+        height,
+        width,
+        delay: 0.06 + Math.random() * 0.16,
+        tilt: (Math.random() - 0.5) * 22,
+        yaw: Math.random() * 360
+      });
+    }
+
+    const pebbles: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      size: number;
+      arc: number;
+      delay: number;
+      spin: number;
+    }[] = [];
+    for (let index = 0; index < 18; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const size = radius * (0.018 + Math.random() * 0.022);
+      const pebble = this.createEntity(
+        this.rockChunkMesh,
+        [index % 3 === 0 ? pebbleDark : pebbleLight],
+        root
+      );
+      pebble.setLocalScale(0.001, 0.001, 0.001);
+      pebbles.push({
+        entity: pebble,
+        angle,
+        distance: radius * (0.2 + Math.random() * 0.8),
+        size,
+        arc: radius * (0.12 + Math.random() * 0.22),
+        delay: 0.04 + Math.random() * 0.12,
+        spin: (Math.random() - 0.5) * 540
+      });
+    }
+
+    this.spawnSporeParticles(
+      root,
+      {
+        y: 0.1,
+        extents: [radius * 0.7, 0.08, radius * 0.7],
+        velocity: [0, 0.35, 0],
+        velocityEnd: [0, 1.5, 0],
+        radialSpeed: 1.1,
+        radialSpeedEnd: 2.8,
+        sizeStart: radius * 0.08,
+        sizeMid: radius * 0.16,
+        sizeEnd: radius * 0.035,
+        lifetime: 0.55,
+        rate: 0.011,
+        numParticles: 120,
+        blendType: pc.BLEND_NORMAL,
+        preWarm: false
+      },
+      [190, 170, 138],
+      this.dustTexture
+    );
+
+    const light = this.createFireLight(root, 0, 0.7, 0, 1.1, radius * 2.1);
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.06);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.2));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const pulse = 0.5 + Math.sin(time * 28) * 0.22;
+
+      pitMaterial.opacity = 0.58 * envelope;
+      pitDeepMaterial.opacity = 0.5 * envelope;
+      const pitScale = radius * 2 * (0.9 + Math.min(1, time / 0.14) * 0.1);
+      pit.setLocalScale(pitScale, 1, pitScale);
+      const deepScale = radius * 1.15 * (0.86 + Math.min(1, time / 0.16) * 0.14);
+      pitDeep.setLocalScale(deepScale, 1, deepScale);
+
+      rimMaterial.opacity = (0.22 + pulse * 0.18) * envelope;
+      rim.setLocalEulerAngles(0, time * 10, 0);
+      magmaMaterial.opacity = (0.5 + pulse * 0.3) * envelope;
+      light.light!.intensity = 1.1 * envelope * (0.65 + Math.random() * 0.35);
+
+      for (const branch of branches) {
+        const local = Math.max(0, Math.min(1, (time - branch.delay) / 0.14));
+        const pop = 1 - Math.pow(1 - local, 3);
+        const sink = radius * 0.02 * pop;
+        const width = branch.width * (0.5 + pop * 0.5);
+        branch.entity.setLocalPosition(
+          Math.sin(branch.angle) * branch.distance,
+          0.05 - sink,
+          Math.cos(branch.angle) * branch.distance
+        );
+        branch.entity.setLocalScale(width, 0.035, branch.length);
+        branch.entity.setLocalEulerAngles(
+          branch.tilt * pop,
+          branch.angle / DEG,
+          branch.tilt * 0.35 * pop
+        );
+        branch.glow.setLocalPosition(
+          Math.sin(branch.angle) * branch.distance,
+          0.078 - sink,
+          Math.cos(branch.angle) * branch.distance
+        );
+        branch.glow.setLocalScale(width * 0.38, 0.012, branch.length * 0.8);
+        branch.glow.setLocalEulerAngles(
+          branch.tilt * pop,
+          branch.angle / DEG,
+          branch.tilt * 0.35 * pop
+        );
+      }
+
+      for (const slab of slabs) {
+        const local = Math.max(0, Math.min(1, (time - slab.delay) / 0.16));
+        const pop = 1 - Math.pow(1 - local, 3);
+        const scale = Math.max(0.001, pop * fadeOut);
+        slab.entity.setLocalPosition(
+          Math.sin(slab.angle) * slab.distance,
+          0.05 + radius * 0.025 * pop,
+          Math.cos(slab.angle) * slab.distance
+        );
+        slab.entity.setLocalScale(
+          slab.width * scale,
+          0.07 * scale,
+          slab.length * scale
+        );
+        slab.entity.setLocalEulerAngles(
+          slab.tilt * pop,
+          slab.angle / DEG,
+          slab.tilt * 0.4 * pop
+        );
+      }
+
+      for (const spike of spikes) {
+        const local = Math.max(0, Math.min(1, (time - spike.delay) / 0.12));
+        const pop = 1 - Math.pow(1 - local, 3);
+        const height = spike.height * pop * fadeOut;
+        if (height <= 0.001) {
+          spike.entity.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        spike.entity.setLocalPosition(spike.x, height * (pop - 0.5), spike.z);
+        spike.entity.setLocalScale(
+          Math.max(0.001, spike.width * pop * fadeOut),
+          height,
+          Math.max(0.001, spike.width * pop * fadeOut)
+        );
+        spike.entity.setLocalEulerAngles(
+          spike.tilt * pop,
+          spike.yaw,
+          spike.tilt * 0.35 * pop
+        );
+      }
+
+      for (const pebble of pebbles) {
+        const local = Math.max(0, Math.min(1, (time - pebble.delay) / 0.4));
+        if (local <= 0) {
+          pebble.entity.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        const distance = pebble.distance * local;
+        const y = pebble.size * 0.4 + Math.sin(local * Math.PI) * pebble.arc;
+        const scale = pebble.size * (1 - local * 0.55) * fadeOut;
+        pebble.entity.setLocalPosition(
+          Math.sin(pebble.angle) * distance,
+          y,
+          Math.cos(pebble.angle) * distance
+        );
+        pebble.entity.setLocalScale(
+          Math.max(0.001, scale),
+          Math.max(0.001, scale * 0.8),
+          Math.max(0.001, scale * 0.9)
+        );
+        pebble.entity.setLocalEulerAngles(
+          local * 260,
+          pebble.angle / DEG,
+          local * pebble.spin
+        );
+      }
+
+      slabLight.opacity = 0.92 * envelope;
+      slabDark.opacity = 0.82 * envelope;
+      dustMaterial.opacity = 0.3 * envelope;
+      pebbleLight.opacity = 0.9 * envelope;
+      pebbleDark.opacity = 0.78 * envelope;
+    };
+    this.addEffect(root, materials, life, animate, areaAnchors(x, z, radius));
     animate(0, 0);
   }
 

@@ -110,7 +110,8 @@ export type AoeStyle =
   | 'heat'
   | 'ice'
   | 'blizzard'
-  | 'ground';
+  | 'ground'
+  | 'fissure';
 
 /**
  * Reparto del daño de un área:
@@ -1796,6 +1797,85 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Onix                                                                      */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('atadura', 'Atadura', 'Rock', 'physical', 'melee')
+    .power(65)
+    .accuracy(100)
+    .cooldown(0.7)
+    .range(2.8)
+    .radius(0.95)
+    .halfAngle(65)
+    .knockback(0.55)
+    .cast(0.45)
+    .animation('attack')
+    .impact('rock')
+    .color(182, 161, 54)
+    .description(
+      'Golpe de cuerpo rocoso que tritura y empuja. Ataque básico de Onix.'
+    )
+);
+
+registerAbility(
+  ability('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', 'projectile')
+    .power(80)
+    .accuracy(95)
+    .cooldown(4.5)
+    .range(8)
+    .radius(0.32)
+    .projectile('rock', 13)
+    .impact('rock')
+    .knockback(0.3)
+    .windup(0.2, { animation: 'charge' })
+    .cast(0.45)
+    .animation('shoot')
+    .color(182, 161, 54)
+    .description(
+      'Lanza una roca a 8 u para presionar a distancia. Su herramienta para no ser kited.'
+    )
+);
+
+registerAbility(
+  ability('excavar', 'Excavar', 'Ground', 'physical', 'dash')
+    .power(85)
+    .accuracy(100)
+    .cooldown(8)
+    .range(0)
+    .radius(0.95)
+    .dash(5.2)
+    .knockback(0.7)
+    .cast(0.35)
+    .animation('attack')
+    .impact('ground')
+    .color(182, 161, 54)
+    .description(
+      'Se hunde bajo tierra y emerge 5,2 u más adelante, arrollando a los rivales del camino.'
+    )
+);
+
+registerAbility(
+  ability('fisura', 'Fisura', 'Ground', 'physical', 'aoe')
+    .power(135)
+    .accuracy(70)
+    .cooldown(14)
+    .range(2.5)
+    .radius(3.4)
+    .area('fissure', 'instant', 0.75)
+    .radial(0.35)
+    .knockback(0.9)
+    .windup(0.6, { animation: 'charge' })
+    .cast(0.6)
+    .animation(null)
+    .impact('ground')
+    .color(182, 161, 54)
+    .description(
+      'Definitiva: abre una fisura de 3,4 u a 2,5 u de distancia. Golpea una vez con 135 de potencia, el 100 % en el centro y el 35 % en el borde; 70 % de precisión.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1839,6 +1919,7 @@ MOVESETS['0151'] = [
 ];
 MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
 MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
+MOVESETS['0095'] = ['atadura', 'lanzarrocas', 'excavar', 'fisura'];
 MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];
 
 export function abilityForSlot(
