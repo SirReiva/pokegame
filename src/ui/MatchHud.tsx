@@ -123,11 +123,14 @@ function KillFeed({
               className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: killerColor }}
             />
-            <span
-              className="min-w-0 truncate font-mono font-semibold"
-              style={{ color: killerIsOwn ? '#ffffff' : killerColor }}
-            >
-              {entry.killerName}
+            <span className="min-w-0 truncate font-mono">
+              <span
+                className="font-semibold"
+                style={{ color: killerIsOwn ? '#ffffff' : killerColor }}
+              >
+                {entry.killerName}
+              </span>{' '}
+              <span className="text-steel-450">({killerPokemon})</span>
             </span>
             <span className="shrink-0 font-mono text-7.36 font-bold tracking-[0.08em] text-steel-450 uppercase">
               KO
@@ -136,11 +139,11 @@ function KillFeed({
               className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: victimColor }}
             />
-            <span
-              className="min-w-0 truncate font-mono"
-              style={{ color: victimIsOwn ? '#ffffff' : victimColor }}
-            >
-              {entry.victimName}
+            <span className="min-w-0 truncate font-mono">
+              <span style={{ color: victimIsOwn ? '#ffffff' : victimColor }}>
+                {entry.victimName}
+              </span>{' '}
+              <span className="text-steel-450">({victimPokemon})</span>
             </span>
           </li>
         );
