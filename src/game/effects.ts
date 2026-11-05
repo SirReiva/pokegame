@@ -39,30 +39,49 @@ export const applyBuffs: Effect<CastEffectContext> = ({ player, def }) => {
 };
 
 /**
- * Cura al lanzador una fracción de su vida máxima. Nunca supera el máximo y
- * muestra un número flotante para que el cambio de vida sea legible.
+ * Cura a un Pokémon una fracción de su vida máxima y devuelve los PV
+ * recuperados. Nunca supera el máximo y muestra un número flotante para que el
+ * cambio de vida sea legible.
  */
+export function applyHealFraction(
+  player: MatchPlayerState,
+  fraction: number,
+  def: AbilityDef,
+  combatFx: CombatFx,
+  showHealPopup: (player: MatchPlayerState, amount: number) => void,
+  /** Quién recibe la estadística de curación; por defecto, el curado. */
+  credit: MatchPlayerState = player
+): number {
+  if (fraction <= 0 || !player.alive) return 0;
+
+  const missing = Math.max(0, player.maxHp - player.hp);
+  const amount = Math.min(missing, Math.round(player.maxHp * fraction));
+  if (amount > 0) {
+    player.hp += amount;
+    credit.abilityHealing += amount;
+    showHealPopup(player, amount);
+  }
+  // Las áreas de curación ya dibujan su propio efecto en todo el radio; un
+  // estallido por objetivo duplicaría el VFX y taparía la lectura del área.
+  if (def.shape !== 'aoe') {
+    combatFx.spawnHeal(
+      player.x,
+      player.z,
+      def.color,
+      Math.max(0.8, Math.min(def.radius, 1.2))
+    );
+  }
+  return amount;
+}
+
+/** Cura al lanzador la fracción indicada por `healSelf`. */
 export function applyHealSelf(
   player: MatchPlayerState,
   def: AbilityDef,
   combatFx: CombatFx,
   showHealPopup: (player: MatchPlayerState, amount: number) => void
 ): void {
-  if (def.healSelf <= 0 || !player.alive) return;
-
-  const missing = Math.max(0, player.maxHp - player.hp);
-  const amount = Math.min(missing, Math.round(player.maxHp * def.healSelf));
-  if (amount > 0) {
-    player.hp += amount;
-    player.abilityHealing += amount;
-    showHealPopup(player, amount);
-  }
-  combatFx.spawnHeal(
-    player.x,
-    player.z,
-    def.color,
-    Math.max(0.8, def.radius)
-  );
+  applyHealFraction(player, def.healSelf, def, combatFx, showHealPopup);
 }
 
 /**

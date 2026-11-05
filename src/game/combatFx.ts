@@ -934,7 +934,9 @@ export class CombatFx {
       ground: (x, z, radius, color, duration) =>
         this.spawnGroundAoe(x, z, radius, color, duration),
       fissure: (x, z, radius, color, duration) =>
-        this.spawnFissureAoe(x, z, radius, color, duration)
+        this.spawnFissureAoe(x, z, radius, color, duration),
+      recovery: (x, z, radius, color, duration) =>
+        this.spawnRecoveryAoe(x, z, radius, color, duration)
     };
   }
 
@@ -5990,6 +5992,109 @@ export class CombatFx {
       }
       sparkMaterial.opacity = 0.95 * (1 - t * 0.9);
     }, [[x, z]]);
+  }
+
+  /**
+   * Área de curación: disco y aro rosas que marcan todo el radio, ondas que
+   * recorren el área y motas que ascienden desde cualquier punto curado.
+   */
+  private spawnRecoveryAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.2, duration);
+    const root = new pc.Entity('recovery-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.55);
+    const fillMaterial = this.createMaterial([255, 214, 240], 0.12);
+    const waveMaterial = this.createMaterial([255, 190, 238], 0.7);
+    const moteMaterial = this.createMaterial([255, 232, 250], 0.95);
+    const materials = [ringMaterial, fillMaterial, waveMaterial, moteMaterial];
+
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    ring.setLocalPosition(0, 0.1, 0);
+    ring.setLocalScale(radius * 2, 1, radius * 2);
+
+    const fill = this.createEntity(this.discMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.03, 0);
+    fill.setLocalScale(radius * 2, 1, radius * 2);
+
+    const waves: pc.Entity[] = [];
+    for (let index = 0; index < 3; index++) {
+      const wave = this.createEntity(this.torusMesh, [waveMaterial], root);
+      wave.setLocalPosition(0, 0.12 + index * 0.06, 0);
+      waves.push(wave);
+    }
+
+    const motes: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      delay: number;
+      rise: number;
+      size: number;
+    }[] = [];
+    const moteCount = 56;
+    for (let index = 0; index < moteCount; index++) {
+      const mote = this.createEntity(this.sphereMesh, [moteMaterial], root);
+      const size = 0.05 + Math.random() * 0.07;
+      mote.setLocalScale(size, size, size);
+      motes.push({
+        entity: mote,
+        angle: Math.random() * Math.PI * 2,
+        // Reparto uniforme por la superficie del círculo, no concentrado en
+        // el centro, para que toda el área se lea como zona curada.
+        distance: Math.sqrt(Math.random()) * radius * 0.95,
+        delay: Math.random() * 0.28,
+        rise: radius * (0.3 + Math.random() * 0.45),
+        size
+      });
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, life, (_t, dt) => {
+      time += dt;
+      const fadeOut = Math.max(0, 1 - time / life);
+      const pulse = 0.5 + Math.sin(time * 18) * 0.25;
+
+      ringMaterial.opacity = (0.35 + pulse * 0.25) * fadeOut;
+      fillMaterial.opacity = (0.07 + pulse * 0.05) * fadeOut;
+      waveMaterial.opacity = 0.65 * fadeOut;
+      const groundScale = radius * 2 * (0.98 + pulse * 0.04);
+      ring.setLocalScale(groundScale, 1, groundScale);
+
+      for (let index = 0; index < waves.length; index++) {
+        const progress = Math.min(
+          1,
+          Math.max(0, (time - index * 0.1) / 0.55)
+        );
+        const ease = 1 - (1 - progress) * (1 - progress);
+        const scale = Math.max(0.01, radius * 2 * ease);
+        waves[index].setLocalScale(scale, 1, scale);
+      }
+
+      for (const mote of motes) {
+        const span = Math.max(0.05, life - mote.delay);
+        const local = Math.min(1, Math.max(0, (time - mote.delay) / span));
+        const angle = mote.angle + local * 0.45;
+        mote.entity.setLocalPosition(
+          Math.cos(angle) * mote.distance,
+          0.12 + mote.rise * local,
+          Math.sin(angle) * mote.distance
+        );
+        const fade =
+          Math.min(1, local / 0.15) * Math.max(0, 1 - local);
+        const scale =
+          mote.size * (0.7 + Math.sin(local * Math.PI) * 0.6) * fade;
+        mote.entity.setLocalScale(scale, scale, scale);
+      }
+      moteMaterial.opacity = 0.95 * fadeOut;
+    });
   }
 
   /** Impacto de Planta: núcleo claro, hojas despedidas y anillo verde. */

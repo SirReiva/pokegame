@@ -111,7 +111,8 @@ export type AoeStyle =
   | 'ice'
   | 'blizzard'
   | 'ground'
-  | 'fissure';
+  | 'fissure'
+  | 'recovery';
 
 /**
  * Reparto del daño de un área:
@@ -193,8 +194,8 @@ export interface AbilityDef {
   /**
    * Callback opcional que decide qué efectos aplica cada golpe o tick del
    * área. Recibe todos los Pokémon vivos dentro del radio (aliados, enemigos y
-   * el propio lanzador) y elige a quién aplica daño, hitstun, empuje, slow o
-   * buffs. Si se omite, se usa `defaultAoeEffect`.
+   * el propio lanzador) y elige a quién aplica daño, hitstun, empuje, slow,
+   * buffs o curación. Si se omite, se usa `defaultAoeEffect`.
    */
   aoeEffect?: AoeEffect;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
@@ -1424,18 +1425,28 @@ registerAbility(
 );
 
 registerAbility(
-  ability('recuperacion', 'Recuperación', 'Psychic', 'status', 'self')
+  ability('recuperacion', 'Recuperación', 'Psychic', 'status', 'aoe')
     .power(0)
     .accuracy(0)
     .cooldown(14)
-    .radius(1)
+    .range(0)
+    .radius(3.5)
     .cast(0.75)
     .windup(0.75)
     .animation('twirl')
-    .heal(0.25)
+    .heal(0.35)
+    .area('recovery', 'instant', 0.75)
+    .aoeEffect(({ targets, applyHeal }) => {
+      // El lanzador ya se cura con `healSelf`; el área reparte el 25 % entre
+      // los aliados que estén dentro del radio.
+      for (const target of targets) {
+        if (!target.isAlly || target.isSelf) continue;
+        applyHeal(target, 0.25);
+      }
+    })
     .color(255, 170, 230)
     .description(
-      'Se concentra y recupera el 25 % de su vida máxima. Si le golpean durante la concentración, se cancela.'
+      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si le golpean durante la concentración, se cancela.'
     )
 );
 

@@ -57,7 +57,7 @@ import {
 import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
-import { applyHealSelf, CAST_EFFECTS } from './effects';
+import { applyHealFraction, applyHealSelf, CAST_EFFECTS } from './effects';
 import { FogDecal, FogMask, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
 import {
   IDLE_INPUT,
@@ -2261,6 +2261,8 @@ export class Game {
       applySlow: (target, slow) =>
         this.applySlow(hit.owner, target.player, hit.def, slow, hit.def.color),
       applyBuff: (target, buff) => this.applyAoeBuff(target, buff, hit.def),
+      applyHeal: (target, fraction) =>
+        this.applyAoeHeal(target, fraction, hit.def, hit.owner),
       isMatchOver: () => this.matchOver
     };
     (hit.def.aoeEffect ?? defaultAoeEffect)(context);
@@ -2308,6 +2310,29 @@ export class Game {
   ): void {
     target.player.buffs.push({ ...buff, duration: buff.duration });
     this.combatFx.spawnBuff(target.player.x, target.player.z, def.color, 0.95);
+  }
+
+  /** Cura a un objetivo del área una fracción de su vida máxima. */
+  private applyAoeHeal(
+    target: AoeTarget,
+    fraction: number,
+    def: AbilityDef,
+    caster: MatchPlayerState
+  ): void {
+    const healed = applyHealFraction(
+      target.player,
+      fraction,
+      def,
+      this.combatFx,
+      (healedPlayer, amount) => {
+        this.showHealPopup(healedPlayer, amount);
+      },
+      // La estadística y la XP de curación son para quien lanza la habilidad.
+      caster
+    );
+    if (healed > 0) {
+      this.awardXp(caster, 'healing', healed * XP_REWARDS.healingPerHp);
+    }
   }
 
   private applyAbilityDamage(

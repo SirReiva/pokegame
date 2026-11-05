@@ -8,7 +8,7 @@
  *
  * El callback recibe **todos** los Pokémon vivos dentro del radio (aliados,
  * enemigos y el propio lanzador). A partir de ahí decide a quién aplica daño,
- * hitstun, empuje, ralentización o buffs. Si la habilidad no define
+ * hitstun, empuje, ralentización, buffs o curación. Si la habilidad no define
  * `aoeEffect`, se usa `defaultAoeEffect`, que reproduce el comportamiento
  * histórico: solo rivales alcanzables, con su `slow` y con control únicamente
  * en las áreas instantáneas.
@@ -120,6 +120,8 @@ export interface AoeEffectContext {
   applySlow(target: AoeTarget, slow: SlowSpec): void;
   /** Añade un buff/debuff temporal al objetivo. */
   applyBuff(target: AoeTarget, buff: BuffSpec): void;
+  /** Cura al objetivo una fracción de su vida máxima (`0.25` = 25 %). */
+  applyHeal(target: AoeTarget, fraction: number): void;
   /** `true` cuando la partida ya terminó; útil para cortar bucles de ticks. */
   isMatchOver(): boolean;
 }
