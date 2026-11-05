@@ -512,7 +512,14 @@ export class FogMask {
     this.maskCanvas = document.createElement('canvas');
     this.maskCanvas.width = MASK_SIZE;
     this.maskCanvas.height = MASK_SIZE;
-    const context = this.maskCanvas.getContext('2d');
+    // La máscara se lee con `getImageData` en cada recompuesto para resolver la
+    // visibilidad de actores y objetos. Sin esta pista, Chrome la mantiene en
+    // GPU y cada lectura fuerza un readback síncrono de ~10 ms. Con el canvas
+    // en memoria de CPU, la lectura es barata; a cambio, el dibujado 2D de una
+    // textura de 192×192 es algo más lento, pero se hace a 20 Hz como máximo.
+    const context = this.maskCanvas.getContext('2d', {
+      willReadFrequently: true
+    });
     if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.maskContext = context;
     // Antes del primer update la máscara es blanca (nada oculto): así el decal
