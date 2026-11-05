@@ -313,166 +313,174 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                 </div>
 
                 {playerStats && (
-                  <div className="flex min-w-30 flex-1 items-center gap-1.5">
-                    <div className="flex min-w-12 flex-1 flex-col gap-0.5">
-                      <div className="h-1.5 overflow-hidden rounded-full bg-black/60">
-                        <div
-                          className="h-full rounded-full transition-[width,background-color] duration-150"
-                          style={{
-                            width: `${hpPct}%`,
-                            backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
-                          }}
-                        />
-                      </div>
-                      <div
-                        className="h-0.75 overflow-hidden rounded-full bg-black/60"
-                        title={xpTitle}
-                      >
-                        <div
-                          className="h-full rounded-full bg-(--team) transition-[width] duration-200"
-                          style={{ width: `${playerStats.xpProgress * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="font-mono text-8 tabular-nums text-steel-250">
-                      {Math.ceil(playerStats.hp)}/{playerStats.maxHp}
-                    </span>
-                    <span
-                      className="font-mono text-8 tabular-nums text-steel-650"
-                      title={combatTitle}
+                  <div className="grid min-w-30 flex-1 gap-0.5">
+                    <div
+                      className={`relative w-full overflow-hidden rounded-full bg-black/60 ${
+                        compact ? 'h-3' : 'h-3.5'
+                      }`}
+                      title={`${Math.ceil(playerStats.hp)}/${playerStats.maxHp} PV`}
                     >
-                      K{playerStats.kills} D{playerStats.deaths}
-                    </span>
-                    {!compact && (
+                      <div
+                        className="h-full rounded-full transition-[width,background-color] duration-150"
+                        style={{
+                          width: `${hpPct}%`,
+                          backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
+                        }}
+                      />
                       <span
-                        className="font-mono text-8 tabular-nums text-steel-500"
-                        title={combatTitle}
+                        className={`absolute inset-0 grid place-items-center font-mono font-bold tabular-nums leading-none text-ink drop-shadow-[0_1px_1px_rgb(0_0_0/0.85)] ${
+                          compact ? 'text-7.36' : 'text-8'
+                        }`}
                       >
-                        DÑO {formatCount(playerStats.damageDealt)}
+                        {Math.ceil(playerStats.hp)}/{playerStats.maxHp}
                       </span>
-                    )}
-                    {!compact && (
-                      <span
-                        className="font-mono text-8 tabular-nums text-success"
-                        title={combatTitle}
-                      >
-                        CUR HAB {formatCount(playerStats.abilityHealing)}
-                      </span>
-                    )}
-                    {!compact && (
-                      <span
-                        className="font-mono text-8 tabular-nums text-success"
-                        title={combatTitle}
-                      >
-                        CUR OBJ {formatCount(playerStats.pickupHealing)}
-                      </span>
-                    )}
-                    {playerStats.invulnerable && (
-                      <span className="rounded bg-white/10 px-1 font-mono text-7.36 tracking-[0.06em] text-steel-150">
-                        INV
-                      </span>
-                    )}
+                    </div>
+                    <div
+                      className={`h-0.75 overflow-hidden rounded-full bg-black/60 ${
+                        compact ? 'mx-1.5' : 'mx-1.75'
+                      }`}
+                      title={xpTitle}
+                    >
+                      <div
+                        className="h-full rounded-full bg-(--team) transition-[width] duration-200"
+                        style={{ width: `${playerStats.xpProgress * 100}%` }}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {playerStats && playerStats.alive && (
-                  <div
-                    className={`pointer-events-auto ml-auto flex items-center rounded-md border font-mono tracking-[0.08em] uppercase ${
-                      compact
-                        ? 'gap-1 px-1.5 py-0.5 text-7.36'
-                        : 'gap-1.5 px-2 py-0.75 text-8.32'
-                    } ${
-                      playerStats.discovered
-                        ? 'border-[color-mix(in_srgb,#ff5f63_50%,transparent)] bg-danger-deep/78 text-danger-100'
-                        : 'border-[color-mix(in_srgb,#8ee08a_42%,transparent)] bg-success-deep/76 text-accent-soft'
-                    }`}
-                    title={
-                      playerStats.discovered
-                        ? `Te ve${playerStats.enemiesSeeing === 1 ? '' : 'n'} ${
-                            playerStats.enemiesSeeing
-                          } rival${playerStats.enemiesSeeing === 1 ? '' : 'es'} del otro equipo. ` +
-                          `Ocultación del terreno ${concealmentPct}%.`
-                        : 'Ningún rival te ve ahora mismo: estás oculto para el otro equipo. ' +
-                          `Ocultación del terreno ${concealmentPct}%.`
-                    }
-                  >
-                    <span className="relative inline-flex items-center">
-                      {/* Reserva el ancho máximo para que el estado no mueva el resto del HUD. */}
-                      <span
-                        className={`invisible flex items-center ${
-                          compact ? 'gap-1' : 'gap-1.5'
-                        }`}
-                        aria-hidden="true"
-                      >
-                        <span className="size-1.5 shrink-0 rounded-full" />
-                        Descubierto
-                        <span>×4</span>
-                      </span>
-                      <span
-                        className={`absolute inset-0 flex items-center justify-center ${
-                          compact ? 'gap-1' : 'gap-1.5'
-                        }`}
-                      >
-                        <span
-                          className={`size-1.5 shrink-0 rounded-full ${
-                            playerStats.discovered ? 'bg-team-red' : 'bg-success'
-                          }`}
-                        />
-                        {playerStats.discovered ? 'Descubierto' : 'Oculto'}
-                        {playerStats.discovered && playerStats.enemiesSeeing > 1 && (
-                          <span className="text-danger-300">×{playerStats.enemiesSeeing}</span>
-                        )}
-                      </span>
-                    </span>
-                  </div>
-                )}
               </div>
 
               {playerStats && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <div
-                    className={`pointer-events-auto flex items-center whitespace-nowrap rounded-md border border-line bg-night-850/55 font-mono text-steel-375 ${
-                      compact
-                        ? 'gap-1 px-1.5 py-0.5 text-8'
-                        : 'gap-2 px-2 py-0.75 text-8.8'
-                    }`}
-                    title={concealmentTitle}
-                  >
-                    <span className="text-steel-150">
-                      {compact ? 'V' : 'Visión'} {playerStats.visionRange.toFixed(1)} u
-                    </span>
-                    <span className={concealmentClass || 'text-steel-340'}>
-                      {compact ? 'O' : 'Ocultación'} {concealmentPct}%
-                    </span>
-                    {!compact && (
-                      <span className="text-steel-650 max-[760px]:hidden">
-                        te ven a {playerStats.detectionRange.toFixed(1)} u
+                <>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <div
+                      className={`pointer-events-auto flex items-center whitespace-nowrap rounded-md border border-line bg-night-850/55 font-mono text-steel-375 ${
+                        compact
+                          ? 'gap-1 px-1.5 py-0.5 text-8'
+                          : 'gap-2 px-2 py-0.75 text-8.8'
+                      }`}
+                      title={concealmentTitle}
+                    >
+                      <span className="text-steel-150">
+                        {compact ? 'V' : 'Visión'} {playerStats.visionRange.toFixed(1)} u
                       </span>
+                      <span className={concealmentClass || 'text-steel-340'}>
+                        {compact ? 'O' : 'Ocultación'} {concealmentPct}%
+                      </span>
+                      {!compact && (
+                        <span className="text-steel-650 max-[760px]:hidden">
+                          te ven a {playerStats.detectionRange.toFixed(1)} u
+                        </span>
+                      )}
+                    </div>
+
+                    <div
+                      className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-steel-340 ${
+                        compact ? 'text-8' : 'text-8.8'
+                      }`}
+                    >
+                      <TypeBadge type={playerStats.terrainType} />
+                      {!compact && <span>{playerStats.terrainName}</span>}
+                      <span
+                        className={`whitespace-nowrap ${
+                          playerStats.terrainSpeedMultiplier > 1
+                            ? 'text-accent-soft'
+                            : playerStats.terrainSpeedMultiplier < 1
+                              ? 'text-danger-100'
+                              : 'text-steel-450'
+                        }`}
+                      >
+                        {playerStats.speed.toFixed(1)} u/s · ×
+                        {playerStats.terrainSpeedMultiplier.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`ml-auto flex items-center whitespace-nowrap font-mono tabular-nums ${
+                        compact ? 'gap-1.5 text-8' : 'gap-2 text-8.8'
+                      }`}
+                      title={combatTitle}
+                    >
+                      <span className="text-steel-650">
+                        K{playerStats.kills} D{playerStats.deaths}
+                      </span>
+                      {!compact && (
+                        <span className="text-steel-500">
+                          DÑO {formatCount(playerStats.damageDealt)}
+                        </span>
+                      )}
+                      {!compact && (
+                        <span className="text-success">
+                          CUR HAB {formatCount(playerStats.abilityHealing)}
+                        </span>
+                      )}
+                      {!compact && (
+                        <span className="text-success">
+                          CUR OBJ {formatCount(playerStats.pickupHealing)}
+                        </span>
+                      )}
+                      {playerStats.invulnerable && (
+                        <span className="rounded bg-white/10 px-1 text-7.36 tracking-[0.06em] text-steel-150">
+                          INV
+                        </span>
+                      )}
+                    </div>
+
+                    {playerStats.alive && (
+                      <div
+                        className={`pointer-events-auto flex items-center rounded-md border font-mono tracking-[0.08em] uppercase ${
+                          compact
+                            ? 'gap-1 px-1.5 py-0.5 text-7.36'
+                            : 'gap-1.5 px-2 py-0.75 text-8.32'
+                        } ${
+                          playerStats.discovered
+                            ? 'border-[color-mix(in_srgb,#ff5f63_50%,transparent)] bg-danger-deep/78 text-danger-100'
+                            : 'border-[color-mix(in_srgb,#8ee08a_42%,transparent)] bg-success-deep/76 text-accent-soft'
+                        }`}
+                        title={
+                          playerStats.discovered
+                            ? `Te ve${playerStats.enemiesSeeing === 1 ? '' : 'n'} ${
+                                playerStats.enemiesSeeing
+                              } rival${playerStats.enemiesSeeing === 1 ? '' : 'es'} del otro equipo. ` +
+                              `Ocultación del terreno ${concealmentPct}%.`
+                            : 'Ningún rival te ve ahora mismo: estás oculto para el otro equipo. ' +
+                              `Ocultación del terreno ${concealmentPct}%.`
+                        }
+                      >
+                        <span className="relative inline-flex items-center">
+                          {/* Reserva el ancho máximo para que el estado no mueva el resto del HUD. */}
+                          <span
+                            className={`invisible flex items-center ${
+                              compact ? 'gap-1' : 'gap-1.5'
+                            }`}
+                            aria-hidden="true"
+                          >
+                            <span className="size-1.5 shrink-0 rounded-full" />
+                            Descubierto
+                            <span>×4</span>
+                          </span>
+                          <span
+                            className={`absolute inset-0 flex items-center justify-center ${
+                              compact ? 'gap-1' : 'gap-1.5'
+                            }`}
+                          >
+                            <span
+                              className={`size-1.5 shrink-0 rounded-full ${
+                                playerStats.discovered ? 'bg-team-red' : 'bg-success'
+                              }`}
+                            />
+                            {playerStats.discovered ? 'Descubierto' : 'Oculto'}
+                            {playerStats.discovered && playerStats.enemiesSeeing > 1 && (
+                              <span className="text-danger-300">×{playerStats.enemiesSeeing}</span>
+                            )}
+                          </span>
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  <div
-                    className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-steel-340 ${
-                      compact ? 'text-8' : 'text-8.8'
-                    }`}
-                  >
-                    <TypeBadge type={playerStats.terrainType} />
-                    {!compact && <span>{playerStats.terrainName}</span>}
-                    <span
-                      className={`whitespace-nowrap ${
-                        playerStats.terrainSpeedMultiplier > 1
-                          ? 'text-accent-soft'
-                          : playerStats.terrainSpeedMultiplier < 1
-                            ? 'text-danger-100'
-                            : 'text-steel-450'
-                      }`}
-                    >
-                      {playerStats.speed.toFixed(1)} u/s · ×
-                      {playerStats.terrainSpeedMultiplier.toFixed(2)}
-                    </span>
-                  </div>
-
-                  <div className="ml-auto flex flex-1 gap-1">
+                  <div className="flex items-stretch gap-1">
                     {playerStats.abilities.map((ability, abilityIndex) => {
                       const ready = ability.cooldown <= 0.001;
                       const pct =
@@ -496,7 +504,11 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                       return (
                         <div
                           key={ability.slot}
-                          className={`relative flex min-w-10 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
+                          className={`relative flex min-w-0 flex-1 items-center overflow-hidden rounded-lg border bg-night-850/82 backdrop-blur-[6px] ${
+                            compact
+                              ? 'gap-1 py-0.5 pr-1 pl-1'
+                              : 'gap-1.5 py-1 pr-1.5 pl-1'
+                          } ${
                             playerStats.shieldActive
                               ? 'opacity-40'
                               : ready && ability.id
@@ -509,24 +521,33 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                               : `${ability.name}${ability.type ? ` · ${typeLabel} · ${categoryLabel}` : ''}`
                           }
                         >
-                          <span className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-7.04 tracking-[0.06em] text-(--team)">
-                              {keys[abilityIndex]}
-                            </span>
-                            {ability.type && (
-                              <span
-                                className={`shrink-0 rounded-full px-1 py-px font-mono font-bold uppercase leading-none tracking-[0.03em] ${
-                                  compact ? 'text-5.44' : 'text-6.4'
-                                }`}
-                                style={typeStyle(ability.type)}
-                              >
-                                {typeBadge}
-                              </span>
-                            )}
+                          <span
+                            className={`grid shrink-0 place-items-center rounded-[4px] border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
+                              compact
+                                ? 'h-4 min-w-4 px-0.75 text-7.36'
+                                : 'h-5 min-w-5 px-1 text-8.32'
+                            }`}
+                          >
+                            {keys[abilityIndex]}
                           </span>
-                          <span className="truncate font-mono text-7.36 text-steel-250">
+                          <span
+                            className={`min-w-0 flex-1 truncate font-mono font-semibold tracking-[-0.01em] text-steel-100 ${
+                              compact ? 'text-8.32' : 'text-9.6'
+                            }`}
+                          >
                             {ability.name}
                           </span>
+                          {ability.type && (
+                            <span
+                              className={`shrink-0 rounded-full px-1 py-px font-mono font-bold uppercase leading-none tracking-[0.03em] ${
+                                compact ? 'text-6.4' : 'text-8'
+                              }`}
+                              style={typeStyle(ability.type)}
+                              title={typeLabel}
+                            >
+                              {typeBadge}
+                            </span>
+                          )}
                           {!ready && (
                             <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
                               {ability.cooldown.toFixed(1)}
@@ -543,7 +564,9 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                     })}
                     {common && !common.hidden && (
                       <div
-                        className={`relative flex min-w-9 flex-1 flex-col overflow-hidden rounded-lg border bg-night-850/82 px-1 py-0.5 backdrop-blur-[6px] ${
+                        className={`relative flex min-w-0 flex-1 items-center overflow-hidden rounded-lg border bg-night-850/82 backdrop-blur-[6px] ${
+                          compact ? 'gap-1 py-0.5 pr-1 pl-1' : 'gap-1.5 py-1 pr-1.5 pl-1'
+                        } ${
                           common.passive
                             ? common.active
                               ? 'border-[color-mix(in_srgb,#8ee08a_55%,var(--color-line))]'
@@ -554,19 +577,27 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                         }`}
                         title={`${common.name} · Instinto común · ${common.description}`}
                       >
-                        <span className="flex items-center justify-between gap-1">
-                          <span className="font-mono text-7.04 tracking-[0.06em] text-(--team)">
-                            {common.passive ? 'PAS' : playerStats.gamepad ? 'RT' : 'I'}
-                          </span>
-                          {common.passive && common.active && (
-                            <span className="shrink-0 rounded-full bg-success-deep/70 px-1 font-mono text-5.44 font-bold uppercase text-accent-soft">
-                              ACT
-                            </span>
-                          )}
+                        <span
+                          className={`grid shrink-0 place-items-center rounded-[4px] border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
+                            compact
+                              ? 'h-4 min-w-4 px-0.75 text-7.36'
+                              : 'h-5 min-w-5 px-1 text-8.32'
+                          }`}
+                        >
+                          {common.passive ? 'PAS' : playerStats.gamepad ? 'RT' : 'I'}
                         </span>
-                        <span className="truncate font-mono text-7.36 text-steel-250">
+                        <span
+                          className={`min-w-0 flex-1 truncate font-mono font-semibold tracking-[-0.01em] text-steel-100 ${
+                            compact ? 'text-8.32' : 'text-9.6'
+                          }`}
+                        >
                           {common.short}
                         </span>
+                        {common.passive && common.active && (
+                          <span className="shrink-0 rounded-full bg-success-deep/70 px-1 py-px font-mono text-6.4 font-bold uppercase leading-none text-accent-soft">
+                            ACT
+                          </span>
+                        )}
                         {!common.passive && common.cooldown > 0.001 && (
                           <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
                             {common.cooldown.toFixed(1)}
@@ -582,7 +613,7 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                       </div>
                     )}
                   </div>
-                </div>
+                </>
               )}
             </div>
 
