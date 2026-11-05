@@ -410,6 +410,13 @@ export class Game {
 
       this.applyMap(map);
 
+      // El mundo ya configuró la niebla y la iluminación de la escena, así que
+      // los shaders se compilan con las mismas variantes que usará la partida.
+      // Se hace antes de cargar sprites para que el GC de la precarga quede
+      // detrás de la pantalla de carga.
+      await this.warmUpShaders();
+      if (this.disposed) return;
+
       let manifest = this.options.manifest ?? null;
       if (!manifest) {
         this.callbacks.onProgress({
@@ -454,12 +461,6 @@ export class Game {
         })
       );
 
-      if (this.disposed) return;
-
-      // Precompila los shaders de los efectos que pueden aparecer en esta
-      // partida. Se hace aquí, con la pantalla de carga todavía visible, para
-      // que el primer casteo de cada habilidad no bloquee el hilo principal.
-      await this.warmUpShaders();
       if (this.disposed) return;
 
       this.ready = true;
@@ -556,10 +557,13 @@ export class Game {
 
     const add = (def: AbilityDef | null | undefined) => {
       if (!def) return;
-      projectiles.add(def.projectileStyle);
+      // El impacto lo puede usar cualquier forma (melee, proyectil, haz...).
       impacts.add(def.impactStyle);
-      beams.add(def.beamStyle);
-      aoes.add(def.aoeStyle);
+      // El resto de estilos solo se usa con su forma correspondiente. Añadir
+      // los cuatro por habilidad calentaba efectos que nunca se iban a lanzar.
+      if (def.shape === 'projectile') projectiles.add(def.projectileStyle);
+      if (def.shape === 'beam') beams.add(def.beamStyle);
+      if (def.shape === 'aoe') aoes.add(def.aoeStyle);
     };
 
     const ids = this.options.pokemonIds;
