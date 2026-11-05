@@ -1178,7 +1178,7 @@ export class Game {
     // La niebla se resuelve después de mover a todos: cada copia se oculta en
     // las vistas que no la ven y cada cámara recibe la unión de círculos del
     // equipo.
-    this.updateVision();
+    this.updateVision(dt);
     if (!frozen) this.updateRegeneration(dt);
     if (!frozen) this.updateParticipation(dt);
 
@@ -3721,7 +3721,7 @@ export class Game {
    * y bots. La ocultación del objetivo se calcula con el terreno que pisa, no
    * con el del observador.
    */
-  private updateVision(): void {
+  private updateVision(dt: number): void {
     const colliders = this.world.colliders;
     for (const player of this.matchPlayers) player.enemiesSeeing = 0;
 
@@ -3752,7 +3752,7 @@ export class Game {
     // ocultación del terreno se aplica después.
     const noCircles: readonly VisionCircle[] = [];
     for (const [team, mask] of this.fogMasks) {
-      mask.update(circlesByTeam.get(team) ?? noCircles);
+      mask.update(circlesByTeam.get(team) ?? noCircles, dt);
     }
 
     // Visibilidad compartida por equipo. Se resuelve una vez por frame y se

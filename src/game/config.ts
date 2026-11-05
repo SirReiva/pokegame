@@ -191,5 +191,24 @@ export const CONFIG = {
     fogColor: [0.016, 0.039, 0.086] as [number, number, number],
     /** Ancho del borde suave, como fracción del radio de visión. */
     fogFeather: 0.06,
+    /**
+     * Máscara world-space de la niebla: sombras de cordilleras y árboles y
+     * visibilidad de objetos. Es independiente del borde suave de pantalla,
+     * que se sigue calculando cada frame en `FogView`.
+     */
+    mask: {
+      /** Resolución del canvas y la textura: 192 = alta, 128 = equilibrada, 96 = rendimiento. */
+      size: 192,
+      /** Hz máximos de recompuesto. 0 = sin límite (cada frame con cambios). */
+      updateHz: 20,
+      /** Movimiento mínimo (u) de un observador para recomponer la máscara. */
+      moveEpsilon: 0.12,
+      /** Rejilla espacial para no recorrer todos los oclusores en cada observador. */
+      spatialGrid: true,
+      /** Lado (u) de la celda de la rejilla de oclusores. */
+      gridCellSize: 10,
+      /** Longitud (u) de las cuñas de sombra. Menos = menos relleno. */
+      shadowLength: 40,
+    },
   },
 } as const;

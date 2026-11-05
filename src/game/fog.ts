@@ -162,12 +162,19 @@ export interface ScreenFog {
   opacity: number;
 }
 
-const MASK_SIZE = 192;
-const SHADOW_LENGTH = 40;
+const MASK_SIZE = CONFIG.vision.mask.size;
+const SHADOW_LENGTH = CONFIG.vision.mask.shadowLength;
 /** Margen (u) del círculo en la máscara para tapar el borde suave de FogView. */
 const MASK_CIRCLE_MARGIN = 0.75;
 /** Extensión de la banda cuando el jugador está pegado a la cresta. */
 const INSIDE_EDGE_EXTENSION = 0.05;
+/** Intervalo mínimo entre recompuestos. 0 = sin límite. */
+const MASK_UPDATE_INTERVAL =
+  CONFIG.vision.mask.updateHz > 0 ? 1 / CONFIG.vision.mask.updateHz : 0;
+/** Movimiento mínimo (u) para considerar que un observador se ha movido. */
+const MASK_MOVE_EPSILON = CONFIG.vision.mask.moveEpsilon;
+const MASK_MOVE_EPSILON_SQ = MASK_MOVE_EPSILON * MASK_MOVE_EPSILON;
+const MASK_RANGE_EPSILON = 0.01;
 
 /**
  * El quad se dibuja un 2 % más grande que el frustum para no dejar una costura
@@ -468,6 +475,25 @@ export class FogMask {
   private visibilityPixels: Uint8ClampedArray | null = null;
   /** Observadores del último dibujo, para no redibujar la máscara sin cambios. */
   private readonly lastCircles: VisionCircle[] = [];
+  /** Transformación mundo -> píxel de la máscara, precalculada. */
+  private readonly maskScaleX: number;
+  private readonly maskScaleY: number;
+  private readonly maskOffsetX: number;
+  private readonly maskOffsetY: number;
+  /** Oclusores del observador actual y sus distancias, reutilizados. */
+  private readonly candidates: SightOccluder[] = [];
+  private readonly candidateDistances: number[] = [];
+  /** Rejilla de oclusores por celda, o `null` si está desactivada. */
+  private occluderGrid: number[][] | null = null;
+  private gridCols = 1;
+  private gridRows = 1;
+  private gridCellSize = 1;
+  private gridMinX = 0;
+  private gridMinZ = 0;
+  private maxOccluderRadius = 0;
+  /** Tiempo desde el último recompuesto y si hay cambios pendientes. */
+  private timeSinceUpdate = MASK_UPDATE_INTERVAL;
+  private dirty = true;
 
   constructor(
     device: pc.GraphicsDevice,
@@ -475,6 +501,13 @@ export class FogMask {
     name: string
   ) {
     this.occluders = occluders;
+
+    const halfX = mapHalfWidth();
+    const halfZ = mapHalfDepth();
+    this.maskScaleX = MASK_SIZE / (halfX * 2);
+    this.maskScaleY = MASK_SIZE / (halfZ * 2);
+    this.maskOffsetX = MASK_SIZE / 2;
+    this.maskOffsetY = MASK_SIZE / 2;
 
     this.maskCanvas = document.createElement('canvas');
     this.maskCanvas.width = MASK_SIZE;
@@ -494,6 +527,39 @@ export class FogMask {
     if (!observerContext) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.observerContext = observerContext;
 
+    // Rejilla uniforme: cada oclusor se guarda en la celda de su centro. En
+    // cada actualización solo se recorren las celdas que cubren el radio del
+    // observador, en vez de toda la lista de árboles y tramos de cordillera.
+    if (CONFIG.vision.mask.spatialGrid && occluders.length > 0) {
+      let maxRadius = 0;
+      for (const occluder of occluders) {
+        if (occluder.radius > maxRadius) maxRadius = occluder.radius;
+      }
+      this.maxOccluderRadius = maxRadius;
+      this.gridCellSize = Math.max(1, CONFIG.vision.mask.gridCellSize);
+      this.gridMinX = -halfX;
+      this.gridMinZ = -halfZ;
+      this.gridCols = Math.max(
+        1,
+        Math.ceil((halfX * 2) / this.gridCellSize)
+      );
+      this.gridRows = Math.max(
+        1,
+        Math.ceil((halfZ * 2) / this.gridCellSize)
+      );
+      const grid: number[][] = [];
+      for (let index = 0; index < this.gridCols * this.gridRows; index++) {
+        grid.push([]);
+      }
+      for (let index = 0; index < occluders.length; index++) {
+        const occluder = occluders[index];
+        const col = this.gridColumn(occluder.x);
+        const row = this.gridRow(occluder.z);
+        grid[row * this.gridCols + col].push(index);
+      }
+      this.occluderGrid = grid;
+    }
+
     this.texture = new pc.Texture(device, {
       name,
       width: MASK_SIZE,
@@ -509,11 +575,21 @@ export class FogMask {
     this.texture.setSource(this.maskCanvas);
   }
 
-  /** Recompone la máscara si cambió la posición o el rango de algún observador. */
-  update(circles: readonly VisionCircle[]): void {
-    if (!this.circlesChanged(circles)) return;
+  /**
+   * Recompone la máscara si cambió la posición o el rango de algún observador.
+   * Se limita la frecuencia: el borde suave de pantalla lo sigue calculando
+   * `FogView` cada frame, y esta máscara solo alimenta sombras y visibilidad.
+   */
+  update(circles: readonly VisionCircle[], dt: number): void {
+    this.timeSinceUpdate += dt;
+    if (this.circlesChanged(circles)) this.dirty = true;
+    if (!this.dirty) return;
+    if (this.timeSinceUpdate < MASK_UPDATE_INTERVAL) return;
+
     this.rememberCircles(circles);
     this.updateMask(circles);
+    this.timeSinceUpdate = 0;
+    this.dirty = false;
   }
 
   /**
@@ -524,10 +600,8 @@ export class FogMask {
    */
   isVisibleAt(x: number, z: number): boolean {
     if (!this.visibilityPixels) return false;
-    const halfX = mapHalfWidth();
-    const halfZ = mapHalfDepth();
-    const px = Math.floor(((x + halfX) / (halfX * 2)) * MASK_SIZE);
-    const py = Math.floor(((z + halfZ) / (halfZ * 2)) * MASK_SIZE);
+    const px = Math.floor(x * this.maskScaleX + this.maskOffsetX);
+    const py = Math.floor(z * this.maskScaleY + this.maskOffsetY);
     if (px < 0 || px >= MASK_SIZE || py < 0 || py >= MASK_SIZE) return false;
     const offset = (py * MASK_SIZE + px) * 4;
     return (this.visibilityPixels[offset] ?? 0) >= 128;
@@ -538,11 +612,10 @@ export class FogMask {
     for (let index = 0; index < circles.length; index++) {
       const next = circles[index];
       const prev = this.lastCircles[index];
-      if (
-        next.x !== prev.x ||
-        next.z !== prev.z ||
-        next.visionRange !== prev.visionRange
-      ) {
+      const dx = next.x - prev.x;
+      const dz = next.z - prev.z;
+      if (dx * dx + dz * dz > MASK_MOVE_EPSILON_SQ) return true;
+      if (Math.abs(next.visionRange - prev.visionRange) > MASK_RANGE_EPSILON) {
         return true;
       }
     }
@@ -550,14 +623,36 @@ export class FogMask {
   }
 
   private rememberCircles(circles: readonly VisionCircle[]): void {
-    this.lastCircles.length = 0;
-    for (const circle of circles) {
-      this.lastCircles.push({
-        x: circle.x,
-        z: circle.z,
-        visionRange: circle.visionRange
-      });
+    for (let index = 0; index < circles.length; index++) {
+      const circle = circles[index];
+      const stored = this.lastCircles[index];
+      if (stored) {
+        stored.x = circle.x;
+        stored.z = circle.z;
+        stored.visionRange = circle.visionRange;
+      } else {
+        this.lastCircles[index] = {
+          x: circle.x,
+          z: circle.z,
+          visionRange: circle.visionRange
+        };
+      }
     }
+    this.lastCircles.length = circles.length;
+  }
+
+  private gridColumn(x: number): number {
+    const column = Math.floor((x - this.gridMinX) / this.gridCellSize);
+    if (column < 0) return 0;
+    if (column >= this.gridCols) return this.gridCols - 1;
+    return column;
+  }
+
+  private gridRow(z: number): number {
+    const row = Math.floor((z - this.gridMinZ) / this.gridCellSize);
+    if (row < 0) return 0;
+    if (row >= this.gridRows) return this.gridRows - 1;
+    return row;
   }
 
   /**
@@ -575,41 +670,39 @@ export class FogMask {
     context.fillStyle = '#000';
     context.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
 
-    const halfX = mapHalfWidth();
-    const halfZ = mapHalfDepth();
-    const toCanvasX = (x: number) => ((x + halfX) / (halfX * 2)) * MASK_SIZE;
-    const toCanvasY = (z: number) => ((z + halfZ) / (halfZ * 2)) * MASK_SIZE;
+    const observer = this.observerContext;
+    context.globalCompositeOperation = 'lighter';
 
     for (const circle of circles) {
-      const observer = this.observerContext;
       observer.setTransform(1, 0, 0, 1, 0, 0);
       observer.globalCompositeOperation = 'source-over';
-      observer.fillStyle = '#fff';
-      observer.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
-      this.drawShadowWedges(observer, circle.x, circle.z, circle.visionRange);
+      observer.clearRect(0, 0, MASK_SIZE, MASK_SIZE);
 
       // Un pequeño margen evita que la cuantización de la textura recorte el
-      // interior del círculo que FogView dibuja con su borde suave.
+      // interior del círculo que FogView dibuja con su borde suave. El recorte
+      // se hace en el lienzo auxiliar para que las cuñas tampoco se pinten
+      // fuera del círculo: antes se rellenaban 40 u y luego se descartaban.
       const radius = circle.visionRange + MASK_CIRCLE_MARGIN;
-      const radiusX = Math.max(0.5, (radius / (halfX * 2)) * MASK_SIZE);
-      const radiusY = Math.max(0.5, (radius / (halfZ * 2)) * MASK_SIZE);
+      const radiusX = Math.max(0.5, radius * this.maskScaleX);
+      const radiusY = Math.max(0.5, radius * this.maskScaleY);
+      const centerX = circle.x * this.maskScaleX + this.maskOffsetX;
+      const centerY = circle.z * this.maskScaleY + this.maskOffsetY;
 
-      context.save();
-      context.beginPath();
-      context.ellipse(
-        toCanvasX(circle.x),
-        toCanvasY(circle.z),
-        radiusX,
-        radiusY,
-        0,
-        0,
-        Math.PI * 2
-      );
-      context.clip();
-      context.globalCompositeOperation = 'lighter';
+      observer.save();
+      observer.beginPath();
+      observer.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+      observer.clip();
+      observer.fillStyle = '#fff';
+      observer.fill();
+      this.drawShadowWedges(observer, circle.x, circle.z, circle.visionRange);
+      observer.restore();
+
+      // El lienzo auxiliar es transparente fuera del círculo, así que al
+      // sumarlo con `lighter` solo aporta la zona visible del observador.
       context.drawImage(this.observerCanvas, 0, 0);
-      context.restore();
     }
+
+    context.globalCompositeOperation = 'source-over';
 
     // Píxeles de la máscara de visión, para que la visibilidad de los objetos
     // use la misma zona que pinta el decal.
@@ -630,26 +723,19 @@ export class FogMask {
     playerZ: number,
     visionRange: number
   ): void {
-    const halfX = mapHalfWidth();
-    const halfZ = mapHalfDepth();
-    const toCanvasX = (x: number) => ((x + halfX) / (halfX * 2)) * MASK_SIZE;
-    const toCanvasY = (z: number) => ((z + halfZ) / (halfZ * 2)) * MASK_SIZE;
+    const toCanvasX = (x: number) => x * this.maskScaleX + this.maskOffsetX;
+    const toCanvasY = (z: number) => z * this.maskScaleY + this.maskOffsetY;
 
     context.fillStyle = '#000';
 
-    const candidates: Array<SightOccluder & { distance: number }> = [];
-    for (const occluder of this.occluders) {
-      const distance = Math.hypot(occluder.x - playerX, occluder.z - playerZ);
-      // Los separadores se muestrean en tramos cortos, así que no basta con
-      // limitar el número total: un separador cercano llenaría la lista y los
-      // demás dejarían de proyectar sombra. Se dibujan todos los tramos que
-      // caen dentro del radio de visión (fuera de él la niebla ya es opaca).
-      if (distance > visionRange + occluder.radius + 2) continue;
-      candidates.push({ ...occluder, distance });
-    }
+    this.collectCandidates(playerX, playerZ, visionRange);
+    const candidates = this.candidates;
+    const distances = this.candidateDistances;
 
-    for (const occluder of candidates) {
-      if (occluder.distance <= occluder.radius + 0.01) {
+    for (let index = 0; index < candidates.length; index++) {
+      const occluder = candidates[index];
+      const distance = distances[index];
+      if (distance <= occluder.radius + 0.01) {
         // Jugador pegado a la cresta: banda sobre el lado opuesto del tramo.
         const segmentX = occluder.bx - occluder.ax;
         const segmentZ = occluder.bz - occluder.az;
@@ -691,9 +777,9 @@ export class FogMask {
       const dx = occluder.x - playerX;
       const dz = occluder.z - playerZ;
       const angle = Math.atan2(dz, dx);
-      const halfAngle = Math.asin(Math.min(1, occluder.radius / occluder.distance));
+      const halfAngle = Math.asin(Math.min(1, occluder.radius / distance));
       const tangentDistance = Math.sqrt(
-        occluder.distance * occluder.distance - occluder.radius * occluder.radius
+        Math.max(0, distance * distance - occluder.radius * occluder.radius)
       );
 
       const a1 = angle - halfAngle;
@@ -718,6 +804,64 @@ export class FogMask {
       context.closePath();
       context.fill();
     }
+  }
+
+  /**
+   * Rellena `candidates` con los oclusores que pueden proyectar sombra sobre
+   * este observador. Con la rejilla activa solo recorre las celdas cercanas.
+   */
+  private collectCandidates(
+    playerX: number,
+    playerZ: number,
+    visionRange: number
+  ): void {
+    const candidates = this.candidates;
+    const distances = this.candidateDistances;
+    candidates.length = 0;
+    distances.length = 0;
+
+    if (this.occluderGrid) {
+      // El filtro original usa la distancia al centro del oclusor, así que su
+      // celda basta: no hace falta insertarlo en varias celdas.
+      const queryRange = visionRange + this.maxOccluderRadius + 2;
+      const col0 = this.gridColumn(playerX - queryRange);
+      const col1 = this.gridColumn(playerX + queryRange);
+      const row0 = this.gridRow(playerZ - queryRange);
+      const row1 = this.gridRow(playerZ + queryRange);
+      for (let row = row0; row <= row1; row++) {
+        const base = row * this.gridCols;
+        for (let col = col0; col <= col1; col++) {
+          for (const index of this.occluderGrid[base + col]) {
+            this.pushCandidate(index, playerX, playerZ, visionRange);
+          }
+        }
+      }
+      return;
+    }
+
+    for (let index = 0; index < this.occluders.length; index++) {
+      this.pushCandidate(index, playerX, playerZ, visionRange);
+    }
+  }
+
+  private pushCandidate(
+    index: number,
+    playerX: number,
+    playerZ: number,
+    visionRange: number
+  ): void {
+    const occluder = this.occluders[index];
+    const dx = occluder.x - playerX;
+    const dz = occluder.z - playerZ;
+    // Los separadores se muestrean en tramos cortos, así que no basta con
+    // limitar el número total: un separador cercano llenaría la lista y los
+    // demás dejarían de proyectar sombra. Se dibujan todos los tramos que
+    // caen dentro del radio de visión (fuera de él la niebla ya es opaca).
+    const limit = visionRange + occluder.radius + 2;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq > limit * limit) return;
+    this.candidates.push(occluder);
+    this.candidateDistances.push(Math.sqrt(distanceSq));
   }
 
   destroy(): void {
