@@ -1,8 +1,7 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
 import { MAX_TEAM_SIZE, type SplitRect } from './multiplayer';
-import { mapHalfDepth, mapHalfWidth, terrainAt } from './terrain';
-import { CONCEALMENT_TYPE_FACTOR, TERRAIN_CONCEALMENT } from './vision';
+import { mapHalfDepth, mapHalfWidth } from './terrain';
 
 /**
  * Niebla de guerra dibujada por el motor.
@@ -465,14 +464,7 @@ export class FogMask {
   /** Lienzo auxiliar donde se compone la visibilidad de cada observador. */
   private readonly observerCanvas: HTMLCanvasElement;
   private readonly observerContext: CanvasRenderingContext2D;
-  /**
-   * Grayscale del terreno: blanco donde no oculta y más oscuro cuanto mayor es
-   * la ocultación máxima del terreno. Se multiplica sobre la máscara para que
-   * la niebla marque también la vegetación y el terreno que esconden a los
-   * Pokémon.
-   */
-  private readonly concealmentCanvas: HTMLCanvasElement;
-  /** Píxeles de la máscara de visión, sin la ocultación del terreno. */
+  /** Píxeles de la máscara de visión. */
   private visibilityPixels: Uint8ClampedArray | null = null;
   /** Observadores del último dibujo, para no redibujar la máscara sin cambios. */
   private readonly lastCircles: VisionCircle[] = [];
@@ -502,8 +494,6 @@ export class FogMask {
     if (!observerContext) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.observerContext = observerContext;
 
-    this.concealmentCanvas = this.buildConcealmentCanvas();
-
     this.texture = new pc.Texture(device, {
       name,
       width: MASK_SIZE,
@@ -519,44 +509,6 @@ export class FogMask {
     this.texture.setSource(this.maskCanvas);
   }
 
-  /**
-   * Precalcula un lienzo world-space con la ocultación máxima de cada terreno.
-   * Se evalúa una vez por mapa y equipo; el terreno no cambia durante la
-   * partida, así que no hay que reconstruirlo cada frame.
-   */
-  private buildConcealmentCanvas(): HTMLCanvasElement {
-    const canvas = document.createElement('canvas');
-    canvas.width = MASK_SIZE;
-    canvas.height = MASK_SIZE;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
-    const image = context.createImageData(MASK_SIZE, MASK_SIZE);
-    const halfX = mapHalfWidth();
-    const halfZ = mapHalfDepth();
-    for (let py = 0; py < MASK_SIZE; py++) {
-      const z = ((py + 0.5) / MASK_SIZE) * halfZ * 2 - halfZ;
-      for (let px = 0; px < MASK_SIZE; px++) {
-        const x = ((px + 0.5) / MASK_SIZE) * halfX * 2 - halfX;
-        // Se usa la ocultación máxima que puede alcanzar ese terreno (un
-        // Pokémon con el tipo propio recibe ×1,5); así la niebla nunca deja
-        // una zona más clara que la ocultación real de un Pokémon escondido.
-        const base = TERRAIN_CONCEALMENT[terrainAt(x, z)] ?? 0;
-        const concealment = Math.min(
-          CONFIG.vision.maxConcealment,
-          base * CONCEALMENT_TYPE_FACTOR.home
-        );
-        const value = Math.round((1 - concealment) * 255);
-        const offset = (py * MASK_SIZE + px) * 4;
-        image.data[offset] = value;
-        image.data[offset + 1] = value;
-        image.data[offset + 2] = value;
-        image.data[offset + 3] = 255;
-      }
-    }
-    context.putImageData(image, 0, 0);
-    return canvas;
-  }
-
   /** Recompone la máscara si cambió la posición o el rango de algún observador. */
   update(circles: readonly VisionCircle[]): void {
     if (!this.circlesChanged(circles)) return;
@@ -567,8 +519,8 @@ export class FogMask {
   /**
    * ¿Está el punto dentro de la zona que la niebla pinta como visible? Usa la
    * misma máscara que el decal (círculos del equipo, sombras de separadores y
-   * árboles), sin la ocultación del terreno. Sirve para que los objetos se
-   * muestren exactamente donde la niebla deja ver el suelo.
+   * árboles). Sirve para que los objetos se muestren exactamente donde la
+   * niebla deja ver el suelo.
    */
   isVisibleAt(x: number, z: number): boolean {
     if (!this.visibilityPixels) return false;
@@ -659,8 +611,8 @@ export class FogMask {
       context.restore();
     }
 
-    // Guarda la visibilidad pura (sin ocultación de terreno) para que la
-    // visibilidad de los objetos use la misma zona que pinta el decal.
+    // Píxeles de la máscara de visión, para que la visibilidad de los objetos
+    // use la misma zona que pinta el decal.
     this.visibilityPixels = context.getImageData(
       0,
       0,
@@ -668,13 +620,6 @@ export class FogMask {
       MASK_SIZE
     ).data;
 
-    // La ocultación del terreno se multiplica sobre la visibilidad: la niebla
-    // oscurece la hierba alta, el bosque umbrío, la ciénaga... aunque el equipo
-    // tenga el punto dentro de su radio. Así un Pokémon oculto por el terreno
-    // no desaparece en una zona que la niebla pinta como despejada.
-    context.globalCompositeOperation = 'multiply';
-    context.drawImage(this.concealmentCanvas, 0, 0);
-    context.globalCompositeOperation = 'source-over';
     this.texture.upload();
   }
 
