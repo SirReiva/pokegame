@@ -96,7 +96,13 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
 
   // Groudon
   cuchillada: 'abilities/cuchillada.mp3',
-  filoAbismo: 'abilities/filoAbismo.mp3'
+  filoAbismo: 'abilities/filoAbismo.mp3',
+
+  // Celebi
+  hojaMagica: 'abilities/hojaMagica.mp3',
+  rayoSolar: 'abilities/rayoSolar.mp3',
+  deseo: 'abilities/deseo.mp3',
+  futuroSiniestro: 'abilities/futuroSiniestro.mp3'
 };
 
 /**

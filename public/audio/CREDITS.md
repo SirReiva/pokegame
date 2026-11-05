@@ -78,6 +78,10 @@ este proyecto fan, no comercial, igual que los sprites.
 | Roca Afilada | Stone Edge |
 | Cuchillada | Slash |
 | Filo del Abismo | Fissure |
+| Hoja Mágica | Razor Leaf |
+| Rayo Solar | Leaf Storm |
+| Deseo | Recover |
+| Futuro Siniestro | Future Sight |
 | Protección | Protect |
 | Impulso | Quick Attack |
 
@@ -86,4 +90,6 @@ Effective` y `Hit Weak Not Very Effective`, elegidas según la efectividad del
 tipo en el momento del golpe.
 
 `Water Shuriken` y `Precipice Blades` no existen en la quinta generación: se
-usan `Water Pulse` y `Fissure` como equivalentes.
+usan `Water Pulse` y `Fissure` como equivalentes. `Magical Leaf` y `Solar Beam`
+tampoco están en el álbum, así que `Hoja Mágica` usa `Razor Leaf` y `Rayo Solar`
+usa `Leaf Storm`.

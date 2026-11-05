@@ -87,6 +87,7 @@ export type ImpactStyle =
 export type BeamStyle =
   | 'electric'
   | 'fire'
+  | 'grass'
   | 'psychic'
   | 'water'
   | 'dark'
@@ -1887,6 +1888,94 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Celebi                                                                    */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('hojaMagica', 'Hoja Mágica', 'Grass', 'special', 'projectile')
+    .power(40)
+    // 0 = nunca falla: las hojas guiadas persiguen el objetivo hasta el final.
+    .accuracy(0)
+    .cooldown(0.8)
+    .range(8)
+    .radius(0.26)
+    .projectile('grass', 14)
+    .impact('grass')
+    .cast(0.3)
+    .animation('shoot')
+    .color(143, 208, 90)
+    .description(
+      'Proyectil de hojas guiadas que nunca falla. 40 de potencia y 8 u de alcance. Ataque básico de Celebi.'
+    )
+);
+
+registerAbility(
+  ability('rayoSolar', 'Rayo Solar', 'Grass', 'special', 'beam')
+    .power(75)
+    .accuracy(95)
+    .cooldown(8)
+    .range(9.5)
+    .radius(0.48)
+    .windup(0.65, { animation: 'charge' })
+    .cast(0.55)
+    .animation('shoot')
+    .beam('grass')
+    .impact('grass')
+    .color(150, 224, 96)
+    .description(
+      'Se carga 0,65 s con la luz del sol y dispara un haz de 9,5 u que atraviesa a todos los rivales en línea. 75 de potencia.'
+    )
+);
+
+registerAbility(
+  ability('deseo', 'Deseo', 'Psychic', 'status', 'aoe')
+    .power(0)
+    .accuracy(0)
+    .cooldown(13)
+    .range(0)
+    .radius(3.2)
+    .windup(0.65)
+    .cast(0.65)
+    .animation('twirl')
+    .heal(0.3)
+    .area('recovery', 'instant', 0.8)
+    .aoeEffect(({ targets, applyHeal }) => {
+      // El lanzador ya se cura con `healSelf`; el área reparte el 20 % entre
+      // los aliados que estén dentro del radio.
+      for (const target of targets) {
+        if (!target.isAlly || target.isSelf) continue;
+        applyHeal(target, 0.2);
+      }
+    })
+    .color(156, 224, 112)
+    .description(
+      'Pide un deseo: se concentra 0,65 s y libera una onda curativa de 3,2 u que recupera el 30 % de su vida máxima y el 20 % de la de sus aliados. Si le golpean durante la concentración, se cancela.'
+    )
+);
+
+registerAbility(
+  ability('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', 'aoe')
+    .power(90)
+    .accuracy(95)
+    .cooldown(15)
+    .range(5.5)
+    .radius(2.8)
+    .windup(1, { animation: 'charge' })
+    .cast(0.7)
+    // El área es instantánea al terminar la carga; no hay clip de lanzamiento
+    // después del impacto.
+    .animation(null)
+    .area('psychic', 'instant', 0.9)
+    .radial(0.35)
+    .slow(0.65, 2)
+    .impact('psychic')
+    .color(190, 140, 255)
+    .description(
+      'Definitiva: marca un punto a 5,5 u y, tras 1 s, cae una explosión psíquica de 2,8 u. 90 de potencia, el 100 % en el centro y el 35 % en el borde, y ralentiza un 35 % durante 2 s.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -1932,6 +2021,7 @@ MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
 MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
 MOVESETS['0095'] = ['atadura', 'lanzarrocas', 'excavar', 'fisura'];
 MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];
+MOVESETS['0251'] = ['hojaMagica', 'rayoSolar', 'deseo', 'futuroSiniestro'];
 
 export function abilityForSlot(
   pokemonId: string,

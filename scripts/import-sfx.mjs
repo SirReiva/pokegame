@@ -94,6 +94,12 @@ const ABILITY_TRACKS = {
   cuchillada: 'Slash',
   // Precipice Blades no existe en Gen 5: Fissure comparte la apertura del suelo.
   filoAbismo: 'Fissure',
+  // Celebi: Magical Leaf y Solar Beam no están en el álbum, así que se usan
+  // los movimientos de Planta y los equivalentes de tiempo/curación más cercanos.
+  hojaMagica: 'Razor Leaf',
+  rayoSolar: 'Leaf Storm',
+  deseo: 'Recover',
+  futuroSiniestro: 'Future Sight',
   proteccion: 'Protect',
   impulso: 'Quick Attack'
 };

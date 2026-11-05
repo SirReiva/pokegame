@@ -673,6 +673,7 @@ export class CombatFx {
   private readonly beamDurations: Record<BeamStyle, number> = {
     electric: 0.34,
     fire: 0.45,
+    grass: 0.46,
     psychic: 0.42,
     water: 0.55,
     dark: 0.48,
@@ -888,6 +889,8 @@ export class CombatFx {
         this.spawnElectricBeam(x1, z1, x2, z2, color, width),
       fire: (x1, z1, x2, z2, color, width) =>
         this.spawnFireBeam(x1, z1, x2, z2, color, width),
+      grass: (x1, z1, x2, z2, color, width) =>
+        this.spawnGrassBeam(x1, z1, x2, z2, color, width),
       psychic: (x1, z1, x2, z2, color, width) =>
         this.spawnPsychicBeam(x1, z1, x2, z2, color, width),
       water: (x1, z1, x2, z2, color, width) =>
@@ -6010,10 +6013,20 @@ export class CombatFx {
     root.setPosition(x, 0.03, z);
     this.app.root.addChild(root);
 
+    // Los tintes claros salen del color de la habilidad para que el área de
+    // curación acompañe a cada Pokémon: rosa en Mew, verde en Celebi.
+    const lighten = (
+      amount: number
+    ): readonly [number, number, number] => [
+      Math.round(color[0] + (255 - color[0]) * amount),
+      Math.round(color[1] + (255 - color[1]) * amount),
+      Math.round(color[2] + (255 - color[2]) * amount)
+    ];
+
     const ringMaterial = this.createMaterial(color, 0.55);
-    const fillMaterial = this.createMaterial([255, 214, 240], 0.12);
-    const waveMaterial = this.createMaterial([255, 190, 238], 0.7);
-    const moteMaterial = this.createMaterial([255, 232, 250], 0.95);
+    const fillMaterial = this.createMaterial(lighten(0.55), 0.12);
+    const waveMaterial = this.createMaterial(lighten(0.35), 0.7);
+    const moteMaterial = this.createMaterial(lighten(0.75), 0.95);
     const materials = [ringMaterial, fillMaterial, waveMaterial, moteMaterial];
 
     const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
@@ -8713,6 +8726,151 @@ export class CombatFx {
       hotMaterial.opacity = 0.34 * fade;
       ringMaterial.opacity = 0.4 * fade;
       featherMaterial.opacity = 0.7 * fade;
+    });
+  }
+
+  /**
+   * Haz de Planta: columna verde con un núcleo claro y tres hélices de hojas
+   * que giran en espiral alrededor de la línea, con anillos de polen que viajan
+   * hasta la punta. La mezcla normal mantiene el verde legible sobre hierba o
+   * arena clara.
+   */
+  private spawnGrassBeam(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    color: readonly [number, number, number],
+    width: number
+  ): void {
+    const dx = x2 - x1;
+    const dz = z2 - z1;
+    const length = Math.max(0.1, Math.hypot(dx, dz));
+    const root = new pc.Entity('grass-beam');
+    root.setPosition(x1, 0.75, z1);
+    root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const bodyMaterial = this.createWaterMaterial(color, 0.22);
+    const coreMaterial = this.createWaterMaterial([244, 255, 206], 0.5);
+    const ringMaterial = this.createMaterial([214, 248, 160], 0.4);
+    const leafMaterial = this.createLeafMaterial([226, 250, 184], 0.9);
+    const hotLeafMaterial = this.createLeafMaterial([248, 255, 222], 0.9);
+    const materials = [
+      bodyMaterial,
+      coreMaterial,
+      ringMaterial,
+      leafMaterial,
+      hotLeafMaterial
+    ];
+
+    const beamMesh = pc.createCylinder(this.device, {
+      radius: 0.5,
+      height: 1,
+      heightSegments: 1,
+      capSegments: 14
+    });
+    const body = this.createEntity(beamMesh, [bodyMaterial], root);
+    const core = this.createEntity(beamMesh, [coreMaterial], root);
+    body.setLocalEulerAngles(90, 0, 0);
+    core.setLocalEulerAngles(90, 0, 0);
+
+    // Tres hélices de hojas: cada una gira alrededor del eje del haz mientras
+    // avanza a lo largo de la línea.
+    const leaves: {
+      entity: pc.Entity;
+      angle: number;
+      offset: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    const segments = 14;
+    for (let helix = 0; helix < 3; helix++) {
+      for (let index = 0; index < segments; index++) {
+        const size = width * (0.32 + Math.random() * 0.14);
+        const leaf = this.createLeaf(
+          root,
+          helix === 1 ? hotLeafMaterial : leafMaterial,
+          {
+            x: 0,
+            y: 0,
+            z: 0,
+            width: size,
+            height: size * 1.8,
+            yaw: Math.random() * 360
+          }
+        );
+        leaves.push({
+          entity: leaf,
+          angle: (helix / 3) * Math.PI * 2,
+          offset: (index + 1) / segments,
+          size,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 4; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      ring.setLocalEulerAngles(90, 0, 0);
+      rings.push(ring);
+    }
+
+    let time = 0;
+    this.addEffect(root, materials, 0.46, (_t, dt) => {
+      time += dt;
+      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
+      const pulse = 0.86 + Math.random() * 0.14;
+      const visibleLength = Math.max(0.02, length * reveal);
+
+      body.setLocalPosition(0, 0, visibleLength / 2);
+      body.setLocalScale(
+        width * 2 * pulse,
+        visibleLength,
+        width * 2 * pulse
+      );
+      core.setLocalPosition(0, 0, visibleLength / 2);
+      core.setLocalScale(
+        width * 0.58 * pulse,
+        visibleLength,
+        width * 0.58 * pulse
+      );
+
+      for (const leaf of leaves) {
+        const z = leaf.offset * visibleLength;
+        const angle = leaf.angle + time * 8 + leaf.offset * Math.PI * 6;
+        const radius = width * (1.05 + Math.sin(leaf.offset * Math.PI) * 0.18);
+        leaf.entity.setLocalPosition(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          z
+        );
+        leaf.entity.setLocalEulerAngles(
+          Math.sin(time * 10 + leaf.phase) * 35,
+          angle / DEG + time * 220,
+          Math.cos(time * 8 + leaf.phase) * 45
+        );
+        const scale = leaf.size * (0.8 + pulse * 0.2);
+        leaf.entity.setLocalScale(scale, scale * 1.8, scale);
+      }
+
+      for (let index = 0; index < rings.length; index++) {
+        const ring = rings[index];
+        const path = (time * 2.4 + index / rings.length) % 1;
+        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
+        const ringScale =
+          width * (1.4 + Math.sin(path * Math.PI) * 1.1) * pulse;
+        ring.setLocalScale(ringScale, ringScale, ringScale);
+        ring.setLocalEulerAngles(90, 0, time * 180 + index * 40);
+      }
+
+      bodyMaterial.opacity = 0.2 * pulse * fade;
+      coreMaterial.opacity = 0.48 * pulse * fade;
+      ringMaterial.opacity = 0.4 * fade;
+      leafMaterial.opacity = 0.82 * fade;
+      hotLeafMaterial.opacity = 0.82 * fade;
     });
   }
 
