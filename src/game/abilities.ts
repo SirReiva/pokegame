@@ -770,7 +770,7 @@ registerAbility(
     .radius(0.35)
     .impact('electric')
     .cast(0.55)
-    .windup(0.5, { mode: 'once' })
+    .windup(0.35, { mode: 'once' })
     .animation('shock')
     .color(255, 238, 88)
     .description(

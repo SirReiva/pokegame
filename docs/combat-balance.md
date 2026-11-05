@@ -839,7 +839,7 @@ cadencias de 0,25-0,4 s. Las definitivas con windup son:
 
 | Habilidad | Windup | Quién |
 | --- | ---: | --- |
-| Rayo | 0,50 s | Pikachu |
+| Rayo | 0,35 s | Pikachu |
 | Giro Fuego | 0,50 s | Charmander |
 | Roca Afilada | 0,50 s | Tyranitar |
 | Explosión | 0,60 s | Voltorb |
