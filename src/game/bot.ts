@@ -24,11 +24,12 @@
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
 import { pointSegmentDistance, segmentBlockedByColliders } from './combat';
-import { DEG } from './config';
+import { CONFIG, DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
 import { otherTeam, type BotDifficulty } from './multiplayer';
+import { maxHitRadius } from './roster';
 import { respawnsForTeam, terrainAt } from './terrain';
 import { typeEffectiveness } from './typeChart';
 import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
@@ -201,6 +202,65 @@ const IMMUNE_TARGET_PENALTY = 60;
 /** Vida por debajo de la cual una pelea con desventaja de tipo justifica huir. */
 const MATCHUP_RETREAT_HP = 0.6;
 
+/**
+ * Penalización al elegir objetivo por el daño que puede evitar ahora mismo.
+ * Un rival invulnerable suma el máximo, y uno con escudo o buffs defensivos
+ * solo la fracción mitigada: sigue siendo atacable si no hay otra opción.
+ */
+const MITIGATED_TARGET_PENALTY = 40;
+
+/** Potencia a partir de la cual una habilidad se considera "grande". */
+const BIG_ABILITY_POWER = 100;
+
+/**
+ * Mitigación a partir de la cual no compensa gastar una habilidad grande. El
+ * golpe entra muy reducido y su cooldown es demasiado caro para malgastarlo.
+ */
+const BIG_ABILITY_MITIGATION_THRESHOLD = 0.4;
+
+/**
+ * Diferencia de retardo que se considera empate al interrumpir. Por debajo de
+ * este margen el orden depende del frame, así que vale más la precisión de la
+ * habilidad que unos milisegundos de diferencia.
+ */
+const INTERRUPT_DELAY_TOLERANCE = 0.05;
+
+/**
+ * Puntuación mínima para gastar una habilidad. Por debajo de este umbral no
+ * compensa el cooldown: curas a vida casi llena o ataques que el rival va a
+ * castigar puntúan negativo, y elegir "la menos mala" solo desperdicia el
+ * recurso.
+ */
+const MIN_ABILITY_SCORE = 0;
+
+/** Puntuación de revivir a un aliado caído con un área de apoyo. */
+const SUPPORT_REVIVE_SCORE = 180;
+/** Puntuación por cada fracción de vida que un área de apoyo cura a un aliado. */
+const SUPPORT_ALLY_HEAL_SCORE = 110;
+/** Fracción de vida que debe faltar a un aliado para que merezca la pena curarlo. */
+const SUPPORT_MIN_MISSING_HP = 0.2;
+/** Radio de rivales que penaliza revivir, porque el windup se puede cancelar. */
+const SUPPORT_REVIVE_DANGER_RADIUS = 5;
+/** Penalización por cada unidad de rival dentro de ese radio. */
+const SUPPORT_REVIVE_DANGER_PENALTY = 30;
+
+interface SupportProfile {
+  /** Devuelve al combate a los aliados caídos dentro del área. */
+  revive?: boolean;
+  /** Reparte curación entre los aliados vivos dentro del área. */
+  healAllies?: boolean;
+}
+
+/**
+ * Áreas cuyo `aoeEffect` beneficia a los aliados. Son habilidades con
+ * `power: 0` que el filtro de efectos ofensivos descarta, así que el bot
+ * necesita una vía propia para valorarlas y lanzarlas.
+ */
+const SUPPORT_PROFILES: Partial<Record<string, SupportProfile>> = {
+  deseo: { revive: true },
+  recuperacion: { healAllies: true }
+};
+
 /** Radio en el que un rival cercano justifica huir con poca vida. */
 const RETREAT_DANGER_RADIUS = 9;
 /** Tiempo máximo de una huida antes de volver a la acción. */
@@ -286,6 +346,13 @@ interface IncomingThreat {
   severity: number;
 }
 
+/** Habilidad elegida para cortar el windup rival y dónde hay que apuntar. */
+interface InterruptPlan {
+  slot: number;
+  /** Posición proyectada del rival cuando el golpe llegue. */
+  aim: Vec2;
+}
+
 type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
 
 /**
@@ -346,6 +413,12 @@ export class BotController {
 
   private decisionTimer = 0;
   private abilitySlot: number | null = null;
+  /**
+   * `true` cuando la habilidad elegida es un área de apoyo centrada en el bot.
+   * Esas habilidades no necesitan objetivo rival ni línea de visión, así que
+   * `drive` las lanza por su cuenta en vez de esperar a ver un enemigo.
+   */
+  private supportCast = false;
   private useCommon = false;
   private retreat = false;
   /** Momento en el que una huida larga se da por terminada. */
@@ -519,6 +592,7 @@ export class BotController {
     this.lastSeen = null;
     this.punishReads.clear();
     this.abilitySlot = null;
+    this.supportCast = false;
     this.useCommon = false;
     this.retreat = false;
     this.retreatUntil = 0;
@@ -848,6 +922,19 @@ export class BotController {
       } else if (defense === 0) {
         score -= 2.5 * typeWeight;
       }
+      // Protección temporal: un rival invulnerable no recibe ningún golpe y
+      // uno con escudo o buffs defensivos recibe menos. Sin esta penalización
+      // el bot podía gastar la definitiva en alguien que acaba de reaparecer.
+      // La gracia de reaparición se pondera por el tiempo que le queda: si está
+      // a punto de caducar, apenas merece la pena evitar a ese rival.
+      const protection =
+        enemy.invulnerableTimer > 0
+          ? Math.min(
+              1,
+              enemy.invulnerableTimer / CONFIG.combat.invulnerabilitySeconds
+            )
+          : 1 - this.damageTakenFactor(enemy, null);
+      if (protection > 0) score += protection * MITIGATED_TARGET_PENALTY;
       // Inmune a todo nuestro daño: mucho cuidado, solo se acepta si no hay
       // ningún otro rival visible.
       if (offense === 0) score += IMMUNE_TARGET_PENALTY;
@@ -997,13 +1084,29 @@ export class BotController {
     }
 
     if (def.shape === 'projectile' || def.shape === 'beam' || def.shape === 'dash') {
-      const reach =
-        def.shape === 'dash' ? def.dashDistance : def.range;
-      const projection = toSelfX * dirX + toSelfZ * dirZ;
+      // Un haz con `moveWhileWindup` deja mover al lanzador durante la carga y
+      // `executeBeam` recalcula la dirección desde su posición actual hasta el
+      // extremo fijado en `pendingCast`. La amenaza debe usar ese mismo vector:
+      // con el `facing` actual se esquivaría un carril que ya no es el real.
+      let aimX = dirX;
+      let aimZ = dirZ;
+      let reach = def.shape === 'dash' ? def.dashDistance : def.range;
+      if (def.shape === 'beam') {
+        const toTargetX = pending.targetX - enemy.x;
+        const toTargetZ = pending.targetZ - enemy.z;
+        const targetDistance = Math.hypot(toTargetX, toTargetZ);
+        if (targetDistance > 0.001) {
+          aimX = toTargetX / targetDistance;
+          aimZ = toTargetZ / targetDistance;
+          // El haz termina en el extremo fijado, así que ese es su alcance real.
+          reach = targetDistance;
+        }
+      }
+      const projection = toSelfX * aimX + toSelfZ * aimZ;
       if (projection < 0 || projection > reach + 0.3) return null;
 
-      const perpX = toSelfX - dirX * projection;
-      const perpZ = toSelfZ - dirZ * projection;
+      const perpX = toSelfX - aimX * projection;
+      const perpZ = toSelfZ - aimZ * projection;
       const perpendicular = Math.hypot(perpX, perpZ);
       const width = selfRadius + (def.shape === 'projectile' ? 0.5 : 0.25);
       if (perpendicular > width) return null;
@@ -1011,8 +1114,8 @@ export class BotController {
       let evadeX = perpX;
       let evadeZ = perpZ;
       if (perpendicular < 0.05) {
-        evadeX = -dirZ * this.orbitSide;
-        evadeZ = dirX * this.orbitSide;
+        evadeX = -aimZ * this.orbitSide;
+        evadeZ = aimX * this.orbitSide;
       }
       const length = Math.hypot(evadeX, evadeZ) || 1;
       return {
@@ -1033,11 +1136,11 @@ export class BotController {
   private findInterruptSlot(
     self: MatchPlayerState,
     source: MatchPlayerState,
-    remaining: number
-  ): number | null {
+    remaining: number,
+    colliders: readonly Collider[]
+  ): InterruptPlan | null {
     if (!this.canCast(self)) return null;
-    const distance = Math.hypot(source.x - self.x, source.z - self.z);
-    let bestSlot: number | null = null;
+    let bestPlan: InterruptPlan | null = null;
     let bestDelay = Infinity;
     let bestPower = -Infinity;
 
@@ -1053,6 +1156,27 @@ export class BotController {
       const effectiveness = typeEffectiveness(def.type, source.types);
       if (effectiveness === 0) continue;
 
+      // El golpe no llega en el instante actual: se adelanta el rival al
+      // momento del impacto. En proyectiles el tiempo de vuelo depende de la
+      // distancia, así que se recalcula una vez con el punto ya corregido. El
+      // adelanto usa el mismo factor por dificultad que el resto de disparos.
+      let distance = Math.hypot(source.x - self.x, source.z - self.z);
+      let aim: Vec2 = { x: source.x, z: source.z };
+      let delay = def.windup;
+      for (let pass = 0; pass < 2; pass++) {
+        const travel =
+          def.shape === 'projectile'
+            ? distance / Math.max(1, def.projectileSpeed)
+            : 0;
+        delay = def.windup + travel;
+        const lead = delay * this.tuning.lead;
+        aim = {
+          x: source.x + source.vx * lead,
+          z: source.z + source.vz * lead
+        };
+        distance = Math.hypot(aim.x - self.x, aim.z - self.z);
+      }
+
       const reach =
         def.shape === 'melee'
           ? def.range + source.hitRadius
@@ -1061,33 +1185,63 @@ export class BotController {
             : def.range;
       if (distance > reach) continue;
 
-      const travel =
-        def.shape === 'projectile'
-          ? distance / Math.max(1, def.projectileSpeed)
-          : 0;
-      const delay = def.windup + travel;
       if (delay > remaining + 0.03) continue;
 
-      const weightedPower = def.power * effectiveness;
+      // Ni el haz ni el proyectil atraviesan un obstáculo: si la línea hasta
+      // la posición proyectada está tapada, gastar el cooldown no interrumpe.
+      // El padding imita al motor para cada forma.
+      if (lineOfSightBlocked(self.x, self.z, aim.x, aim.z, colliders)) {
+        continue;
+      }
+      const padding =
+        def.shape === 'melee'
+          ? CONFIG.combat.meleeSightPadding
+          : def.shape === 'projectile'
+            ? Math.max(0.05, def.radius)
+            : 0;
       if (
-        delay < bestDelay ||
-        (delay === bestDelay && weightedPower > bestPower)
+        segmentBlockedByColliders(
+          self.x,
+          self.z,
+          aim.x,
+          aim.z,
+          colliders,
+          padding
+        )
       ) {
-        bestSlot = slot;
+        continue;
+      }
+
+      // La precisión pondera el valor del corte: un golpe que falla no
+      // cancela nada. El retardo manda, pero dentro del mismo frame vale más
+      // la habilidad más fiable.
+      const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
+      const weightedPower = def.power * effectiveness * accuracy;
+      if (
+        bestPlan === null ||
+        delay < bestDelay - INTERRUPT_DELAY_TOLERANCE ||
+        (delay <= bestDelay + INTERRUPT_DELAY_TOLERANCE &&
+          weightedPower > bestPower)
+      ) {
+        bestPlan = { slot, aim };
         bestDelay = delay;
         bestPower = weightedPower;
       }
     }
 
-    return bestSlot;
+    return bestPlan;
   }
 
-  private decide(self: MatchPlayerState, players: readonly MatchPlayerState[]): void {
+  private decide(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): void {
     const target = this.target;
     const targetIsVisible = target !== null && this.targetVisible && target.alive;
     const distance = target ? Math.hypot(target.x - self.x, target.z - self.z) : Infinity;
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     this.abilitySlot = null;
+    this.supportCast = false;
     this.useCommon = false;
 
     // Lectura de tipos del objetivo: atacar solo si podemos dañarlo, y huir
@@ -1202,14 +1356,25 @@ export class BotController {
       this.retreatUntil = this.clock + RETREAT_MAX_SECONDS;
     }
 
-    // Huida: se planta a curarse si tiene una habilidad de curación lista y el
-    // rival no está encima. Si no, corre hacia su base.
+    // Huida: se planta a curarse si tiene una curación fiable lista y el rival
+    // no está encima. Si no, corre hacia su base.
     if (this.retreat) {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
       this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
       if (pickup) this.setGoal(pickup, pickup);
       else this.setGoal(self.spawn);
+      return;
+    }
+
+    // Las áreas de apoyo (revivir o curar aliados) se pueden lanzar sin un
+    // rival a la vista. Si hay una pelea útil, `chooseAbility` ya suma su valor
+    // y decide si compensa; fuera de combate el apoyo manda sobre patrullar o
+    // recoger un objeto.
+    const supportSlot = this.chooseSupportAbility(self, players);
+    if (supportSlot !== null && (!targetIsVisible || targetOffense === 0)) {
+      this.abilitySlot = supportSlot;
+      this.supportCast = true;
       return;
     }
 
@@ -1229,6 +1394,8 @@ export class BotController {
 
     if (targetIsVisible && this.visibleTimer >= this.tuning.reaction) {
       this.abilitySlot = this.chooseAbility(self, target, distance, players);
+      this.supportCast =
+        this.abilitySlot !== null && this.isSupportSlot(self, this.abilitySlot);
       this.useCommon = this.shouldUseCommon(self, distance, false, hpFraction);
       return;
     }
@@ -1290,6 +1457,32 @@ export class BotController {
       if (best < 0) best = 1;
     }
     return best;
+  }
+
+  /**
+   * Fracción de daño que el objetivo recibe con su escudo y sus buffs
+   * defensivos activos (0-1). No mira la invulnerabilidad: esa caduca y quien
+   * decide si el golpe llega a tiempo es `scoreAbility`.
+   */
+  private damageTakenFactor(
+    target: MatchPlayerState,
+    def: AbilityDef | null
+  ): number {
+    const reduction =
+      target.damageReductionTimer > 0 ? target.damageReduction : 0;
+    const wantsPhysical = def !== null && def.category === 'physical';
+    const wantsSpecial = def !== null && def.category === 'special';
+    let defense = 1;
+    for (const buff of target.buffs) {
+      if (buff.stat !== 'defense' && buff.stat !== 'spDefense') continue;
+      if (wantsPhysical && buff.stat !== 'defense') continue;
+      if (wantsSpecial && buff.stat !== 'spDefense') continue;
+      // Con una habilidad concreta solo cuenta la defensa que usa. Sin ella se
+      // aplican ambas para no sobrevalorar a un rival con la defensa buffeada.
+      defense *= buff.multiplier;
+    }
+    const factor = (1 - reduction) / Math.max(1, defense);
+    return Math.min(1, Math.max(0, factor));
   }
 
   /**
@@ -1651,6 +1844,9 @@ export class BotController {
     let casting = false;
 
     if (this.threat) {
+      // La amenaza manda: una habilidad de apoyo elegida antes de verla no debe
+      // colarse como si fuera un ataque preparado.
+      this.supportCast = false;
       const threat = this.threat;
       const read = this.readPunish(threat.source);
       const interrupt =
@@ -1659,18 +1855,19 @@ export class BotController {
           : this.findInterruptSlot(
               self,
               threat.source,
-              Math.max(0.02, threat.remaining + read.remainingError)
+              Math.max(0.02, threat.remaining + read.remainingError),
+              colliders
             );
       if (interrupt !== null) {
         // Interrumpir el windup rival es la mejor jugada: un golpe cancela la
         // habilidad y evita el daño. Se prioriza sobre la huida.
-        const aim = { x: threat.source.x, z: threat.source.z };
+        const aim = interrupt.aim;
         const error = Math.abs(
           normalizeAngle(Math.atan2(aim.x - self.x, aim.z - self.z) - self.facing)
         );
-        this.abilitySlot = interrupt;
+        this.abilitySlot = interrupt.slot;
         if (error <= this.tuning.aimTolerance && this.canCast(self)) {
-          casting = this.pulseAbility(snapshot, interrupt);
+          casting = this.pulseAbility(snapshot, interrupt.slot);
         }
         desired = directionTo(self, aim);
       } else {
@@ -1708,6 +1905,16 @@ export class BotController {
         } else {
           this.pulseCommon(snapshot, self, true);
         }
+      }
+    } else if (this.supportCast && this.abilitySlot !== null) {
+      // Las áreas de apoyo nacen en la posición del bot, así que no hace falta
+      // encarar al rival ni tener línea de visión. Se queda quieto para no
+      // salir del radio de los aliados durante la preparación.
+      if (self.cooldowns[this.abilitySlot] > 0.001) {
+        // Ya se lanzó mientras el temporizador de decisión seguía activo.
+        this.supportCast = false;
+      } else if (!channeling && this.canCast(self)) {
+        casting = this.pulseAbility(snapshot, this.abilitySlot);
       }
     } else if (targetIsVisible && target) {
       const distance = Math.hypot(target.x - self.x, target.z - self.z);
@@ -1948,12 +2155,22 @@ export class BotController {
     return id ? ABILITIES[id] ?? null : null;
   }
 
+  /**
+   * Curación que no depende de acertar un golpe. Las habilidades con
+   * `healOnHit` (Come Sueños) solo curan si el haz impacta, así que no sirven
+   * para retirarse a recuperar vida: pueden gastar la definitiva sin curar
+   * nada.
+   */
+  private isReliableHeal(def: AbilityDef): boolean {
+    return def.healSelf > 0 && !def.healOnHit;
+  }
+
   private findHealSlot(self: MatchPlayerState): number | null {
     for (let slot = 0; slot < 4; slot++) {
       if (self.cooldowns[slot] > 0.001) continue;
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
-      if (def && def.healSelf > 0) return slot;
+      if (def && this.isReliableHeal(def)) return slot;
     }
     return null;
   }
@@ -1972,19 +2189,103 @@ export class BotController {
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
-      if (!this.inRange(def, distance, target)) continue;
+      const support = this.supportScore(self, players, def);
+      // Las áreas de apoyo se centran en el bot: no necesitan que haya un
+      // rival dentro de su alcance para ser útiles.
+      const inRange = this.inRange(def, distance, target);
+      if (!inRange && support <= 0) continue;
       if (def.selfDamage > 0 && self.hp / Math.max(1, self.maxHp) < 0.52) {
         continue;
       }
 
-      const score = this.scoreAbility(self, target, def, slot, distance, players);
+      let score = inRange
+        ? this.scoreAbility(self, target, def, slot, distance, support)
+        : -Infinity;
+      if (support > 0) {
+        score = score === -Infinity ? support : score + support;
+      }
       if (score > bestScore) {
         bestScore = score;
         bestSlot = slot;
       }
     }
 
+    // Ninguna opción aporta lo suficiente: es mejor no gastar el cooldown y
+    // seguir moviéndose que lanzar una cura o un buff inútil.
+    return bestScore > MIN_ABILITY_SCORE ? bestSlot : null;
+  }
+
+  /**
+   * Valor de un área de apoyo según los aliados a los que beneficia ahora
+   * mismo. `Deseo` revive a los caídos y `Recuperación` reparte curación; el
+   * filtro ofensivo de `scoreAbility` no puede valorar ninguna de las dos.
+   */
+  private supportScore(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    def: AbilityDef
+  ): number {
+    const profile = SUPPORT_PROFILES[def.id];
+    // Las áreas de apoyo conocidas nacen en la posición del lanzador.
+    if (!profile || def.range > 0.1) return 0;
+
+    const reach = def.radius + maxHitRadius();
+    let score = 0;
+    for (const ally of players) {
+      if (ally === self || ally.team !== self.team) continue;
+      const distance = Math.hypot(ally.x - self.x, ally.z - self.z);
+      if (distance > reach + ally.hitRadius) continue;
+
+      if (!ally.alive) {
+        // Si va a reaparecer igualmente, el área no aporta nada.
+        if (!profile.revive || ally.respawnTimer <= 1) continue;
+        score += SUPPORT_REVIVE_SCORE;
+        continue;
+      }
+
+      if (!profile.healAllies) continue;
+      const missing = 1 - ally.hp / Math.max(1, ally.maxHp);
+      if (missing < SUPPORT_MIN_MISSING_HP) continue;
+      score += missing * SUPPORT_ALLY_HEAL_SCORE;
+    }
+
+    if (score <= 0) return 0;
+    // Revivir tarda más de un segundo y se cancela al recibir un golpe: con
+    // rivales encima sigue siendo útil, pero no a cualquier precio.
+    if (profile.revive) {
+      const danger = this.nearestVisibleEnemyDistance(self);
+      if (danger < SUPPORT_REVIVE_DANGER_RADIUS) {
+        score -=
+          (SUPPORT_REVIVE_DANGER_RADIUS - danger) * SUPPORT_REVIVE_DANGER_PENALTY;
+      }
+    }
+    return Math.max(0, score);
+  }
+
+  private chooseSupportAbility(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): number | null {
+    let bestSlot: number | null = null;
+    let bestScore = 0;
+    for (let slot = 0; slot < 4; slot++) {
+      if (self.cooldowns[slot] > 0.001) continue;
+      const id = self.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def) continue;
+      const score = this.supportScore(self, players, def);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSlot = slot;
+      }
+    }
     return bestSlot;
+  }
+
+  private isSupportSlot(self: MatchPlayerState, slot: number): boolean {
+    const id = self.abilityIds[slot];
+    const def = id ? ABILITIES[id] : null;
+    return def !== null && Object.hasOwn(SUPPORT_PROFILES, def.id);
   }
 
   private scoreAbility(
@@ -1993,7 +2294,7 @@ export class BotController {
     def: AbilityDef,
     slot: number,
     distance: number,
-    players: readonly MatchPlayerState[]
+    support = 0
   ): number {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const hasEffect =
@@ -2008,19 +2309,47 @@ export class BotController {
     // La efectividad multiplica el daño real, así que pesa directamente en la
     // puntuación. Una habilidad inmune no hace daño ni aplica control: nunca es
     // una buena elección contra ese objetivo.
-    let score = def.power;
+    let effectiveness = 1;
     if (def.power > 0) {
-      const effectiveness = typeEffectiveness(def.type, target.types);
+      effectiveness = typeEffectiveness(def.type, target.types);
       if (effectiveness === 0) return -Infinity;
-      score *= effectiveness;
     } else if (def.slow !== null) {
       if (typeEffectiveness(def.type, target.types) === 0) return -Infinity;
+    }
+    let score = def.power * effectiveness;
+
+    const offensive = def.power > 0 || def.slow !== null;
+    if (offensive && target.invulnerableTimer > 0) {
+      // Si la invulnerabilidad termina antes del impacto, el golpe sí cuenta.
+      // Se estima el retardo con el windup y, en proyectiles, con el vuelo.
+      const travel =
+        def.shape === 'projectile' && def.projectileSpeed > 0
+          ? distance / def.projectileSpeed
+          : 0;
+      if (target.invulnerableTimer > def.windup + travel) return -Infinity;
+    }
+
+    if (def.power > 0) {
+      const mitigation = 1 - this.damageTakenFactor(target, def);
+      if (mitigation > 0) {
+        // El escudo reduce el daño esperado, así que las habilidades grandes
+        // pierden más puntos. Una habilidad grande se descarta si la
+        // mitigación es alta: su cooldown no compensa un golpe muy reducido.
+        if (
+          mitigation >= BIG_ABILITY_MITIGATION_THRESHOLD &&
+          (slot === 3 || def.power >= BIG_ABILITY_POWER)
+        ) {
+          return -Infinity;
+        }
+        score -= def.power * effectiveness * mitigation;
+      }
     }
 
     if (def.healSelf > 0) {
       score += 70 + (1 - hpFraction) * 130;
-      // No gastar la curación a vida casi llena.
-      if (hpFraction > 0.8) score -= 220;
+      // No gastar la curación a vida casi llena, salvo que también cure a
+      // aliados heridos: entonces el lanzamiento sí aporta.
+      if (hpFraction > 0.8 && support <= 0) score -= 220;
     }
     if (def.shield) score += 55 + (1 - hpFraction) * 70;
     if (def.buffs.length > 0) score += 35;
@@ -2039,13 +2368,7 @@ export class BotController {
         if (def.power === 0) score += 35; // reposicionamiento / huida
         break;
       case 'aoe': {
-        const extra = this.countEnemiesNear(
-          players,
-          self.team,
-          target.x,
-          target.z,
-          def.radius
-        );
+        const extra = this.countEnemiesNear(target.x, target.z, def.radius);
         score += 12 + Math.max(0, extra - 1) * 32;
         break;
       }
@@ -2078,17 +2401,13 @@ export class BotController {
     return score;
   }
 
-  private countEnemiesNear(
-    players: readonly MatchPlayerState[],
-    team: MatchPlayerState['team'],
-    x: number,
-    z: number,
-    radius: number
-  ): number {
+  private countEnemiesNear(x: number, z: number, radius: number): number {
     let count = 0;
-    for (const player of players) {
-      if (!player.alive || player.team === team) continue;
-      if (Math.hypot(player.x - x, player.z - z) <= radius + player.hitRadius) {
+    // Solo enemigos visibles para el equipo: contar rivales ocultos dentro del
+    // radio hacía que el bot sobrevalorase los AoE por información que no tenía.
+    for (const enemy of this.visibleEnemies) {
+      if (!enemy.alive) continue;
+      if (Math.hypot(enemy.x - x, enemy.z - z) <= radius + enemy.hitRadius) {
         count++;
       }
     }
