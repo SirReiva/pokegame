@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Redirect, useLocation } from 'wouter';
-import { Game } from '../game/game';
+import { Game, type PokemonSkinSelection } from '../game/game';
 import { commonAbilityOption } from '../game/abilities';
+import { DEFAULT_SKIN_ID, skinFor } from '../game/skins';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
   TEAM_INFO,
@@ -122,9 +123,22 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
 
     // El motor solo necesita los sprites de las especies que juegan esta
     // partida. Se deduplican porque dos jugadores pueden elegir el mismo
-    // Pokémon y su hoja se comparte.
+    // Pokémon y su hoja se comparte. Cada combinación especie + aspecto se
+    // carga por separado: dos jugadores pueden usar el mismo Pokémon con
+    // skins distintas.
     const pokemonIds = [
       ...new Set(configsRef.current.map((config) => config.pokemonId))
+    ];
+    const pokemonSkins: PokemonSkinSelection[] = [
+      ...new Map(
+        configsRef.current.map((config) => {
+          const skinId = config.skinId ?? DEFAULT_SKIN_ID;
+          return [
+            `${config.pokemonId}:${skinId}`,
+            { pokemonId: config.pokemonId, skinId }
+          ] as const;
+        })
+      ).values()
     ];
 
     const game = new Game(
@@ -158,7 +172,7 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
           if (!disposed) handlersRef.current?.onCountdown(remaining);
         }
       },
-      { mapId, manifest, koTarget, pokemonIds }
+      { mapId, manifest, koTarget, pokemonIds, pokemonSkins }
     );
 
     gameRef.current = game;
@@ -336,6 +350,7 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
               <div className="grid grid-cols-2 gap-2 max-[760px]:grid-cols-1">
                 {players.map((player) => {
                   const entry = selectedEntryFor(player.pokemonId);
+                  const skin = entry ? skinFor(entry, player.skinId) : null;
                   const info = TEAM_INFO[player.team];
                   return (
                     <div
@@ -348,7 +363,11 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
                       }
                     >
                       <span className="grid size-9 place-items-center">
-                        {entry ? <PokemonPortrait entry={entry} height={36} /> : '—'}
+                        {entry ? (
+                          <PokemonPortrait entry={entry} skin={skin} height={36} />
+                        ) : (
+                          '—'
+                        )}
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col">
                         <strong className="font-mono text-9.92 tracking-[0.06em]">
@@ -494,6 +513,7 @@ function MatchScoreboard({
     | 'name'
     | 'team'
     | 'pokemonId'
+    | 'skinId'
     | 'kills'
     | 'deaths'
     | 'damageDealt'
@@ -522,6 +542,7 @@ function MatchScoreboard({
             name: player.name,
             team: player.team,
             pokemonId: player.pokemonId,
+            skinId: player.skinId ?? DEFAULT_SKIN_ID,
             kills: 0,
             deaths: 0,
             damageDealt: 0,
@@ -585,6 +606,7 @@ function MatchScoreboard({
             <ol className="divide-y divide-line/60">
               {rows.map((row) => {
                 const entry = entriesById.get(row.pokemonId);
+                const skin = entry ? skinFor(entry, row.skinId) : null;
                 return (
                   <li
                     key={row.slot}
@@ -592,7 +614,7 @@ function MatchScoreboard({
                   >
                     <span className="relative grid size-8 shrink-0 place-items-center">
                       {entry ? (
-                        <PokemonPortrait entry={entry} height={30} />
+                        <PokemonPortrait entry={entry} skin={skin} height={30} />
                       ) : (
                         <span className="text-11.2 text-steel-600">—</span>
                       )}

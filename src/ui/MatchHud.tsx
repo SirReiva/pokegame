@@ -8,6 +8,7 @@ import {
   type LobbyPlayer,
   type PlayerMatchStats
 } from '../game/multiplayer';
+import { skinFor } from '../game/skins';
 import type { SpriteManifest } from '../game/types';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
 import { XP_SOURCE_LABELS } from '../game/xp';
@@ -192,6 +193,9 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
         const info = TEAM_INFO[player.team];
         const playerStats = statsBySlot.get(player.slot);
         const entry = manifest.pokemon.find((pokemon) => pokemon.id === player.pokemonId);
+        const skin = entry
+          ? skinFor(entry, player.skinId ?? playerStats?.skinId)
+          : null;
         const compact = players.length > 4;
         const common = playerStats?.commonAbility ?? null;
         const hpPct = playerStats
@@ -297,7 +301,13 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                   >
                     NV {playerStats?.level ?? 1}
                   </span>
-                  {entry && <PokemonPortrait entry={entry} height={compact ? 22 : 28} />}
+                  {entry && (
+                    <PokemonPortrait
+                      entry={entry}
+                      skin={skin}
+                      height={compact ? 22 : 28}
+                    />
+                  )}
                   <span className="flex flex-col leading-[1.05]">
                     <strong className="font-mono text-9.92 tracking-[0.08em] uppercase">
                       {player.name}

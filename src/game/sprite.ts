@@ -2,9 +2,11 @@ import * as pc from 'playcanvas';
 import { ABILITIES, MOVESETS } from './abilities';
 import { CONFIG, DEG, RAD } from './config';
 import { publicUrl } from './publicUrl';
+import { defaultSkinFor } from './skins';
 import type {
   AnimationName,
   PokemonEntry,
+  PokemonSkin,
   RequiredAnimationName,
   SpriteAnimation
 } from './types';
@@ -24,10 +26,12 @@ export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
 
 export interface SpriteAsset {
   entry: PokemonEntry;
+  /** Aspecto cargado: incluye las animaciones ya recortadas para el motor. */
+  skin: PokemonSkin;
   textures: SpriteTextures;
   /** Factor de reescalado aplicado a cada hoja (puede ser menor en hojas grandes). */
   textureScales: Partial<Record<AnimationName, number>>;
-  /** Retrato de la especie, ya cargado para la marca de KO del suelo. */
+  /** Retrato del aspecto, ya cargado para la marca de KO del suelo. */
   portrait: HTMLImageElement | null;
 }
 
@@ -304,19 +308,19 @@ function createSpriteTexture(
 export async function loadSpriteAsset(
   device: pc.GraphicsDevice,
   entry: PokemonEntry,
-  onProgress?: () => void
+  skin: PokemonSkin = defaultSkinFor(entry)
 ): Promise<SpriteAsset> {
   // El recorte tight reemplaza las celdas de cada animación. Se trabaja sobre
   // una copia: el manifiesto lo comparten la partida, las recargas de HMR y
   // cualquier remontaje, y mutarlo hacía que la segunda carga aplicara el
   // recorte ya recortado sobre la hoja original (sprite pequeño y desalineado).
-  const animations = { ...entry.animations };
+  const animations = { ...skin.animations };
   const [images, portrait] = await Promise.all([
     Promise.all(ANIMATIONS.map((name) => loadImage(animations[name].sheet))),
     // El retrato es opcional: si falta, la marca de KO cae a la X dibujada.
-    loadImage(entry.portrait).catch((error) => {
+    loadImage(skin.portrait).catch((error) => {
       console.warn(
-        `[sprite] No se pudo cargar el retrato de ${entry.id}; la marca de KO usará la X.`,
+        `[sprite] No se pudo cargar el retrato de ${entry.id} (${skin.id}); la marca de KO usará la X.`,
         error
       );
       return null;
@@ -342,7 +346,7 @@ export async function loadSpriteAsset(
     textures[name] = createSpriteTexture(
       device,
       source,
-      `${entry.id}-${name}`,
+      `${entry.id}-${skin.id}-${name}`,
       scale
     );
     textureScales[name] = scale;
@@ -371,9 +375,9 @@ export async function loadSpriteAsset(
     }
   }
 
-  onProgress?.();
   return {
-    entry: { ...entry, animations },
+    entry,
+    skin: { ...skin, animations },
     textures,
     textureScales,
     portrait
@@ -552,14 +556,14 @@ export class SpriteBillboard {
         name,
         this.createLayer(
           name,
-          asset.entry.animations[name],
+          asset.skin.animations[name],
           asset.textures[name],
           asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
         )
       );
     }
     for (const name of OPTIONAL_LAYER_NAMES) {
-      const animation = asset.entry.animations[name];
+      const animation = asset.skin.animations[name];
       const texture = asset.textures[name];
       if (!animation || !texture) continue;
       this.layers.set(

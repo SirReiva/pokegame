@@ -129,6 +129,7 @@ import {
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
 import { typeEffectiveness } from './typeChart';
+import { DEFAULT_SKIN_ID, skinFor } from './skins';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
@@ -151,6 +152,12 @@ export interface GameCallbacks {
   onCountdown(remaining: number | null): void;
 }
 
+/** Combinación especie + aspecto que hay que cargar para una partida. */
+export interface PokemonSkinSelection {
+  pokemonId: string;
+  skinId: string;
+}
+
 export interface GameOptions {
   /** Mapa que se carga al montar `/play`. */
   mapId?: string;
@@ -162,8 +169,19 @@ export interface GameOptions {
    * Si no se indica, se cargan todas (comportamiento anterior).
    */
   pokemonIds?: readonly string[];
+  /**
+   * Aspectos concretos que usa cada jugador. Si se indica, sustituye a la
+   * carga por especie: dos jugadores pueden compartir Pokémon con skins
+   * distintas y cada combinación se descarga una sola vez.
+   */
+  pokemonSkins?: readonly PokemonSkinSelection[];
   /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
   koTarget?: number;
+}
+
+/** Clave del caché de sprites: la especie y el aspecto son independientes. */
+function assetKey(pokemonId: string, skinId?: string): string {
+  return `${pokemonId}\u0000${skinId ?? DEFAULT_SKIN_ID}`;
 }
 
 function angleLerp(current: number, target: number, t: number): number {
@@ -233,7 +251,16 @@ export class Game {
   private readonly worldLayerId: number;
 
   private manifest: SpriteManifest | null = null;
+  /** Caché por `especie + aspecto`; ver `assetKey`. */
   private readonly assets = new Map<string, SpriteAsset>();
+
+  /** Sprite del aspecto elegido por un jugador (o el normal si no hay). */
+  private assetFor(
+    pokemonId: string,
+    skinId?: string
+  ): SpriteAsset | undefined {
+    return this.assets.get(assetKey(pokemonId, skinId));
+  }
   /** Texturas de los objetos recogibles, cargadas una vez por partida. */
   private readonly itemTextures: ItemTextureMap = new Map();
   /** Objetos del mapa activo; se reconstruyen al cambiar de mapa. */
@@ -241,7 +268,8 @@ export class Game {
   /** Objetos que superaron la validación de posición y se ofrecen a los bots. */
   private pickupSpawns: readonly PickupSpawn[] = [];
   private readonly pickupHandlers: PickupHandlers = {
-    pokemonFor: (player) => this.assets.get(player.pokemonId)?.entry ?? null,
+    pokemonFor: (player) =>
+      this.assetFor(player.pokemonId, player.skinId)?.entry ?? null,
     heal: (player, amount) => {
       if (!player.alive) return 0;
       const before = player.hp;
@@ -436,29 +464,56 @@ export class Game {
       }
       this.manifest = manifest;
 
-      // Solo se descargan las hojas de las especies que van a aparecer en la
-      // partida. Cargar todo el manifiesto retrasaba el inicio y subía a la GPU
-      // texturas que ningún jugador ni bot iba a usar.
-      const requiredIds = this.options.pokemonIds
-        ? new Set(this.options.pokemonIds)
-        : null;
-      const entries = requiredIds
-        ? manifest.pokemon.filter((entry) => requiredIds.has(entry.id))
-        : manifest.pokemon;
+      // Solo se descargan las hojas que van a aparecer en la partida. Cargar
+      // todo el manifiesto retrasaba el inicio y subía a la GPU texturas que
+      // ningún jugador ni bot iba a usar. Cada combinación especie + aspecto se
+      // deduplica, porque dos jugadores pueden compartir exactamente la misma.
+      const requestedSkins = this.options.pokemonSkins;
+      let selections: PokemonSkinSelection[];
+      if (requestedSkins && requestedSkins.length > 0) {
+        const unique = new Map<string, PokemonSkinSelection>();
+        for (const selection of requestedSkins) {
+          unique.set(assetKey(selection.pokemonId, selection.skinId), selection);
+        }
+        selections = [...unique.values()];
+      } else {
+        const requiredIds = this.options.pokemonIds
+          ? new Set(this.options.pokemonIds)
+          : null;
+        const entries = requiredIds
+          ? manifest.pokemon.filter((entry) => requiredIds.has(entry.id))
+          : manifest.pokemon;
+        selections = entries.map((entry) => ({
+          pokemonId: entry.id,
+          skinId: DEFAULT_SKIN_ID
+        }));
+      }
 
-      const total = entries.length * 4;
+      const total = selections.length * 4;
       let loaded = 0;
       this.callbacks.onProgress({ loaded, total, label: 'Cargando sprites' });
 
       await Promise.all(
-        entries.map(async (entry) => {
-          const asset = await loadSpriteAsset(this.app.graphicsDevice, entry);
-          this.assets.set(entry.id, asset);
+        selections.map(async (selection) => {
+          const entry = manifest.pokemon.find(
+            (candidate) => candidate.id === selection.pokemonId
+          );
+          if (!entry) return;
+          const skin = skinFor(entry, selection.skinId);
+          const asset = await loadSpriteAsset(
+            this.app.graphicsDevice,
+            entry,
+            skin
+          );
+          this.assets.set(assetKey(entry.id, selection.skinId), asset);
           loaded += 4;
           this.callbacks.onProgress({
             loaded,
             total,
-            label: `${entry.name} listo`
+            label:
+              skin.id === DEFAULT_SKIN_ID
+                ? `${entry.name} listo`
+                : `${entry.name} · ${skin.name} listo`
           });
         })
       );
@@ -786,10 +841,21 @@ export class Game {
     // cargarse dejaría la partida en 1v0 y el HUD repartiría los paneles con
     // otro número de jugadores. Mejor abortar y avisar para volver al roster.
     const missing = configs.filter(
-      (config) => !this.assets.has(config.pokemonId)
+      (config) => !this.assetFor(config.pokemonId, config.skinId)
     );
     if (missing.length > 0) {
-      const ids = [...new Set(missing.map((config) => config.pokemonId))];
+      const ids = [
+        ...new Set(
+          missing.map(
+            (config) =>
+              `${config.pokemonId}${
+                config.skinId && config.skinId !== DEFAULT_SKIN_ID
+                  ? ` (${config.skinId})`
+                  : ''
+              }`
+          )
+        )
+      ];
       this.callbacks.onError(
         `No se pudo cargar el sprite de ${ids.join(', ')}. Vuelve al roster e inténtalo de nuevo.`
       );
@@ -834,7 +900,7 @@ export class Game {
     let viewIndex = 0;
 
     valid.forEach((config) => {
-      const asset = this.assets.get(config.pokemonId);
+      const asset = this.assetFor(config.pokemonId, config.skinId);
       if (!asset) return;
 
       const isBot = config.isBot === true;
@@ -1013,7 +1079,7 @@ export class Game {
     // Cada actor tiene una copia por vista (no por jugador): los bots se ven
     // en las pantallas humanas, pero no generan una vista propia.
     this.matchPlayers.forEach((player) => {
-      const asset = this.assets.get(player.pokemonId);
+      const asset = this.assetFor(player.pokemonId, player.skinId);
       if (!asset) return;
       this.views.forEach((viewer, viewIndex) => {
         const copy = new Actor(
@@ -1634,9 +1700,9 @@ export class Game {
     animation: AnimationName,
     duration: number
   ): number {
-    const asset = this.assets.get(player.pokemonId);
+    const asset = this.assetFor(player.pokemonId, player.skinId);
     const clip =
-      asset?.entry.animations[animation] ?? asset?.entry.animations.attack;
+      asset?.skin.animations[animation] ?? asset?.skin.animations.attack;
     const naturalDuration = clip
       ? clip.durations.reduce((total, ticks) => total + ticks, 0) / 60
       : duration;
@@ -1985,7 +2051,7 @@ export class Game {
    * caído, aunque el cuerpo esté fuera de la niebla.
    */
   private spawnDeathMarker(target: MatchPlayerState): void {
-    const asset = this.assets.get(target.pokemonId);
+    const asset = this.assetFor(target.pokemonId, target.skinId);
     const terrain = terrainAt(target.x, target.z);
     const onWater = terrain === 'waterLow' || terrain === 'waterHigh';
     const y = onWater
@@ -2420,8 +2486,8 @@ export class Game {
     player: MatchPlayerState,
     def: AbilityDef
   ): void {
-    const asset = this.assets.get(player.pokemonId);
-    const idle = asset?.entry.animations.idle;
+    const asset = this.assetFor(player.pokemonId, player.skinId);
+    const idle = asset?.skin.animations.idle;
     const anchorY = idle?.anchors[0]?.y ?? (idle?.frameHeight ?? 32) * 0.75;
     const spriteHeight =
       anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
@@ -2881,10 +2947,10 @@ export class Game {
       immune?: boolean;
     }
   ): void {
-    const asset = this.assets.get(target.pokemonId);
+    const asset = this.assetFor(target.pokemonId, target.skinId);
     if (!asset) return;
 
-    const idle = asset.entry.animations.idle;
+    const idle = asset.skin.animations.idle;
     const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
     const worldY =
       0.04 +
@@ -2921,8 +2987,11 @@ export class Game {
     // vuelven a llamar a `onMatchEnd`.
     if (this.matchOver) return;
     if (!target.alive) return;
-    const entry = this.assets.get(target.pokemonId)?.entry;
-    const deathAnimation = entry?.animations.faint ?? entry?.animations.hurt;
+    const animations = this.assetFor(
+      target.pokemonId,
+      target.skinId
+    )?.skin.animations;
+    const deathAnimation = animations?.faint ?? animations?.hurt;
     const deathDuration = deathAnimation
       ? deathAnimation.durations.reduce((total, ticks) => total + ticks, 0) / 60
       : 0.7;
@@ -2949,7 +3018,7 @@ export class Game {
     target.shieldFx?.destroy();
     target.shieldFx = null;
     this.breakRegen(target);
-    target.animation = entry?.animations.faint ? 'faint' : 'hurt';
+    target.animation = animations?.faint ? 'faint' : 'hurt';
     target.playback = 1;
     for (const copy of target.copies) copy.play(target.animation, true);
     this.spawnDeathMarker(target);
@@ -3688,6 +3757,7 @@ export class Game {
         name: player.name,
         team: player.team,
         pokemonId: player.pokemonId,
+        skinId: player.skinId ?? DEFAULT_SKIN_ID,
         fps: Math.round(this.fps),
         yaw: player.camera.yaw * RAD,
         row,

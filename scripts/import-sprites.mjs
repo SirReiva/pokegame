@@ -393,7 +393,33 @@ function parseCredits(text) {
   return rows;
 }
 
-function creditMarkdown(pokemon, credits) {
+/**
+ * Recolores oficiales de PMD Sprite Collab (`Altcolor`). No todas las especies
+ * tienen uno completo; `importPokemon` omite los que no traen AnimData.xml o
+ * retrato, de modo que añadir una ruta aquí nunca rompe la regeneración.
+ */
+const RECOLOR_PATHS = {
+  '0001': '0001',
+  '0004': '0001',
+  '0095': '0001',
+  '0123': '0001',
+  '0145': '0003',
+  '0150': '0005',
+  '0243': '0002',
+  '0244': '0002',
+  '0245': '0002',
+  '0383': '0003'
+};
+
+/** Aspectos alternativos que se intentan importar para cada especie. */
+function skinsFor(pokemon) {
+  const skins = [{ id: 'shiny', name: 'Shiny', path: '0000/0001' }];
+  const recolor = RECOLOR_PATHS[pokemon.id];
+  if (recolor) skins.push({ id: 'recolor', name: 'Recolor', path: recolor });
+  return skins;
+}
+
+function creditMarkdown(pokemon, credits, skins = []) {
   const lines = [`## ${pokemon.name} (#${pokemon.id})`, ''];
   if (credits.length === 0) {
     lines.push('- Créditos no disponibles.');
@@ -410,35 +436,76 @@ function creditMarkdown(pokemon, credits) {
     `- Hoja de créditos original: ${RAW_BASE}/${pokemon.id}/credits.txt`,
     ''
   );
+
+  for (const skin of skins) {
+    lines.push(`### ${pokemon.name} · ${skin.name}`, '');
+    if (skin.credits.length === 0) {
+      lines.push('- Créditos no disponibles.');
+    } else {
+      for (const credit of skin.credits) {
+        const contact =
+          credit.contact && credit.contact !== 'Unspecified' ? ` — ${credit.contact}` : '';
+        const actions = credit.actions.length > 0 ? ` · ${credit.actions.join(', ')}` : '';
+        lines.push(`- ${credit.artist}${contact}${actions}`);
+      }
+    }
+    lines.push(
+      `- Fuente: ${RAW_BASE}/${pokemon.id}/${skin.path}`,
+      `- Retrato: ${PORTRAIT_BASE}/${pokemon.id}/${skin.path}/Normal.png` +
+        (skin.portraitFallback
+          ? ' (no disponible; se usa el retrato de la forma normal)'
+          : ''),
+      ''
+    );
+  }
+
   return lines.join('\n');
 }
 
-async function importPokemon(pokemon) {
-  const dir = path.join(OUT_DIR, pokemon.id);
-  await mkdir(dir, { recursive: true });
+/**
+ * Descarga una forma (la normal o un aspecto) y devuelve sus animaciones ya
+ * procesadas. `sourcePath` es la ruta dentro del repositorio de PMD; `folder` es
+ * la carpeta local donde se guardan sus hojas (vacía para la forma normal).
+ */
+async function importForm(pokemon, form) {
+  const dir = form.folder
+    ? path.join(OUT_DIR, pokemon.id, form.folder)
+    : path.join(OUT_DIR, pokemon.id);
 
-  const folderUrl = `${RAW_BASE}/${pokemon.id}`;
+  const remotePath = form.sourcePath ? `${pokemon.id}/${form.sourcePath}` : pokemon.id;
+  const folderUrl = `${RAW_BASE}/${remotePath}`;
   const animDataPath = path.join(dir, 'animdata.xml');
   const creditsPath = path.join(dir, 'credits.txt');
 
+  // Primero el AnimData: si la forma no existe, no se crea una carpeta vacía.
   const animDataXml = await fetchText(`${folderUrl}/AnimData.xml`);
+  await mkdir(dir, { recursive: true });
   await writeFile(animDataPath, animDataXml);
 
-  const creditsText = await fetchText(`${folderUrl}/credits.txt`);
-  await writeFile(creditsPath, creditsText);
-
-  // Retrato normal para las interfaces HTML. Los sprites animados solo se usan
-  // en el mundo 3D de PlayCanvas.
+  // El retrato va después. La forma normal siempre lo necesita; un aspecto
+  // puede no tenerlo y entonces reutiliza el retrato normal (sus hojas siguen
+  // siendo válidas). Así no se pierde una skin completa solo por el retrato.
   const portraitFile = 'portrait.png';
   const portraitPath = path.join(dir, portraitFile);
+  let portraitFallback = false;
   if (!existsSync(portraitPath) || force) {
-    await download(`${PORTRAIT_BASE}/${pokemon.id}/Normal.png`, portraitPath);
+    try {
+      await download(`${PORTRAIT_BASE}/${remotePath}/Normal.png`, portraitPath);
+    } catch (error) {
+      if (!form.folder) throw error;
+      portraitFallback = true;
+      console.log('  Retrato propio no disponible; se usará el de la forma normal');
+    }
   }
+
+  const creditsText = await fetchText(`${folderUrl}/credits.txt`).catch(() => '');
+  if (creditsText) await writeFile(creditsPath, creditsText);
 
   const anims = parseAnims(animDataXml);
   const credits = parseCredits(creditsText);
   const shadowSize = Number(/<ShadowSize>(\d+)<\/ShadowSize>/.exec(animDataXml)?.[1] ?? 1);
   const animations = {};
+  const sheetFolder = `sprites/${pokemon.id}${form.folder ? `/${form.folder}` : ''}`;
 
   for (const action of [...ACTIONS, ...(pokemon.actions ?? [])]) {
     const optional = OPTIONAL_ACTIONS.has(action);
@@ -521,7 +588,7 @@ async function importPokemon(pokemon) {
     );
 
     animations[slug(action)] = {
-      sheet: `sprites/${pokemon.id}/${file}`,
+      sheet: `${sheetFolder}/${file}`,
       frameWidth: meta.frameWidth,
       frameHeight: meta.frameHeight,
       columns,
@@ -540,17 +607,59 @@ async function importPokemon(pokemon) {
 
   return {
     credits,
+    shadowSize,
+    portrait: portraitFallback
+      ? `sprites/${pokemon.id}/${portraitFile}`
+      : `${sheetFolder}/${portraitFile}`,
+    portraitFallback,
+    animations
+  };
+}
+
+async function importPokemon(pokemon) {
+  const base = await importForm(pokemon, { folder: null, sourcePath: '' });
+  const skins = [];
+  const skinCredits = [];
+
+  for (const candidate of skinsFor(pokemon)) {
+    try {
+      console.log(`  Aspecto: ${candidate.name}`);
+      const form = await importForm(pokemon, {
+        folder: candidate.id,
+        sourcePath: candidate.path
+      });
+      skins.push({
+        id: candidate.id,
+        name: candidate.name,
+        portrait: form.portrait,
+        source: `${SOURCE}#/${pokemon.id}`,
+        animations: form.animations
+      });
+      skinCredits.push({
+        ...candidate,
+        credits: form.credits,
+        portraitFallback: form.portraitFallback
+      });
+    } catch (error) {
+      console.log(`  Aspecto ${candidate.name} omitido: ${error.message}`);
+    }
+  }
+
+  return {
+    credits: base.credits,
+    skinCredits,
     entry: {
       id: pokemon.id,
       name: pokemon.name,
       dex: Number(pokemon.id),
       types: pokemon.types,
       accent: pokemon.accent,
-      shadowSize,
+      shadowSize: base.shadowSize,
       source: `${SOURCE}#/${pokemon.id}`,
-      credits,
-      portrait: `sprites/${pokemon.id}/${portraitFile}`,
-      animations
+      credits: base.credits,
+      portrait: base.portrait,
+      animations: base.animations,
+      skins
     }
   };
 }
@@ -566,7 +675,9 @@ async function main() {
     console.log(`\n${pokemon.name} (#${pokemon.id})`);
     const result = await importPokemon(pokemon);
     entries.push(result.entry);
-    creditSections.push(creditMarkdown(pokemon, result.credits));
+    creditSections.push(
+      creditMarkdown(pokemon, result.credits, result.skinCredits)
+    );
   }
 
   const manifest = {

@@ -220,6 +220,8 @@ export interface LobbyPlayer {
   team: Team;
   teamReady: boolean;
   pokemonId: string;
+  /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
+  skinId?: string;
   commonAbilityId: CommonAbilityId;
   rosterReady: boolean;
   /** `true` si la plaza la controla la IA en vez de un dispositivo. */
@@ -235,6 +237,8 @@ export interface MatchPlayerConfig {
   deviceKind: InputDeviceInfo['kind'];
   team: Team;
   pokemonId: string;
+  /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
+  skinId?: string;
   commonAbilityId: CommonAbilityId;
   isBot?: boolean;
   botDifficulty?: BotDifficulty;
@@ -293,6 +297,8 @@ export interface PlayerMatchStats {
   name: string;
   team: Team;
   pokemonId: string;
+  /** Aspecto alternativo usado en la partida. */
+  skinId?: string;
   fps: number;
   yaw: number;
   row: number;

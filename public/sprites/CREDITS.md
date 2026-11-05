@@ -16,12 +16,38 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/credits.txt
 
+### Bulbasaur · Shiny
+
+- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Shake, Dance, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/0000/0001/Normal.png
+
+### Bulbasaur · Recolor
+
+- <@!356635814668664832> — PMDCollab_1 · Attack, Charge, Cringe, DeepBreath, Double, Eat, EventSleep, Faint, Float, Head, HitGround, Hop, Hurt, Idle, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Rotate, Shake, Shoot, Sink, Sit, Sleep, Swing, Trip, Tumble, TumbleBack, Wake, Walk
+- <@!117780585635643396> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shake, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!861005464682889266> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shake, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/0001/Normal.png
+
 ## Charmander (#0004)
 
 - CHUNSOFT · Walk, Attack, Kick, Shoot, Strike, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/credits.txt
+
+### Charmander · Shiny
+
+- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Kick, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/0000/0001/Normal.png
+
+### Charmander · Recolor
+
+- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Kick, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/0001/Normal.png
 
 ## Squirtle (#0007)
 
@@ -30,12 +56,25 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0007/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0007/credits.txt
 
+### Squirtle · Shiny
+
+- <@!204460364023201793> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
+- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Withdraw, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0007/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0007/0000/0001/Normal.png
+
 ## Pikachu (#0025)
 
 - CHUNSOFT · Walk, Attack, QuickStrike, Shoot, Shock, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/credits.txt
+
+### Pikachu · Shiny
+
+- <@!204460364023201793> — PMDCollab_1 · Walk, Attack, QuickStrike, Shoot, Shock, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/0000/0001/Normal.png
 
 ## Gengar (#0094)
 
@@ -44,6 +83,13 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0094/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094/credits.txt
+
+### Gengar · Shiny
+
+- <@!234720295292895232> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Lick, Twirl, Swing, Double, Rotate, Hop
+- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0094/0000/0001/Normal.png
 
 ## Voltorb (#0100)
 
@@ -54,12 +100,30 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0100/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100/credits.txt
 
+### Voltorb · Shiny
+
+- <@!234720295292895232> — PMDCollab_1 · Attack, Charge, Double, Hop, Hurt, Idle, Rotate, Sleep, Swing, Twirl, Walk
+- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!356635814668664832> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0100/0000/0001/Normal.png
+
 ## Eevee (#0133)
 
 - CHUNSOFT · Walk, Attack, Strike, Shoot, Appeal, TailWhip, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0133/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133/credits.txt
+
+### Eevee · Shiny
+
+- <@!95650095034273792> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Appeal, TailWhip, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
+- <@!544245909639397378> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, TailWhip, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0133/0000/0001/Normal.png
 
 ## Lucario (#0448)
 
@@ -69,6 +133,14 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0448/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448/credits.txt
+
+### Lucario · Shiny
+
+- <@!207188665959448576> — PMDCollab_1 · Walk, Attack, QuickStrike, Strike, SpAttack, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Strike, RearUp, Swing, Double, Rotate, Hop, QuickStrike, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- <@!356635814668664832> — CC_BY-NC_4 · EventSleep, Wake, Float, Trip, Laying, HitGround
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0448/0000/0001/Normal.png
 
 ## Greninja (#0658)
 
@@ -80,6 +152,12 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/credits.txt
 
+### Greninja · Shiny
+
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, RearUp, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/0000/0001/Normal.png
+
 ## Mewtwo (#0150)
 
 - CHUNSOFT · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
@@ -87,6 +165,13 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0150/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150/credits.txt
+
+### Mewtwo · Shiny
+
+- <@!200385851069300736> — PMDCollab_1 · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
+- <@!702275233125630042> — PMDCollab_1 · Cringe, DeepBreath, Eat, EventSleep, Faint, Float, Head, HitGround, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Sink, Sit, Trip, Tumble, TumbleBack, Wake
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0150/0000/0001/Normal.png
 
 ## Mew (#0151)
 
@@ -96,12 +181,31 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/credits.txt
 
+### Mew · Shiny
+
+- <@!200318546750865418> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!237286997645983744> — CC_BY-NC_4 · Walk, Hurt, Swing, Double, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/0000/0001/Normal.png
+
 ## Onix (#0095)
 
 - CHUNSOFT · Walk, Attack, Slam, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/credits.txt
+
+### Onix · Shiny
+
+- <@!200385851069300736> — PMDCollab_1 · Walk, Attack, Slam, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/0000/0001/Normal.png
+
+### Onix · Recolor
+
+- <@!350050109741858829> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Slam, Twirl, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/0001/Normal.png
 
 ## Scyther (#0123)
 
@@ -110,12 +214,30 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/credits.txt
 
+### Scyther · Shiny
+
+- <@!234720295292895232> — PMDCollab_1 · Walk, Attack, Slice, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/0000/0001/Normal.png
+
+### Scyther · Recolor
+
+- <@!861005464682889266> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Slice, Twirl, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/0001/Normal.png
+
 ## Tyranitar (#0248)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0248/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248/credits.txt
+
+### Tyranitar · Shiny
+
+- <@!215699178553212929> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0248/0000/0001/Normal.png
 
 ## Articuno (#0144)
 
@@ -124,12 +246,31 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0144/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144/credits.txt
 
+### Articuno · Shiny
+
+- <@!200385851069300736> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0144/0000/0001/Normal.png
+
 ## Zapdos (#0145)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/credits.txt
+
+### Zapdos · Shiny
+
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/0000/0001/Normal.png
+
+### Zapdos · Recolor
+
+- <@!1038631037284126741> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/0003
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/0003/Normal.png
 
 ## Moltres (#0146)
 
@@ -138,12 +279,24 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0146/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146/credits.txt
 
+### Moltres · Shiny
+
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0146/0000/0001/Normal.png
+
 ## Raikou (#0243)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shock, Swing, Double, Rotate, Hop, QuickStrike
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0243/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243/credits.txt
+
+### Raikou · Shiny
+
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shock, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0243/0000/0001/Normal.png
 
 ## Entei (#0244)
 
@@ -152,12 +305,37 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/credits.txt
 
+### Entei · Shiny
+
+- <@!200385851069300736> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/0000/0001/Normal.png
+
+### Entei · Recolor
+
+- <@!350050109741858829> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/0002
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/0002/Normal.png
+
 ## Suicune (#0245)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/credits.txt
+
+### Suicune · Shiny
+
+- <@!95650095034273792> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/0000/0001/Normal.png
+
+### Suicune · Recolor
+
+- <@!157796074457661440> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/0002
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/0002/Normal.png (no disponible; se usa el retrato de la forma normal)
 
 ## Lugia (#0249)
 
@@ -166,12 +344,26 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0249/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249/credits.txt
 
+### Lugia · Shiny
+
+- <@!117780585635643396> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
+- <@!117780585635643396> — CC_BY-NC_4 · Shoot, Swing, Double, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0249/0000/0001/Normal.png
+
 ## Ho-Oh (#0250)
 
 - CHUNSOFT · Walk, Attack, Jab, Shoot, Hover, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0250/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250/credits.txt
+
+### Ho-Oh · Shiny
+
+- <@!200385851069300736> — PMDCollab_1 · Walk, Attack, Jab, Shoot, Hover, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!157796074457661440> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Jab, Swing, Double, Rotate, Hop, Hover
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0250/0000/0001/Normal.png
 
 ## Celebi (#0251)
 
@@ -182,10 +374,23 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/credits.txt
 
+### Celebi · Shiny
+
+- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
+- CHUNSOFT · "
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/0000/0001/Normal.png
+
 ## Groudon (#0383)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/Normal.png
 - Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/credits.txt
+
+### Groudon · Shiny
+
+- <@!232091727094218752> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/0000/0001/Normal.png
 

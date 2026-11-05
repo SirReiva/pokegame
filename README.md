@@ -606,11 +606,14 @@ Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas
 
 1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike`, `Shock`, `Shoot`, `Charge`, `Strike`, `Twirl`, `Shake` y `Punch` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
 2. Descarga el retrato `portrait/<id>/Normal.png` de cada Pokémon y lo guarda como `portrait.png`; las interfaces HTML usan ese retrato en lugar de las hojas animadas.
-3. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
-4. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
-5. Decodifica también la hoja de animación para guardar el píxel inferior con contenido visible de cada frame (`bottoms`), que evita que el suelo recorte el dibujo.
-6. Escribe `public/sprites/manifest.json` con frames, duraciones en ticks de 1/60 s, anclas, bordes inferiores y ruta del retrato por Pokémon, créditos y metadatos de licencia.
-7. Genera `public/sprites/CREDITS.md`.
+3. Intenta importar los **aspectos** de cada especie: el shiny (`sprite/<id>/0000/0001`) y, cuando existe, el recolor oficial de PMD Sprite Collab (`RECOLOR_PATHS` en el script). Cada aspecto se guarda en su propia carpeta (`shiny/`, `recolor/`) y añade una entrada a `skins` en el manifiesto. Si un aspecto no tiene retrato propio, reutiliza el de la forma normal; solo se omite cuando le falta `AnimData.xml` o una animación obligatoria.
+4. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
+5. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
+6. Decodifica también la hoja de animación para guardar el píxel inferior con contenido visible de cada frame (`bottoms`), que evita que el suelo recorte el dibujo.
+7. Escribe `public/sprites/manifest.json` con frames, duraciones en ticks de 1/60 s, anclas, bordes inferiores, ruta del retrato, `skins` por Pokémon, créditos y metadatos de licencia.
+8. Genera `public/sprites/CREDITS.md`, incluyendo los créditos de cada aspecto importado.
+
+En el roster, las especies con más de un aspecto muestran un selector **Aspecto**. Con la card girada, `↑`/`↓` cambian de skin y `←`/`→` cambian el instinto; también se puede hacer clic en cada aspecto. La partida carga solo las combinaciones especie + skin que usan los jugadores y los bots.
 
 Orden de las filas: `S, SE, E, NE, N, NW, W, SW` (0–7).
 

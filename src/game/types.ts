@@ -83,6 +83,37 @@ export interface SpriteCredits {
   actions: string[];
 }
 
+/** Hojas de animación de una especie o de uno de sus aspectos. */
+export type PokemonAnimations = Record<RequiredAnimationName, SpriteAnimation> & {
+  faint?: SpriteAnimation;
+  quickstrike?: SpriteAnimation;
+  shock?: SpriteAnimation;
+  shoot?: SpriteAnimation;
+  charge?: SpriteAnimation;
+  strike?: SpriteAnimation;
+  twirl?: SpriteAnimation;
+  shake?: SpriteAnimation;
+  punch?: SpriteAnimation;
+  hop?: SpriteAnimation;
+};
+
+/**
+ * Aspecto alternativo de una especie (shiny, recolor...). Comparte estadísticas,
+ * tipos y habilidades con el Pokémon base; solo cambian las hojas y el retrato.
+ */
+export interface PokemonSkin {
+  /** Identificador estable dentro de la especie, p. ej. `shiny` o `recolor`. */
+  id: string;
+  /** Nombre visible en el selector de aspecto. */
+  name: string;
+  /** Retrato del aspecto para las interfaces HTML. */
+  portrait: string;
+  /** Hojas animadas del aspecto. */
+  animations: PokemonAnimations;
+  /** Página de origen del aspecto en PMD Sprite Collab. */
+  source?: string;
+}
+
 export interface PokemonEntry {
   id: string;
   name: string;
@@ -94,18 +125,9 @@ export interface PokemonEntry {
   credits: SpriteCredits[];
   /** Retrato normal de PMD Sprite Collab para las interfaces HTML. */
   portrait: string;
-  animations: Record<RequiredAnimationName, SpriteAnimation> & {
-    faint?: SpriteAnimation;
-    quickstrike?: SpriteAnimation;
-    shock?: SpriteAnimation;
-    shoot?: SpriteAnimation;
-    charge?: SpriteAnimation;
-    strike?: SpriteAnimation;
-    twirl?: SpriteAnimation;
-    shake?: SpriteAnimation;
-    punch?: SpriteAnimation;
-    hop?: SpriteAnimation;
-  };
+  animations: PokemonAnimations;
+  /** Aspectos alternativos además del normal (que no se repite aquí). */
+  skins?: PokemonSkin[];
 }
 
 export interface SpriteManifest {

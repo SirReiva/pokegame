@@ -33,6 +33,8 @@ export interface SessionValue {
   continueToRoster: () => boolean;
   moveCursor: (slot: number, action: MenuAction) => void;
   selectPokemon: (slot: number, pokemonId: string) => void;
+  selectSkin: (slot: number, skinId: string) => void;
+  cycleSkin: (slot: number, delta: number) => void;
   selectCommonAbility: (slot: number, abilityId: CommonAbilityId) => void;
   cycleCommonAbility: (slot: number, delta: number) => void;
   setRosterReady: (slot: number, ready: boolean) => void;

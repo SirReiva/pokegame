@@ -68,7 +68,7 @@ export class Actor {
     this.facing = facing;
     this.homeFacing = facing;
 
-    const idle = asset.entry.animations.idle;
+    const idle = asset.skin.animations.idle;
     const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
     const spriteHeight =
       anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
