@@ -132,10 +132,10 @@ Los cinco hallazgos más importantes:
 
 Desde v0.7.0 hay además un sistema de objetos recogibles (pociones de 50/120 PV)
 que no entra en la simulación de §4. Su recogida automática ya comprueba
-obstáculos, visibilidad, hurtbox por especie y duplicados (§3.11); las posiciones
+obstáculos, visibilidad, hurtbox por especie y duplicados; las posiciones
 se validan al cargar el mapa y cada jugador recoge como máximo un objeto por
-frame (§3.12). Los bots solo persiguen objetos que ven o han visto hace poco y
-rodean los obstáculos (§3.13).
+frame. Los bots solo persiguen objetos que ven o han visto hace poco y
+rodean los obstáculos.
 
 Sigue abierto el fallo de la pasada anterior: todos los dashes se detienen en
 cualquier jugador, aunque `dashBlocksOnEnemies` solo esté activo en Impulso
@@ -258,7 +258,7 @@ reinicia al reaparecer. Atacar retira la invulnerabilidad
 pociones grandes (120 PV, 45 s). La recogida es automática y el estado es
 global: un solo objeto compartido por todos los jugadores. La niebla oculta su
 billboard y la recogida comprueba colliders, línea de visión y visibilidad del
-equipo; el alcance usa el hurtbox de la especie (§3.11-§3.13).
+equipo; el alcance usa el hurtbox de la especie.
 
 **KO**: 15 por equipo (`CONFIG.combat.koTarget`).
 
@@ -285,7 +285,7 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-04)
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-05)
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
@@ -297,11 +297,9 @@ cobertura de tipos.
 | 3.6 Validación de dos equipos | **pendiente** | Una partida 1v0 no puede terminar. |
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
 | 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
-| 3.9 Detalles menores | **arreglado** | Spawn resuelto, facing/yaw por spawn real, terreno inicial y su multiplicador sincronizados, hurtbox en proyectiles de bots y una marca 🚫 por lanzamiento. |
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
-| 3.11 Objetos recogibles | **arreglado** | Recogida con colliders y visibilidad, `hitRadius` por especie, duplicados rechazados y reparto por distancia. |
-| 3.12 Posiciones de objetos | **arreglado** | Validación contra límites, agua y colliders al cargar, un objeto por jugador/frame y editor que fusiona duplicados y avisa de posiciones inválidas. |
-| 3.13 Bots y objetos no visibles | **arreglado** | Solo eligen objetos vistos o recordados (10 s), recuerdan el estado usado y rodean obstáculos en vez de atajar contra ellos. |
+
+Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.13) corresponden a apartados ya corregidos y retirados de la lista.
 
 ### 3.1. Cobertura: 6 especies sin moveset (crítico)
 
@@ -479,43 +477,6 @@ También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 `Dragon`, `Flying`), así que Mewtwo, Mew, Lucario y Lugia nunca reciben el bonus
 `home` de 1,18× de velocidad/ocultación (`terrain.ts:35-51`).
 
-### 3.9. Varios detalles menores (arreglado)
-
-Los seis cabos de la revisión anterior ya están corregidos:
-
-- **Spawn/facing en mapas con varios respawns**: `facingToCenter` y
-  `cameraYawForTeam` aceptan la posición real del jugador
-  (`src/game/multiplayer.ts:133,141`). `startMatch` les pasa el spawn resuelto
-  de cada uno (`game.ts:557,596`) y `respawnPlayer` hace lo mismo desde su
-  posición de reaparición (`game.ts:1577`). Los mapas actuales siguen
-  declarando un solo respawn por equipo, pero el arreglo ya cubre varios.
-- **Spawn inicial sin resolver**: `startMatch` resuelve el spawn con
-  `resolvePosition` antes de crear la cámara y el estado (`game.ts:551-559`);
-  la primera copia, el yaw, el terreno y su multiplicador usan ese punto. Ya no
-  puede nacer un frame dentro de un collider o del agua profunda.
-- **Terreno inicial y multiplicador**: `terrainMultiplier` y
-  `terrainSpeedReason` salen de `terrainSpeedEffect` aplicado al terreno del
-  spawn (`game.ts:559,616-617`), así que el HUD muestra el multiplicador real
-  durante la cuenta atrás. Además, `stepPlayer` lo recalcula tras el
-  desplazamiento (`game.ts:1260-1262`): terreno y multiplicador describen
-  siempre el mismo punto y no se mezcla el terreno nuevo con el valor anterior.
-- **HUD de terreno durante dash/windup**: `stepPendingCast`
-  (`game.ts:1370-1372`) y `stepDash` (`game.ts:1517-1519`) actualizan también
-  `terrainMultiplier` y `terrainSpeedReason`, no solo `terrain` y
-  `concealment`.
-- **Rango de proyectiles de los bots**: `inRange` suma el hurtbox del objetivo
-  también en `projectile` (`src/game/bot.ts:1605-1609`). El bot deja de
-  acercarse de más contra los cuerpos grandes y aprovecha el alcance que usa el
-  motor.
-- **Inmunidad en áreas `overTime`**: `ActiveAoe` guarda un `Set` con los slots ya
-  avisados (`src/game/matchState.ts:158-162`); `applyAbilityDamage` muestra la
-  marca 🚫 solo la primera vez por lanzamiento y objetivo
-  (`game.ts:2271-2273`) y las áreas lo comparten entre ticks
-  (`game.ts:2819`). Un charco sobre un inmune ya no apila marcas.
-
-**Balance**: sin cambios. Son correcciones de posición inicial, sincronización
-del HUD y precisión de los bots, no de daño ni de tiempos.
-
 ### 3.10. Todos los dashes se detienen en cualquier jugador (medio, diseño)
 
 `dashPosition` resuelve cada paso con `resolvePosition` (`game.ts:3245-3288`), y
@@ -536,88 +497,6 @@ detrás de un árbol o un muro puede acortar el dash aunque el camino esté libr
 `dashPosition` necesita un flag para ignorar jugadores (o al menos aliados) y
 `dashEnemyLimit` debe comprobar LOS; si todos los dashes deben detenerse, quitar
 o documentar `dashBlocksOnEnemies` y unificar la distancia.
-
-### 3.11. Objetos recogibles: LOS, duplicados y reparto (arreglado)
-
-El sistema de objetos (`0c7b736`, `919e5cb`, `e0b725e`) funciona en lo básico y
-los cuatro cabos de la revisión anterior ya están corregidos:
-
-- `PickupField.collect` (`src/game/pickups.ts:460`) ya no consume por distancia:
-  antes de gastar el objeto llama a `PickupHandlers.canReach`, que en
-  `src/game/game.ts` comprueba `segmentBlockedByColliders` y la visibilidad del
-  equipo con `teamSeesPoint`. Un objeto al otro lado de un muro, una roca o un
-  árbol, o dentro de una zona oculta para el equipo, no se recoge.
-- El alcance usa `definition.pickupRadius + player.hitRadius`
-  (`src/game/pickups.ts:470`), así que un Onix (0,58 u) recoge desde más lejos
-  que un Voltorb (0,34 u), igual que en el resto del combate.
-- `parsePickups` (`src/game/map.ts:108`) rechaza dos entradas en la misma
-  coordenada con un error explícito. Ya no se pueden consumir dos objetos del
-  mismo punto en un frame ni los bots ven un estado que no corresponde al
-  objeto que se lleva.
-- Si varios jugadores tocan el mismo objeto en el mismo frame, gana el jugador
-  vivo más cercano; un empate exacto se resuelve por el orden estable de
-  `matchPlayers`. La comprobación de alcance, vida y visibilidad se hace antes
-  de elegir, así que un candidato bloqueado no impide que otro válido lo recoja.
-
-**Balance**: las tablas de §4 siguen sin simular las pociones (50/120 PV). Es una
-decisión explícita, no un cabo suelto: §4.1 lo indica y el TTK de los mapas con
-objetos debe leerse como vida efectiva adicional, no como el de la matriz.
-
-### 3.12. Posiciones de objetos sin validar (arreglado)
-
-Los objetos se validan ahora contra el mundo ya construido y los inválidos se
-descartan antes de crear su billboard o de ofrecérselos a los bots:
-
-- `Game.pickupPlacementIssue` (`src/game/game.ts:470-500`) comprueba que el
-  centro esté dentro de los límites del mapa, que su celda no sea `waterHigh` y
-  que no caiga dentro de ningún collider con `pointBlockedByColliders`. Como se
-  ejecuta después de `buildWorld`, cubre muros, cordilleras, bases y también los
-  props procedurales (árboles, rocas...) que no están en el JSON.
-- `applyMap` filtra `map.pickups` con ese criterio, avisa por consola y guarda
-  solo los aceptados en `pickupSpawns` (`src/game/game.ts:452-463`).
-  `PickupField.setMap` recibe ya la lista filtrada (`src/game/pickups.ts:331`) y
-  los bots solo conocen esas posiciones (`src/game/game.ts:723`). Un objeto
-  inalcanzable ya no atrae a ningún bot.
-- `PickupField.collect` limita la recogida a un objeto por jugador y frame
-  (`src/game/pickups.ts:461-506`). Si dos objetos solapados tocan al mismo
-  jugador, el segundo queda para el frame siguiente o para otro jugador.
-- El editor fusiona los duplicados exactos antes de `parseMap`
-  (`src/game/mapEditor.ts:506-544`), así que un mapa antiguo con dos objetos en
-  la misma coordenada se importa conservando el primero. Sus reglas de
-  validación avisan además de objetos en agua profunda, dentro de un separador o
-  dentro del collider de una base (`src/game/mapEditor.ts:719-755`).
-- Se corrigió el dato de `laberinto`: la poción que estaba dentro de un muro
-  (inalcanzable por la comprobación de LOS de §3.11) se movió a una celda válida
-  en `public/maps/laberinto.json`.
-
-**Balance**: sin cambios. Los objetos siguen midiéndose aparte de la matriz de
-§4.
-
-### 3.13. Bots y objetos fuera de visión (arreglado)
-
-Los bots ya no persiguen objetos que no han visto y dejan de atajar contra los
-obstáculos:
-
-- `pickupTarget` (`src/game/bot.ts:1079-1162`) solo considera objetos que el
-  equipo ve en ese frame o que ha visto en los últimos `PICKUP_MEMORY_SECONDS`
-  (10 s, `bot.ts:197`). Si el último estado conocido es «usado», lo descarta; si
-  no hay estado visible ni recuerdo, la posición no es un destino válido.
-- `BotController.rememberPickups` (`src/game/bot.ts:400-409`) guarda ese estado
-  con marca de tiempo y purga los recuerdos caducados. Así un objeto usado no
-  reaparece en el conocimiento al salir de visión.
-- Si un objeto lleva al bot a dos atascos seguidos,
-  `avoidCurrentPickupGoal` (`bot.ts:416-427`) lo descarta durante
-  `PICKUP_AVOID_SECONDS` (12 s); `pickupTarget` lo ignora y el bot vuelve a
-  patrullar en vez de fijarlo indefinidamente.
-- `moveTowards` (`src/game/bot.ts:1796-1816`) solo ataja en línea recta si
-  `nav.lineClear` confirma que no hay obstáculo. Si lo hay, usa A* para rodearlo
-  también a menos de 1,6 u, que era el caso del muro fino con el objeto al otro
-  lado.
-- La memoria es por bot y no cambia la disponibilidad global ni el reparto de
-  `collect`; solo evita que el bot vuelva a fijar un objetivo ya gastado o que
-  nunca ha visto.
-
-**Balance**: sin cambios.
 
 ## 4. Estudio cuantitativo del balance
 
@@ -649,7 +528,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   regeneraron el 2026-11-03 con este modelo.
 - **Objetos recogibles**: las tablas tampoco simulan las pociones de v0.7.0
   (50/120 PV). Son vida efectiva adicional y pueden cambiar el TTK de los mapas
-  que las incluyen; su recogida se detalla en §3.11-§3.13.
+  que las incluyen; su recogida automática se describe en §1.
 - **Hurtbox**: la matriz mide daño suponiendo que todas las habilidades conectan;
   no mide facilidad de impacto. Desde `3bae0e9` cada especie tiene un
   `hitRadius` de 0,34-0,58 u, así que las especies grandes son más
@@ -1001,23 +880,9 @@ autodaño la convierte en una mala elección en 1v1.
     desaparece; hoy queda inmóvil y se le puede farmear.
 23. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
     `roster.ts`; valorar aplicar slow/terreno al dash.
-24. **Detalles menores (hecho)**: el spawn inicial pasa por `resolvePosition`, el
-    facing/yaw usan el spawn real de cada jugador y el `terrainMultiplier` del
-    spawn, del movimiento, del dash y del windup sale de `terrainSpeedEffect`
-    (§3.9).
-25. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
+24. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
     o no; hacer que `dashBlocksOnEnemies` y `dashEnemyLimit` (con LOS) controlen
     la regla, en vez de que `resolvePosition` detenga todas las dashes.
-26. **Objetos recogibles (hecho)**: la recogida ya comprueba colliders y
-    visibilidad, usa el `hitRadius` de la especie, rechaza duplicados en
-    `parsePickups` y reparte por distancia. Queda decidir si las pociones entran
-    en §4; hoy la matriz mide combate sin objetos y §4.1 lo indica.
-27. **Posiciones de objetos (hecho)**: los objetos se validan contra límites,
-    agua y colliders al cargar el mapa, cada jugador recoge como máximo uno por
-    frame y el editor fusiona duplicados y avisa de posiciones inválidas (§3.12).
-28. **Bots y objetos (hecho)**: solo eligen objetos vistos o recordados, con
-    caducidad del último estado usado, y rodean los obstáculos con la
-    navegación en vez de atajar en línea recta (§3.13).
 
 > Los números son un punto de partida para una primera pasada, no una verdad
 > absoluta. Conviene cambiarlos de pocos en pocos y volver a ejecutar la matriz.
@@ -1175,7 +1040,7 @@ Un script de balance como el usado para este informe se puede añadir a
   el orden de resolución.
 - El hurtbox por especie está centralizado en `POKEMON_HIT_RADIUS` y se aplica a
   todas las formas de golpe; en los bots cubre melee, dash, área y también
-  `projectile` (§3.9). La colisión de movimiento y la navegación de los bots
+  `projectile`. La colisión de movimiento y la navegación de los bots
   quedan separadas y se pueden revertir con un flag.
 - Las estadísticas de daño distinguen daño real (sin sobrepasar la vida restante)
   de autodaño y se emiten con el resto de `PlayerMatchStats`; el marcador final
@@ -1196,10 +1061,10 @@ Un script de balance como el usado para este informe se puede añadir a
   mapa; la niebla oculta sus billboards y los bots solo conocen la
   disponibilidad de los puntos que ve su equipo. La recogida comprueba
   colliders y visibilidad, usa el `hitRadius` de la especie, rechaza duplicados
-  y reparte por distancia (§3.11); las posiciones se validan al cargar y cada
-  jugador recoge como máximo un objeto por frame (§3.12). Los bots solo fijan
+  y reparte por distancia; las posiciones se validan al cargar y cada
+  jugador recoge como máximo un objeto por frame. Los bots solo fijan
   objetos vistos o recordados, recuerdan el estado usado con caducidad y rodean
-  los obstáculos (§3.13).
+  los obstáculos.
 - Los commits `fix melee` y `fix inmune` van en la dirección correcta: la melee,
   las áreas, los dashes y los proyectiles comprueban todos los colliders, el
   proyectil barre también a los objetivos y el choque revalida los golpes. La inmunidad de tipo se comprueba antes de
