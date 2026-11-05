@@ -1464,7 +1464,7 @@ export class Game {
             : this.animationPlaybackFor(player, animation, pending.windup);
       }
     } else {
-      // Mantén la pose de lanzamiento mientras el Pokémon esté quieto; al
+      // Mantén la pose de preparación mientras el Pokémon esté quieto; al
       // andar, la animación de caminar tiene prioridad.
       player.actionTimer = Math.max(player.actionTimer, 0.05);
     }
@@ -1863,8 +1863,7 @@ export class Game {
       // no hay un frame con la animación de lanzamiento antes del windup.
       const windupAnimation = def.windupAnimation ?? def.animation;
       if (windupAnimation !== null) {
-        player.animation = windupAnimation;
-        player.playback =
+        const windupPlayback =
           def.windupAnimationMode === 'loop'
             ? Math.max(0.05, def.windupAnimationSpeed)
             : this.animationPlaybackFor(
@@ -1872,9 +1871,19 @@ export class Game {
                 windupAnimation,
                 def.windup
               );
+        player.animation = windupAnimation;
+        player.playback = windupPlayback;
+        // En los windups móviles la prioridad de animación usa `actionAnimation`
+        // mientras el Pokémon está quieto. Debe apuntar a la preparación y no al
+        // lanzamiento: si no, el clip de `shoot` se reproduce durante el windup
+        // y vuelve a empezar al ejecutar la habilidad.
+        player.actionAnimation = windupAnimation;
+        player.actionPlayback = windupPlayback;
       } else {
         player.animation = 'idle';
         player.playback = 1;
+        player.actionAnimation = null;
+        player.actionPlayback = 1;
       }
       const dirX = Math.sin(player.facing);
       const dirZ = Math.cos(player.facing);
