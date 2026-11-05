@@ -7,9 +7,10 @@
  * callback por habilidad.
  *
  * El callback recibe **todos** los Pokémon vivos dentro del radio (aliados,
- * enemigos y el propio lanzador). A partir de ahí decide a quién aplica daño,
- * hitstun, empuje, ralentización, buffs o curación. Si la habilidad no define
- * `aoeEffect`, se usa `defaultAoeEffect`, que reproduce el comportamiento
+ * enemigos y el propio lanzador) en `targets`, y a los compañeros caídos con
+ * marcador de KO en `fallenAllies`. A partir de ahí decide a quién aplica daño,
+ * hitstun, empuje, ralentización, buffs, curación o revivir. Si la habilidad no
+ * define `aoeEffect`, se usa `defaultAoeEffect`, que reproduce el comportamiento
  * histórico: solo rivales alcanzables, con su `slow` y con control únicamente
  * en las áreas instantáneas.
  */
@@ -64,6 +65,16 @@ export interface AoeTarget {
   hittable: boolean;
 }
 
+/**
+ * Aliado caído cuyo marcador de KO queda dentro del área. El motor solo reúne
+ * aquí a los compañeros de equipo que todavía no han reaparecido.
+ */
+export interface AoeFallenAlly {
+  player: MatchPlayerState;
+  /** Distancia centro del área → punto donde cayó. */
+  distance: number;
+}
+
 export interface AoeHitOptions {
   /** Potencia del golpe. Por defecto, `target.damagePower`. */
   power?: number;
@@ -107,6 +118,8 @@ export interface AoeEffectContext {
   /** Potencia base del golpe antes del multiplicador radial. */
   power: number;
   targets: readonly AoeTarget[];
+  /** Compañeros de equipo caídos con su marcador de KO dentro del radio. */
+  fallenAllies: readonly AoeFallenAlly[];
   /**
    * Aplica el golpe estándar: precisión, inmunidad, sonido, slow, daño,
    * hitstun/cancel/empuje y `healOnHit`. Devuelve `true` solo si quitó vida.
@@ -122,6 +135,11 @@ export interface AoeEffectContext {
   applyBuff(target: AoeTarget, buff: BuffSpec): void;
   /** Cura al objetivo una fracción de su vida máxima (`0.25` = 25 %). */
   applyHeal(target: AoeTarget, fraction: number): void;
+  /**
+   * Revive a un aliado caído con una fracción de su vida máxima (`0.5` = 50 %)
+   * en el punto donde murió. Devuelve `true` si seguía caído.
+   */
+  revive(target: AoeFallenAlly, fraction: number): boolean;
   /** `true` cuando la partida ya terminó; útil para cortar bucles de ticks. */
   isMatchOver(): boolean;
 }

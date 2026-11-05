@@ -22,6 +22,7 @@ import {
 import {
   defaultAoeEffect,
   type AoeEffectContext,
+  type AoeFallenAlly,
   type AoeHitInput,
   type AoeHitOptions,
   type AoeTarget
@@ -57,6 +58,7 @@ import {
 import { CombatFx } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
+import { DeathMarker } from './deathMarker';
 import { applyHealFraction, applyHealSelf, CAST_EFFECTS } from './effects';
 import { FogDecal, FogMask, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
 import {
@@ -184,6 +186,10 @@ const KILL_FEED_MAX_ENTRIES = 4;
 const MATCH_COUNTDOWN_SECONDS = 5;
 /** Tiempo que se mantiene el cartel de salida después de la cuenta atrás. */
 const MATCH_COUNTDOWN_GO_SECONDS = 0.8;
+/** Altura del decal de KO sobre el suelo. */
+const DEATH_MARKER_GROUND_Y = 0.06;
+/** Separación de la marca sobre la superficie cuando el KO ocurre en el agua. */
+const DEATH_MARKER_WATER_LIFT = 0.02;
 
 /**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
@@ -266,6 +272,8 @@ export class Game {
   private views: MatchPlayerState[] = [];
   private bots = new Map<number, BotController>();
   private viewLayers: pc.Layer[] = [];
+  /** Marca de KO en el suelo, una copia por vista. Solo la ve su equipo. */
+  private deathMarkers = new Map<number, Array<DeathMarker | null>>();
   /** Proyectiles activos de todas las vistas. */
   private projectiles: Projectile[] = [];
   /** Áreas persistentes con daño periódico. */
@@ -895,6 +903,11 @@ export class Game {
     this.visibleByTeam = { blue: new Set(), red: new Set() };
     this.pickupKnowledge = { blue: new Map(), red: new Map() };
 
+    for (const markers of this.deathMarkers.values()) {
+      for (const marker of markers) marker?.destroy();
+    }
+    this.deathMarkers.clear();
+
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
       player.copies = [];
@@ -1138,6 +1151,11 @@ export class Game {
         copy.setLevel(levelFromXp(player.xp));
         copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
+      });
+      // El retrato de la marca de KO se mantiene de pie en cada vista aunque
+      // la cámara orbite alrededor del cuerpo.
+      this.deathMarkers.forEach((markers) => {
+        markers[viewIndex]?.faceCamera(cameraPosition);
       });
     });
 
@@ -1678,12 +1696,31 @@ export class Game {
    */
   private respawnPlayer(player: MatchPlayerState): void {
     const resolved = this.resolvePosition(player, player.spawn.x, player.spawn.z);
-    player.x = resolved.x;
-    player.z = resolved.z;
-    player.facing = facingToCenter(player.team, resolved.x, resolved.z);
+    this.revivePlayer(player, resolved.x, resolved.z, 1);
+    this.combatFx.spawnBuff(player.x, player.z, [255, 255, 255], 1.1);
+  }
+
+  /**
+   * Devuelve a la vida al jugador en `(x, z)` con una fracción de su vida
+   * máxima. Comparten este reinicio el respawn de la base y las habilidades de
+   * revivir, que conservan el punto donde cayó el aliado.
+   */
+  private revivePlayer(
+    player: MatchPlayerState,
+    x: number,
+    z: number,
+    hpFraction: number
+  ): void {
+    this.removeDeathMarker(player.slot);
+    player.x = x;
+    player.z = z;
+    player.facing = facingToCenter(player.team, x, z);
     player.vx = 0;
     player.vz = 0;
-    player.hp = player.maxHp;
+    player.hp = Math.max(
+      1,
+      Math.round(player.maxHp * clamp(hpFraction, 0, 1))
+    );
     player.alive = true;
     player.respawnTimer = 0;
     player.invulnerableTimer = CONFIG.combat.invulnerabilitySeconds;
@@ -1712,14 +1749,68 @@ export class Game {
     player.animation = 'idle';
     player.playback = 1;
     // El HUD lee estos campos hasta el primer frame de movimiento: deben
-    // reflejar el terreno del spawn nuevo, no el de la vida anterior.
+    // reflejar el terreno del punto de reaparición, no el de la vida anterior.
     player.terrain = terrainAt(player.x, player.z);
     const terrainEffect = terrainSpeedEffect(player.terrain, player.types);
     player.terrainMultiplier = terrainEffect.multiplier;
     player.terrainSpeedReason = terrainEffect.reason;
     player.concealment = terrainConcealment(player.terrain, player.types);
     player.submerge = 0;
-    this.combatFx.spawnBuff(player.x, player.z, [255, 255, 255], 1.1);
+  }
+
+  /** Revive desde un área a un aliado caído, en el punto de su marcador. */
+  private reviveAoeAlly(
+    target: AoeFallenAlly,
+    fraction: number,
+    def: AbilityDef
+  ): boolean {
+    const player = target.player;
+    if (player.alive) return false;
+    this.revivePlayer(player, player.x, player.z, fraction);
+    this.showHealPopup(player, player.hp);
+    this.combatFx.spawnBuff(player.x, player.z, def.color, 1.1);
+    return true;
+  }
+
+  /**
+   * Deja una marca en el punto del KO, con una copia por vista aliada. La marca
+   * es información de equipo: solo se crea en las vistas del equipo del Pokémon
+   * caído, aunque el cuerpo esté fuera de la niebla.
+   */
+  private spawnDeathMarker(target: MatchPlayerState): void {
+    const asset = this.assets.get(target.pokemonId);
+    const terrain = terrainAt(target.x, target.z);
+    const onWater = terrain === 'waterLow' || terrain === 'waterHigh';
+    const y = onWater
+      ? this.world.waterHeight + DEATH_MARKER_WATER_LIFT
+      : DEATH_MARKER_GROUND_Y;
+
+    const markers: Array<DeathMarker | null> = this.views.map(() => null);
+    this.views.forEach((viewer, index) => {
+      if (viewer.team !== target.team) return;
+      const layer = this.viewLayers[index];
+      if (!layer) return;
+      const marker = new DeathMarker(
+        this.app,
+        target.x,
+        target.z,
+        y,
+        asset?.portrait ?? null
+      );
+      marker.setLayer(layer.id);
+      marker.faceCamera(viewer.camera.position);
+      markers[index] = marker;
+    });
+    if (markers.some((marker) => marker !== null)) {
+      this.deathMarkers.set(target.slot, markers);
+    }
+  }
+
+  private removeDeathMarker(slot: number): void {
+    const markers = this.deathMarkers.get(slot);
+    if (!markers) return;
+    for (const marker of markers) marker?.destroy();
+    this.deathMarkers.delete(slot);
   }
 
   /** Reinicia el estado de la regeneración pasiva. */
@@ -2245,8 +2336,17 @@ export class Game {
    */
   private resolveAoeHit(hit: AoeHitInput): void {
     const targets: AoeTarget[] = [];
+    const fallenAllies: AoeFallenAlly[] = [];
     for (const player of this.matchPlayers) {
-      if (!player.alive) continue;
+      if (!player.alive) {
+        // Los aliados caídos siguen en el punto del KO hasta reaparecer: son
+        // los únicos revivibles por un área.
+        if (player.team !== hit.owner.team) continue;
+        const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
+        if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
+        fallenAllies.push({ player, distance });
+        continue;
+      }
       const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
       if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
       const radialMultiplier = this.radialDamageMultiplier(
@@ -2284,6 +2384,7 @@ export class Game {
       elapsed: hit.elapsed,
       power: hit.power,
       targets,
+      fallenAllies,
       applyHit: (target, options) => this.applyAoeHit(hit, target, options),
       applyHitstun: (target, seconds, cancel = false) =>
         this.applyAoeHitstun(target, seconds, cancel),
@@ -2294,6 +2395,8 @@ export class Game {
       applyBuff: (target, buff) => this.applyAoeBuff(target, buff, hit.def),
       applyHeal: (target, fraction) =>
         this.applyAoeHeal(target, fraction, hit.def, hit.owner),
+      revive: (target, fraction) =>
+        this.reviveAoeAlly(target, fraction, hit.def),
       isMatchOver: () => this.matchOver
     };
     (hit.def.aoeEffect ?? defaultAoeEffect)(context);
@@ -2642,6 +2745,7 @@ export class Game {
     target.animation = entry?.animations.faint ? 'faint' : 'hurt';
     target.playback = 1;
     for (const copy of target.copies) copy.play(target.animation, true);
+    this.spawnDeathMarker(target);
 
     this.pushKillFeed(killer, target);
 

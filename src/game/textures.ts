@@ -1570,6 +1570,105 @@ export function createMarkerCanvas(
   return ctx.canvas;
 }
 
+/** Resolución de la marca de KO que queda en el suelo. */
+export const DEATH_MARKER_TEXTURE_SIZE = 80;
+
+/**
+ * Marca plana para el punto donde cayó un Pokémon: una X dentro de un anillo o,
+ * si se pasa un retrato, la imagen de la especie dentro del anillo. Se dibuja
+ * con un contorno oscuro para que se lea sobre cualquier terreno y se resuelve
+ * píxel a píxel, sin antialiasing, como el resto del arte.
+ */
+export function createDeathMarkerCanvas(
+  portrait: HTMLImageElement | null = null,
+  size = DEATH_MARKER_TEXTURE_SIZE,
+): HTMLCanvasElement {
+  const ctx = canvas2d(size);
+  const image = ctx.createImageData(size, size);
+  const data = image.data;
+  const center = size / 2;
+  const scale = size / DEATH_MARKER_TEXTURE_SIZE;
+
+  const put = (x: number, y: number, value: readonly number[]) => {
+    const index = (y * size + x) * 4;
+    data[index] = value[0];
+    data[index + 1] = value[1];
+    data[index + 2] = value[2];
+    data[index + 3] = value[3];
+  };
+
+  const outline: readonly number[] = [26, 16, 24, 255];
+  const ringColor: readonly number[] = [255, 91, 77, 255];
+  const crossColor: readonly number[] = [255, 224, 208, 255];
+
+  // Silueta y formas activas se definen por radios y semianchos en píxeles de
+  // la textura base de 64 px, escalados si se pide otra resolución.
+  const ringInner = 23 * scale;
+  const ringOuter = 29 * scale;
+  const crossHalfWidth = 4.5 * scale;
+  const crossReach = 16 * scale;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const px = x + 0.5 - center;
+      const py = y + 0.5 - center;
+      const radius = Math.hypot(px, py);
+
+      const ring = radius >= ringInner && radius <= ringOuter;
+      // Con retrato la X desaparece: la imagen ocupa el centro de la marca.
+      // Dos barras diagonales cruzadas: |x-y| y |x+y| acotados en el centro.
+      const cross =
+        portrait === null &&
+        (Math.abs(px - py) <= crossHalfWidth ||
+          Math.abs(px + py) <= crossHalfWidth) &&
+        Math.abs(px) <= crossReach &&
+        Math.abs(py) <= crossReach;
+      const outlineRing =
+        radius >= ringInner - 2.5 * scale && radius <= ringOuter + 2.5 * scale;
+      const outlineCross =
+        portrait === null &&
+        (Math.abs(px - py) <= crossHalfWidth + 2 * scale ||
+          Math.abs(px + py) <= crossHalfWidth + 2 * scale) &&
+        Math.abs(px) <= crossReach + 1.5 * scale &&
+        Math.abs(py) <= crossReach + 1.5 * scale;
+
+      if (ring) put(x, y, ringColor);
+      else if (cross) put(x, y, crossColor);
+      else if (outlineRing || outlineCross) put(x, y, outline);
+    }
+  }
+
+  ctx.putImageData(image, 0, 0);
+
+  if (portrait) {
+    // Fondo oscuro para que el retrato se lea sobre cualquier terreno.
+    ctx.fillStyle = 'rgba(20, 12, 20, 0.9)';
+    ctx.beginPath();
+    ctx.arc(center, center, size * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+
+    // El retrato cabe en un cuadrado inscrito en el anillo (40 px sobre una
+    // textura de 80): sus esquinas no llegan a tapar el aro.
+    const maxSize = size * 0.5;
+    const portraitScale = Math.min(
+      maxSize / portrait.width,
+      maxSize / portrait.height,
+    );
+    const width = portrait.width * portraitScale;
+    const height = portrait.height * portraitScale;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      portrait,
+      center - width / 2,
+      center - height / 2,
+      width,
+      height,
+    );
+  }
+
+  return ctx.canvas;
+}
+
 export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
   const ctx = canvas2d(width, height);
   const gradient = ctx.createLinearGradient(0, 0, 0, height);

@@ -897,7 +897,7 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
-/** Motas de curación de `Recuperación` y `Deseo`. */
+/** Motas del efecto de recuperación que comparten `Recuperación` y `Deseo`. */
 export const MOTION_RECOVERY_MOTES = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
   float span = max(0.05, uEffectLife - a0.z);

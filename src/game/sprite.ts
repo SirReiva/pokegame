@@ -27,6 +27,8 @@ export interface SpriteAsset {
   textures: SpriteTextures;
   /** Factor de reescalado aplicado a cada hoja (puede ser menor en hojas grandes). */
   textureScales: Partial<Record<AnimationName, number>>;
+  /** Retrato de la especie, ya cargado para la marca de KO del suelo. */
+  portrait: HTMLImageElement | null;
 }
 
 const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
@@ -309,9 +311,17 @@ export async function loadSpriteAsset(
   // cualquier remontaje, y mutarlo hacía que la segunda carga aplicara el
   // recorte ya recortado sobre la hoja original (sprite pequeño y desalineado).
   const animations = { ...entry.animations };
-  const images = await Promise.all(
-    ANIMATIONS.map((name) => loadImage(animations[name].sheet))
-  );
+  const [images, portrait] = await Promise.all([
+    Promise.all(ANIMATIONS.map((name) => loadImage(animations[name].sheet))),
+    // El retrato es opcional: si falta, la marca de KO cae a la X dibujada.
+    loadImage(entry.portrait).catch((error) => {
+      console.warn(
+        `[sprite] No se pudo cargar el retrato de ${entry.id}; la marca de KO usará la X.`,
+        error
+      );
+      return null;
+    })
+  ]);
 
   const textures = {} as SpriteTextures;
   const textureScales: Partial<Record<AnimationName, number>> = {};
@@ -365,7 +375,8 @@ export async function loadSpriteAsset(
   return {
     entry: { ...entry, animations },
     textures,
-    textureScales
+    textureScales,
+    portrait
   };
 }
 

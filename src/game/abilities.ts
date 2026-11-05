@@ -196,8 +196,9 @@ export interface AbilityDef {
   /**
    * Callback opcional que decide qué efectos aplica cada golpe o tick del
    * área. Recibe todos los Pokémon vivos dentro del radio (aliados, enemigos y
-   * el propio lanzador) y elige a quién aplica daño, hitstun, empuje, slow,
-   * buffs o curación. Si se omite, se usa `defaultAoeEffect`.
+   * el propio lanzador) y los aliados caídos cuyo marcador de KO está dentro,
+   * y elige a quién aplica daño, hitstun, empuje, slow, buffs, curación o
+   * revivir. Si se omite, se usa `defaultAoeEffect`.
    */
   aoeEffect?: AoeEffect;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
@@ -1936,22 +1937,18 @@ registerAbility(
     .cooldown(13)
     .range(0)
     .radius(3.2)
-    .windup(0.65)
+    .windup(1.5, { mode: 'once' })
     .cast(0.65)
     .animation('twirl')
-    .heal(0.3)
     .area('recovery', 'instant', 0.8)
-    .aoeEffect(({ targets, applyHeal }) => {
-      // El lanzador ya se cura con `healSelf`; el área reparte el 20 % entre
-      // los aliados que estén dentro del radio.
-      for (const target of targets) {
-        if (!target.isAlly || target.isSelf) continue;
-        applyHeal(target, 0.2);
-      }
+    .aoeEffect(({ fallenAllies, revive }) => {
+      // La onda no cura: devuelve al combate a los aliados caídos cuyo
+      // marcador de KO esté dentro del radio, con la mitad de su vida.
+      for (const ally of fallenAllies) revive(ally, 0.5);
     })
     .color(156, 224, 112)
     .description(
-      'Pide un deseo: se concentra 0,65 s y libera una onda curativa de 3,2 u que recupera el 30 % de su vida máxima y el 20 % de la de sus aliados. Si le golpean durante la concentración, se cancela.'
+      'Pide un deseo: se concentra 1,5 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si le golpean durante la concentración, se cancela.'
     )
 );
 
