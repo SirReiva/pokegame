@@ -23,7 +23,7 @@
 
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
-import { pointSegmentDistance } from './combat';
+import { pointSegmentDistance, segmentBlockedByColliders } from './combat';
 import { DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
@@ -361,6 +361,13 @@ export class BotController {
   private regenGoalTimer = 0;
   private regenCheckTimer = 0;
   private goal: Vec2 = { x: 0, z: 0 };
+  /**
+   * Objeto que ocupa el destino actual, o `null` si el destino es una patrulla,
+   * una posición recordada o la base. Sirve para dar el último tramo en línea
+   * recta: la rejilla infla los colliders con el radio del cuerpo y puede marcar
+   * como bloqueada la celda de una poción que sí se alcanza a pie.
+   */
+  private goalPickup: PickupSpawn | null = null;
 
   /** Posiciones de objetos conocidas de antemano; nunca su estado. */
   private readonly pickups: readonly PickupSpawn[];
@@ -1201,7 +1208,7 @@ export class BotController {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
       this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
-      if (pickup) this.setGoal(pickup);
+      if (pickup) this.setGoal(pickup, pickup);
       else this.setGoal(self.spawn);
       return;
     }
@@ -1209,7 +1216,7 @@ export class BotController {
     // Sin rival útil a la vista, un bot dañado prefiere acercarse a un objeto
     // conocido antes que perseguir una posición recordada o patrullar.
     if (pickup && (!targetIsVisible || targetOffense === 0)) {
-      this.setGoal(pickup);
+      this.setGoal(pickup, pickup);
       return;
     }
 
@@ -1531,12 +1538,13 @@ export class BotController {
     return best;
   }
 
-  private setGoal(goal: Vec2): void {
+  private setGoal(goal: Vec2, pickup: PickupSpawn | null = null): void {
     if (Math.hypot(goal.x - this.goal.x, goal.z - this.goal.z) > 1.2) {
       this.path = [];
       this.pathTimer = 0;
     }
     this.goal = goal;
+    this.goalPickup = pickup;
   }
 
   private updatePatrol(self: MatchPlayerState): void {
@@ -1674,7 +1682,7 @@ export class BotController {
         }
       }
     } else if (this.retreat) {
-      desired = this.moveTowards(self, this.goal, dt);
+      desired = this.moveTowards(self, this.goal, dt, colliders);
       if (
         !channeling &&
         this.abilitySlot !== null &&
@@ -1760,11 +1768,17 @@ export class BotController {
       // Sin objetivo visible: ir a la última posición conocida o patrullar.
       // Si un aliado detenido ya ocupa ese destino (por ejemplo, llegó antes
       // a la última posición vista), se descarta en vez de girar a su
-      // alrededor empujándolo.
-      if (!this.retreat && this.goalTakenByAlly(self, players)) {
+      // alrededor empujándolo. Los objetos no cuentan: su recogida es
+      // automática y compartida, y abandonar la poción solo porque un aliado
+      // pasó cerca dejaba al bot marcharse justo antes de cogerla.
+      if (
+        !this.retreat &&
+        this.goalPickup === null &&
+        this.goalTakenByAlly(self, players)
+      ) {
         this.abandonGoal(self);
       }
-      desired = this.moveTowards(self, this.goal, dt);
+      desired = this.moveTowards(self, this.goal, dt, colliders);
       if (!channeling && this.useCommon) this.pulseCommon(snapshot, self, true);
     }
 
@@ -1833,6 +1847,7 @@ export class BotController {
       this.pathTimer = 0;
       const blocker = this.nearestAlly(self, players);
       if (
+        this.goalPickup === null &&
         blocker &&
         Math.hypot(blocker.x - this.goal.x, blocker.z - this.goal.z) <=
           GOAL_OCCUPIED_RADIUS
@@ -2248,14 +2263,39 @@ export class BotController {
     };
   }
 
-  private moveTowards(self: MatchPlayerState, goal: Vec2, dt: number): Vec2 {
+  private moveTowards(
+    self: MatchPlayerState,
+    goal: Vec2,
+    dt: number,
+    colliders?: readonly Collider[]
+  ): Vec2 {
     const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
     if (distance < 0.12) return { x: 0, z: 0 };
     if (distance < 1.6) {
+      // El último tramo hacia una poción se hace en línea recta si los
+      // colliders reales lo permiten. La rejilla de navegación infla los
+      // obstáculos con el radio del cuerpo y puede marcar como bloqueada la
+      // celda del objeto aunque se alcance a pie; A* entonces nunca cierra la
+      // distancia y el bot se queda empujando al lado hasta descartarlo.
+      const directPickup =
+        this.goalPickup !== null &&
+        goal.x === this.goalPickup.x &&
+        goal.z === this.goalPickup.z &&
+        (colliders === undefined ||
+          !segmentBlockedByColliders(
+            self.x,
+            self.z,
+            goal.x,
+            goal.z,
+            colliders
+          ));
       // El steering local solo vale si no hay un obstáculo entre medias. Si lo
       // hay, se rodea con la navegación: atajar en línea recta dejaría al bot
       // empujando contra un muro fino.
-      if (this.nav.lineClear(self.x, self.z, goal.x, goal.z)) {
+      if (
+        directPickup ||
+        this.nav.lineClear(self.x, self.z, goal.x, goal.z)
+      ) {
         this.path = [];
         this.pathTimer = 0;
         return directionTo(self, goal);
