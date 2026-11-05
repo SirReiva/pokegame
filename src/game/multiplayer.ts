@@ -35,14 +35,20 @@ export function normalizePlayerName(name: string, slot: number): string {
 }
 
 /** Nivel de la IA. Compartido entre el lobby, el motor y el controlador. */
-export type BotDifficulty = 'easy' | 'normal' | 'hard';
+export type BotDifficulty = 'easy' | 'normal' | 'hard' | 'expert';
 
-export const BOT_DIFFICULTIES: readonly BotDifficulty[] = ['easy', 'normal', 'hard'];
+export const BOT_DIFFICULTIES: readonly BotDifficulty[] = [
+  'easy',
+  'normal',
+  'hard',
+  'expert'
+];
 
 export const BOT_DIFFICULTY_LABEL: Record<BotDifficulty, string> = {
   easy: 'Fácil',
   normal: 'Normal',
-  hard: 'Difícil'
+  hard: 'Difícil',
+  expert: 'Experto'
 };
 
 /** Límites de KOs que se pueden elegir en el lobby. */

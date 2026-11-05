@@ -442,7 +442,7 @@ El apuntado es **fiel al juego**: `facing` se deriva de la velocidad, igual que 
 
 Los bots también **juegan con los windups**, pero no son infalibles: por cada lanzamiento rival deciden una sola vez si van a castigarlo (con una probabilidad que sube con la dificultad), reaccionan con un tiempo variable y estiman el tiempo restante con cierto error. Por eso a veces ignoran la ventana, reaccionan tarde o eligen una habilidad demasiado lenta. Si un rival visible está preparando un área, un cono o una línea que les va a alcanzar, intentan salir del área o de la línea; si se han comprometido a castigarlo y tienen una habilidad rápida que puede impactar antes de que termine la preparación, la usan para **interrumpir** el lanzamiento (un golpe cancela el `pendingCast`). Si el rival está clavado preparando algo que no les amenaza, pueden priorizarlo como objetivo y preferir ataques instantáneos frente a preparaciones largas. Durante sus propios `windup` móviles siguen reposicionándose, pero no encadenan otra habilidad mientras canalizan.
 
-Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y apenas pondera los tipos; `Normal` y `Difícil` reaccionan antes al windup rival, predicen proyectiles, usan más el instinto común y aprovechan mejor las ventajas de tipo.
+Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo menos y apenas pondera los tipos; `Normal` y `Difícil` reaccionan antes al windup rival, predicen proyectiles, usan más el instinto común y aprovechan mejor las ventajas de tipo. `Experto` apura al máximo esas ventajas: reacciona casi al instante, apenas falla el apuntado y el castigo de windups, y mantiene la distancia de su kit con más precisión.
 
 ## Qué demuestra
 

@@ -118,6 +118,23 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     punishChance: 0.72,
     punishTimingError: 0.1,
     punishReaction: 0.08
+  },
+  expert: {
+    reaction: 0.08,
+    decision: 0.09,
+    aimTolerance: 0.06,
+    visionFactor: 1.08,
+    matchupWeight: 1.6,
+    retreatHp: 0.4,
+    memory: 6,
+    lead: 0.98,
+    commonChance: 1,
+    pathInterval: 0.3,
+    evadeWindow: 0.78,
+    punishBonus: 6,
+    punishChance: 0.9,
+    punishTimingError: 0.04,
+    punishReaction: 0.03
   }
 };
 
