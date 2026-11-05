@@ -1965,13 +1965,17 @@ export class Game {
   private reviveAoeAlly(
     target: AoeFallenAlly,
     fraction: number,
-    def: AbilityDef
+    def: AbilityDef,
+    caster: MatchPlayerState
   ): boolean {
     const player = target.player;
     if (player.alive) return false;
     this.revivePlayer(player, player.x, player.z, fraction);
     this.showHealPopup(player, player.hp);
     this.combatFx.spawnBuff(player.x, player.z, def.color, 1.1);
+    // La XP de revivir premia al lanzador, igual que la de curación: el
+    // aliado recupera su vida, pero el logro de devolverlo al combate es suyo.
+    this.awardXp(caster, 'revive', XP_REWARDS.revive);
     return true;
   }
 
@@ -2599,7 +2603,7 @@ export class Game {
       applyHeal: (target, fraction) =>
         this.applyAoeHeal(target, fraction, hit.def, hit.owner),
       revive: (target, fraction) =>
-        this.reviveAoeAlly(target, fraction, hit.def),
+        this.reviveAoeAlly(target, fraction, hit.def, hit.owner),
       isMatchOver: () => this.matchOver
     };
     (hit.def.aoeEffect ?? defaultAoeEffect)(context);

@@ -158,6 +158,7 @@ La curva es aritmética: cada nivel cuesta 20 XP más que el anterior. El nivel 
 | Daño recibido | 10 XP por barra de vida |
 | Daño bloqueado con Protección | 10 XP por barra absorbida |
 | Curación | 1 XP por cada 15 PV |
+| Aliado revivido (Deseo) | 20 |
 | Objeto recogido | 8 |
 | Cortar una racha de 3+ KOs | 25 |
 | Multibaja (2.ª / 3.ª / 4.ª) | 10 / 15 / 25 |

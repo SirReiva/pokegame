@@ -39,6 +39,7 @@ export type XpSource =
   | 'damage'
   | 'taken'
   | 'healing'
+  | 'revive'
   | 'blocked'
   | 'pickup'
   | 'shutdown'
@@ -54,6 +55,7 @@ export const XP_SOURCE_LABELS: Record<XpSource, string> = {
   damage: 'Daño hecho',
   taken: 'Daño recibido',
   healing: 'Curación',
+  revive: 'Revividos',
   blocked: 'Daño bloqueado',
   pickup: 'Objetos',
   shutdown: 'Cortar rachas',
@@ -78,6 +80,8 @@ export const XP_REWARDS = {
   blockedPerMaxHp: 10,
   /** XP por PV curado (habilidades, Regeneración y pociones). */
   healingPerHp: 1 / 15,
+  /** Aliado caído devuelto a la vida por una habilidad de revivir. */
+  revive: 20,
   /** Objeto recogido. */
   pickup: 8,
   /** Matar a alguien que venía en racha. */
@@ -179,6 +183,7 @@ export function emptyXpBreakdown(): XpBreakdown {
     damage: 0,
     taken: 0,
     healing: 0,
+    revive: 0,
     blocked: 0,
     pickup: 0,
     shutdown: 0,
