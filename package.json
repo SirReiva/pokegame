@@ -27,15 +27,15 @@
     "wouter": "3.13.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.3.3",
+    "@tailwindcss/vite": "4.3.4",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.2",
-    "oxlint": "1.90.0",
-    "tailwindcss": "4.3.3",
+    "@vitejs/plugin-react": "6.2.1",
+    "oxlint": "1.91.0",
+    "tailwindcss": "4.3.4",
     "twlinter": "0.8.0",
     "typescript": "7.0.2",
-    "vite": "8.3.5"
+    "vite": "8.3.6"
   }
 }
