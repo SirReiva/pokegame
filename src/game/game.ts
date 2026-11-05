@@ -151,6 +151,12 @@ export interface GameOptions {
   mapId?: string;
   /** Manifiesto ya descargado por la sesión, para no pedirlo dos veces. */
   manifest?: SpriteManifest;
+  /**
+   * Especies que jugarán la partida. Solo se cargan sus hojas de sprite: el
+   * resto del manifiesto se queda como datos ligeros para el roster y el HUD.
+   * Si no se indica, se cargan todas (comportamiento anterior).
+   */
+  pokemonIds?: readonly string[];
   /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
   koTarget?: number;
 }
@@ -419,12 +425,22 @@ export class Game {
       }
       this.manifest = manifest;
 
-      const total = manifest.pokemon.length * 4;
+      // Solo se descargan las hojas de las especies que van a aparecer en la
+      // partida. Cargar todo el manifiesto retrasaba el inicio y subía a la GPU
+      // texturas que ningún jugador ni bot iba a usar.
+      const requiredIds = this.options.pokemonIds
+        ? new Set(this.options.pokemonIds)
+        : null;
+      const entries = requiredIds
+        ? manifest.pokemon.filter((entry) => requiredIds.has(entry.id))
+        : manifest.pokemon;
+
+      const total = entries.length * 4;
       let loaded = 0;
       this.callbacks.onProgress({ loaded, total, label: 'Cargando sprites' });
 
       await Promise.all(
-        manifest.pokemon.map(async (entry) => {
+        entries.map(async (entry) => {
           const asset = await loadSpriteAsset(this.app.graphicsDevice, entry);
           this.assets.set(entry.id, asset);
           loaded += 4;

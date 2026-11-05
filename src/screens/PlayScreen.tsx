@@ -120,6 +120,13 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
     if (!canvas) return;
     let disposed = false;
 
+    // El motor solo necesita los sprites de las especies que juegan esta
+    // partida. Se deduplican porque dos jugadores pueden elegir el mismo
+    // Pokémon y su hoja se comparte.
+    const pokemonIds = [
+      ...new Set(configsRef.current.map((config) => config.pokemonId))
+    ];
+
     const game = new Game(
       canvas,
       {
@@ -151,7 +158,7 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
           if (!disposed) handlersRef.current?.onCountdown(remaining);
         }
       },
-      { mapId, manifest, koTarget }
+      { mapId, manifest, koTarget, pokemonIds }
     );
 
     gameRef.current = game;
