@@ -154,6 +154,21 @@ const BACK_OFF_SECONDS = 0.9;
 /** Distancia que se retrocede por el rastro para salir de un bloqueo. */
 const BACK_OFF_DISTANCE = 1.6;
 
+/** Velocidad real por debajo de la cual un aliado cuenta como detenido. */
+const ALLY_STILL_SPEED = 0.25;
+/** Tiempo que un aliado debe permanecer casi inmóvil para considerarlo parado. */
+const ALLY_STILL_SECONDS = 0.35;
+/** Radio alrededor del destino en el que un aliado detenido lo ocupa. */
+const GOAL_OCCUPIED_RADIUS = 0.9;
+/** Distancia al destino por debajo de la cual ya se considera alcanzado. */
+const GOAL_ARRIVE_EPSILON = 0.5;
+/** Radio en el que un aliado cercano puede estar bloqueando el avance. */
+const ORBIT_ALLY_RADIUS = 2.2;
+/** Tiempo avanzando sin acercarse al destino que delata un giro alrededor de un aliado. */
+const ORBIT_PROGRESS_SECONDS = 1.1;
+/** Mejora de distancia que cuenta como progreso real hacia el destino. */
+const ORBIT_PROGRESS_GAIN = 0.35;
+
 /**
  * Penalización para un rival inmune a todo el daño del bot. No lo convierte en
  * objetivo mientras haya cualquier otra pelea posible.
@@ -364,6 +379,15 @@ export class BotController {
   /** Aliado al que se le está cediendo el paso y hasta cuándo. */
   private yieldSource: MatchPlayerState | null = null;
   private yieldUntil = 0;
+  /** Posición anterior de cada aliado para distinguir avance real de intención. */
+  private readonly allyMotion = new Map<
+    number,
+    { x: number; z: number; stillFor: number }
+  >();
+  /** Destino con el que se está midiendo el progreso y mejor distancia vista. */
+  private progressGoal: Vec2 = { x: Infinity, z: Infinity };
+  private progressDistance = Infinity;
+  private progressTimer = 0;
 
   constructor(
     slot: number,
@@ -396,6 +420,7 @@ export class BotController {
       return { ...IDLE_INPUT };
     }
 
+    this.updateAllyMotion(dt, self, players);
     this.recordTrail(dt, self);
     this.updateTarget(dt, self, players, colliders);
     this.updateThreat(self);
@@ -483,6 +508,10 @@ export class BotController {
     this.backOffTimer = 0;
     this.yieldSource = null;
     this.yieldUntil = 0;
+    this.allyMotion.clear();
+    this.progressGoal = { x: Infinity, z: Infinity };
+    this.progressDistance = Infinity;
+    this.progressTimer = 0;
   }
 
   /**
@@ -524,6 +553,167 @@ export class BotController {
     this.trailTimer = 0.15;
     this.trail.push({ x: self.x, z: self.z });
     if (this.trail.length > 24) this.trail.shift();
+  }
+
+  /**
+   * Guarda cuánto se ha movido de verdad cada aliado. `vx`/`vz` es la
+   * intención de movimiento: un bot atascado contra una pared o contra otro
+   * cuerpo puede tenerlas altas sin desplazarse. Sin esta distinción, sus
+   * compañeros creen que se les echa encima y ceden el paso en bucle.
+   */
+  private updateAllyMotion(
+    dt: number,
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): void {
+    const step = Math.max(dt, 0.0001);
+    for (const other of players) {
+      if (other === self || other.team !== self.team) continue;
+      const previous = this.allyMotion.get(other.slot);
+      if (!previous) {
+        this.allyMotion.set(other.slot, {
+          x: other.x,
+          z: other.z,
+          stillFor: 0
+        });
+        continue;
+      }
+      const moved = Math.hypot(other.x - previous.x, other.z - previous.z);
+      previous.stillFor =
+        other.alive && moved < ALLY_STILL_SPEED * step
+          ? previous.stillFor + dt
+          : 0;
+      previous.x = other.x;
+      previous.z = other.z;
+    }
+  }
+
+  /** `true` si el aliado lleva un rato sin desplazarse realmente. */
+  private isAllyStill(other: MatchPlayerState): boolean {
+    const motion = this.allyMotion.get(other.slot);
+    return motion !== undefined && motion.stillFor >= ALLY_STILL_SECONDS;
+  }
+
+  /** Distancia al aliado vivo más cercano, o `Infinity` si no hay ninguno. */
+  private nearestAllyDistance(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): number {
+    let nearest = Infinity;
+    for (const other of players) {
+      if (other === self || !other.alive || other.team !== self.team) continue;
+      nearest = Math.min(
+        nearest,
+        Math.hypot(other.x - self.x, other.z - self.z)
+      );
+    }
+    return nearest;
+  }
+
+  /**
+   * ¿Otro aliado ya llegó y se quedó parado en el destino de este bot? Varios
+   * bots que persiguen la misma última posición vista acaban apilados; el que
+   * llega último debe buscar otro objetivo, no orbitar al primero.
+   */
+  private goalTakenByAlly(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): boolean {
+    const selfDistance = Math.hypot(
+      this.goal.x - self.x,
+      this.goal.z - self.z
+    );
+    if (selfDistance <= GOAL_ARRIVE_EPSILON) return false;
+
+    for (const other of players) {
+      if (other === self || !other.alive || other.team !== self.team) continue;
+      if (!this.isAllyStill(other)) continue;
+      const distance = Math.hypot(
+        other.x - this.goal.x,
+        other.z - this.goal.z
+      );
+      if (distance <= GOAL_OCCUPIED_RADIUS && distance < selfDistance - 0.15) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Descarta el destino ocupado y vuelve a patrullar por otra zona. */
+  private abandonGoal(self: MatchPlayerState): void {
+    this.avoidCurrentPickupGoal();
+    this.lastSeen = null;
+    this.patrolTimer = 0;
+    this.path = [];
+    this.pathTimer = 0;
+    this.resetProgress();
+    this.updatePatrol(self);
+  }
+
+  /**
+   * Detecta que el bot avanza en círculo alrededor de un aliado sin acercarse
+   * a su destino. Solo cuenta si la línea hasta el destino está despejada y
+   * hay un aliado cerca: así no confunde una ruta larga que rodea una pared
+   * con una órbita.
+   */
+  private orbitStalled(
+    dt: number,
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    steeringToGoal: boolean,
+    wantsToMove: boolean,
+    casting: boolean
+  ): boolean {
+    if (!steeringToGoal || casting || !wantsToMove) {
+      this.resetProgress();
+      return false;
+    }
+
+    const goalDistance = Math.hypot(
+      this.goal.x - self.x,
+      this.goal.z - self.z
+    );
+    if (goalDistance <= GOAL_ARRIVE_EPSILON) {
+      this.resetProgress();
+      return false;
+    }
+
+    const nearAlly = this.nearestAllyDistance(self, players) <= ORBIT_ALLY_RADIUS;
+    if (
+      !nearAlly ||
+      !this.nav.lineClear(self.x, self.z, this.goal.x, this.goal.z)
+    ) {
+      this.resetProgress();
+      return false;
+    }
+
+    const goalMoved = Math.hypot(
+      this.goal.x - this.progressGoal.x,
+      this.goal.z - this.progressGoal.z
+    );
+    if (goalMoved > 0.5) {
+      this.progressGoal = { ...this.goal };
+      this.progressDistance = goalDistance;
+      this.progressTimer = 0;
+      return false;
+    }
+
+    if (goalDistance < this.progressDistance - ORBIT_PROGRESS_GAIN) {
+      this.progressDistance = goalDistance;
+      this.progressTimer = 0;
+      return false;
+    }
+
+    this.progressTimer += dt;
+    if (this.progressTimer < ORBIT_PROGRESS_SECONDS) return false;
+    this.resetProgress();
+    return true;
+  }
+
+  private resetProgress(): void {
+    this.progressGoal = { x: Infinity, z: Infinity };
+    this.progressDistance = Infinity;
+    this.progressTimer = 0;
   }
 
   private updateTarget(
@@ -1394,6 +1584,10 @@ export class BotController {
     const targetIsVisible =
       target !== null && this.targetVisible && target.alive && this.engageTarget;
     const channeling = self.pendingCast !== null;
+    // El destino solo guía el movimiento cuando no hay combate ni amenaza:
+    // en esos casos el bot orbita al rival a propósito y no debe considerarse
+    // un atasco.
+    const steeringToGoal = this.threat === null && (this.retreat || !targetIsVisible);
     let desired: Vec2 = { x: 0, z: 0 };
     let casting = false;
 
@@ -1513,10 +1707,17 @@ export class BotController {
       }
     } else {
       // Sin objetivo visible: ir a la última posición conocida o patrullar.
+      // Si un aliado detenido ya ocupa ese destino (por ejemplo, llegó antes
+      // a la última posición vista), se descarta en vez de girar a su
+      // alrededor empujándolo.
+      if (!this.retreat && this.goalTakenByAlly(self, players)) {
+        this.abandonGoal(self);
+      }
       desired = this.moveTowards(self, this.goal, dt);
       if (!channeling && this.useCommon) this.pulseCommon(snapshot, self, true);
     }
 
+    const steeringOverride = this.backOffTimer > 0 || this.detourTimer > 0;
     desired = this.addSeparation(self, players, desired);
     if (this.backOffTimer > 0) {
       this.backOffTimer = Math.max(0, this.backOffTimer - dt);
@@ -1559,6 +1760,29 @@ export class BotController {
       }
     } else if (moved > Math.max(0.004, expected * 0.5) || casting || !wantsToMove) {
       this.stuckTimer = 0;
+    }
+
+    // Un aliado puede dejar al bot girando a su alrededor a toda velocidad: se
+    // mueve, así que no cuenta como bloqueo físico, pero no se acerca al
+    // destino. En ese caso se deshace el rastro para romper la órbita.
+    if (
+      !steeringOverride &&
+      !blocked &&
+      this.orbitStalled(
+        dt,
+        self,
+        players,
+        steeringToGoal,
+        wantsToMove,
+        casting
+      )
+    ) {
+      this.stuckCount = 0;
+      this.path = [];
+      this.pathTimer = 0;
+      this.backOffGoal = this.trailBackOff(self);
+      this.backOffTimer = BACK_OFF_SECONDS;
+      desired = directionTo(self, this.backOffGoal);
     }
 
     this.applyMovement(snapshot, self, desired);
@@ -2041,9 +2265,13 @@ export class BotController {
       if (ahead <= 0.05 || distance > ALLY_AVOID_RADIUS) continue;
 
       // Choque frontal contra un aliado con prioridad: se aparta hacia atrás
-      // en diagonal para abrirle el paso en vez de empujarse mutuamente.
+      // en diagonal para abrirle el paso en vez de empujarse mutuamente. Solo
+      // cuenta si el aliado se mueve de verdad: uno atascado conserva `vx`/`vz`
+      // altas y, si no se comprueba el avance real, provoca una cesión infinita.
+      const still = this.isAllyStill(other);
       const otherSpeed = Math.hypot(other.vx, other.vz);
       const approaching =
+        !still &&
         otherSpeed > 0.2 &&
         (other.vx * dirX + other.vz * dirZ) / otherSpeed < -0.35;
       if (
@@ -2078,7 +2306,12 @@ export class BotController {
     }
 
     const active = this.yieldSource;
-    if (active && active.alive && this.clock < this.yieldUntil) {
+    if (
+      active &&
+      active.alive &&
+      !this.isAllyStill(active) &&
+      this.clock < this.yieldUntil
+    ) {
       const dx = self.x - active.x;
       const dz = self.z - active.z;
       const distance = Math.hypot(dx, dz);
