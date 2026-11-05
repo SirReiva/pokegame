@@ -471,8 +471,6 @@ export class FogMask {
   /** Lienzo auxiliar donde se compone la visibilidad de cada observador. */
   private readonly observerCanvas: HTMLCanvasElement;
   private readonly observerContext: CanvasRenderingContext2D;
-  /** Píxeles de la máscara de visión. */
-  private visibilityPixels: Uint8ClampedArray | null = null;
   /** Observadores del último dibujo, para no redibujar la máscara sin cambios. */
   private readonly lastCircles: VisionCircle[] = [];
   /** Transformación mundo -> píxel de la máscara, precalculada. */
@@ -512,14 +510,10 @@ export class FogMask {
     this.maskCanvas = document.createElement('canvas');
     this.maskCanvas.width = MASK_SIZE;
     this.maskCanvas.height = MASK_SIZE;
-    // La máscara se lee con `getImageData` en cada recompuesto para resolver la
-    // visibilidad de actores y objetos. Sin esta pista, Chrome la mantiene en
-    // GPU y cada lectura fuerza un readback síncrono de ~10 ms. Con el canvas
-    // en memoria de CPU, la lectura es barata; a cambio, el dibujado 2D de una
-    // textura de 192×192 es algo más lento, pero se hace a 20 Hz como máximo.
-    const context = this.maskCanvas.getContext('2d', {
-      willReadFrequently: true
-    });
+    // La máscara solo se dibuja y se sube como textura; la visibilidad de
+    // actores y objetos se resuelve geométricamente en `Game`. Por eso no se
+    // lee con `getImageData` ni necesita `willReadFrequently`.
+    const context = this.maskCanvas.getContext('2d');
     if (!context) throw new Error('No se pudo crear el contexto 2D de la niebla');
     this.maskContext = context;
     // Antes del primer update la máscara es blanca (nada oculto): así el decal
@@ -585,7 +579,7 @@ export class FogMask {
   /**
    * Recompone la máscara si cambió la posición o el rango de algún observador.
    * Se limita la frecuencia: el borde suave de pantalla lo sigue calculando
-   * `FogView` cada frame, y esta máscara solo alimenta sombras y visibilidad.
+   * `FogView` cada frame, y esta máscara solo alimenta el decal de sombra.
    */
   update(circles: readonly VisionCircle[], dt: number): void {
     this.timeSinceUpdate += dt;
@@ -597,21 +591,6 @@ export class FogMask {
     this.updateMask(circles);
     this.timeSinceUpdate = 0;
     this.dirty = false;
-  }
-
-  /**
-   * ¿Está el punto dentro de la zona que la niebla pinta como visible? Usa la
-   * misma máscara que el decal (círculos del equipo, sombras de separadores y
-   * árboles). Sirve para que los objetos se muestren exactamente donde la
-   * niebla deja ver el suelo.
-   */
-  isVisibleAt(x: number, z: number): boolean {
-    if (!this.visibilityPixels) return false;
-    const px = Math.floor(x * this.maskScaleX + this.maskOffsetX);
-    const py = Math.floor(z * this.maskScaleY + this.maskOffsetY);
-    if (px < 0 || px >= MASK_SIZE || py < 0 || py >= MASK_SIZE) return false;
-    const offset = (py * MASK_SIZE + px) * 4;
-    return (this.visibilityPixels[offset] ?? 0) >= 128;
   }
 
   private circlesChanged(circles: readonly VisionCircle[]): boolean {
@@ -710,15 +689,6 @@ export class FogMask {
     }
 
     context.globalCompositeOperation = 'source-over';
-
-    // Píxeles de la máscara de visión, para que la visibilidad de los objetos
-    // use la misma zona que pinta el decal.
-    this.visibilityPixels = context.getImageData(
-      0,
-      0,
-      MASK_SIZE,
-      MASK_SIZE
-    ).data;
 
     this.texture.upload();
   }
