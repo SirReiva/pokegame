@@ -1937,7 +1937,7 @@ registerAbility(
     .cooldown(13)
     .range(0)
     .radius(3.2)
-    .windup(1.5, { mode: 'once' })
+    .windup(1.2, { mode: 'once' })
     .cast(0.65)
     .animation('twirl')
     .area('recovery', 'instant', 0.8)
@@ -1948,7 +1948,7 @@ registerAbility(
     })
     .color(156, 224, 112)
     .description(
-      'Pide un deseo: se concentra 1,5 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si le golpean durante la concentración, se cancela.'
+      'Pide un deseo: se concentra 1,2 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si le golpean durante la concentración, se cancela.'
     )
 );
 
