@@ -8723,8 +8723,13 @@ export class CombatFx {
     const vortex = new pc.Entity('cyclone-vortex');
     root.addChild(vortex);
 
-    const ribbonMaterial = this.createVertexColorMaterial(0.26);
-    const ribbonBrightMaterial = this.createVertexColorMaterial(0.2);
+    // Capas de cintas a distintas alturas: el vórtice tiene volumen en Y.
+    const ribbonMaterials = [
+      this.createVertexColorMaterial(0.28),
+      this.createVertexColorMaterial(0.24),
+      this.createVertexColorMaterial(0.2),
+      this.createVertexColorMaterial(0.16)
+    ];
     const puffMaterial = this.createWaterMaterial(tintColor(color, 0.84), 0.2);
     const puffShadeMaterial = this.createWaterMaterial(
       tintColor(color, 0.58),
@@ -8737,8 +8742,7 @@ export class CombatFx {
       0.16
     );
     const materials = [
-      ribbonMaterial,
-      ribbonBrightMaterial,
+      ...ribbonMaterials,
       puffMaterial,
       puffShadeMaterial,
       eyeMaterial,
@@ -8764,24 +8768,30 @@ export class CombatFx {
     outerRing.setLocalScale(radius * 2, 1, radius * 2);
 
     const arms = 3;
-    for (let armIndex = 0; armIndex < arms; armIndex++) {
-      const arm = this.createEntity(
-        this.cycloneArmMeshes[armIndex % this.cycloneArmMeshes.length],
-        [ribbonMaterial],
-        vortex
-      );
-      arm.setLocalEulerAngles(0, (armIndex / arms) * 360, 0);
-      arm.setLocalScale(radius, 1, radius);
-
-      // Segunda capa más alta y girada: da volumen de nube al brazo.
-      const upperArm = this.createEntity(
-        this.cycloneArmMeshes[(armIndex + 1) % this.cycloneArmMeshes.length],
-        [ribbonBrightMaterial],
-        vortex
-      );
-      upperArm.setLocalEulerAngles(0, (armIndex / arms) * 360 + 24, 0);
-      upperArm.setLocalPosition(0, 0.12, 0);
-      upperArm.setLocalScale(radius * 0.84, 1, radius * 0.84);
+    const ribbonLayers = [
+      { y: 0.02, scale: 0.86, twist: 0 },
+      { y: 0.32, scale: 0.94, twist: 14 },
+      { y: 0.64, scale: 1, twist: 28 },
+      { y: 0.94, scale: 1.02, twist: 42 }
+    ];
+    for (let layerIndex = 0; layerIndex < ribbonLayers.length; layerIndex++) {
+      const layer = ribbonLayers[layerIndex];
+      for (let armIndex = 0; armIndex < arms; armIndex++) {
+        const arm = this.createEntity(
+          this.cycloneArmMeshes[
+            (armIndex + layerIndex) % this.cycloneArmMeshes.length
+          ],
+          [ribbonMaterials[layerIndex]],
+          vortex
+        );
+        arm.setLocalEulerAngles(
+          0,
+          (armIndex / arms) * 360 + layer.twist,
+          0
+        );
+        arm.setLocalPosition(0, layer.y, 0);
+        arm.setLocalScale(radius * layer.scale, 1, radius * layer.scale);
+      }
     }
 
     // Nubes volumétricas a lo largo de los brazos y en la banda exterior.
@@ -8800,7 +8810,8 @@ export class CombatFx {
       distance: number,
       y: number,
       size: number,
-      shade: boolean
+      shade: boolean,
+      tall: boolean
     ): void => {
       const puff = this.createEntity(
         this.sphereMesh,
@@ -8808,7 +8819,7 @@ export class CombatFx {
         vortex
       );
       const sx = size * (1.35 + Math.random() * 0.35);
-      const sy = size * (0.55 + Math.random() * 0.3);
+      const sy = size * (tall ? 1.4 + Math.random() * 0.7 : 0.55 + Math.random() * 0.3);
       const sz = size * (1.35 + Math.random() * 0.35);
       const px = Math.cos(angle) * distance;
       const pz = Math.sin(angle) * distance;
@@ -8829,22 +8840,54 @@ export class CombatFx {
     const turns = 1.5;
     for (let armIndex = 0; armIndex < arms; armIndex++) {
       const baseAngle = (armIndex / arms) * Math.PI * 2;
-      for (let puffIndex = 0; puffIndex < 12; puffIndex++) {
+      for (let puffIndex = 0; puffIndex < 10; puffIndex++) {
         const t =
-          0.16 + (puffIndex / 11) * 0.84 + (Math.random() - 0.5) * 0.03;
+          0.16 + (puffIndex / 9) * 0.84 + (Math.random() - 0.5) * 0.03;
         const angle = baseAngle + t * turns * Math.PI * 2;
         const distance = (0.17 + 0.76 * t) * radius;
-        const y = 0.2 + 0.1 * t + Math.random() * 0.1;
+        const y =
+          0.14 + Math.random() * 0.98 + 0.12 * (puffIndex / 9);
         const size = radius * (0.05 + Math.random() * 0.05);
-        addPuff(angle, distance, y, size, puffIndex % 3 === 0);
+        addPuff(
+          angle,
+          distance,
+          y,
+          size,
+          puffIndex % 3 === 0,
+          puffIndex % 2 === 0
+        );
       }
     }
-    for (let index = 0; index < 24; index++) {
-      const angle = (index / 24) * Math.PI * 2 + Math.random() * 0.3;
+    for (let index = 0; index < 16; index++) {
+      const angle = (index / 16) * Math.PI * 2 + Math.random() * 0.3;
       const distance = radius * (0.8 + Math.random() * 0.2);
-      const y = 0.12 + Math.random() * 0.14;
+      const y = 0.1 + Math.random() * 0.28;
       const size = radius * (0.06 + Math.random() * 0.06);
-      addPuff(angle, distance, y, size, index % 2 === 0);
+      addPuff(angle, distance, y, size, index % 2 === 0, false);
+    }
+    for (let index = 0; index < 10; index++) {
+      const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.4;
+      const distance = radius * (0.62 + Math.random() * 0.25);
+      const y = 0.55 + Math.random() * 0.45;
+      const size = radius * (0.06 + Math.random() * 0.05);
+      addPuff(angle, distance, y, size, index % 2 === 0, true);
+    }
+    // Muro del ojo: dos anillos de nubes altas alrededor del centro.
+    for (let ring = 0; ring < 2; ring++) {
+      const wallRadius = radius * (0.28 + ring * 0.04);
+      const wallY = 0.28 + ring * 0.5;
+      for (let index = 0; index < 9; index++) {
+        const angle = (index / 9) * Math.PI * 2 + ring * 0.35;
+        const size = radius * (0.045 + Math.random() * 0.03);
+        addPuff(
+          angle,
+          wallRadius,
+          wallY + Math.random() * 0.08,
+          size,
+          false,
+          true
+        );
+      }
     }
 
     let time = 0;
@@ -8854,13 +8897,16 @@ export class CombatFx {
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
       const envelope = Math.min(fadeIn, fadeOut);
       const grow = 0.86 + 0.14 * Math.min(1, time / 0.35);
+      const verticalBreath = 0.92 + 0.08 * Math.sin(time * 2.2);
 
-      // El vórtice gira y crece; las nubes respiran encima.
+      // El vórtice gira, crece y respira en vertical.
       vortex.setLocalEulerAngles(0, time * 300, 0);
-      vortex.setLocalScale(grow, 1, grow);
+      vortex.setLocalScale(grow, verticalBreath, grow);
 
-      ribbonMaterial.opacity = 0.24 * envelope;
-      ribbonBrightMaterial.opacity = 0.18 * envelope;
+      const ribbonOpacity = [0.26, 0.22, 0.18, 0.14];
+      for (let index = 0; index < ribbonMaterials.length; index++) {
+        ribbonMaterials[index].opacity = ribbonOpacity[index] * envelope;
+      }
       puffMaterial.opacity = (0.18 + Math.sin(time * 4) * 0.03) * envelope;
       puffShadeMaterial.opacity =
         (0.14 + Math.sin(time * 3.4 + 1) * 0.025) * envelope;
@@ -8872,7 +8918,8 @@ export class CombatFx {
       outerRing.setLocalScale(ringScale, 1, ringScale);
 
       for (const puff of puffs) {
-        const bob = Math.sin(time * 2.6 + puff.phase) * 0.035;
+        const bob =
+          Math.sin(time * 2.6 + puff.phase) * (0.03 + puff.y * 0.012);
         const pulse = 0.9 + Math.sin(time * 3.2 + puff.phase) * 0.1;
         puff.entity.setLocalPosition(puff.x, puff.y + bob, puff.z);
         puff.entity.setLocalScale(
