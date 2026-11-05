@@ -13,6 +13,29 @@ import * as pc from 'playcanvas';
 import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilities';
 import { CONFIG, DEG } from './config';
 import { attachProjectileHitbox } from './hitboxDebug';
+import {
+  applyVertexEffectShader,
+  EffectBatch,
+  type EffectBatchInstance,
+  MOTION_BLIZZARD_CRYSTALS,
+  MOTION_BLIZZARD_PUFFS,
+  MOTION_CYCLONE_PUFFS,
+  MOTION_FIRE_WHIRL_FLAMES,
+  MOTION_FISSURE_BRANCHES,
+  MOTION_FISSURE_PEBBLES,
+  MOTION_FISSURE_SLABS,
+  MOTION_FISSURE_SPIKES,
+  MOTION_GRASS_LEAVES,
+  MOTION_HEAT_BLADES,
+  MOTION_HEAT_EMBERS,
+  MOTION_HEAT_FLAMES,
+  MOTION_PSYCHIC_SHARDS,
+  MOTION_PSYCHIC_WAVE,
+  MOTION_SNOWFLAKES,
+  MOTION_SPORE_SWARM,
+  MOTION_STATIC,
+  MOTION_WATER_JETS
+} from './effectBatch';
 import { createDustCanvas, createFlameCanvas, createFrostCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
 /** Opacidad base del arco melee según el estilo de impacto. */
@@ -1046,6 +1069,11 @@ export class CombatFx {
   private readonly dustTexture: pc.Texture;
   private readonly telegraphs = new Set<GroundTelegraph>();
   /**
+   * Mallas unitarias reutilizables (rayos, aspas). Se crean una vez y se
+   * escalan por entidad, así un casteo no genera geometría ni sube buffers.
+   */
+  private readonly meshCache = new Map<string, pc.Mesh>();
+  /**
    * Duración del efecto visual de cada haz. El carril del suelo se mantiene
    * vivo lo que dura el propio haz para que ambos desaparezcan a la vez.
    */
@@ -1924,6 +1952,18 @@ export class CombatFx {
     entity.setLocalPosition(x, y, z);
     parent.addChild(entity);
     return entity;
+  }
+
+  /** Devuelve una malla compartida y la crea solo la primera vez. */
+  private cachedMesh(key: string, create: () => pc.Mesh): pc.Mesh {
+    const cached = this.meshCache.get(key);
+    if (cached) return cached;
+    const mesh = create();
+    // La caché mantiene una referencia propia para que el MeshInstance no la
+    // destruya al terminar el efecto.
+    mesh.incRefCount();
+    this.meshCache.set(key, mesh);
+    return mesh;
   }
 
   private createEntity(
@@ -3175,11 +3215,7 @@ export class CombatFx {
 
     const psychicWaves: {
       entity: pc.Entity;
-      mesh: pc.Mesh;
-      positions: number[];
       material: pc.StandardMaterial;
-      segments: number;
-      halfAngle: number;
       delay: number;
       travel: number;
       opacity: number;
@@ -3210,9 +3246,9 @@ export class CombatFx {
         );
         waveMaterial.blendType = pc.BLEND_NORMAL;
         waveMaterial.opacity = 0;
-        waveMaterial.update();
+        applyVertexEffectShader(waveMaterial, MOTION_PSYCHIC_WAVE);
         materials.push(waveMaterial);
-        const { mesh: waveMesh, positions: wavePositions } = createArcBandMesh(
+        const { mesh: waveMesh } = createArcBandMesh(
           this.device,
           0.94,
           1,
@@ -3225,11 +3261,7 @@ export class CombatFx {
         wave.setLocalScale(0.001, 1, 0.001);
         psychicWaves.push({
           entity: wave,
-          mesh: waveMesh,
-          positions: wavePositions,
           material: waveMaterial,
-          segments,
-          halfAngle,
           delay: index * 0.07,
           travel: 0.42,
           opacity: highlight ? 0.9 : 0.75,
@@ -3385,23 +3417,16 @@ export class CombatFx {
     }[] = [];
     let cloudMaterial: pc.StandardMaterial | null = null;
     let cloudHotMaterial: pc.StandardMaterial | null = null;
-    const spores: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      height: number;
-      delay: number;
-      travel: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    let sporeBatch: EffectBatch | null = null;
     if (style === 'spore') {
       // Rocío en abanico: cada partícula nace en el vértice del cono y viaja
-      // hacia un ángulo distinto del borde, cubriendo toda la abertura.
+      // hacia un ángulo distinto del borde, cubriendo toda la abertura. El
+      // enjambre entero se resuelve en un solo lote instanciado.
       effectDuration = 1;
       material.opacity = 0.28;
       const sporeMaterial = this.createSporeMaterial([92, 158, 70], 0.92);
       materials.push(sporeMaterial);
+      const sporeInstances: EffectBatchInstance[] = [];
       const sporeCount = 104;
       for (let index = 0; index < sporeCount; index++) {
         const angle =
@@ -3409,25 +3434,29 @@ export class CombatFx {
           (index / (sporeCount - 1)) * halfAngle * 1.9 +
           (Math.random() - 0.5) * 0.03;
         const size = 0.055 + Math.random() * 0.07;
-        const entitySpore = this.createLeaf(entity, sporeMaterial, {
-          x: 0,
-          y: 0.55,
-          z: 0,
-          width: size,
-          height: size,
-          yaw: Math.random() * 360
-        });
-        spores.push({
-          entity: entitySpore,
-          angle,
-          distance: range * (0.6 + Math.random() * 0.4),
-          height: 0.18 + Math.random() * 0.62,
-          delay: Math.random() * 0.16,
-          travel: 0.42 + Math.random() * 0.28,
-          size,
-          phase: Math.random() * Math.PI * 2
+        sporeInstances.push({
+          anim0: [
+            angle,
+            range * (0.6 + Math.random() * 0.4),
+            0.18 + Math.random() * 0.62,
+            Math.random() * 0.16
+          ],
+          anim1: [
+            0.42 + Math.random() * 0.28,
+            size,
+            Math.random() * Math.PI * 2,
+            0
+          ]
         });
       }
+      sporeBatch = new EffectBatch({
+        app: this.app,
+        parent: entity,
+        mesh: this.leafMesh,
+        material: sporeMaterial,
+        instances: sporeInstances,
+        motion: MOTION_SPORE_SWARM
+      });
     }
     if (style === 'poison') {
       // Nube violeta: puffs esféricos que avanzan por el cono y motas aditivas
@@ -3541,34 +3570,7 @@ export class CombatFx {
         );
       }
 
-      for (const spore of spores) {
-        const local = Math.min(
-          1,
-          Math.max(0, (time - spore.delay) / spore.travel)
-        );
-        const ease = 1 - (1 - local) * (1 - local);
-        const distance = spore.distance * ease;
-        const angle = spore.angle + Math.sin(time * 2.4 + spore.phase) * 0.035;
-        const y =
-          0.55 +
-          (spore.height - 0.55) * ease +
-          Math.sin(local * Math.PI) * 0.18;
-        spore.entity.setLocalPosition(
-          Math.sin(angle) * distance,
-          y,
-          Math.cos(angle) * distance
-        );
-        const fade =
-          Math.min(1, local / 0.1) * Math.min(1, (1 - local) / 0.15);
-        const sporeScale =
-          spore.size * (0.7 + ease * 0.7) * Math.max(0, fade);
-        spore.entity.setLocalScale(sporeScale, sporeScale, sporeScale);
-        spore.entity.setLocalEulerAngles(
-          Math.sin(time * 2.1 + spore.phase) * 18,
-          time * 150 + spore.phase * 40,
-          Math.cos(time * 1.8 + spore.phase) * 18
-        );
-      }
+      sporeBatch?.setTime(time);
 
       for (const wave of psychicWaves) {
         const local = Math.min(
@@ -3584,29 +3586,12 @@ export class CombatFx {
             : Math.min(1, local / 0.12) * Math.min(1, (1 - local) / 0.3);
         wave.material.opacity = wave.opacity * Math.max(0, fade);
 
-        if (local > 0) {
-          // Cinta tridimensional: cada vértice sube y baja en Y según su
-          // ángulo dentro del arco, con un desfase entre borde interior y
-          // exterior para que la onda se retuerza.
-          const positions = wave.positions;
-          const vertices = positions.length / 3;
-          for (let vertex = 0; vertex < vertices; vertex++) {
-            const angleIndex = Math.floor(vertex / 2);
-            const angle =
-              -wave.halfAngle +
-              (2 * wave.halfAngle * angleIndex) / wave.segments;
-            const edgePhase = vertex % 2 === 0 ? 0 : 0.9;
-            positions[vertex * 3 + 1] =
-              Math.sin(
-                angle * wave.ripple +
-                  time * 11 +
-                  wave.phase +
-                  edgePhase
-              ) * wave.amplitude;
-          }
-          wave.mesh.setPositions(positions);
-          wave.mesh.update();
-        }
+        // La ondulación de la cinta vive en el vertex shader: solo se suben
+        // tres uniformes por onda en vez de reescribir la malla cada frame.
+        wave.material.setParameter('uEffectTime', time);
+        wave.material.setParameter('uEffectParam0', wave.phase);
+        wave.material.setParameter('uEffectParam1', wave.amplitude);
+        wave.material.setParameter('uEffectParam2', wave.ripple);
 
         wave.entity.setLocalPosition(
           0,
@@ -3695,15 +3680,21 @@ export class CombatFx {
     const segments = Math.max(10, Math.round(length * 2));
     const strands: pc.Entity[] = [];
     for (let index = 0; index < 2; index++) {
-      const mesh = createLightningMesh(
-        this.device,
-        length,
-        strandWidth,
-        segments,
-        3000 + index * 7919
+      // Malla unitaria cacheada: el largo se aplica con la escala Z.
+      const mesh = this.cachedMesh(
+        `lightning:${strandWidth.toFixed(3)}:${segments}:${index}`,
+        () =>
+          createLightningMesh(
+            this.device,
+            1,
+            strandWidth,
+            segments,
+            3000 + index * 7919
+          )
       );
       const strand = this.createEntity(mesh, [strandMaterial], root);
       strand.setLocalPosition(0, 0, length / 2);
+      strand.setLocalScale(1, 1, length);
       strands.push(strand);
     }
 
@@ -3718,7 +3709,7 @@ export class CombatFx {
       const reveal = 1 - (1 - advance) * (1 - advance);
       for (const strand of strands) {
         strand.setLocalPosition(0, 0, (length / 2) * reveal);
-        strand.setLocalScale(1, 1, Math.max(0.02, reveal));
+        strand.setLocalScale(1, 1, Math.max(0.02, length * reveal));
       }
       core.setLocalPosition(0, 0, (length / 2) * reveal);
       core.setLocalScale(coreWidth, coreWidth, length * Math.max(0.02, reveal));
@@ -4746,16 +4737,11 @@ export class CombatFx {
       color
     );
 
-    const leaves: {
-      entity: pc.Entity;
-      angle: number;
-      radiusFactor: number;
-      phase: number;
-      rise: number;
-      spin: number;
-      size: number;
-      yaw: number;
-    }[] = [];
+    // El enjambre entero se dibuja con dos lotes instanciados (hojas normales y
+    // hojas calientes). La posición, el giro y el fundido se calculan en el
+    // vertex shader: la CPU no recorre 120 entidades por frame.
+    const leafInstances: EffectBatchInstance[] = [];
+    const hotLeafInstances: EffectBatchInstance[] = [];
     const leafCount = 120;
     for (let index = 0; index < leafCount; index++) {
       // Todas las hojas entran en el giro: se reparten por todo el radio y
@@ -4764,29 +4750,38 @@ export class CombatFx {
       const radiusFactor = 0.32 + Math.sqrt(Math.random()) * 0.68;
       const size = radius * (0.045 + Math.random() * 0.05);
       const yaw = Math.random() * 360;
-      const entity = this.createLeaf(
-        root,
-        index % 5 === 0 ? hotLeafMaterial : leafMaterial,
-        {
-          x: Math.cos(angle) * radius * radiusFactor * 0.2,
-          y: 0.05,
-          z: Math.sin(angle) * radius * radiusFactor * 0.2,
-          width: size,
-          height: size * 1.75,
-          yaw
-        }
-      );
-      leaves.push({
-        entity,
-        angle,
-        radiusFactor,
-        phase: Math.random(),
-        rise: 0.7 + Math.random() * 0.55,
-        spin: 0.8 + Math.random() * 0.5,
-        size,
-        yaw
-      });
+      const instance: EffectBatchInstance = {
+        anim0: [
+          angle,
+          radiusFactor,
+          Math.random(),
+          0.7 + Math.random() * 0.55
+        ],
+        anim1: [0.8 + Math.random() * 0.5, size, yaw, 0]
+      };
+      if (index % 5 === 0) hotLeafInstances.push(instance);
+      else leafInstances.push(instance);
     }
+    const leafBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.leafMesh,
+      material: leafMaterial,
+      instances: leafInstances,
+      motion: MOTION_GRASS_LEAVES,
+      radius,
+      life
+    });
+    const hotLeafBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.leafMesh,
+      material: hotLeafMaterial,
+      instances: hotLeafInstances,
+      motion: MOTION_GRASS_LEAVES,
+      radius,
+      life
+    });
 
     let time = 0;
     const animate = (_t: number, dt: number): void => {
@@ -4803,38 +4798,8 @@ export class CombatFx {
       const ringScale = radius * 2 * (0.94 + pulse * 0.06);
       ring.setLocalScale(ringScale, 1, ringScale);
 
-      for (const leaf of leaves) {
-        // La hoja sube en espiral: el ángulo avanza con el tiempo y con la
-        // altura, y el radio se abre en embudo hacia la parte alta.
-        const p = (time * leaf.rise + leaf.phase) % 1;
-        const angle =
-          leaf.angle + time * 7.2 + p * Math.PI * 2.6;
-        // Torbellino bajo y ancho: ya nace abierto y se ensancha hasta el
-        // borde del área sin ganar apenas altura.
-        const funnel = 0.45 + 0.55 * p;
-        const dist = radius * leaf.radiusFactor * funnel;
-        const y = 0.05 + p * radius * 0.45;
-        leaf.entity.setLocalPosition(
-          Math.cos(angle) * dist,
-          y,
-          Math.sin(angle) * dist
-        );
-        leaf.entity.setLocalEulerAngles(
-          Math.sin(time * 2.4 + leaf.phase * 6.28) * 22,
-          leaf.yaw + time * 900 * leaf.spin + p * 540,
-          Math.cos(time * 2 + leaf.phase * 6.28) * 18
-        );
-        const leafFade =
-          Math.min(1, p / 0.1) *
-          Math.min(1, (1 - p) / 0.18) *
-          envelope;
-        const scale =
-          leaf.size *
-          leafFade *
-          (0.8 + Math.sin(time * 6 + leaf.phase * 10) * 0.2);
-        leaf.entity.setLocalScale(scale, scale * 1.75, scale);
-      }
-
+      leafBatch.setTime(time);
+      hotLeafBatch.setTime(time);
       leafMaterial.opacity = 0.82 * envelope;
       hotLeafMaterial.opacity = 0.9 * envelope;
     };
@@ -4875,17 +4840,12 @@ export class CombatFx {
     border.setLocalPosition(0, 0.08, 0);
     border.setLocalScale(radius * 2, 1, radius * 2);
 
-    const jets: {
-      body: pc.Entity;
-      x: number;
-      z: number;
-      width: number;
-      height: number;
-      phase: number;
-      speed: number;
-      spin: number;
-    }[] = [];
-
+    // Los 18 chorros se reparten en cuatro lotes, uno por variante de malla.
+    // Así se conservan las siluetas distintas con cuatro draw calls en vez de
+    // dieciocho entidades animadas desde JavaScript.
+    const jetInstances: EffectBatchInstance[][] = this.waterJetMeshes.map(
+      () => []
+    );
     const jetCount = 18;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     for (let index = 0; index < jetCount; index++) {
@@ -4902,14 +4862,24 @@ export class CombatFx {
       // lento original, pero sin parpadear.
       const speed = 2 + Math.random() * 1.2;
       const spin = Math.random() * Math.PI;
-
-      const body = this.createEntity(
-        this.waterJetMeshes[index % this.waterJetMeshes.length],
-        [jetMaterial],
-        root
-      );
-      jets.push({ body, x: px, z: pz, width, height, phase, speed, spin });
+      jetInstances[index % this.waterJetMeshes.length].push({
+        anim0: [px, pz, phase, speed],
+        anim1: [width, height, spin, 0]
+      });
     }
+    const jetBatches = jetInstances.map(
+      (instances, index) =>
+        new EffectBatch({
+          app: this.app,
+          parent: root,
+          mesh: this.waterJetMeshes[index],
+          material: jetMaterial,
+          instances,
+          motion: MOTION_WATER_JETS,
+          radius,
+          life
+        })
+    );
 
     let time = 0;
     const animate = (_t: number, dt: number): void => {
@@ -4926,23 +4896,7 @@ export class CombatFx {
       border.setLocalScale(borderScale, 1, borderScale);
       ringMaterial.opacity = (0.28 + Math.sin(time * 6) * 0.07) * envelope;
 
-      for (const jet of jets) {
-        // Cada chorro respira en altura y grosor con su propia fase.
-        const wave =
-          0.5 + 0.5 * Math.sin(time * jet.speed * Math.PI * 2 + jet.phase);
-        const height = jet.height * (0.55 + 0.45 * wave);
-        const width = jet.width * (0.92 + 0.12 * wave);
-
-        jet.body.setLocalPosition(jet.x, 0, jet.z);
-        jet.body.setLocalScale(width, height, width);
-        // Girar la malla mueve la corona ondulada y las gotas.
-        jet.body.setLocalEulerAngles(
-          0,
-          jet.spin + Math.sin(time * 1.2 + jet.phase) * 5,
-          0
-        );
-      }
-
+      for (const batch of jetBatches) batch.setTime(time);
       jetMaterial.opacity = 0.92 * envelope;
     };
     this.addEffect(root, materials, life, animate);
@@ -5557,33 +5511,34 @@ export class CombatFx {
     core.setLocalPosition(0, 0.7, 0);
     core.setLocalScale(0.4, 0.4, 0.4);
 
-    const shards: {
-      entity: pc.Entity;
-      angle: number;
-      elevation: number;
-      distance: number;
-      delay: number;
-      travel: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    const shardInstances: EffectBatchInstance[] = [];
     const shardCount = 54;
     for (let index = 0; index < shardCount; index++) {
-      const angle = Math.random() * Math.PI * 2;
-      const size = 0.08 + Math.random() * 0.1;
-      const shard = this.createEntity(this.sphereMesh, [shardMaterial], root);
-      shard.setLocalScale(size, size, size);
-      shards.push({
-        entity: shard,
-        angle,
-        elevation: 0.15 + Math.random() * 0.8,
-        distance: radius * (0.45 + Math.random() * 0.55),
-        delay: Math.random() * 0.1,
-        travel: 0.38 + Math.random() * 0.24,
-        size,
-        phase: Math.random() * Math.PI * 2
+      shardInstances.push({
+        anim0: [
+          Math.random() * Math.PI * 2,
+          0.15 + Math.random() * 0.8,
+          radius * (0.45 + Math.random() * 0.55),
+          Math.random() * 0.1
+        ],
+        anim1: [
+          0.38 + Math.random() * 0.24,
+          0.08 + Math.random() * 0.1,
+          Math.random() * Math.PI * 2,
+          0
+        ]
       });
     }
+    const shardBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: shardMaterial,
+      instances: shardInstances,
+      motion: MOTION_PSYCHIC_SHARDS,
+      radius,
+      life
+    });
 
     let time = 0;
     this.addEffect(root, materials, life, (_t, dt) => {
@@ -5622,31 +5577,7 @@ export class CombatFx {
       coreMaterial.opacity =
         0.95 * (implosion < 1 ? 1 : Math.max(0, 1 - burst));
 
-      for (const shard of shards) {
-        const local = Math.min(
-          1,
-          Math.max(0, (time - shard.delay) / shard.travel)
-        );
-        const ease = 1 - (1 - local) * (1 - local);
-        const distance = shard.distance * ease;
-        const angle = shard.angle + Math.sin(time * 3 + shard.phase) * 0.06;
-        const y = 0.4 + shard.elevation * ease * radius * 0.45;
-        shard.entity.setLocalPosition(
-          Math.cos(angle) * distance,
-          y,
-          Math.sin(angle) * distance
-        );
-        const fade =
-          Math.min(1, local / 0.1) * Math.min(1, (1 - local) / 0.25);
-        const scale =
-          shard.size * (0.6 + ease * 0.9) * Math.max(0, fade) * fadeOut;
-        shard.entity.setLocalScale(scale, scale, scale);
-        shard.entity.setLocalEulerAngles(
-          time * 160 + shard.phase * 30,
-          time * 210 + shard.phase * 40,
-          Math.sin(time * 5 + shard.phase) * 24
-        );
-      }
+      shardBatch.setTime(time);
     });
   }
 
@@ -5916,15 +5847,8 @@ export class CombatFx {
     glow.setLocalPosition(0, 0.14, 0);
     glow.setLocalScale(radius * 1.15, radius * 0.22, radius * 1.15);
 
-    const flames: {
-      entity: pc.Entity;
-      phase: number;
-      angle: number;
-      dist: number;
-      baseWidth: number;
-      baseHeight: number;
-      yaw: number;
-    }[] = [];
+    const flameInstances: EffectBatchInstance[] = [];
+    const hotFlameInstances: EffectBatchInstance[] = [];
     // Tres anillos concéntricos con desfase: cubren todo el disco y evitan
     // el hueco que dejaba una sola corona de llamas.
     const flameRings = [
@@ -5944,29 +5868,42 @@ export class CombatFx {
         const baseHeight =
           radius * spec.height * (0.88 + variation * 0.24);
         const yaw = (index * 47 + ringIndex * 31) % 360;
-        const entity = this.createFlame(
-          root,
-          (index + ringIndex) % 4 === 0 ? hotMaterial : flameMaterial,
-          {
-            x: Math.cos(angle) * dist,
-            y: 0,
-            z: Math.sin(angle) * dist,
-            width: baseWidth,
-            height: baseHeight,
-            yaw
-          }
-        );
-        flames.push({
-          entity,
-          phase: index * 1.3 + ringIndex * 2.1,
-          angle,
-          dist,
-          baseWidth,
-          baseHeight,
-          yaw
-        });
+        const instance: EffectBatchInstance = {
+          anim0: [index * 1.3 + ringIndex * 2.1, angle, dist, yaw],
+          anim1: [baseWidth, baseHeight, 0, 0]
+        };
+        if ((index + ringIndex) % 4 === 0) hotFlameInstances.push(instance);
+        else flameInstances.push(instance);
       }
     }
+    const flameParams: [number, number, number, number] = [
+      Math.min(0.22, life * 0.3),
+      Math.min(0.35, life * 0.35),
+      Math.min(0.25, life * 0.3),
+      0
+    ];
+    const flameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: flameMaterial,
+      instances: flameInstances,
+      motion: MOTION_HEAT_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
+    const hotFlameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: hotMaterial,
+      instances: hotFlameInstances,
+      motion: MOTION_HEAT_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
 
     // Llama central más alta: da el pico de calor en el centro del anillo.
     const centerWidth = radius * 0.6;
@@ -6007,30 +5944,8 @@ export class CombatFx {
 
       root.setLocalEulerAngles(0, time * 6, 0);
 
-      for (const flame of flames) {
-        const growIn = Math.min(0.25, life * 0.3);
-        const delay = (flame.phase % 1) * growIn * 0.3;
-        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
-        const flicker = 0.88 + Math.sin(time * 11 + flame.phase * 1.7) * 0.12;
-        const sway = Math.sin(time * 6.5 + flame.phase) * 0.2;
-        const scale = Math.max(0.001, localIn * envelope);
-        flame.entity.setLocalScale(
-          flame.baseWidth * scale * flicker,
-          flame.baseHeight * scale * (1.05 + sway),
-          flame.baseWidth * scale * flicker
-        );
-        // Las llamas siguen brotando del suelo hasta el final; solo se mecen.
-        flame.entity.setLocalPosition(
-          Math.cos(flame.angle) * flame.dist,
-          Math.max(0, sway * radius * 0.05),
-          Math.sin(flame.angle) * flame.dist
-        );
-        flame.entity.setLocalEulerAngles(
-          0,
-          flame.yaw + time * 10 + Math.sin(time * 3 + flame.phase) * 10,
-          Math.sin(time * 4 + flame.phase) * 7
-        );
-      }
+      flameBatch.setTime(time);
+      hotFlameBatch.setTime(time);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerLife = centerIn * envelope;
@@ -6106,15 +6021,8 @@ export class CombatFx {
     });
     const light = this.createFireLight(root, 0, 1, 0, 1.4, radius * 2.3);
 
-    const flames: {
-      entity: pc.Entity;
-      baseAngle: number;
-      dist: number;
-      baseWidth: number;
-      baseHeight: number;
-      phase: number;
-      lean: number;
-    }[] = [];
+    const flameInstances: EffectBatchInstance[] = [];
+    const hotFlameInstances: EffectBatchInstance[] = [];
 
     const arms = 3;
     const perArm = 9;
@@ -6127,29 +6035,42 @@ export class CombatFx {
           (arm / arms) * Math.PI * 2 + f * spiralTurns * Math.PI * 2;
         const baseWidth = radius * (0.26 + 0.22 * f);
         const baseHeight = radius * (0.35 + 0.5 * f);
-        const entity = this.createFlame(
-          root,
-          (index + arm) % 4 === 0 ? hotMaterial : flameMaterial,
-          {
-            x: Math.cos(baseAngle) * dist,
-            y: 0,
-            z: Math.sin(baseAngle) * dist,
-            width: baseWidth,
-            height: baseHeight,
-            yaw: 90 - (baseAngle * 180) / Math.PI
-          }
-        );
-        flames.push({
-          entity,
-          baseAngle,
-          dist,
-          baseWidth,
-          baseHeight,
-          phase: arm * 2.3 + index * 1.1,
-          lean: 4 + f * 8
-        });
+        const instance: EffectBatchInstance = {
+          anim0: [baseAngle, dist, 4 + f * 8, arm * 2.3 + index * 1.1],
+          anim1: [baseWidth, baseHeight, 0, 0]
+        };
+        if ((index + arm) % 4 === 0) hotFlameInstances.push(instance);
+        else flameInstances.push(instance);
       }
     }
+    const flameParams: [number, number, number, number] = [
+      Math.min(0.22, life * 0.3),
+      Math.min(0.4, life * 0.35),
+      Math.min(0.24, life * 0.3),
+      0
+    ];
+    const flameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: flameMaterial,
+      instances: flameInstances,
+      motion: MOTION_FIRE_WHIRL_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
+    const hotFlameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: hotMaterial,
+      instances: hotFlameInstances,
+      motion: MOTION_FIRE_WHIRL_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
 
     // Columna central más alta: marca el eje del remolino.
     const centerWidth = radius * 0.52;
@@ -6171,43 +6092,14 @@ export class CombatFx {
       const fadeIn = Math.min(1, time / fadeInTime);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / fadeOutTime));
       const envelope = Math.min(fadeIn, fadeOut);
-      const spin = time * 2.8;
       const pulse = 0.5 + Math.sin(time * 8) * 0.2;
 
       ringMaterial.opacity = (0.16 + pulse * 0.12) * envelope;
       glowMaterial.opacity = (0.08 + pulse * 0.05) * envelope;
       light.light!.intensity = 1.4 * envelope * (0.7 + Math.random() * 0.3);
 
-      const growIn = Math.min(0.24, life * 0.3);
-      for (const flame of flames) {
-        const delay = (flame.phase % 1) * growIn * 0.25;
-        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
-        const scale = localIn * envelope;
-        if (scale <= 0.001) {
-          flame.entity.setLocalScale(0, 0, 0);
-          continue;
-        }
-        // Cada llama avanza por su brazo espiral mientras el conjunto gira.
-        const angle = flame.baseAngle + spin;
-        const flicker = 0.85 + Math.sin(time * 9 + flame.phase) * 0.15;
-        const sway = Math.sin(time * 6 + flame.phase) * 0.18;
-        const widthNow = flame.baseWidth * scale * flicker;
-        flame.entity.setLocalScale(
-          widthNow,
-          flame.baseHeight * scale * (1.05 + sway),
-          widthNow
-        );
-        flame.entity.setLocalPosition(
-          Math.cos(angle) * flame.dist,
-          0,
-          Math.sin(angle) * flame.dist
-        );
-        flame.entity.setLocalEulerAngles(
-          flame.lean,
-          90 - (angle * 180) / Math.PI,
-          Math.sin(time * 4 + flame.phase) * 10
-        );
-      }
+      flameBatch.setTime(time);
+      hotFlameBatch.setTime(time);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerScale = centerIn * envelope;
@@ -8774,37 +8666,37 @@ export class CombatFx {
       { y: 0.64, scale: 1, twist: 28 },
       { y: 0.94, scale: 1.02, twist: 42 }
     ];
+    const armInstances: EffectBatchInstance[][] = ribbonLayers.map(() => []);
     for (let layerIndex = 0; layerIndex < ribbonLayers.length; layerIndex++) {
       const layer = ribbonLayers[layerIndex];
       for (let armIndex = 0; armIndex < arms; armIndex++) {
-        const arm = this.createEntity(
-          this.cycloneArmMeshes[
-            (armIndex + layerIndex) % this.cycloneArmMeshes.length
-          ],
-          [ribbonMaterials[layerIndex]],
-          vortex
-        );
-        arm.setLocalEulerAngles(
-          0,
-          (armIndex / arms) * 360 + layer.twist,
-          0
-        );
-        arm.setLocalPosition(0, layer.y, 0);
-        arm.setLocalScale(radius * layer.scale, 1, radius * layer.scale);
+        armInstances[layerIndex].push({
+          x: 0,
+          y: layer.y,
+          z: 0,
+          sx: radius * layer.scale,
+          sy: 1,
+          sz: radius * layer.scale,
+          ry: (armIndex / arms) * 360 + layer.twist
+        });
       }
+    }
+    for (let layerIndex = 0; layerIndex < armInstances.length; layerIndex++) {
+      new EffectBatch({
+        app: this.app,
+        parent: vortex,
+        mesh: this.cycloneArmMeshes[layerIndex % this.cycloneArmMeshes.length],
+        material: ribbonMaterials[layerIndex],
+        instances: armInstances[layerIndex],
+        motion: MOTION_STATIC,
+        radius,
+        life
+      });
     }
 
     // Nubes volumétricas a lo largo de los brazos y en la banda exterior.
-    const puffs: {
-      entity: pc.Entity;
-      x: number;
-      y: number;
-      z: number;
-      sx: number;
-      sy: number;
-      sz: number;
-      phase: number;
-    }[] = [];
+    const puffInstances: EffectBatchInstance[] = [];
+    const puffShadeInstances: EffectBatchInstance[] = [];
     const addPuff = (
       angle: number,
       distance: number,
@@ -8813,28 +8705,20 @@ export class CombatFx {
       shade: boolean,
       tall: boolean
     ): void => {
-      const puff = this.createEntity(
-        this.sphereMesh,
-        [shade ? puffShadeMaterial : puffMaterial],
-        vortex
-      );
       const sx = size * (1.35 + Math.random() * 0.35);
       const sy = size * (tall ? 1.4 + Math.random() * 0.7 : 0.55 + Math.random() * 0.3);
       const sz = size * (1.35 + Math.random() * 0.35);
-      const px = Math.cos(angle) * distance;
-      const pz = Math.sin(angle) * distance;
-      puff.setLocalPosition(px, y, pz);
-      puff.setLocalScale(sx, sy, sz);
-      puffs.push({
-        entity: puff,
-        x: px,
+      const instance: EffectBatchInstance = {
+        x: Math.cos(angle) * distance,
         y,
-        z: pz,
+        z: Math.sin(angle) * distance,
         sx,
         sy,
         sz,
-        phase: Math.random() * Math.PI * 2
-      });
+        anim0: [Math.random() * Math.PI * 2, y, 0, 0]
+      };
+      if (shade) puffShadeInstances.push(instance);
+      else puffInstances.push(instance);
     };
 
     const turns = 1.5;
@@ -8890,6 +8774,27 @@ export class CombatFx {
       }
     }
 
+    const puffBatch = new EffectBatch({
+      app: this.app,
+      parent: vortex,
+      mesh: this.sphereMesh,
+      material: puffMaterial,
+      instances: puffInstances,
+      motion: MOTION_CYCLONE_PUFFS,
+      radius,
+      life
+    });
+    const puffShadeBatch = new EffectBatch({
+      app: this.app,
+      parent: vortex,
+      mesh: this.sphereMesh,
+      material: puffShadeMaterial,
+      instances: puffShadeInstances,
+      motion: MOTION_CYCLONE_PUFFS,
+      radius,
+      life
+    });
+
     let time = 0;
     const animate = (_t: number, dt: number): void => {
       time += dt;
@@ -8917,17 +8822,8 @@ export class CombatFx {
       const ringScale = radius * 2 * (0.94 + Math.sin(time * 3) * 0.02);
       outerRing.setLocalScale(ringScale, 1, ringScale);
 
-      for (const puff of puffs) {
-        const bob =
-          Math.sin(time * 2.6 + puff.phase) * (0.03 + puff.y * 0.012);
-        const pulse = 0.9 + Math.sin(time * 3.2 + puff.phase) * 0.1;
-        puff.entity.setLocalPosition(puff.x, puff.y + bob, puff.z);
-        puff.entity.setLocalScale(
-          puff.sx * pulse,
-          puff.sy * pulse,
-          puff.sz * pulse
-        );
-      }
+      puffBatch.setTime(time);
+      puffShadeBatch.setTime(time);
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
@@ -8998,15 +8894,8 @@ export class CombatFx {
     const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.14, 0);
 
-    const flames: {
-      entity: pc.Entity;
-      phase: number;
-      angle: number;
-      dist: number;
-      baseWidth: number;
-      baseHeight: number;
-      yaw: number;
-    }[] = [];
+    const flameInstances: EffectBatchInstance[] = [];
+    const hotFlameInstances: EffectBatchInstance[] = [];
     const flameRings = [
       { count: 10, dist: 0.2, width: 0.18, height: 0.42 },
       { count: 14, dist: 0.45, width: 0.22, height: 0.56 },
@@ -9024,29 +8913,42 @@ export class CombatFx {
         const baseHeight =
           radius * spec.height * (0.88 + variation * 0.24);
         const yaw = (index * 47 + ringIndex * 31) % 360;
-        const entity = this.createFlame(
-          root,
-          (index + ringIndex) % 4 === 0 ? hotMaterial : flameMaterial,
-          {
-            x: Math.cos(angle) * dist,
-            y: 0,
-            z: Math.sin(angle) * dist,
-            width: baseWidth,
-            height: baseHeight,
-            yaw
-          }
-        );
-        flames.push({
-          entity,
-          phase: index * 1.3 + ringIndex * 2.1,
-          angle,
-          dist,
-          baseWidth,
-          baseHeight,
-          yaw
-        });
+        const instance: EffectBatchInstance = {
+          anim0: [index * 1.3 + ringIndex * 2.1, angle, dist, yaw],
+          anim1: [baseWidth, baseHeight, 0, 0]
+        };
+        if ((index + ringIndex) % 4 === 0) hotFlameInstances.push(instance);
+        else flameInstances.push(instance);
       }
     }
+    const flameParams: [number, number, number, number] = [
+      0.16,
+      0.3,
+      Math.min(0.25, life * 0.3),
+      0
+    ];
+    const flameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: flameMaterial,
+      instances: flameInstances,
+      motion: MOTION_HEAT_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
+    const hotFlameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: hotMaterial,
+      instances: hotFlameInstances,
+      motion: MOTION_HEAT_FLAMES,
+      radius,
+      life,
+      params: flameParams
+    });
 
     const centerWidth = radius * 0.58;
     const centerHeight = radius * 1.05;
@@ -9064,46 +8966,55 @@ export class CombatFx {
     const swirl = new pc.Entity('heat-swirl');
     swirl.setLocalPosition(0, radius * 0.34, 0);
     root.addChild(swirl);
-    const windBlades: { entity: pc.Entity; size: number; phase: number }[] = [];
+    const bladeInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 6; index++) {
       const angle = (index / 6) * Math.PI * 2;
       const size = radius * (0.32 + (index % 3) * 0.07);
-      const blade = this.createEntity(
-        createWindBladeMesh(this.device, radius * 0.52, 1.25, radius * 0.1, 10),
-        [windMaterial],
-        swirl
-      );
-      blade.setLocalPosition(
-        Math.cos(angle) * radius * 0.45,
-        Math.sin(angle * 2) * radius * 0.05,
-        Math.sin(angle) * radius * 0.45
-      );
-      blade.setLocalEulerAngles(90, angle / DEG, 0);
-      windBlades.push({ entity: blade, size, phase: index * 1.2 });
+      bladeInstances.push({
+        x: Math.cos(angle) * radius * 0.45,
+        y: Math.sin(angle * 2) * radius * 0.05,
+        z: Math.sin(angle) * radius * 0.45,
+        anim0: [size, index * 1.2, 0, 0]
+      });
     }
+    const bladeBatch = new EffectBatch({
+      app: this.app,
+      parent: swirl,
+      mesh: this.cachedMesh('wind-blade:unit', () =>
+        createWindBladeMesh(this.device, 0.52, 1.25, 0.1, 10)
+      ),
+      material: windMaterial,
+      instances: bladeInstances,
+      motion: MOTION_HEAT_BLADES,
+      radius,
+      life,
+      params: [0.16, 0.3, 0.32, 0]
+    });
 
-    const embers: {
-      entity: pc.Entity;
-      angle: number;
-      dist: number;
-      rise: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    const emberInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 10; index++) {
       const angle = (index / 10) * Math.PI * 2 + Math.random() * 0.5;
       const size = radius * (0.035 + Math.random() * 0.03);
-      const ember = this.createEntity(this.sphereMesh, [emberMaterial], root);
-      ember.setLocalScale(size, size, size);
-      embers.push({
-        entity: ember,
-        angle,
-        dist: radius * (0.2 + Math.random() * 0.65),
-        rise: radius * (0.5 + Math.random() * 0.6),
-        size,
-        phase: Math.random() * Math.PI * 2
+      emberInstances.push({
+        anim0: [
+          angle,
+          radius * (0.2 + Math.random() * 0.65),
+          radius * (0.5 + Math.random() * 0.6),
+          Math.random() * Math.PI * 2
+        ],
+        anim1: [size, 0, 0, 0]
       });
     }
+    const emberBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: emberMaterial,
+      instances: emberInstances,
+      motion: MOTION_HEAT_EMBERS,
+      radius,
+      life
+    });
 
     let time = 0;
     const animate = (_t: number, dt: number): void => {
@@ -9127,40 +9038,10 @@ export class CombatFx {
       glowMaterial.opacity = (0.1 + pulse * 0.08) * envelope;
 
       swirl.setLocalEulerAngles(0, time * 90, 0);
-      for (const blade of windBlades) {
-        const scale =
-          blade.size * (0.7 + grow * 0.45) * (0.85 + Math.sin(time * 7 + blade.phase) * 0.12) * envelope;
-        blade.entity.setLocalScale(scale, scale, scale);
-        blade.entity.setLocalEulerAngles(
-          90,
-          time * 40 + blade.phase * 60,
-          Math.sin(time * 4 + blade.phase) * 18
-        );
-      }
-
-      for (const flame of flames) {
-        const growIn = Math.min(0.25, life * 0.3);
-        const delay = (flame.phase % 1) * growIn * 0.3;
-        const localIn = Math.min(1, Math.max(0, (time - delay) / growIn));
-        const flicker = 0.88 + Math.sin(time * 11 + flame.phase * 1.7) * 0.12;
-        const sway = Math.sin(time * 6.5 + flame.phase) * 0.2;
-        const scale = Math.max(0.001, localIn * envelope);
-        flame.entity.setLocalScale(
-          flame.baseWidth * scale * flicker,
-          flame.baseHeight * scale * (1.05 + sway),
-          flame.baseWidth * scale * flicker
-        );
-        flame.entity.setLocalPosition(
-          Math.cos(flame.angle) * flame.dist,
-          Math.max(0, sway * radius * 0.05),
-          Math.sin(flame.angle) * flame.dist
-        );
-        flame.entity.setLocalEulerAngles(
-          0,
-          flame.yaw + time * 10 + Math.sin(time * 3 + flame.phase) * 10,
-          Math.sin(time * 4 + flame.phase) * 7
-        );
-      }
+      bladeBatch.setTime(time);
+      flameBatch.setTime(time);
+      hotFlameBatch.setTime(time);
+      emberBatch.setTime(time);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerLife = centerIn * envelope;
@@ -9174,23 +9055,6 @@ export class CombatFx {
         15 + time * 14,
         Math.sin(time * 5) * 7
       );
-
-      for (const ember of embers) {
-        const progress = Math.min(1, time / Math.max(0.2, life * 0.8));
-        const angle = ember.angle + time * 1.6;
-        const dist = ember.dist * (0.5 + progress * 0.7);
-        ember.entity.setLocalPosition(
-          Math.cos(angle) * dist,
-          0.18 + progress * ember.rise,
-          Math.sin(angle) * dist
-        );
-        const fade = Math.max(0, 1 - progress);
-        ember.entity.setLocalScale(
-          ember.size * fade,
-          ember.size * fade,
-          ember.size * fade
-        );
-      }
 
       flameMaterial.opacity =
         0.42 * envelope * (0.85 + Math.random() * 0.15);
@@ -10253,6 +10117,9 @@ export class CombatFx {
     );
     const deepMaterial = this.createIceCrystalMaterial([96, 176, 230], 0.76);
     const snowMaterial = this.createWaterMaterial([235, 250, 255], 0.34);
+    // Copos y puffs comparten aspecto, pero necesitan shaders de animación
+    // distintos; un material por lote evita que el último chunk pise al otro.
+    const flakeMaterial = this.createWaterMaterial([235, 250, 255], 0.34);
     const flashMaterial = this.createMaterial([200, 240, 255], 0.55);
     const materials = [
       ringMaterial,
@@ -10260,6 +10127,7 @@ export class CombatFx {
       crystalMaterial,
       deepMaterial,
       snowMaterial,
+      flakeMaterial,
       flashMaterial
     ];
 
@@ -10278,22 +10146,9 @@ export class CombatFx {
     const flash = this.createEntity(this.sphereMesh, [flashMaterial], root);
     flash.setLocalPosition(0, 0.75, 0);
 
-    const shards: {
-      entity: pc.Entity;
-      puff: pc.Entity;
-      targetX: number;
-      targetZ: number;
-      startY: number;
-      landY: number;
-      delay: number;
-      fall: number;
-      width: number;
-      height: number;
-      puffSize: number;
-      tiltX: number;
-      tiltZ: number;
-      yaw: number;
-    }[] = [];
+    const crystalInstances: EffectBatchInstance[] = [];
+    const deepCrystalInstances: EffectBatchInstance[] = [];
+    const puffInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 26; index++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.sqrt(Math.random()) * radius * 0.9;
@@ -10308,63 +10163,85 @@ export class CombatFx {
       const tiltX = (Math.random() - 0.5) * 18;
       const tiltZ = (Math.random() - 0.5) * 18;
       const yaw = Math.random() * 360;
-      const crystal = this.createEntity(
-        this.iceCrystalMesh,
-        [index % 4 === 0 ? deepMaterial : crystalMaterial],
-        root
-      );
-      crystal.setLocalPosition(targetX, startY, targetZ);
-      crystal.setLocalScale(0.001, 0.001, 0.001);
-      crystal.setLocalEulerAngles(tiltX, yaw, tiltZ);
+      const delay = Math.random() * 0.06;
+      const fall = 0.1 + Math.random() * 0.06;
+      const crystal: EffectBatchInstance = {
+        x: targetX,
+        z: targetZ,
+        rx: tiltX,
+        ry: yaw,
+        rz: tiltZ,
+        anim0: [startY, landY, delay, fall],
+        anim1: [width, height, 0, 0]
+      };
+      if (index % 4 === 0) deepCrystalInstances.push(crystal);
+      else crystalInstances.push(crystal);
 
       const puffSize = radius * (0.045 + Math.random() * 0.04);
-      const puff = this.createEntity(this.sphereMesh, [snowMaterial], root);
-      puff.setLocalPosition(targetX, 0.12, targetZ);
-      puff.setLocalScale(0.001, 0.001, 0.001);
-
-      shards.push({
-        entity: crystal,
-        puff,
-        targetX,
-        targetZ,
-        startY,
-        landY,
-        delay: Math.random() * 0.06,
-        fall: 0.1 + Math.random() * 0.06,
-        width,
-        height,
-        puffSize,
-        tiltX,
-        tiltZ,
-        yaw
+      puffInstances.push({
+        x: targetX,
+        y: 0.12,
+        z: targetZ,
+        anim0: [puffSize, delay, fall, 0]
       });
     }
 
-    const snowflakes: {
-      entity: pc.Entity;
-      x: number;
-      z: number;
-      startY: number;
-      fall: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    const flakeInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 24; index++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.sqrt(Math.random()) * radius * 0.95;
       const size = radius * (0.014 + Math.random() * 0.016);
-      const flake = this.createEntity(this.sphereMesh, [snowMaterial], root);
-      flake.setLocalScale(size, size, size);
-      snowflakes.push({
-        entity: flake,
+      flakeInstances.push({
         x: Math.cos(angle) * distance,
         z: Math.sin(angle) * distance,
-        startY: radius * (1.4 + Math.random() * 1.6),
-        fall: 0.65 + Math.random() * 0.35,
-        size,
-        phase: Math.random() * Math.PI * 2
+        anim0: [
+          radius * (1.4 + Math.random() * 1.6),
+          0.65 + Math.random() * 0.35,
+          Math.random() * Math.PI * 2,
+          size
+        ]
       });
     }
+    const crystalBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.iceCrystalMesh,
+      material: crystalMaterial,
+      instances: crystalInstances,
+      motion: MOTION_BLIZZARD_CRYSTALS,
+      radius,
+      life
+    });
+    const deepCrystalBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.iceCrystalMesh,
+      material: deepMaterial,
+      instances: deepCrystalInstances,
+      motion: MOTION_BLIZZARD_CRYSTALS,
+      radius,
+      life
+    });
+    const puffBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: snowMaterial,
+      instances: puffInstances,
+      motion: MOTION_BLIZZARD_PUFFS,
+      radius,
+      life
+    });
+    const flakeBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: flakeMaterial,
+      instances: flakeInstances,
+      motion: MOTION_SNOWFLAKES,
+      radius,
+      life
+    });
 
     let time = 0;
     this.addEffect(root, materials, life, (_t, dt) => {
@@ -10389,72 +10266,15 @@ export class CombatFx {
       flash.setLocalScale(flashScale, flashScale, flashScale);
       flashMaterial.opacity = 0.5 * Math.max(0, 1 - time / 0.2);
 
-      for (const shard of shards) {
-        const local = (time - shard.delay) / shard.fall;
-        if (local <= 0) {
-          shard.entity.setLocalScale(0.001, 0.001, 0.001);
-          shard.puff.setLocalScale(0.001, 0.001, 0.001);
-          continue;
-        }
-        const fall = Math.min(1, local);
-        const eased = fall * fall * fall;
-        const y = shard.startY + (shard.landY - shard.startY) * eased;
-        const landed = fall >= 1;
-        const settle = landed
-          ? Math.min(1, (time - (shard.delay + shard.fall)) / 0.16)
-          : 0;
-        const endFade = Math.min(1, Math.max(0, (life - time) / 0.22));
-        const appear = Math.min(1, local * 6);
-        const scale = appear * endFade;
-
-        shard.entity.setLocalPosition(shard.targetX, y, shard.targetZ);
-        shard.entity.setLocalScale(
-          Math.max(0.001, shard.width * scale),
-          Math.max(0.001, shard.height * scale),
-          Math.max(0.001, shard.width * scale)
-        );
-        shard.entity.setLocalEulerAngles(
-          shard.tiltX + (landed ? Math.sin(settle * Math.PI) * 4 : 0),
-          shard.yaw,
-          shard.tiltZ
-        );
-
-        const puffLocal = Math.min(
-          1,
-          Math.max(0, (time - (shard.delay + shard.fall)) / 0.3)
-        );
-        const puffScale =
-          shard.puffSize *
-          (0.3 + puffLocal * 1.1) *
-          Math.max(0, 1 - puffLocal) *
-          envelope;
-        shard.puff.setLocalScale(
-          Math.max(0.001, puffScale),
-          Math.max(0.001, puffScale * 0.7),
-          Math.max(0.001, puffScale)
-        );
-      }
-
-      for (const flake of snowflakes) {
-        const fall = Math.min(1, time / flake.fall);
-        const drift = Math.sin(time * 1.7 + flake.phase) * radius * 0.07;
-        flake.entity.setLocalPosition(
-          flake.x + drift,
-          0.1 + flake.startY * (1 - fall),
-          flake.z + Math.cos(time * 1.4 + flake.phase) * radius * 0.07
-        );
-        const scale =
-          flake.size * (1 - fall * 0.5) * Math.max(0, 1 - fall);
-        flake.entity.setLocalScale(
-          Math.max(0.001, scale),
-          Math.max(0.001, scale),
-          Math.max(0.001, scale)
-        );
-      }
+      crystalBatch.setTime(time);
+      deepCrystalBatch.setTime(time);
+      puffBatch.setTime(time);
+      flakeBatch.setTime(time);
 
       crystalMaterial.opacity = 0.86 * envelope;
       deepMaterial.opacity = 0.72 * envelope;
       snowMaterial.opacity = 0.3 * envelope;
+      flakeMaterial.opacity = 0.3 * envelope;
     });
   }
 
@@ -11222,6 +11042,12 @@ export class CombatFx {
     const dustMaterial = this.createWaterMaterial([190, 170, 138], 0.32);
     const pebbleLight = this.createRockMaterial([176, 156, 122], 1);
     const pebbleDark = this.createRockMaterial([110, 92, 70], 1);
+    // Cada familia de instancias necesita su propio material: el chunk de
+    // animación es distinto para grietas, losas, estalagmitas y piedras.
+    const branchLight = this.createRockMaterial([116, 98, 74], 1);
+    const branchDark = this.createRockMaterial([74, 61, 46], 1);
+    const spikeLight = this.createRockMaterial([116, 98, 74], 1);
+    const spikeDark = this.createRockMaterial([74, 61, 46], 1);
     const materials = [
       pitMaterial,
       pitDeepMaterial,
@@ -11231,7 +11057,11 @@ export class CombatFx {
       slabDark,
       dustMaterial,
       pebbleLight,
-      pebbleDark
+      pebbleDark,
+      branchLight,
+      branchDark,
+      spikeLight,
+      spikeDark
     ];
 
     const pit = this.createEntity(this.discMesh, [pitMaterial], root);
@@ -11246,16 +11076,10 @@ export class CombatFx {
     rim.setLocalPosition(0, 0.07, 0);
     rim.setLocalScale(radius * 2, 1, radius * 2);
 
-    const branches: {
-      entity: pc.Entity;
-      glow: pc.Entity;
-      angle: number;
-      distance: number;
-      width: number;
-      length: number;
-      delay: number;
-      tilt: number;
-    }[] = [];
+    const branchLightInstances: EffectBatchInstance[] = [];
+    const branchDarkInstances: EffectBatchInstance[] = [];
+    const branchGlowInstances: EffectBatchInstance[] = [];
+    let branchCount = 0;
     const addBranch = (
       angle: number,
       distance: number,
@@ -11263,36 +11087,32 @@ export class CombatFx {
       width: number,
       delay: number
     ): void => {
-      const slab = this.createEntity(
-        this.boxMesh,
-        [branches.length % 4 === 0 ? slabLight : slabDark],
-        root
-      );
-      slab.setLocalPosition(
-        Math.sin(angle) * distance,
-        0.05,
-        Math.cos(angle) * distance
-      );
-      slab.setLocalEulerAngles(0, angle / DEG, 0);
-      slab.setLocalScale(width, 0.035, length);
-      const glow = this.createEntity(this.boxMesh, [magmaMaterial], root);
-      glow.setLocalPosition(
-        Math.sin(angle) * distance,
-        0.078,
-        Math.cos(angle) * distance
-      );
-      glow.setLocalEulerAngles(0, angle / DEG, 0);
-      glow.setLocalScale(width * 0.38, 0.012, length * 0.8);
-      branches.push({
-        entity: slab,
-        glow,
-        angle,
-        distance,
-        width,
-        length,
-        delay,
-        tilt: (Math.random() - 0.5) * 16
+      const tilt = (Math.random() - 0.5) * 16;
+      const x = Math.sin(angle) * distance;
+      const z = Math.cos(angle) * distance;
+      const instance: EffectBatchInstance = {
+        x,
+        y: 0.05,
+        z,
+        sx: width,
+        sy: 0.035,
+        sz: length,
+        ry: angle / DEG,
+        anim0: [delay, tilt, 0, 0]
+      };
+      if (branchCount % 4 === 0) branchLightInstances.push(instance);
+      else branchDarkInstances.push(instance);
+      branchGlowInstances.push({
+        x,
+        y: 0.078,
+        z,
+        sx: width * 0.38,
+        sy: 0.012,
+        sz: length * 0.8,
+        ry: angle / DEG,
+        anim0: [delay, tilt, 0, 0]
       });
+      branchCount++;
     };
 
     const mainBranches = 5;
@@ -11323,104 +11143,170 @@ export class CombatFx {
       }
     }
 
-    const slabs: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      width: number;
-      length: number;
-      tilt: number;
-      delay: number;
-    }[] = [];
+    const slabLightInstances: EffectBatchInstance[] = [];
+    const slabDarkInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = radius * (0.28 + Math.random() * 0.5);
       const width = radius * (0.12 + Math.random() * 0.08);
       const length = radius * (0.16 + Math.random() * 0.1);
-      const slab = this.createEntity(
-        this.boxMesh,
-        [index % 2 === 0 ? slabLight : slabDark],
-        root
-      );
-      slab.setLocalPosition(
-        Math.sin(angle) * distance,
-        0.05,
-        Math.cos(angle) * distance
-      );
-      slab.setLocalEulerAngles(0, angle / DEG, 0);
-      slab.setLocalScale(width, 0.07, length);
-      slabs.push({
-        entity: slab,
-        angle,
-        distance,
-        width,
-        length,
-        tilt: (8 + Math.random() * 10) * (index % 2 === 0 ? 1 : -1),
-        delay: 0.03 + Math.random() * 0.12
-      });
+      const instance: EffectBatchInstance = {
+        x: Math.sin(angle) * distance,
+        y: 0.05,
+        z: Math.cos(angle) * distance,
+        sx: width,
+        sy: 0.07,
+        sz: length,
+        ry: angle / DEG,
+        anim0: [
+          0.03 + Math.random() * 0.12,
+          (8 + Math.random() * 10) * (index % 2 === 0 ? 1 : -1),
+          0,
+          0
+        ]
+      };
+      if (index % 2 === 0) slabLightInstances.push(instance);
+      else slabDarkInstances.push(instance);
     }
 
-    const spikes: {
-      entity: pc.Entity;
-      x: number;
-      z: number;
-      height: number;
-      width: number;
-      delay: number;
-      tilt: number;
-      yaw: number;
-    }[] = [];
+    const spikeLightInstances: EffectBatchInstance[] = [];
+    const spikeDarkInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 8; index++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = radius * (0.12 + Math.sqrt(Math.random()) * 0.62);
       const height = radius * (0.18 + Math.random() * 0.2);
       const width = radius * (0.045 + Math.random() * 0.035);
-      const spike = this.createEntity(
-        this.rockSpikeMesh,
-        [index % 3 === 0 ? slabDark : slabLight],
-        root
-      );
-      spike.setLocalScale(0.001, 0.001, 0.001);
-      spikes.push({
-        entity: spike,
+      const instance: EffectBatchInstance = {
         x: Math.sin(angle) * distance,
         z: Math.cos(angle) * distance,
-        height,
-        width,
-        delay: 0.06 + Math.random() * 0.16,
-        tilt: (Math.random() - 0.5) * 22,
-        yaw: Math.random() * 360
-      });
+        ry: Math.random() * 360,
+        anim0: [
+          height,
+          width,
+          0.06 + Math.random() * 0.16,
+          (Math.random() - 0.5) * 22
+        ]
+      };
+      if (index % 3 === 0) spikeDarkInstances.push(instance);
+      else spikeLightInstances.push(instance);
     }
 
-    const pebbles: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      size: number;
-      arc: number;
-      delay: number;
-      spin: number;
-    }[] = [];
+    const pebbleLightInstances: EffectBatchInstance[] = [];
+    const pebbleDarkInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 18; index++) {
       const angle = Math.random() * Math.PI * 2;
       const size = radius * (0.018 + Math.random() * 0.022);
-      const pebble = this.createEntity(
-        this.rockChunkMesh,
-        [index % 3 === 0 ? pebbleDark : pebbleLight],
-        root
-      );
-      pebble.setLocalScale(0.001, 0.001, 0.001);
-      pebbles.push({
-        entity: pebble,
-        angle,
-        distance: radius * (0.2 + Math.random() * 0.8),
-        size,
-        arc: radius * (0.12 + Math.random() * 0.22),
-        delay: 0.04 + Math.random() * 0.12,
-        spin: (Math.random() - 0.5) * 540
-      });
+      const instance: EffectBatchInstance = {
+        anim0: [
+          angle,
+          radius * (0.2 + Math.random() * 0.8),
+          radius * (0.12 + Math.random() * 0.22),
+          0.04 + Math.random() * 0.12
+        ],
+        anim1: [size, (Math.random() - 0.5) * 540, 0, 0]
+      };
+      if (index % 3 === 0) pebbleDarkInstances.push(instance);
+      else pebbleLightInstances.push(instance);
     }
+
+    const branchBatches = [
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.boxMesh,
+        material: branchLight,
+        instances: branchLightInstances,
+        motion: MOTION_FISSURE_BRANCHES,
+        radius,
+        life
+      }),
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.boxMesh,
+        material: branchDark,
+        instances: branchDarkInstances,
+        motion: MOTION_FISSURE_BRANCHES,
+        radius,
+        life
+      }),
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.boxMesh,
+        material: magmaMaterial,
+        instances: branchGlowInstances,
+        motion: MOTION_FISSURE_BRANCHES,
+        radius,
+        life
+      })
+    ];
+    const slabBatches = [
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.boxMesh,
+        material: slabLight,
+        instances: slabLightInstances,
+        motion: MOTION_FISSURE_SLABS,
+        radius,
+        life
+      }),
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.boxMesh,
+        material: slabDark,
+        instances: slabDarkInstances,
+        motion: MOTION_FISSURE_SLABS,
+        radius,
+        life
+      })
+    ];
+    const spikeBatches = [
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.rockSpikeMesh,
+        material: spikeLight,
+        instances: spikeLightInstances,
+        motion: MOTION_FISSURE_SPIKES,
+        radius,
+        life
+      }),
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.rockSpikeMesh,
+        material: spikeDark,
+        instances: spikeDarkInstances,
+        motion: MOTION_FISSURE_SPIKES,
+        radius,
+        life
+      })
+    ];
+    const pebbleBatches = [
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.rockChunkMesh,
+        material: pebbleLight,
+        instances: pebbleLightInstances,
+        motion: MOTION_FISSURE_PEBBLES,
+        radius,
+        life
+      }),
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.rockChunkMesh,
+        material: pebbleDark,
+        instances: pebbleDarkInstances,
+        motion: MOTION_FISSURE_PEBBLES,
+        radius,
+        life
+      })
+    ];
 
     this.spawnSporeParticles(
       root,
@@ -11466,108 +11352,20 @@ export class CombatFx {
       magmaMaterial.opacity = (0.5 + pulse * 0.3) * envelope;
       light.light!.intensity = 1.1 * envelope * (0.65 + Math.random() * 0.35);
 
-      for (const branch of branches) {
-        const local = Math.max(0, Math.min(1, (time - branch.delay) / 0.14));
-        const pop = 1 - Math.pow(1 - local, 3);
-        const sink = radius * 0.02 * pop;
-        const width = branch.width * (0.5 + pop * 0.5);
-        branch.entity.setLocalPosition(
-          Math.sin(branch.angle) * branch.distance,
-          0.05 - sink,
-          Math.cos(branch.angle) * branch.distance
-        );
-        branch.entity.setLocalScale(width, 0.035, branch.length);
-        branch.entity.setLocalEulerAngles(
-          branch.tilt * pop,
-          branch.angle / DEG,
-          branch.tilt * 0.35 * pop
-        );
-        branch.glow.setLocalPosition(
-          Math.sin(branch.angle) * branch.distance,
-          0.078 - sink,
-          Math.cos(branch.angle) * branch.distance
-        );
-        branch.glow.setLocalScale(width * 0.38, 0.012, branch.length * 0.8);
-        branch.glow.setLocalEulerAngles(
-          branch.tilt * pop,
-          branch.angle / DEG,
-          branch.tilt * 0.35 * pop
-        );
-      }
-
-      for (const slab of slabs) {
-        const local = Math.max(0, Math.min(1, (time - slab.delay) / 0.16));
-        const pop = 1 - Math.pow(1 - local, 3);
-        const scale = Math.max(0.001, pop * fadeOut);
-        slab.entity.setLocalPosition(
-          Math.sin(slab.angle) * slab.distance,
-          0.05 + radius * 0.025 * pop,
-          Math.cos(slab.angle) * slab.distance
-        );
-        slab.entity.setLocalScale(
-          slab.width * scale,
-          0.07 * scale,
-          slab.length * scale
-        );
-        slab.entity.setLocalEulerAngles(
-          slab.tilt * pop,
-          slab.angle / DEG,
-          slab.tilt * 0.4 * pop
-        );
-      }
-
-      for (const spike of spikes) {
-        const local = Math.max(0, Math.min(1, (time - spike.delay) / 0.12));
-        const pop = 1 - Math.pow(1 - local, 3);
-        const height = spike.height * pop * fadeOut;
-        if (height <= 0.001) {
-          spike.entity.setLocalScale(0.001, 0.001, 0.001);
-          continue;
-        }
-        spike.entity.setLocalPosition(spike.x, height * (pop - 0.5), spike.z);
-        spike.entity.setLocalScale(
-          Math.max(0.001, spike.width * pop * fadeOut),
-          height,
-          Math.max(0.001, spike.width * pop * fadeOut)
-        );
-        spike.entity.setLocalEulerAngles(
-          spike.tilt * pop,
-          spike.yaw,
-          spike.tilt * 0.35 * pop
-        );
-      }
-
-      for (const pebble of pebbles) {
-        const local = Math.max(0, Math.min(1, (time - pebble.delay) / 0.4));
-        if (local <= 0) {
-          pebble.entity.setLocalScale(0.001, 0.001, 0.001);
-          continue;
-        }
-        const distance = pebble.distance * local;
-        const y = pebble.size * 0.4 + Math.sin(local * Math.PI) * pebble.arc;
-        const scale = pebble.size * (1 - local * 0.55) * fadeOut;
-        pebble.entity.setLocalPosition(
-          Math.sin(pebble.angle) * distance,
-          y,
-          Math.cos(pebble.angle) * distance
-        );
-        pebble.entity.setLocalScale(
-          Math.max(0.001, scale),
-          Math.max(0.001, scale * 0.8),
-          Math.max(0.001, scale * 0.9)
-        );
-        pebble.entity.setLocalEulerAngles(
-          local * 260,
-          pebble.angle / DEG,
-          local * pebble.spin
-        );
-      }
+      for (const batch of branchBatches) batch.setTime(time);
+      for (const batch of slabBatches) batch.setTime(time);
+      for (const batch of spikeBatches) batch.setTime(time);
+      for (const batch of pebbleBatches) batch.setTime(time);
 
       slabLight.opacity = 0.92 * envelope;
       slabDark.opacity = 0.82 * envelope;
       dustMaterial.opacity = 0.3 * envelope;
       pebbleLight.opacity = 0.9 * envelope;
       pebbleDark.opacity = 0.78 * envelope;
+      branchLight.opacity = 0.92 * envelope;
+      branchDark.opacity = 0.82 * envelope;
+      spikeLight.opacity = 0.92 * envelope;
+      spikeDark.opacity = 0.82 * envelope;
     };
     this.addEffect(root, materials, life, animate, areaAnchors(x, z, radius));
     animate(0, 0);
@@ -11773,6 +11571,8 @@ export class CombatFx {
     this.iceCrystalMesh.destroy();
     this.rockSpikeMesh.destroy();
     this.rockChunkMesh.destroy();
+    for (const mesh of this.meshCache.values()) mesh.destroy();
+    this.meshCache.clear();
     this.dustTexture.destroy();
   }
 }
