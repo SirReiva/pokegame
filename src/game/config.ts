@@ -27,6 +27,15 @@ export const CONFIG = {
      */
     showHitboxes: false as boolean,
   },
+  performance: {
+    /**
+     * Precompila durante la carga los shaders de los efectos de las especies
+     * que juegan la partida. Evita el tirón del primer casteo de cada estilo.
+     */
+    warmUpShaders: true as boolean,
+    /** Efectos creados por lote de precarga. Menos = menos pico de memoria. */
+    warmUpBatchSize: 4,
+  },
   sprite: {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,

@@ -1051,6 +1051,8 @@ export class CombatFx {
   private readonly layerId: number;
   /** Resuelve las capas de las vistas que pueden ver un efecto. */
   private readonly resolveLayers: FxLayerResolver;
+  /** Capa temporal para la precarga de shaders; `null` en partida normal. */
+  private warmupLayer: number | null = null;
   /** Anclas del efecto que se está construyendo, si las define su `spawn`. */
   private pendingAnchors: FxAnchors | null = null;
   /** Acumulador para no repetir el cálculo de niebla de todos los FX por frame. */
@@ -2052,6 +2054,15 @@ export class CombatFx {
   }
 
   /**
+   * Fuerza una capa concreta para todos los efectos. Se usa durante la
+   * precarga de shaders de la pantalla de carga. Con `null` se vuelve al
+   * resolvedor normal de visibilidad.
+   */
+  setWarmupLayer(layerId: number | null): void {
+    this.warmupLayer = layerId;
+  }
+
+  /**
    * Ajusta las capas del árbol de un efecto a las vistas que lo ven. PlayCanvas
    * guarda las capas por componente (`render` y `particlesystem`), así que hay
    * que recorrer los hijos además del nodo raíz.
@@ -2061,6 +2072,11 @@ export class CombatFx {
     anchors: FxAnchors,
     ignoreTerrainConcealment = false
   ): void {
+    if (this.warmupLayer !== null) {
+      this.setEntityLayers(entity, [this.warmupLayer]);
+      return;
+    }
+
     const layers: number[] = [];
     for (const [x, z] of anchors) {
       for (const id of this.resolveLayers(x, z, ignoreTerrainConcealment)) {

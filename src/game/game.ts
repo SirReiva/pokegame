@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import {
   ABILITIES,
   ABILITY_SLOTS,
+  COMMON_ABILITIES,
   DEFAULT_COMMON_ABILITY,
   MOVESETS,
   REGENERATION_DELAY_SECONDS,
@@ -11,8 +12,12 @@ import {
   isCommonAbilityId,
   type AbilityDef,
   type AbilitySlot,
+  type AoeStyle,
+  type BeamStyle,
   type BuffSpec,
   type BuffStat,
+  type ImpactStyle,
+  type ProjectileStyle,
   type SlowSpec
 } from './abilities';
 import {
@@ -451,6 +456,12 @@ export class Game {
 
       if (this.disposed) return;
 
+      // Precompila los shaders de los efectos que pueden aparecer en esta
+      // partida. Se hace aquí, con la pantalla de carga todavía visible, para
+      // que el primer casteo de cada habilidad no bloquee el hilo principal.
+      await this.warmUpShaders();
+      if (this.disposed) return;
+
       this.ready = true;
       this.mode = 'menu';
       this.menuCamera.setEnabled(true);
@@ -459,6 +470,180 @@ export class Game {
       const message = error instanceof Error ? error.message : 'Error desconocido al cargar';
       this.callbacks.onError(message);
     }
+  }
+
+  /**
+   * Precarga los shaders de los efectos en una capa y cámara temporales. Las
+   * compilaciones se hacen con la pantalla de carga visible, no en el primer
+   * casteo de cada habilidad.
+   */
+  private async warmUpShaders(): Promise<void> {
+    if (!CONFIG.performance.warmUpShaders || this.disposed) return;
+
+    const layer = new pc.Layer({ name: 'shader-warmup' });
+    this.app.scene.layers.pushTransparent(layer);
+
+    const camera = new pc.Entity('shader-warmup-camera');
+    camera.addComponent('camera', {
+      nearClip: 0.1,
+      farClip: 120,
+      fov: 70
+    });
+    const cameraComponent = camera.camera;
+    if (!cameraComponent) {
+      this.app.scene.layers.remove(layer);
+      return;
+    }
+    cameraComponent.layers = [layer.id];
+    cameraComponent.clearColorBuffer = false;
+    // Viewport mínimo: el coste de relleno es irrelevante, pero el shader se
+    // compila igual al enviar la draw call.
+    cameraComponent.rect = new pc.Vec4(0, 0, 0.01, 0.01);
+    cameraComponent.scissorRect = new pc.Vec4(0, 0, 0.01, 0.01);
+    camera.setPosition(0, 12, 12);
+    camera.lookAt(new pc.Vec3(0, 0, 0));
+    this.app.root.addChild(camera);
+
+    this.combatFx.setWarmupLayer(layer.id);
+
+    const calls = this.buildWarmupCalls(this.collectWarmupStyles());
+    const batchSize = Math.max(1, CONFIG.performance.warmUpBatchSize);
+    const batches = Math.ceil(calls.length / batchSize);
+
+    try {
+      for (
+        let start = 0, batch = 0;
+        start < calls.length;
+        start += batchSize, batch++
+      ) {
+        const end = Math.min(start + batchSize, calls.length);
+        for (let index = start; index < end; index++) calls[index]();
+        // Un paso mínimo para que los materiales queden con opacidad/tiempo
+        // iniciales y la draw call no se descarte por un estado transitorio.
+        this.combatFx.update(1 / 60);
+
+        // Dos frames: uno para enviar materiales y otro para que la
+        // compilación/uso del shader quede resuelto antes de limpiar.
+        await this.waitFrames(2);
+        this.combatFx.clear();
+        this.callbacks.onProgress({
+          loaded: batch + 1,
+          total: batches,
+          label: 'Precompilando efectos'
+        });
+        if (this.disposed) break;
+      }
+    } catch (error) {
+      console.warn('[shaders] No se pudieron precargar todos los efectos', error);
+    } finally {
+      this.combatFx.clear();
+      this.combatFx.setWarmupLayer(null);
+      camera.destroy();
+      this.app.scene.layers.remove(layer);
+    }
+  }
+
+  private collectWarmupStyles(): {
+    projectiles: ProjectileStyle[];
+    impacts: ImpactStyle[];
+    beams: BeamStyle[];
+    aoes: AoeStyle[];
+  } {
+    const projectiles = new Set<ProjectileStyle>(['orb']);
+    const impacts = new Set<ImpactStyle>(['hit']);
+    const beams = new Set<BeamStyle>(['electric']);
+    const aoes = new Set<AoeStyle>(['ring']);
+
+    const add = (def: AbilityDef | null | undefined) => {
+      if (!def) return;
+      projectiles.add(def.projectileStyle);
+      impacts.add(def.impactStyle);
+      beams.add(def.beamStyle);
+      aoes.add(def.aoeStyle);
+    };
+
+    const ids = this.options.pokemonIds;
+    if (ids && ids.length > 0) {
+      for (const id of ids) {
+        for (const abilityId of MOVESETS[id] ?? []) {
+          if (abilityId) add(ABILITIES[abilityId]);
+        }
+      }
+    } else {
+      for (const moveset of Object.values(MOVESETS)) {
+        for (const abilityId of moveset) {
+          if (abilityId) add(ABILITIES[abilityId]);
+        }
+      }
+    }
+    for (const def of Object.values(COMMON_ABILITIES)) add(def);
+
+    return {
+      projectiles: [...projectiles],
+      impacts: [...impacts],
+      beams: [...beams],
+      aoes: [...aoes]
+    };
+  }
+
+  private buildWarmupCalls(styles: {
+    projectiles: ProjectileStyle[];
+    impacts: ImpactStyle[];
+    beams: BeamStyle[];
+    aoes: AoeStyle[];
+  }): Array<() => void> {
+    const calls: Array<() => void> = [];
+    const color: [number, number, number] = [255, 255, 255];
+    const x = 0;
+    const z = 0;
+
+    for (const style of styles.projectiles) {
+      calls.push(() =>
+        this.combatFx.spawnProjectile(x, z, color, 0.45, style, 1, 0)
+      );
+    }
+    for (const style of styles.impacts) {
+      calls.push(() => this.combatFx.spawnImpact(x, z, color, 1, style));
+      calls.push(() =>
+        this.combatFx.spawnMelee(x, z, 0, 2, 45, color, style)
+      );
+    }
+    for (const style of styles.beams) {
+      calls.push(() =>
+        this.combatFx.spawnBeam(-1, 0, 1, 0, color, 0.3, style)
+      );
+    }
+    calls.push(() =>
+      this.combatFx.spawnBeamLane(-1, 0, 1, 0, 0.3, color, 0, 'electric')
+    );
+    for (const style of styles.aoes) {
+      calls.push(() =>
+        this.combatFx.spawnAoe(x, z, 1.5, color, style, 0.6)
+      );
+    }
+    calls.push(() =>
+      this.combatFx.spawnAoeTelegraph(x, z, 1.5, color, 0.6, 0.6)
+    );
+    calls.push(() => this.combatFx.spawnDash(-1, 0, 1, 0, color));
+    calls.push(() => this.combatFx.spawnBuff(x, z, color, 1));
+    calls.push(() =>
+      this.combatFx.spawnProtectionShield({ x, z }, color, 1, 1, 0.5)
+    );
+    calls.push(() => this.combatFx.spawnHeal(x, z, color, 1));
+
+    return calls;
+  }
+
+  private waitFrames(count: number): Promise<void> {
+    return new Promise((resolve) => {
+      let remaining = count;
+      const step = () => {
+        remaining -= 1;
+        if (remaining <= 0) resolve();
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
   }
 
   /** Cambia el mapa activo. Solo se permite desde el menú. */
