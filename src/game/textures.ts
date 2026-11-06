@@ -4,9 +4,7 @@ import {
   terrainAt,
   zoneBounds,
   zoneCenter,
-  zoneContains,
   zoneContainsInset,
-  zoneSignedDistance,
   type GameMap,
   type TerrainId,
   type TerrainZone,
@@ -257,45 +255,95 @@ function paintTerrainZone(
       }
       ctx.closePath();
     } else {
-      ctx.arc(cx, cy, zone.radius * scale, 0, Math.PI * 2);
+      // Círculo con el mismo borde irregular que usaba el relleno por píxel.
+      const segments = 72;
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const wobble =
+          1 +
+          0.05 * Math.sin(angle * 3 + seed) +
+          0.035 * Math.sin(angle * 7 - seed * 1.7);
+        const r = zone.radius * wobble * scale;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
     }
   };
 
-  // En círculos se conserva el borde irregular de siempre. En polígonos la
-  // silueta se pinta tal cual para que coincida con la de `terrainAt`.
-  const insideForPaint = (x: number, z: number): boolean => {
-    if ("points" in zone) return zoneContains(shape, x, z);
-    const distance = Math.hypot(x - zone.x, z - zone.z);
-    const angle = Math.atan2(z - zone.z, x - zone.x);
-    const wobble =
-      1 +
-      0.05 * Math.sin(angle * 3 + seed) +
-      0.035 * Math.sin(angle * 7 - seed * 1.7);
-    return distance <= zone.radius * wobble;
+  /**
+   * Borde oscuro: medio trazo de `edgeWorld` dentro de la silueta. Antes se
+   * resolvía consultando la distancia firmada de cada píxel al polígono; con
+   * el clip puesto basta con trazar el contorno una sola vez.
+   */
+  const strokeBorder = () => {
+    traceShape();
+    ctx.strokeStyle = palette.dark;
+    ctx.lineWidth = Math.max(1, edgeWorld * scale * 2);
+    ctx.stroke();
   };
 
-  // Bloque de suelo: se recorre el rectángulo envolvente en coordenadas de
-  // mundo para que círculos y polígonos compartan el mismo grano de 4 px.
-  const worldPerPixel = 1 / scale;
-  const startX = Math.floor(toPxX(bounds.minX) / step) * step;
-  const startY = Math.floor(toPxY(bounds.minZ) / step) * step;
-  const endX = Math.ceil(toPxX(bounds.maxX) / step) * step;
-  const endY = Math.ceil(toPxY(bounds.maxZ) / step) * step;
-  for (let py = startY; py <= endY; py += step) {
-    for (let px = startX; px <= endX; px += step) {
-      const wx = centerX + (px + step / 2 - cx) * worldPerPixel;
-      const wz = centerZ + (py + step / 2 - cy) * worldPerPixel;
-      if (!insideForPaint(wx, wz)) continue;
-
-      const signed = zoneSignedDistance(shape, wx, wz);
-      let color = palette.base;
-      if (signed <= edgeWorld) color = palette.dark;
-      else if (random() < 0.16) color = palette.light;
-      else if (random() < 0.07) color = palette.dark;
-      ctx.fillStyle = color;
-      ctx.fillRect(px, py, step, step);
+  const paintFirePlates = () => {
+    // Basalto volcánico: placas oscuras separadas por una red de grietas.
+    // El naranja y el amarillo no van en el suelo; viven en las coronas de
+    // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
+    const plateCount = 9;
+    const plates: Array<{ x: number; y: number; color: string }> = [];
+    for (let i = 0; i < plateCount; i++) {
+      const angle = random() * Math.PI * 2;
+      const distance = Math.sqrt(random()) * radius * 0.82;
+      plates.push({
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance,
+        color: random() < 0.55 ? palette.base : palette.light,
+      });
     }
-  }
+
+    for (let oy = -radius; oy <= radius; oy += step) {
+      for (let ox = -radius; ox <= radius; ox += step) {
+        let nearest = 0;
+        let d1 = Infinity;
+        let d2 = Infinity;
+        for (let p = 0; p < plates.length; p++) {
+          const dx = ox - plates[p].x;
+          const dy = oy - plates[p].y;
+          const d = Math.hypot(dx, dy);
+          if (d < d1) {
+            d2 = d1;
+            d1 = d;
+            nearest = p;
+          } else if (d < d2) {
+            d2 = d;
+          }
+        }
+
+        const px = Math.floor(cx + ox);
+        const py = Math.floor(cy + oy);
+
+        if (d2 - d1 < 5) {
+          // Surco ancho y oscuro entre placas. La lava vive en las rocas 3D,
+          // no en el suelo, así que las grietas se quedan en basalto negro.
+          ctx.fillStyle = palette.dark;
+          ctx.fillRect(px, py, step, step);
+        } else {
+          // Interior de la placa: basalto con vetas y poros.
+          let color = plates[nearest].color;
+          if (random() < 0.08) color = palette.dark;
+          ctx.fillStyle = color;
+          ctx.fillRect(px, py, step, step);
+          if (random() < 0.14) {
+            ctx.fillStyle = palette.light;
+            ctx.fillRect(px + 1, py + 1, 2, 2);
+          } else if (random() < 0.08) {
+            ctx.fillStyle = palette.dark;
+            ctx.fillRect(px, py + 2, step, 2);
+          }
+        }
+      }
+    }
+  };
 
   const mark = (
     ox: number,
@@ -317,79 +365,14 @@ function paintTerrainZone(
   traceShape();
   ctx.clip();
 
+  // La base de la zona ya la pinta `paintGridTiles` celda a celda. Aquí solo
+  // se añade el borde y la decoración propia del terreno.
+  if (zone.terrain === "fire") paintFirePlates();
+  strokeBorder();
+
   switch (zone.terrain) {
-    case "fire": {
-      // Basalto volcánico: placas oscuras separadas por una red de grietas.
-      // El naranja y el amarillo no van en el suelo; viven en las coronas de
-      // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
-      const plateCount = 9;
-      const plates: Array<{ x: number; y: number; color: string }> = [];
-      for (let i = 0; i < plateCount; i++) {
-        const angle = random() * Math.PI * 2;
-        const distance = Math.sqrt(random()) * radius * 0.82;
-        plates.push({
-          x: Math.cos(angle) * distance,
-          y: Math.sin(angle) * distance,
-          color: random() < 0.55 ? palette.base : palette.light,
-        });
-      }
-
-      for (let oy = -radius; oy <= radius; oy += step) {
-        for (let ox = -radius; ox <= radius; ox += step) {
-          const wx = centerX + ox / scale;
-          const wz = centerZ + oy / scale;
-          if (!insideForPaint(wx, wz)) continue;
-          const signed = zoneSignedDistance(shape, wx, wz);
-
-          let nearest = 0;
-          let d1 = Infinity;
-          let d2 = Infinity;
-          for (let p = 0; p < plates.length; p++) {
-            const dx = ox - plates[p].x;
-            const dy = oy - plates[p].y;
-            const d = Math.hypot(dx, dy);
-            if (d < d1) {
-              d2 = d1;
-              d1 = d;
-              nearest = p;
-            } else if (d < d2) {
-              d2 = d;
-            }
-          }
-
-          const px = Math.floor(cx + ox);
-          const py = Math.floor(cy + oy);
-
-          if (signed <= edgeWorld) {
-            ctx.fillStyle = palette.dark;
-            ctx.fillRect(px, py, step, step);
-            continue;
-          }
-
-          if (d2 - d1 < 5) {
-            // Surco ancho y oscuro entre placas. La lava vive en las rocas 3D,
-            // no en el suelo, así que las grietas se quedan en basalto negro.
-            ctx.fillStyle = palette.dark;
-            ctx.fillRect(px, py, step, step);
-          } else {
-            // Interior de la placa: basalto con vetas y poros.
-            let color = plates[nearest].color;
-            if (random() < 0.08) color = palette.dark;
-            ctx.fillStyle = color;
-            ctx.fillRect(px, py, step, step);
-            if (random() < 0.14) {
-              ctx.fillStyle = palette.light;
-              ctx.fillRect(px + 1, py + 1, 2, 2);
-            } else if (random() < 0.08) {
-              ctx.fillStyle = palette.dark;
-              ctx.fillRect(px, py + 2, step, 2);
-            }
-          }
-        }
-      }
-
+    case "fire":
       break;
-    }
     case "electric": {
       // Hierba seca y pequeñas chispas.
       for (let i = 0; i < 34; i++) {
@@ -594,7 +577,13 @@ function paintTerrainZone(
   ctx.restore();
 }
 
-/** Pinta la rejilla base del mapa, celda a celda. */
+/**
+ * Pinta la rejilla base del mapa, celda a celda.
+ *
+ * Es también la base de los calveros decorativos: cada celda usa la paleta de
+ * su terreno, así que `paintTerrainZone()` no necesita volver a rellenar la
+ * zona entera y puede limitarse al borde y a la decoración propia.
+ */
 function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
   const rows = map.tiles.length;
   const cols = map.tiles[0]?.length ?? 0;
