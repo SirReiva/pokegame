@@ -73,6 +73,8 @@ export interface AoeFallenAlly {
   player: MatchPlayerState;
   /** Distancia centro del área → punto donde cayó. */
   distance: number;
+  /** `false` si un collider corta la línea entre el centro del área y el marcador. */
+  lineOfSight: boolean;
 }
 
 export interface AoeHitOptions {

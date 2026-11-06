@@ -545,7 +545,7 @@ export class BotController {
     this.decisionTimer -= dt;
     if (this.decisionTimer <= 0) {
       this.decisionTimer = this.tuning.decision;
-      this.decide(self, players);
+      this.decide(self, players, colliders);
     }
 
     return this.drive(dt, self, players, colliders);
@@ -1234,7 +1234,8 @@ export class BotController {
 
   private decide(
     self: MatchPlayerState,
-    players: readonly MatchPlayerState[]
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
   ): void {
     const target = this.target;
     const targetIsVisible = target !== null && this.targetVisible && target.alive;
@@ -1371,7 +1372,7 @@ export class BotController {
     // rival a la vista. Si hay una pelea útil, `chooseAbility` ya suma su valor
     // y decide si compensa; fuera de combate el apoyo manda sobre patrullar o
     // recoger un objeto.
-    const supportSlot = this.chooseSupportAbility(self, players);
+    const supportSlot = this.chooseSupportAbility(self, players, colliders);
     if (supportSlot !== null && (!targetIsVisible || targetOffense === 0)) {
       this.abilitySlot = supportSlot;
       this.supportCast = true;
@@ -1393,7 +1394,13 @@ export class BotController {
     }
 
     if (targetIsVisible && this.visibleTimer >= this.tuning.reaction) {
-      this.abilitySlot = this.chooseAbility(self, target, distance, players);
+      this.abilitySlot = this.chooseAbility(
+        self,
+        target,
+        distance,
+        players,
+        colliders
+      );
       this.supportCast =
         this.abilitySlot !== null && this.isSupportSlot(self, this.abilitySlot);
       this.useCommon = this.shouldUseCommon(self, distance, false, hpFraction);
@@ -2179,7 +2186,8 @@ export class BotController {
     self: MatchPlayerState,
     target: MatchPlayerState,
     distance: number,
-    players: readonly MatchPlayerState[]
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
   ): number | null {
     let bestSlot: number | null = null;
     let bestScore = -Infinity;
@@ -2189,7 +2197,7 @@ export class BotController {
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
-      const support = this.supportScore(self, players, def);
+      const support = this.supportScore(self, players, def, colliders);
       // Las áreas de apoyo se centran en el bot: no necesitan que haya un
       // rival dentro de su alcance para ser útiles.
       const inRange = this.inRange(def, distance, target);
@@ -2223,7 +2231,8 @@ export class BotController {
   private supportScore(
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
-    def: AbilityDef
+    def: AbilityDef,
+    colliders: readonly Collider[]
   ): number {
     const profile = SUPPORT_PROFILES[def.id];
     // Las áreas de apoyo conocidas nacen en la posición del lanzador.
@@ -2239,6 +2248,11 @@ export class BotController {
       if (!ally.alive) {
         // Si va a reaparecer igualmente, el área no aporta nada.
         if (!profile.revive || ally.respawnTimer <= 1) continue;
+        // El marcador debe estar en línea con el centro del área; si hay un
+        // obstáculo de por medio, el motor no lo revive.
+        if (segmentBlockedByColliders(self.x, self.z, ally.x, ally.z, colliders)) {
+          continue;
+        }
         score += SUPPORT_REVIVE_SCORE;
         continue;
       }
@@ -2264,7 +2278,8 @@ export class BotController {
 
   private chooseSupportAbility(
     self: MatchPlayerState,
-    players: readonly MatchPlayerState[]
+    players: readonly MatchPlayerState[],
+    colliders: readonly Collider[]
   ): number | null {
     let bestSlot: number | null = null;
     let bestScore = 0;
@@ -2273,7 +2288,7 @@ export class BotController {
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
-      const score = this.supportScore(self, players, def);
+      const score = this.supportScore(self, players, def, colliders);
       if (score > bestScore) {
         bestScore = score;
         bestSlot = slot;

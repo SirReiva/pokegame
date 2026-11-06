@@ -99,6 +99,23 @@
 > contar `Deseo`), en la banda de Charmander y Lucario; la de Lugia ronda el
 > 122 % de la vida media en la matriz de 15 rivales, lastrada por su papel de
 > tanque de control.
+>
+> **Actualización 2026-11-06**: revisado contra `f373792`. Se añaden 3.14
+> (Regeneración/HUD usando la visión compartida del equipo en vez de la línea de
+> visión directa), 3.15 (máscara de niebla recompuesta a 20 Hz pero usada como
+> autoridad de visibilidad de actores, objetos y FX) y 3.16 (`Deseo` revive
+> aliados a través de obstáculos al no comprobar LOS). También se actualizan los
+> valores de velocidad y visión de §4.7, que quedaron obsoletos con `da2161d`.
+>
+> **Actualización 2026-11-06 (2)**: arreglado 3.14. `enemiesSeeing` vuelve a
+> calcularse con `isTargetVisible` directo para cada rival vivo, sin depender de
+> la máscara de niebla compartida. Regeneración y el HUD «Descubierto» vuelven a
+> exigir línea de visión real.
+>
+> **Actualización 2026-11-06 (3)**: arreglado 3.16. `AoeFallenAlly` guarda
+> ahora `lineOfSight`; `reviveAoeAlly` descarta los marcadores tapados por un
+> muro, roca o cordillera y `supportScore` solo valora revivir aliados con línea
+> de visión.
 
 ## Resumen ejecutivo
 
@@ -285,7 +302,7 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-05)
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-06)
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
@@ -298,8 +315,9 @@ cobertura de tipos.
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
 | 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
+| 3.15 Máscara de niebla a 20 Hz | **nuevo** | La visibilidad de actores, objetos y FX puede quedar hasta ~50 ms desfasada. |
 
-Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.13) corresponden a apartados ya corregidos y retirados de la lista.
+Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.14 y 3.16) corresponden a apartados ya corregidos y retirados de la lista.
 
 ### 3.1. Cobertura: 6 especies sin moveset (crítico)
 
@@ -498,6 +516,25 @@ detrás de un árbol o un muro puede acortar el dash aunque el camino esté libr
 `dashEnemyLimit` debe comprobar LOS; si todos los dashes deben detenerse, quitar
 o documentar `dashBlocksOnEnemies` y unificar la distancia.
 
+### 3.15. La máscara de niebla a 20 Hz alimenta la visibilidad de juego (bajo-medio)
+
+`CONFIG.vision.mask.updateHz` vale 20 (`config.ts:212`) y `FogMask.update` sale
+antes de recomponer si no ha pasado el intervalo (`fog.ts:589-598`). Esa misma
+máscara se consulta para decidir si se dibujan actores y objetos y si se ven sus
+FX (`maskSeesPoint` → `observerSeesActor`, `teamSeesPoint` y
+`teamSeesPickupPoint`, `game.ts:3922-4004`).
+
+Durante hasta ~50 ms la visibilidad puede quedar desfasada: un Pokémon que acaba
+de esconderse detrás de un árbol sigue dibujándose, o uno que acaba de salir de
+cobertura tarda en aparecer. En objetos, el retraso puede mostrar la poción un
+frame después de que la zona quede a oscuras. La distancia efectiva se comprueba
+aparte, así que el efecto se limita a la línea de visión, pero rompe la
+correspondencia exacta entre lo que se ve y lo que el motor considera visible.
+
+**Arreglo**: separar la máscara visual (20 Hz) de la consulta de visibilidad de
+juego, o desactivar el límite para las consultas de actores y objetos. Como
+mínimo, usar geometría exacta cuando el resultado de la máscara sea decisivo.
+
 ## 4. Estudio cuantitativo del balance
 
 ### 4.1. Metodología
@@ -601,6 +638,11 @@ daño radial es menor.
 | Mew | 117 | 123 | 99 | 81 % | 5/14 | 2 |
 | Bulbasaur | 48 | 58 | 101 | 77 % | 4/14 | 0 |
 | Pikachu | 52 | 80 | 84 | 69 % | 3/14 | 0 |
+
+> **Nota (2026-11-06)**: las filas de Bulbasaur, Charmander y Squirtle son
+> anteriores a `da2161d`. `Hoja Afilada` pasó de física a especial, así que el
+> daño de Bulbasaur contra el objetivo neutro y su combo ya no coinciden con la
+> tabla; las velocidades y visiones actualizadas están en §4.7.
 
 **Lectura**:
 
@@ -769,9 +811,9 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 | Gengar | 7,6 | 10,8 | no | 8,5 u proyectil / 8 u haz |
 | Scyther | 7,2 | 10,8 | Corte Aéreo 5 u | 2,7 u melee |
 | Pikachu | 6,9 | 11,0 | Ataque Rápido 4,5 u | 11 u haz |
-| Bulbasaur | 4,2 | 8,0 | no | 7,4 u área |
-| Squirtle | 4,8 | 8,5 | Acua Jet 4,2 u | 8,5 u haz |
-| Charmander | 5,4 | 9,5 | no | 9,5 u haz |
+| Bulbasaur | 4,6 | 8,8 | no | 7,4 u área |
+| Squirtle | 5,2 | 9,2 | Acua Jet 4,2 u | 8,5 u haz |
+| Charmander | 5,8 | 9,5 | no | 9,5 u haz |
 | Tyranitar | 4,5 | 9,6 | no | 9 u haz / 8,5 u proyectil |
 | Groudon | 5,6 | 10,6 | no | 8,5 u proyectil / 7,7 u área |
 
@@ -783,8 +825,9 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
   además buena velocidad, con Tyranitar y Groudon como excepción lenta. La
   combinación «te veo antes + te pego desde más lejos + puedo escapar» no tiene
   contrapeso en los rápidos.
-- Bulbasaur es el más lento, tiene la visión más baja, no tiene dash y su
-  definitiva tarda 0,75 s. Es el caso más desfavorecido.
+- **Tyranitar** es ahora el más lento (4,5), seguido de Onix y Bulbasaur
+  (4,6). Bulbasaur sigue teniendo la visión más baja del grupo, no tiene dash y
+  su definitiva tarda 0,75 s; es el caso más desfavorecido.
 - Charmander tampoco tiene dash y es frágil (114 PV, 63 Def).
 - No hay ningún terreno Psíquico en `TERRAINS` (`src/game/terrain.ts:35-51`), así
   que Mewtwo y Mew nunca reciben el bonus «home» de 1,18× de velocidad; es una
@@ -946,6 +989,14 @@ así que se pueden añadir tests baratos:
   partida (ningún jugador debe desaparecer sin aviso ni desalinear el HUD).
 - **Visión/combate**: si se implementa el revelado, un atacante que hace daño
   desde fuera de la vista debe aparecer o indicarse durante N segundos.
+- **Visión y regeneración**: un rival con un árbol o una cordillera entre medias
+  no debe sumar a `enemiesSeeing` aunque otro aliado suyo vea la zona; un rival
+  con LOS directa debe hacerlo aunque la máscara de niebla vaya un frame atrás.
+- **Máscara de niebla**: con `updateHz = 20`, un actor que se esconde tras un
+  árbol no debe seguir dibujándose más de 50 ms; un objeto en una zona que acaba
+  de quedar a oscuras no debe poder recogerse con la visibilidad anterior.
+- **Revivir de área**: un aliado caído detrás de un muro no debe revivir con
+  `Deseo` salvo que se documente explícitamente lo contrario.
 - **Proyectiles/niebla**: un disparo desde hierba alta debe verse al cruzar la
   vegetación; comprobar si el VFX revela la dirección del tirador y si eso es
   intencionado.

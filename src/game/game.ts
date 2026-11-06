@@ -133,6 +133,7 @@ import { DEFAULT_SKIN_ID, skinFor } from './skins';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
+  isTargetVisible,
   lineOfSightBlocked,
   terrainConcealment,
   visionForPokemon
@@ -2041,6 +2042,9 @@ export class Game {
   ): boolean {
     const player = target.player;
     if (player.alive) return false;
+    // El marcador debe estar en línea con el centro del área: un muro, una roca
+    // o una cordillera entre ambos impide revivir, igual que impide el daño.
+    if (!target.lineOfSight) return false;
     this.revivePlayer(player, player.x, player.z, fraction);
     this.showHealPopup(player, player.hp);
     this.combatFx.spawnBuff(player.x, player.z, def.color, 1.1);
@@ -2623,7 +2627,17 @@ export class Game {
         if (player.team !== hit.owner.team) continue;
         const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
         if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
-        fallenAllies.push({ player, distance });
+        fallenAllies.push({
+          player,
+          distance,
+          lineOfSight: !segmentBlockedByColliders(
+            hit.x,
+            hit.z,
+            player.x,
+            player.z,
+            this.world.colliders
+          )
+        });
         continue;
       }
       const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
@@ -4082,13 +4096,21 @@ export class Game {
           colliders,
           maskVisible
         );
-        // El HUD "Descubierto" y la regeneración siguen contando la línea de
-        // visión directa de cada rival vivo, no la visión compartida del equipo.
+        // El HUD "Descubierto" y la regeneración cuentan la línea de visión
+        // directa de cada rival vivo, no la visión compartida del equipo. Por
+        // eso no usan `visible` (que sale de la máscara del equipo): un rival
+        // tapado por un árbol sigue sin contar aunque un aliado suyo vea la zona.
         if (
           observer.alive &&
           target.alive &&
           observer.team !== target.team &&
-          visible
+          isTargetVisible(
+            observer,
+            target,
+            target.concealment.value,
+            colliders,
+            alreadyVisible
+          )
         ) {
           target.enemiesSeeing += 1;
         }
