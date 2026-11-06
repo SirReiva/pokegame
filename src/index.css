@@ -16,6 +16,7 @@
   --color-accent-soft: #bff39d;
   --color-team-blue: #4b9cff;
   --color-team-red: #ff5f63;
+  --color-vs-gold: #ffd24a;
   --color-danger: #ff5c5c;
   --color-danger-100: #ffb2b5;
   --color-danger-200: #ff9b9b;
@@ -125,6 +126,31 @@
   --animate-rise-in: rise-in 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   --animate-pop-in: pop-in 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 
+  /*
+   * Entrada del cartel de versus. Las duraciones coinciden con las constantes
+   * de VersusScreen.tsx: cuando acaba la última animación arranca la carga.
+   */
+  --animate-versus-side-left: versus-side-left 700ms
+    cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-versus-side-right: versus-side-right 700ms
+    cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-versus-row-left: versus-row-left 640ms
+    cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-versus-row-right: versus-row-right 640ms
+    cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-versus-frame: versus-frame 620ms
+    cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-versus-seam: versus-seam 760ms cubic-bezier(0.16, 1, 0.3, 1)
+    backwards;
+  --animate-versus-band: versus-band 620ms cubic-bezier(0.16, 1, 0.3, 1)
+    backwards;
+  --animate-versus-header: versus-header 500ms ease-out backwards;
+  --animate-versus-slam: versus-slam 660ms cubic-bezier(0.16, 1, 0.3, 1)
+    backwards;
+  --animate-versus-flash: versus-flash 760ms ease-out both;
+  --animate-versus-sheen: versus-sheen 900ms ease-out both;
+  --animate-versus-progress: versus-progress 2400ms linear both;
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -153,6 +179,153 @@
     to {
       opacity: 1;
       transform: scale(1);
+    }
+  }
+
+  @keyframes versus-side-left {
+    from {
+      opacity: 0;
+      transform: translateX(-9%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes versus-side-right {
+    from {
+      opacity: 0;
+      transform: translateX(9%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes versus-row-left {
+    from {
+      opacity: 0;
+      transform: translate3d(-115%, 0, 0);
+    }
+    55% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes versus-row-right {
+    from {
+      opacity: 0;
+      transform: translate3d(115%, 0, 0);
+    }
+    55% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes versus-frame {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes versus-seam {
+    from {
+      opacity: 0;
+      transform: scaleY(0.08);
+    }
+    to {
+      opacity: 1;
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes versus-band {
+    from {
+      opacity: 0;
+      transform: scaleY(0.04);
+    }
+    to {
+      opacity: 1;
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes versus-header {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes versus-slam {
+    0% {
+      opacity: 0;
+      transform: scale(2.6) rotate(-12deg);
+      filter: blur(8px);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(0.9) rotate(3deg);
+      filter: blur(0);
+    }
+    72% {
+      transform: scale(1.06) rotate(-1.5deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0);
+      filter: blur(0);
+    }
+  }
+
+  @keyframes versus-flash {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    18% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.8);
+    }
+  }
+
+  @keyframes versus-sheen {
+    from {
+      transform: translateX(-160%) skewX(-18deg);
+    }
+    to {
+      transform: translateX(430%) skewX(-18deg);
+    }
+  }
+
+  @keyframes versus-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
     }
   }
 }
