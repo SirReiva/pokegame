@@ -60,9 +60,33 @@ interface PlayScreenProps {
   configs: MatchPlayerConfig[];
   players: LobbyPlayer[];
   koTarget: number;
+  /** Oculta la carga interna cuando una intro muestra el progreso encima. */
+  hideLoadingOverlay?: boolean;
+  /** Permite arrancar la partida; la intro lo activa al terminar. */
+  start?: boolean;
+  onProgress?: (progress: LoadingProgress) => void;
+  onEngineReady?: () => void;
+  onEngineError?: (message: string) => void;
 }
 
-function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenProps) {
+/** Props que la intro pasa a través de la ruta para controlar la carga. */
+type PlayRouteProps = Pick<
+  PlayScreenProps,
+  'hideLoadingOverlay' | 'start' | 'onProgress' | 'onEngineReady' | 'onEngineError'
+>;
+
+function PlayScreen({
+  manifest,
+  mapId,
+  configs,
+  players,
+  koTarget,
+  hideLoadingOverlay = false,
+  start = true,
+  onProgress,
+  onEngineReady,
+  onEngineError
+}: PlayScreenProps) {
   const [, navigate] = useLocation();
   const { resetPlayers, resetRosterReady } = useSession();
 
@@ -72,8 +96,10 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
   const configsRef = useRef(configs);
   const pausedRef = useRef(false);
   const modalRef = useRef<InfoKind | null>(null);
+  const startedRef = useRef(false);
 
   const [progress, setProgress] = useState<LoadingProgress>(DEFAULT_PROGRESS);
+  const [engineReady, setEngineReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -95,10 +121,17 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
   useEffect(() => {
     handlersRef.current = {
       onReady: () => {
-        if (gameRef.current?.startMatch(configsRef.current)) setPlaying(true);
+        setEngineReady(true);
+        onEngineReady?.();
       },
-      onProgress: (next) => setProgress(next),
-      onError: (message) => setError(message),
+      onProgress: (next) => {
+        setProgress(next);
+        onProgress?.(next);
+      },
+      onError: (message) => {
+        setError(message);
+        onEngineError?.(message);
+      },
       onDevicesChanged: () => {},
       onMenuInput: (event) => {
         if (modalRef.current !== null) {
@@ -115,6 +148,15 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
       onCountdown: (remaining) => setCountdown(remaining)
     };
   });
+
+  // El motor puede terminar de cargar durante la intro (o al revés). La
+  // partida solo arranca cuando ambos lados han terminado.
+  useEffect(() => {
+    if (!start || !engineReady || startedRef.current) return;
+    if (!gameRef.current?.startMatch(configsRef.current)) return;
+    startedRef.current = true;
+    setPlaying(true);
+  }, [engineReady, start]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -262,7 +304,7 @@ function PlayScreen({ manifest, mapId, configs, players, koTarget }: PlayScreenP
         className="fixed inset-0 block size-full cursor-grab touch-none outline-none active:cursor-grabbing"
       />
 
-      {!error && !playing && (
+      {!hideLoadingOverlay && !error && !playing && (
         <LoadingScreen
           label={progress.label}
           detail="Descargando hojas de animación y preparando el mapa."
@@ -804,7 +846,7 @@ function MatchScoreboard({
   );
 }
 
-function PlayGuard() {
+function PlayGuard(props: PlayRouteProps) {
   const { manifest, mapId, matchConfigs, players, koTarget } = useSession();
 
   if (!manifest || !mapId) return <Redirect to="/lobby" />;
@@ -812,6 +854,7 @@ function PlayGuard() {
 
   return (
     <PlayScreen
+      {...props}
       manifest={manifest}
       mapId={mapId}
       configs={matchConfigs}
@@ -821,13 +864,13 @@ function PlayGuard() {
   );
 }
 
-export function PlayRoute() {
+export function PlayRoute(props: PlayRouteProps) {
   return (
     <SessionGate
       label="Preparando la partida"
       detail="Iniciando PlayCanvas y cargando el mapa elegido."
     >
-      <PlayGuard />
+      <PlayGuard {...props} />
     </SessionGate>
   );
 }

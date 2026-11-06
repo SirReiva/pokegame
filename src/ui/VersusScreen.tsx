@@ -8,7 +8,7 @@ import {
 import { TEAM_INFO, TEAM_ORDER, type LobbyPlayer } from '../game/multiplayer';
 import { skinFor } from '../game/skins';
 import type { Team } from '../game/terrain';
-import type { PokemonEntry, SpriteManifest } from '../game/types';
+import type { LoadingProgress, PokemonEntry, SpriteManifest } from '../game/types';
 import { PokemonPortrait } from './PokemonPortrait';
 
 /** Cadencia de la entrada de cada fila y duración de la animación. */
@@ -30,7 +30,13 @@ const vsWord =
 interface VersusScreenProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
-  /** Se llama cuando termina la entrada; entonces arranca la carga real. */
+  /** Progreso real de la carga de assets que se pinta en el pie. */
+  progress?: LoadingProgress | null;
+  /** `true` cuando el motor ya tiene todo lo necesario para empezar. */
+  ready?: boolean;
+  /** Se llama cuando termina la animación de entrada. */
+  onEntranceEnd?: () => void;
+  /** Se llama cuando el cartel termina de desvanecerse. */
   onDone: () => void;
 }
 
@@ -47,19 +53,31 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Cartel de versus previo a la carga de la partida. Mezcla las filas de
- * retratos tipo KOF con el corte diagonal neón rojo/azul del VS clásico.
- * La duración se calcula con las animaciones de las filas y del emblema para
- * que `onDone` se dispare justo cuando acaba la última.
+ * Cartel de versus de la partida. Mezcla las filas de retratos tipo KOF con el
+ * corte diagonal neón rojo/azul del VS clásico. Además de la intro, es la
+ * pantalla de carga real: el pie muestra el progreso de los assets y el cartel
+ * no se desvanece hasta que el motor está listo.
  */
-export function VersusScreen({ manifest, players, onDone }: VersusScreenProps) {
+export function VersusScreen({
+  manifest,
+  players,
+  progress = null,
+  ready = true,
+  onEntranceEnd,
+  onDone
+}: VersusScreenProps) {
   const onDoneRef = useRef(onDone);
   useEffect(() => {
     onDoneRef.current = onDone;
   }, [onDone]);
+  const onEntranceEndRef = useRef(onEntranceEnd);
+  useEffect(() => {
+    onEntranceEndRef.current = onEntranceEnd;
+  }, [onEntranceEnd]);
 
   const finishedRef = useRef(false);
   const [exiting, setExiting] = useState(false);
+  const [entranceDone, setEntranceDone] = useState(false);
   const reduced = prefersReducedMotion();
 
   const rosterFor = (team: Team): TeamRoster => ({
@@ -80,6 +98,10 @@ export function VersusScreen({ manifest, players, onDone }: VersusScreenProps) {
     Math.max(rowsEnd, VS_DELAY_MS + VS_DURATION_MS) + HOLD_MS + FADE_MS;
   const duration = reduced ? REDUCED_DURATION_MS : fullDuration;
   const fadeDuration = reduced ? 0 : FADE_MS;
+  const percent =
+    progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.loaded / progress.total) * 100))
+      : null;
 
   const finish = useCallback(() => {
     if (finishedRef.current) return;
@@ -87,35 +109,45 @@ export function VersusScreen({ manifest, players, onDone }: VersusScreenProps) {
     onDoneRef.current();
   }, []);
 
+  // La entrada termina por sí sola, pero el fundido y `onDone` esperan a que
+  // el motor haya cargado los assets: así el versus sustituye a la pantalla
+  // de carga en lugar de dar paso a otra.
   useEffect(() => {
-    if (reduced) {
-      const timeout = window.setTimeout(finish, duration);
-      return () => window.clearTimeout(timeout);
-    }
-
-    const fadeTimeout = window.setTimeout(
-      () => setExiting(true),
+    const timeout = window.setTimeout(
+      () => setEntranceDone(true),
       Math.max(0, duration - fadeDuration)
     );
-    const doneTimeout = window.setTimeout(finish, duration);
+    return () => window.clearTimeout(timeout);
+  }, [duration, fadeDuration]);
+
+  // Avisa una sola vez de que la animación de entrada terminó: entonces ya
+  // se puede empezar a montar PlayCanvas sin tapar la intro.
+  useEffect(() => {
+    if (entranceDone) onEntranceEndRef.current?.();
+  }, [entranceDone]);
+
+  useEffect(() => {
+    if (!entranceDone || !ready) return;
+    const fadeTimeout = window.setTimeout(() => setExiting(true), 0);
+    const doneTimeout = window.setTimeout(finish, fadeDuration);
     return () => {
       window.clearTimeout(fadeTimeout);
       window.clearTimeout(doneTimeout);
     };
-  }, [duration, fadeDuration, finish, reduced]);
+  }, [entranceDone, ready, fadeDuration, finish]);
 
-  // Enter, Espacio o Escape saltan la intro; luego la partida ya captura sus
-  // propias teclas y este componente se desmonta.
+  // Enter, Espacio o Escape saltan la intro; si los assets aún no están
+  // listos, el cartel se queda mostrando el progreso hasta que lo estén.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        finish();
+        setEntranceDone(true);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [finish]);
+  }, []);
 
   const entryFor = (pokemonId: string): PokemonEntry | null =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
@@ -205,10 +237,15 @@ export function VersusScreen({ manifest, players, onDone }: VersusScreenProps) {
           </span>
           <button
             type="button"
-            onClick={finish}
-            className="cursor-pointer rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5 font-mono text-10.08 tracking-[0.16em] uppercase text-white/70 backdrop-blur-sm transition-colors hover:border-white/40 hover:bg-black/45 hover:text-white"
+            onClick={() => setEntranceDone(true)}
+            disabled={entranceDone && !ready}
+            className={`rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5 font-mono text-10.08 tracking-[0.16em] uppercase text-white/70 backdrop-blur-sm transition-colors ${
+              entranceDone && !ready
+                ? 'cursor-default opacity-50'
+                : 'cursor-pointer hover:border-white/40 hover:bg-black/45 hover:text-white'
+            }`}
           >
-            Saltar intro ▸
+            {entranceDone && !ready ? 'Cargando…' : 'Saltar intro ▸'}
           </button>
         </div>
       </header>
@@ -230,17 +267,25 @@ export function VersusScreen({ manifest, players, onDone }: VersusScreenProps) {
       </div>
 
       <footer className="relative z-20 flex shrink-0 items-center gap-3 px-[clamp(14px,3vw,40px)] pt-2 pb-[clamp(10px,2.2vh,22px)]">
-        <span className={`${sideLabel} shrink-0 text-white/40`}>
-          Preparando el combate
+        <span className={`${sideLabel} min-w-0 max-w-[45%] truncate text-white/40`}>
+          {progress?.label ?? 'Preparando el combate'}
         </span>
         <div className="h-1 min-w-16 flex-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full origin-left animate-versus-progress rounded-full bg-[linear-gradient(90deg,var(--color-team-blue),#ffffff,var(--color-team-red))] shadow-[0_0_12px_rgb(255_255_255/0.45)]"
-            style={{ animationDuration: `${duration}ms` }}
+            className={`h-full origin-left rounded-full bg-[linear-gradient(90deg,var(--color-team-blue),#ffffff,var(--color-team-red))] shadow-[0_0_12px_rgb(255_255_255/0.45)] ${
+              percent === null
+                ? 'animate-versus-progress'
+                : 'transition-[width] duration-300 ease-out'
+            }`}
+            style={
+              percent === null
+                ? { animationDuration: `${duration}ms` }
+                : { width: `${percent}%` }
+            }
           />
         </div>
         <span className={`${sideLabel} hidden shrink-0 text-white/30 sm:block`}>
-          Cargando assets
+          {percent === null ? 'Cargando assets' : `${percent}%`}
         </span>
       </footer>
     </div>

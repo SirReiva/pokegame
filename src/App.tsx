@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { Redirect, Route, Router, Switch, useLocation } from 'wouter';
+import type { LoadingProgress } from './game/types';
 import { useHashLocation } from './router/hashLocation';
 import { HomeScreen } from './screens/HomeScreen';
 import { LobbyRoute } from './screens/LobbyRoute';
@@ -30,37 +31,74 @@ const playFallback = (
 
 /**
  * Muestra el cartel de versus antes de descargar el chunk de PlayCanvas y los
- * assets de la partida. Si no hay una partida preparada (por ejemplo al abrir
- * /play directamente), deja pasar a la ruta normal para que redirija.
+ * assets de la partida. PlayCanvas no se monta hasta que termina la animación
+ * de entrada; a partir de ahí el propio cartel muestra el progreso real y se
+ * queda en pantalla hasta que el motor está listo.
  */
 function PlayIntroGate() {
   const { bootStatus, manifest, matchConfigs, players } = useSession();
+  const [entranceDone, setEntranceDone] = useState(false);
   const [introDone, setIntroDone] = useState(false);
+  const [engineReady, setEngineReady] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<LoadingProgress | null>(null);
 
-  if (!introDone) {
-    if (bootStatus === 'loading') {
-      return (
-        <LoadingScreen
-          label="Preparando la partida"
-          detail="Leyendo el manifiesto de sprites y los equipos."
-        />
-      );
-    }
-    if (bootStatus === 'ready' && manifest && matchConfigs && players.length > 0) {
-      return (
+  if (bootStatus === 'loading') {
+    return (
+      <LoadingScreen
+        label="Preparando la partida"
+        detail="Leyendo el manifiesto de sprites y los equipos."
+      />
+    );
+  }
+
+  // Si no hay una partida preparada (por ejemplo al abrir /play directamente),
+  // deja pasar a la ruta normal para que SessionGate y PlayGuard redirijan.
+  const hasMatch =
+    bootStatus === 'ready' &&
+    manifest !== null &&
+    matchConfigs !== null &&
+    players.length > 0;
+
+  if (!hasMatch) {
+    return (
+      <Suspense fallback={playFallback}>
+        <PlayRoute />
+      </Suspense>
+    );
+  }
+
+  // La partida arranca cuando la intro ya terminó de desvanecerse y los assets
+  // están cargados. Mientras falta cualquiera de las dos, el versus se queda.
+  const showIntro = engineError === null && !introDone;
+  const startMatch = engineReady && introDone;
+
+  return (
+    <>
+      {/* PlayCanvas no se monta hasta que la animación del cartel ha
+          terminado: así el motor no empieza a cargar por debajo de la intro. */}
+      {entranceDone && (
+        <Suspense fallback={null}>
+          <PlayRoute
+            hideLoadingOverlay
+            start={startMatch}
+            onProgress={setProgress}
+            onEngineReady={() => setEngineReady(true)}
+            onEngineError={setEngineError}
+          />
+        </Suspense>
+      )}
+      {showIntro && (
         <VersusScreen
           manifest={manifest}
           players={players}
+          progress={progress}
+          ready={engineReady}
+          onEntranceEnd={() => setEntranceDone(true)}
           onDone={() => setIntroDone(true)}
         />
-      );
-    }
-  }
-
-  return (
-    <Suspense fallback={playFallback}>
-      <PlayRoute />
-    </Suspense>
+      )}
+    </>
   );
 }
 
