@@ -3754,6 +3754,9 @@ export class BotController {
         // alcance útil también lo suma.
         return prediction.distance <= def.range + targetRadius;
       case 'beam': {
+        // El haz nunca llega más allá de `range`; si el objetivo ya está fuera,
+        // no hace falta lanzar el raycast contra todos los colliders.
+        if (prediction.distance > def.range + targetRadius) return false;
         const direction = directionTo(self, prediction);
         if (direction.x === 0 && direction.z === 0) return false;
         const reach = Math.max(
@@ -3789,6 +3792,9 @@ export class BotController {
         if (def.range <= 0.1) {
           return prediction.distance <= effectiveRadius;
         }
+        // El centro cae como mucho a `range` del lanzador, así que un objetivo
+        // más lejos que eso sumado al radio efectivo no puede quedar dentro.
+        if (prediction.distance > def.range + effectiveRadius) return false;
         const direction = directionTo(self, prediction);
         // Sin dirección útil el centro cae sobre el propio lanzador.
         const reach =

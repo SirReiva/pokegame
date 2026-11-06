@@ -373,9 +373,104 @@ function segmentDistance(
 }
 
 /**
+ * Primer `t` del rayo en el que entra en un círculo expandido, o `Infinity` si
+ * no lo toca. `dx/dz` debe ser unitario. Resolver la ecuación de segundo grado
+ * evita muestrear el rayo punto a punto.
+ */
+function rayCircleEntry(
+  x: number,
+  z: number,
+  dx: number,
+  dz: number,
+  cx: number,
+  cz: number,
+  radius: number,
+  maxDistance: number
+): number {
+  const ox = x - cx;
+  const oz = z - cz;
+  const offset = ox * ox + oz * oz - radius * radius;
+  if (offset <= 0) return 0;
+  const projection = ox * dx + oz * dz;
+  if (projection > 0) return Infinity;
+  const discriminant = projection * projection - offset;
+  if (discriminant < 0) return Infinity;
+  const t = -projection - Math.sqrt(discriminant);
+  return t >= 0 && t <= maxDistance ? t : Infinity;
+}
+
+/**
+ * Primer `t` del rayo en el que entra en una cápsula (segmento engordado), o
+ * `Infinity` si no la toca. La cápsula es la unión del rectángulo central y los
+ * dos círculos de los extremos, así que basta con quedarse con la entrada más
+ * temprana de las tres.
+ */
+function rayCapsuleEntry(
+  x: number,
+  z: number,
+  dx: number,
+  dz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  radius: number,
+  maxDistance: number
+): number {
+  let best = Math.min(
+    rayCircleEntry(x, z, dx, dz, ax, az, radius, maxDistance),
+    rayCircleEntry(x, z, dx, dz, bx, bz, radius, maxDistance)
+  );
+  const ex = bx - ax;
+  const ez = bz - az;
+  const length = Math.hypot(ex, ez);
+  if (length > 0.000001) {
+    const ux = ex / length;
+    const uz = ez / length;
+    const relX = x - ax;
+    const relZ = z - az;
+    // Coordenadas locales del rectángulo: `t` avanza a lo largo del segmento y
+    // `s` perpendicular a él, con el rectángulo en [0, length] × [-radius, radius].
+    const originT = relX * ux + relZ * uz;
+    const originS = -relX * uz + relZ * ux;
+    const dirT = dx * ux + dz * uz;
+    const dirS = -dx * uz + dz * ux;
+    let enter = 0;
+    let exit = maxDistance;
+    if (Math.abs(dirT) < 0.000001) {
+      if (originT < 0 || originT > length) enter = Infinity;
+    } else {
+      let t1 = -originT / dirT;
+      let t2 = (length - originT) / dirT;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      enter = Math.max(enter, t1);
+      exit = Math.min(exit, t2);
+    }
+    if (enter <= exit) {
+      if (Math.abs(dirS) < 0.000001) {
+        if (originS < -radius || originS > radius) enter = Infinity;
+      } else {
+        let t1 = (-radius - originS) / dirS;
+        let t2 = (radius - originS) / dirS;
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        enter = Math.max(enter, t1);
+        exit = Math.min(exit, t2);
+      }
+      if (enter <= exit && enter < best) best = Math.max(0, enter);
+    }
+  }
+  return best;
+}
+
+/**
  * Distancia hasta el primer collider que corta un rayo, o `maxDistance` si no
  * hay nada. Los haces la usan para detenerse en separadores, muros y rocas en
  * vez de atravesarlos. `padding` ensancha los colliders con el radio del haz.
+ *
+ * La intersección es analítica (rayo-círculo y rayo-cápsula). Antes se avanzaba
+ * en pasos de 0,1 u y se comprobaba cada collider en cada paso: con 8 bots
+ * evaluando habilidades cada frame eso consumía ~15 % de un núcleo y provocaba
+ * caídas de FPS en las peleas.
  */
 export function raycastColliderDistance(
   x: number,
@@ -390,19 +485,31 @@ export function raycastColliderDistance(
   if (length < 0.000001 || maxDistance <= 0) return 0;
   const dx = dirX / length;
   const dz = dirZ / length;
-  // Avance fino: los separadores son cápsulas, así que comprobar punto a punto
-  // evita tener que resolver la intersección rayo-cápsula.
-  const step = 0.1;
-  const steps = Math.max(1, Math.ceil(maxDistance / step));
-  for (let index = 0; index <= steps; index++) {
-    const t = Math.min(maxDistance, (index / steps) * maxDistance);
-    const px = x + dx * t;
-    const pz = z + dz * t;
-    for (const collider of colliders) {
-      if (pointToCollider(px, pz, collider) <= padding) return t;
+  let nearest = maxDistance;
+  for (const collider of colliders) {
+    const radius = collider.radius + padding;
+    if (radius < 0) continue;
+    const t =
+      collider.type === 'circle'
+        ? rayCircleEntry(x, z, dx, dz, collider.x, collider.z, radius, nearest)
+        : rayCapsuleEntry(
+            x,
+            z,
+            dx,
+            dz,
+            collider.ax,
+            collider.az,
+            collider.bx,
+            collider.bz,
+            radius,
+            nearest
+          );
+    if (t < nearest) {
+      nearest = t;
+      if (nearest === 0) return 0;
     }
   }
-  return maxDistance;
+  return nearest;
 }
 
 /**
