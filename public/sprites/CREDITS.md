@@ -226,6 +226,20 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/0001/Normal.png
 
+## Gyarados (#0130)
+
+- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0130/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130/credits.txt
+
+### Gyarados · Shiny
+
+- <@!217899432652308480> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, RearUp, Swing, Double, Rotate, Hop
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0130/0000/0001/Normal.png
+
 ## Tyranitar (#0248)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop

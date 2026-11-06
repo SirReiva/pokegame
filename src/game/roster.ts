@@ -24,6 +24,7 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
   '0095': 4.6, // Onix: una serpiente de piedra enorme, avanza pesada
   '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
+  '0130': 6.2, // Gyarados: serpiente marina enorme; se desliza con impulso
   '0248': 4.5, // Tyranitar: mole de roca y piel dura, avanza con paso implacable
   '0144': 6.8, // Articuno: planea con calma gélida, sin prisa pero sin pausa
   '0145': 7.6, // Zapdos: alas de tormenta, el ave legendaria más veloz
@@ -69,6 +70,7 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0151': 0.36, // Mew: flota y su cuerpo real es pequeño
   '0095': 0.58, // Onix: enorme; el arte incluye cola y anillos
   '0123': 0.42, // Scyther: alas finas, manda el cuerpo
+  '0130': 0.56, // Gyarados: cuerpo largo y ancho; la cola no cuenta
   '0248': 0.52, // Tyranitar: mole compacta y pesada
   '0144': 0.56, // Articuno: cuerpo grande; las puntas de las alas no cuentan
   '0145': 0.52, // Zapdos: envergadura más estrecha que Articuno

@@ -132,7 +132,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 La configuración tiene dos rutas:
 
 1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
-2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticuatro especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
+2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticinco especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (azul o roja). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.
 
@@ -450,7 +450,7 @@ Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo meno
 - **8 direcciones según el rumbo**: cada actor conserva una dirección propia (`facing`). La fila visible se calcula con el ángulo entre ese rumbo y la cámara, usando el eje “derecha de pantalla”. Al orbitar, el sprite cambia de vista de forma continua sin dejar de mirar hacia donde mira de verdad.
 - **Rumbos independientes**: cada jugador empieza mirando al centro desde su base y solo cambia de rumbo al moverse.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
-- **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Voltorb 8,2 u/s, Mewtwo 7,8, Raikou 7,7, Zapdos 7,6, Gengar 7,6, Lugia 7,5, Greninja 7,4, Entei 7,2, Scyther 7,2, Celebi 7,1, Moltres 7,0, Mew 7,0, Suicune 7,0, Ho-Oh 6,9, Pikachu 6,9, Articuno 6,8, Lucario 6,5, Eevee 6,1, Charmander 5,8, Squirtle 5,2, Bulbasaur 4,6, Onix 4,6, Tyranitar 4,5). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
+- **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Voltorb 8,2 u/s, Mewtwo 7,8, Raikou 7,7, Zapdos 7,6, Gengar 7,6, Lugia 7,5, Greninja 7,4, Entei 7,2, Scyther 7,2, Celebi 7,1, Moltres 7,0, Mew 7,0, Suicune 7,0, Ho-Oh 6,9, Pikachu 6,9, Articuno 6,8, Lucario 6,5, Gyarados 6,2, Eevee 6,1, Charmander 5,8, Squirtle 5,2, Bulbasaur 4,6, Onix 4,6, Tyranitar 4,5). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
 - **Niebla de guerra compartida por equipo**: cada vista sombrea el mundo fuera de la unión de los radios de visión de su equipo y oculta a los Pokémon que nadie del equipo ve. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y los separadores (cordilleras y muros) y los árboles bloquean la línea de visión. El sombreado exterior es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, y los separadores añaden un decal de sombra fijo en el mundo que oscurece lo que queda detrás; el HUD de cada vista resume el rango, la ocultación y el radio de detección.
 - **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
@@ -544,6 +544,7 @@ Los rangos base viven en `POKEMON_VISION` (`src/game/vision.ts`):
 | Eevee | 9,5 u | Olfato y oído finos |
 | Voltorb | 9,5 u | Rueda sin ojos, pero detecta la electricidad cercana |
 | Tyranitar | 9,6 u | Depredador nocturno, pero con poca altura de ojos |
+| Gyarados | 10,2 u | Depredador marino, atento a lo que se mueve cerca |
 | Lucario | 10,5 u | Percibe el aura |
 | Gengar | 10,8 u | Ve en la oscuridad y siente el miedo cercano |
 | Scyther | 10,8 u | Ojos de depredador y reflejos de mantis |
@@ -764,10 +765,10 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 
 ## Limitaciones conocidas
 
-- El catálogo de habilidades cubre 18 de las 24 especies: Eevee, Zapdos, Raikou, Entei, Suicune y Ho-Oh todavía no tienen moveset y el carrusel las filtra. Cada habilidad se define en `src/game/abilities.ts` y se asigna por Pokémon en `MOVESETS`. No hay captura ni estados alterados más allá de la ralentización.
+- El catálogo de habilidades cubre 18 de las 25 especies: Eevee, Zapdos, Raikou, Entei, Suicune, Ho-Oh y Gyarados todavía no tienen moveset y el carrusel los filtra. Cada habilidad se define en `src/game/abilities.ts` y se asigna por Pokémon en `MOVESETS`. No hay captura ni estados alterados más allá de la ralentización.
 - El multijugador local es un **team deathmatch con límite de KOs configurable** (15 por defecto); no hay súbditos, torretas ni otros objetivos MOBA.
 - Los bots cubren las plazas que no ocupan mandos, pero **no sustituyen a una vista humana**: la partida necesita al menos un jugador local. Su IA es deliberadamente sencilla (percepción, A*, rotación de habilidades y huida) y solo usan las 18 especies con moveset definido.
-- La selección de Pokémon permite repetir especie aunque hay 24 especies para hasta 8 jugadores.
+- La selección de Pokémon permite repetir especie aunque hay 25 especies para hasta 8 jugadores.
 - La niebla exterior es la unión de varios círculos de pantalla por vista (uno por Pokémon vivo del equipo); los separadores añaden un decal de sombra fijo en el mundo cuya máscara también se compone por equipo. No es un polígono de visibilidad exacto y los árboles ocultan actores, pero de momento no sombrean el terreno.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.

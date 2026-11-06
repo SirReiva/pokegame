@@ -46,6 +46,7 @@ const ROSTER = [
   { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' },
   { id: '0095', name: 'Onix', types: ['Rock', 'Ground'], accent: '#b6a136' },
   { id: '0123', name: 'Scyther', types: ['Bug', 'Flying'], accent: '#a6b91a' },
+  { id: '0130', name: 'Gyarados', types: ['Water', 'Flying'], accent: '#4c8fd6', actions: ['Hop'] },
   { id: '0248', name: 'Tyranitar', types: ['Rock', 'Dark'], accent: '#6f8f6a', actions: ['Hop'] },
   { id: '0144', name: 'Articuno', types: ['Ice', 'Flying'], accent: '#7fc4dc' },
   { id: '0145', name: 'Zapdos', types: ['Electric', 'Flying'], accent: '#f2c53d' },
