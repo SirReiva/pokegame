@@ -21,9 +21,10 @@
  * gira hacia el objetivo avanzando en esa dirección antes de lanzar.
  */
 
-import { ABILITIES, type AbilityDef } from './abilities';
+import { ABILITIES, type AbilityDef, type BuffStat } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
 import {
+  computeDamage,
   pointSegmentDistance,
   raycastColliderDistance,
   segmentBlockedByColliders
@@ -231,6 +232,21 @@ const BIG_ABILITY_POWER = 100;
  * golpe entra muy reducido y su cooldown es demasiado caro para malgastarlo.
  */
 const BIG_ABILITY_MITIGATION_THRESHOLD = 0.4;
+
+/**
+ * Enfriamiento de referencia para valorar el daño por segundo. Una habilidad
+ * con 4 s de cooldown conserva su daño esperado; las más lentas se penalizan y
+ * las muy rápidas se valoran algo más, sin llegar a spamear la definitiva.
+ */
+const COOLDOWN_REFERENCE = 4;
+const COOLDOWN_WEIGHT_MIN = 0.45;
+const COOLDOWN_WEIGHT_MAX = 1.25;
+
+/** Bonus por un golpe que se espera letal, y por dejar al rival a remate. */
+const LETHAL_BONUS = 60;
+const FINISH_BONUS = 18;
+/** Fracción de vida máxima que cuenta como "a remate". */
+const FINISH_HP_FRACTION = 0.18;
 
 /**
  * Diferencia de retardo que se considera empate al interrumpir. Por debajo de
@@ -1730,6 +1746,15 @@ export class BotController {
     return best;
   }
 
+  /** Multiplicador acumulado de un stat por los buffs activos. */
+  private statMultiplier(player: MatchPlayerState, stat: BuffStat): number {
+    let multiplier = 1;
+    for (const buff of player.buffs) {
+      if (buff.stat === stat) multiplier *= buff.multiplier;
+    }
+    return multiplier;
+  }
+
   /**
    * Fracción de daño que el objetivo recibe con su escudo y sus buffs
    * defensivos activos (0-1). No mira la invulnerabilidad: esa caduca y quien
@@ -1741,16 +1766,18 @@ export class BotController {
   ): number {
     const reduction =
       target.damageReductionTimer > 0 ? target.damageReduction : 0;
-    const wantsPhysical = def !== null && def.category === 'physical';
-    const wantsSpecial = def !== null && def.category === 'special';
-    let defense = 1;
-    for (const buff of target.buffs) {
-      if (buff.stat !== 'defense' && buff.stat !== 'spDefense') continue;
-      if (wantsPhysical && buff.stat !== 'defense') continue;
-      if (wantsSpecial && buff.stat !== 'spDefense') continue;
-      // Con una habilidad concreta solo cuenta la defensa que usa. Sin ella se
-      // aplican ambas para no sobrevalorar a un rival con la defensa buffeada.
-      defense *= buff.multiplier;
+    let defense: number;
+    if (def !== null && def.category !== 'status') {
+      defense = this.statMultiplier(
+        target,
+        def.category === 'physical' ? 'defense' : 'spDefense'
+      );
+    } else {
+      // Sin una habilidad concreta (o con una de estado) se aplican ambas
+      // defensas para no sobrevalorar a un rival con una sola buffeada.
+      defense =
+        this.statMultiplier(target, 'defense') *
+        this.statMultiplier(target, 'spDefense');
     }
     const factor = (1 - reduction) / Math.max(1, defense);
     return Math.min(1, Math.max(0, factor));
@@ -2527,14 +2554,7 @@ export class BotController {
       }
 
       let score = inRange
-        ? this.scoreAbility(
-            self,
-            target,
-            def,
-            slot,
-            prediction.distance,
-            support
-          )
+        ? this.scoreAbility(self, target, def, slot, prediction, support)
         : -Infinity;
       if (support > 0) {
         score = score === -Infinity ? support : score + support;
@@ -2630,12 +2650,179 @@ export class BotController {
     return def !== null && Object.hasOwn(SUPPORT_PROFILES, def.id);
   }
 
+  /**
+   * Daño final esperado de un golpe, con stats reales, STAB, efectividad,
+   * buffs, escudo, crítico medio y factor aleatorio medio. La precisión se
+   * aplica aparte en `hitChance`.
+   */
+  private expectedDamage(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef,
+    prediction: TargetPrediction
+  ): number {
+    if (def.power <= 0 || def.category === 'status') return 0;
+    const category: 'physical' | 'special' =
+      def.category === 'physical' ? 'physical' : 'special';
+    const physical = category === 'physical';
+    const randomFactor =
+      (CONFIG.combat.randomMin + CONFIG.combat.randomMax) / 2;
+
+    // Las áreas con daño radial pegan menos en el borde. Como el bot apunta al
+    // centro previsto, la distancia relevante es la diferencia entre la
+    // posición prevista del rival y el alcance del centro.
+    let power = def.power;
+    if (def.shape === 'aoe' && def.radialDamage) {
+      const centerDistance = def.range > 0.1 ? def.range : 0;
+      const offset = Math.abs(prediction.distance - centerDistance);
+      const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
+      power *= 1 - (1 - def.radialMinDamage) * t;
+    }
+    // En las áreas `overTime`, `power` es daño por segundo. Para compararlas
+    // con un golpe instantáneo se usa el daño total si el rival permanece
+    // dentro durante toda la duración.
+    if (
+      def.shape === 'aoe' &&
+      def.aoeDamageMode === 'overTime' &&
+      def.aoeDuration > 0
+    ) {
+      power *= def.aoeDuration;
+    }
+    if (power <= 0) return 0;
+
+    const input = {
+      moveType: def.type,
+      category,
+      power,
+      attacker: self.combat,
+      defender: target.combat,
+      attackerTypes: self.types,
+      defenderTypes: target.types,
+      attackMultiplier: this.statMultiplier(
+        self,
+        physical ? 'attack' : 'spAttack'
+      ),
+      defenseMultiplier: this.statMultiplier(
+        target,
+        physical ? 'defense' : 'spDefense'
+      ),
+      randomFactor
+    };
+    const normal = computeDamage({ ...input, critical: false }).damage;
+    const critical = computeDamage({ ...input, critical: true }).damage;
+    const expected =
+      normal * (1 - CONFIG.combat.critChance) +
+      critical * CONFIG.combat.critChance;
+    const reduction =
+      target.damageReductionTimer > 0 ? target.damageReduction : 0;
+    return Math.max(1, Math.round(expected * (1 - reduction)));
+  }
+
+  /**
+   * Probabilidad estimada de que el golpe conecte. Combina precisión, error
+   * angular de la dificultad, distancia y el adelanto imperfecto contra la
+   * velocidad lateral del rival.
+   */
+  private hitChance(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef,
+    prediction: TargetPrediction
+  ): number {
+    const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
+    if (accuracy <= 0) return 0;
+    if (def.shape === 'self') return accuracy;
+
+    const targetRadius = target.hitRadius;
+    let lateralTolerance: number;
+    let aimDistance = Math.max(0.5, prediction.distance);
+    switch (def.shape) {
+      case 'melee':
+        lateralTolerance =
+          prediction.distance * Math.tan(def.halfAngle * DEG) +
+          maxHitRadius() +
+          targetRadius;
+        break;
+      case 'projectile':
+        lateralTolerance = def.radius + targetRadius;
+        break;
+      case 'beam':
+        lateralTolerance = def.radius + maxHitRadius() + targetRadius;
+        break;
+      case 'dash':
+        lateralTolerance = Math.max(0.5, def.radius) + targetRadius;
+        break;
+      case 'aoe':
+        lateralTolerance = def.radius + maxHitRadius() + targetRadius;
+        aimDistance = def.range > 0.1 ? def.range : 0.5;
+        break;
+    }
+
+    const maxAngle = Math.atan2(
+      Math.max(0.05, lateralTolerance),
+      aimDistance
+    );
+    const aimChance =
+      this.tuning.aimError > 0
+        ? clamp(maxAngle / this.tuning.aimError, 0, 1)
+        : 1;
+
+    // El adelanto usa solo una fracción de la velocidad (`lead`). La parte que
+    // falta se nota sobre todo en la velocidad lateral al disparo.
+    const direction = directionTo(self, prediction);
+    const lateralSpeed = Math.abs(
+      target.vx * direction.z - target.vz * direction.x
+    );
+    const residual = lateralSpeed * prediction.time * (1 - this.tuning.lead);
+    const motionChance = clamp(
+      1 - residual / Math.max(0.25, lateralTolerance * 2),
+      0.5,
+      1
+    );
+    return clamp(accuracy * aimChance * motionChance, 0, 1);
+  }
+
+  /**
+   * Valor de los buffs del lanzador según su magnitud, duración, stat y estado
+   * actual. Un buff de ataque vale más con vida alta; uno defensivo, con vida
+   * baja. Tener ya ese stat buffeado reduce el valor de repetirlo.
+   */
+  private buffValue(
+    self: MatchPlayerState,
+    def: AbilityDef,
+    hpFraction: number
+  ): number {
+    let value = 0;
+    for (const buff of def.buffs) {
+      const magnitude = Math.abs(buff.multiplier - 1);
+      if (magnitude < 0.001) continue;
+      let base =
+        (10 + magnitude * 100) * clamp(buff.duration / 6, 0.35, 1.5);
+      if (this.statMultiplier(self, buff.stat) !== 1) base *= 0.5;
+      switch (buff.stat) {
+        case 'attack':
+        case 'spAttack':
+          base *= 0.6 + hpFraction * 0.4;
+          break;
+        case 'defense':
+        case 'spDefense':
+          base *= 0.7 + (1 - hpFraction) * 0.7;
+          break;
+        case 'speed':
+          base *= 0.85;
+          break;
+      }
+      value += base;
+    }
+    return value;
+  }
+
   private scoreAbility(
     self: MatchPlayerState,
     target: MatchPlayerState,
     def: AbilityDef,
     slot: number,
-    distance: number,
+    prediction: TargetPrediction,
     support = 0
   ): number {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
@@ -2643,59 +2830,92 @@ export class BotController {
       def.power > 0 ||
       def.healSelf > 0 ||
       def.slow !== null ||
+      def.knockback > 0 ||
       def.buffs.length > 0 ||
       def.shield ||
       def.shape === 'dash';
     if (!hasEffect) return -Infinity;
 
-    // La efectividad multiplica el daño real, así que pesa directamente en la
-    // puntuación. Una habilidad inmune no hace daño ni aplica control: nunca es
-    // una buena elección contra ese objetivo.
-    let effectiveness = 1;
-    if (def.power > 0) {
-      effectiveness = typeEffectiveness(def.type, target.types);
-      if (effectiveness === 0) return -Infinity;
-    } else if (def.slow !== null) {
-      if (typeEffectiveness(def.type, target.types) === 0) return -Infinity;
+    // Una habilidad inmune no hace daño ni aplica control: nunca es una buena
+    // elección contra ese objetivo.
+    if (def.power > 0 && typeEffectiveness(def.type, target.types) === 0) {
+      return -Infinity;
     }
-    let score = def.power * effectiveness;
+    if (
+      def.power <= 0 &&
+      def.slow !== null &&
+      typeEffectiveness(def.type, target.types) === 0
+    ) {
+      return -Infinity;
+    }
+
+    const hitChance = this.hitChance(self, target, def, prediction);
+    const expectedDamage = this.expectedDamage(
+      self,
+      target,
+      def,
+      prediction
+    );
+    const expectedHit = expectedDamage * hitChance;
 
     const offensive = def.power > 0 || def.slow !== null;
     if (offensive && target.invulnerableTimer > 0) {
       // Si la invulnerabilidad termina antes del impacto, el golpe sí cuenta.
-      // Se estima el retardo con el windup y, en proyectiles, con el vuelo.
-      const travel =
-        def.shape === 'projectile' && def.projectileSpeed > 0
-          ? distance / def.projectileSpeed
-          : 0;
-      if (target.invulnerableTimer > def.windup + travel) return -Infinity;
+      if (target.invulnerableTimer > prediction.time) return -Infinity;
     }
+
+    const cooldownWeight = clamp(
+      COOLDOWN_REFERENCE / Math.max(0.5, def.cooldown),
+      COOLDOWN_WEIGHT_MIN,
+      COOLDOWN_WEIGHT_MAX
+    );
+    let score = 0;
 
     if (def.power > 0) {
       const mitigation = 1 - this.damageTakenFactor(target, def);
-      if (mitigation > 0) {
-        // El escudo reduce el daño esperado, así que las habilidades grandes
-        // pierden más puntos. Una habilidad grande se descarta si la
-        // mitigación es alta: su cooldown no compensa un golpe muy reducido.
-        if (
-          mitigation >= BIG_ABILITY_MITIGATION_THRESHOLD &&
-          (slot === 3 || def.power >= BIG_ABILITY_POWER)
-        ) {
-          return -Infinity;
-        }
-        score -= def.power * effectiveness * mitigation;
+      // El escudo ya rebaja el daño esperado, pero una habilidad grande cuyo
+      // golpe entra muy reducido no compensa su cooldown.
+      if (
+        mitigation >= BIG_ABILITY_MITIGATION_THRESHOLD &&
+        (slot === 3 || def.power >= BIG_ABILITY_POWER)
+      ) {
+        return -Infinity;
+      }
+      score += expectedHit * cooldownWeight;
+      // Un impacto también aplica hitstun y cancela dash/preparaciones.
+      score += 8 * hitChance;
+      if (expectedHit >= target.hp) {
+        score += LETHAL_BONUS;
+      } else if (
+        target.hp - expectedHit <=
+        target.maxHp * FINISH_HP_FRACTION
+      ) {
+        score += FINISH_BONUS;
       }
     }
 
     if (def.healSelf > 0) {
-      score += 70 + (1 - hpFraction) * 130;
+      let healScore = 70 + (1 - hpFraction) * 130;
+      // `healOnHit` solo cura si el golpe conecta.
+      if (def.healOnHit) healScore *= hitChance;
+      score += healScore;
       // No gastar la curación a vida casi llena, salvo que también cure a
       // aliados heridos: entonces el lanzamiento sí aporta.
       if (hpFraction > 0.8 && support <= 0) score -= 220;
     }
     if (def.shield) score += 55 + (1 - hpFraction) * 70;
-    if (def.buffs.length > 0) score += 35;
-    if (def.slow) score += 22;
+    if (def.buffs.length > 0) {
+      score += this.buffValue(self, def, hpFraction);
+    }
+    if (def.slow) {
+      const slowStrength = clamp(1 - def.slow.multiplier, 0, 1);
+      const durationFactor = clamp(def.slow.duration / 2.5, 0.4, 1.5);
+      score +=
+        (15 + slowStrength * 70) * durationFactor * hitChance;
+    }
+    if (def.knockback > 0) {
+      score += Math.min(20, def.knockback * 12) * hitChance;
+    }
 
     switch (def.shape) {
       case 'melee':
@@ -2703,7 +2923,7 @@ export class BotController {
         break;
       case 'projectile':
       case 'beam':
-        score += distance > 2.5 ? 16 : 0;
+        score += prediction.distance > 2.5 ? 16 : 0;
         break;
       case 'dash':
         score += 10;
@@ -2718,6 +2938,14 @@ export class BotController {
         score += 28;
         break;
     }
+
+    // Autodaño y windup son riesgos reales: cuanto más largo el segundo y más
+    // caro el primero, menos compensa lanzarlo.
+    if (def.selfDamage > 0) {
+      const selfDamage = self.maxHp * def.selfDamage;
+      score -= 15 + (selfDamage / Math.max(1, self.hp)) * 70;
+    }
+    score -= Math.min(16, def.windup * 14);
 
     // Aprovechar el windup rival: las habilidades instantáneas pueden cancelar
     // su preparación; las que tardan más que el rival llegan tarde y además
@@ -2776,7 +3004,12 @@ export class BotController {
     const targetRadius = target.hitRadius;
     switch (def.shape) {
       case 'melee':
-        return prediction.distance <= def.range + targetRadius;
+        // El sector del motor amplía el alcance con el hurtbox mayor del
+        // roster; el borde dibujado coincide con ese primer contacto.
+        return (
+          prediction.distance <=
+          def.range + maxHitRadius() + targetRadius
+        );
       case 'projectile':
         // El motor mide el impacto contra el hurtbox del objetivo, así que el
         // alcance útil también lo suma.
@@ -2813,8 +3046,9 @@ export class BotController {
             def.dashDistance + Math.max(0.5, def.radius) + targetRadius
         );
       case 'aoe': {
+        const effectiveRadius = def.radius + maxHitRadius() + targetRadius;
         if (def.range <= 0.1) {
-          return prediction.distance <= def.radius + targetRadius;
+          return prediction.distance <= effectiveRadius;
         }
         const direction = directionTo(self, prediction);
         // Sin dirección útil el centro cae sobre el propio lanzador.
@@ -2837,7 +3071,7 @@ export class BotController {
         const centerZ = self.z + direction.z * reach;
         return (
           Math.hypot(prediction.x - centerX, prediction.z - centerZ) <=
-          def.radius + targetRadius
+          effectiveRadius
         );
       }
       case 'self':

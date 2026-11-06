@@ -300,7 +300,17 @@ porque hoy pueden comer daño evitable que un humano esquivaría sin pensar.
 
 ---
 
-## 4. Evaluar habilidades con daño real
+## 4. Evaluar habilidades con daño real — ✅ Arreglado
+
+> **Estado: arreglado.** `scoreAbility` usa `computeDamage` con ataque, defensa,
+> STAB, efectividad, buffs activos, escudo, crítico medio y factor aleatorio
+> medio. Contempla el daño radial y el total de las áreas `overTime`. El daño se
+> pondera por la probabilidad de impacto (precisión, error de apuntado, distancia
+> y velocidad lateral), por la eficiencia de cooldown y por si el golpe es letal
+> o deja al rival a remate. También valora control
+> (slow/knockback/hitstun), buffs según duración y estado, el riesgo de
+> autodaño/windup, la curación `healOnHit` según su probabilidad real y mantiene
+> el descarte de habilidades grandes contra objetivos muy mitigados.
 
 ### Problema
 
