@@ -69,7 +69,7 @@ import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { DeathMarker } from './deathMarker';
 import { applyHealFraction, applyHealSelf, CAST_EFFECTS } from './effects';
-import { FogDecal, FogMask, FogView, createFogDecalMesh, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
+import { FogMask, FogView, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
 import {
   IDLE_INPUT,
   Input,
@@ -341,12 +341,10 @@ export class Game {
   private fogViews: FogView[] = [];
   /** Malla compartida por todas las vistas; se crea en la primera partida. */
   private fogMesh: pc.Mesh | null = null;
-  /** Decals de sombra de cordillera en el suelo, uno por vista. */
-  private fogDecals: FogDecal[] = [];
-  private fogDecalMesh: pc.Mesh | null = null;
   /**
    * Máscara de visibilidad world-space por equipo. Es independiente de la
-   * cámara, así que todas las vistas del mismo equipo comparten la suya.
+   * cámara, así que todas las vistas del mismo equipo comparten la suya. La
+   * misma textura la muestrea el quad de niebla de cada vista.
    */
   private readonly fogMasks = new Map<Team, FogMask>();
   /** Buffers de círculos por vista, para poner el observador local primero. */
@@ -361,6 +359,12 @@ export class Game {
     blue: new Set(),
     red: new Set()
   };
+  /**
+   * Memo de capas de FX dentro del frame actual. Varios efectos de una misma
+   * habilidad comparten anclas; sin esta caché cada uno repetía la prueba de
+   * visión del equipo. Se vacía al empezar cada frame.
+   */
+  private readonly fxVisibilityCache = new Map<string, number[]>();
   /**
    * Objetos que cada equipo ve y si están disponibles. Solo contiene puntos
    * visibles: los bots no pueden consultar el estado del resto.
@@ -1058,23 +1062,15 @@ export class Game {
       }
 
       if (layer) {
+        const mask = this.ensureFogMask(config.team);
         this.fogViews.push(
           new FogView(
             this.app.graphicsDevice,
             this.ensureFogMesh(),
             camera.entity,
             layer.id,
-            currentView
-          )
-        );
-        this.fogDecals.push(
-          new FogDecal(
-            this.app.graphicsDevice,
-            this.app.root,
-            this.ensureFogDecalMesh(),
-            layer.id,
             currentView,
-            this.ensureFogMask(config.team)
+            mask.texture
           )
         );
       }
@@ -1160,16 +1156,11 @@ export class Game {
 
     for (const fog of this.fogViews) fog.destroy();
     this.fogViews = [];
-    for (const decal of this.fogDecals) decal.destroy();
-    this.fogDecals = [];
-    // Las vistas y los decals comparten estas mallas. Al destruir sus
-    // instancias, PlayCanvas libera la malla cuando se queda sin referencias,
-    // así que no se pueden conservar para la revancha: se recrean al empezar
-    // la siguiente partida.
+    // Las vistas comparten esta malla. Al destruir sus instancias, PlayCanvas
+    // libera la malla cuando se queda sin referencias, así que no se puede
+    // conservar para la revancha: se recrea al empezar la siguiente partida.
     this.fogMesh?.destroy();
     this.fogMesh = null;
-    this.fogDecalMesh?.destroy();
-    this.fogDecalMesh = null;
     for (const mask of this.fogMasks.values()) mask.destroy();
     this.fogMasks.clear();
     this.viewCircles.length = 0;
@@ -1200,12 +1191,6 @@ export class Game {
   private ensureFogMesh(): pc.Mesh {
     if (!this.fogMesh) this.fogMesh = createFogMesh(this.app.graphicsDevice);
     return this.fogMesh;
-  }
-
-  /** Plano horizontal compartido por los decals de sombra. */
-  private ensureFogDecalMesh(): pc.Mesh {
-    if (!this.fogDecalMesh) this.fogDecalMesh = createFogDecalMesh(this.app.graphicsDevice);
-    return this.fogDecalMesh;
   }
 
   /**
@@ -1286,6 +1271,7 @@ export class Game {
     // no se simulan jugadores ni habilidades.
     if (this.matchOver) {
       this.world.update(frameDt);
+      this.fxVisibilityCache.clear();
       this.combatFx.update(frameDt);
       this.damageNumbers.update(frameDt);
       return;
@@ -1379,6 +1365,9 @@ export class Game {
   }
 
   private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
+    // La visibilidad de los FX se consulta muchas veces por frame con las
+    // mismas anclas; la memoización solo es válida dentro de este frame.
+    this.fxVisibilityCache.clear();
     // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
     // es despreciable y evita un frame de movimiento fantasma.
     for (const player of this.views) {
@@ -1415,6 +1404,11 @@ export class Game {
         // el resto de jugadores no debería seguir actuando.
         if (this.matchOver) break;
       }
+
+      // Los observadores ya no se moverán hasta el siguiente frame. Se tira la
+      // caché que pudieran haber llenado efectos creados durante `stepPlayer`
+      // para que las fases de resolución usen las posiciones finales.
+      this.fxVisibilityCache.clear();
 
       // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
       // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
@@ -3940,6 +3934,9 @@ export class Game {
     if (this.mode !== 'match' || this.views.length === 0) {
       return [this.worldLayerId];
     }
+    const cacheKey = `${ignoreTerrainConcealment ? 1 : 0}:${x}:${z}`;
+    const cached = this.fxVisibilityCache.get(cacheKey);
+    if (cached) return cached;
     const colliders = this.world.colliders;
     // La ocultación del punto sale del terreno, pero si el ancla cae sobre un
     // Pokémon se usa la suya (terreno + tipos): así el FX se oculta exactamente
@@ -3976,6 +3973,7 @@ export class Game {
       }
       if (seenTeams.has(observer.team)) layers.push(layer.id);
     });
+    this.fxVisibilityCache.set(cacheKey, layers);
     return layers;
   }
 
@@ -3984,9 +3982,9 @@ export class Game {
    *
    * Se resuelve con geometría exacta en cada frame: radio efectivo según la
    * ocultación del terreno del objetivo y línea de visión contra los oclusores.
-   * La máscara de niebla solo se usa para dibujar el decal, no para decidir si
-   * un actor existe para el motor; así su recompuesto a 20 Hz no retrasa la
-   * visibilidad de juego.
+   * La máscara de niebla solo alimenta el sombreado, no decide si un actor
+   * existe para el motor; así su recompuesto a 15 Hz no retrasa la visibilidad
+   * de juego.
    */
   private observerSeesActor(
     observer: MatchPlayerState,
@@ -4085,9 +4083,9 @@ export class Game {
     }
 
     // La máscara world-space se compone una sola vez por equipo, aunque haya
-    // varias vistas suyas en pantalla. Solo alimenta el decal de sombra: la
+    // varias vistas suyas en pantalla. Alimenta el quad de niebla: la
     // visibilidad de actores y objetos se calcula con geometría exacta cada
-    // frame para que el límite de 20 Hz no la retrase.
+    // frame para que el límite de 15 Hz no la retrase.
     const noCircles: readonly VisionCircle[] = [];
     for (const [team, mask] of this.fogMasks) {
       mask.update(circlesByTeam.get(team) ?? noCircles, dt);
@@ -4116,8 +4114,8 @@ export class Game {
         if (!target.alive && target.deathFade <= 0) continue;
         const alreadyVisible = previous[observer.team].has(target.slot);
         // La visibilidad de actores se resuelve con geometría exacta en cada
-        // frame. La máscara de niebla solo alimenta el decal: su recompuesto a
-        // 20 Hz no puede retrasar la aparición o desaparición de un rival.
+        // frame. La máscara de niebla solo alimenta el sombreado: su recompuesto
+        // a 15 Hz no puede retrasar la aparición o desaparición de un rival.
         const visible = this.observerSeesActor(
           observer,
           target,
@@ -4157,12 +4155,6 @@ export class Game {
           observer.camera.yaw,
           circles
         );
-      }
-
-      const decal = this.fogDecals[viewIndex];
-      if (decal) {
-        const screenFog = fog && camera ? fog.screenFog : null;
-        decal.update(screenFog);
       }
 
       const visibleSlots = current[observer.team];
@@ -4390,8 +4382,6 @@ export class Game {
     this.damageNumbers.destroy();
     this.fogMesh?.destroy();
     this.fogMesh = null;
-    this.fogDecalMesh?.destroy();
-    this.fogDecalMesh = null;
     this.menuCamera?.dispose();
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();

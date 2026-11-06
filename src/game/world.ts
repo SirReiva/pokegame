@@ -59,11 +59,7 @@ export interface World {
   bounds: { x: number; z: number };
   waterHeight: number;
   shadowMaterial: pc.StandardMaterial;
-  /**
-   * Mallas de separadores (cordilleras y muros). Escriben esténcil 0 para que
-   * el decal de sombra no tiña su cara visible; el resto del mundo escribe 1.
-   */
-  barrierMeshInstances: pc.MeshInstance[];
+
   update(dt: number): void;
   dispose(): void;
 }
@@ -313,7 +309,7 @@ export function buildWorld(app: pc.Application): World {
   const windMaterials: pc.StandardMaterial[] = [];
   const instancedFoliageBuffers: pc.VertexBuffer[] = [];
   const surfaceMeshes: pc.Mesh[] = [];
-  const barrierMeshInstances: pc.MeshInstance[] = [];
+
 
   // Orden transparente manual: primero las láminas de agua, después las
   // sombras de contacto y al final el anillo del jugador. Así el anillo nunca
@@ -1156,7 +1152,6 @@ export function buildWorld(app: pc.Application): World {
         instance.castShadow = true;
         instance.receiveShadow = true;
         wall.render!.meshInstances = [instance];
-        barrierMeshInstances.push(instance);
         app.root.addChild(wall);
         created.push(wall);
       }
@@ -1189,7 +1184,6 @@ export function buildWorld(app: pc.Application): World {
       instance.castShadow = true;
       instance.receiveShadow = true;
       peak.render!.meshInstances = [instance];
-      barrierMeshInstances.push(instance);
       app.root.addChild(peak);
       created.push(peak);
     });
@@ -4130,43 +4124,6 @@ export function buildWorld(app: pc.Application): World {
   shadowMaterial.update();
   materials.push(shadowMaterial);
 
-  // Máscara de esténcil del decal de sombra: el terreno, las decoraciones y
-  // los props escriben 1; los separadores escriben 0. El decal se dibuja sin
-  // depth test (para teñir la vegetación) pero solo donde el esténcil vale 1,
-  // así que su cara visible nunca queda sombreada. Si el dispositivo no tiene
-  // esténcil, el decal simplemente se dibuja como antes.
-  if (device.supportsStencil) {
-    const receiverStencil = new pc.StencilParameters({
-      func: pc.FUNC_ALWAYS,
-      ref: 1,
-      readMask: 0xff,
-      writeMask: 0xff,
-      fail: pc.STENCILOP_KEEP,
-      zfail: pc.STENCILOP_KEEP,
-      zpass: pc.STENCILOP_REPLACE
-    });
-    const barrierStencil = new pc.StencilParameters({
-      func: pc.FUNC_ALWAYS,
-      ref: 0,
-      readMask: 0xff,
-      writeMask: 0xff,
-      fail: pc.STENCILOP_KEEP,
-      zfail: pc.STENCILOP_KEEP,
-      zpass: pc.STENCILOP_REPLACE
-    });
-    const barrierSet = new Set(barrierMeshInstances);
-    for (const render of app.root.findComponents('render')) {
-      for (const instance of render.meshInstances) {
-        // Solo opacos: el agua, las partículas y las sombras de contacto no
-        // deben tocar la máscara.
-        if (instance.material?.blendType !== pc.BLEND_NONE) continue;
-        const stencil = barrierSet.has(instance) ? barrierStencil : receiverStencil;
-        instance.stencilFront = stencil;
-        instance.stencilBack = stencil;
-      }
-    }
-  }
-
   let time = 0;
 
   return {
@@ -4174,7 +4131,6 @@ export function buildWorld(app: pc.Application): World {
     bounds: { x: HALF_X, z: HALF_Z },
     waterHeight,
     shadowMaterial,
-    barrierMeshInstances,
     update(dt: number) {
       time += dt;
 

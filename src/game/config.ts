@@ -135,7 +135,7 @@ export const CONFIG = {
     /**
      * Sombras direccionales que proyecta el sol sobre el mapa. Desactivadas
      * por defecto: el mundo ya tiene las sombras de contacto de los actores y
-     * el decal de sombra de la niebla.
+     * la máscara de sombra de la niebla.
      */
     shadows: false,
     /** Resolución del shadow map; más alto = bordes más finos y más coste. */
@@ -207,9 +207,9 @@ export const CONFIG = {
      */
     mask: {
       /** Resolución del canvas y la textura: 192 = alta, 128 = equilibrada, 96 = rendimiento. */
-      size: 192,
+      size: 128,
       /** Hz máximos de recompuesto. 0 = sin límite (cada frame con cambios). */
-      updateHz: 20,
+      updateHz: 15,
       /** Movimiento mínimo (u) de un observador para recomponer la máscara. */
       moveEpsilon: 0.12,
       /** Rejilla espacial para no recorrer todos los oclusores en cada observador. */

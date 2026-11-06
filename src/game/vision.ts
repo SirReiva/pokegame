@@ -211,6 +211,223 @@ function segmentSegmentDistanceSq(
 }
 
 /**
+ * Comprueba un único oclusor. Está separado para que tanto el recorrido lineal
+ * como el indexado por rejilla compartan exactamente la misma geometría.
+ */
+function blocksSight(
+  collider: Collider,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number
+): boolean {
+  const sightRadius = collider.sightRadius;
+  if (sightRadius === undefined) return false;
+  const radiusSq = sightRadius * sightRadius;
+
+  if (collider.type === 'circle') {
+    // Si el observador o el objetivo están dentro de la copa, el árbol no
+    // queda entre ellos: no se deja cegar al que lo tiene encima ni se oculta
+    // al que está de pie bajo sus hojas. Se compara al cuadrado para no pagar
+    // una raíz por cada extremo y cada oclusor.
+    const axOff = ax - collider.x;
+    const azOff = az - collider.z;
+    if (axOff * axOff + azOff * azOff < radiusSq) return false;
+    const bxOff = bx - collider.x;
+    const bzOff = bz - collider.z;
+    if (bxOff * bxOff + bzOff * bzOff < radiusSq) return false;
+    return pointSegmentDistanceSq(collider.x, collider.z, ax, az, bx, bz) <= radiusSq;
+  }
+
+  // Mismo caso para una cordillera: si cualquiera de los extremos está pegado
+  // a su radio de visión, la cresta no tapa el horizonte entre ellos.
+  if (
+    pointSegmentDistanceSq(ax, az, collider.ax, collider.az, collider.bx, collider.bz) <
+    radiusSq
+  ) {
+    return false;
+  }
+  if (
+    pointSegmentDistanceSq(bx, bz, collider.ax, collider.az, collider.bx, collider.bz) <
+    radiusSq
+  ) {
+    return false;
+  }
+  // Si ambos puntos están del mismo lado de la cresta, la cresta no queda
+  // entre ellos: puede pasar cerca de su volumen de visión (por ejemplo, al
+  // correr junto a un muro) sin taparlos. Solo bloquea cuando los separa.
+  const sideA = orientation(
+    collider.ax,
+    collider.az,
+    collider.bx,
+    collider.bz,
+    ax,
+    az
+  );
+  const sideB = orientation(
+    collider.ax,
+    collider.az,
+    collider.bx,
+    collider.bz,
+    bx,
+    bz
+  );
+  if (sideA * sideB > 0) return false;
+  return (
+    segmentSegmentDistanceSq(
+      ax,
+      az,
+      bx,
+      bz,
+      collider.ax,
+      collider.az,
+      collider.bx,
+      collider.bz
+    ) <= radiusSq
+  );
+}
+
+/**
+ * Rejilla uniforme de oclusores de visión. Las cordilleras se muestrean en
+ * tramos de 0,8 u, así que un mapa grande puede acumular cientos de colliders
+ * con `sightRadius`; recorrerlos todos en cada par observador-objetivo cada
+ * frame era el principal coste de la visión. La rejilla inserta cada oclusor
+ * en las celdas que cubre su volumen y la consulta solo toca las celdas que
+ * atraviesa el segmento.
+ */
+class SightIndex {
+  readonly sourceLength: number;
+  private readonly occluders: readonly Collider[];
+  private readonly cellSize: number;
+  private readonly minX: number;
+  private readonly minZ: number;
+  private readonly cols: number;
+  private readonly rows: number;
+  private readonly cells: number[][];
+  private readonly seen: Uint32Array;
+  private stamp = 0;
+
+  constructor(colliders: readonly Collider[]) {
+    this.sourceLength = colliders.length;
+    const occluders: Collider[] = [];
+    let minX = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxZ = -Infinity;
+
+    for (const collider of colliders) {
+      const sightRadius = collider.sightRadius;
+      if (sightRadius === undefined) continue;
+      occluders.push(collider);
+      if (collider.type === 'circle') {
+        minX = Math.min(minX, collider.x - sightRadius);
+        maxX = Math.max(maxX, collider.x + sightRadius);
+        minZ = Math.min(minZ, collider.z - sightRadius);
+        maxZ = Math.max(maxZ, collider.z + sightRadius);
+      } else {
+        minX = Math.min(minX, collider.ax, collider.bx) - sightRadius;
+        maxX = Math.max(maxX, collider.ax, collider.bx) + sightRadius;
+        minZ = Math.min(minZ, collider.az, collider.bz) - sightRadius;
+        maxZ = Math.max(maxZ, collider.az, collider.bz) + sightRadius;
+      }
+    }
+
+    this.occluders = occluders;
+    this.cellSize = Math.max(4, CONFIG.vision.mask.gridCellSize);
+    this.minX = minX;
+    this.minZ = minZ;
+    this.cols = Math.max(1, Math.ceil((maxX - minX) / this.cellSize));
+    this.rows = Math.max(1, Math.ceil((maxZ - minZ) / this.cellSize));
+    this.cells = Array.from({ length: this.cols * this.rows }, () => []);
+    this.seen = new Uint32Array(occluders.length);
+
+    for (let index = 0; index < occluders.length; index++) {
+      const collider = occluders[index];
+      const sightRadius = collider.sightRadius as number;
+      let x0: number;
+      let x1: number;
+      let z0: number;
+      let z1: number;
+      if (collider.type === 'circle') {
+        x0 = collider.x - sightRadius;
+        x1 = collider.x + sightRadius;
+        z0 = collider.z - sightRadius;
+        z1 = collider.z + sightRadius;
+      } else {
+        x0 = Math.min(collider.ax, collider.bx) - sightRadius;
+        x1 = Math.max(collider.ax, collider.bx) + sightRadius;
+        z0 = Math.min(collider.az, collider.bz) - sightRadius;
+        z1 = Math.max(collider.az, collider.bz) + sightRadius;
+      }
+      const col0 = this.column(x0);
+      const col1 = this.column(x1);
+      const row0 = this.row(z0);
+      const row1 = this.row(z1);
+      for (let row = row0; row <= row1; row++) {
+        const base = row * this.cols;
+        for (let col = col0; col <= col1; col++) {
+          this.cells[base + col].push(index);
+        }
+      }
+    }
+  }
+
+  private column(x: number): number {
+    const column = Math.floor((x - this.minX) / this.cellSize);
+    if (column < 0) return 0;
+    if (column >= this.cols) return this.cols - 1;
+    return column;
+  }
+
+  private row(z: number): number {
+    const row = Math.floor((z - this.minZ) / this.cellSize);
+    if (row < 0) return 0;
+    if (row >= this.rows) return this.rows - 1;
+    return row;
+  }
+
+  blocked(ax: number, az: number, bx: number, bz: number): boolean {
+    if (this.occluders.length === 0) return false;
+    if (this.stamp >= 0xfffffff0) {
+      this.seen.fill(0);
+      this.stamp = 0;
+    }
+    const stamp = ++this.stamp;
+    const col0 = this.column(Math.min(ax, bx));
+    const col1 = this.column(Math.max(ax, bx));
+    const row0 = this.row(Math.min(az, bz));
+    const row1 = this.row(Math.max(az, bz));
+    for (let row = row0; row <= row1; row++) {
+      const base = row * this.cols;
+      for (let col = col0; col <= col1; col++) {
+        for (const index of this.cells[base + col]) {
+          if (this.seen[index] === stamp) continue;
+          this.seen[index] = stamp;
+          if (blocksSight(this.occluders[index], ax, az, bx, bz)) return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/**
+ * La rejilla se construye una vez por lista de colliders. El mundo entrega la
+ * misma instancia durante toda la partida, así que la clave débil evita atarla
+ * a la vida de `Game` y se invalida sola al cambiar de mapa.
+ */
+const sightIndexCache = new WeakMap<readonly Collider[], SightIndex>();
+
+function sightIndexOf(colliders: readonly Collider[]): SightIndex | null {
+  if (colliders.length === 0) return null;
+  const cached = sightIndexCache.get(colliders);
+  if (cached && cached.sourceLength === colliders.length) return cached;
+  const index = new SightIndex(colliders);
+  sightIndexCache.set(colliders, index);
+  return index;
+}
+
+/**
  * ¿Hay una montaña o un árbol entre `a` y `b`? Solo los colliders con
  * `sightRadius` bloquean la visión; las rocas bajas, los cactus y los adornos
  * de las bases no cuentan. El radio de visión de los árboles es mayor que el de
@@ -230,73 +447,10 @@ export function lineOfSightBlocked(
   bz: number,
   colliders: readonly Collider[]
 ): boolean {
+  const index = sightIndexOf(colliders);
+  if (index) return index.blocked(ax, az, bx, bz);
   for (const collider of colliders) {
-    const sightRadius = collider.sightRadius;
-    if (sightRadius === undefined) continue;
-    const radiusSq = sightRadius * sightRadius;
-
-    if (collider.type === 'circle') {
-      // Si el observador o el objetivo están dentro de la copa, el árbol no
-      // queda entre ellos: no se deja cegar al que lo tiene encima ni se oculta
-      // al que está de pie bajo sus hojas.
-      if (Math.hypot(ax - collider.x, az - collider.z) < sightRadius) continue;
-      if (Math.hypot(bx - collider.x, bz - collider.z) < sightRadius) continue;
-      if (
-        pointSegmentDistanceSq(collider.x, collider.z, ax, az, bx, bz) <= radiusSq
-      ) {
-        return true;
-      }
-    } else {
-      // Mismo caso para una cordillera: si cualquiera de los extremos está
-      // pegado a su radio de visión, la cresta no tapa el horizonte entre ellos.
-      if (
-        pointSegmentDistanceSq(ax, az, collider.ax, collider.az, collider.bx, collider.bz) <
-        radiusSq
-      ) {
-        continue;
-      }
-      if (
-        pointSegmentDistanceSq(bx, bz, collider.ax, collider.az, collider.bx, collider.bz) <
-        radiusSq
-      ) {
-        continue;
-      }
-      // Si ambos puntos están del mismo lado de la cresta, la cresta no queda
-      // entre ellos: puede pasar cerca de su volumen de visión (por ejemplo, al
-      // correr junto a un muro) sin taparlos. Solo bloquea cuando los separa.
-      const sideA = orientation(
-        collider.ax,
-        collider.az,
-        collider.bx,
-        collider.bz,
-        ax,
-        az
-      );
-      const sideB = orientation(
-        collider.ax,
-        collider.az,
-        collider.bx,
-        collider.bz,
-        bx,
-        bz
-      );
-      if (sideA * sideB > 0) continue;
-      if (
-        segmentSegmentDistanceSq(
-          ax,
-          az,
-          bx,
-          bz,
-          collider.ax,
-          collider.az,
-          collider.bx,
-          collider.bz
-        ) <=
-        radiusSq
-      ) {
-        return true;
-      }
-    }
+    if (blocksSight(collider, ax, az, bx, bz)) return true;
   }
   return false;
 }
