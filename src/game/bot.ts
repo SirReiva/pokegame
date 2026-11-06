@@ -233,6 +233,18 @@ const INTERRUPT_DELAY_TOLERANCE = 0.05;
  */
 const MIN_ABILITY_SCORE = 0;
 
+/**
+ * Margen alrededor de un peligro ya lanzado. Se suma al radio propio y al
+ * `hitRadius` del bot para decidir cuándo empieza a apartarse.
+ */
+const HAZARD_SAFETY_MARGIN = 0.12;
+/** Margen extra para no quedarse justo en el borde de un área persistente. */
+const HAZARD_AOE_MARGIN = 0.18;
+/** Distancia que se comprueba al elegir una dirección de huida. */
+const HAZARD_ESCAPE_STEP = 1.4;
+/** Por debajo de esta velocidad un proyectil se trata como estático. */
+const HAZARD_MIN_PROJECTILE_SPEED = 0.05;
+
 /** Puntuación de revivir a un aliado caído con un área de apoyo. */
 const SUPPORT_REVIVE_SCORE = 180;
 /** Puntuación por cada fracción de vida que un área de apoyo cura a un aliado. */
@@ -335,6 +347,23 @@ export function createBotSquad(): BotSquad {
   };
 }
 
+/** Peligro ya lanzado que el bot debe esquivar aunque no haya windup rival. */
+export interface BotHazard {
+  kind: 'projectile' | 'aoe' | 'zone';
+  x: number;
+  z: number;
+  /** Radio propio del peligro; el bot suma después su propio `hitRadius`. */
+  radius: number;
+  vx?: number;
+  vz?: number;
+  /** Segundos que el peligro seguirá activo. */
+  remaining?: number;
+  ownerTeam: MatchPlayerState['team'];
+}
+
+/** Sin peligros externos (partidas sin bots o primer frame). */
+const NO_HAZARDS: readonly BotHazard[] = [];
+
 /** Amenaza inmediata creada por el windup visible de un rival. */
 interface IncomingThreat {
   source: MatchPlayerState;
@@ -351,6 +380,13 @@ interface InterruptPlan {
   slot: number;
   /** Posición proyectada del rival cuando el golpe llegue. */
   aim: Vec2;
+}
+
+/** Dirección para salir del peligro ya lanzado más urgente. */
+interface HazardEvasion {
+  direction: Vec2;
+  /** Cuanto más alto, más prioridad tiene frente a otros peligros. */
+  severity: number;
 }
 
 type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
@@ -407,6 +443,10 @@ export class BotController {
   private visibleTimer = 0;
   private visibleEnemies: MatchPlayerState[] = [];
   private threat: IncomingThreat | null = null;
+  /** Peligros ya lanzados (proyectiles y áreas persistentes) de este frame. */
+  private hazards: readonly BotHazard[] = NO_HAZARDS;
+  /** Salida del peligro ya lanzado más urgente, o `null` si no hay ninguno. */
+  private hazardEvasion: HazardEvasion | null = null;
   private lastSeen: { x: number; z: number; at: number } | null = null;
   /** Lecturas por rival de su windup actual, para no volver a tirar cada frame. */
   private punishReads = new Map<number, PunishRead>();
@@ -514,7 +554,8 @@ export class BotController {
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
     colliders: readonly Collider[],
-    knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE
+    knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE,
+    hazards: readonly BotHazard[] = NO_HAZARDS
   ): DeviceInputSnapshot {
     this.clock += dt;
     this.pickupKnowledge = knownPickups;
@@ -524,10 +565,12 @@ export class BotController {
       return { ...IDLE_INPUT };
     }
 
+    this.hazards = hazards;
     this.updateAllyMotion(dt, self, players);
     this.recordTrail(dt, self);
     this.updateTarget(dt, self, players, colliders);
     this.updateThreat(self);
+    this.updateHazardEvasion(self, colliders);
 
     // Un dash, hitstun o una preparación que clava al lanzador consumen el
     // frame: el snapshot idle evita pulsar habilidades que el motor rechaza.
@@ -589,6 +632,8 @@ export class BotController {
     this.visibleTimer = 0;
     this.visibleEnemies = [];
     this.threat = null;
+    this.hazards = NO_HAZARDS;
+    this.hazardEvasion = null;
     this.lastSeen = null;
     this.punishReads.clear();
     this.abilitySlot = null;
@@ -1130,6 +1175,186 @@ export class BotController {
   }
 
   /**
+   * Elige el peligro ya lanzado que más urge esquivar. A diferencia de
+   * `updateThreat`, aquí no hay windup: el proyectil o el área ya existen y el
+   * bot debe salir de su trayectoria sin esperar a que el rival vuelva a actuar.
+   */
+  private updateHazardEvasion(
+    self: MatchPlayerState,
+    colliders: readonly Collider[]
+  ): void {
+    let best: HazardEvasion | null = null;
+    for (const hazard of this.hazards) {
+      if (hazard.ownerTeam === self.team) continue;
+      const evasion = this.hazardEvasionFrom(self, hazard, colliders);
+      if (evasion && (!best || evasion.severity > best.severity)) {
+        best = evasion;
+      }
+    }
+    this.hazardEvasion = best;
+  }
+
+  private hazardEvasionFrom(
+    self: MatchPlayerState,
+    hazard: BotHazard,
+    colliders: readonly Collider[]
+  ): HazardEvasion | null {
+    const remaining = hazard.remaining ?? Infinity;
+    if (remaining <= 0) return null;
+
+    if (hazard.kind === 'projectile') {
+      const vx = hazard.vx ?? 0;
+      const vz = hazard.vz ?? 0;
+      const speed = Math.hypot(vx, vz);
+      if (speed < HAZARD_MIN_PROJECTILE_SPEED) return null;
+
+      const toSelfX = self.x - hazard.x;
+      const toSelfZ = self.z - hazard.z;
+      const along = toSelfX * vx + toSelfZ * vz;
+      // Un proyectil que ya pasó de largo solo importa si el bot está encima
+      // de su radio en este instante.
+      const timeToClosest =
+        along > 0 ? Math.min(along / (speed * speed), remaining) : 0;
+      const closestX = hazard.x + vx * timeToClosest;
+      const closestZ = hazard.z + vz * timeToClosest;
+      const distance = Math.hypot(self.x - closestX, self.z - closestZ);
+      const dangerRadius =
+        hazard.radius + self.hitRadius + HAZARD_SAFETY_MARGIN;
+      if (distance > dangerRadius) return null;
+
+      // La reacción depende de la dificultad: los bots fáciles reaccionan más
+      // tarde y los expertos empiezan a apartarse antes.
+      const horizon = Math.max(
+        0.2,
+        0.3 + this.tuning.evadeWindow * 0.6
+      );
+      if (timeToClosest > horizon) return null;
+
+      // Un obstáculo entre el proyectil y el bot lo detendría antes.
+      if (
+        segmentBlockedByColliders(
+          hazard.x,
+          hazard.z,
+          closestX,
+          closestZ,
+          colliders,
+          Math.max(0.05, hazard.radius)
+        )
+      ) {
+        return null;
+      }
+
+      let direction = { x: self.x - closestX, z: self.z - closestZ };
+      let length = Math.hypot(direction.x, direction.z);
+      if (length < 0.05) {
+        // Justo sobre la línea de tiro: apartarse en perpendicular.
+        direction = {
+          x: (-vz / speed) * this.orbitSide,
+          z: (vx / speed) * this.orbitSide
+        };
+        length = 1;
+      }
+      direction = {
+        x: direction.x / length,
+        z: direction.z / length
+      };
+      return {
+        direction: this.pickHazardEscape(self, direction, colliders),
+        severity:
+          100 +
+          (1 - timeToClosest / horizon) * 80 +
+          (1 - distance / dangerRadius) * 40
+      };
+    }
+
+    const dx = self.x - hazard.x;
+    const dz = self.z - hazard.z;
+    const distance = Math.hypot(dx, dz);
+    const dangerRadius =
+      hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN;
+    if (distance > dangerRadius) return null;
+
+    // Las áreas tampoco atraviesan un muro: si el centro no tiene línea hasta
+    // el bot, sus ticks no le alcanzan.
+    if (
+      segmentBlockedByColliders(hazard.x, hazard.z, self.x, self.z, colliders)
+    ) {
+      return null;
+    }
+
+    let direction = { x: dx, z: dz };
+    let length = distance;
+    if (length < 0.05) {
+      direction = {
+        x: -Math.sin(self.facing) * this.orbitSide,
+        z: Math.cos(self.facing) * this.orbitSide
+      };
+      length = 1;
+    }
+    direction = {
+      x: direction.x / length,
+      z: direction.z / length
+    };
+    return {
+      direction: this.pickHazardEscape(self, direction, colliders),
+      severity: 140 + (1 - distance / dangerRadius) * 80
+    };
+  }
+
+  /**
+   * Si la huida directa choca con un obstáculo, prueba los laterales antes de
+   * quedarse empujando contra una pared.
+   */
+  private pickHazardEscape(
+    self: MatchPlayerState,
+    direction: Vec2,
+    colliders: readonly Collider[]
+  ): Vec2 {
+    const left = {
+      x: -direction.z * this.orbitSide,
+      z: direction.x * this.orbitSide
+    };
+    const right = { x: -left.x, z: -left.z };
+    const candidates: Vec2[] = [
+      direction,
+      left,
+      right,
+      { x: -direction.x, z: -direction.z }
+    ];
+    for (const candidate of candidates) {
+      const endX = self.x + candidate.x * HAZARD_ESCAPE_STEP;
+      const endZ = self.z + candidate.z * HAZARD_ESCAPE_STEP;
+      if (!segmentBlockedByColliders(self.x, self.z, endX, endZ, colliders)) {
+        return candidate;
+      }
+    }
+    return direction;
+  }
+
+  /** ¿El trayecto hasta `point` cruza un área persistente enemiga? */
+  private hazardPathBlocked(self: MatchPlayerState, point: Vec2): boolean {
+    for (const hazard of this.hazards) {
+      if (hazard.ownerTeam === self.team) continue;
+      if (hazard.kind === 'projectile') continue;
+      if ((hazard.remaining ?? Infinity) <= 0) continue;
+      const distance = pointSegmentDistance(
+        hazard.x,
+        hazard.z,
+        self.x,
+        self.z,
+        point.x,
+        point.z
+      );
+      if (
+        distance <= hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Habilidad que puede golpear al lanzador rival antes de que termine su
    * windup. Un impacto cancela la preparación en `game.ts`.
    */
@@ -1244,6 +1469,12 @@ export class BotController {
     this.abilitySlot = null;
     this.supportCast = false;
     this.useCommon = false;
+    // Con un peligro ya encima, Impulso es una salida válida aunque no haya un
+    // rival cerca: la rama de huida de `drive` solo necesita saber si toca
+    // intentarlo.
+    if (this.hazardEvasion && self.commonAbilityId === 'impulso') {
+      this.useCommon = Math.random() < this.tuning.commonChance;
+    }
 
     // Lectura de tipos del objetivo: atacar solo si podemos dañarlo, y huir
     // antes si nos supera claramente en efectividad.
@@ -1275,7 +1506,10 @@ export class BotController {
     // Regeneración solo funciona si ningún rival le ve. Un windup visible que
     // todavía puede alcanzarle también hace peligroso quedarse quieto.
     const regenSafe =
-      hidden && nearestEnemy > REGEN_DANGER_RADIUS && this.threat === null;
+      hidden &&
+      nearestEnemy > REGEN_DANGER_RADIUS &&
+      this.threat === null &&
+      this.hazardEvasion === null;
     const canRecover =
       (regenBot && regenSafe) || this.findHealSlot(self) !== null;
     // Los objetos se conocen por posición desde el principio. Si el equipo ya
@@ -1591,6 +1825,10 @@ export class BotController {
     const cell = this.nav.worldToCell(point.x, point.z);
     if (!this.nav.isWalkable(cell.row, cell.col)) return false;
     if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) return false;
+    // Tampoco vale esconderse dentro de un charco o cruzar uno camino del
+    // punto: los ticks del área seguirían haciendo daño aunque no hubiera nadie
+    // a la vista.
+    if (this.hazardPathBlocked(self, point)) return false;
 
     const enemies = this.visibleEnemies.filter(
       (enemy) => enemy.alive && enemy.team !== self.team
@@ -1835,8 +2073,16 @@ export class BotController {
     const snapshot: DeviceInputSnapshot = { ...IDLE_INPUT };
     if (this.recovering) {
       // Movimiento cauteloso: sigue oculto, no ataca y va a media velocidad.
-      const regenDirection = this.regenMove(self, colliders, dt);
-      this.applyMovement(snapshot, self, regenDirection, REGEN_MOVE_SCALE);
+      // Si aparece un peligro ya lanzado, salir manda sobre mantener la
+      // cobertura: quedarse regenerando dentro de un charco regala vida.
+      const escape = this.hazardEvasion?.direction ?? null;
+      const regenDirection = escape ?? this.regenMove(self, colliders, dt);
+      this.applyMovement(
+        snapshot,
+        self,
+        regenDirection,
+        escape ? 1 : REGEN_MOVE_SCALE
+      );
       return snapshot;
     }
     const target = this.target;
@@ -1845,8 +2091,11 @@ export class BotController {
     const channeling = self.pendingCast !== null;
     // El destino solo guía el movimiento cuando no hay combate ni amenaza:
     // en esos casos el bot orbita al rival a propósito y no debe considerarse
-    // un atasco.
-    const steeringToGoal = this.threat === null && (this.retreat || !targetIsVisible);
+    // un atasco. Esquivar un peligro ya lanzado tampoco es un atasco.
+    const steeringToGoal =
+      this.threat === null &&
+      this.hazardEvasion === null &&
+      (this.retreat || !targetIsVisible);
     let desired: Vec2 = { x: 0, z: 0 };
     let casting = false;
 
@@ -1882,6 +2131,29 @@ export class BotController {
         // daño si el bot la tiene disponible.
         desired = threat.evade;
         if (!channeling && this.useCommon && self.commonAbilityId === 'proteccion') {
+          this.pulseCommon(snapshot, self, true);
+        }
+      }
+    } else if (this.hazardEvasion) {
+      // Un peligro ya lanzado tiene prioridad sobre atacar o mantener la
+      // posición: el bot sale de la trayectoria del proyectil o del área.
+      this.supportCast = false;
+      desired = this.hazardEvasion.direction;
+      if (
+        !channeling &&
+        this.useCommon &&
+        self.commonAbilityId === 'impulso' &&
+        self.cooldowns[4] <= 0.001 &&
+        self.damageReductionTimer <= 0
+      ) {
+        const error = Math.abs(
+          normalizeAngle(
+            Math.atan2(desired.x, desired.z) - self.facing
+          )
+        );
+        if (error <= this.tuning.aimTolerance + 0.08) {
+          // Impulso recorre varios metros en la dirección de `facing`: además
+          // de esquivar, saca al bot de un área persistente antes del tick.
           this.pulseCommon(snapshot, self, true);
         }
       }

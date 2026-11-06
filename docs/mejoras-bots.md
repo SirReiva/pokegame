@@ -237,7 +237,15 @@ dash siguen usando `facing`, porque sus ejecutores no leen `targetX`/`targetZ`.
 
 ---
 
-## 3. Evitar peligros ya lanzados
+## 3. Evitar peligros ya lanzados — ✅ Arreglado
+
+> **Estado: arreglado.** `game.ts` construye una vez por frame una vista
+> compacta de proyectiles en vuelo y áreas persistentes enemigas y se la pasa a
+> cada bot. El bot predice el punto de máxima aproximación de cada proyectil,
+> sale de las áreas que ya le cubren y no elige puntos de regeneración ni
+> trayectos que crucen un charco. Si tiene `Impulso` disponible, puede usarlo
+> para completar la huida. El peligro ya lanzado tiene prioridad sobre atacar o
+> mantener la posición de combate, pero no sobre interrumpir un windup rival.
 
 ### Problema
 
@@ -248,8 +256,9 @@ dash siguen usando `facing`, porque sus ejecutores no leen `targetX`/`targetZ`.
 - zonas de daño en el suelo,
 - proyectiles que van a impactar en los próximos frames.
 
-El motor sí tiene esa información (`projectiles` y `activeAoes` en
-`src/game/game.ts:314-316`), pero no se le pasa al bot.
+El motor ya tiene esa información (`projectiles` y `activeAoes` en
+`src/game/game.ts:314-316`); ahora `buildBotHazards` la resume y se la pasa a
+cada bot junto con los objetos conocidos.
 
 ### Mejora propuesta
 

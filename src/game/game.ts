@@ -43,7 +43,11 @@ import {
   startMatchMusic,
   stopMatchMusic
 } from './audio';
-import { BotController, createBotSquad } from './bot';
+import {
+  BotController,
+  createBotSquad,
+  type BotHazard
+} from './bot';
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
@@ -1333,6 +1337,47 @@ export class Game {
     this.pickups?.update(dt, [this.menuCamera.position]);
   }
 
+  /**
+   * Resume los peligros ya lanzados para la IA: proyectiles en vuelo y áreas
+   * persistentes que siguen haciendo daño. El bot no necesita el `AbilityDef`
+   * completo, solo su posición, radio y tiempo de vida para apartarse a tiempo.
+   */
+  private buildBotHazards(): BotHazard[] {
+    const hazards: BotHazard[] = [];
+    for (const projectile of this.projectiles) {
+      if (projectile.def.power <= 0 && projectile.def.slow === null) continue;
+      const speed = Math.hypot(projectile.vx, projectile.vz);
+      const remainingDistance = Math.max(
+        0,
+        projectile.def.range - projectile.traveled
+      );
+      hazards.push({
+        kind: 'projectile',
+        x: projectile.x,
+        z: projectile.z,
+        radius: Math.max(0.05, projectile.def.radius),
+        vx: projectile.vx,
+        vz: projectile.vz,
+        remaining: speed > 0.0001 ? remainingDistance / speed : 0,
+        ownerTeam: projectile.owner.team
+      });
+    }
+    for (const aoe of this.activeAoes) {
+      if (aoe.def.power <= 0 && aoe.def.slow === null) continue;
+      hazards.push({
+        kind: 'aoe',
+        x: aoe.x,
+        z: aoe.z,
+        // El motor compara contra el hurtbox mayor del roster, igual que el
+        // aro visual; el bot suma después su propio `hitRadius`.
+        radius: aoe.radius + maxHitRadius(),
+        remaining: Math.max(0, aoe.duration - aoe.elapsed),
+        ownerTeam: aoe.owner.team
+      });
+    }
+    return hazards;
+  }
+
   private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
     // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
     // es despreciable y evita un frame de movimiento fantasma.
@@ -1347,6 +1392,11 @@ export class Game {
 
     if (!frozen) {
       this.matchElapsed += dt;
+      // Vista compacta de lo que ya está en el aire. Se construye una vez por
+      // frame y todos los bots de ambos equipos la comparten: cada uno filtra
+      // por `ownerTeam`.
+      const hazards =
+        this.bots.size > 0 ? this.buildBotHazards() : [];
 
       for (const player of this.matchPlayers) {
         const bot = player.isBot ? this.bots.get(player.slot) : null;
@@ -1356,7 +1406,8 @@ export class Game {
               player,
               this.matchPlayers,
               this.world.colliders,
-              this.pickupKnowledge[player.team]
+              this.pickupKnowledge[player.team],
+              hazards
             )
           : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
         this.stepPlayer(player, input, dt);
