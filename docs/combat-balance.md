@@ -116,6 +116,11 @@
 > ahora `lineOfSight`; `reviveAoeAlly` descarta los marcadores tapados por un
 > muro, roca o cordillera y `supportScore` solo valora revivir aliados con línea
 > de visión.
+>
+> **Actualización 2026-11-06 (4)**: arreglado 3.15. La máscara de niebla queda
+> solo para el decal de sombra; actores, objetos y FX vuelven a resolverse con
+> geometría exacta cada frame, así que el recompuesto a 20 Hz ya no retrasa su
+> visibilidad.
 
 ## Resumen ejecutivo
 
@@ -315,9 +320,8 @@ cobertura de tipos.
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
 | 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante. |
-| 3.15 Máscara de niebla a 20 Hz | **nuevo** | La visibilidad de actores, objetos y FX puede quedar hasta ~50 ms desfasada. |
 
-Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.14 y 3.16) corresponden a apartados ya corregidos y retirados de la lista.
+Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.16) corresponden a apartados ya corregidos y retirados de la lista.
 
 ### 3.1. Cobertura: 6 especies sin moveset (crítico)
 
@@ -515,25 +519,6 @@ detrás de un árbol o un muro puede acortar el dash aunque el camino esté libr
 `dashPosition` necesita un flag para ignorar jugadores (o al menos aliados) y
 `dashEnemyLimit` debe comprobar LOS; si todos los dashes deben detenerse, quitar
 o documentar `dashBlocksOnEnemies` y unificar la distancia.
-
-### 3.15. La máscara de niebla a 20 Hz alimenta la visibilidad de juego (bajo-medio)
-
-`CONFIG.vision.mask.updateHz` vale 20 (`config.ts:212`) y `FogMask.update` sale
-antes de recomponer si no ha pasado el intervalo (`fog.ts:589-598`). Esa misma
-máscara se consulta para decidir si se dibujan actores y objetos y si se ven sus
-FX (`maskSeesPoint` → `observerSeesActor`, `teamSeesPoint` y
-`teamSeesPickupPoint`, `game.ts:3922-4004`).
-
-Durante hasta ~50 ms la visibilidad puede quedar desfasada: un Pokémon que acaba
-de esconderse detrás de un árbol sigue dibujándose, o uno que acaba de salir de
-cobertura tarda en aparecer. En objetos, el retraso puede mostrar la poción un
-frame después de que la zona quede a oscuras. La distancia efectiva se comprueba
-aparte, así que el efecto se limita a la línea de visión, pero rompe la
-correspondencia exacta entre lo que se ve y lo que el motor considera visible.
-
-**Arreglo**: separar la máscara visual (20 Hz) de la consulta de visibilidad de
-juego, o desactivar el límite para las consultas de actores y objetos. Como
-mínimo, usar geometría exacta cuando el resultado de la máscara sea decisivo.
 
 ## 4. Estudio cuantitativo del balance
 
