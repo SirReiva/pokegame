@@ -32,7 +32,7 @@ táctica y evaluar mejor las consecuencias de cada decisión.
 | 4 | Corregir fugas de información y bugs concretos | Medio | Bajo |
 | 5 | Coordinación de equipo — ✅ Hecho | Alto | Medio |
 | 6 | Evaluar retirada/agresión con recursos y número de jugadores | Alto | Medio |
-| 7 | Movimiento táctico y uso del terreno | Medio | Medio |
+| 7 | Movimiento táctico y uso del terreno — ✅ Hecho | Medio | Medio |
 | 8 | Dificultad, personalidad y composición de bots | Medio | Bajo |
 | 9 | Tests, simulación, debug y rendimiento | Alto a largo plazo | Medio |
 
@@ -508,9 +508,18 @@ Y no dar la huida por terminada si el perseguidor sigue cerca.
 
 ---
 
-## 7. Movimiento táctico y uso del terreno
+## 7. Movimiento táctico y uso del terreno — ✅ Arreglado
 
-### 7.1 Distancia de combate
+> **Estado: arreglado.** `preferredRange` se ajusta con las amenazas listas del
+> rival: mantiene distancia fuera del melee, se aparta de la línea de un haz,
+> se vuelve más agresivo si el rival está ralentizado o sin habilidades clave,
+> y no intenta kite cuando el bot está ralentizado y es más lento. La
+> navegación A* ahora pondera el coste del terreno por tipo de Pokémon, evita
+> terreno hostil y prefiere cobertura al huir. La patrulla reparte zonas entre
+> aliados, y durante la retirada se busca un punto cercano de cobertura que
+> rompa la línea de visión antes de seguir hacia la base.
+
+### 7.1 Distancia de combate — ✅ Arreglado
 
 `preferredRange` (`src/game/bot.ts:2217`) solo mira la habilidad seleccionada.
 Añadir las amenazas del rival:
@@ -521,7 +530,7 @@ Añadir las amenazas del rival:
 - si tiene habilidades clave en cooldown, acercarse,
 - si el bot está ralentizado, no intentar kite imposible.
 
-### 7.2 Terreno
+### 7.2 Terreno — ✅ Arreglado
 
 `BotNavGrid` trata todas las celdas transitables igual. Añadir coste por celda:
 
@@ -530,13 +539,13 @@ Añadir las amenazas del rival:
 - evitar agua profunda o terreno hostil,
 - preferir hierba alta para emboscar o retirarse.
 
-### 7.3 Patrulla
+### 7.3 Patrulla — ✅ Arreglado
 
 `pickSearchPoint` (`src/game/bot.ts:1568`) elige puntos aleatorios del mapa.
 Puede provocar que varios bots se junten o que cubran mal el mapa. Una influencia
 de equipo o un reparto de zonas daría una patrulla más creíble.
 
-### 7.4 Cobertura
+### 7.4 Cobertura — ✅ Arreglado
 
 Durante la huida, el bot va a la base o a una poción. Podría usar la cobertura
 más cercana para romper línea de visión, igual que ya hace al regenerar.

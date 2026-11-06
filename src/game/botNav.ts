@@ -20,6 +20,8 @@ import {
   onMountain,
   terrainAtCell
 } from './terrain';
+import { terrainSpeedEffect } from './terrainSpeed';
+import { terrainConcealment } from './vision';
 import type { Collider } from './world';
 
 export interface NavPoint {
@@ -27,6 +29,14 @@ export interface NavPoint {
   z: number;
   row: number;
   col: number;
+}
+
+/** Preferencias de coste para una ruta concreta. */
+export interface NavPathOptions {
+  /** Tipos del Pokémon: el terreno cómodo cuesta menos y el hostil más. */
+  types?: readonly string[];
+  /** Penaliza más las celdas abiertas para buscar cobertura al huir. */
+  preferConcealment?: boolean;
 }
 
 interface OpenNode {
@@ -159,7 +169,13 @@ export class BotNavGrid {
    * es inalcanzable devuelve la ruta al punto explorado más cercano, para que
    * el bot no se quede parado contra un muro.
    */
-  findPath(sx: number, sz: number, gx: number, gz: number): NavPoint[] {
+  findPath(
+    sx: number,
+    sz: number,
+    gx: number,
+    gz: number,
+    options: NavPathOptions = {}
+  ): NavPoint[] {
     const startCell = this.worldToCell(sx, sz);
     const goalCell = this.worldToCell(gx, gz);
     const start = this.nearestWalkable(startCell.row, startCell.col);
@@ -176,7 +192,17 @@ export class BotNavGrid {
     const cameFrom = new Int32Array(total);
     cameFrom.fill(-1);
     const closed = new Uint8Array(total);
+    const stepCostCache = new Float32Array(total);
     const open = new MinHeap();
+    const stepCost = (row: number, col: number): number => {
+      const cacheIndex = this.index(row, col);
+      let value = stepCostCache[cacheIndex];
+      if (value === 0) {
+        value = this.terrainStepCost(row, col, options);
+        stepCostCache[cacheIndex] = value;
+      }
+      return value;
+    };
 
     const heuristic = (index: number): number => {
       const row = Math.floor(index / this.cols);
@@ -222,7 +248,7 @@ export class BotNavGrid {
         }
         const nextIndex = this.index(nr, nc);
         if (closed[nextIndex]) continue;
-        const tentative = gScore[index] + cost;
+        const tentative = gScore[index] + cost * stepCost(nr, nc);
         if (tentative >= gScore[nextIndex]) continue;
         gScore[nextIndex] = tentative;
         cameFrom[nextIndex] = index;
@@ -255,6 +281,27 @@ export class BotNavGrid {
       if (!this.isWalkable(cell.row, cell.col)) return false;
     }
     return true;
+  }
+
+  /**
+   * Coste de entrar en una celda. Nunca baja de 1 para que la heurística de A*
+   * siga siendo admisible. El terreno hostil cuesta más, el propio algo menos,
+   * y la cobertura abarata relativamente las celdas ocultas.
+   */
+  private terrainStepCost(
+    row: number,
+    col: number,
+    options: NavPathOptions
+  ): number {
+    const types = options.types;
+    if (!types || types.length === 0) return 1;
+    const terrain = terrainAtCell(row, col);
+    const speed = terrainSpeedEffect(terrain, types).multiplier;
+    const concealment = terrainConcealment(terrain, types).value;
+    let cost = Math.max(1, 1 / Math.max(0.5, speed));
+    if (speed < 0.9) cost += 0.18;
+    cost += (1 - concealment) * (options.preferConcealment ? 0.28 : 0.06);
+    return cost;
   }
 
   private simplify(points: NavPoint[]): NavPoint[] {

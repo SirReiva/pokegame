@@ -314,6 +314,10 @@ const RETREAT_MAX_SECONDS = 18;
 /** Extensión cuando el perseguidor sigue dentro de este radio. */
 const RETREAT_PURSUER_RADIUS = 8;
 const RETREAT_PURSUIT_EXTENSION = 2.5;
+/** Radio en el que se busca cobertura al iniciar una huida. */
+const RETREAT_COVER_RADIUS = 6;
+/** Vigencia del punto de cobertura elegido durante la huida. */
+const RETREAT_COVER_SECONDS = 3;
 /** Distancia al punto de aparición que cuenta como "ya en la base". */
 const RETREAT_ARRIVE_DISTANCE = 2.5;
 /** Espera antes de poder volver a huir tras llegar a la base sin curación. */
@@ -379,6 +383,8 @@ const FOCUS_HOLD_SECONDS = 3.5;
 const PICKUP_CLAIM_SECONDS = 4;
 /** Duración de la reclamación de un aliado caído para revivirlo. */
 const REVIVE_CLAIM_SECONDS = 2.5;
+/** Duración de la zona de patrulla reservada por un bot. */
+const PATROL_CLAIM_SECONDS = 7;
 /** Antigüedad máxima de las posiciones compartidas por el equipo. */
 const SQUAD_LAST_SEEN_SECONDS = 8;
 /** Ventana en la que se descuenta el daño ya comprometido por otros bots. */
@@ -417,6 +423,13 @@ export interface BotReviveClaim {
   until: number;
 }
 
+/** Zona de patrulla reservada por un bot para repartir el mapa. */
+export interface BotPatrolClaim {
+  x: number;
+  z: number;
+  until: number;
+}
+
 /** Daño que otro bot ya prevé aplicar a un objetivo, para no sobrematar. */
 export interface BotDamageCommitment {
   attackerSlot: number;
@@ -436,6 +449,7 @@ export interface TeamBlackboard {
   aliveEnemies: number;
   pickupClaims: Map<string, BotPickupClaim>;
   reviveClaims: Map<number, BotReviveClaim>;
+  patrolClaims: Map<number, BotPatrolClaim>;
   engageCall: BotEngageCall;
   committedDamage: Map<string, BotDamageCommitment>;
   help: BotHelpCall | null;
@@ -454,6 +468,7 @@ function createTeamBlackboard(): TeamBlackboard {
     aliveEnemies: 0,
     pickupClaims: new Map(),
     reviveClaims: new Map(),
+    patrolClaims: new Map(),
     engageCall: 'engage',
     committedDamage: new Map(),
     help: null
@@ -517,6 +532,19 @@ interface TargetPrediction {
   time: number;
   /** Distancia desde el bot hasta la posición prevista. */
   distance: number;
+}
+
+/** Amenazas listas del rival, usadas para ajustar la distancia de combate. */
+interface EnemyThreatProfile {
+  /** Alcance del melee peligroso listo, o 0. */
+  meleeReach: number;
+  /** Hay un haz listo y su alcance. */
+  beamReady: boolean;
+  beamRange: number;
+  /** Alguna habilidad ofensiva lista. */
+  anyReady: boolean;
+  /** Una habilidad grande o de control está lista. */
+  keyReady: boolean;
 }
 
 /** Resultado de evaluar la pelea actual como un intercambio de daño. */
@@ -613,6 +641,9 @@ export class BotController {
   private retreatUntil = 0;
   /** Tras una huida infructuosa, espera antes de volver a intentarlo. */
   private retreatCooldownUntil = 0;
+  /** Punto de cobertura intermedio elegido para romper la línea de visión. */
+  private retreatCover: Vec2 | null = null;
+  private retreatCoverUntil = 0;
   /** `true` mientras espera oculto para curarse con Regeneración. */
   private recovering = false;
   private regenUntil = 0;
@@ -719,6 +750,7 @@ export class BotController {
       for (const [slot, claim] of team.reviveClaims) {
         if (claim.slot === self.slot) team.reviveClaims.delete(slot);
       }
+      team.patrolClaims.delete(self.slot);
       this.resetCombatState();
       return { ...IDLE_INPUT };
     }
@@ -811,6 +843,8 @@ export class BotController {
     this.retreat = false;
     this.retreatUntil = 0;
     this.retreatCooldownUntil = 0;
+    this.retreatCover = null;
+    this.retreatCoverUntil = 0;
     this.recovering = false;
     this.regenUntil = 0;
     this.regenCooldownUntil = 0;
@@ -885,6 +919,9 @@ export class BotController {
     }
     for (const [slot, claim] of team.reviveClaims) {
       if (claim.until <= this.clock) team.reviveClaims.delete(slot);
+    }
+    for (const [slot, claim] of team.patrolClaims) {
+      if (claim.until <= this.clock) team.patrolClaims.delete(slot);
     }
     for (const [key, commitment] of team.committedDamage) {
       if (commitment.until <= this.clock) team.committedDamage.delete(key);
@@ -1891,6 +1928,8 @@ export class BotController {
     ) {
       this.retreat = true;
       this.retreatUntil = this.clock + this.retreatTime(self, pickup);
+      this.retreatCover = this.pickRetreatCover(self, colliders);
+      this.retreatCoverUntil = this.clock + RETREAT_COVER_SECONDS;
     }
 
     // Huida: se planta a curarse si tiene una curación fiable lista y el rival
@@ -1899,9 +1938,26 @@ export class BotController {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
       this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
+      let cover = this.retreatCover;
+      if (cover) {
+        const coverEnemies = this.visibleEnemies.filter(
+          (enemy) => enemy.alive && enemy.team !== self.team
+        );
+        const stale =
+          this.clock >= this.retreatCoverUntil ||
+          Math.hypot(cover.x - self.x, cover.z - self.z) < 0.9 ||
+          coverEnemies.length === 0 ||
+          !this.regenSegmentHidden(self, cover, colliders, coverEnemies);
+        if (stale) {
+          cover = null;
+          this.retreatCover = null;
+        }
+      }
       if (pickup) {
         this.claimPickup(self, pickup);
         this.setGoal(pickup, pickup);
+      } else if (cover) {
+        this.setGoal(cover);
       } else {
         this.setGoal(self.spawn);
       }
@@ -1981,6 +2037,8 @@ export class BotController {
    */
   private stopRetreat(cooldown: boolean): void {
     this.retreat = false;
+    this.retreatCover = null;
+    this.retreatCoverUntil = 0;
     if (cooldown) this.retreatCooldownUntil = this.clock + RETREAT_COOLDOWN_SECONDS;
     this.lastSeen = null;
     this.patrolTimer = 0;
@@ -2172,6 +2230,67 @@ export class BotController {
       RETREAT_MIN_SECONDS,
       RETREAT_MAX_SECONDS
     );
+  }
+
+  /**
+   * Punto cercano con cobertura que rompe la línea de visión sin alejarse de la
+   * base. Solo se usa al empezar a huir y si los rivales todavía ven al bot.
+   */
+  private pickRetreatCover(
+    self: MatchPlayerState,
+    colliders: readonly Collider[]
+  ): Vec2 | null {
+    if (self.enemiesSeeing === 0) return null;
+    const enemies = this.visibleEnemies.filter(
+      (enemy) => enemy.alive && enemy.team !== self.team
+    );
+    if (enemies.length === 0) return null;
+
+    const currentBaseDistance = Math.hypot(
+      self.x - self.spawn.x,
+      self.z - self.spawn.z
+    );
+    let best: Vec2 | null = null;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 2 + Math.random() * (RETREAT_COVER_RADIUS - 2);
+      const x = self.x + Math.cos(angle) * distance;
+      const z = self.z + Math.sin(angle) * distance;
+      const cell = this.nav.worldToCell(x, z);
+      if (!this.nav.isWalkable(cell.row, cell.col)) continue;
+
+      const point = this.nav.cellCenter(cell.row, cell.col);
+      const realDistance = Math.hypot(point.x - self.x, point.z - self.z);
+      if (realDistance < 1 || realDistance > RETREAT_COVER_RADIUS) continue;
+      if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) continue;
+
+      const concealment = terrainConcealment(
+        terrainAt(point.x, point.z),
+        self.types
+      ).value;
+      if (concealment < 0.08) continue;
+      if (!this.regenSegmentHidden(self, point, colliders, enemies)) continue;
+
+      const baseDistance = Math.hypot(
+        point.x - self.spawn.x,
+        point.z - self.spawn.z
+      );
+      if (baseDistance > currentBaseDistance + 2) continue;
+
+      const score =
+        concealment * 6 -
+        realDistance * 0.18 -
+        baseDistance * 0.02 +
+        Math.random() * 0.25;
+      if (score > bestScore) {
+        bestScore = score;
+        best = point;
+      }
+    }
+
+    return best;
   }
 
   /**
@@ -2564,6 +2683,7 @@ export class BotController {
     const bases = [...ownBases, ...enemyBases];
     const ownBase = ownBases[0] ?? self.spawn;
     const enemyBase = enemyBases[0];
+    const team = this.squad[self.team];
 
     let best: Vec2 | null = null;
     let bestScore = -Infinity;
@@ -2600,23 +2720,42 @@ export class BotController {
         score -= Math.abs(enemyDistance - ownDistance) * 0.015;
       }
 
+      // Reparto de zonas: no repetir la patrulla de otro bot ni amontonarse
+      // alrededor de donde están los aliados.
+      for (const [slot, claim] of team.patrolClaims) {
+        if (slot === self.slot || claim.until <= this.clock) continue;
+        const away = Math.hypot(point.x - claim.x, point.z - claim.z);
+        if (away < 12) score -= (12 - away) * 0.45;
+      }
+      for (const motion of this.allyMotion.values()) {
+        const away = Math.hypot(point.x - motion.anchorX, point.z - motion.anchorZ);
+        if (away < 8) score -= (8 - away) * 0.18;
+      }
+
       if (score > bestScore) {
         bestScore = score;
         best = point;
       }
     }
 
-    if (best) return best;
+    if (!best) {
+      // Sin candidatos válidos (mapa minúsculo o muy bloqueado): ir al centro
+      // transitable en vez de volver a una base.
+      const centerCell = this.nav.nearestWalkable(
+        Math.floor(this.nav.rows / 2),
+        Math.floor(this.nav.cols / 2)
+      );
+      best = centerCell
+        ? this.nav.cellCenter(centerCell.row, centerCell.col)
+        : { ...self.spawn };
+    }
 
-    // Sin candidatos válidos (mapa minúsculo o muy bloqueado): ir al centro
-    // transitable en vez de volver a una base.
-    const centerCell = this.nav.nearestWalkable(
-      Math.floor(this.nav.rows / 2),
-      Math.floor(this.nav.cols / 2)
-    );
-    return centerCell
-      ? this.nav.cellCenter(centerCell.row, centerCell.col)
-      : { ...self.spawn };
+    team.patrolClaims.set(self.slot, {
+      x: best.x,
+      z: best.z,
+      until: this.clock + PATROL_CLAIM_SECONDS
+    });
+    return best;
   }
 
   private drive(
@@ -3710,28 +3849,33 @@ export class BotController {
     facingError: number,
     dt: number
   ): Vec2 {
-    let preferred = this.preferredRange(self, def);
+    const threat = this.enemyThreatProfile(target);
+    let preferred = this.adjustPreferredRange(
+      self,
+      target,
+      def,
+      this.preferredRange(self, def),
+      threat
+    );
 
     // Cautela de tipos: contra un rival que nos pega súper eficaz se mantiene
     // algo más de distancia; contra uno al que somos inmunes, se acorta. El
     // ajuste nunca saca la distancia preferida del alcance de la habilidad.
     const caution = this.targetMatchupDefense;
     if (caution !== 1) {
-      const reach =
-        def === null
-          ? Infinity
-          : def.shape === 'dash'
-            ? def.dashDistance + Math.max(0.5, def.radius)
-            : def.shape === 'aoe'
-              ? def.range + def.radius
-              : def.range;
-      const maxPreferred =
-        def === null
-          ? Infinity
-          : Math.max(1, reach - target.hitRadius - 0.35);
+      const maxPreferred = this.maxUsefulRange(def, target);
       const adjust =
         caution === 0 ? -0.7 : Math.min(1.8, (caution - 1) * 0.7);
       preferred = clamp(preferred + adjust, 0.9, maxPreferred);
+    }
+
+    // Con un haz listo, quedarse sobre la línea de tiro es regalar el impacto.
+    // El órbita lateral saca al bot del carril sin dejar de apuntar.
+    if (
+      threat.beamReady &&
+      this.onEnemyBeamLine(self, target, threat.beamRange)
+    ) {
+      return this.orbit(target, self);
     }
 
     // Si hay una habilidad elegida pero aún no está encarado, avanzar hacia el
@@ -3740,9 +3884,13 @@ export class BotController {
       return this.moveTowards(self, target, dt);
     }
 
+    const canKite =
+      this.effectiveSpeed(self) >= this.effectiveSpeed(target) * 0.92;
     if (!def) {
       if (distance > preferred + 0.8) return this.moveTowards(self, target, dt);
-      if (distance < preferred - 1.2) return directionTo(target, self);
+      if (distance < preferred - 1.2) {
+        return canKite ? directionTo(target, self) : this.orbit(target, self);
+      }
       return this.orbit(target, self);
     }
 
@@ -3750,9 +3898,104 @@ export class BotController {
     if (distance < preferred - 1.5) {
       // Alejarse del objetivo sin perderlo de vista: el movimiento de huida
       // cambia el rumbo, así que se alterna con el acercamiento al apuntar.
-      return directionTo(target, self);
+      return canKite ? directionTo(target, self) : this.orbit(target, self);
     }
     return this.orbit(target, self);
+  }
+
+  /** Alcance máximo útil de la habilidad seleccionada contra este rival. */
+  private maxUsefulRange(
+    def: AbilityDef | null,
+    target: MatchPlayerState
+  ): number {
+    if (!def) return 6.5;
+    if (def.shape === 'self') return 8;
+    const reach =
+      def.shape === 'dash'
+        ? def.dashDistance + Math.max(0.5, def.radius) + target.hitRadius
+        : def.shape === 'melee' || def.shape === 'projectile'
+          ? def.range + target.hitRadius
+          : def.shape === 'aoe'
+            ? def.range + def.radius + target.hitRadius
+            : def.range;
+    return Math.max(1, reach - target.hitRadius - 0.35);
+  }
+
+  /**
+   * Ajusta la distancia según las amenazas listas del rival. Si tiene melee
+   * peligroso se mantiene fuera de su alcance; si sus habilidades clave están
+   * en cooldown o está ralentizado, se acerca. Un bot ralentizado no intenta
+   * kite imposible: acepta el cuerpo a cuerpo y orbita.
+   */
+  private adjustPreferredRange(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef | null,
+    base: number,
+    threat: EnemyThreatProfile
+  ): number {
+    let preferred = base;
+    if (threat.meleeReach > 0) {
+      preferred = Math.max(preferred, threat.meleeReach);
+    }
+    if (!threat.anyReady) preferred -= 0.6;
+    else if (!threat.keyReady) preferred -= 0.25;
+    if (target.slowMultiplier < 0.9) preferred -= 0.6;
+
+    const canKite =
+      this.effectiveSpeed(self) >= this.effectiveSpeed(target) * 0.92;
+    if (self.slowMultiplier < 0.9 && !canKite) {
+      preferred = Math.min(preferred, Math.max(1.2, base - 0.5));
+    }
+
+    return clamp(preferred, 0.9, this.maxUsefulRange(def, target));
+  }
+
+  /** Perfil de habilidades ofensivas del rival que ya puede usar. */
+  private enemyThreatProfile(target: MatchPlayerState): EnemyThreatProfile {
+    let meleeReach = 0;
+    let beamReady = false;
+    let beamRange = 0;
+    let anyReady = false;
+    let keyReady = false;
+
+    const consider = (def: AbilityDef | null, ready: boolean): void => {
+      if (!def || !ready) return;
+      if (def.power <= 0 && def.slow === null) return;
+      anyReady = true;
+      if (def.power >= BIG_ABILITY_POWER || def.slow !== null) keyReady = true;
+      if (def.shape === 'melee') {
+        // El alcance real del melee suma el hurtbox mayor del roster; se usa
+        // como cota conservadora para no quedarse dentro del cono.
+        meleeReach = Math.max(meleeReach, def.range + maxHitRadius() + 0.4);
+      } else if (def.shape === 'beam') {
+        beamReady = true;
+        beamRange = Math.max(beamRange, def.range);
+      }
+    };
+
+    for (let slot = 0; slot < 4; slot++) {
+      const id = target.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      consider(def, target.cooldowns[slot] <= 0.5);
+    }
+    if (target.pendingCast) consider(target.pendingCast.def, true);
+
+    return { meleeReach, beamReady, beamRange, anyReady, keyReady };
+  }
+
+  /** ¿El bot está casi sobre la línea de tiro de un haz rival? */
+  private onEnemyBeamLine(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    range: number
+  ): boolean {
+    const distance = Math.hypot(self.x - target.x, self.z - target.z);
+    if (distance > range + self.hitRadius) return false;
+    const angle = Math.abs(
+      normalizeAngle(Math.atan2(self.x - target.x, self.z - target.z) - target.facing)
+    );
+    return angle < 0.18;
   }
 
   /** Dirección perpendicular alrededor del objetivo para no quedarse quieto. */
@@ -3916,7 +4159,10 @@ export class BotController {
     this.pathTimer += dt;
     const goalMoved = Math.hypot(goal.x - this.pathGoal.x, goal.z - this.pathGoal.z);
     if (goalMoved > 1.2 || this.pathTimer > this.tuning.pathInterval) {
-      this.path = this.nav.findPath(self.x, self.z, goal.x, goal.z);
+      this.path = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
+        types: self.types,
+        preferConcealment: this.retreat || this.recovering
+      });
       this.pathGoal = { ...goal };
       this.pathTimer = 0;
     } else if (this.path.length === 0) {
