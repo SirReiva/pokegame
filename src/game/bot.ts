@@ -305,12 +305,27 @@ const SUPPORT_PROFILES: Partial<Record<string, SupportProfile>> = {
 
 /** Radio en el que un rival cercano justifica huir con poca vida. */
 const RETREAT_DANGER_RADIUS = 9;
-/** Tiempo máximo de una huida antes de volver a la acción. */
-const RETREAT_MAX_SECONDS = 6;
+/** Mínimo de tiempo que dura una huida, aunque la base esté cerca. */
+const RETREAT_MIN_SECONDS = 2.5;
+/** Margen sobre el tiempo de trayecto para no cortar la huida antes de llegar. */
+const RETREAT_TIME_MARGIN = 2;
+/** Tope de seguridad para una huida; no es una duración fija. */
+const RETREAT_MAX_SECONDS = 18;
+/** Extensión cuando el perseguidor sigue dentro de este radio. */
+const RETREAT_PURSUER_RADIUS = 8;
+const RETREAT_PURSUIT_EXTENSION = 2.5;
 /** Distancia al punto de aparición que cuenta como "ya en la base". */
 const RETREAT_ARRIVE_DISTANCE = 2.5;
 /** Espera antes de poder volver a huir tras llegar a la base sin curación. */
 const RETREAT_COOLDOWN_SECONDS = 4;
+
+/** Umbrales dinámicos de retirada según el intercambio y el número de vivos. */
+const RETREAT_EXCHANGE_LOSS = 0.8;
+const RETREAT_EXCHANGE_EDGE = 1.2;
+const RETREAT_LOSING_HP = 0.6;
+const RETREAT_OUTNUMBERED_HP = 0.65;
+const RETREAT_THRESHOLD_MIN = 0.12;
+const RETREAT_THRESHOLD_MAX = 0.68;
 
 /** Vida por debajo de la cual un bot con Regeneración busca curarse oculto. */
 const REGEN_START_HP = 0.55;
@@ -427,6 +442,20 @@ interface TargetPrediction {
   time: number;
   /** Distancia desde el bot hasta la posición prevista. */
   distance: number;
+}
+
+/** Resultado de evaluar la pelea actual como un intercambio de daño. */
+interface FightAssessment {
+  /** Segundos estimados para matar al objetivo. */
+  timeToKill: number;
+  /** Segundos estimados para que el objetivo mate al bot. */
+  timeToDie: number;
+  /** `timeToDie / timeToKill`: por encima de 1 la pelea favorece al bot. */
+  exchange: number;
+  /** Aliados vivos menos rivales vivos. */
+  allyDiff: number;
+  /** Umbral de vida dinámico para decidir la retirada. */
+  retreatHp: number;
 }
 
 type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
@@ -1541,11 +1570,6 @@ export class BotController {
     // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
     const nearestEnemy = this.nearestVisibleEnemyDistance(self);
     const regenBot = self.commonAbilityId === 'regeneracion';
-    const lowHp =
-      hpFraction <
-      (regenBot
-        ? Math.max(this.tuning.retreatHp, REGEN_RETREAT_HP)
-        : this.tuning.retreatHp);
     const atBase =
       Math.hypot(self.x - self.spawn.x, self.z - self.spawn.z) <=
       RETREAT_ARRIVE_DISTANCE;
@@ -1562,6 +1586,28 @@ export class BotController {
     // Los objetos se conocen por posición desde el principio. Si el equipo ya
     // ve uno usado, `pickupTarget` lo descarta sin necesidad de ir hasta él.
     const pickup = hpFraction < PICKUP_SEEK_HP ? this.pickupTarget(self) : null;
+
+    // La retirada ya no usa solo la vida: compara el intercambio de daño,
+    // cuenta los vivos de cada equipo, los recursos disponibles y la facilidad
+    // de escapar. El umbral resultante es mayor para cristales y menor para
+    // tanques o bots con escudo/curación.
+    const fight =
+      targetIsVisible && target
+        ? this.assessFight(self, target, players, pickup, colliders)
+        : null;
+    const retreatHp = regenBot
+      ? Math.max(fight?.retreatHp ?? this.tuning.retreatHp, REGEN_RETREAT_HP)
+      : fight?.retreatHp ?? this.tuning.retreatHp;
+    const lowHp = hpFraction < retreatHp;
+    const losingFight =
+      fight !== null &&
+      fight.exchange < RETREAT_EXCHANGE_LOSS &&
+      hpFraction < RETREAT_LOSING_HP;
+    const outnumbered =
+      fight !== null &&
+      fight.allyDiff <= -1 &&
+      hpFraction < RETREAT_OUTNUMBERED_HP;
+    const wantsRetreat = lowHp || badFight || losingFight || outnumbered;
 
     if (this.recovering) {
       // Deja de esperar si le ven, se acerca un rival, hay una amenaza en curso
@@ -1584,7 +1630,7 @@ export class BotController {
     }
 
     if (this.retreat) {
-      if (!(lowHp || badFight) || nearestEnemy > RETREAT_DANGER_RADIUS) {
+      if (!wantsRetreat || nearestEnemy > RETREAT_DANGER_RADIUS) {
         // El peligro ya pasó: vuelve a la acción sin esperar.
         this.stopRetreat(false);
       } else if (regenBot && regenSafe && hpFraction < REGEN_STOP_HP) {
@@ -1595,8 +1641,13 @@ export class BotController {
         // baja; es mejor volver a patrullar y buscar una pelea favorable.
         this.stopRetreat(true);
       } else if (this.clock >= this.retreatUntil) {
-        // Una huida eterna deja al equipo en inferioridad.
-        this.stopRetreat(true);
+        if (!atBase && nearestEnemy <= RETREAT_PURSUER_RADIUS) {
+          // La huida calculada terminó, pero el perseguidor sigue encima: no
+          // se da por segura hasta romper la distancia.
+          this.retreatUntil = this.clock + RETREAT_PURSUIT_EXTENSION;
+        } else {
+          this.stopRetreat(true);
+        }
       }
     }
 
@@ -1629,13 +1680,13 @@ export class BotController {
 
     if (
       !this.retreat &&
-      (lowHp || badFight) &&
+      wantsRetreat &&
       nearestEnemy <= RETREAT_DANGER_RADIUS &&
       this.clock >= this.retreatCooldownUntil &&
       !(atBase && !canRecover)
     ) {
       this.retreat = true;
-      this.retreatUntil = this.clock + RETREAT_MAX_SECONDS;
+      this.retreatUntil = this.clock + this.retreatTime(self, pickup);
     }
 
     // Huida: se planta a curarse si tiene una curación fiable lista y el rival
@@ -1719,6 +1770,191 @@ export class BotController {
       if (distance < nearest) nearest = distance;
     }
     return nearest;
+  }
+
+  /** Velocidad efectiva actual, con terreno, buffs, ralentización y escudo. */
+  private effectiveSpeed(player: MatchPlayerState): number {
+    const shieldSpeed =
+      player.damageReductionTimer > 0 ? player.shieldSpeedMultiplier : 1;
+    return Math.max(
+      0.5,
+      player.maxSpeed *
+        player.terrainMultiplier *
+        this.statMultiplier(player, 'speed') *
+        player.slowMultiplier *
+        shieldSpeed
+    );
+  }
+
+  /**
+   * Vida efectiva para el intercambio: PV actuales más la mejor cura fiable
+   * disponible, el escudo común listo y la poción conocida más cercana.
+   */
+  private effectiveHp(
+    player: MatchPlayerState,
+    pickup: PickupSpawn | null
+  ): number {
+    const missing = Math.max(0, player.maxHp - player.hp);
+    let reserve = 0;
+    for (let slot = 0; slot < 4; slot++) {
+      if (player.cooldowns[slot] > 0.5) continue;
+      const id = player.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def || def.healSelf <= 0 || def.healOnHit) continue;
+      reserve = Math.max(
+        reserve,
+        Math.min(missing, player.maxHp * def.healSelf) * 0.8
+      );
+    }
+    if (player.commonAbilityId === 'proteccion' && player.cooldowns[4] <= 0.5) {
+      // Dos segundos de reducción del 60 % valen aproximadamente un quinto de
+      // la vida actual como colchón, sin contar el daño que se evita al curar.
+      reserve += player.hp * 0.2;
+    }
+    if (pickup) {
+      const item = ITEM_DEFINITIONS[pickup.type];
+      if (item) reserve += Math.min(missing, item.healHp) * 0.6;
+    }
+    return player.hp + reserve;
+  }
+
+  /**
+   * DPS esperado del mejor ataque disponible. El cooldown restante retrasa el
+   * primer uso, así que una habilidad clave ya gastada pesa menos ahora.
+   * Para el daño entrante se usa la precisión pura: el bot debe asumir que el
+   * rival puede apuntar, no heredar su propio error.
+   */
+  private bestDamagePerSecond(
+    attacker: MatchPlayerState,
+    defender: MatchPlayerState,
+    useAimEstimate: boolean,
+    colliders: readonly Collider[]
+  ): number {
+    let best = 0;
+    for (let slot = 0; slot < 4; slot++) {
+      const id = attacker.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def || def.power <= 0 || def.category === 'status') continue;
+      if (typeEffectiveness(def.type, defender.types) === 0) continue;
+      const prediction = this.predictTarget(attacker, defender, def);
+      // Una habilidad fuera de alcance o tapada no cuenta como daño inmediato.
+      if (
+        !this.canHitPrediction(attacker, defender, def, prediction, colliders)
+      ) {
+        continue;
+      }
+      const accuracy = useAimEstimate
+        ? this.hitChance(attacker, defender, def, prediction)
+        : def.accuracy > 0
+          ? def.accuracy / 100
+          : 1;
+      const damage = this.expectedDamage(attacker, defender, def, prediction);
+      const remaining = Math.max(0, attacker.cooldowns[slot] ?? 0);
+      const cycle = Math.max(0.75, def.cooldown + remaining);
+      best = Math.max(best, (damage * accuracy) / cycle);
+    }
+    return best;
+  }
+
+  /** Diferencia de vivos entre ambos equipos. Solo usa números, no posiciones. */
+  private aliveTeamAdvantage(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): number {
+    let allies = 0;
+    let enemies = 0;
+    for (const player of players) {
+      if (!player.alive) continue;
+      if (player.team === self.team) allies++;
+      else enemies++;
+    }
+    return allies - enemies;
+  }
+
+  /**
+   * Compara el tiempo estimado de matar con el de morir. El cociente incorpora
+   * de forma natural la resistencia del Pokémon (tanques aguantan más) y el
+   * daño real de ambos. Después ajusta el umbral de huida por número de vivos,
+   * recursos disponibles, cooldowns, velocidad de escape y distancia a la base.
+   */
+  private assessFight(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    pickup: PickupSpawn | null,
+    colliders: readonly Collider[]
+  ): FightAssessment {
+    const selfDps = this.bestDamagePerSecond(self, target, true, colliders);
+    const enemyDps = this.bestDamagePerSecond(target, self, false, colliders);
+    const selfEffectiveHp = this.effectiveHp(self, pickup);
+    const targetEffectiveHp = this.effectiveHp(target, null);
+
+    const timeToKill =
+      targetEffectiveHp / Math.max(1, selfDps) +
+      Math.max(0, target.invulnerableTimer);
+    const timeToDie =
+      selfEffectiveHp / Math.max(1, enemyDps) +
+      Math.max(0, self.invulnerableTimer);
+    const exchange = timeToDie / Math.max(0.1, timeToKill);
+
+    const allyDiff = this.aliveTeamAdvantage(self, players);
+    const hpFraction = self.hp / Math.max(1, self.maxHp);
+    let retreatHp = this.tuning.retreatHp;
+
+    // Perder el intercambio sube el umbral; dominarlo lo baja. Los tanques
+    // suelen tener `timeToDie` alto y por tanto retirarse más tarde.
+    if (exchange < RETREAT_EXCHANGE_LOSS) retreatHp += 0.1;
+    else if (exchange > RETREAT_EXCHANGE_EDGE) retreatHp -= 0.08;
+    if (timeToDie < 1.5) retreatHp += 0.08;
+    if (timeToKill < 2 && exchange > 1) retreatHp -= 0.05;
+
+    if (allyDiff <= -1) retreatHp += 0.1;
+    else if (allyDiff >= 1) retreatHp -= 0.06;
+
+    const resourceReserve =
+      Math.max(0, selfEffectiveHp - self.hp) / Math.max(1, self.maxHp);
+    if (resourceReserve > 0.15) retreatHp -= 0.05;
+    else if (hpFraction < 0.6) retreatHp += 0.03;
+
+    if (this.effectiveSpeed(self) < this.effectiveSpeed(target) * 0.95) {
+      retreatHp += 0.04;
+    }
+    const distanceToBase = Math.hypot(
+      self.x - self.spawn.x,
+      self.z - self.spawn.z
+    );
+    if (distanceToBase > 18) retreatHp += 0.04;
+    else if (distanceToBase < 8) retreatHp -= 0.03;
+
+    return {
+      timeToKill,
+      timeToDie,
+      exchange,
+      allyDiff,
+      retreatHp: clamp(
+        retreatHp,
+        RETREAT_THRESHOLD_MIN,
+        RETREAT_THRESHOLD_MAX
+      )
+    };
+  }
+
+  /**
+   * Duración de la huida según el trayecto real hasta la base o la poción. La
+   * base no cura sola, pero el tiempo se calcula igual: si no hay recursos, el
+   * bot dejará de huir al llegar y volverá a buscar una pelea favorable.
+   */
+  private retreatTime(
+    self: MatchPlayerState,
+    pickup: PickupSpawn | null
+  ): number {
+    const goal = pickup ?? self.spawn;
+    const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
+    return clamp(
+      distance / this.effectiveSpeed(self) + RETREAT_TIME_MARGIN,
+      RETREAT_MIN_SECONDS,
+      RETREAT_MAX_SECONDS
+    );
   }
 
   /**

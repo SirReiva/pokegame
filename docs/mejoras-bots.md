@@ -442,7 +442,16 @@ interface TeamBlackboard {
 
 ---
 
-## 6. Retirada y evaluación de peleas
+## 6. Retirada y evaluación de peleas — ✅ Arreglado
+
+> **Estado: arreglado.** `assessFight` estima el tiempo para matar y para morir
+> con el daño esperado de ambos, la vida efectiva con curas/escudo/poción, la
+> ventaja numérica, los cooldowns pendientes, la velocidad de escape y la
+> distancia a la base. El umbral de retirada es dinámico: los tanques aguantan
+> más, los cristales huyen antes, los recursos permiten aceptar peleas peores y
+> la inferioridad numérica vuelve al bot más prudente. El temporizador ya no es
+> fijo: se calcula desde el trayecto hasta la base o la poción, con margen, y se
+> extiende si el perseguidor sigue cerca.
 
 ### Problema
 
