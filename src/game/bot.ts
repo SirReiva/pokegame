@@ -23,7 +23,11 @@
 
 import { ABILITIES, type AbilityDef } from './abilities';
 import { BotNavGrid, type NavPoint } from './botNav';
-import { pointSegmentDistance, segmentBlockedByColliders } from './combat';
+import {
+  pointSegmentDistance,
+  raycastColliderDistance,
+  segmentBlockedByColliders
+} from './combat';
 import { CONFIG, DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
@@ -42,6 +46,12 @@ interface BotTuning {
   decision: number;
   /** Error angular máximo para considerar que está encarado. */
   aimTolerance: number;
+  /**
+   * Error angular máximo de apuntado (radianes). Se mantiene estable durante
+   * unos frames para que el bot no tiemble, pero le hace fallar tiros que con
+   * puntería perfecta entrarían.
+   */
+  aimError: number;
   /** Multiplicador sobre el rango de visión de la especie. */
   visionFactor: number;
   /** Peso de las ventajas y desventajas de tipo al elegir objetivo. */
@@ -73,6 +83,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     reaction: 0.55,
     decision: 0.45,
     aimTolerance: 0.34,
+    aimError: 0.2,
     visionFactor: 0.82,
     matchupWeight: 0.55,
     retreatHp: 0.22,
@@ -90,6 +101,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     reaction: 0.3,
     decision: 0.26,
     aimTolerance: 0.2,
+    aimError: 0.1,
     visionFactor: 0.96,
     matchupWeight: 1,
     retreatHp: 0.3,
@@ -107,6 +119,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     reaction: 0.14,
     decision: 0.15,
     aimTolerance: 0.1,
+    aimError: 0.05,
     visionFactor: 1.04,
     matchupWeight: 1.35,
     retreatHp: 0.36,
@@ -124,6 +137,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     reaction: 0.08,
     decision: 0.09,
     aimTolerance: 0.06,
+    aimError: 0.025,
     visionFactor: 1.08,
     matchupWeight: 1.6,
     retreatHp: 0.4,
@@ -389,6 +403,16 @@ interface HazardEvasion {
   severity: number;
 }
 
+/** Posición prevista del rival cuando la habilidad pueda impactar. */
+interface TargetPrediction {
+  x: number;
+  z: number;
+  /** Tiempo total previsto: windup más vuelo del proyectil. */
+  time: number;
+  /** Distancia desde el bot hasta la posición prevista. */
+  distance: number;
+}
+
 type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
 
 /**
@@ -447,6 +471,10 @@ export class BotController {
   private hazards: readonly BotHazard[] = NO_HAZARDS;
   /** Salida del peligro ya lanzado más urgente, o `null` si no hay ninguno. */
   private hazardEvasion: HazardEvasion | null = null;
+  /** Error angular de apuntado vigente; cambia cada pocas decisiones. */
+  private aimBias = 0;
+  private aimBiasUntil = 0;
+  private aimBiasTarget: MatchPlayerState | null = null;
   private lastSeen: { x: number; z: number; at: number } | null = null;
   /** Lecturas por rival de su windup actual, para no volver a tirar cada frame. */
   private punishReads = new Map<number, PunishRead>();
@@ -634,6 +662,9 @@ export class BotController {
     this.threat = null;
     this.hazards = NO_HAZARDS;
     this.hazardEvasion = null;
+    this.aimBias = 0;
+    this.aimBiasUntil = 0;
+    this.aimBiasTarget = null;
     this.lastSeen = null;
     this.punishReads.clear();
     this.abilitySlot = null;
@@ -1631,7 +1662,6 @@ export class BotController {
       this.abilitySlot = this.chooseAbility(
         self,
         target,
-        distance,
         players,
         colliders
       );
@@ -2198,19 +2228,31 @@ export class BotController {
     } else if (targetIsVisible && target) {
       const distance = Math.hypot(target.x - self.x, target.z - self.z);
       const def = this.selectedDef(self);
-      const aim = this.aimPoint(target, distance, def);
+      // El disparo no sale hasta terminar el windup. Se apunta a donde estará
+      // el rival en ese momento (y, en proyectiles, también al terminar el
+      // vuelo), no a su posición actual.
+      const prediction = this.predictTarget(self, target, def);
+      const aim = this.aimPoint(self, target, prediction, def);
       const facingError = Math.abs(
         normalizeAngle(
           Math.atan2(aim.x - self.x, aim.z - self.z) - self.facing
         )
       );
 
-      const inRange = def ? this.inRange(def, distance, target) : false;
+      const inRange = def
+        ? this.canHitPrediction(self, target, def, prediction, colliders)
+        : false;
       const ready =
         this.abilitySlot !== null &&
         self.cooldowns[this.abilitySlot] <= 0.001;
       const hasLine =
-        !lineOfSightBlocked(self.x, self.z, target.x, target.z, colliders);
+        !lineOfSightBlocked(
+          self.x,
+          self.z,
+          prediction.x,
+          prediction.z,
+          colliders
+        );
       if (
         !channeling &&
         this.abilitySlot !== null &&
@@ -2457,7 +2499,6 @@ export class BotController {
   private chooseAbility(
     self: MatchPlayerState,
     target: MatchPlayerState,
-    distance: number,
     players: readonly MatchPlayerState[],
     colliders: readonly Collider[]
   ): number | null {
@@ -2472,14 +2513,28 @@ export class BotController {
       const support = this.supportScore(self, players, def, colliders);
       // Las áreas de apoyo se centran en el bot: no necesitan que haya un
       // rival dentro de su alcance para ser útiles.
-      const inRange = this.inRange(def, distance, target);
+      const prediction = this.predictTarget(self, target, def);
+      const inRange = this.canHitPrediction(
+        self,
+        target,
+        def,
+        prediction,
+        colliders
+      );
       if (!inRange && support <= 0) continue;
       if (def.selfDamage > 0 && self.hp / Math.max(1, self.maxHp) < 0.52) {
         continue;
       }
 
       let score = inRange
-        ? this.scoreAbility(self, target, def, slot, distance, support)
+        ? this.scoreAbility(
+            self,
+            target,
+            def,
+            slot,
+            prediction.distance,
+            support
+          )
         : -Infinity;
       if (support > 0) {
         score = score === -Infinity ? support : score + support;
@@ -2701,10 +2756,19 @@ export class BotController {
     return count;
   }
 
-  private inRange(
+  /**
+   * ¿La habilidad alcanzaría al rival en su posición prevista si el bot
+   * apuntara perfectamente? Para áreas se compara contra el centro real que el
+   * motor fijará al empezar el windup, incluyendo el recorte por obstáculos.
+   * La validación usa la puntería ideal: el error de `aimBias` se aplica solo
+   * al `facing` real para que el fallo sea natural, no para bloquear el disparo.
+   */
+  private canHitPrediction(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
     def: AbilityDef,
-    distance: number,
-    target: MatchPlayerState
+    prediction: TargetPrediction,
+    colliders: readonly Collider[]
   ): boolean {
     // El alcance real suma el hurtbox del objetivo: un Groudon (0,56 u) recibe
     // antes que un Voltorb (0,34 u). Un radio fijo hacía que el bot llegase
@@ -2712,28 +2776,75 @@ export class BotController {
     const targetRadius = target.hitRadius;
     switch (def.shape) {
       case 'melee':
-        return distance <= def.range + targetRadius;
+        return prediction.distance <= def.range + targetRadius;
       case 'projectile':
         // El motor mide el impacto contra el hurtbox del objetivo, así que el
-        // alcance útil también lo suma. Sin esto el bot se acercaba de más
-        // contra los cuerpos grandes en vez de aprovechar el alcance real.
-        return distance <= def.range + targetRadius;
-      case 'beam':
-        return distance <= def.range;
+        // alcance útil también lo suma.
+        return prediction.distance <= def.range + targetRadius;
+      case 'beam': {
+        const direction = directionTo(self, prediction);
+        if (direction.x === 0 && direction.z === 0) return false;
+        const reach = Math.max(
+          0.1,
+          raycastColliderDistance(
+            self.x,
+            self.z,
+            direction.x,
+            direction.z,
+            def.range,
+            colliders
+          )
+        );
+        if (prediction.distance > reach + targetRadius) return false;
+        return !segmentBlockedByColliders(
+          self.x,
+          self.z,
+          prediction.x,
+          prediction.z,
+          colliders
+        );
+      }
       case 'dash':
         // El barrido del dash alcanza `distancia + max(0.5, radio del dash) +
         // hurtbox del objetivo`; el 0,4 es solo el mínimo para no dashear pegado.
         return (
-          distance >= 0.4 &&
-          distance <=
+          prediction.distance >= 0.4 &&
+          prediction.distance <=
             def.dashDistance + Math.max(0.5, def.radius) + targetRadius
         );
-      case 'aoe':
-        // El centro del área se fija a `range` por delante del lanzador.
-        if (def.range <= 0.1) return distance <= def.radius + targetRadius;
-        return Math.abs(distance - def.range) <= def.radius + targetRadius;
+      case 'aoe': {
+        if (def.range <= 0.1) {
+          return prediction.distance <= def.radius + targetRadius;
+        }
+        const direction = directionTo(self, prediction);
+        // Sin dirección útil el centro cae sobre el propio lanzador.
+        const reach =
+          direction.x === 0 && direction.z === 0
+            ? 0
+            : Math.min(
+                def.range,
+                raycastColliderDistance(
+                  self.x,
+                  self.z,
+                  direction.x,
+                  direction.z,
+                  def.range,
+                  colliders,
+                  CONFIG.combat.aoeSightPadding
+                )
+              );
+        const centerX = self.x + direction.x * reach;
+        const centerZ = self.z + direction.z * reach;
+        return (
+          Math.hypot(prediction.x - centerX, prediction.z - centerZ) <=
+          def.radius + targetRadius
+        );
+      }
       case 'self':
-        return distance <= Math.max(2.5, def.radius + 2) && distance <= 8;
+        return (
+          prediction.distance <= Math.max(2.5, def.radius + 2) &&
+          prediction.distance <= 8
+        );
     }
   }
 
@@ -2853,20 +2964,71 @@ export class BotController {
     return clamp(longest * 0.6, 1.4, 6.5);
   }
 
-  private aimPoint(
+  /**
+   * Posición prevista del rival en el momento del impacto. El proyectil no
+   * existe hasta terminar el `windup`, así que el adelanto incluye tanto la
+   * preparación como el vuelo. El segundo pase corrige el tiempo de vuelo con
+   * la distancia ya adelantada.
+   */
+  private predictTarget(
+    self: MatchPlayerState,
     target: MatchPlayerState,
-    distance: number,
+    def: AbilityDef | null
+  ): TargetPrediction {
+    const windup = def?.windup ?? 0;
+    const projectileSpeed =
+      def && def.shape === 'projectile' && def.projectileSpeed > 0
+        ? def.projectileSpeed
+        : 0;
+    let predictedX = target.x;
+    let predictedZ = target.z;
+    let time = windup;
+    let distance = Math.hypot(predictedX - self.x, predictedZ - self.z);
+
+    for (let pass = 0; pass < 2; pass++) {
+      const travel = projectileSpeed > 0 ? distance / projectileSpeed : 0;
+      time = windup + travel;
+      const lead = time * this.tuning.lead;
+      predictedX = target.x + target.vx * lead;
+      predictedZ = target.z + target.vz * lead;
+      distance = Math.hypot(predictedX - self.x, predictedZ - self.z);
+    }
+
+    return { x: predictedX, z: predictedZ, time, distance };
+  }
+
+  /**
+   * Punto al que debe mirar el bot para que el `facing` real coincida con la
+   * predicción. El error angular se mantiene estable unos frames para que la
+   * puntería sea imperfecta sin que el bot tiemble.
+   */
+  private aimPoint(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    prediction: TargetPrediction,
     def: AbilityDef | null
   ): Vec2 {
-    const travel =
-      def && def.shape === 'projectile' && def.projectileSpeed > 0
-        ? distance / def.projectileSpeed
-        : 0;
-    const lead = travel * this.tuning.lead;
+    const dx = prediction.x - self.x;
+    const dz = prediction.z - self.z;
+    if (Math.hypot(dx, dz) < 0.0001) {
+      return { x: prediction.x, z: prediction.z };
+    }
+    let angle = Math.atan2(dx, dz);
+    if (def && def.shape !== 'self') angle += this.aimBiasFor(target);
     return {
-      x: target.x + target.vx * lead,
-      z: target.z + target.vz * lead
+      x: self.x + Math.sin(angle) * prediction.distance,
+      z: self.z + Math.cos(angle) * prediction.distance
     };
+  }
+
+  private aimBiasFor(target: MatchPlayerState): number {
+    if (this.aimBiasTarget !== target || this.clock >= this.aimBiasUntil) {
+      this.aimBiasTarget = target;
+      this.aimBiasUntil =
+        this.clock + this.tuning.decision * (1.5 + Math.random());
+      this.aimBias = (Math.random() * 2 - 1) * this.tuning.aimError;
+    }
+    return this.aimBias;
   }
 
   private moveTowards(

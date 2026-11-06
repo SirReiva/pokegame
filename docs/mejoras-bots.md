@@ -38,7 +38,15 @@ táctica y evaluar mejor las consecuencias de cada decisión.
 
 ---
 
-## 1. Anticipación de disparos y habilidades
+## 1. Anticipación de disparos y habilidades — ✅ Arreglado
+
+> **Estado: arreglado.** `predictTarget` adelanta al rival por el `windup` más
+> el tiempo de vuelo del proyectil, con una segunda pasada para corregir la
+> distancia. Haces, áreas y melee usan al menos el `windup`. Las áreas validan
+> el impacto contra la posición prevista y el centro real que fijará el motor,
+> incluido el recorte por obstáculos. Cada dificultad tiene además un error
+> angular de apuntado estable durante unos frames: los bots difíciles fallan
+> poco, pero ya no tienen puntería perfecta.
 
 ### Problema
 
