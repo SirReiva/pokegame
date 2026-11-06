@@ -373,6 +373,8 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
 
 Los previews del slider se generan con `pnpm maps:previews`: el script lee cada archivo del índice, dibuja la rejilla con la paleta del editor y guarda `public/maps/previews/<id>.png`, actualizando el campo `preview` de `index.json`. Hay que volver a ejecutarlo al añadir o editar un mapa.
 
+`perf-256.json` es un mapa de estrés de 256 × 256 celdas (`tileSize` 0.5 y `waterHeight` 0.3) con los quince terrenos, ocho distritos elementales, un lago central y puentes. Sirve para medir el rendimiento de mapas grandes en el lobby.
+
 ## Editor de mapas
 
 El menú principal (`/`) y la sala de equipos (`/lobby`) enlazan a **Editor**, que también se abre directo en `/editor`. Permite crear un mapa jugable sin editar el JSON a mano:
@@ -672,6 +674,7 @@ public/maps/
   previews/                  vistas cenitales PNG generadas para el lobby
   arena.json                 mapa por defecto en rejilla + respawns + separadores
   laberinto.json             laberinto 128 × 128 con bases en esquinas opuestas
+  perf-256.json              arena de estrés 256 × 256 para medir rendimiento
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla y visión
   types.ts                   tipos del manifiesto y del estado del juego

@@ -18,6 +18,13 @@
       "file": "laberinto.json",
       "description": "Laberinto de 128 × 128 celdas con bases en esquinas opuestas y distritos temáticos.",
       "preview": "maps/previews/laberinto.png"
+    },
+    {
+      "id": "perf-256",
+      "name": "Arena de Rendimiento 256×256",
+      "file": "perf-256.json",
+      "description": "Mapa de estrés de 256 × 256 celdas (tileSize 0.5, agua a 0.3) con ocho distritos elementales, lago central y puentes. Pensado para medir rendimiento.",
+      "preview": "maps/previews/perf-256.png"
     }
   ]
 }
