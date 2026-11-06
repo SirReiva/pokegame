@@ -30,7 +30,7 @@ táctica y evaluar mejor las consecuencias de cada decisión.
 | 2 | Evitar proyectiles y AoE ya activas | Alto | Medio |
 | 3 | Puntuar habilidades con daño real | Alto | Medio |
 | 4 | Corregir fugas de información y bugs concretos | Medio | Bajo |
-| 5 | Coordinación de equipo | Alto | Medio |
+| 5 | Coordinación de equipo — ✅ Hecho | Alto | Medio |
 | 6 | Evaluar retirada/agresión con recursos y número de jugadores | Alto | Medio |
 | 7 | Movimiento táctico y uso del terreno | Medio | Medio |
 | 8 | Dificultad, personalidad y composición de bots | Medio | Bajo |
@@ -373,7 +373,16 @@ const lethal = expectedDamage >= target.hp;
 
 ---
 
-## 5. Coordinación de equipo
+## 5. Coordinación de equipo — ✅ Arreglado
+
+> **Estado: arreglado.** `BotSquad` ahora contiene una pizarra por equipo con
+> foco, últimas posiciones vistas, contadores de vivos, reclamaciones de
+> pociones y revividos, llamada de retirada/agrupación, ayuda del aliado más
+> urgente y daño comprometido. El foco lo fija solo el bot líder y se mantiene
+> varios segundos. Las pociones se reclaman con una prioridad común para que no
+> las persigan dos bots, y las habilidades grandes descuentan el daño que ya han
+> comprometido otros compañeros para no apilar definitivas sobre un rival que ya
+> va a caer.
 
 ### Estado actual
 

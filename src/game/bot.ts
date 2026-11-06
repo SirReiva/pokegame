@@ -373,6 +373,20 @@ const PICKUP_AVOID_SECONDS = 12;
 /** Sin información de visión, ningún objeto tiene estado conocido. */
 const NO_PICKUP_KNOWLEDGE: ReadonlyMap<string, boolean> = new Map();
 
+/** Tiempo mínimo que se mantiene un foco de equipo antes de cambiarlo. */
+const FOCUS_HOLD_SECONDS = 3.5;
+/** Duración de la reclamación de una poción. */
+const PICKUP_CLAIM_SECONDS = 4;
+/** Duración de la reclamación de un aliado caído para revivirlo. */
+const REVIVE_CLAIM_SECONDS = 2.5;
+/** Antigüedad máxima de las posiciones compartidas por el equipo. */
+const SQUAD_LAST_SEEN_SECONDS = 8;
+/** Ventana en la que se descuenta el daño ya comprometido por otros bots. */
+const COMMITTED_DAMAGE_SECONDS = 1;
+/** Vida por debajo de la cual un bot pide ayuda si le ven. */
+const HELP_CALL_HP = 0.5;
+const HELP_CALL_SECONDS = 3;
+
 /** Foco compartido por los bots de un mismo equipo. */
 export interface BotFocus {
   slot: number | null;
@@ -380,15 +394,76 @@ export interface BotFocus {
   until: number;
 }
 
+/** Reclamación temporal de una poción por parte de un bot. */
+export interface BotPickupClaim {
+  slot: number;
+  until: number;
+  /** Puntuación con la que se reclamó; sirve para arbitrar reclamaciones. */
+  priority: number;
+}
+
+/** Petición de ayuda de un aliado bajo de vida y perseguido. */
+export interface BotHelpCall {
+  slot: number;
+  x: number;
+  z: number;
+  hpFraction: number;
+  until: number;
+}
+
+/** Reclamación de un aliado caído que otro bot va a revivir. */
+export interface BotReviveClaim {
+  slot: number;
+  until: number;
+}
+
+/** Daño que otro bot ya prevé aplicar a un objetivo, para no sobrematar. */
+export interface BotDamageCommitment {
+  attackerSlot: number;
+  targetSlot: number;
+  amount: number;
+  until: number;
+}
+
+export type BotEngageCall = 'engage' | 'retreat' | 'group';
+
+/** Pizarra compartida por los bots de un equipo. */
+export interface TeamBlackboard {
+  focus: BotFocus;
+  /** Última posición vista de cada rival, compartida por el equipo. */
+  lastSeen: Map<number, { x: number; z: number; at: number }>;
+  aliveAllies: number;
+  aliveEnemies: number;
+  pickupClaims: Map<string, BotPickupClaim>;
+  reviveClaims: Map<number, BotReviveClaim>;
+  engageCall: BotEngageCall;
+  committedDamage: Map<string, BotDamageCommitment>;
+  help: BotHelpCall | null;
+}
+
 export interface BotSquad {
-  blue: BotFocus;
-  red: BotFocus;
+  blue: TeamBlackboard;
+  red: TeamBlackboard;
+}
+
+function createTeamBlackboard(): TeamBlackboard {
+  return {
+    focus: { slot: null, until: 0 },
+    lastSeen: new Map(),
+    aliveAllies: 0,
+    aliveEnemies: 0,
+    pickupClaims: new Map(),
+    reviveClaims: new Map(),
+    engageCall: 'engage',
+    committedDamage: new Map(),
+    help: null
+  };
 }
 
 export function createBotSquad(): BotSquad {
   return {
-    blue: { slot: null, until: 0 },
-    red: { slot: null, until: 0 }
+    blue: createTeamBlackboard(),
+    red: createTeamBlackboard()
   };
 }
 
@@ -569,6 +644,8 @@ export class BotController {
   private readonly pickupMemory = new Map<string, { available: boolean; at: number }>();
   /** Objetos descartados temporalmente tras un atasco camino de ellos. */
   private readonly pickupAvoidUntil = new Map<string, number>();
+  /** Puntuación del objeto elegido en la última llamada a `pickupTarget`. */
+  private pickupCandidatePriority = 0;
 
   private path: NavPoint[] = [];
   private pathGoal: Vec2 = { x: 0, z: 0 };
@@ -632,13 +709,22 @@ export class BotController {
   ): DeviceInputSnapshot {
     this.clock += dt;
     this.pickupKnowledge = knownPickups;
-    this.rememberPickups(knownPickups);
+    this.rememberPickups(self, knownPickups);
     if (!self.alive) {
+      const team = this.squad[self.team];
+      if (team.help?.slot === self.slot) team.help = null;
+      for (const [key, claim] of team.pickupClaims) {
+        if (claim.slot === self.slot) team.pickupClaims.delete(key);
+      }
+      for (const [slot, claim] of team.reviveClaims) {
+        if (claim.slot === self.slot) team.reviveClaims.delete(slot);
+      }
       this.resetCombatState();
       return { ...IDLE_INPUT };
     }
 
     this.hazards = hazards;
+    this.updateTeamBlackboard(self, players);
     this.updateAllyMotion(dt, self, players);
     this.recordTrail(dt, self);
     this.updateTarget(dt, self, players, colliders);
@@ -668,9 +754,15 @@ export class BotController {
   }
 
   /** Guarda el estado visible de los objetos y descarta recuerdos caducados. */
-  private rememberPickups(knownPickups: ReadonlyMap<string, boolean>): void {
+  private rememberPickups(
+    self: MatchPlayerState,
+    knownPickups: ReadonlyMap<string, boolean>
+  ): void {
+    const team = this.squad[self.team];
     for (const [key, available] of knownPickups) {
       this.pickupMemory.set(key, { available, at: this.clock });
+      // Si el equipo ve que ya se usó, la reclamación deja de tener sentido.
+      if (!available) team.pickupClaims.delete(key);
     }
     for (const [key, entry] of this.pickupMemory) {
       if (this.clock - entry.at > PICKUP_MEMORY_SECONDS) {
@@ -684,7 +776,8 @@ export class BotController {
    * con el destino actual. Así `pickupTarget` no vuelve a fijarlo y el bot
    * regresa a patrullar en vez de empujar contra el obstáculo sin fin.
    */
-  private avoidCurrentPickupGoal(): void {
+  private avoidCurrentPickupGoal(self: MatchPlayerState): void {
+    this.releasePickupClaim(self);
     for (const pickup of this.pickups) {
       if (Math.hypot(pickup.x - this.goal.x, pickup.z - this.goal.z) > 1.2) {
         continue;
@@ -738,6 +831,65 @@ export class BotController {
     this.progressGoal = { x: Infinity, z: Infinity };
     this.progressDistance = Infinity;
     this.progressTimer = 0;
+  }
+
+  /**
+   * Actualiza la pizarra común: vivos de cada bando, llamada de equipo, ayuda
+   * del aliado más urgente y caducidad de posiciones, reclamaciones y daño
+   * comprometido.
+   */
+  private updateTeamBlackboard(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): void {
+    const team = this.squad[self.team];
+    let allies = 0;
+    let enemies = 0;
+    for (const player of players) {
+      if (!player.alive) continue;
+      if (player.team === self.team) allies++;
+      else enemies++;
+    }
+    team.aliveAllies = allies;
+    team.aliveEnemies = enemies;
+    team.engageCall =
+      enemies > allies + 1 ? 'retreat' : enemies > allies ? 'group' : 'engage';
+
+    const hpFraction = self.hp / Math.max(1, self.maxHp);
+    if (hpFraction < HELP_CALL_HP && self.enemiesSeeing > 0) {
+      if (
+        !team.help ||
+        team.help.slot === self.slot ||
+        team.help.until <= this.clock ||
+        hpFraction <= team.help.hpFraction
+      ) {
+        team.help = {
+          slot: self.slot,
+          x: self.x,
+          z: self.z,
+          hpFraction,
+          until: this.clock + HELP_CALL_SECONDS
+        };
+      }
+    } else if (team.help?.slot === self.slot) {
+      team.help = null;
+    }
+
+    for (const [slot, seen] of team.lastSeen) {
+      if (this.clock - seen.at > SQUAD_LAST_SEEN_SECONDS) {
+        team.lastSeen.delete(slot);
+      }
+    }
+    for (const [key, claim] of team.pickupClaims) {
+      if (claim.until <= this.clock) team.pickupClaims.delete(key);
+    }
+    for (const [slot, claim] of team.reviveClaims) {
+      if (claim.until <= this.clock) team.reviveClaims.delete(slot);
+    }
+    for (const [key, commitment] of team.committedDamage) {
+      if (commitment.until <= this.clock) team.committedDamage.delete(key);
+    }
+    if (team.help && team.help.until <= this.clock) team.help = null;
   }
 
   /**
@@ -891,7 +1043,7 @@ export class BotController {
 
   /** Descarta el destino ocupado y vuelve a patrullar por otra zona. */
   private abandonGoal(self: MatchPlayerState): void {
-    this.avoidCurrentPickupGoal();
+    this.avoidCurrentPickupGoal(self);
     this.lastSeen = null;
     this.patrolTimer = 0;
     this.path = [];
@@ -986,8 +1138,10 @@ export class BotController {
     let immuneScore = Infinity;
     let immuneDefense = 1;
     this.visibleEnemies = [];
-    const focus = this.squad[self.team];
+    const team = this.squad[self.team];
+    const focus = team.focus;
     if (focus.until <= this.clock) focus.slot = null;
+    const isLeader = this.teamLeaderSlot(self, players) === self.slot;
 
     for (const enemy of players) {
       if (enemy === self || enemy.team === self.team || !enemy.alive) continue;
@@ -1015,6 +1169,13 @@ export class BotController {
       });
       if (!visible) continue;
       this.visibleEnemies.push(enemy);
+      // Memoria compartida: cualquier rival que vea el equipo deja su última
+      // posición para que los demás puedan investigar cuando se oculte.
+      team.lastSeen.set(enemy.slot, {
+        x: enemy.x,
+        z: enemy.z,
+        at: this.clock
+      });
 
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
       const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
@@ -1026,8 +1187,10 @@ export class BotController {
       let score = distance + hpFraction * 7 - (1 - hpFraction) * 4;
       if (this.target === enemy) score -= 1.5;
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
-      // visible, en vez de repartirse al azar por el mapa.
-      if (focus.slot === enemy.slot) score -= 3.5;
+      // visible, en vez de repartirse al azar por el mapa. Un rival inmune a
+      // este bot no recibe el bonus: el foco no debe arrastrarlo a una pelea
+      // que no puede ganar.
+      if (focus.slot === enemy.slot && offense > 0) score -= 3.5;
 
       // Preferencia ofensiva: buscar al rival al que nuestros ataques le hacen
       // más daño y evitar a los que resisten. La inmunidad se trata aparte.
@@ -1105,11 +1268,27 @@ export class BotController {
     this.targetVisible = chosen !== null;
 
     if (chosen) {
-      if (focus.slot === chosen.slot) {
-        focus.until = this.clock + 2;
-      } else {
-        focus.slot = chosen.slot;
-        focus.until = this.clock + 2;
+      // Solo el líder del equipo cambia el foco, y lo mantiene varios segundos.
+      // Así dos bots no se pasan el objetivo el uno al otro cada frame.
+      if (isLeader && chosenOffense > 0) {
+        const focusEnemy =
+          focus.slot === null
+            ? null
+            : players.find(
+                (player) =>
+                  player.team !== self.team && player.slot === focus.slot
+              ) ?? null;
+        const focusUsable =
+          focusEnemy !== null &&
+          focusEnemy.alive &&
+          this.visibleEnemies.includes(focusEnemy) &&
+          this.bestTypeMultiplier(self, focusEnemy) > 0;
+        if (focus.slot === null || !focusUsable) {
+          focus.slot = chosen.slot;
+          focus.until = this.clock + FOCUS_HOLD_SECONDS;
+        } else if (focus.slot === chosen.slot) {
+          focus.until = this.clock + FOCUS_HOLD_SECONDS;
+        }
       }
       this.visibleTimer += dt;
       this.lastSeen = { x: chosen.x, z: chosen.z, at: this.clock };
@@ -1119,6 +1298,29 @@ export class BotController {
     ) {
       this.lastSeen = null;
     }
+  }
+
+  /** El bot vivo con el slot más bajo del equipo fija el foco compartido. */
+  private teamLeaderSlot(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[]
+  ): number {
+    let leader = self.slot;
+    for (const player of players) {
+      if (!player.alive || player.team !== self.team || !player.isBot) continue;
+      leader = Math.min(leader, player.slot);
+    }
+    return leader;
+  }
+
+  /** Posición compartida más reciente todavía dentro de la memoria del bot. */
+  private squadLastSeen(self: MatchPlayerState): { x: number; z: number } | null {
+    let best: { x: number; z: number; at: number } | null = null;
+    for (const seen of this.squad[self.team].lastSeen.values()) {
+      if (this.clock - seen.at > this.tuning.memory) continue;
+      if (!best || seen.at > best.at) best = seen;
+    }
+    return best ? { x: best.x, z: best.z } : null;
   }
 
   /**
@@ -1545,6 +1747,8 @@ export class BotController {
     this.abilitySlot = null;
     this.supportCast = false;
     this.useCommon = false;
+    this.releasePickupClaim(self);
+    this.releaseReviveClaims(self);
     // Con un peligro ya encima, Impulso es una salida válida aunque no haya un
     // rival cerca: la rama de huida de `drive` solo necesita saber si toca
     // intentarlo.
@@ -1593,7 +1797,7 @@ export class BotController {
     // tanques o bots con escudo/curación.
     const fight =
       targetIsVisible && target
-        ? this.assessFight(self, target, players, pickup, colliders)
+        ? this.assessFight(self, target, pickup, colliders)
         : null;
     const retreatHp = regenBot
       ? Math.max(fight?.retreatHp ?? this.tuning.retreatHp, REGEN_RETREAT_HP)
@@ -1695,8 +1899,12 @@ export class BotController {
       const healSlot = this.findHealSlot(self);
       if (healSlot !== null && distance > 3.2) this.abilitySlot = healSlot;
       this.useCommon = this.shouldUseCommon(self, distance, true, hpFraction);
-      if (pickup) this.setGoal(pickup, pickup);
-      else this.setGoal(self.spawn);
+      if (pickup) {
+        this.claimPickup(self, pickup);
+        this.setGoal(pickup, pickup);
+      } else {
+        this.setGoal(self.spawn);
+      }
       return;
     }
 
@@ -1714,6 +1922,7 @@ export class BotController {
     // Sin rival útil a la vista, un bot dañado prefiere acercarse a un objeto
     // conocido antes que perseguir una posición recordada o patrullar.
     if (pickup && (!targetIsVisible || targetOffense === 0)) {
+      this.claimPickup(self, pickup);
       this.setGoal(pickup, pickup);
       return;
     }
@@ -1738,8 +1947,26 @@ export class BotController {
       return;
     }
 
-    if (this.lastSeen && this.clock - this.lastSeen.at <= this.tuning.memory) {
-      this.setGoal({ x: this.lastSeen.x, z: this.lastSeen.z });
+    // Sin objetivo visible, acudir a la llamada de ayuda de un aliado herido
+    // tiene prioridad sobre perseguir una posición recordada.
+    const help = this.squad[self.team].help;
+    if (
+      help &&
+      help.slot !== self.slot &&
+      help.until > this.clock &&
+      hpFraction > HELP_CALL_HP
+    ) {
+      this.setGoal({ x: help.x, z: help.z });
+      return;
+    }
+
+    const ownMemory =
+      this.lastSeen && this.clock - this.lastSeen.at <= this.tuning.memory
+        ? this.lastSeen
+        : null;
+    const memory = ownMemory ?? this.squadLastSeen(self);
+    if (memory) {
+      this.setGoal({ x: memory.x, z: memory.z });
       return;
     }
 
@@ -1856,21 +2083,6 @@ export class BotController {
     return best;
   }
 
-  /** Diferencia de vivos entre ambos equipos. Solo usa números, no posiciones. */
-  private aliveTeamAdvantage(
-    self: MatchPlayerState,
-    players: readonly MatchPlayerState[]
-  ): number {
-    let allies = 0;
-    let enemies = 0;
-    for (const player of players) {
-      if (!player.alive) continue;
-      if (player.team === self.team) allies++;
-      else enemies++;
-    }
-    return allies - enemies;
-  }
-
   /**
    * Compara el tiempo estimado de matar con el de morir. El cociente incorpora
    * de forma natural la resistencia del Pokémon (tanques aguantan más) y el
@@ -1880,7 +2092,6 @@ export class BotController {
   private assessFight(
     self: MatchPlayerState,
     target: MatchPlayerState,
-    players: readonly MatchPlayerState[],
     pickup: PickupSpawn | null,
     colliders: readonly Collider[]
   ): FightAssessment {
@@ -1897,7 +2108,8 @@ export class BotController {
       Math.max(0, self.invulnerableTimer);
     const exchange = timeToDie / Math.max(0.1, timeToKill);
 
-    const allyDiff = this.aliveTeamAdvantage(self, players);
+    const team = this.squad[self.team];
+    const allyDiff = team.aliveAllies - team.aliveEnemies;
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     let retreatHp = this.tuning.retreatHp;
 
@@ -1910,6 +2122,11 @@ export class BotController {
 
     if (allyDiff <= -1) retreatHp += 0.1;
     else if (allyDiff >= 1) retreatHp -= 0.06;
+    // La llamada compartida refuerza la lectura numérica: retirarse cuando el
+    // equipo está en inferioridad o aceptar pelea cuando domina el marcador.
+    if (team.engageCall === 'retreat') retreatHp += 0.04;
+    else if (team.engageCall === 'group') retreatHp += 0.02;
+    else if (allyDiff >= 0) retreatHp -= 0.02;
 
     const resourceReserve =
       Math.max(0, selfEffectiveHp - self.hp) / Math.max(1, self.maxHp);
@@ -2188,6 +2405,7 @@ export class BotController {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const missingHp = self.maxHp - self.hp;
     const enemyBases = respawnsForTeam(otherTeam(self.team));
+    const team = this.squad[self.team];
     let best: PickupSpawn | null = null;
     let bestScore = -Infinity;
 
@@ -2260,13 +2478,57 @@ export class BotController {
       const score =
         healFraction * 6 + knownBonus - distanceCost - baseCost - pathDanger;
 
+      // Otra bot ya puede estar yendo a por esta poción. Solo se le discute si
+      // esta elección puntúa mejor (más vida que recuperar, menos distancia o
+      // menos peligro); si no, se busca otra.
+      const claim = team.pickupClaims.get(key);
+      if (
+        claim &&
+        claim.until > this.clock &&
+        claim.slot !== self.slot &&
+        claim.priority >= score
+      ) {
+        continue;
+      }
+
       if (score > bestScore) {
         bestScore = score;
         best = pickup;
       }
     }
 
+    this.pickupCandidatePriority = best ? bestScore : 0;
     return best;
+  }
+
+  /** Reclama ante el equipo la poción que este bot va a perseguir. */
+  private claimPickup(self: MatchPlayerState, pickup: PickupSpawn): void {
+    const key = `${pickup.x}:${pickup.z}`;
+    const team = this.squad[self.team];
+    for (const [otherKey, claim] of team.pickupClaims) {
+      if (claim.slot === self.slot) team.pickupClaims.delete(otherKey);
+    }
+    team.pickupClaims.set(key, {
+      slot: self.slot,
+      until: this.clock + PICKUP_CLAIM_SECONDS,
+      priority: this.pickupCandidatePriority
+    });
+  }
+
+  /** Retira la reclamación propia al dejar de perseguir un objeto. */
+  private releasePickupClaim(self: MatchPlayerState): void {
+    const team = this.squad[self.team];
+    for (const [key, claim] of team.pickupClaims) {
+      if (claim.slot === self.slot) team.pickupClaims.delete(key);
+    }
+  }
+
+  /** Retira las reclamaciones de revivir que ya no está ejecutando. */
+  private releaseReviveClaims(self: MatchPlayerState): void {
+    const team = this.squad[self.team];
+    for (const [slot, claim] of team.reviveClaims) {
+      if (claim.slot === self.slot) team.reviveClaims.delete(slot);
+    }
   }
 
   private setGoal(goal: Vec2, pickup: PickupSpawn | null = null): void {
@@ -2605,7 +2867,7 @@ export class BotController {
           // Dos desvíos seguidos sin avanzar: volver por donde vino. Es lo
           // único que funciona en un pasillo donde dos aliados no caben.
           this.stuckCount = 0;
-          this.avoidCurrentPickupGoal();
+          this.avoidCurrentPickupGoal(self);
           this.backOffGoal = this.trailBackOff(self);
           this.backOffTimer = BACK_OFF_SECONDS;
         } else {
@@ -2803,7 +3065,41 @@ export class BotController {
 
     // Ninguna opción aporta lo suficiente: es mejor no gastar el cooldown y
     // seguir moviéndose que lanzar una cura o un buff inútil.
-    return bestScore > MIN_ABILITY_SCORE ? bestSlot : null;
+    if (bestSlot === null || bestScore <= MIN_ABILITY_SCORE) return null;
+    const bestId = self.abilityIds[bestSlot];
+    const bestDef = bestId ? ABILITIES[bestId] : null;
+    if (bestDef) {
+      this.claimSupportRevives(self, players, bestDef, colliders);
+    }
+    this.commitPlannedDamage(self, target, bestSlot);
+    return bestSlot;
+  }
+
+  /** Marca los aliados caídos que este bot va a intentar revivir. */
+  private claimSupportRevives(
+    self: MatchPlayerState,
+    players: readonly MatchPlayerState[],
+    def: AbilityDef,
+    colliders: readonly Collider[]
+  ): void {
+    const profile = SUPPORT_PROFILES[def.id];
+    if (!profile?.revive || def.range > 0.1) return;
+    const reach = def.radius + maxHitRadius();
+    const team = this.squad[self.team];
+    for (const ally of players) {
+      if (ally.team !== self.team || ally.alive) continue;
+      if (ally.respawnTimer <= 1) continue;
+      if (Math.hypot(ally.x - self.x, ally.z - self.z) > reach + ally.hitRadius) {
+        continue;
+      }
+      if (segmentBlockedByColliders(self.x, self.z, ally.x, ally.z, colliders)) {
+        continue;
+      }
+      team.reviveClaims.set(ally.slot, {
+        slot: self.slot,
+        until: this.clock + REVIVE_CLAIM_SECONDS
+      });
+    }
   }
 
   /**
@@ -2831,6 +3127,15 @@ export class BotController {
       if (!ally.alive) {
         // Si va a reaparecer igualmente, el área no aporta nada.
         if (!profile.revive || ally.respawnTimer <= 1) continue;
+        // Otro bot ya se ha comprometido a revivirlo: no se apilan dos Deseos.
+        const claim = this.squad[self.team].reviveClaims.get(ally.slot);
+        if (
+          claim &&
+          claim.until > this.clock &&
+          claim.slot !== self.slot
+        ) {
+          continue;
+        }
         // El marcador debe estar en línea con el centro del área; si hay un
         // obstáculo de por medio, el motor no lo revive.
         if (segmentBlockedByColliders(self.x, self.z, ally.x, ally.z, colliders)) {
@@ -2877,6 +3182,11 @@ export class BotController {
         bestSlot = slot;
       }
     }
+    if (bestSlot !== null) {
+      const id = self.abilityIds[bestSlot];
+      const def = id ? ABILITIES[id] : null;
+      if (def) this.claimSupportRevives(self, players, def, colliders);
+    }
     return bestSlot;
   }
 
@@ -2884,6 +3194,54 @@ export class BotController {
     const id = self.abilityIds[slot];
     const def = id ? ABILITIES[id] : null;
     return def !== null && Object.hasOwn(SUPPORT_PROFILES, def.id);
+  }
+
+  /** Daño letal que otros aliados ya han comprometido sobre el objetivo. */
+  private committedDamageOn(
+    self: MatchPlayerState,
+    target: MatchPlayerState
+  ): number {
+    let total = 0;
+    for (const commitment of this.squad[self.team].committedDamage.values()) {
+      if (commitment.targetSlot !== target.slot) continue;
+      if (commitment.attackerSlot === self.slot) continue;
+      if (commitment.until <= this.clock) continue;
+      total += commitment.amount;
+    }
+    return total;
+  }
+
+  /**
+   * Registra el daño que este bot piensa aplicar con una habilidad grande. Los
+   * compañeros lo descuentan durante una ventana corta para no apilar dos o
+   * tres definitivas sobre un rival que ya va a caer.
+   */
+  private commitPlannedDamage(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    slot: number
+  ): void {
+    const id = self.abilityIds[slot];
+    const def = id ? ABILITIES[id] : null;
+    if (!def || def.power <= 0) return;
+    if (slot !== 3 && def.power < BIG_ABILITY_POWER) return;
+
+    const prediction = this.predictTarget(self, target, def);
+    const accuracy = this.hitChance(self, target, def, prediction);
+    const amount =
+      this.expectedDamage(self, target, def, prediction) * accuracy;
+    const team = this.squad[self.team];
+    for (const [key, commitment] of team.committedDamage) {
+      if (commitment.attackerSlot === self.slot) {
+        team.committedDamage.delete(key);
+      }
+    }
+    team.committedDamage.set(`${target.slot}:${self.slot}`, {
+      attackerSlot: self.slot,
+      targetSlot: target.slot,
+      amount,
+      until: this.clock + COMMITTED_DAMAGE_SECONDS
+    });
   }
 
   /**
@@ -3108,12 +3466,18 @@ export class BotController {
     let score = 0;
 
     if (def.power > 0) {
+      const bigAbility = slot === 3 || def.power >= BIG_ABILITY_POWER;
+      // Si un compañero ya ha comprometido daño suficiente para tumbarlo, no
+      // se gasta otra definitiva en el mismo objetivo.
+      if (bigAbility && this.committedDamageOn(self, target) >= target.hp) {
+        return -Infinity;
+      }
       const mitigation = 1 - this.damageTakenFactor(target, def);
       // El escudo ya rebaja el daño esperado, pero una habilidad grande cuyo
       // golpe entra muy reducido no compensa su cooldown.
       if (
         mitigation >= BIG_ABILITY_MITIGATION_THRESHOLD &&
-        (slot === 3 || def.power >= BIG_ABILITY_POWER)
+        bigAbility
       ) {
         return -Infinity;
       }
