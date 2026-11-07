@@ -1,6 +1,7 @@
 import * as pc from 'playcanvas';
 import { ABILITIES, MOVESETS } from './abilities';
 import { CONFIG, DEG, RAD } from './config';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { publicUrl } from './publicUrl';
 import { defaultSkinFor } from './skins';
 import type {
@@ -645,6 +646,10 @@ export class SpriteBillboard {
       outline.castShadow = false;
       outline.receiveShadow = false;
       outline.drawOrder = OUTLINE_DRAW_ORDER;
+      if (this.device.supportsStencil) {
+        outline.stencilFront = FOG_EXCLUDED_STENCIL;
+        outline.stencilBack = FOG_EXCLUDED_STENCIL;
+      }
     }
 
     const entity = new pc.Entity(`sprite-${name}`);
@@ -658,6 +663,16 @@ export class SpriteBillboard {
     silhouette.castShadow = false;
     silhouette.receiveShadow = false;
     silhouette.drawOrder = SILHOUETTE_DRAW_ORDER;
+    // Excluye el sprite de la niebla de guerra: si no, la mitad superior de un
+    // Pokémon alto se oscurece con la sombra del suelo que queda detrás de su
+    // cabeza. La silueta de oclusión también se marca para que no pierda
+    // contraste bajo la niebla (ver `fogStencil.ts`).
+    if (this.device.supportsStencil) {
+      instance.stencilFront = FOG_EXCLUDED_STENCIL;
+      instance.stencilBack = FOG_EXCLUDED_STENCIL;
+      silhouette.stencilFront = FOG_EXCLUDED_STENCIL;
+      silhouette.stencilBack = FOG_EXCLUDED_STENCIL;
+    }
     // La silueta se descarta sola donde el sprite está a la vista; basta con
     // tenerla activa. Solo el jugador la lleva, para no llenar la base de
     // contornos pálidos cuando los NPC quedan detrás de un árbol.

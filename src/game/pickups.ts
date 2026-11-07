@@ -12,6 +12,7 @@
 
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import {
   ITEM_DEFINITIONS,
   ITEM_IDS,
@@ -225,6 +226,12 @@ export class PickupView {
     this.instance = new pc.MeshInstance(this.mesh, this.unusedMaterial);
     this.instance.castShadow = false;
     this.instance.receiveShadow = false;
+    // El billboard también queda fuera de la niebla: su mitad superior no debe
+    // heredar la sombra del suelo que hay detrás.
+    if (device.supportsStencil) {
+      this.instance.stencilFront = FOG_EXCLUDED_STENCIL;
+      this.instance.stencilBack = FOG_EXCLUDED_STENCIL;
+    }
     render.meshInstances = [this.instance];
     this.pivot.addChild(entity);
     this.sprite = entity;

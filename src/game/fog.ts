@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG, DEG } from './config';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { MAX_TEAM_SIZE, type SplitRect } from './multiplayer';
 import { mapHalfDepth, mapHalfWidth } from './terrain';
 
@@ -231,6 +232,22 @@ export class FogView {
     instance.castShadow = false;
     instance.receiveShadow = false;
     instance.drawOrder = 1000;
+    // Los separadores y los Pokémon escriben esténcil 1: la niebla no los
+    // tiñe, así que su cara visible no hereda la sombra del suelo que queda
+    // detrás de ellos en pantalla (ver `fogStencil.ts`).
+    if (device.supportsStencil) {
+      const stencil = new pc.StencilParameters({
+        func: pc.FUNC_NOTEQUAL,
+        ref: FOG_EXCLUDED_STENCIL.ref,
+        readMask: 0xff,
+        writeMask: 0x00,
+        fail: pc.STENCILOP_KEEP,
+        zfail: pc.STENCILOP_KEEP,
+        zpass: pc.STENCILOP_KEEP
+      });
+      instance.stencilFront = stencil;
+      instance.stencilBack = stencil;
+    }
 
     this.entity = new pc.Entity(`fog-view-${index + 1}`);
     this.entity.addComponent('render');

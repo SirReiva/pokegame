@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { TEAM_INFO } from './multiplayer';
 import {
   BASES,
@@ -310,7 +311,8 @@ export function buildWorld(app: pc.Application): World {
   const windMaterials: pc.StandardMaterial[] = [];
   const instancedFoliageBuffers: pc.VertexBuffer[] = [];
   const surfaceMeshes: pc.Mesh[] = [];
-
+  /** Mallas de separadores: escriben esténcil 1 para que la niebla no las tiña. */
+  const barrierMeshInstances: pc.MeshInstance[] = [];
 
   // Orden transparente manual: primero las láminas de agua, después las
   // sombras de contacto y al final el anillo del jugador. Así el anillo nunca
@@ -1153,6 +1155,7 @@ export function buildWorld(app: pc.Application): World {
         instance.castShadow = true;
         instance.receiveShadow = true;
         wall.render!.meshInstances = [instance];
+        barrierMeshInstances.push(instance);
         app.root.addChild(wall);
         created.push(wall);
       }
@@ -1185,6 +1188,7 @@ export function buildWorld(app: pc.Application): World {
       instance.castShadow = true;
       instance.receiveShadow = true;
       peak.render!.meshInstances = [instance];
+      barrierMeshInstances.push(instance);
       app.root.addChild(peak);
       created.push(peak);
     });
@@ -4124,6 +4128,16 @@ export function buildWorld(app: pc.Application): World {
   shadowMaterial.cull = pc.CULLFACE_NONE;
   shadowMaterial.update();
   materials.push(shadowMaterial);
+
+  // La niebla de guerra se apoya en el suelo que queda detrás de cada píxel;
+  // sin esta marca, la cara de una cordillera vista de frente heredaba la
+  // sombra de su propia ladera. `FogView` solo pinta donde el esténcil es 0.
+  if (device.supportsStencil) {
+    for (const instance of barrierMeshInstances) {
+      instance.stencilFront = FOG_EXCLUDED_STENCIL;
+      instance.stencilBack = FOG_EXCLUDED_STENCIL;
+    }
+  }
 
   let time = 0;
 
