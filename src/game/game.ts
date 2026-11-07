@@ -67,6 +67,7 @@ import {
   segmentBlockedByColliders
 } from './combat';
 import { CombatFx } from './combatFx';
+import type { TelegraphHandle } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { DeathMarker } from './deathMarker';
@@ -1840,7 +1841,15 @@ export class Game {
       // el límite durante el efecto y se autodestruye al acabar. El carril del
       // haz también sigue visible mientras se reproduce el haz.
       player.pendingCast = null;
-      this.queueCast(player, pending.def, pending.targetX, pending.targetZ);
+      this.queueCast(
+        player,
+        pending.def,
+        pending.targetX,
+        pending.targetZ,
+        pending.marker,
+        pending.dirX,
+        pending.dirZ
+      );
     }
 
     if (!movable) {
@@ -2398,7 +2407,9 @@ export class Game {
         marker,
         lane,
         targetX,
-        targetZ
+        targetZ,
+        dirX,
+        dirZ
       };
       return;
     }
@@ -2421,9 +2432,12 @@ export class Game {
     player: MatchPlayerState,
     def: AbilityDef,
     targetX?: number,
-    targetZ?: number
+    targetZ?: number,
+    marker?: TelegraphHandle | null,
+    dirX?: number,
+    dirZ?: number
   ): void {
-    this.queuedCasts.push({ player, def, targetX, targetZ });
+    this.queuedCasts.push({ player, def, targetX, targetZ, marker, dirX, dirZ });
   }
 
   /** Ejecuta las habilidades instantáneas encoladas en orden de lanzamiento. */
@@ -2434,7 +2448,15 @@ export class Game {
     for (const cast of casts) {
       // Un golpe anterior de esta misma tanda pudo cerrar la partida.
       if (this.matchOver) break;
-      this.executeAbility(cast.player, cast.def, cast.targetX, cast.targetZ);
+      this.executeAbility(
+        cast.player,
+        cast.def,
+        cast.targetX,
+        cast.targetZ,
+        cast.marker,
+        cast.dirX,
+        cast.dirZ
+      );
     }
   }
 
@@ -2443,7 +2465,10 @@ export class Game {
     player: MatchPlayerState,
     def: AbilityDef,
     targetX?: number,
-    targetZ?: number
+    targetZ?: number,
+    marker?: TelegraphHandle | null,
+    dirX?: number,
+    dirZ?: number
   ): void {
     // El lock de movimiento, la recuperación global y el clip de ataque
     // empiezan cuando la habilidad se ejecuta de verdad (tras el windup, si lo
@@ -2516,6 +2541,9 @@ export class Game {
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
       addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
+      marker,
+      castDirX: dirX,
+      castDirZ: dirZ,
       resolveAoeHit: (hit) => this.resolveAoeHit(hit),
       healToken
     };
@@ -3588,6 +3616,25 @@ export class Game {
     // terminadas se retiran durante el recorrido.
     for (const aoe of this.activeAoes.slice()) {
       aoe.elapsed += dt;
+      // Las áreas móviles recalculan su centro antes del tick para que el daño
+      // de este frame y el aro visual se resuelvan en la misma posición. En el
+      // frame en que el área caduca ya no se mueve: su efecto visual puede
+      // haberse retirado antes.
+      if (aoe.movement && aoe.elapsed < aoe.duration) {
+        const next = aoe.movement({
+          caster: aoe.owner,
+          def: aoe.def,
+          originX: aoe.originX,
+          originZ: aoe.originZ,
+          dirX: aoe.dirX,
+          dirZ: aoe.dirZ,
+          duration: aoe.duration,
+          elapsed: aoe.elapsed
+        });
+        aoe.x = next.x;
+        aoe.z = next.z;
+        aoe.moveVisual?.(aoe.x, aoe.z);
+      }
       aoe.tickTimer -= dt;
       // El primer tick cae al aparecer el área (tickTimer empieza en 0).
       let guard = 0;

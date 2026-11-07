@@ -44,6 +44,38 @@ export interface AoeHitInput {
   immuneMarked?: Set<number>;
 }
 
+/**
+ * Datos que recibe cada frame la función de movimiento de un área `overTime`.
+ * El centro se expresa en coordenadas de mundo.
+ */
+export interface AoeMovementContext {
+  caster: MatchPlayerState;
+  def: AbilityDef;
+  /** Centro donde apareció el área. */
+  originX: number;
+  originZ: number;
+  /**
+   * Dirección horizontal del lanzamiento (desde el lanzador hacia el centro),
+   * normalizada. Si el área nació sobre el lanzador, es su `facing`.
+   */
+  dirX: number;
+  dirZ: number;
+  /** Duración total del área en segundos. */
+  duration: number;
+  /** Segundos transcurridos desde que apareció el área. */
+  elapsed: number;
+}
+
+/**
+ * Función que recoloca el centro de un área `overTime` en cada frame. Debe
+ * devolver el centro en coordenadas de mundo; el motor mueve con él el daño de
+ * cada tick, el aro del equipo y el efecto visual.
+ */
+export type AoeMovement = (context: AoeMovementContext) => {
+  x: number;
+  z: number;
+};
+
 /** Un Pokémon dentro del área en el momento del golpe. */
 export interface AoeTarget {
   player: MatchPlayerState;

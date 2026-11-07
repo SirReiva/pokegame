@@ -5,6 +5,7 @@
  */
 
 import type { AbilityDef, BuffStat } from './abilities';
+import type { AoeMovement } from './aoeEffect';
 import type { Actor } from './actor';
 import type { CameraRig } from './camera';
 import type { EffectHandle, FxHandle, TelegraphHandle } from './combatFx';
@@ -92,6 +93,14 @@ export interface QueuedCast {
   def: AbilityDef;
   targetX?: number;
   targetZ?: number;
+  /**
+   * Marca de área creada durante el `windup`. Se conserva hasta la ejecución
+   * para que un área móvil pueda seguir moviéndola durante el efecto.
+   */
+  marker?: TelegraphHandle | null;
+  /** Dirección horizontal fijada al empezar la preparación. */
+  dirX?: number;
+  dirZ?: number;
 }
 
 /**
@@ -154,6 +163,9 @@ export interface PendingCast {
   /** Centro del área o extremo del haz fijado al empezar el lanzamiento. */
   targetX: number;
   targetZ: number;
+  /** Dirección horizontal fijada al empezar la preparación. */
+  dirX: number;
+  dirZ: number;
 }
 
 /** Área persistente que aplica daño periódico mientras el rival siga dentro. */
@@ -170,6 +182,19 @@ export interface ActiveAoe {
   tickTimer: number;
   /** Índice del próximo golpe: 0 para el primer tick. */
   tick: number;
+  /**
+   * Función opcional que recoloca el centro en cada frame durante la duración.
+   * Solo existe en las áreas `overTime` que declaran `aoeMovement`.
+   */
+  movement?: AoeMovement;
+  /** Centro donde apareció el área; base para `movement`. */
+  originX: number;
+  originZ: number;
+  /** Dirección horizontal unitaria del lanzamiento. */
+  dirX: number;
+  dirZ: number;
+  /** Recoloca el aro del equipo y el efecto visual al mover el centro. */
+  moveVisual?: (x: number, z: number) => void;
   /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
   healToken?: HealOnHitToken;
   /**

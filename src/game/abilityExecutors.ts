@@ -15,7 +15,7 @@ import {
   sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
-import type { CombatFx } from './combatFx';
+import type { CombatFx, TelegraphHandle } from './combatFx';
 import type {
   ActiveAoe,
   HealOnHitToken,
@@ -95,6 +95,14 @@ export interface AbilityExecutorDeps {
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
+  /**
+   * Marca de área creada durante el `windup`, si la hubo. El ejecutor la
+   * reutiliza en vez de crear otra y la mueve junto al centro del área.
+   */
+  readonly marker?: TelegraphHandle | null;
+  /** Dirección fijada al empezar la preparación, si la hubo. */
+  readonly castDirX?: number;
+  readonly castDirZ?: number;
   /**
    * Resuelve el golpe de un área: reúne a todos los Pokémon dentro del radio y
    * delega en el `aoeEffect` de la habilidad (o en el efecto por defecto).
@@ -287,8 +295,10 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
 };
 
 const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
-  const dirX = Math.sin(player.facing);
-  const dirZ = Math.cos(player.facing);
+  // En las áreas con preparación se conserva la dirección del lanzamiento; el
+  // jugador pudo girar durante un `windup` móvil y el centro ya estaba fijado.
+  const dirX = deps.castDirX ?? Math.sin(player.facing);
+  const dirZ = deps.castDirZ ?? Math.cos(player.facing);
   // El centro no puede quedar detrás de un obstáculo: se detiene antes del
   // primer collider para que el telegraph y el daño coincidan con lo que ve el
   // jugador.
@@ -309,21 +319,24 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const duration = Math.max(0.1, def.aoeDuration);
   // Las áreas sin preparación no pasan por la marca de `castAbility`: el aro
   // del equipo se crea aquí junto al efecto para que el límite del área se vea
-  // durante toda la habilidad, no solo durante el impacto.
-  if (def.windup <= 0) {
-    deps.combatFx.spawnAoeTelegraph(
-      centerX,
-      centerZ,
-      def.radius + maxHitRadius(),
-      TEAM_INFO[player.team].accent,
-      0,
-      duration
-    );
-  }
+  // durante toda la habilidad, no solo durante el impacto. Las áreas con
+  // `windup` reciben la marca ya creada para poder moverla junto al centro.
+  const marker =
+    deps.marker ??
+    (def.windup <= 0
+      ? deps.combatFx.spawnAoeTelegraph(
+          centerX,
+          centerZ,
+          def.radius + maxHitRadius(),
+          TEAM_INFO[player.team].accent,
+          0,
+          duration
+        )
+      : null);
   // El aro y el efecto dibujan el radio máximo de golpe (área + el mayor
   // hurtbox) y la comprobación usa el mismo valor: todo el interior del aro es
   // golpeable y el borde coincide con el límite real.
-  deps.combatFx.spawnAoe(
+  const areaFx = deps.combatFx.spawnAoe(
     centerX,
     centerZ,
     def.radius + maxHitRadius(),
@@ -345,7 +358,16 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       tickTimer: 0,
       tick: 0,
       healToken: deps.healToken,
-      immuneMarked: new Set()
+      immuneMarked: new Set(),
+      movement: def.aoeMovement,
+      originX: centerX,
+      originZ: centerZ,
+      dirX,
+      dirZ,
+      moveVisual: (x, z) => {
+        areaFx.setCenter(x, z);
+        marker?.setCenter?.(x, z);
+      }
     });
     return;
   }

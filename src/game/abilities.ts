@@ -21,7 +21,7 @@
  * movimiento.
  */
 
-import type { AoeEffect } from './aoeEffect';
+import type { AoeEffect, AoeMovement } from './aoeEffect';
 import type { PokemonType } from './typeChart';
 import type { AnimationName } from './types';
 
@@ -193,6 +193,13 @@ export interface AbilityDef {
   aoeDuration: number;
   /** Intervalo entre golpes en modo `overTime` (segundos). */
   aoeTickInterval: number;
+  /**
+   * Función opcional que recoloca el centro de un área `overTime` en cada
+   * frame. Recibe el tiempo transcurrido y el centro original, y devuelve el
+   * centro actual en coordenadas de mundo. El motor mueve con él el daño de
+   * cada tick, el aro del equipo y el efecto visual. Solo se usa en `overTime`.
+   */
+  aoeMovement?: AoeMovement;
   /**
    * Callback opcional que decide qué efectos aplica cada golpe o tick del
    * área. Recibe todos los Pokémon vivos dentro del radio (aliados, enemigos y
@@ -449,6 +456,16 @@ export class AbilityBuilder {
    */
   aoeEffect(effect: AoeEffect): this {
     this.draft.aoeEffect = effect;
+    return this;
+  }
+
+  /**
+   * Función que mueve el centro de un área `overTime` durante su duración.
+   * Recibe el tiempo transcurrido y devuelve el centro en el mundo; el daño,
+   * el aro y el efecto visual siguen ese centro.
+   */
+  aoeMovement(movement: AoeMovement): this {
+    this.draft.aoeMovement = movement;
     return this;
   }
 

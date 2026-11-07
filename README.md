@@ -301,6 +301,18 @@ Las áreas reparten su daño de dos formas con `aoeDamageMode`:
 
 En ambos modos el área visible dura `aoeDuration`: el aro del equipo, el anillo del estilo y las llamas que salen del suelo se mantienen hasta el final y se apagan en los últimos 0,3 s. En `instant` el daño se aplica una sola vez al inicio y las llamas quedan como residuo visual; si quieres que sigan dañando, cambia la habilidad a `overTime`.
 
+Las áreas `overTime` pueden mover su centro durante la duración con `aoeMovement`. La función se llama cada frame con el tiempo transcurrido (`elapsed`), la duración, el centro original (`originX`/`originZ`), la dirección del lanzamiento (`dirX`/`dirZ`), el lanzador y la definición, y devuelve el centro actual en coordenadas de mundo. El motor mueve con él el cálculo de cada tick, el aro del equipo y el efecto visual. Por ejemplo, una columna que avanza en la dirección del lanzamiento:
+
+```ts
+.area('whirl', 'overTime', 3, 0.5)
+  .aoeMovement(({ originX, originZ, dirX, dirZ, elapsed }) => ({
+    x: originX + dirX * elapsed * 1.5,
+    z: originZ + dirZ * elapsed * 1.5
+  }))
+```
+
+Sin `aoeMovement` el centro queda fijo donde se lanzó, como hasta ahora.
+
 Las áreas pueden usar **daño radial** con `radialDamage: true`. El centro siempre hace el 100 % de la potencia y el borde hace `radialMinDamage`, con interpolación lineal según la distancia. Por defecto `radialMinDamage` vale `0`, así que el borde no hace daño; con `0.35` el borde hace el 35 %. Funciona igual en `instant` y en `overTime` (el multiplicador se aplica a cada tick). `Psicoataque` es el primer caso: 100 % en el centro y 35 % en el borde. El resto de áreas siguen haciendo daño completo porque `radialDamage` es `false` por defecto.
 
 `Giro Fuego` usa `overTime` (35/s durante 2,4 s, ticks de 0,4 s) y `Terremoto` también (40/s durante 2,5 s, ticks de 0,5 s), así que el área golpea varias veces a quien se quede dentro. `Anillo Ígneo` usa `instant` con `aoeDuration: 0,5`, así que su explosión golpea una vez y el estallido de llamas dura medio segundo.

@@ -85,6 +85,12 @@ export interface FxHandle {
   destroy(): void;
 }
 
+/** Handle de un área visual que puede seguir a un centro móvil. */
+export interface AoeFxHandle extends FxHandle {
+  /** Recoloca el centro del área sin reiniciar su animación. */
+  setCenter(x: number, z: number): void;
+}
+
 /**
  * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
  * Devuelve un array vacío si ninguna vista lo ve.
@@ -155,6 +161,11 @@ interface ProjectileVisual {
 /** Marca de área activa; se puede cancelar antes de que termine el retardo. */
 export interface TelegraphHandle {
   destroy(): void;
+  /**
+   * Recoloca la marca si el área asociada se mueve. Solo lo implementan las
+   * marcas de área; los carriles de haz no se desplazan.
+   */
+  setCenter?(x: number, z: number): void;
 }
 
 interface GroundTelegraph {
@@ -4681,12 +4692,37 @@ export class CombatFx {
     color: readonly [number, number, number],
     style: AoeStyle = 'ring',
     duration = 0.65
-  ): void {
+  ): AoeFxHandle {
     const life = Math.max(0.2, duration);
     const factory = this.aoeFactories[style] ?? this.aoeFactories.ring;
+    // Las fábricas crean una o varias entidades en coordenadas de mundo. Se
+    // recuerdan para poder desplazar el conjunto cuando el área se mueva sin
+    // reiniciar sus animaciones.
+    const firstEffect = this.effects.length;
     this.withAnchors(areaAnchors(x, z, radius), () =>
       factory(x, z, radius, color, life)
     );
+    const created = this.effects.slice(firstEffect);
+    const bases = created.map((effect) => {
+      const position = effect.entity.getPosition();
+      return { effect, x: position.x, z: position.z };
+    });
+    return {
+      setCenter: (nextX, nextZ) => {
+        const dx = nextX - x;
+        const dz = nextZ - z;
+        for (const base of bases) {
+          const position = base.effect.entity.getPosition();
+          base.effect.entity.setPosition(base.x + dx, position.y, base.z + dz);
+          // La visibilidad se decide por las anclas del área: si el centro se
+          // mueve a otra vista, el efecto debe aparecer ahí.
+          base.effect.anchors = areaAnchors(nextX, nextZ, radius);
+        }
+      },
+      destroy: () => {
+        for (const effect of created) this.disposeEffect(effect);
+      }
+    };
   }
 
   /** Anillo de área genérico: crece y se desvanece en el suelo. */
@@ -5648,7 +5684,17 @@ export class CombatFx {
 
     this.applyVisibility(root, areaAnchors(x, z, radius));
     this.telegraphs.add(record);
-    return { destroy: () => this.disposeTelegraph(record) };
+    return {
+      destroy: () => this.disposeTelegraph(record),
+      setCenter: (nextX, nextZ) => {
+        record.entity.setPosition(
+          nextX,
+          record.entity.getPosition().y,
+          nextZ
+        );
+        record.anchors = areaAnchors(nextX, nextZ, radius);
+      }
+    };
   }
 
   private disposeTelegraph(telegraph: GroundTelegraph): void {
