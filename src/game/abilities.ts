@@ -1000,11 +1000,22 @@ registerAbility(
     .windup(0.5, { move: true })
     .cast(0.45)
     .area('whirl', 'overTime', 2.4, 0.4)
+    .aoeMovement(({ originX, originZ, duration, elapsed }) => {
+      // Espiral hacia fuera: arranca en el centro, da 1,5 vueltas y se abre
+      // hasta 1,2 u. El remolino barre la zona sin dejar de cubrir el origen.
+      const progress = Math.min(1, elapsed / duration);
+      const angle = progress * Math.PI * 3;
+      const radius = progress * 1.2;
+      return {
+        x: originX + Math.cos(angle) * radius,
+        z: originZ + Math.sin(angle) * radius
+      };
+    })
     .impact('fire')
     .slow(0.8, 1.5)
     .color(255, 132, 40)
     .description(
-      'Remolino de fuego persistente: 35 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
+      'Remolino de fuego en espiral: 35 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
     )
 );
 
