@@ -602,6 +602,9 @@ las 4 habilidades contra el objetivo neutro. `% vida media` = combo medio contra
 las otras 14 especies jugables, dividido por su HP. `100-0` = número de rivales
 a los que el combo completo les quita toda la vida.
 
+> El desglose de daño por segundo de cada habilidad contra cada rival está en
+> [`dps-por-habilidad.md`](dps-por-habilidad.md).
+
 La matriz incluye 15 de las 18 especies con moveset (14 rivales por fila, sin
 contar el mirror); Onix, Celebi y Lugia quedan fuera de esta simulación. Las áreas se valoran con el objetivo en el centro; en el borde el
 daño radial es menor.

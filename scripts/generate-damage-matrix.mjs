@@ -332,6 +332,214 @@ try {
   const output = join(root, 'docs/tabla-danos-por-ataque.md');
   writeFileSync(output, lines.join('\n'), 'utf8');
   console.log(`Escrito ${output} (${lines.length} líneas)`);
+
+  /* ----------------------------------------------------------------------- */
+  /* Tabla de daño por segundo (DPS) por habilidad                           */
+  /* ----------------------------------------------------------------------- */
+
+  /** Defensor sin tipos y con 100 en todo, para comparar habilidades. */
+  const NEUTRAL_TARGET = {
+    id: 'neutral',
+    name: 'Objetivo neutro',
+    types: [],
+    stats: {
+      hp: 100,
+      attack: 100,
+      defense: 100,
+      spAttack: 100,
+      spDefense: 100,
+      speed: 100
+    }
+  };
+
+  /** Número con una decimal como máximo y coma decimal. */
+  function formatNumber(value) {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded)
+      ? String(rounded)
+      : rounded.toFixed(1).replace('.', ',');
+  }
+
+  /** Cooldown con hasta dos decimales y coma decimal (0,25 s, 8 s, 0,9 s). */
+  function formatCooldown(value) {
+    const rounded = Math.round(value * 100) / 100;
+    return String(rounded).replace('.', ',');
+  }
+
+  /**
+   * DPS de una habilidad contra un defensor: daño esperado de un lanzamiento
+   * completo dividido por su cooldown. El cooldown empieza al iniciar el
+   * lanzamiento, así que es la cadencia máxima de la habilidad.
+   */
+  function dpsOf(attacker, defender, def) {
+    if (!def || def.power <= 0 || def.category === 'status') return null;
+    return expectedCast(attacker, defender, def) / Math.max(0.05, def.cooldown);
+  }
+
+  /** Mediana del DPS de un ataque contra todos los rivales. */
+  function medianDps(attacker, def) {
+    if (!def || def.power <= 0 || def.category === 'status') return null;
+    return median(
+      rivalsOf(attacker)
+        .map((rival) => dpsOf(attacker, rival, def))
+        .filter((value) => value !== null)
+    );
+  }
+
+  const dpsLines = [];
+  dpsLines.push('# Daño por segundo por Pokémon y habilidad');
+  dpsLines.push('');
+  dpsLines.push(
+    '> Generado automáticamente por `node scripts/generate-damage-matrix.mjs` ' +
+      'a partir de `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y ' +
+      'el manifiesto de sprites. No editar a mano.'
+  );
+  dpsLines.push('');
+  dpsLines.push('## Cómo leer las tablas');
+  dpsLines.push('');
+  dpsLines.push(
+    '- **Agrupación**: una sección por Pokémon atacante y una fila por rival. ' +
+      'Cada columna es uno de sus cuatro ataques.'
+  );
+  dpsLines.push(
+    '- **Celda**: daño esperado por segundo (`daño de un lanzamiento / cooldown`). ' +
+      'La efectividad de cada celda está en ' +
+      '[`tabla-danos-por-ataque.md`](tabla-danos-por-ataque.md).'
+  );
+  dpsLines.push(
+    '- **Cooldown**: es el valor de la definición de la habilidad y empieza al ' +
+      'iniciar el lanzamiento. El DPS no descuenta el `cast`, el `windup`, el ' +
+      'bloqueo global ni el tiempo de movimiento entre ataques, así que es una ' +
+      '**cota superior**.'
+  );
+  dpsLines.push(
+    '- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, ' +
+      'random medio 0,925, crítico 1/24 (×1,5) y precisión aplicada. STAB incluido.'
+  );
+  dpsLines.push(
+    '- **Áreas**: se valoran con el rival en el centro (100 %). En el borde el ' +
+      'daño radial baja hasta `radialMinDamage`.'
+  );
+  dpsLines.push(
+    '- **Áreas `overTime`**: el daño de un lanzamiento suma todos los ticks ' +
+      '(`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`.'
+  );
+  dpsLines.push(
+    '- **Estado**: la habilidad no hace daño; la celda muestra `Estado`.'
+  );
+  dpsLines.push(
+    '- **—**: hueco sin asignar o valor que no aplica.'
+  );
+  dpsLines.push(
+    '- **Mediana**: valor central del DPS contra los 24 rivales (con un número ' +
+      'par, media de los dos centrales).'
+  );
+  dpsLines.push('');
+  dpsLines.push('## Índice');
+  dpsLines.push('');
+  for (const id of attackerIds) {
+    const pokemon = byId.get(id);
+    const anchor = pokemon.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    dpsLines.push(`- [${pokemon.name}](#${anchor})`);
+  }
+  dpsLines.push('');
+
+  for (const id of attackerIds) {
+    const attacker = byId.get(id);
+    if (!attacker) continue;
+
+    dpsLines.push(`## ${attacker.name}`);
+    dpsLines.push('');
+    dpsLines.push(
+      `Tipos: **${attacker.types.join(' / ')}** · ` +
+        `HP ${attacker.stats.hp} · Atk ${attacker.stats.attack} · ` +
+        `Def ${attacker.stats.defense} · SpA ${attacker.stats.spAttack} · ` +
+        `SpD ${attacker.stats.spDefense} · Vel ${attacker.stats.speed}`
+    );
+    dpsLines.push('');
+
+    const defs = [0, 1, 2, 3].map((slot) => abilityForSlot(id, slot));
+    const headers = defs.map((def, slot) => {
+      if (!def) return `${SLOT_LABEL[slot]}<br>Sin asignar`;
+      const perSecond =
+        def.shape === 'aoe' && def.aoeDamageMode === 'overTime';
+      const power =
+        def.category === 'status'
+          ? '—'
+          : `${def.power}${perSecond ? '/s' : ''}`;
+      return (
+        `${SLOT_LABEL[slot]}: ${def.name}<br>` +
+        `${def.type} · ${CATEGORY_LABEL[def.category]} · Pot ${power} · ` +
+        `CD ${formatCooldown(def.cooldown)} s`
+      );
+    });
+
+    dpsLines.push(`| Rival | ${headers.join(' | ')} |`);
+    dpsLines.push(`| --- | ${defs.map(() => '---:').join(' | ')} |`);
+
+    for (const defender of targets) {
+      if (defender.id === attacker.id) continue;
+      const cells = defs.map((def) => {
+        if (!def) return '—';
+        if (def.power <= 0 || def.category === 'status') return 'Estado';
+        return formatNumber(dpsOf(attacker, defender, def));
+      });
+      dpsLines.push(`| ${defender.name} | ${cells.join(' | ')} |`);
+    }
+
+    const medianCells = defs.map((def) => {
+      const value = medianDps(attacker, def);
+      return value === null ? '—' : formatNumber(value);
+    });
+    dpsLines.push(`| **Mediana de DPS** | ${medianCells.join(' | ')} |`);
+    dpsLines.push('');
+  }
+
+  dpsLines.push('## DPS por habilidad contra un objetivo neutro');
+  dpsLines.push('');
+  dpsLines.push(
+    'Objetivo sin tipos y con 100 en todas las estadísticas: sirve para ' +
+      'comparar la potencia bruta de cada habilidad sin que el matchup de tipos ' +
+      'distorsione el resultado. STAB incluido.'
+  );
+  dpsLines.push('');
+  dpsLines.push(
+    '| Pokémon | Básica | Habilidad 1 | Habilidad 2 | Definitiva | DPS sostenido |'
+  );
+  dpsLines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
+  for (const id of attackerIds) {
+    const attacker = byId.get(id);
+    if (!attacker) continue;
+    const defs = [0, 1, 2, 3].map((slot) => abilityForSlot(id, slot));
+    const cells = defs.map((def) => {
+      if (!def) return '—';
+      const value = dpsOf(attacker, NEUTRAL_TARGET, def);
+      return value === null ? `${def.name} —` : `${def.name} ${formatNumber(value)}`;
+    });
+    const total = defs.reduce(
+      (sum, def) => sum + (dpsOf(attacker, NEUTRAL_TARGET, def) ?? 0),
+      0
+    );
+    dpsLines.push(
+      `| ${attacker.name} | ${cells.join(' | ')} | ${formatNumber(total)} |`
+    );
+  }
+  dpsLines.push('');
+  dpsLines.push(
+    '**DPS sostenido** es la suma del DPS de las cuatro habilidades contra el ' +
+      'objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo ' +
+      'global de casteo hace que el valor real sea algo menor.'
+  );
+  dpsLines.push('');
+  dpsLines.push(
+    `Atacantes con moveset asignado: **${attackerIds.length}** de ` +
+      `${roster.length} especies del roster.`
+  );
+  dpsLines.push('');
+
+  const dpsOutput = join(root, 'docs/dps-por-habilidad.md');
+  writeFileSync(dpsOutput, dpsLines.join('\n'), 'utf8');
+  console.log(`Escrito ${dpsOutput} (${dpsLines.length} líneas)`);
 } finally {
   await server.close();
 }
