@@ -21,6 +21,18 @@
       "preview": "maps/previews/arena2.png"
     },
     {
+      "id": "arena3",
+      "name": "Tridente de las Tormentas",
+      "file": "arena3.json",
+      "teams": [
+        "red",
+        "blue",
+        "yellow"
+      ],
+      "description": "Arena de 96 × 96 celdas para tres equipos: bases en triángulo, ruta triangular perimetral, tres radios hacia una plaza central con laguna y tres distritos elementales.",
+      "preview": "maps/previews/arena3.png"
+    },
+    {
       "id": "arena4",
       "name": "Arena de las Cuatro Coronas",
       "file": "arena4.json",
