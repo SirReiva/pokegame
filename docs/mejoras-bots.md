@@ -1,8 +1,9 @@
 # Mejoras para los bots
 
 Documento de revisión y hoja de ruta para la IA de `src/game/bot.ts` y
-`src/game/botNav.ts`. No describe cambios implementados: recoge mejoras
-recomendadas, ordenadas por impacto y esfuerzo.
+`src/game/botNav.ts`. Recoge las mejoras ya implementadas (marcadas como ✅) y
+las que siguen pendientes, ordenadas por impacto y esfuerzo. La sección 13
+conserva la revisión crítica que originó esta puesta al día.
 
 ## Diagnóstico
 
@@ -17,24 +18,28 @@ La base de la IA es sólida:
 - Separa objetivo, habilidad, movimiento, retirada, regeneración y recogida de
   objetos.
 
-El punto débil no es la arquitectura, sino que **la IA reacciona bien a lo que
-ve, pero anticipa poco, no evita peligros ya lanzados y coordina poco**. Las
-mejoras con mejor relación impacto/esfuerzo están en darle mejor información
-táctica y evaluar mejor las consecuencias de cada decisión.
+El punto débil original no era la arquitectura, sino que **la IA reaccionaba
+bien a lo que veía, pero anticipaba poco, no evitaba peligros ya lanzados y
+coordinaba poco**. Las mejoras con mejor relación impacto/esfuerzo estaban en
+darle mejor información táctica y evaluar mejor las consecuencias de cada
+decisión; la mayoría ya están implementadas.
 
 ## Resumen priorizado
 
-| Prioridad | Mejora | Impacto | Esfuerzo |
-| --- | --- | --- | --- |
-| 1 | Anticipar disparos, haces y áreas | Alto | Bajo |
-| 2 | Evitar proyectiles y AoE ya activas | Alto | Medio |
-| 3 | Puntuar habilidades con daño real | Alto | Medio |
-| 4 | Corregir fugas de información y bugs concretos | Medio | Bajo |
-| 5 | Coordinación de equipo — ✅ Hecho | Alto | Medio |
-| 6 | Evaluar retirada/agresión con recursos y número de jugadores | Alto | Medio |
-| 7 | Movimiento táctico y uso del terreno — ✅ Hecho | Medio | Medio |
-| 8 | Dificultad, personalidad y composición de bots | Medio | Bajo |
-| 9 | Tests, simulación, debug y rendimiento | Alto a largo plazo | Medio |
+| Prioridad | Sección | Mejora | Estado | Impacto | Esfuerzo |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1 | Anticipar disparos, haces y áreas | ✅ Hecho | Alto | Bajo |
+| 2 | 3 | Evitar proyectiles y AoE ya activas | ✅ Hecho | Alto | Medio |
+| 3 | 4 | Puntuar habilidades con daño real | ✅ Hecho | Alto | Medio |
+| 4 | 2 | Corregir fugas de información y bugs concretos | ✅ Hecho | Medio | Bajo |
+| 5 | 5 | Coordinación de equipo | ✅ Hecho | Alto | Medio |
+| 6 | 6 | Evaluar retirada/agresión con recursos y número de jugadores | ✅ Hecho | Alto | Medio |
+| 7 | 7 | Movimiento táctico y uso del terreno | ✅ Hecho | Medio | Medio |
+| 8 | 8 | Dificultad, personalidad y composición de bots | 🟡 Parcial | Medio | Bajo |
+| 9 | 9 | Tests, simulación, debug y rendimiento | 🟡 Parcial | Alto a largo plazo | Medio |
+
+La columna «Sección» enlaza cada mejora con su apartado; la prioridad conserva
+el orden original de impacto y esfuerzo.
 
 ---
 
@@ -50,7 +55,7 @@ táctica y evaluar mejor las consecuencias de cada decisión.
 
 ### Problema
 
-`aimPoint` (`src/game/bot.ts:2250`) solo adelanta el proyectil por el tiempo de
+`aimPoint` (`src/game/bot.ts`) solo adelantaba el proyectil por el tiempo de
 vuelo:
 
 ```ts
@@ -65,7 +70,7 @@ Pero el proyectil no sale hasta que termina el `windup`. El bot apunta a donde
 está el rival ahora, no a donde estará cuando el proyectil exista y llegue.
 
 En las habilidades de área el centro queda fijado al empezar el casteo
-(`src/game/game.ts:2258-2288`), así que el bot también debería comprobar la
+(`src/game/game.ts`), así que el bot también debía comprobar la
 posición proyectada del rival contra el centro real del área.
 
 ### Mejora propuesta
@@ -128,7 +133,8 @@ const hit = Math.hypot(predicted.x - centerX, predicted.z - centerZ)
 > (visión compartida del equipo) en lugar de todos los `players`, y se
 > eliminaron los parámetros `players` que ya no se usaban.
 
-`src/game/bot.ts:2081` iteraba todo `players` sin filtrar por visión:
+`countEnemiesNear` (`src/game/bot.ts`) iteraba todo `players` sin filtrar por
+visión:
 
 ```ts
 for (const player of players) {
@@ -151,7 +157,7 @@ visibles del equipo.
 > aliados, y su penalización por vida casi llena solo se aplica cuando no cura a
 > nadie más.
 
-`scoreAbility` (`src/game/bot.ts:1999`) descartaba habilidades sin `power`,
+`scoreAbility` (`src/game/bot.ts`) descartaba habilidades sin `power`,
 `healSelf`, `slow`, `buffs`, `shield` ni `dash`:
 
 ```ts
@@ -166,7 +172,7 @@ if (!hasEffect) return -Infinity;
 ```
 
 `Deseo` es un área de soporte que revive aliados caídos y solo tiene
-`aoeEffect` (`src/game/abilities.ts:1934`), así que la IA lo ignoraba siempre.
+`aoeEffect` (`src/game/abilities.ts`), así que la IA lo ignoraba siempre.
 `Recuperación` sí se usaba por su `healSelf`, pero no se valoraba la curación
 que repartía a los aliados. Ahora ambas se puntúan por el beneficio real que
 aportan a los aliados dentro de su radio.
@@ -177,7 +183,7 @@ aportan a los aliados dentro de su radio.
 > no depende de acertar. `Come Sueños` sigue usándose como ataque, pero ya no se
 > elige como cura de huida ni cuenta como recurso para quedarse a recuperar.
 
-`findHealSlot` (`src/game/bot.ts:1951`) devolvía cualquier habilidad con
+`findHealSlot` (`src/game/bot.ts`) devolvía cualquier habilidad con
 `healSelf > 0`. `Come Sueños` solo cura si el haz impacta. Usarla para huir
 podía gastar la definitiva sin curar nada. Ahora `isReliableHeal` exige
 `healSelf > 0` y `!healOnHit`.
@@ -188,7 +194,7 @@ podía gastar la definitiva sin curar nada. Ahora `isReliableHeal` exige
 > puntuación no supera `MIN_ABILITY_SCORE` (0), así que el bot prefiere seguir
 > moviéndose antes que gastar un cooldown en una cura o un buff que no aporta.
 
-`chooseAbility` (`src/game/bot.ts:1961`) se quedaba con la mejor habilidad en
+`chooseAbility` (`src/game/bot.ts`) se quedaba con la mejor habilidad en
 rango aunque todas tuvieran puntuación negativa. Ahora solo elige una opción si
 su puntuación es estrictamente positiva.
 
@@ -200,7 +206,7 @@ su puntuación es estrictamente positiva.
 > También pondera `def.accuracy` y devuelve el punto al que hay que apuntar,
 > adelantado con el factor de dificultad del bot.
 
-`findInterruptSlot` (`src/game/bot.ts:1091`) comprobaba distancia y tipo, pero no
+`findInterruptSlot` (`src/game/bot.ts`) comprobaba distancia y tipo, pero no
 colliders ni precisión. Ahora añade:
 
 - línea de visión hasta el lanzador rival,
@@ -218,7 +224,7 @@ colliders ni precisión. Ahora añade:
 > gracia, se descuenta el daño mitigado y no se gasta la definitiva ni otra
 > habilidad grande cuando la mitigación supera el umbral.
 
-`updateTarget` (`src/game/bot.ts:851`) no miraba `invulnerableTimer`,
+`updateTarget` (`src/game/bot.ts`) no miraba `invulnerableTimer`,
 `damageReductionTimer` ni `buffs`. Un bot podía gastar la definitiva en alguien
 que acaba de reaparecer o que está protegido. Ahora añade:
 
@@ -235,10 +241,10 @@ que acaba de reaparecer o que está protegido. Ahora añade:
 > esquiva el carril real aunque el lanzador se haya movido durante la carga; en
 > los haces estáticos el resultado coincide con el `facing` de siempre.
 
-En `threatFrom`, las ramas de proyectil/haz/dash usaban `enemy.facing`
-(`src/game/bot.ts:1017`). Para un haz con `moveWhileWindup`, la dirección
-real se recalcula desde la posición actual del lanzador hasta `pending.targetX`
-/ `pending.targetZ` (`src/game/abilityExecutors.ts:204-217`). Ahora la amenaza
+En `threatFrom`, las ramas de proyectil/haz/dash usaban `enemy.facing`. Para un
+haz con `moveWhileWindup`, la dirección real se recalcula desde la posición
+actual del lanzador hasta `pending.targetX` / `pending.targetZ`
+(`src/game/abilityExecutors.ts`). Ahora la amenaza
 usa el objetivo fijado del `pendingCast` en lugar del `facing` actual y toma la
 distancia hasta ese extremo como alcance real del haz. Los proyectiles y los
 dash siguen usando `facing`, porque sus ejecutores no leen `targetX`/`targetZ`.
@@ -250,14 +256,18 @@ dash siguen usando `facing`, porque sus ejecutores no leen `targetX`/`targetZ`.
 > **Estado: arreglado.** `game.ts` construye una vez por frame una vista
 > compacta de proyectiles en vuelo y áreas persistentes enemigas y se la pasa a
 > cada bot. El bot predice el punto de máxima aproximación de cada proyectil,
-> sale de las áreas que ya le cubren y no elige puntos de regeneración ni
-> trayectos que crucen un charco. Si tiene `Impulso` disponible, puede usarlo
-> para completar la huida. El peligro ya lanzado tiene prioridad sobre atacar o
-> mantener la posición de combate, pero no sobre interrumpir un windup rival.
+> sale de las áreas que ya le cubren y no elige puntos de regeneración que
+> crucen un charco. Si tiene `Impulso` disponible, puede usarlo para completar
+> la huida. El peligro ya lanzado tiene prioridad sobre atacar o mantener la
+> posición de combate, pero no sobre interrumpir un windup rival.
+>
+> La comprobación de trayectos (`hazardPathBlocked`) solo se aplica a la
+> regeneración: la retirada, las pociones, la patrulla y `followPath` aún no la
+> consultan (ver 13.2, punto 3).
 
 ### Problema
 
-`updateThreat` (`src/game/bot.ts:921`) solo mira `pendingCast`. No ve:
+`updateThreat` (`src/game/bot.ts`) solo miraba `pendingCast` y no veía:
 
 - proyectiles ya creados,
 - áreas persistentes ya activas,
@@ -265,12 +275,12 @@ dash siguen usando `facing`, porque sus ejecutores no leen `targetX`/`targetZ`.
 - proyectiles que van a impactar en los próximos frames.
 
 El motor ya tiene esa información (`projectiles` y `activeAoes` en
-`src/game/game.ts:314-316`); ahora `buildBotHazards` la resume y se la pasa a
-cada bot junto con los objetos conocidos.
+`src/game/game.ts`); ahora `buildBotHazards` la resume y se la pasa a cada bot
+junto con los objetos conocidos.
 
-### Mejora propuesta
+### Solución implementada
 
-Pasar al bot una vista táctica compacta de peligros:
+Se pasa al bot una vista táctica compacta de peligros:
 
 ```ts
 interface BotHazard {
@@ -295,8 +305,8 @@ Con eso, el bot puede:
 
 ### Prioridad
 
-Es probablemente la mejora que más hará que los bots parezcan más listos,
-porque hoy pueden comer daño evitable que un humano esquivaría sin pensar.
+Fue probablemente la mejora que más hizo que los bots parecieran más listos,
+porque antes podían comer daño evitable que un humano esquivaría sin pensar.
 
 ---
 
@@ -314,8 +324,8 @@ porque hoy pueden comer daño evitable que un humano esquivaría sin pensar.
 
 ### Problema
 
-`scoreAbility` (`src/game/bot.ts:1990`) usa `def.power` y el multiplicador de
-tipo, pero ignora:
+`scoreAbility` (`src/game/bot.ts`) usa `def.power` y el multiplicador de tipo,
+pero ignora:
 
 - ataque/defensa reales,
 - STAB,
@@ -327,7 +337,7 @@ tipo, pero ignora:
 - vida real del objetivo,
 - si el golpe es letal.
 
-Ya existe `computeDamage` en `src/game/combat.ts:105`.
+Ya existe `computeDamage` en `src/game/combat.ts`.
 
 ### Mejora propuesta
 
@@ -384,9 +394,9 @@ const lethal = expectedDamage >= target.hp;
 > comprometido otros compañeros para no apilar definitivas sobre un rival que ya
 > va a caer.
 
-### Estado actual
+### Estado anterior
 
-`BotSquad` (`src/game/bot.ts:259`) solo guarda un foco compartido:
+`BotSquad` solo guardaba un foco compartido por equipo:
 
 ```ts
 export interface BotFocus {
@@ -400,9 +410,9 @@ export interface BotSquad {
 }
 ```
 
-Es un buen inicio, pero se queda corto.
+Era un buen inicio, pero se quedaba corto.
 
-### Problemas
+### Problemas que resolvía
 
 - Cualquier bot puede sobrescribir el foco cada 2 s.
 - El foco puede apuntar a un enemigo inmune para ese bot.
@@ -411,35 +421,34 @@ Es un buen inicio, pero se queda corto.
 - Todos los bots con poca vida pueden perseguir la misma poción.
 - Varios bots pueden gastar la definitiva en el mismo rival de 10 PV.
 
-### Mejora propuesta
+### Diseño implementado
 
-Extender `BotSquad` con:
+La pizarra por equipo contiene:
 
-- posiciones vistas por el equipo y su antigüedad,
-- contador de aliados/rivales vivos,
-- objetivos reclamados (foco, pociones, aliado a revivir),
-- una votación o un líder que fije el foco,
-- compromiso de daño por objetivo para no sobrematar,
-- llamada de retirada cuando el equipo está en inferioridad,
-- llamada de ayuda si un aliado está bajo de vida o siendo perseguido.
-
-### Diseño sugerido
+- posiciones vistas por el equipo y su antigüedad (`lastSeen`),
+- contador de aliados/rivales vivos (`aliveAllies`, `aliveEnemies`),
+- objetivos reclamados: foco, pociones, aliados a revivir y zonas de patrulla,
+- un líder que fija el foco durante varios segundos,
+- compromiso de daño por objetivo para no sobrematar (`committedDamage`),
+- llamada de retirada/agrupación cuando el equipo está en inferioridad
+  (`engageCall`),
+- llamada de ayuda si un aliado está bajo de vida o siendo perseguido (`help`).
 
 ```ts
-interface BotSquad {
-  blue: TeamBlackboard;
-  red: TeamBlackboard;
-}
-
 interface TeamBlackboard {
   focus: BotFocus;
   lastSeen: Map<number, { x: number; z: number; at: number }>;
   aliveAllies: number;
   aliveEnemies: number;
-  pickupClaims: Map<string, { slot: number; until: number }>;
+  pickupClaims: Map<string, BotPickupClaim>;
+  reviveClaims: Map<number, BotReviveClaim>;
+  patrolClaims: Map<number, BotPatrolClaim>;
   engageCall: 'engage' | 'retreat' | 'group';
-  committedDamage: Map<number, number>;
+  committedDamage: Map<string, BotDamageCommitment>;
+  help: BotHelpCall | null;
 }
+
+export type BotSquad = Record<Team, TeamBlackboard>;
 ```
 
 ### Criterio de aceptación
@@ -464,8 +473,8 @@ interface TeamBlackboard {
 
 ### Problema
 
-La retirada actual usa umbrales fijos de vida y un temporizador de 6 s
-(`src/game/bot.ts:70-139`, `src/game/bot.ts:1150`). No tiene en cuenta:
+La retirada usaba umbrales fijos de vida y un temporizador de 6 s. No tenía en
+cuenta:
 
 - si el bot está en inferioridad numérica,
 - si el rival tiene habilidades clave en cooldown,
@@ -521,7 +530,7 @@ Y no dar la huida por terminada si el perseguidor sigue cerca.
 
 ### 7.1 Distancia de combate — ✅ Arreglado
 
-`preferredRange` (`src/game/bot.ts:2217`) solo mira la habilidad seleccionada.
+`preferredRange` (`src/game/bot.ts`) solo miraba la habilidad seleccionada.
 Añadir las amenazas del rival:
 
 - si el enemigo tiene un melee peligroso, mantener distancia,
@@ -541,8 +550,8 @@ Añadir las amenazas del rival:
 
 ### 7.3 Patrulla — ✅ Arreglado
 
-`pickSearchPoint` (`src/game/bot.ts:1568`) elige puntos aleatorios del mapa.
-Puede provocar que varios bots se junten o que cubran mal el mapa. Una influencia
+`pickSearchPoint` (`src/game/bot.ts`) elegía puntos aleatorios del mapa.
+Podía provocar que varios bots se juntaran o que cubrieran mal el mapa. Una influencia
 de equipo o un reparto de zonas daría una patrulla más creíble.
 
 ### 7.4 Cobertura — ✅ Arreglado
@@ -554,17 +563,24 @@ más cercana para romper línea de visión, igual que ya hace al regenerar.
 
 ## 8. Dificultad, personalidad y composición
 
-### 8.1 Dificultad
+### 8.1 Dificultad — ✅ Arreglado
 
-Difícil y experto tienen `visionFactor > 1` y reacciones de 0,08 y 0,03 s
-(`src/game/bot.ts:105-138`). Eso se siente más “tramposo” que “inteligente”.
+> **Estado: arreglado.** Difícil y experto usan `visionFactor: 1` y reacciones
+> de 0,2 y 0,16 s, en rango humano. La dificultad se expresa con predicción
+> (`lead`), castigo de windups, memoria, coordinación y evaluación de daño.
+> También hay error de apuntado (`aimError`) y error de decisión
+> (`decisionError`): el bot puede elegir una acción viable peor que la mejor,
+> con menos probabilidad en experto. Los cooldowns rivales se estiman desde los
+> lanzamientos observados y la invulnerabilidad se trata como estado, sin leer
+> cuántos segundos le quedan.
 
-Mejor:
+- visión y reacción en rangos humanos,
+- error de apuntado y de decisión por dificultad,
+- cooldowns rivales estimados e invulnerabilidad sin temporizador exacto,
+- dificultad apoyada en predicción, castigo, memoria y evaluación de daño.
 
-- mantener visión y reacción en rangos humanos,
-- subir dificultad con predicción, coordinación, uso de coberturas y evaluación
-  de daño,
-- añadir un pequeño error de apuntado y de decisión incluso en experto.
+La fachada de percepción completa (`BotWorldView`) sigue pendiente en 9.5; lo
+que quedaba de 8.1 ya está aplicado.
 
 ### 8.2 Personalidad
 
@@ -587,7 +603,7 @@ Variar:
 
 ### 8.3 Composición
 
-`makeBotPlayer` (`src/session/SessionProvider.tsx:70`) elige Pokémon al azar
+`makeBotPlayer` (`src/session/SessionProvider.tsx`) elige Pokémon al azar
 uniforme. Eso permite duplicados y equipos sin roles.
 
 Mejor:
@@ -636,7 +652,7 @@ Esto vale más que cualquier ajuste a ciegas.
 
 ### 9.3 Refactor
 
-`src/game/bot.ts` tiene ~2.500 líneas. No haría una reescritura grande; extraería
+`src/game/bot.ts` tiene ~4.400 líneas. No haría una reescritura grande; extraería
 módulos de forma incremental:
 
 - percepción,
@@ -648,10 +664,17 @@ módulos de forma incremental:
 
 Cada módulo con funciones puras y tests.
 
-### 9.4 Rendimiento de navegación
+### 9.4 Rendimiento de navegación — ✅ Hecho
 
-`BotNavGrid.findPath` (`src/game/botNav.ts:162`) asigna arrays y un heap en cada
-llamada:
+> **Estado: arreglado.** `BotNavGrid` reserva una sola vez los buffers de A*
+> (`gScore`, `cameFrom`, `closed`, coste por celda y marcas de visita) y los
+> invalida con `visitStamp` en lugar de reasignarlos o limpiarlos enteros en cada
+> ruta. La cola es un heap indexado con decrease-key, sin objetos por nodo. Se
+> cachea la última ruta del frame y se reparte un presupuesto de 24.000
+> expansiones por frame, reiniciado desde `game.ts` antes de actualizar a los
+> bots.
+
+Antes cada `findPath` asignaba cuatro arrays y un heap nuevo:
 
 ```ts
 const gScore = new Float32Array(total);
@@ -660,37 +683,51 @@ const closed = new Uint8Array(total);
 const open = new MinHeap();
 ```
 
-Con 8 bots hay bastante presión de GC. Conviene:
+Con 8 bots eso generaba bastante presión de GC. Ahora:
 
-- reutilizar buffers,
-- cachear rutas por frame,
-- usar un heap indexado sin objetos,
-- limitar el presupuesto de pathfinding por frame.
+- se reutilizan buffers,
+- se cachean rutas por frame,
+- el heap es indexado y sin objetos,
+- el pathfinding tiene un presupuesto por frame.
 
-### 9.5 Visibilidad compartida
+### 9.5 Visibilidad y fugas de información — ✅ Hecho
 
-`updateTarget` (`src/game/bot.ts:803`) recalcula visibilidad para cada
-bot × enemigo × aliado. `src/game/game.ts` ya calcula la visión del equipo.
+> **Estado: arreglado.** `game.ts` ya calculaba `visibleByTeam` una vez por
+> frame para la niebla y la histéresis; ahora ese mismo conjunto se pasa a cada
+> bot como `BotWorldView.visibleSlots`. `updateTarget` dejó de recorrer todos los
+> aliados por cada rival, así que la visibilidad no se recalcula bot × enemigo ×
+> aliado. El factor de visión por dificultad se guarda en el jugador
+> (`visionFactor`) y se aplica solo en el observador que lo posee.
+>
+> Las fugas de estado se redujeron en 8.1: los cooldowns rivales se estiman
+> desde lanzamientos observados y la invulnerabilidad se trata como estado
+> activo/inactivo. Los buffs, el escudo y el respawn de aliados se leen como
+> estados visibles en el HUD, no como temporizadores ocultos.
 
-Opciones:
+Antes `updateTarget` recalculaba visibilidad para cada
+bot × enemigo × aliado, aunque `src/game/game.ts` ya resolvía la visión del
+equipo. El bot también leía directamente cooldowns, timers y buffs del rival.
+La vista táctica elimina el primer coste y las estimaciones de 8.1 reducen el
+segundo.
 
-- calcular una vez por frame y pasar una vista táctica,
-- cachear líneas de visión por par de jugadores,
-- mantener el factor de visión por dificultad solo para el propio bot.
+### 9.6 Rutas inalcanzables — ✅ Hecho
 
-### 9.6 Rutas inalcanzables
+> **Estado: arreglado.** `findPath` devuelve `NavPathResult` con estado
+> `ok`, `unreachable` o `budget`. `followPath` distingue los tres: si A* agota
+> el mapa sin llegar, abandona el destino, descarta la poción y su reclamación,
+> limpia la última posición perseguida y vuelve a patrullar. Si solo se agotó el
+> presupuesto del frame, conserva la ruta parcial y reintenta más tarde. Durante
+> una huida no se cambia a patrulla: se descarta la poción inalcanzable y se
+> sigue la ruta parcial hacia la base.
 
-Si A* no llega, `followPath` acaba yendo en línea recta al destino
-(`src/game/bot.ts:2320`), lo que produce el clásico bot empujando una pared.
+Antes, si A* no llegaba, `followPath` acababa yendo en línea recta al destino,
+lo que producía el clásico bot empujando una pared.
 
-Mejor devolver un estado “inalcanzable” y:
+### 9.7 Fachada de percepción — 🟡 Parcial
 
-- cambiar de objetivo,
-- buscar un punto alternativo,
-- descartar la poción,
-- volver a patrullar.
-
-### 9.7 Fachada de percepción
+> **Estado: parcial.** `BotWorldView` ya existe para la visión compartida
+> (9.5), pero el bot todavía recibe todos los `matchPlayers` para el resto del
+> estado. Falta envolver cooldowns, buffs, timers y respawn en esa vista.
 
 Ahora el bot recibe todos los `matchPlayers` y podría leer estado no visible.
 Una interfaz `BotWorldView` con solo lo visible/recordado:
@@ -711,14 +748,14 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 
 ## 10. Plan de trabajo recomendado
 
-### Fase 1 — Instrumentación
+### Fase 1 — Instrumentación — ⏳ Pendiente
 
 - Overlay de debug.
 - Simulación headless.
 - Métricas básicas.
 - RNG con semilla.
 
-### Fase 2 — Percepción y puntería
+### Fase 2 — Percepción y puntería — ✅ Hecho
 
 - Predicción de proyectiles/haces/áreas.
 - Evitación de proyectiles y AoE activas.
@@ -726,7 +763,7 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 - Memoria por enemigo.
 - Penalización de invulnerables/escudos.
 
-### Fase 3 — Evaluación de combate
+### Fase 3 — Evaluación de combate — ✅ Hecho
 
 - Daño esperado con `computeDamage`.
 - Puntuación por cooldown y precisión.
@@ -734,7 +771,7 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 - Habilidades de soporte y revive.
 - `findHealSlot` con `healOnHit`.
 
-### Fase 4 — Equipo
+### Fase 4 — Equipo — ✅ Hecho
 
 - Blackboard de equipo.
 - Foco estable.
@@ -742,20 +779,25 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 - Llamadas de engage/retreat.
 - Evitar sobrematar.
 
-### Fase 5 — Movimiento y personalidad
+### Fase 5 — Movimiento y personalidad — 🟡 Parcial
 
-- Rangos basados en amenazas.
-- Coste de terreno.
-- Patrulla distribuida.
-- Perfiles de personalidad.
-- Composición de bots por rol.
+- Rangos basados en amenazas. ✅
+- Coste de terreno. ✅
+- Patrulla distribuida. ✅
+- Perfiles de personalidad. ⏳
+- Composición de bots por rol. ⏳
 
-### Fase 6 — Rendimiento y limpieza
+### Fase 6 — Rendimiento y limpieza — 🟡 Parcial
 
-- Buffers de A*.
-- Visibilidad cacheada.
-- Rutas inalcanzables.
-- Refactor incremental de `bot.ts`.
+- Buffers de A*. ✅
+- Visibilidad cacheada. ✅
+- Rutas inalcanzables. ✅
+- Refactor incremental de `bot.ts`. ⏳
+
+Las fases 1 y 6, y los puntos de personalidad y composición de la fase 5, siguen
+abiertos. La sección 13.2 recoge además fallos detectados en la revisión
+(geometría de amenazas, colisiones, peligros en pathfinding y fugas de
+información) que conviene abordar antes de seguir con el tuning.
 
 ---
 
@@ -784,8 +826,259 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 
 ---
 
+## 13. Revisión crítica del documento y del código
+
+> Revisión realizada el 2026-11-07 sobre `src/game/bot.ts` (~4.400 líneas).
+> Las referencias de línea de esta sección corresponden a esa revisión; el resto
+> del documento usa nombres de función para no quedar obsoleto. No implica
+> cambios de lógica de juego.
+
+### 13.1 Problemas del propio documento
+
+> **Estado: resuelto.** Se corrigieron la introducción, la tabla resumen y las
+> referencias de línea; también se actualizaron las secciones 3, 5, 8.1, 9.5 y
+> 10. La lista siguiente se conserva como registro de lo detectado.
+
+- **Contradicción de estado**: la introducción decía que el documento “no
+  describe cambios implementados”, pero las secciones 1–7 están marcadas como
+  hechas.
+- **Tabla resumen incoherente**: solo marcaba como hechas las mejoras 5 y 7,
+  mientras las secciones 1, 2, 3, 4 y 6 también lo están. Además, la prioridad 4
+  de la tabla (“bugs concretos”) corresponde a la sección 2, no a la 4.
+- **Referencias de línea obsoletas** (ya sustituidas por nombres de función).
+  Ejemplos:
+  - `aimPoint`: documento 2250 → real ~4094.
+  - `countEnemiesNear`: 2081 → ~3719.
+  - `scoreAbility`: 1999 → ~3559.
+  - `findHealSlot`: 1951 → ~3159.
+  - `findInterruptSlot`: 1091 → ~1670.
+  - `updateTarget`: 851 → ~1155.
+  - `threatFrom`: 1017 → ~1371.
+  - `pickSearchPoint`: 1568 → ~2676.
+  - `followPath`: 2320 → ~4170.
+- **La sección 5 describía un “estado actual” que ya no existía**: el blackboard
+  con foco, posiciones compartidas, reclamaciones, llamada de ayuda y daño
+  comprometido ya está implementado.
+- **La sección 8.1 estaba desactualizada**: decía que a los difíciles les falta
+  error de apuntado, pero `aimError` ya existe en `TUNING`.
+- **La sección 3 sobrevendía la evitación de peligros**: afirmaba que el bot no
+  elige trayectos que crucen un charco. En su momento `hazardPathBlocked` solo
+  se usaba en `regenPointSafe`; ahora A* incorpora coste de peligros y la
+  retirada, las pociones, la patrulla y `followPath` lo consultan.
+- **La sección 9.5 se quedaba corta**: además de la visibilidad, el bot leía
+  cooldowns exactos, buffs, timers de invulnerabilidad/escudo y
+  `enemiesSeeing`. Era una fuga de información mayor que la que sugería el
+  documento.
+- **La sección 10 seguía planificando como pendientes cosas ya hechas**
+  (`countEnemiesNear`, predicción, memoria por enemigo, etc.).
+
+### 13.2 Fallos de la IA no recogidos — ✅ Resuelto
+
+> **Estado: resuelto.** Se corrigieron la geometría de amenazas, las colisiones
+> de línea de tiro, los peligros en pathfinding, los windups tras muros, las
+> posiciones de enemigos muertos, el sesgo de `assessFight`, `retreatTime`,
+> `Deseo` y los puntos de prioridad baja. La histéresis y las fugas de
+> información ya quedaron cubiertas en 9.5 y 8.1. El texto siguiente se conserva
+> como registro de los fallos detectados.
+
+#### Prioridad alta
+
+**1. La geometría de las amenazas no coincide con la del motor**
+
+`threatFrom` (`bot.ts:1371`) usaba aproximaciones más estrechas que las
+comprobaciones reales:
+
+- **Melee**: usaba `def.range + selfRadius + 0.2` y `halfAngle + 0.12`. El motor
+  usa `def.range + maxHitRadius() + target.hitRadius` y añade el radio angular
+  del cuerpo (`abilityExecutors.ts:119-171`).
+- **Haz**: usaba `selfRadius + 0.25`. El motor usa
+  `def.radius + maxHitRadius() + target.hitRadius`
+  (`abilityExecutors.ts:258-269`).
+- **Área**: usaba `def.radius + selfRadius + 0.1`. El motor usa
+  `def.radius + maxHitRadius() + target.hitRadius` (`game.ts:2687-2688`).
+- **Dash**: usaba `selfRadius + 0.25` y `def.dashDistance`. El motor usa
+  `max(0.5, def.radius) + target.hitRadius` y recorta la distancia por colliders
+  (`game.ts:1897-1914`).
+- **Proyectil**: usaba `selfRadius + 0.5`; el motor usa
+  `def.radius + target.hitRadius` (`game.ts:3421`).
+
+Consecuencia: los bots no reaccionaban hasta estar casi en el centro del
+área/línea, y con haces o dashes podían recibir golpes en el borde que deberían
+haber esquivado. Se cerró usando en `threatFrom` los mismos primitivos del motor
+(`sectorOverlapsCircle`, `raycastColliderDistance`, `pointSegmentDistance` y
+`segmentBlockedByColliders`).
+
+**2. Los ataques pueden lanzarse contra colliders que sí bloquean el golpe**
+
+En `drive` (`bot.ts:2918-2925`) la línea de tiro se comprobaba con
+`lineOfSightBlocked`, que **solo mira colliders con `sightRadius`** (árboles,
+montañas). El pedestal de base (`world.ts:4081-4086`) no tiene `sightRadius`,
+pero sí bloquea proyectiles y melee.
+
+Además, `canHitPrediction` (`bot.ts:3739`) no comprobaba colliders para
+proyectiles, melee ni dash.
+
+Resultado: el bot podía gastar una habilidad contra una base o un obstáculo bajo
+y el motor la anulaba. Ahora `canHitPrediction` usa
+`segmentBlockedByColliders` con el padding de cada forma y `drive` ya no acepta
+solo la línea de visión.
+
+**3. La evitación de peligros es reactiva, no de ruta**
+
+`hazardPathBlocked` (`bot.ts:1644`) solo se usaba al elegir punto de
+regeneración. No se usaba en:
+
+- `pickRetreatCover` (`bot.ts:2233`),
+- `pickupTarget` (`bot.ts:2517`),
+- `pickSearchPoint` (`bot.ts:2676`),
+- `followPath` (`bot.ts:4170`),
+- la persecución de `lastSeen`.
+
+Por eso un bot podía atravesar un charco de veneno o un área persistente para
+llegar a una poción, una cobertura o una posición recordada. Ahora A* recibe los
+peligros persistentes con coste adicional, la simplificación de ruta no corta a
+través de ellos y los destinos directos se descartan si cruzan un área.
+
+#### Prioridad media
+
+**4. La histéresis de visión se aplica al objetivo actual, no por enemigo u
+observador**
+
+> **Corregido en 9.5.** Los bots consumen el `visibleByTeam` que `game.ts`
+> calcula una vez por frame, con histéresis de equipo por observador.
+
+En `updateTarget` (`bot.ts:1179`):
+
+```ts
+const wasVisible = this.target === enemy && this.targetVisible;
+```
+
+Ese `wasVisible` se pasa a `isTargetVisible` para **todos los aliados**
+(`bot.ts:1183-1200`). Dos problemas:
+
+- Un enemigo recién visto puede parpadear en el borde del radio porque no recibe
+  histéresis.
+- Si el bot está apuntando a un enemigo, ese enemigo recibe histéresis extra en
+  la visión de todos los aliados, aunque ese aliado nunca lo haya visto.
+
+Debería mantenerse un `Set` de enemigos visibles en el frame anterior, o calcular
+la histéresis por observador.
+
+**5. Se reacciona a windups que están detrás de una pared para el propio bot**
+
+`updateThreat` (`bot.ts:1362`) recorría `visibleEnemies`, que es visión
+compartida del equipo, y leía `enemy.pendingCast`. `threatFrom` no comprobaba si
+había un collider entre el rival y el bot.
+
+Así, un bot podía intentar esquivar o interrumpir una habilidad que, desde su
+posición, estaba tapada por un muro. `findInterruptSlot` sí comprobaba colliders,
+pero el movimiento de evasión no. Ahora `threatFrom` comprueba la geometría y los
+colliders de cada forma antes de declarar la amenaza.
+
+**6. Fugas de información más allá de la visibilidad**
+
+> **Corregido (8.1 + 9.5).** Los cooldowns rivales se estiman desde los
+> lanzamientos observados, la invulnerabilidad se trata como estado y la
+> visibilidad compartida se calcula una vez por frame en `BotWorldView`. Las
+> lecturas que quedan son estados visibles en el HUD (buffs, escudo, respawn de
+> aliados), no temporizadores ocultos.
+
+El documento habla de una futura `BotWorldView`; en el momento de la revisión
+el bot leía directamente:
+
+- `enemy.cooldowns` en `enemyThreatProfile`,
+- cooldowns y habilidades de curación del rival en `effectiveHp`,
+- `target.invulnerableTimer`, `damageReductionTimer`, `buffs`,
+- `self.enemiesSeeing` en `regenSafe`,
+- `ally.respawnTimer` exacto.
+
+Eso hacía que los bots difíciles no solo fueran “más inteligentes”: sabían cosas
+que un humano no puede consultar con precisión. Para la sección 8.1, esto era
+tan importante como `visionFactor`.
+
+**7. Los bots persiguen enemigos muertos**
+
+`team.lastSeen` se actualizaba al ver enemigos (`bot.ts:1205`), pero solo se
+borraba por antigüedad (`bot.ts:906-910`). Si un enemigo moría, su última
+posición seguía hasta 8 segundos y `squadLastSeen` (`bot.ts:1348`) podía enviar a
+un bot a investigar el cadáver. `this.lastSeen` del objetivo tampoco se limpiaba
+al morir el rival. Ahora ambas memorias se borran en cuanto el rival cae.
+
+**8. `assessFight` está sesgado por la dificultad del propio bot**
+
+`bestDamagePerSecond` calculaba también el DPS del rival (`bot.ts:2106-2135`),
+pero usaba `predictTarget`, que aplica `this.tuning.lead` (`bot.ts:4080`). Es
+decir, un bot fácil creía que el rival también adelantaba mal, y uno experto creía
+que el rival adelantaba perfectamente.
+
+Además, el ciclo de daño (`bot.ts:2132`) ignoraba el `windup` de la habilidad. Un
+bot con habilidades lentas sobreestimaba su DPS y podía aceptar peleas que no
+debía. Ahora el DPS entrante usa adelanto pleno y el ciclo suma el `windup`.
+
+**9. `retreatTime` mide en línea recta**
+
+`retreatTime` (`bot.ts:2216`) usaba `Math.hypot` hasta la base o la poción. No
+usaba la longitud de la ruta ni el coste del terreno, así que en mapas con
+obstáculos la huida podía darse por terminada antes de llegar. Ahora mide la
+longitud de la ruta que devuelve A* y solo cae al trayecto recto si no hay ruta
+completa.
+
+**10. `Deseo` tiene una inconsistencia bot/motor**
+
+> **Corregido.** El motor ya comprueba `lineOfSight` en `reviveAoeAlly` y el bot
+> usa la misma comprobación con `segmentBlockedByColliders`. Además, el bot
+> descarta aliados que reaparecerán antes de terminar el `windup` de `Deseo`
+> (`respawnTimer <= def.windup + 0.15`).
+
+`supportScore` y `claimSupportRevives` (`bot.ts:3286`, `bot.ts:3240`) exigían
+línea de visión para revivir. El callback de `Deseo`
+(`abilities.ts:1945-1949`) revive a todos los `fallenAllies`; el motor pasó a
+bloquear el revive si el marcador no tiene línea de visión, así que ambos lados
+coinciden.
+
+#### Prioridad baja — ✅ Resuelta
+
+- **`BotHazard.kind: 'zone'` no se usa**: se eliminó del tipo; solo quedan
+  `projectile` y `aoe`.
+- **Los interrupts no usan el error de apuntado**: `findInterruptSlot` aplica el
+  mismo `aimBiasFor` que un ataque normal.
+- **Habilidades `self` solo se valoran si el rival está a ≤8 u**:
+  `canHitPrediction` devuelve `true` para `shape === 'self'`, así que los buffs
+  propios se usan para prepararse antes de acercarse.
+- **No se valora el multi-impacto**: `countExtraAbilityTargets` cuenta conos,
+  haces, proyectiles con `pierce`, dash y áreas con la geometría del motor.
+- **`overTime` se valora como si el rival se quedara toda la duración dentro**:
+  `expectedDamage` estima los ticks esperados según distancia al centro y
+  velocidad de salida.
+- **`commitPlannedDamage` deja compromisos obsoletos**: cada decisión limpia el
+  compromiso propio y solo se vuelve a registrar si la habilidad elegida hace
+  daño grande.
+
+### 13.3 Cambios recomendados al documento
+
+1. **Actualizar estados y referencias**: separar “hecho” de “pendiente”,
+   corregir la tabla y sustituir los números de línea por nombres de función.
+2. **Añadir una prioridad nueva por encima de la 1**: “Geometría compartida de
+   amenazas y colisiones”, porque afecta a anticipación, evasión y puntuación.
+3. **Añadir “Peligros en pathfinding”**: usar `hazardPathBlocked` también en
+   retirada, pociones, patrulla y `followPath`, o incorporar un coste dinámico a
+   `BotNavGrid`.
+4. **Subir la fachada de percepción**: cooldowns, timers y `enemiesSeeing`
+   exactos son una ventaja no humana; debería ser prioridad media-alta, no un
+   detalle de la sección 9.7.
+5. **Añadir tests de geometría y visión** antes de seguir con tuning:
+   - amenaza melee/haz/área/dash contra los mismos cálculos del motor,
+   - histéresis por observador,
+   - colisiones en línea de tiro,
+   - RNG con semilla para reproducir decisiones.
+6. **Actualizar la sección 11**: varios criterios ya se cumplen parcialmente;
+   otros, como “no se quedan empujando paredes” o “no gastan la definitiva en
+   invulnerables”, siguen dependiendo de los casos anteriores.
+
+---
+
 ## Nota
 
-Este documento es una propuesta. No se ha modificado ningún archivo de lógica de
-juego. Si se empieza a implementar, conviene hacerlo en el orden del apartado 10
-y mantener cada fase detrás de métricas de la simulación.
+Las secciones marcadas como hechas ya están implementadas; el resto sigue siendo
+una propuesta. Para lo pendiente conviene mantener el orden del apartado 10 y
+cada fase detrás de métricas de la simulación.

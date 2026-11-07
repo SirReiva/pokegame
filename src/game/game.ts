@@ -45,8 +45,10 @@ import {
 } from './audio';
 import {
   BotController,
+  botVisionFactor,
   createBotSquad,
-  type BotHazard
+  type BotHazard,
+  type BotWorldView
 } from './bot';
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
@@ -313,6 +315,8 @@ export class Game {
    */
   private views: MatchPlayerState[] = [];
   private bots = new Map<number, BotController>();
+  /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
+  private botNav: BotNavGrid | null = null;
   private viewLayers: pc.Layer[] = [];
   /** Marca de KO en el suelo, una copia por vista. Solo la ve su equipo. */
   private deathMarkers = new Map<number, Array<DeathMarker | null>>();
@@ -904,6 +908,7 @@ export class Game {
     const hasBots = valid.some((config) => config.isBot);
     const botNav = hasBots ? new BotNavGrid(this.world.colliders) : null;
     const botSquad = hasBots ? createBotSquad() : null;
+    this.botNav = botNav;
     const teamIndex: Record<Team, number> = createTeamRecord(() => 0);
     let viewIndex = 0;
 
@@ -987,6 +992,7 @@ export class Game {
         terrainMultiplier: spawnTerrainEffect.multiplier,
         terrainSpeedReason: spawnTerrainEffect.reason,
         visionRange: visionForPokemon(config.pokemonId),
+        visionFactor: isBot ? botVisionFactor(config.botDifficulty ?? 'normal') : 1,
         concealment: terrainConcealment(terrain, asset.entry.types),
         enemiesSeeing: 0,
         camera,
@@ -1181,6 +1187,7 @@ export class Game {
     this.matchPlayers = [];
     this.views = [];
     this.bots.clear();
+    this.botNav = null;
     this.viewLayers = [];
   }
 
@@ -1381,11 +1388,23 @@ export class Game {
 
     if (!frozen) {
       this.matchElapsed += dt;
+      // El presupuesto de A* es compartido: se reinicia una vez por frame antes
+      // de que los bots pidan rutas.
+      this.botNav?.beginFrame();
       // Vista compacta de lo que ya está en el aire. Se construye una vez por
       // frame y todos los bots de ambos equipos la comparten: cada uno filtra
       // por `ownerTeam`.
       const hazards =
         this.bots.size > 0 ? this.buildBotHazards() : [];
+      // La visión de equipo ya se resolvió en `updateVision` para la niebla y
+      // la histéresis. Los bots consumen ese mismo conjunto en vez de repetir
+      // un barrido de visibilidad por cada rival y aliado.
+      const botViews: Record<Team, BotWorldView> = {
+        red: { visibleSlots: this.visibleByTeam.red },
+        blue: { visibleSlots: this.visibleByTeam.blue },
+        yellow: { visibleSlots: this.visibleByTeam.yellow },
+        green: { visibleSlots: this.visibleByTeam.green }
+      };
 
       for (const player of this.matchPlayers) {
         const bot = player.isBot ? this.bots.get(player.slot) : null;
@@ -1396,7 +1415,8 @@ export class Game {
               this.matchPlayers,
               this.world.colliders,
               this.pickupKnowledge[player.team],
-              hazards
+              hazards,
+              botViews[player.team]
             )
           : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
         this.stepPlayer(player, input, dt);
@@ -3992,7 +4012,7 @@ export class Game {
   ): boolean {
     const distance = Math.hypot(target.x - observer.x, target.z - observer.z);
     const effective = effectiveVisionRange(
-      observer.visionRange,
+      observer.visionRange * observer.visionFactor,
       target.concealment.value
     );
     const limit = alreadyVisible ? effective + CONFIG.vision.hysteresis : effective;
@@ -4017,7 +4037,10 @@ export class Game {
     for (const observer of this.matchPlayers) {
       if (!observer.alive || observer.team !== team) continue;
       const distance = Math.hypot(x - observer.x, z - observer.z);
-      const effective = effectiveVisionRange(observer.visionRange, concealment);
+      const effective = effectiveVisionRange(
+        observer.visionRange * observer.visionFactor,
+        concealment
+      );
       if (distance > effective) continue;
       if (!lineOfSightBlocked(observer.x, observer.z, x, z, colliders)) return true;
     }
@@ -4042,7 +4065,12 @@ export class Game {
       if (observer.team !== team) continue;
       if (!observer.alive && observer.isBot) continue;
       const distance = Math.hypot(x - observer.x, z - observer.z);
-      if (distance > effectiveVisionRange(observer.visionRange, 0)) continue;
+      if (
+        distance >
+        effectiveVisionRange(observer.visionRange * observer.visionFactor, 0)
+      ) {
+        continue;
+      }
       if (!lineOfSightBlocked(observer.x, observer.z, x, z, colliders)) return true;
     }
     return false;
@@ -4069,7 +4097,7 @@ export class Game {
       const circle: VisionCircle = {
         x: player.x,
         z: player.z,
-        visionRange: player.visionRange
+        visionRange: player.visionRange * player.visionFactor
       };
       localCircleBySlot.set(player.slot, circle);
       let circles = circlesByTeam.get(player.team);

@@ -22,11 +22,12 @@
  */
 
 import { ABILITIES, type AbilityDef, type BuffStat } from './abilities';
-import { BotNavGrid, type NavPoint } from './botNav';
+import { BotNavGrid, type NavHazard, type NavPoint } from './botNav';
 import {
   computeDamage,
   pointSegmentDistance,
   raycastColliderDistance,
+  sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
 import { CONFIG, DEG } from './config';
@@ -45,6 +46,11 @@ interface BotTuning {
   reaction: number;
   /** Cada cuánto reevalúa objetivo y habilidad. */
   decision: number;
+  /**
+   * Probabilidad de elegir una acción viable peor que la mejor puntuada. Un
+   * experto falla poco, pero no tiene una evaluación perfecta.
+   */
+  decisionError: number;
   /** Error angular máximo para considerar que está encarado. */
   aimTolerance: number;
   /**
@@ -79,10 +85,17 @@ interface BotTuning {
   punishReaction: number;
 }
 
+/**
+ * La dificultad se expresa sobre todo con predicción (`lead`), castigo de
+ * windups, memoria, coordinación y evaluación de daño. Visión y reacción se
+ * mantienen en rangos humanos: difícil y experto no ven más lejos que un
+ * jugador ni reaccionan en milisegundos.
+ */
 const TUNING: Record<BotDifficulty, BotTuning> = {
   easy: {
     reaction: 0.55,
     decision: 0.45,
+    decisionError: 0.3,
     aimTolerance: 0.34,
     aimError: 0.2,
     visionFactor: 0.82,
@@ -101,6 +114,7 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
   normal: {
     reaction: 0.3,
     decision: 0.26,
+    decisionError: 0.18,
     aimTolerance: 0.2,
     aimError: 0.1,
     visionFactor: 0.96,
@@ -117,11 +131,12 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     punishReaction: 0.15
   },
   hard: {
-    reaction: 0.14,
+    reaction: 0.2,
     decision: 0.15,
+    decisionError: 0.1,
     aimTolerance: 0.1,
     aimError: 0.05,
-    visionFactor: 1.04,
+    visionFactor: 1,
     matchupWeight: 1.35,
     retreatHp: 0.36,
     memory: 5,
@@ -135,11 +150,12 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     punishReaction: 0.08
   },
   expert: {
-    reaction: 0.08,
+    reaction: 0.16,
     decision: 0.09,
+    decisionError: 0.05,
     aimTolerance: 0.06,
     aimError: 0.025,
-    visionFactor: 1.08,
+    visionFactor: 1,
     matchupWeight: 1.6,
     retreatHp: 0.4,
     memory: 6,
@@ -153,6 +169,11 @@ const TUNING: Record<BotDifficulty, BotTuning> = {
     punishReaction: 0.03
   }
 };
+
+/** Factor de visión que la dificultad aplica a su propio observador. */
+export function botVisionFactor(difficulty: BotDifficulty): number {
+  return TUNING[difficulty].visionFactor;
+}
 
 interface Vec2 {
   x: number;
@@ -478,7 +499,7 @@ export function createBotSquad(): BotSquad {
 
 /** Peligro ya lanzado que el bot debe esquivar aunque no haya windup rival. */
 export interface BotHazard {
-  kind: 'projectile' | 'aoe' | 'zone';
+  kind: 'projectile' | 'aoe';
   x: number;
   z: number;
   /** Radio propio del peligro; el bot suma después su propio `hitRadius`. */
@@ -492,6 +513,18 @@ export interface BotHazard {
 
 /** Sin peligros externos (partidas sin bots o primer frame). */
 const NO_HAZARDS: readonly BotHazard[] = [];
+
+/**
+ * Vista táctica del equipo que el motor calcula una sola vez por frame. Los
+ * bots no recalculan visibilidad por su cuenta: comparten el mismo conjunto que
+ * alimenta la niebla y la histéresis de equipo.
+ */
+export interface BotWorldView {
+  /** Slots de actores visibles para el equipo en este frame. */
+  readonly visibleSlots: ReadonlySet<number>;
+}
+
+const EMPTY_BOT_WORLD_VIEW: BotWorldView = { visibleSlots: new Set() };
 
 /** Amenaza inmediata creada por el windup visible de un rival. */
 interface IncomingThreat {
@@ -617,9 +650,22 @@ export class BotController {
   private aimBias = 0;
   private aimBiasUntil = 0;
   private aimBiasTarget: MatchPlayerState | null = null;
-  private lastSeen: { x: number; z: number; at: number } | null = null;
+  private lastSeen: {
+    x: number;
+    z: number;
+    at: number;
+    slot: number;
+  } | null = null;
   /** Lecturas por rival de su windup actual, para no volver a tirar cada frame. */
   private punishReads = new Map<number, PunishRead>();
+  /**
+   * Momento estimado en el que cada habilidad rival vuelve a estar lista,
+   * calculado desde que se le ve lanzarla. Evita consultar su cooldown exacto,
+   * que un humano no puede leer.
+   */
+  private readonly enemyReadyAt = new Map<number, Float32Array>();
+  /** Último cooldown observado de cada rival, para detectar lanzamientos. */
+  private readonly enemyCooldownSeen = new Map<number, Float32Array>();
 
   private decisionTimer = 0;
   private abilitySlot: number | null = null;
@@ -730,7 +776,8 @@ export class BotController {
     players: readonly MatchPlayerState[],
     colliders: readonly Collider[],
     knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE,
-    hazards: readonly BotHazard[] = NO_HAZARDS
+    hazards: readonly BotHazard[] = NO_HAZARDS,
+    view: BotWorldView = EMPTY_BOT_WORLD_VIEW
   ): DeviceInputSnapshot {
     this.clock += dt;
     this.pickupKnowledge = knownPickups;
@@ -753,8 +800,8 @@ export class BotController {
     this.updateTeamBlackboard(self, players);
     this.updateAllyMotion(dt, self, players);
     this.recordTrail(dt, self);
-    this.updateTarget(dt, self, players, colliders);
-    this.updateThreat(self);
+    this.updateTarget(dt, self, players, view);
+    this.updateThreat(self, colliders);
     this.updateHazardEvasion(self, colliders);
 
     // Un dash, hitstun o una preparación que clava al lanzador consumen el
@@ -874,7 +921,12 @@ export class BotController {
     let allies = 0;
     let enemies = 0;
     for (const player of players) {
-      if (!player.alive) continue;
+      if (!player.alive) {
+        // Un cadáver no es una posición que merezca investigarse.
+        team.lastSeen.delete(player.slot);
+        if (this.lastSeen?.slot === player.slot) this.lastSeen = null;
+        continue;
+      }
       if (player.team === self.team) allies++;
       else enemies++;
     }
@@ -1156,7 +1208,7 @@ export class BotController {
     dt: number,
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
-    colliders: readonly Collider[]
+    view: BotWorldView
   ): void {
     // `best` agrupa a los rivales a los que el bot puede dañar; `immuneBest`
     // queda como último recurso para no quedarse sin objetivo si todos los
@@ -1176,30 +1228,12 @@ export class BotController {
 
     for (const enemy of players) {
       if (enemy === self || enemy.team === self.team || !enemy.alive) continue;
-      const wasVisible = this.target === enemy && this.targetVisible;
-      // La visión es compartida por equipo: el bot también explota lo que ve
-      // cualquier aliado vivo. Su propio observador conserva el factor de
-      // visión de la dificultad; los aliados usan su rango real.
-      const visible = players.some((ally) => {
-        if (!ally.alive || ally.team !== self.team) return false;
-        const observer =
-          ally === self
-            ? {
-                x: self.x,
-                z: self.z,
-                visionRange: self.visionRange * this.tuning.visionFactor
-              }
-            : ally;
-        return isTargetVisible(
-          observer,
-          enemy,
-          enemy.concealment.value,
-          colliders,
-          wasVisible
-        );
-      });
+      // La visibilidad y su histéresis se calculan una sola vez por frame para
+      // todo el equipo en `game.ts`; aquí solo se consulta el conjunto.
+      const visible = view.visibleSlots.has(enemy.slot);
       if (!visible) continue;
       this.visibleEnemies.push(enemy);
+      this.observeEnemyCooldowns(enemy);
       // Memoria compartida: cualquier rival que vea el equipo deja su última
       // posición para que los demás puedan investigar cuando se oculte.
       team.lastSeen.set(enemy.slot, {
@@ -1240,15 +1274,10 @@ export class BotController {
       // Protección temporal: un rival invulnerable no recibe ningún golpe y
       // uno con escudo o buffs defensivos recibe menos. Sin esta penalización
       // el bot podía gastar la definitiva en alguien que acaba de reaparecer.
-      // La gracia de reaparición se pondera por el tiempo que le queda: si está
-      // a punto de caducar, apenas merece la pena evitar a ese rival.
+      // Solo se mira si la protección está activa, no cuántos segundos exactos
+      // le quedan: ese dato no está a la vista del jugador.
       const protection =
-        enemy.invulnerableTimer > 0
-          ? Math.min(
-              1,
-              enemy.invulnerableTimer / CONFIG.combat.invulnerabilitySeconds
-            )
-          : 1 - this.damageTakenFactor(enemy, null);
+        enemy.invulnerableTimer > 0 ? 1 : 1 - this.damageTakenFactor(enemy, null);
       if (protection > 0) score += protection * MITIGATED_TARGET_PENALTY;
       // Inmune a todo nuestro daño: mucho cuidado, solo se acepta si no hay
       // ningún otro rival visible.
@@ -1322,7 +1351,12 @@ export class BotController {
         }
       }
       this.visibleTimer += dt;
-      this.lastSeen = { x: chosen.x, z: chosen.z, at: this.clock };
+      this.lastSeen = {
+        x: chosen.x,
+        z: chosen.z,
+        at: this.clock,
+        slot: chosen.slot
+      };
     } else if (
       this.lastSeen &&
       this.clock - this.lastSeen.at > this.tuning.memory
@@ -1359,16 +1393,23 @@ export class BotController {
    * está dentro del área, cono o línea que va a golpear; si está fuera, el
    * rival queda como objetivo para castigarlo.
    */
-  private updateThreat(self: MatchPlayerState): void {
+  private updateThreat(
+    self: MatchPlayerState,
+    colliders: readonly Collider[]
+  ): void {
     let best: IncomingThreat | null = null;
     for (const enemy of this.visibleEnemies) {
-      const threat = this.threatFrom(self, enemy);
+      const threat = this.threatFrom(self, enemy, colliders);
       if (threat && (!best || threat.severity > best.severity)) best = threat;
     }
     this.threat = best;
   }
 
-  private threatFrom(self: MatchPlayerState, enemy: MatchPlayerState): IncomingThreat | null {
+  private threatFrom(
+    self: MatchPlayerState,
+    enemy: MatchPlayerState,
+    colliders: readonly Collider[]
+  ): IncomingThreat | null {
     const pending = enemy.pendingCast;
     if (!pending) return null;
     const remaining = pending.windup - pending.elapsed;
@@ -1387,8 +1428,22 @@ export class BotController {
       const dx = self.x - pending.targetX;
       const dz = self.z - pending.targetZ;
       const fromCenter = Math.hypot(dx, dz);
-      const dangerRadius = def.radius + selfRadius + 0.1;
+      // La geometría debe coincidir con `resolveAoeHit`: el cuerpo del rival
+      // cuenta desde el borde del radio, no desde su centro.
+      const dangerRadius = def.radius + maxHitRadius() + selfRadius;
       if (fromCenter > dangerRadius) return null;
+      // El área tampoco golpea a través de un muro.
+      if (
+        segmentBlockedByColliders(
+          pending.targetX,
+          pending.targetZ,
+          self.x,
+          self.z,
+          colliders
+        )
+      ) {
+        return null;
+      }
 
       // Cuánto se tarda en salir del círculo; los bots difíciles reaccionan
       // antes y los fáciles esperan demasiado.
@@ -1414,12 +1469,35 @@ export class BotController {
     if (remaining > this.tuning.evadeWindow) return null;
 
     if (def.shape === 'melee') {
-      const angle = Math.abs(
-        normalizeAngle(Math.atan2(toSelfX, toSelfZ) - enemy.facing)
-      );
-      const reach = def.range + selfRadius + 0.2;
-      if (distance > reach) return null;
-      if (angle > def.halfAngle * DEG + 0.12) return null;
+      // Misma comprobación que `executeMelee`: el cono dibuja
+      // `range + maxHitRadius()` y el cuerpo del objetivo se cuenta desde el
+      // borde, con el radio angular que aporta su hurtbox.
+      if (
+        !sectorOverlapsCircle(
+          enemy.x,
+          enemy.z,
+          enemy.facing,
+          def.halfAngle * DEG,
+          def.range + maxHitRadius(),
+          self.x,
+          self.z,
+          selfRadius
+        )
+      ) {
+        return null;
+      }
+      if (
+        segmentBlockedByColliders(
+          enemy.x,
+          enemy.z,
+          self.x,
+          self.z,
+          colliders,
+          CONFIG.combat.meleeSightPadding
+        )
+      ) {
+        return null;
+      }
 
       const away =
         distance > 0.001
@@ -1437,14 +1515,59 @@ export class BotController {
       };
     }
 
-    if (def.shape === 'projectile' || def.shape === 'beam' || def.shape === 'dash') {
+    if (def.shape === 'dash') {
+      // `stepDash` recorta el desplazamiento al primer collider y golpea con
+      // `max(0.5, radius) + hitRadius` desde el barrido real.
+      const stop = Math.max(
+        0.1,
+        raycastColliderDistance(
+          enemy.x,
+          enemy.z,
+          dirX,
+          dirZ,
+          def.dashDistance,
+          colliders,
+          CONFIG.player.radius
+        )
+      );
+      const endX = enemy.x + dirX * stop;
+      const endZ = enemy.z + dirZ * stop;
+      const dashReach = Math.max(0.5, def.radius) + selfRadius;
+      const toSweep = pointSegmentDistance(
+        self.x,
+        self.z,
+        enemy.x,
+        enemy.z,
+        endX,
+        endZ
+      );
+      if (toSweep > dashReach) return null;
+      if (toSelfX * dirX + toSelfZ * dirZ < -selfRadius) return null;
+
+      const away =
+        distance > 0.001
+          ? { x: toSelfX / distance, z: toSelfZ / distance }
+          : { x: -dirX, z: -dirZ };
+      const side = { x: -dirZ * this.orbitSide, z: dirX * this.orbitSide };
+      const evadeX = away.x + side.x * 0.8;
+      const evadeZ = away.z + side.z * 0.8;
+      const length = Math.hypot(evadeX, evadeZ) || 1;
+      return {
+        source: enemy,
+        remaining,
+        evade: { x: evadeX / length, z: evadeZ / length },
+        severity: def.power + 18 + (1 - toSweep / dashReach) * 22
+      };
+    }
+
+    if (def.shape === 'projectile' || def.shape === 'beam') {
       // Un haz con `moveWhileWindup` deja mover al lanzador durante la carga y
       // `executeBeam` recalcula la dirección desde su posición actual hasta el
       // extremo fijado en `pendingCast`. La amenaza debe usar ese mismo vector:
       // con el `facing` actual se esquivaría un carril que ya no es el real.
       let aimX = dirX;
       let aimZ = dirZ;
-      let reach = def.shape === 'dash' ? def.dashDistance : def.range;
+      let reach = def.range;
       if (def.shape === 'beam') {
         const toTargetX = pending.targetX - enemy.x;
         const toTargetZ = pending.targetZ - enemy.z;
@@ -1456,14 +1579,50 @@ export class BotController {
           reach = targetDistance;
         }
       }
+
       const projection = toSelfX * aimX + toSelfZ * aimZ;
-      if (projection < 0 || projection > reach + 0.3) return null;
+      const alongLimit =
+        def.shape === 'beam'
+          ? reach + selfRadius
+          : reach + def.radius + selfRadius;
+      if (projection < -selfRadius || projection > alongLimit) return null;
 
       const perpX = toSelfX - aimX * projection;
       const perpZ = toSelfZ - aimZ * projection;
       const perpendicular = Math.hypot(perpX, perpZ);
-      const width = selfRadius + (def.shape === 'projectile' ? 0.5 : 0.25);
+      // El haz y el proyectil usan el cuerpo del objetivo desde el borde.
+      const width =
+        def.shape === 'beam'
+          ? def.radius + maxHitRadius() + selfRadius
+          : def.radius + selfRadius;
       if (perpendicular > width) return null;
+
+      // Ni el haz ni el proyectil atraviesan un obstáculo antes de llegar.
+      const hitAlong = Math.max(0, Math.min(projection, reach));
+      if (def.shape === 'beam') {
+        if (
+          segmentBlockedByColliders(
+            enemy.x,
+            enemy.z,
+            self.x,
+            self.z,
+            colliders
+          )
+        ) {
+          return null;
+        }
+      } else if (
+        segmentBlockedByColliders(
+          enemy.x,
+          enemy.z,
+          enemy.x + aimX * hitAlong,
+          enemy.z + aimZ * hitAlong,
+          colliders,
+          Math.max(0.05, def.radius)
+        )
+      ) {
+        return null;
+      }
 
       let evadeX = perpX;
       let evadeZ = perpZ;
@@ -1664,6 +1823,25 @@ export class BotController {
   }
 
   /**
+   * Peligros persistentes que A* debe rodear. Los proyectiles se excluyen
+   * porque se mueven y la ruta se recalcula con poca frecuencia.
+   */
+  private navHazards(self: MatchPlayerState): NavHazard[] | undefined {
+    const hazards: NavHazard[] = [];
+    for (const hazard of this.hazards) {
+      if (hazard.ownerTeam === self.team) continue;
+      if (hazard.kind === 'projectile') continue;
+      if ((hazard.remaining ?? Infinity) <= 0) continue;
+      hazards.push({
+        x: hazard.x,
+        z: hazard.z,
+        radius: hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
+      });
+    }
+    return hazards.length > 0 ? hazards : undefined;
+  }
+
+  /**
    * Habilidad que puede golpear al lanzador rival antes de que termine su
    * windup. Un impacto cancela la preparación en `game.ts`.
    */
@@ -1711,12 +1889,27 @@ export class BotController {
         distance = Math.hypot(aim.x - self.x, aim.z - self.z);
       }
 
+      // El interrupt también falla por apuntado: usa el mismo sesgo angular que
+      // un ataque normal en vez de tener puntería perfecta.
+      const aimBias = this.aimBiasFor(source);
+      if (aimBias !== 0) {
+        const relX = aim.x - source.x;
+        const relZ = aim.z - source.z;
+        const cos = Math.cos(aimBias);
+        const sin = Math.sin(aimBias);
+        aim = {
+          x: source.x + relX * cos - relZ * sin,
+          z: source.z + relX * sin + relZ * cos
+        };
+        distance = Math.hypot(aim.x - self.x, aim.z - self.z);
+      }
+
       const reach =
         def.shape === 'melee'
-          ? def.range + source.hitRadius
+          ? def.range + maxHitRadius() + source.hitRadius
           : def.shape === 'dash'
             ? def.dashDistance + Math.max(0.5, def.radius) + source.hitRadius
-            : def.range;
+            : def.range + source.hitRadius;
       if (distance > reach) continue;
 
       if (delay > remaining + 0.03) continue;
@@ -1780,6 +1973,9 @@ export class BotController {
     this.useCommon = false;
     this.releasePickupClaim(self);
     this.releaseReviveClaims(self);
+    // Cualquier decisión nueva invalida el daño comprometido en la anterior,
+    // incluso si acaba eligiendo una habilidad de apoyo o ninguna.
+    this.clearPlannedDamage(self);
     // Con un peligro ya encima, Impulso es una salida válida aunque no haya un
     // rival cerca: la rama de huida de `drive` solo necesita saber si toca
     // intentarlo.
@@ -2076,7 +2272,7 @@ export class BotController {
     const missing = Math.max(0, player.maxHp - player.hp);
     let reserve = 0;
     for (let slot = 0; slot < 4; slot++) {
-      if (player.cooldowns[slot] > 0.5) continue;
+      if (this.abilityCooldown(player, slot) > 0.5) continue;
       const id = player.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def || def.healSelf <= 0 || def.healOnHit) continue;
@@ -2085,7 +2281,10 @@ export class BotController {
         Math.min(missing, player.maxHp * def.healSelf) * 0.8
       );
     }
-    if (player.commonAbilityId === 'proteccion' && player.cooldowns[4] <= 0.5) {
+    if (
+      player.commonAbilityId === 'proteccion' &&
+      this.abilityCooldown(player, 4) <= 0.5
+    ) {
       // Dos segundos de reducción del 60 % valen aproximadamente un quinto de
       // la vida actual como colchón, sin contar el daño que se evita al curar.
       reserve += player.hp * 0.2;
@@ -2115,7 +2314,14 @@ export class BotController {
       const def = id ? ABILITIES[id] : null;
       if (!def || def.power <= 0 || def.category === 'status') continue;
       if (typeEffectiveness(def.type, defender.types) === 0) continue;
-      const prediction = this.predictTarget(attacker, defender, def);
+      // El DPS entrante no hereda el adelanto imperfecto de este bot: se asume
+      // que el rival apunta con su precisión real.
+      const prediction = this.predictTarget(
+        attacker,
+        defender,
+        def,
+        useAimEstimate ? this.tuning.lead : 1
+      );
       // Una habilidad fuera de alcance o tapada no cuenta como daño inmediato.
       if (
         !this.canHitPrediction(attacker, defender, def, prediction, colliders)
@@ -2128,8 +2334,10 @@ export class BotController {
           ? def.accuracy / 100
           : 1;
       const damage = this.expectedDamage(attacker, defender, def, prediction);
-      const remaining = Math.max(0, attacker.cooldowns[slot] ?? 0);
-      const cycle = Math.max(0.75, def.cooldown + remaining);
+      const remaining = this.abilityCooldown(attacker, slot);
+      // El windup también forma parte del ciclo: las habilidades lentas no se
+      // pueden repetir tan rápido como sugiere el cooldown solo.
+      const cycle = Math.max(0.75, def.cooldown + remaining) + def.windup;
       best = Math.max(best, (damage * accuracy) / cycle);
     }
     return best;
@@ -2152,9 +2360,11 @@ export class BotController {
     const selfEffectiveHp = this.effectiveHp(self, pickup);
     const targetEffectiveHp = this.effectiveHp(target, null);
 
+    // Del rival solo se sabe si su gracia está activa, no cuánto le queda: se
+    // suma una estimación fija en vez de leer su temporizador exacto.
+    const targetGrace = target.invulnerableTimer > 0 ? 1 : 0;
     const timeToKill =
-      targetEffectiveHp / Math.max(1, selfDps) +
-      Math.max(0, target.invulnerableTimer);
+      targetEffectiveHp / Math.max(1, selfDps) + targetGrace;
     const timeToDie =
       selfEffectiveHp / Math.max(1, enemyDps) +
       Math.max(0, self.invulnerableTimer);
@@ -2218,7 +2428,21 @@ export class BotController {
     pickup: PickupSpawn | null
   ): number {
     const goal = pickup ?? self.spawn;
-    const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
+    let distance = Math.hypot(goal.x - self.x, goal.z - self.z);
+    const route = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
+      types: self.types,
+      preferConcealment: true,
+      hazards: this.navHazards(self)
+    });
+    if (route.status === 'ok' && route.points.length > 0) {
+      let length = 0;
+      let previous = { x: self.x, z: self.z };
+      for (const point of route.points) {
+        length += Math.hypot(point.x - previous.x, point.z - previous.z);
+        previous = point;
+      }
+      distance = length;
+    }
     return clamp(
       distance / this.effectiveSpeed(self) + RETREAT_TIME_MARGIN,
       RETREAT_MIN_SECONDS,
@@ -2259,6 +2483,7 @@ export class BotController {
       const realDistance = Math.hypot(point.x - self.x, point.z - self.z);
       if (realDistance < 1 || realDistance > RETREAT_COVER_RADIUS) continue;
       if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) continue;
+      if (this.hazardPathBlocked(self, point)) continue;
 
       const concealment = terrainConcealment(
         terrainAt(point.x, point.z),
@@ -2541,6 +2766,8 @@ export class BotController {
       // objeto no es un destino válido.
       const available = knownAvailable ?? rememberedAvailable;
       if (available === undefined || !available) continue;
+      // No cruzar un charco persistente solo por una poción.
+      if (this.hazardPathBlocked(self, pickup)) continue;
 
       const definition = ITEM_DEFINITIONS[pickup.type];
       const heal = definition?.healHp ?? 0;
@@ -2702,6 +2929,7 @@ export class BotController {
       const point = this.nav.cellCenter(row, col);
       const distanceFromSelf = Math.hypot(point.x - self.x, point.z - self.z);
       if (distanceFromSelf < SEARCH_MIN_DISTANCE) continue;
+      if (this.hazardPathBlocked(self, point)) continue;
 
       let nearBase = false;
       for (const base of bases) {
@@ -2915,21 +3143,12 @@ export class BotController {
       const ready =
         this.abilitySlot !== null &&
         self.cooldowns[this.abilitySlot] <= 0.001;
-      const hasLine =
-        !lineOfSightBlocked(
-          self.x,
-          self.z,
-          prediction.x,
-          prediction.z,
-          colliders
-        );
       if (
         !channeling &&
         this.abilitySlot !== null &&
         ready &&
         def &&
         inRange &&
-        hasLine &&
         facingError <= this.tuning.aimTolerance &&
         this.canCast(self)
       ) {
@@ -3174,6 +3393,7 @@ export class BotController {
   ): number | null {
     let bestSlot: number | null = null;
     let bestScore = -Infinity;
+    const candidates: { slot: number; score: number }[] = [];
 
     for (let slot = 0; slot < 4; slot++) {
       if (self.cooldowns[slot] > 0.001) continue;
@@ -3197,11 +3417,20 @@ export class BotController {
       }
 
       let score = inRange
-        ? this.scoreAbility(self, target, def, slot, prediction, support)
+        ? this.scoreAbility(
+            self,
+            target,
+            def,
+            slot,
+            prediction,
+            support,
+            colliders
+          )
         : -Infinity;
       if (support > 0) {
         score = score === -Infinity ? support : score + support;
       }
+      candidates.push({ slot, score });
       if (score > bestScore) {
         bestScore = score;
         bestSlot = slot;
@@ -3210,14 +3439,50 @@ export class BotController {
 
     // Ninguna opción aporta lo suficiente: es mejor no gastar el cooldown y
     // seguir moviéndose que lanzar una cura o un buff inútil.
-    if (bestSlot === null || bestScore <= MIN_ABILITY_SCORE) return null;
-    const bestId = self.abilityIds[bestSlot];
+    const chosenSlot = this.pickWithDecisionError(
+      candidates,
+      bestSlot,
+      bestScore,
+      MIN_ABILITY_SCORE
+    );
+    if (chosenSlot === null) return null;
+    const bestId = self.abilityIds[chosenSlot];
     const bestDef = bestId ? ABILITIES[bestId] : null;
     if (bestDef) {
       this.claimSupportRevives(self, players, bestDef, colliders);
     }
-    this.commitPlannedDamage(self, target, bestSlot);
-    return bestSlot;
+    this.commitPlannedDamage(self, target, chosenSlot);
+    return chosenSlot;
+  }
+
+  /**
+   * Aplica el error de decisión: con cierta probabilidad el bot elige una
+   * acción viable distinta de la mejor. El ruido escala con la puntuación para
+   * que un experto siga prefiriendo claramente la opción correcta.
+   */
+  private pickWithDecisionError(
+    candidates: readonly { slot: number; score: number }[],
+    bestSlot: number | null,
+    bestScore: number,
+    minScore: number
+  ): number | null {
+    if (bestSlot === null || bestScore <= minScore) return null;
+    const error = this.tuning.decisionError;
+    const viable = candidates.filter((candidate) => candidate.score > minScore);
+    if (error <= 0 || viable.length < 2) return bestSlot;
+
+    const spread = Math.max(4, Math.abs(bestScore) * 0.35);
+    let chosen = bestSlot;
+    let chosenScore = -Infinity;
+    for (const candidate of viable) {
+      const noisy =
+        candidate.score + (Math.random() * 2 - 1) * error * spread;
+      if (noisy > chosenScore) {
+        chosenScore = noisy;
+        chosen = candidate.slot;
+      }
+    }
+    return chosen;
   }
 
   /** Marca los aliados caídos que este bot va a intentar revivir. */
@@ -3233,7 +3498,7 @@ export class BotController {
     const team = this.squad[self.team];
     for (const ally of players) {
       if (ally.team !== self.team || ally.alive) continue;
-      if (ally.respawnTimer <= 1) continue;
+      if (ally.respawnTimer <= def.windup + 0.15) continue;
       if (Math.hypot(ally.x - self.x, ally.z - self.z) > reach + ally.hitRadius) {
         continue;
       }
@@ -3271,7 +3536,7 @@ export class BotController {
 
       if (!ally.alive) {
         // Si va a reaparecer igualmente, el área no aporta nada.
-        if (!profile.revive || ally.respawnTimer <= 1) continue;
+        if (!profile.revive || ally.respawnTimer <= def.windup + 0.15) continue;
         // Otro bot ya se ha comprometido a revivirlo: no se apilan dos Deseos.
         const claim = this.squad[self.team].reviveClaims.get(ally.slot);
         if (
@@ -3316,23 +3581,34 @@ export class BotController {
   ): number | null {
     let bestSlot: number | null = null;
     let bestScore = 0;
+    const candidates: { slot: number; score: number }[] = [];
     for (let slot = 0; slot < 4; slot++) {
       if (self.cooldowns[slot] > 0.001) continue;
       const id = self.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
       const score = this.supportScore(self, players, def, colliders);
+      candidates.push({ slot, score });
       if (score > bestScore) {
         bestScore = score;
         bestSlot = slot;
       }
     }
-    if (bestSlot !== null) {
-      const id = self.abilityIds[bestSlot];
+    const chosenSlot = this.pickWithDecisionError(
+      candidates,
+      bestSlot,
+      bestScore,
+      0
+    );
+    if (chosenSlot !== null) {
+      // Una habilidad de apoyo no compromete daño: el compromiso anterior deja
+      // de ser válido en cuanto se toma esta decisión.
+      this.clearPlannedDamage(self);
+      const id = self.abilityIds[chosenSlot];
       const def = id ? ABILITIES[id] : null;
       if (def) this.claimSupportRevives(self, players, def, colliders);
     }
-    return bestSlot;
+    return chosenSlot;
   }
 
   private isSupportSlot(self: MatchPlayerState, slot: number): boolean {
@@ -3356,6 +3632,16 @@ export class BotController {
     return total;
   }
 
+  /** Retira el daño que este bot había comprometido sobre cualquier rival. */
+  private clearPlannedDamage(self: MatchPlayerState): void {
+    const team = this.squad[self.team];
+    for (const [key, commitment] of team.committedDamage) {
+      if (commitment.attackerSlot === self.slot) {
+        team.committedDamage.delete(key);
+      }
+    }
+  }
+
   /**
    * Registra el daño que este bot piensa aplicar con una habilidad grande. Los
    * compañeros lo descuentan durante una ventana corta para no apilar dos o
@@ -3366,6 +3652,8 @@ export class BotController {
     target: MatchPlayerState,
     slot: number
   ): void {
+    this.clearPlannedDamage(self);
+    const team = this.squad[self.team];
     const id = self.abilityIds[slot];
     const def = id ? ABILITIES[id] : null;
     if (!def || def.power <= 0) return;
@@ -3375,12 +3663,6 @@ export class BotController {
     const accuracy = this.hitChance(self, target, def, prediction);
     const amount =
       this.expectedDamage(self, target, def, prediction) * accuracy;
-    const team = this.squad[self.team];
-    for (const [key, commitment] of team.committedDamage) {
-      if (commitment.attackerSlot === self.slot) {
-        team.committedDamage.delete(key);
-      }
-    }
     team.committedDamage.set(`${target.slot}:${self.slot}`, {
       attackerSlot: self.slot,
       targetSlot: target.slot,
@@ -3417,15 +3699,29 @@ export class BotController {
       const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
       power *= 1 - (1 - def.radialMinDamage) * t;
     }
-    // En las áreas `overTime`, `power` es daño por segundo. Para compararlas
-    // con un golpe instantáneo se usa el daño total si el rival permanece
-    // dentro durante toda la duración.
+    // En las áreas `overTime`, `power` es daño por segundo. No se asume que el
+    // rival se quede toda la duración: se estiman los ticks que llegará a
+    // recibir según lo lejos que esté del centro y lo rápido que pueda salir.
     if (
       def.shape === 'aoe' &&
       def.aoeDamageMode === 'overTime' &&
       def.aoeDuration > 0
     ) {
-      power *= def.aoeDuration;
+      const tickInterval = Math.max(0.1, def.aoeTickInterval);
+      const maxTicks = Math.max(1, Math.floor(def.aoeDuration / tickInterval));
+      const centerDistance = def.range > 0.1 ? def.range : 0;
+      const offset = Math.abs(prediction.distance - centerDistance);
+      const escapeDistance = Math.max(0, def.radius - offset);
+      const escapeTime = escapeDistance / Math.max(1, this.effectiveSpeed(target));
+      const expectedTime = Math.min(
+        def.aoeDuration,
+        escapeTime + tickInterval
+      );
+      const ticks = Math.max(
+        1,
+        Math.min(maxTicks, Math.ceil(expectedTime / tickInterval))
+      );
+      power *= ticks * tickInterval;
     }
     if (power <= 0) return 0;
 
@@ -3562,7 +3858,8 @@ export class BotController {
     def: AbilityDef,
     slot: number,
     prediction: TargetPrediction,
-    support = 0
+    support: number,
+    colliders: readonly Collider[]
   ): number {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const hasEffect =
@@ -3598,10 +3895,9 @@ export class BotController {
     const expectedHit = expectedDamage * hitChance;
 
     const offensive = def.power > 0 || def.slow !== null;
-    if (offensive && target.invulnerableTimer > 0) {
-      // Si la invulnerabilidad termina antes del impacto, el golpe sí cuenta.
-      if (target.invulnerableTimer > prediction.time) return -Infinity;
-    }
+    // La gracia de reaparición se ve como estado, pero no su tiempo restante:
+    // mientras esté activa no se gasta una habilidad ofensiva en ese rival.
+    if (offensive && target.invulnerableTimer > 0) return -Infinity;
 
     const cooldownWeight = clamp(
       COOLDOWN_REFERENCE / Math.max(0.5, def.cooldown),
@@ -3674,14 +3970,27 @@ export class BotController {
         score += 10;
         if (def.power === 0) score += 35; // reposicionamiento / huida
         break;
-      case 'aoe': {
-        const extra = this.countEnemiesNear(target.x, target.z, def.radius);
-        score += 12 + Math.max(0, extra - 1) * 32;
+      case 'aoe':
+        score += 12;
         break;
-      }
       case 'self':
         score += 28;
         break;
+    }
+
+    // Un cono, un haz que atraviesa, un proyectil con `pierce` o un área pueden
+    // golpear a más de un rival. El daño principal ya está en `score`, pero el
+    // impacto extra también vale parte del cooldown.
+    const extraTargets = this.countExtraAbilityTargets(
+      self,
+      target,
+      def,
+      prediction,
+      colliders
+    );
+    if (extraTargets > 0) {
+      const weight = def.shape === 'aoe' ? 32 : 24;
+      score += extraTargets * weight * hitChance;
     }
 
     // Autodaño y windup son riesgos reales: cuanto más largo el segundo y más
@@ -3716,15 +4025,194 @@ export class BotController {
     return score;
   }
 
-  private countEnemiesNear(x: number, z: number, radius: number): number {
+  /**
+   * Nº de rivales adicionales al objetivo que caerían en la misma habilidad si
+   * el bot apuntara al objetivo. Usa la geometría del motor para conos, haces,
+   * proyectiles con `pierce`, dash y áreas.
+   */
+  private countExtraAbilityTargets(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef,
+    prediction: TargetPrediction,
+    colliders: readonly Collider[]
+  ): number {
+    if (def.power <= 0 || def.shape === 'self') return 0;
+    const direction = directionTo(self, prediction);
+    if (direction.x === 0 && direction.z === 0) return 0;
+    const facing = Math.atan2(direction.x, direction.z);
+    const beamReach =
+      def.shape === 'beam'
+        ? Math.max(
+            0.1,
+            raycastColliderDistance(
+              self.x,
+              self.z,
+              direction.x,
+              direction.z,
+              def.range,
+              colliders
+            )
+          )
+        : 0;
+    const dashReach =
+      def.shape === 'dash'
+        ? Math.max(
+            0.1,
+            raycastColliderDistance(
+              self.x,
+              self.z,
+              direction.x,
+              direction.z,
+              def.dashDistance,
+              colliders,
+              CONFIG.player.radius
+            )
+          )
+        : 0;
+    const aoeCenterReach =
+      def.shape === 'aoe' && def.range > 0.1
+        ? Math.min(
+            def.range,
+            raycastColliderDistance(
+              self.x,
+              self.z,
+              direction.x,
+              direction.z,
+              def.range,
+              colliders,
+              CONFIG.combat.aoeSightPadding
+            )
+          )
+        : 0;
+
     let count = 0;
-    // Solo enemigos visibles para el equipo: contar rivales ocultos dentro del
-    // radio hacía que el bot sobrevalorase los AoE por información que no tenía.
     for (const enemy of this.visibleEnemies) {
-      if (!enemy.alive) continue;
-      if (Math.hypot(enemy.x - x, enemy.z - z) <= radius + enemy.hitRadius) {
-        count++;
+      if (enemy === target || !enemy.alive) continue;
+      const dx = enemy.x - self.x;
+      const dz = enemy.z - self.z;
+      switch (def.shape) {
+        case 'melee': {
+          if (
+            !sectorOverlapsCircle(
+              self.x,
+              self.z,
+              facing,
+              def.halfAngle * DEG,
+              def.range + maxHitRadius(),
+              enemy.x,
+              enemy.z,
+              enemy.hitRadius
+            )
+          ) {
+            break;
+          }
+          if (
+            segmentBlockedByColliders(
+              self.x,
+              self.z,
+              enemy.x,
+              enemy.z,
+              colliders,
+              CONFIG.combat.meleeSightPadding
+            )
+          ) {
+            break;
+          }
+          count++;
+          break;
+        }
+        case 'projectile': {
+          if (def.pierce <= 0) break;
+          const along = dx * direction.x + dz * direction.z;
+          if (
+            along < -enemy.hitRadius ||
+            along > def.range + def.radius + enemy.hitRadius
+          ) {
+            break;
+          }
+          const lateral = Math.abs(dx * direction.z - dz * direction.x);
+          if (lateral > def.radius + enemy.hitRadius) break;
+          if (
+            segmentBlockedByColliders(
+              self.x,
+              self.z,
+              enemy.x,
+              enemy.z,
+              colliders,
+              Math.max(0.05, def.radius)
+            )
+          ) {
+            break;
+          }
+          count++;
+          break;
+        }
+        case 'beam': {
+          const along = dx * direction.x + dz * direction.z;
+          if (along < 0 || along > beamReach + enemy.hitRadius) break;
+          const lateral = Math.abs(dx * direction.z - dz * direction.x);
+          if (lateral > def.radius + maxHitRadius() + enemy.hitRadius) break;
+          if (
+            segmentBlockedByColliders(
+              self.x,
+              self.z,
+              enemy.x,
+              enemy.z,
+              colliders
+            )
+          ) {
+            break;
+          }
+          count++;
+          break;
+        }
+        case 'dash': {
+          const reach = Math.max(0.5, def.radius) + enemy.hitRadius;
+          if (
+            dx * direction.x + dz * direction.z < -enemy.hitRadius ||
+            pointSegmentDistance(
+              enemy.x,
+              enemy.z,
+              self.x,
+              self.z,
+              self.x + direction.x * dashReach,
+              self.z + direction.z * dashReach
+            ) > reach
+          ) {
+            break;
+          }
+          count++;
+          break;
+        }
+        case 'aoe': {
+          const centerX = self.x + direction.x * aoeCenterReach;
+          const centerZ = self.z + direction.z * aoeCenterReach;
+          if (
+            Math.hypot(enemy.x - centerX, enemy.z - centerZ) >
+            def.radius + maxHitRadius() + enemy.hitRadius
+          ) {
+            break;
+          }
+          if (
+            segmentBlockedByColliders(
+              centerX,
+              centerZ,
+              enemy.x,
+              enemy.z,
+              colliders
+            )
+          ) {
+            break;
+          }
+          count++;
+          break;
+        }
       }
+    }
+    // Un proyectil con `pierce` solo atraviesa ese número de rivales extra.
+    if (def.shape === 'projectile') {
+      return Math.min(count, Math.max(0, def.pierce));
     }
     return count;
   }
@@ -3748,17 +4236,51 @@ export class BotController {
     // tarde contra los cuerpos grandes y pronto contra los pequeños.
     const targetRadius = target.hitRadius;
     switch (def.shape) {
-      case 'melee':
+      case 'melee': {
         // El sector del motor amplía el alcance con el hurtbox mayor del
         // roster; el borde dibujado coincide con ese primer contacto.
-        return (
-          prediction.distance <=
-          def.range + maxHitRadius() + targetRadius
+        if (prediction.distance > def.range + maxHitRadius() + targetRadius) {
+          return false;
+        }
+        const facing = Math.atan2(
+          prediction.x - self.x,
+          prediction.z - self.z
         );
+        if (
+          !sectorOverlapsCircle(
+            self.x,
+            self.z,
+            facing,
+            def.halfAngle * DEG,
+            def.range + maxHitRadius(),
+            prediction.x,
+            prediction.z,
+            targetRadius
+          )
+        ) {
+          return false;
+        }
+        return !segmentBlockedByColliders(
+          self.x,
+          self.z,
+          prediction.x,
+          prediction.z,
+          colliders,
+          CONFIG.combat.meleeSightPadding
+        );
+      }
       case 'projectile':
         // El motor mide el impacto contra el hurtbox del objetivo, así que el
         // alcance útil también lo suma.
-        return prediction.distance <= def.range + targetRadius;
+        if (prediction.distance > def.range + targetRadius) return false;
+        return !segmentBlockedByColliders(
+          self.x,
+          self.z,
+          prediction.x,
+          prediction.z,
+          colliders,
+          Math.max(0.05, def.radius)
+        );
       case 'beam': {
         // El haz nunca llega más allá de `range`; si el objetivo ya está fuera,
         // no hace falta lanzar el raycast contra todos los colliders.
@@ -3785,18 +4307,51 @@ export class BotController {
           colliders
         );
       }
-      case 'dash':
+      case 'dash': {
         // El barrido del dash alcanza `distancia + max(0.5, radio del dash) +
-        // hurtbox del objetivo`; el 0,4 es solo el mínimo para no dashear pegado.
-        return (
-          prediction.distance >= 0.4 &&
-          prediction.distance <=
-            def.dashDistance + Math.max(0.5, def.radius) + targetRadius
+        // hurtbox del objetivo`; el 0,4 es solo el mínimo para no dashear
+        // pegado. El desplazamiento se recorta en el primer collider.
+        if (prediction.distance < 0.4) return false;
+        const direction = directionTo(self, prediction);
+        if (direction.x === 0 && direction.z === 0) return false;
+        const stop = Math.max(
+          0.1,
+          raycastColliderDistance(
+            self.x,
+            self.z,
+            direction.x,
+            direction.z,
+            def.dashDistance,
+            colliders,
+            CONFIG.player.radius
+          )
         );
+        const reach = Math.max(0.5, def.radius) + targetRadius;
+        return (
+          prediction.distance <= stop + reach &&
+          pointSegmentDistance(
+            prediction.x,
+            prediction.z,
+            self.x,
+            self.z,
+            self.x + direction.x * stop,
+            self.z + direction.z * stop
+          ) <= reach
+        );
+      }
       case 'aoe': {
         const effectiveRadius = def.radius + maxHitRadius() + targetRadius;
         if (def.range <= 0.1) {
-          return prediction.distance <= effectiveRadius;
+          return (
+            prediction.distance <= effectiveRadius &&
+            !segmentBlockedByColliders(
+              self.x,
+              self.z,
+              prediction.x,
+              prediction.z,
+              colliders
+            )
+          );
         }
         // El centro cae como mucho a `range` del lanzador, así que un objetivo
         // más lejos que eso sumado al radio efectivo no puede quedar dentro.
@@ -3820,16 +4375,24 @@ export class BotController {
               );
         const centerX = self.x + direction.x * reach;
         const centerZ = self.z + direction.z * reach;
-        return (
-          Math.hypot(prediction.x - centerX, prediction.z - centerZ) <=
+        if (
+          Math.hypot(prediction.x - centerX, prediction.z - centerZ) >
           effectiveRadius
+        ) {
+          return false;
+        }
+        return !segmentBlockedByColliders(
+          centerX,
+          centerZ,
+          prediction.x,
+          prediction.z,
+          colliders
         );
       }
       case 'self':
-        return (
-          prediction.distance <= Math.max(2.5, def.radius + 2) &&
-          prediction.distance <= 8
-        );
+        // Los buffs propios no necesitan un rival cerca: el bot puede
+        // prepararse antes de acercarse.
+        return true;
     }
   }
 
@@ -3963,6 +4526,49 @@ export class BotController {
     return clamp(preferred, 0.9, this.maxUsefulRange(def, target));
   }
 
+  /**
+   * Actualiza el enfriamiento estimado de un rival visible. Solo se marca una
+   * habilidad como gastada cuando se ve el salto de su cooldown; el valor exacto
+   * restante no se lee. Si el bot no ha visto el lanzamiento, asume que está
+   * lista, igual que haría un jugador que no lleva la cuenta.
+   */
+  private observeEnemyCooldowns(enemy: MatchPlayerState): void {
+    let ready = this.enemyReadyAt.get(enemy.slot);
+    let seen = this.enemyCooldownSeen.get(enemy.slot);
+    if (!ready) {
+      ready = new Float32Array(5);
+      this.enemyReadyAt.set(enemy.slot, ready);
+    }
+    if (!seen) {
+      seen = new Float32Array(5);
+      seen.fill(-1);
+      this.enemyCooldownSeen.set(enemy.slot, seen);
+    }
+
+    for (let slot = 0; slot < 5; slot++) {
+      const current = enemy.cooldowns[slot] ?? 0;
+      const previous = seen[slot];
+      if (previous >= 0 && current > previous + 0.05) {
+        const id = enemy.abilityIds[slot];
+        const def = id ? ABILITIES[id] : null;
+        const duration = Math.max(current, def?.cooldown ?? 0);
+        ready[slot] = this.clock + duration;
+      }
+      seen[slot] = current;
+    }
+  }
+
+  /**
+   * Cooldown que el bot puede conocer: el propio es exacto; el de un rival se
+   * estima desde el último lanzamiento observado.
+   */
+  private abilityCooldown(player: MatchPlayerState, slot: number): number {
+    if (player.slot === this.slot) return player.cooldowns[slot] ?? 0;
+    const ready = this.enemyReadyAt.get(player.slot);
+    if (!ready) return 0;
+    return Math.max(0, ready[slot] - this.clock);
+  }
+
   /** Perfil de habilidades ofensivas del rival que ya puede usar. */
   private enemyThreatProfile(target: MatchPlayerState): EnemyThreatProfile {
     let meleeReach = 0;
@@ -3989,7 +4595,7 @@ export class BotController {
     for (let slot = 0; slot < 4; slot++) {
       const id = target.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
-      consider(def, target.cooldowns[slot] <= 0.5);
+      consider(def, this.abilityCooldown(target, slot) <= 0.5);
     }
     if (target.pendingCast) consider(target.pendingCast.def, true);
 
@@ -4062,7 +4668,8 @@ export class BotController {
   private predictTarget(
     self: MatchPlayerState,
     target: MatchPlayerState,
-    def: AbilityDef | null
+    def: AbilityDef | null,
+    leadFactor = this.tuning.lead
   ): TargetPrediction {
     const windup = def?.windup ?? 0;
     const projectileSpeed =
@@ -4077,7 +4684,7 @@ export class BotController {
     for (let pass = 0; pass < 2; pass++) {
       const travel = projectileSpeed > 0 ? distance / projectileSpeed : 0;
       time = windup + travel;
-      const lead = time * this.tuning.lead;
+      const lead = time * leadFactor;
       predictedX = target.x + target.vx * lead;
       predictedZ = target.z + target.vz * lead;
       distance = Math.hypot(predictedX - self.x, predictedZ - self.z);
@@ -4128,6 +4735,9 @@ export class BotController {
   ): Vec2 {
     const distance = Math.hypot(goal.x - self.x, goal.z - self.z);
     if (distance < 0.12) return { x: 0, z: 0 };
+    // Si el atajo cruza un área persistente, se usa A* con coste de peligro
+    // aunque la línea esté despejada.
+    const directBlockedByHazard = this.hazardPathBlocked(self, goal);
     if (distance < 1.6) {
       // El último tramo hacia una poción se hace en línea recta si los
       // colliders reales lo permiten. La rejilla de navegación infla los
@@ -4150,8 +4760,9 @@ export class BotController {
       // hay, se rodea con la navegación: atajar en línea recta dejaría al bot
       // empujando contra un muro fino.
       if (
-        directPickup ||
-        this.nav.lineClear(self.x, self.z, goal.x, goal.z)
+        !directBlockedByHazard &&
+        (directPickup ||
+          this.nav.lineClear(self.x, self.z, goal.x, goal.z))
       ) {
         this.path = [];
         this.pathTimer = 0;
@@ -4159,7 +4770,10 @@ export class BotController {
       }
       return this.followPath(self, goal, dt);
     }
-    if (this.nav.lineClear(self.x, self.z, goal.x, goal.z)) {
+    if (
+      !directBlockedByHazard &&
+      this.nav.lineClear(self.x, self.z, goal.x, goal.z)
+    ) {
       this.path = [];
       this.pathTimer = 0;
       return directionTo(self, goal);
@@ -4171,15 +4785,33 @@ export class BotController {
     this.pathTimer += dt;
     const goalMoved = Math.hypot(goal.x - this.pathGoal.x, goal.z - this.pathGoal.z);
     if (goalMoved > 1.2 || this.pathTimer > this.tuning.pathInterval) {
-      this.path = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
+      const result = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
         types: self.types,
-        preferConcealment: this.retreat || this.recovering
+        preferConcealment: this.retreat || this.recovering,
+        hazards: this.navHazards(self)
       });
+      this.path = result.points;
       this.pathGoal = { ...goal };
       this.pathTimer = 0;
+      if (result.status === 'unreachable') {
+        if (this.retreat) {
+          // En plena huida no se cambia a patrulla: si el destino era una
+          // poción inalcanzable, se descarta, y se sigue la ruta parcial.
+          if (this.goalPickup !== null) {
+            this.avoidCurrentPickupGoal(self);
+            this.goalPickup = null;
+          }
+        } else {
+          // Destino inalcanzable: se descarta la poción si era el objetivo, se
+          // libera su reclamación y se vuelve a patrullar en vez de empujar
+          // contra la pared hasta el siguiente recálculo.
+          this.abandonGoal(self);
+          return directionTo(self, this.goal);
+        }
+      }
     } else if (this.path.length === 0) {
-      // Ruta vacía reciente: el destino es inalcanzable. Se avanza en línea
-      // recta hasta el siguiente intento para no recalcular A* cada frame.
+      // Ruta vacía reciente: se avanza en línea recta hasta el siguiente
+      // intento para no recalcular A* cada frame.
       return directionTo(self, goal);
     }
 

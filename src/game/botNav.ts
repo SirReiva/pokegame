@@ -31,60 +31,44 @@ export interface NavPoint {
   col: number;
 }
 
+/**
+ * Resultado de una búsqueda de ruta. `unreachable` significa que A* agotó el
+ * mapa sin llegar al destino; `budget` que se quedó sin presupuesto y conviene
+ * reintentar en otro frame. En ambos casos `points` puede contener una ruta
+ * parcial hacia el punto explorado más cercano.
+ */
+export type NavPathStatus = 'ok' | 'unreachable' | 'budget';
+
+export interface NavPathResult {
+  points: NavPoint[];
+  status: NavPathStatus;
+}
+
+/** Zona de peligro persistente que la ruta debe evitar si puede. */
+export interface NavHazard {
+  x: number;
+  z: number;
+  radius: number;
+}
+
 /** Preferencias de coste para una ruta concreta. */
 export interface NavPathOptions {
   /** Tipos del Pokémon: el terreno cómodo cuesta menos y el hostil más. */
   types?: readonly string[];
   /** Penaliza más las celdas abiertas para buscar cobertura al huir. */
   preferConcealment?: boolean;
+  /** Áreas enemigas que conviene rodear. */
+  hazards?: readonly NavHazard[];
 }
 
-interface OpenNode {
-  index: number;
-  f: number;
-}
-
-/** Montículo binario mínimo para la cola de abiertos de A*. */
-class MinHeap {
-  private data: OpenNode[] = [];
-
-  get size(): number {
-    return this.data.length;
-  }
-
-  push(node: OpenNode): void {
-    const data = this.data;
-    data.push(node);
-    let index = data.length - 1;
-    while (index > 0) {
-      const parent = (index - 1) >> 1;
-      if (data[parent].f <= data[index].f) break;
-      [data[parent], data[index]] = [data[index], data[parent]];
-      index = parent;
-    }
-  }
-
-  pop(): OpenNode | null {
-    const data = this.data;
-    if (data.length === 0) return null;
-    const top = data[0];
-    const last = data.pop();
-    if (data.length === 0 || !last) return top;
-    data[0] = last;
-    let index = 0;
-    for (;;) {
-      const left = index * 2 + 1;
-      const right = left + 1;
-      let smallest = index;
-      if (left < data.length && data[left].f < data[smallest].f) smallest = left;
-      if (right < data.length && data[right].f < data[smallest].f) smallest = right;
-      if (smallest === index) break;
-      [data[smallest], data[index]] = [data[index], data[smallest]];
-      index = smallest;
-    }
-    return top;
-  }
-}
+/** Tope de expansiones de una sola búsqueda de A*. */
+const PATHFINDING_MAX_ITERATIONS = 6000;
+/**
+ * Presupuesto de expansiones por frame compartido por todos los bots. Varias
+ * búsquedas completas caben de sobra; si coinciden muchas, las últimas reciben
+ * una ruta parcial en vez de bloquear el frame.
+ */
+const PATHFINDING_BUDGET_PER_FRAME = 24000;
 
 const NEIGHBOURS: ReadonlyArray<{ dr: number; dc: number; cost: number }> = [
   { dr: 1, dc: 0, cost: 1 },
@@ -107,6 +91,30 @@ export class BotNavGrid {
   private readonly blocked: Uint8Array;
   private readonly radius: number;
 
+  // Buffers reutilizados por cada búsqueda de A*. Se reservan una sola vez y se
+  // invalidan con `visitStamp`, así que no generan basura en cada ruta.
+  private readonly gScore: Float32Array;
+  private readonly cameFrom: Int32Array;
+  private readonly closed: Uint8Array;
+  private readonly stepCostCache: Float32Array;
+  private readonly visitStamp: Uint32Array;
+  private searchId = 0;
+
+  // Heap indexado con decrease-key: un nodo vive como mucho una vez en la cola.
+  private readonly heap: Int32Array;
+  private readonly heapPosition: Int32Array;
+  private readonly heapScore: Float32Array;
+  private heapSize = 0;
+
+  private frameBudget = PATHFINDING_BUDGET_PER_FRAME;
+  private cacheStart = -1;
+  private cacheGoal = -1;
+  private cacheTypeHash = 0;
+  private cacheHazardHash = 0;
+  private cachePreferConcealment = false;
+  private cachePath: NavPoint[] | null = null;
+  private cacheStatus: NavPathStatus = 'ok';
+
   constructor(colliders: readonly Collider[]) {
     this.rows = mapRows();
     this.cols = mapCols();
@@ -114,10 +122,26 @@ export class BotNavGrid {
     this.halfX = mapHalfWidth();
     this.halfZ = mapHalfDepth();
     this.radius = CONFIG.player.radius + 0.08;
-    this.blocked = new Uint8Array(this.rows * this.cols);
+    const total = this.rows * this.cols;
+    this.blocked = new Uint8Array(total);
+
+    this.gScore = new Float32Array(total);
+    this.cameFrom = new Int32Array(total);
+    this.closed = new Uint8Array(total);
+    this.stepCostCache = new Float32Array(total);
+    this.visitStamp = new Uint32Array(total);
+    this.heap = new Int32Array(total);
+    this.heapPosition = new Int32Array(total);
+    this.heapScore = new Float32Array(total);
 
     this.markDeepWater();
     for (const collider of colliders) this.markCollider(collider);
+  }
+
+  /** Reinicia el presupuesto y la caché de rutas al empezar un frame. */
+  beginFrame(): void {
+    this.frameBudget = PATHFINDING_BUDGET_PER_FRAME;
+    this.cachePath = null;
   }
 
   private index(row: number, col: number): number {
@@ -165,9 +189,10 @@ export class BotNavGrid {
   }
 
   /**
-   * Ruta de centros de celda desde `(sx, sz)` hasta `(gx, gz)`. Si el destino
-   * es inalcanzable devuelve la ruta al punto explorado más cercano, para que
-   * el bot no se quede parado contra un muro.
+   * Ruta de centros de celda desde `(sx, sz)` hasta `(gx, gz)`. El resultado
+   * incluye un estado: si el destino es inalcanzable devuelve la ruta al punto
+   * explorado más cercano para que el bot pueda decidir si abandona el objetivo
+   * en vez de quedarse empujando un muro.
    */
   findPath(
     sx: number,
@@ -175,62 +200,75 @@ export class BotNavGrid {
     gx: number,
     gz: number,
     options: NavPathOptions = {}
-  ): NavPoint[] {
+  ): NavPathResult {
     const startCell = this.worldToCell(sx, sz);
     const goalCell = this.worldToCell(gx, gz);
     const start = this.nearestWalkable(startCell.row, startCell.col);
     const goal = this.nearestWalkable(goalCell.row, goalCell.col);
-    if (!start || !goal) return [];
+    if (!start || !goal) return { points: [], status: 'unreachable' };
 
     const startIndex = this.index(start.row, start.col);
     const goalIndex = this.index(goal.row, goal.col);
-    if (startIndex === goalIndex) return [this.cellCenter(goal.row, goal.col)];
+    if (startIndex === goalIndex) {
+      return {
+        points: [this.cellCenter(goal.row, goal.col)],
+        status: 'ok'
+      };
+    }
 
-    const total = this.rows * this.cols;
-    const gScore = new Float32Array(total);
-    gScore.fill(Infinity);
-    const cameFrom = new Int32Array(total);
-    cameFrom.fill(-1);
-    const closed = new Uint8Array(total);
-    const stepCostCache = new Float32Array(total);
-    const open = new MinHeap();
-    const stepCost = (row: number, col: number): number => {
-      const cacheIndex = this.index(row, col);
-      let value = stepCostCache[cacheIndex];
-      if (value === 0) {
-        value = this.terrainStepCost(row, col, options);
-        stepCostCache[cacheIndex] = value;
-      }
-      return value;
-    };
+    const preferConcealment = options.preferConcealment === true;
+    const typeHash = this.hashTypes(options.types);
+    const hazardHash = this.hashHazards(options.hazards);
+    // Varios bots pueden pedir la misma ruta dentro del mismo frame (por
+    // ejemplo, dos rezagados hacia la misma base). Se devuelve una copia porque
+    // `followPath` consume la ruta con `shift`.
+    if (
+      this.cachePath !== null &&
+      this.cacheStart === startIndex &&
+      this.cacheGoal === goalIndex &&
+      this.cacheTypeHash === typeHash &&
+      this.cacheHazardHash === hazardHash &&
+      this.cachePreferConcealment === preferConcealment
+    ) {
+      return {
+        points: this.cachePath.slice(),
+        status: this.cacheStatus
+      };
+    }
 
-    const heuristic = (index: number): number => {
-      const row = Math.floor(index / this.cols);
-      const col = index % this.cols;
-      const dr = Math.abs(row - goal.row);
-      const dc = Math.abs(col - goal.col);
-      return Math.max(dr, dc) + (Math.SQRT2 - 1) * Math.min(dr, dc);
-    };
+    if (this.frameBudget <= 0) return { points: [], status: 'budget' };
+    // El presupuesto del frame puede dejar la búsqueda a medias aunque el
+    // destino sí tenga ruta. Solo se declara inalcanzable cuando la búsqueda
+    // tuvo su tope completo y aun así no llegó.
+    const budgetLimited = this.frameBudget < PATHFINDING_MAX_ITERATIONS;
 
-    gScore[startIndex] = 0;
-    open.push({ index: startIndex, f: heuristic(startIndex) });
+    this.beginSearch();
+    this.ensureVisited(startIndex);
+    this.gScore[startIndex] = 0;
+    const startHeuristic = this.heuristic(startIndex, goal.row, goal.col);
+    this.heapPush(startIndex, startHeuristic);
     let bestIndex = startIndex;
-    let bestScore = heuristic(startIndex);
+    let bestScore = startHeuristic;
+    const maxIterations = Math.min(
+      PATHFINDING_MAX_ITERATIONS,
+      this.frameBudget
+    );
     let iterations = 0;
+    let reachedGoal = false;
 
-    while (open.size > 0 && iterations < 6000) {
+    while (this.heapSize > 0 && iterations < maxIterations) {
       iterations++;
-      const current = open.pop();
-      if (!current) break;
-      const index = current.index;
-      if (closed[index]) continue;
-      closed[index] = 1;
+      const index = this.heapPop();
+      if (index < 0) break;
+      if (this.closed[index]) continue;
+      this.closed[index] = 1;
       if (index === goalIndex) {
         bestIndex = index;
+        reachedGoal = true;
         break;
       }
 
-      const score = heuristic(index);
+      const score = this.heuristic(index, goal.row, goal.col);
       if (score < bestScore) {
         bestScore = score;
         bestIndex = index;
@@ -247,14 +285,25 @@ export class BotNavGrid {
           if (!this.isWalkable(row, nc) || !this.isWalkable(nr, col)) continue;
         }
         const nextIndex = this.index(nr, nc);
-        if (closed[nextIndex]) continue;
-        const tentative = gScore[index] + cost * stepCost(nr, nc);
-        if (tentative >= gScore[nextIndex]) continue;
-        gScore[nextIndex] = tentative;
-        cameFrom[nextIndex] = index;
-        open.push({ index: nextIndex, f: tentative + heuristic(nextIndex) });
+        this.ensureVisited(nextIndex);
+        if (this.closed[nextIndex]) continue;
+        const tentative =
+          this.gScore[index] + cost * this.stepCostFor(nr, nc, options);
+        if (tentative >= this.gScore[nextIndex]) continue;
+        this.gScore[nextIndex] = tentative;
+        this.cameFrom[nextIndex] = index;
+        this.heapPush(
+          nextIndex,
+          tentative + this.heuristic(nextIndex, goal.row, goal.col)
+        );
       }
     }
+    this.frameBudget -= iterations;
+    const status: NavPathStatus = reachedGoal
+      ? 'ok'
+      : budgetLimited
+        ? 'budget'
+        : 'unreachable';
 
     const cells: NavPoint[] = [];
     let cursor = bestIndex;
@@ -263,22 +312,195 @@ export class BotNavGrid {
       const col = cursor % this.cols;
       cells.push(this.cellCenter(row, col));
       if (cursor === startIndex) break;
-      cursor = cameFrom[cursor];
+      cursor = this.cameFrom[cursor];
     }
     cells.reverse();
-    return this.simplify(cells);
+    const result = this.simplify(cells, options);
+    this.cacheStart = startIndex;
+    this.cacheGoal = goalIndex;
+    this.cacheTypeHash = typeHash;
+    this.cacheHazardHash = hazardHash;
+    this.cachePreferConcealment = preferConcealment;
+    this.cachePath = result.slice();
+    this.cacheStatus = status;
+    return { points: result, status };
   }
 
-  /** ¿Se puede ir en línea recta sin pisar una celda bloqueada? */
-  lineClear(ax: number, az: number, bx: number, bz: number): boolean {
+  /** Prepara una búsqueda nueva invalidando los buffers sin recorrerlos. */
+  private beginSearch(): void {
+    this.searchId = (this.searchId + 1) >>> 0;
+    if (this.searchId === 0) {
+      this.visitStamp.fill(0);
+      this.searchId = 1;
+    }
+    this.heapSize = 0;
+  }
+
+  /**
+   * Marca un nodo como perteneciente a la búsqueda actual e inicializa sus
+   * valores. La marca evita limpiar los cuatro buffers completos en cada ruta.
+   */
+  private ensureVisited(index: number): void {
+    if (this.visitStamp[index] === this.searchId) return;
+    this.visitStamp[index] = this.searchId;
+    this.gScore[index] = Infinity;
+    this.cameFrom[index] = -1;
+    this.closed[index] = 0;
+    this.stepCostCache[index] = 0;
+    this.heapPosition[index] = -1;
+    this.heapScore[index] = Infinity;
+  }
+
+  private stepCostFor(
+    row: number,
+    col: number,
+    options: NavPathOptions
+  ): number {
+    const index = this.index(row, col);
+    let value = this.stepCostCache[index];
+    if (value === 0) {
+      value = this.terrainStepCost(row, col, options);
+      this.stepCostCache[index] = value;
+    }
+    return value;
+  }
+
+  private heuristic(index: number, goalRow: number, goalCol: number): number {
+    const row = Math.floor(index / this.cols);
+    const col = index % this.cols;
+    const dr = Math.abs(row - goalRow);
+    const dc = Math.abs(col - goalCol);
+    return Math.max(dr, dc) + (Math.SQRT2 - 1) * Math.min(dr, dc);
+  }
+
+  private hashHazards(hazards?: readonly NavHazard[]): number {
+    if (!hazards || hazards.length === 0) return 0;
+    let hash = 23;
+    for (const hazard of hazards) {
+      hash = (hash * 31 + Math.round(hazard.x * 100)) | 0;
+      hash = (hash * 31 + Math.round(hazard.z * 100)) | 0;
+      hash = (hash * 31 + Math.round(hazard.radius * 100)) | 0;
+    }
+    return hash;
+  }
+
+  private hashTypes(types?: readonly string[]): number {
+    if (!types) return 0;
+    let hash = 17;
+    for (const type of types) {
+      hash = (hash * 31 + type.length) | 0;
+      for (let i = 0; i < type.length; i++) {
+        hash = (hash * 31 + type.charCodeAt(i)) | 0;
+      }
+    }
+    return hash;
+  }
+
+  private heapPush(index: number, f: number): void {
+    const position = this.heapPosition[index];
+    if (position >= 0) {
+      if (f >= this.heapScore[index]) return;
+      this.heapScore[index] = f;
+      this.heapSiftUp(position);
+      return;
+    }
+    const slot = this.heapSize++;
+    this.heap[slot] = index;
+    this.heapPosition[index] = slot;
+    this.heapScore[index] = f;
+    this.heapSiftUp(slot);
+  }
+
+  private heapPop(): number {
+    if (this.heapSize === 0) return -1;
+    const top = this.heap[0];
+    const lastSlot = --this.heapSize;
+    this.heapPosition[top] = -1;
+    if (lastSlot > 0) {
+      const last = this.heap[lastSlot];
+      this.heap[0] = last;
+      this.heapPosition[last] = 0;
+      this.heapSiftDown(0);
+    }
+    return top;
+  }
+
+  private heapSiftUp(start: number): void {
+    let position = start;
+    const index = this.heap[position];
+    const f = this.heapScore[index];
+    while (position > 0) {
+      const parentPosition = (position - 1) >> 1;
+      const parent = this.heap[parentPosition];
+      if (this.heapScore[parent] <= f) break;
+      this.heap[position] = parent;
+      this.heapPosition[parent] = position;
+      position = parentPosition;
+    }
+    this.heap[position] = index;
+    this.heapPosition[index] = position;
+  }
+
+  private heapSiftDown(start: number): void {
+    let position = start;
+    for (;;) {
+      const left = position * 2 + 1;
+      if (left >= this.heapSize) break;
+      const right = left + 1;
+      let smallest = left;
+      if (
+        right < this.heapSize &&
+        this.heapScore[this.heap[right]] < this.heapScore[this.heap[left]]
+      ) {
+        smallest = right;
+      }
+      if (this.heapScore[this.heap[smallest]] >= this.heapScore[this.heap[position]]) {
+        break;
+      }
+      const swap = this.heap[smallest];
+      this.heap[smallest] = this.heap[position];
+      this.heapPosition[this.heap[position]] = smallest;
+      this.heap[position] = swap;
+      this.heapPosition[swap] = position;
+      position = smallest;
+    }
+  }
+
+  /**
+   * ¿Se puede ir en línea recta sin pisar una celda bloqueada? Si se pasan
+   * peligros, tampoco vale la línea si cruza su radio.
+   */
+  lineClear(
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    hazards?: readonly NavHazard[]
+  ): boolean {
     const distance = Math.hypot(bx - ax, bz - az);
     const steps = Math.max(1, Math.ceil(distance / 0.28));
     for (let step = 0; step <= steps; step++) {
       const t = step / steps;
       const x = ax + (bx - ax) * t;
       const z = az + (bz - az) * t;
-      const cell = this.worldToCell(x, z);
-      if (!this.isWalkable(cell.row, cell.col)) return false;
+      // Se calcula la celda directamente para no crear un objeto por paso:
+      // `simplify` llama a `lineClear` muchas veces por ruta.
+      const col = Math.max(
+        0,
+        Math.min(this.cols - 1, Math.floor((x + this.halfX) / this.tileSize))
+      );
+      const row = Math.max(
+        0,
+        Math.min(this.rows - 1, Math.floor((z + this.halfZ) / this.tileSize))
+      );
+      if (this.blocked[this.index(row, col)] !== 0) return false;
+      if (hazards && hazards.length > 0) {
+        for (const hazard of hazards) {
+          if (Math.hypot(x - hazard.x, z - hazard.z) <= hazard.radius) {
+            return false;
+          }
+        }
+      }
     }
     return true;
   }
@@ -293,25 +515,53 @@ export class BotNavGrid {
     col: number,
     options: NavPathOptions
   ): number {
+    let cost = 1;
     const types = options.types;
-    if (!types || types.length === 0) return 1;
-    const terrain = terrainAtCell(row, col);
-    const speed = terrainSpeedEffect(terrain, types).multiplier;
-    const concealment = terrainConcealment(terrain, types).value;
-    let cost = Math.max(1, 1 / Math.max(0.5, speed));
-    if (speed < 0.9) cost += 0.18;
-    cost += (1 - concealment) * (options.preferConcealment ? 0.28 : 0.06);
+    if (types && types.length > 0) {
+      const terrain = terrainAtCell(row, col);
+      const speed = terrainSpeedEffect(terrain, types).multiplier;
+      const concealment = terrainConcealment(terrain, types).value;
+      cost = Math.max(1, 1 / Math.max(0.5, speed));
+      if (speed < 0.9) cost += 0.18;
+      cost += (1 - concealment) * (options.preferConcealment ? 0.28 : 0.06);
+    }
+
+    const hazards = options.hazards;
+    if (hazards && hazards.length > 0) {
+      const x = (col + 0.5) * this.tileSize - this.halfX;
+      const z = (row + 0.5) * this.tileSize - this.halfZ;
+      for (const hazard of hazards) {
+        if (Math.hypot(x - hazard.x, z - hazard.z) <= hazard.radius) {
+          // Penalización alta pero finita: si no hay ruta alternativa, cruzará
+          // el área en vez de quedarse sin camino.
+          cost += 8;
+          break;
+        }
+      }
+    }
     return cost;
   }
 
-  private simplify(points: NavPoint[]): NavPoint[] {
+  private simplify(
+    points: NavPoint[],
+    options: NavPathOptions
+  ): NavPoint[] {
     if (points.length <= 2) return points;
     const result: NavPoint[] = [];
     let anchor = points[0];
     let cursor = 0;
     while (cursor < points.length - 1) {
       let next = points.length - 1;
-      while (next > cursor + 1 && !this.lineClear(anchor.x, anchor.z, points[next].x, points[next].z)) {
+      while (
+        next > cursor + 1 &&
+        !this.lineClear(
+          anchor.x,
+          anchor.z,
+          points[next].x,
+          points[next].z,
+          options.hazards
+        )
+      ) {
         next--;
       }
       result.push(points[next]);

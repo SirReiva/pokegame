@@ -199,6 +199,8 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   terrainMultiplier: number;
   terrainSpeedReason: TerrainSpeedReason;
   visionRange: number;
+  /** Multiplicador de visión de la dificultad del bot (1 para humanos). */
+  visionFactor: number;
   concealment: Concealment;
   /** Color representativo del Pokémon (`accent` del manifiesto). */
   accent: [number, number, number];
