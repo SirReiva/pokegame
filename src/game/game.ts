@@ -33,6 +33,8 @@ import {
   type AoeTarget
 } from './aoeEffect';
 import { Actor } from './actor';
+import { CastDebugOverlay } from './castDebug';
+import { buildCastPlan, frameForSegment, segmentAt } from './castPlan';
 import {
   configureAudio,
   disposeAudio,
@@ -85,6 +87,7 @@ import type { PickupSpawn } from './items';
 import { loadMap, loadMapIndex, type MapIndexEntry } from './map';
 import type {
   ActiveAoe,
+  ActiveCast,
   HealOnHitToken,
   MatchPlayerState,
   PendingInstantHit,
@@ -117,7 +120,12 @@ import {
 import { baseStatsFor, combatStatsFor } from './pokedex';
 import { hitRadiusForPokemon, maxHitRadius, speedForPokemon } from './roster';
 import { rumbleOnDamage } from './rumble';
-import { disposeSpriteAsset, loadSpriteAsset, type SpriteAsset } from './sprite';
+import {
+  disposeSpriteAsset,
+  loadSpriteAsset,
+  resolveAnimationClip,
+  type SpriteAsset
+} from './sprite';
 import {
   XP_REWARDS,
   XP_RULES,
@@ -139,7 +147,7 @@ import {
 import { terrainSpeedEffect } from './terrainSpeed';
 import { typeEffectiveness } from './typeChart';
 import { DEFAULT_SKIN_ID, skinFor } from './skins';
-import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
+import type { LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
   lineOfSightBlocked,
@@ -344,6 +352,8 @@ export class Game {
   private winner: Team | null = null;
   private readonly combatFx: CombatFx;
   private readonly damageNumbers: DamageNumbers;
+  /** Overlay opcional con las fases de casteo. */
+  private readonly castDebug: CastDebugOverlay | null = null;
   /** Quads de niebla, uno por vista. */
   private fogViews: FogView[] = [];
   /** Malla compartida por todas las vistas; se crea en la primera partida. */
@@ -433,6 +443,9 @@ export class Game {
         this.fxLayersAt(x, z, ignoreTerrainConcealment)
     );
     this.damageNumbers = new DamageNumbers(this.app);
+    if (CONFIG.debug.showCastTimings) {
+      this.castDebug = new CastDebugOverlay();
+    }
 
     this.app.on('update', this.onUpdate);
     this.app.start();
@@ -1016,14 +1029,9 @@ export class Game {
         invulnerableTimer: 0,
         stunTimer: 0,
         hurtTimer: 0,
-        actionTimer: 0,
-        actionPlayback: 1,
-        moveLockTimer: 0,
-        actionAnimation: null,
-        actionHold: false,
-        castLockTimer: 0,
+        animationFrame: null,
         dash: null,
-        pendingCast: null,
+        activeCast: null,
         deathFade: 0,
         kills: 0,
         deaths: 0,
@@ -1233,7 +1241,7 @@ export class Game {
       if (
         !player.alive ||
         player.dash !== null ||
-        player.pendingCast !== null ||
+        player.activeCast !== null ||
         player.stunTimer > 0 ||
         player.hurtTimer > 0
       ) {
@@ -1241,6 +1249,7 @@ export class Game {
       }
       player.animation = 'idle';
       player.playback = 1;
+      player.animationFrame = null;
       for (const copy of player.copies) copy.play('idle');
     }
   }
@@ -1458,29 +1467,15 @@ export class Game {
         if (!copy) return;
         copy.setPosition(player.x, player.z);
         copy.setFacing(player.facing);
-        copy.play(player.animation);
-        // Solo la animación de preparación `once` deja de repetirse. El resto
-        // (andar, reposo, clips en bucle) debe seguir avanzando: sin esto, un
-        // windup móvil sin animación propia, como Giro Fuego, dejaba el caminar
-        // congelado en su último frame para siempre.
-        const pendingDef = player.pendingCast?.def;
-        const windupClip = pendingDef
-          ? pendingDef.windupAnimation ?? pendingDef.animation
-          : null;
-        // Un clip de preparación `once` se detiene en su último frame. Si al
-        // lanzar se reutiliza ese mismo clip, se mantiene esa pose final en vez
-        // de reiniciarlo: si no, la animación se ve dos veces seguidas.
-        const holdAction =
-          player.actionHold &&
-          player.actionTimer > 0 &&
-          player.animation === player.actionAnimation;
-        copy.setLoop(
-          !holdAction &&
-            (windupClip === null ||
-              player.animation !== windupClip ||
-              pendingDef?.windupAnimationMode === 'loop')
-        );
-        copy.setPlayback(player.playback);
+        if (player.animationFrame !== null) {
+          // El plan de casteo fija el frame; todas las vistas dibujan el mismo.
+          copy.setManualFrame(player.animation, player.animationFrame);
+        } else {
+          copy.clearManual();
+          copy.play(player.animation);
+          copy.setPlayback(player.playback);
+          copy.setLoop(true);
+        }
         copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
         copy.setLevel(levelFromXp(player.xp));
@@ -1502,6 +1497,7 @@ export class Game {
     // La niebla se resuelve después de mover a todos: cada copia se oculta en
     // las vistas que no la ven y cada cámara recibe la unión de círculos del
     // equipo.
+    this.castDebug?.update(this.matchPlayers);
     this.updateVision(dt);
     if (!frozen) this.updateRegeneration(dt);
     if (!frozen) this.updateParticipation(dt);
@@ -1546,16 +1542,7 @@ export class Game {
       player.stunTimer = Math.max(0, player.stunTimer - dt);
     }
     if (player.hurtTimer > 0) player.hurtTimer = Math.max(0, player.hurtTimer - dt);
-    if (player.actionTimer > 0) {
-      player.actionTimer = Math.max(0, player.actionTimer - dt);
-      if (player.actionTimer === 0) player.actionHold = false;
-    }
-    if (player.castLockTimer > 0) {
-      player.castLockTimer = Math.max(0, player.castLockTimer - dt);
-    }
-    if (player.moveLockTimer > 0) {
-      player.moveLockTimer = Math.max(0, player.moveLockTimer - dt);
-    }
+
     if (player.deathFade > 0) player.deathFade = Math.max(0, player.deathFade - dt);
 
     if (!player.alive) {
@@ -1573,6 +1560,7 @@ export class Game {
       player.vz = 0;
       player.animation = 'hurt';
       player.playback = 1;
+      player.animationFrame = null;
       const terrain = terrainAt(player.x, player.z);
       player.terrain = terrain;
       player.concealment = terrainConcealment(terrain, player.types);
@@ -1580,9 +1568,8 @@ export class Game {
       return;
     }
 
-    // Una habilidad con preparación bloquea movimiento y otras habilidades
-    // mientras se reproduce su animación.
-    if (this.stepPendingCast(player, input, dt)) return;
+    // Un casteo bloquea movimiento y otras habilidades mientras se reproduce.
+    if (this.stepActiveCast(player, input, dt)) return;
 
     // Un dash consume el frame: no se mezcla con el movimiento normal.
     if (this.stepDash(player, input, dt)) return;
@@ -1593,10 +1580,10 @@ export class Game {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
-    // El bloqueo de las melee ignora el input de movimiento y también impide
-    // lanzar otra habilidad hasta que el clip termina; la cámara sigue girando.
-    const moveX = player.moveLockTimer > 0 ? 0 : input.moveX;
-    const moveY = player.moveLockTimer > 0 ? 0 : input.moveY;
+    // El bloqueo de movimiento lo consume `stepActiveCast`: si el casteo está
+    // en startup o en la ventana activa de una melee, este bloque no se ejecuta.
+    const moveX = input.moveX;
+    const moveY = input.moveY;
     const desiredX = rightX * moveX + forwardX * moveY;
     const desiredZ = rightZ * moveX + forwardZ * moveY;
     const magnitude = Math.hypot(desiredX, desiredZ);
@@ -1694,16 +1681,24 @@ export class Game {
     if (player.hurtTimer > 0) {
       player.animation = 'hurt';
       player.playback = 1;
-    } else if (
-      player.actionTimer > 0 &&
-      player.actionAnimation !== null &&
-      !(
-        player.pendingCast?.def.moveWhileWindup &&
+      player.animationFrame = null;
+    } else if (player.animationFrame !== null) {
+      // El plan de casteo manda. Si el startup permite moverse y el Pokémon
+      // anda, el caminar tiene prioridad para no deslizar.
+      const cast = player.activeCast;
+      if (
+        cast?.def.moveWhileStartup &&
+        cast.elapsed < cast.def.startup &&
         speed > CONFIG.player.minFacingSpeed
-      )
-    ) {
-      player.animation = player.actionAnimation;
-      player.playback = player.actionPlayback;
+      ) {
+        player.animation = 'walk';
+        player.playback = clamp(
+          speed / CONFIG.sprite.walkRateRefSpeed,
+          CONFIG.sprite.walkRateMin,
+          CONFIG.sprite.walkRateMax
+        );
+        player.animationFrame = null;
+      }
     } else if (speed > CONFIG.player.minFacingSpeed) {
       player.animation = 'walk';
       player.playback = clamp(
@@ -1761,102 +1756,91 @@ export class Game {
   }
 
   /**
-   * Avanza un dash activo. El desplazamiento se reparte durante la animación
-   * (QuickStrike) para que se vea el salto, en vez de teletransportar al actor.
-   * Devuelve `true` si este frame lo ha consumido el dash.
+   * Avanza el casteo activo: reloj, disparo único del efecto y presentación.
+   * El efecto ocurre en `startup`; la animación ya está en su `HitFrame` en ese
+   * instante. Devuelve `true` si el casteo bloquea el movimiento este frame.
    */
-  /** Ajusta la velocidad de la animación a la duración real del dash. */
-  private animationPlaybackFor(
-    player: MatchPlayerState,
-    animation: AnimationName,
-    duration: number
-  ): number {
-    const asset = this.assetFor(player.pokemonId, player.skinId);
-    const clip =
-      asset?.skin.animations[animation] ?? asset?.skin.animations.attack;
-    const naturalDuration = clip
-      ? clip.durations.reduce((total, ticks) => total + ticks, 0) / 60
-      : duration;
-    return naturalDuration > 0
-      ? naturalDuration / Math.max(0.05, duration)
-      : 1;
-  }
-
-  /**
-   * Avanza una habilidad en preparación. El efecto (proyectil, haz, melee...)
-   * no se ejecuta hasta que termina `windup`; durante ese tiempo el Pokémon
-   * está quieto y reproduce la animación de la habilidad.
-   */
-  private stepPendingCast(
+  private stepActiveCast(
     player: MatchPlayerState,
     input: DeviceInputSnapshot,
     dt: number
   ): boolean {
-    // La partida pudo terminar en una fase anterior del mismo frame: la
-    // preparación no debe seguir avanzando ni llegar a ejecutarse.
     if (this.matchOver) return true;
-    const pending = player.pendingCast;
-    if (!pending) return false;
+    const cast = player.activeCast;
+    if (!cast) return false;
 
-    pending.elapsed += dt;
-    // Las habilidades marcadas con `moveWhileWindup` dejan seguir moviéndose;
-    // el centro del área ya está fijado y la marca permanece en el suelo.
-    const movable = pending.def.moveWhileWindup;
-    if (!movable) {
-      player.vx = 0;
-      player.vz = 0;
-      // La preparación puede tener su propia animación (por ejemplo, Shoot);
-      // si no, se reutiliza la de lanzamiento. Si la habilidad no define
-      // ninguna, se mantiene el reposo en vez de inventar una pose.
-      const animation = pending.def.windupAnimation ?? pending.def.animation;
-      if (animation === null) {
-        player.animation = 'idle';
-        player.playback = 1;
-      } else {
-        player.animation = animation;
-        // `once`: el clip dura exactamente lo que la preparación; `loop`: velocidad
-        // fija y repetición hasta que termine el windup.
-        player.playback =
-          pending.def.windupAnimationMode === 'loop'
-            ? Math.max(0.05, pending.def.windupAnimationSpeed)
-            : this.animationPlaybackFor(player, animation, pending.windup);
-      }
-    } else {
-      // Mantén la pose de preparación mientras el Pokémon esté quieto; al
-      // andar, la animación de caminar tiene prioridad.
-      player.actionTimer = Math.max(player.actionTimer, 0.05);
-    }
+    cast.elapsed += dt;
 
-    const terrain = terrainAt(player.x, player.z);
-    player.terrain = terrain;
-    // El HUD también se actualiza durante la preparación: antes conservaba el
-    // multiplicador del último paso normal aunque el terreno ya hubiera cambiado.
-    const windupTerrainEffect = terrainSpeedEffect(terrain, player.types);
-    player.terrainMultiplier = windupTerrainEffect.multiplier;
-    player.terrainSpeedReason = windupTerrainEffect.reason;
-    player.concealment = terrainConcealment(terrain, player.types);
-
-    if (pending.elapsed >= pending.windup) {
-      // La marca del área ya no se destruye al impactar: su aro sigue marcando
-      // el límite durante el efecto y se autodestruye al acabar. El carril del
-      // haz también sigue visible mientras se reproduce el haz.
-      player.pendingCast = null;
+    // Efecto: una sola vez, al llegar al instante de impacto/lanzamiento.
+    if (!cast.fired && cast.elapsed >= cast.effectAt) {
+      cast.fired = true;
       this.queueCast(
         player,
-        pending.def,
-        pending.targetX,
-        pending.targetZ,
-        pending.marker,
-        pending.dirX,
-        pending.dirZ
+        cast.def,
+        cast.targetX,
+        cast.targetZ,
+        cast.marker,
+        cast.dirX,
+        cast.dirZ
       );
     }
 
-    if (!movable) {
+    this.applyCastPresentation(player, cast);
+
+    const terrain = terrainAt(player.x, player.z);
+    player.terrain = terrain;
+    const castTerrainEffect = terrainSpeedEffect(terrain, player.types);
+    player.terrainMultiplier = castTerrainEffect.multiplier;
+    player.terrainSpeedReason = castTerrainEffect.reason;
+    player.concealment = terrainConcealment(terrain, player.types);
+
+    if (cast.elapsed >= cast.plan.endAt) {
+      // La marca y el carril se autodestruyen al terminar su propio efecto.
+      player.activeCast = null;
+      player.animationFrame = null;
+      return false;
+    }
+
+    // Movimiento: bloqueado durante el startup (salvo `moveWhileStartup`) y
+    // durante la ventana activa de las melee. El dash mueve por su cuenta.
+    const startupLocked =
+      cast.elapsed < cast.def.startup && !cast.def.moveWhileStartup;
+    const meleeLocked =
+      cast.def.shape === 'melee' && cast.elapsed < cast.plan.activeEnd;
+    if (startupLocked || meleeLocked) {
+      player.vx = 0;
+      player.vz = 0;
       this.updateCamera(player, input, dt);
       return true;
     }
     return false;
+  }
+
+  /** Selecciona el frame del plan de casteo para el instante actual. */
+  private applyCastPresentation(
+    player: MatchPlayerState,
+    cast: ActiveCast
+  ): void {
+    const segment = segmentAt(cast.plan, cast.elapsed);
+    if (!segment) {
+      player.animationFrame = null;
+      player.animation = 'idle';
+      player.playback = 1;
+      return;
+    }
+    const clip = this.assetFor(
+      player.pokemonId,
+      player.skinId
+    )?.skin.animations[segment.animation];
+    if (!clip) {
+      player.animationFrame = null;
+      player.animation = 'idle';
+      player.playback = 1;
+      return;
+    }
+    player.animation = segment.animation;
+    player.animationFrame = frameForSegment(segment, clip, cast.elapsed);
+    player.playback = 1;
   }
 
   /**
@@ -1890,6 +1874,11 @@ export class Game {
     );
   }
 
+  /**
+   * Avanza un dash activo. El desplazamiento se reparte durante la animación
+   * (QuickStrike) para que se vea el salto, en vez de teletransportar al actor.
+   * Devuelve `true` si este frame lo ha consumido el dash.
+   */
   private stepDash(
     player: MatchPlayerState,
     input: DeviceInputSnapshot,
@@ -1976,10 +1965,6 @@ export class Game {
       dash.trailTimer = 0.04;
     }
 
-    if (dash.def.animation !== null) {
-      player.animation = dash.def.animation;
-      player.playback = dash.playback;
-    }
     player.vx = dash.dirX * dash.speed;
     player.vz = dash.dirZ * dash.speed;
 
@@ -2010,7 +1995,6 @@ export class Game {
       player.dash = null;
       player.vx = 0;
       player.vz = 0;
-      player.actionTimer = 0;
       this.updateCamera(player, input, dt);
       return true;
     }
@@ -2023,7 +2007,6 @@ export class Game {
       player.dash = null;
       player.vx = 0;
       player.vz = 0;
-      player.actionTimer = 0;
     }
 
     this.updateCamera(player, input, dt);
@@ -2074,14 +2057,9 @@ export class Game {
     player.invulnerableTimer = CONFIG.combat.invulnerabilitySeconds;
     player.stunTimer = 0;
     player.hurtTimer = 0;
-    player.actionTimer = 0;
-    player.actionPlayback = 1;
-    player.actionAnimation = null;
-    player.actionHold = false;
-    player.moveLockTimer = 0;
-    player.castLockTimer = 0;
+    player.animationFrame = null;
     player.dash = null;
-    this.cancelPendingCast(player);
+    this.cancelCast(player);
     player.deathFade = 0;
     // Los enfriamientos del kit siguen corriendo durante los 5 s de muerte: no
     // se reinician al reaparecer. El instinto activo sí se resetea, como pide
@@ -2227,33 +2205,22 @@ export class Game {
     }
   }
 
-  /** Cancela una habilidad en preparación y retira sus marcas del suelo. */
-  private cancelPendingCast(player: MatchPlayerState): void {
-    if (!player.pendingCast) return;
-    player.pendingCast.marker?.destroy();
-    player.pendingCast.lane?.destroy();
-    player.pendingCast = null;
-    // La recuperación global se fija al ejecutar; un casteo que nunca llega a
-    // ejecutarse no debe dejar al jugador bloqueado. Se limpia aquí para que
-    // una interrupción no arrastre el timer aunque cambie el orden de fases.
-    player.castLockTimer = 0;
+  /** Cancela el casteo activo y retira sus marcas del suelo. */
+  private cancelCast(player: MatchPlayerState): void {
+    if (!player.activeCast) return;
+    player.activeCast.marker?.destroy();
+    player.activeCast.lane?.destroy();
+    player.activeCast = null;
+    player.animationFrame = null;
   }
 
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
     if (!player.alive || this.matchOver) return;
-    if (player.pendingCast || player.dash) return;
+    if (player.activeCast || player.dash) return;
     // Las habilidades instantáneas de este frame aún no se han ejecutado: sin
     // esta comprobación se podrían encolar dos (p. ej. dash + haz) pulsando
     // dos botones a la vez, y se gastarían ambos enfriamientos.
     if (this.hasQueuedCast(player)) return;
-    // Bloqueo global de casteo: durante la recuperación de la habilidad
-    // anterior no se puede lanzar otra, sea cual sea el hueco.
-    if (player.castLockTimer > 0) return;
-    // Las melee no usan `castLockTimer` (su cadencia la marca el cooldown),
-    // pero sí comprometen el golpe: no se puede encadenar otra habilidad hasta
-    // que termine su clip/`moveLock`. Sin esto, un haz podía empezar a cargarse
-    // con la animación melee a medias y ocultarla.
-    if (player.moveLockTimer > 0) return;
     const abilityId = player.abilityIds[slotIndex];
     if (!abilityId) return;
     const baseDef = ABILITIES[abilityId];
@@ -2285,18 +2252,6 @@ export class Game {
       player.invulnerableTimer = 0;
     }
     player.cooldowns[slotIndex] = def.cooldown;
-    // La recuperación global se cobra en `executeAbility`, cuando la habilidad
-    // se ejecuta de verdad. Durante el windup ya bloquea `pendingCast`; si el
-    // lanzamiento se interrumpe, no debe quedar un bloqueo que nunca se usó.
-    // Las melee se limitan con su cooldown y `moveLock`, y no usan este timer.
-    // Solo las habilidades con animación propia ocupan el canal de acción;
-    // sin animación el Pokémon conserva su reposo o su caminar.
-    player.actionTimer = def.animation === null ? 0 : def.animationTime;
-    player.actionPlayback = 1;
-    player.actionAnimation = def.animation;
-    player.actionHold = false;
-    if (def.animation !== null) player.animation = def.animation;
-    player.playback = 1;
     // Las habilidades pensadas para usarse en movimiento conservan la inercia:
     // poner la velocidad a cero producía un frenazo brusco y luego el jugador
     // volvía a acelerar, justo el efecto que no queremos en Protección.
@@ -2305,116 +2260,91 @@ export class Game {
       player.vz = 0;
     }
 
-    if (def.windup > 0) {
-      // La pose inicial de la preparación también usa su animación propia, así
-      // no hay un frame con la animación de lanzamiento antes del windup.
-      const windupAnimation = def.windupAnimation ?? def.animation;
-      if (windupAnimation !== null) {
-        const windupPlayback =
-          def.windupAnimationMode === 'loop'
-            ? Math.max(0.05, def.windupAnimationSpeed)
-            : this.animationPlaybackFor(
-                player,
-                windupAnimation,
-                def.windup
-              );
-        player.animation = windupAnimation;
-        player.playback = windupPlayback;
-        // En los windups móviles la prioridad de animación usa `actionAnimation`
-        // mientras el Pokémon está quieto. Debe apuntar a la preparación y no al
-        // lanzamiento: si no, el clip de `shoot` se reproduce durante el windup
-        // y vuelve a empezar al ejecutar la habilidad.
-        player.actionAnimation = windupAnimation;
-        player.actionPlayback = windupPlayback;
-      } else {
-        player.animation = 'idle';
-        player.playback = 1;
-        player.actionAnimation = null;
-        player.actionPlayback = 1;
-      }
-      const dirX = Math.sin(player.facing);
-      const dirZ = Math.cos(player.facing);
-      // Las habilidades de área no se pueden colocar detrás de un obstáculo:
-      // el centro se detiene antes del primer collider. Los haces hacen lo
-      // mismo para que el carril y el haz terminen en el mismo punto.
-      const reach =
-        def.shape === 'aoe'
-          ? raycastColliderDistance(
-              player.x,
-              player.z,
-              dirX,
-              dirZ,
-              def.range,
-              this.world.colliders,
-              CONFIG.combat.aoeSightPadding
-            )
-          : def.shape === 'beam'
-            ? Math.max(
-                0.1,
-                raycastColliderDistance(
-                  player.x,
-                  player.z,
-                  dirX,
-                  dirZ,
-                  def.range,
-                  this.world.colliders
-                )
+    const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
+    const plan = buildCastPlan(def, (name) =>
+      resolveAnimationClip(asset, name)
+    );
+    const dirX = Math.sin(player.facing);
+    const dirZ = Math.cos(player.facing);
+    // Las habilidades de área no se pueden colocar detrás de un obstáculo:
+    // el centro se detiene antes del primer collider. Los haces hacen lo
+    // mismo para que el carril y el haz terminen en el mismo punto.
+    const reach =
+      def.shape === 'aoe'
+        ? raycastColliderDistance(
+            player.x,
+            player.z,
+            dirX,
+            dirZ,
+            def.range,
+            this.world.colliders,
+            CONFIG.combat.aoeSightPadding
+          )
+        : def.shape === 'beam'
+          ? Math.max(
+              0.1,
+              raycastColliderDistance(
+                player.x,
+                player.z,
+                dirX,
+                dirZ,
+                def.range,
+                this.world.colliders
               )
-            : def.range;
-      const targetX = player.x + dirX * reach;
-      const targetZ = player.z + dirZ * reach;
-      // Las marcas de área usan el color del equipo del lanzador: así se
-      // distingue de inmediato a quién pertenece el aviso.
-      const teamAccent = TEAM_INFO[player.team].accent;
-      // Las habilidades de área fijan su centro al empezar el retardo y
-      // muestran la marca en el suelo hasta que termina el efecto. El aro
-      // (color del equipo) es persistente; el relleno de carga solo dura el
-      // `windup`. El aro dibuja el radio máximo de golpe (área + mayor hurtbox)
-      // y la comprobación usa ese mismo valor: todo el interior es golpeable y
-      // el borde coincide con el límite real.
-      const marker =
-        def.shape === 'aoe'
-          ? this.combatFx.spawnAoeTelegraph(
-              targetX,
-              targetZ,
-              def.radius + maxHitRadius(),
-              teamAccent,
-              def.windup,
-              Math.max(0.1, def.aoeDuration)
             )
-          : null;
-      // Los haces muestran su carril desde el inicio del windup. El ancho es el
-      // radio máximo de golpe (haz + mayor hurtbox), el mismo que usa la
-      // comprobación: todo el interior del carril es golpeable.
-      const lane =
-        def.shape === 'beam'
-          ? this.combatFx.spawnBeamLane(
-              player.x,
-              player.z,
-              targetX,
-              targetZ,
-              def.radius + maxHitRadius(),
-              teamAccent,
-              def.windup,
-              def.beamStyle
-            )
-          : null;
-      player.pendingCast = {
-        def,
-        slotIndex,
-        elapsed: 0,
-        windup: def.windup,
-        marker,
-        lane,
-        targetX,
-        targetZ,
-        dirX,
-        dirZ
-      };
-      return;
-    }
+          : def.range;
+    const targetX = player.x + dirX * reach;
+    const targetZ = player.z + dirZ * reach;
+    const teamAccent = TEAM_INFO[player.team].accent;
+    // Las marcas solo existen si hay preparación visible. Las habilidades
+    // instantáneas crean su propio aviso en el ejecutor.
+    const marker =
+      def.startup > 0 && def.shape === 'aoe'
+        ? this.combatFx.spawnAoeTelegraph(
+            targetX,
+            targetZ,
+            def.radius + maxHitRadius(),
+            teamAccent,
+            def.startup,
+            Math.max(0.1, def.aoeDuration)
+          )
+        : null;
+    const lane =
+      def.startup > 0 && def.shape === 'beam'
+        ? this.combatFx.spawnBeamLane(
+            player.x,
+            player.z,
+            targetX,
+            targetZ,
+            def.radius + maxHitRadius(),
+            teamAccent,
+            def.startup,
+            def.beamStyle
+          )
+        : null;
 
-    this.queueCast(player, def);
+    const cast: ActiveCast = {
+      def,
+      slotIndex,
+      elapsed: 0,
+      plan,
+      effectAt: plan.effectAt,
+      fired: false,
+      marker,
+      lane,
+      targetX,
+      targetZ,
+      dirX,
+      dirZ
+    };
+    player.activeCast = cast;
+    this.applyCastPresentation(player, cast);
+
+    // Startup cero: el efecto se resuelve en la fase común de este mismo frame.
+    if (plan.effectAt <= 0) {
+      cast.fired = true;
+      this.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ);
+    }
   }
 
   /** ¿Tiene este jugador una habilidad instantánea esperando resolución? */
@@ -2460,7 +2390,11 @@ export class Game {
     }
   }
 
-  /** Ejecuta el efecto de una habilidad cuando termina su preparación. */
+  /**
+   * Ejecuta el efecto de una habilidad cuando su presentación llega al
+   * `HitFrame` (`plan.effectAt`). Los bloqueos y la animación ya los lleva el
+   * `ActiveCast`; aquí solo se aplica el efecto de gameplay.
+   */
   private executeAbility(
     player: MatchPlayerState,
     def: AbilityDef,
@@ -2470,43 +2404,7 @@ export class Game {
     dirX?: number,
     dirZ?: number
   ): void {
-    // El lock de movimiento, la recuperación global y el clip de ataque
-    // empiezan cuando la habilidad se ejecuta de verdad (tras el windup, si lo
-    // tiene). En las melee el lock y el clip duran lo mismo. Reiniciar el clip
-    // vale para todas las formas: si `windup > animationTime` (por ejemplo,
-    // Ataque Celeste), el temporizador arrancado en `castAbility` se agotaba
-    // durante la preparación y la animación de lanzamiento no llegaba a verse
-    // nunca.
-    const windupClip =
-      def.windup > 0 ? def.windupAnimation ?? def.animation : null;
-    // Si la preparación usó la misma animación que el lanzamiento, el clip ya
-    // se reprodujo entero y está en su último frame. Reiniciarlo aquí lo
-    // mostraría dos veces seguidas, así que se mantiene esa pose.
-    const reusesWindupClip =
-      windupClip !== null && windupClip === def.animation;
-    player.moveLockTimer = Math.max(player.moveLockTimer, def.moveLock);
-    if (def.shape !== 'melee') {
-      player.castLockTimer = Math.max(player.castLockTimer, def.castTime);
-    }
-    if (def.animation !== null) {
-      player.actionTimer = def.animationTime;
-      player.actionAnimation = def.animation;
-      if (reusesWindupClip) {
-        player.actionHold = true;
-        player.animation = def.animation;
-      } else {
-        player.actionHold = false;
-        player.actionPlayback = this.animationPlaybackFor(
-          player,
-          def.animation,
-          def.animationTime
-        );
-        player.animation = def.animation;
-        player.playback = player.actionPlayback;
-      }
-    }
-
-    // El sonido va con el efecto real, no con el inicio del windup: en
+    // El sonido va con el efecto real, no con el inicio del startup: en
     // habilidades cargadas el golpe suena cuando sale, no cuando se prepara.
     playAbilityCast(def);
 
@@ -2536,8 +2434,6 @@ export class Game {
         this.applyAbilityDamage(attacker, target, ability, options),
       dashPosition: (source, x, z, dirX, dirZ, distance) =>
         this.dashPosition(source, x, z, dirX, dirZ, distance),
-      animationPlaybackFor: (source, animation, duration) =>
-        this.animationPlaybackFor(source, animation, duration),
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
       addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
@@ -2648,12 +2544,10 @@ export class Game {
     );
   }
 
-  /** Cancela dash, preparación y locks de acción de un objetivo. */
+  /** Cancela dash, casteo y animación manual de un objetivo. */
   private interruptPlayer(target: MatchPlayerState): void {
-    target.actionTimer = 0;
-    target.moveLockTimer = 0;
     target.dash = null;
-    this.cancelPendingCast(target);
+    this.cancelCast(target);
   }
 
   /**
@@ -3114,11 +3008,9 @@ export class Game {
     target.respawnTimer = CONFIG.combat.respawnSeconds;
     target.deathFade = Math.max(0.45, deathDuration);
     target.hurtTimer = 0;
-    target.actionTimer = 0;
-    target.moveLockTimer = 0;
-    target.castLockTimer = 0;
+    target.animationFrame = null;
     target.dash = null;
-    this.cancelPendingCast(target);
+    this.cancelCast(target);
     target.vx = 0;
     target.vz = 0;
     target.buffs = [];
@@ -3798,10 +3690,8 @@ export class Game {
           CONFIG.combat.clashStunSeconds
         );
         player.hurtTimer = Math.max(player.hurtTimer, 0.35);
-        player.actionTimer = 0;
-        player.moveLockTimer = 0;
         player.dash = null;
-        this.cancelPendingCast(player);
+        this.cancelCast(player);
         player.vx = 0;
         player.vz = 0;
         player.animation = 'hurt';
@@ -4450,6 +4340,7 @@ export class Game {
     disposeItemTextures(this.itemTextures);
     this.combatFx.destroy();
     this.damageNumbers.destroy();
+    this.castDebug?.destroy();
     this.fogMesh?.destroy();
     this.fogMesh = null;
     this.menuCamera?.dispose();

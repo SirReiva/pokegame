@@ -129,7 +129,18 @@ function parseAnims(xml) {
     const frameHeight = Number(/<FrameHeight>(\d+)<\/FrameHeight>/.exec(block)?.[1]);
     const durations = [...block.matchAll(/<Duration>(\d+)<\/Duration>/g)].map((m) => Number(m[1]));
     if (!frameWidth || !frameHeight || durations.length === 0) continue;
-    anims.set(name, { frameWidth, frameHeight, durations });
+    const readFrame = (tag) => {
+      const value = new RegExp(`<${tag}>(\\d+)</${tag}>`).exec(block)?.[1];
+      return value === undefined ? undefined : Number(value);
+    };
+    anims.set(name, {
+      frameWidth,
+      frameHeight,
+      durations,
+      rushFrame: readFrame('RushFrame'),
+      hitFrame: readFrame('HitFrame'),
+      returnFrame: readFrame('ReturnFrame')
+    });
   }
   return anims;
 }
@@ -595,6 +606,9 @@ async function importForm(pokemon, form) {
       columns,
       rows,
       durations: meta.durations,
+      ...(meta.rushFrame !== undefined ? { rushFrame: meta.rushFrame } : {}),
+      ...(meta.hitFrame !== undefined ? { hitFrame: meta.hitFrame } : {}),
+      ...(meta.returnFrame !== undefined ? { returnFrame: meta.returnFrame } : {}),
       anchors,
       bottoms,
       contentRows

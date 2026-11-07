@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
-import { ABILITIES, MOVESETS } from './abilities';
+import { ABILITIES, COMMON_ABILITIES, MOVESETS } from './abilities';
+import { resolveAnimationName } from './animationTimeline';
 import { CONFIG, DEG, RAD } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { publicUrl } from './publicUrl';
@@ -9,6 +10,7 @@ import type {
   PokemonEntry,
   PokemonSkin,
   RequiredAnimationName,
+  ResolvedAnimation,
   SpriteAnimation
 } from './types';
 
@@ -79,6 +81,24 @@ const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
   (animation) => animation.name
 );
 
+/**
+ * Devuelve el clip que realmente se dibuja para `name` en este aspecto. Es la
+ * pieza que comparten el billboard y el plan de casteo para leer los
+ * `HitFrame` del clip resuelto (no del nombre pedido).
+ */
+export function resolveAnimationClip(
+  asset: SpriteAsset | null,
+  name: AnimationName
+): ResolvedAnimation | null {
+  if (!asset) return null;
+  const resolved = resolveAnimationName(
+    name,
+    (candidate) => asset.textures[candidate] !== undefined
+  );
+  const animation = asset.skin.animations[resolved];
+  return animation ? { name: resolved, animation } : null;
+}
+
 /** Límites para no crear texturas gigantes que la GPU no pueda subir. */
 const MAX_TEXTURE_DIMENSION = 2048;
 const MAX_TEXTURE_AREA = MAX_TEXTURE_DIMENSION * MAX_TEXTURE_DIMENSION;
@@ -140,15 +160,11 @@ function movesetUsesAnimation(
   animation: AnimationName
 ): boolean {
   const moveset = MOVESETS[entry.id];
-  if (!moveset) return false;
-  return moveset.some((id) => {
-    if (!id) return false;
-    const ability = ABILITIES[id];
-    return (
-      ability?.animation === animation ||
-      ability?.windupAnimation === animation
-    );
-  });
+  const uses = (ability: { animation?: AnimationName | null; startupAnimation?: AnimationName | null } | null) =>
+    ability?.animation === animation || ability?.startupAnimation === animation;
+  if (moveset?.some((id) => (id ? uses(ABILITIES[id]) : false))) return true;
+  // El instinto común (Impulso usa QuickStrike) también necesita su hoja.
+  return Object.values(COMMON_ABILITIES).some((ability) => uses(ability));
 }
 
 /**
@@ -532,6 +548,12 @@ export class SpriteBillboard {
   private playback = 1;
   /** Si es `false`, el clip se detiene en su último frame en vez de repetirse. */
   private loop = true;
+  /**
+   * Modo manual: el frame lo fija la simulación (plan de casteo) y el billboard
+   * no avanza su propio reloj. Las copias de todas las vistas dibujan el mismo
+   * frame, sin desfases.
+   */
+  private manual = false;
   private facingYaw = 0;
   private lastAppliedFrame = -1;
   private lastAppliedRow = -1;
@@ -724,6 +746,38 @@ export class SpriteBillboard {
     this.playback = rate;
   }
 
+  get currentFrame(): number {
+    return this.frame;
+  }
+
+  /**
+   * Fija un frame concreto desde la simulación. Desactiva el avance automático
+   * hasta llamar a `clearManual()`.
+   */
+  setManualFrame(name: AnimationName, frame: number): void {
+    const resolved = this.resolveAnimation(name);
+    const layer = this.layers.get(resolved);
+    if (!layer) return;
+    if (this.animation !== resolved) {
+      this.animation = resolved;
+      this.elapsed = 0;
+      for (const [key, candidate] of this.layers) {
+        candidate.entity.enabled = key === resolved;
+      }
+    }
+    this.manual = true;
+    this.loop = false;
+    const maxFrame = Math.max(0, layer.animation.columns - 1);
+    this.frame = Math.max(0, Math.min(maxFrame, Math.round(frame)));
+    this.lastAppliedFrame = -1;
+    this.applyFrame();
+  }
+
+  /** Vuelve al reloj automático (idle, walk, hurt...). */
+  clearManual(): void {
+    this.manual = false;
+  }
+
   /**
    * Activa o desactiva la repetición del clip actual. Al cambiar de animación
    * vuelve a `true`; el motor lo desactiva solo durante preparaciones `once`.
@@ -737,27 +791,14 @@ export class SpriteBillboard {
    * `quickstrike` a `attack` cuando la especie no tiene esa hoja.
    */
   private resolveAnimation(name: AnimationName): AnimationName {
-    if (this.layers.has(name)) return name;
-    const fallbacks: AnimationName[] =
-      name === 'faint'
-        ? ['hurt', 'idle']
-        : name === 'quickstrike' ||
-            name === 'shock' ||
-            name === 'shoot' ||
-            name === 'charge' ||
-            name === 'strike' ||
-            name === 'twirl' ||
-            name === 'shake' ||
-            name === 'punch'
-          ? ['attack', 'idle']
-          : ['idle'];
-    let resolved: AnimationName = 'idle';
-    for (const fallback of fallbacks) {
-      if (!this.layers.has(fallback)) continue;
-      resolved = fallback;
-      break;
-    }
-    if (name === 'quickstrike' && !this.warnedMissingQuickstrike) {
+    const resolved = resolveAnimationName(name, (candidate) =>
+      this.layers.has(candidate)
+    );
+    if (
+      name === 'quickstrike' &&
+      resolved !== 'quickstrike' &&
+      !this.warnedMissingQuickstrike
+    ) {
       this.warnedMissingQuickstrike = true;
       console.warn(
         `[sprite] QuickStrike no disponible para ${this.root.name}; usando ${resolved}`
@@ -916,22 +957,24 @@ export class SpriteBillboard {
     const layer = this.layers.get(this.animation);
     if (!layer) return;
 
-    // 1. Animación.
-    const animation = layer.animation;
-    this.elapsed += dt * Math.max(0.05, this.playback);
-    const lastFrame = animation.columns - 1;
-    let guard = 0;
-    while (guard++ < 32) {
-      const ticks = animation.durations[this.frame] ?? 6;
-      const duration = Math.max(1 / 120, ticks / 60);
-      if (this.elapsed < duration) break;
-      if (!this.loop && this.frame >= lastFrame) {
-        // Clip de una sola pasada: se queda en el último frame.
-        this.elapsed = duration;
-        break;
+    // 1. Animación. En modo manual el frame lo fija la simulación.
+    if (!this.manual) {
+      const animation = layer.animation;
+      this.elapsed += dt * Math.max(0.05, this.playback);
+      const lastFrame = animation.columns - 1;
+      let guard = 0;
+      while (guard++ < 32) {
+        const ticks = animation.durations[this.frame] ?? 6;
+        const duration = Math.max(1 / 120, ticks / 60);
+        if (this.elapsed < duration) break;
+        if (!this.loop && this.frame >= lastFrame) {
+          // Clip de una sola pasada: se queda en el último frame.
+          this.elapsed = duration;
+          break;
+        }
+        this.elapsed -= duration;
+        this.frame = this.loop ? (this.frame + 1) % animation.columns : this.frame + 1;
       }
-      this.elapsed -= duration;
-      this.frame = this.loop ? (this.frame + 1) % animation.columns : this.frame + 1;
     }
 
     // 2. Dirección según cámara.

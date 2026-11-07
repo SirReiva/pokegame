@@ -588,7 +588,7 @@ interface FightAssessment {
   retreatHp: number;
 }
 
-type PendingCastState = NonNullable<MatchPlayerState['pendingCast']>;
+type PendingCastState = NonNullable<MatchPlayerState['activeCast']>;
 
 /**
  * Lo que el bot cree saber de un windup rival. Se fija una sola vez por
@@ -806,13 +806,13 @@ export class BotController {
 
     // Un dash, hitstun o una preparación que clava al lanzador consumen el
     // frame: el snapshot idle evita pulsar habilidades que el motor rechaza.
-    // Las preparaciones con `moveWhileWindup` sí llegan a `drive`, que deja
+    // Las preparaciones con `moveWhileStartup` sí llegan a `drive`, que deja
     // mover al bot pero no dispara otra habilidad mientras canaliza.
     if (
       self.dash !== null ||
       self.stunTimer > 0 ||
       self.hurtTimer > 0 ||
-      (self.pendingCast !== null && !self.pendingCast.def.moveWhileWindup)
+      (self.activeCast !== null && !self.activeCast.def.moveWhileStartup)
     ) {
       return { ...IDLE_INPUT };
     }
@@ -985,7 +985,7 @@ export class BotController {
    * todavía empezando a reaccionar.
    */
   private readPunish(enemy: MatchPlayerState): PunishRead | null {
-    const pending = enemy.pendingCast;
+    const pending = enemy.activeCast;
     if (!pending) return null;
     const known = this.punishReads.get(enemy.slot);
     if (known && known.cast === pending) return known;
@@ -1283,9 +1283,9 @@ export class BotController {
       // ningún otro rival visible.
       if (offense === 0) score += IMMUNE_TARGET_PENALTY;
 
-      const pending = enemy.pendingCast;
+      const pending = enemy.activeCast;
       if (pending) {
-        const remaining = pending.windup - pending.elapsed;
+        const remaining = pending.effectAt - pending.elapsed;
         const read = this.readPunish(enemy);
         if (remaining > 0 && read?.commit) {
           // Un rival preparando una habilidad es una ventana: si está clavado,
@@ -1293,7 +1293,7 @@ export class BotController {
           // resuelve aparte en `updateThreat`. La tirada de `readPunish` hace
           // que no todos los bots detecten o aprovechen cada windup.
           score -= this.tuning.punishBonus;
-          if (!pending.def.moveWhileWindup) score -= 1.5;
+          if (!pending.def.moveWhileStartup) score -= 1.5;
         }
       }
 
@@ -1410,9 +1410,9 @@ export class BotController {
     enemy: MatchPlayerState,
     colliders: readonly Collider[]
   ): IncomingThreat | null {
-    const pending = enemy.pendingCast;
+    const pending = enemy.activeCast;
     if (!pending) return null;
-    const remaining = pending.windup - pending.elapsed;
+    const remaining = pending.effectAt - pending.elapsed;
     if (remaining <= 0.02) return null;
     const def = pending.def;
     if (def.power <= 0 && def.slow === null && def.selfDamage <= 0) return null;
@@ -1561,9 +1561,9 @@ export class BotController {
     }
 
     if (def.shape === 'projectile' || def.shape === 'beam') {
-      // Un haz con `moveWhileWindup` deja mover al lanzador durante la carga y
+      // Un haz con `moveWhileStartup` deja mover al lanzador durante la carga y
       // `executeBeam` recalcula la dirección desde su posición actual hasta el
-      // extremo fijado en `pendingCast`. La amenaza debe usar ese mismo vector:
+      // extremo fijado en `activeCast`. La amenaza debe usar ese mismo vector:
       // con el `facing` actual se esquivaría un carril que ya no es el real.
       let aimX = dirX;
       let aimZ = dirZ;
@@ -1874,13 +1874,13 @@ export class BotController {
       // adelanto usa el mismo factor por dificultad que el resto de disparos.
       let distance = Math.hypot(source.x - self.x, source.z - self.z);
       let aim: Vec2 = { x: source.x, z: source.z };
-      let delay = def.windup;
+      let delay = def.startup;
       for (let pass = 0; pass < 2; pass++) {
         const travel =
           def.shape === 'projectile'
             ? distance / Math.max(1, def.projectileSpeed)
             : 0;
-        delay = def.windup + travel;
+        delay = def.startup + travel;
         const lead = delay * this.tuning.lead;
         aim = {
           x: source.x + source.vx * lead,
@@ -2086,7 +2086,7 @@ export class BotController {
       !this.recovering &&
       regenBot &&
       regenSafe &&
-      self.pendingCast === null &&
+      self.activeCast === null &&
       hpFraction < REGEN_START_HP &&
       this.clock >= this.regenCooldownUntil
     ) {
@@ -2337,7 +2337,7 @@ export class BotController {
       const remaining = this.abilityCooldown(attacker, slot);
       // El windup también forma parte del ciclo: las habilidades lentas no se
       // pueden repetir tan rápido como sugiere el cooldown solo.
-      const cycle = Math.max(0.75, def.cooldown + remaining) + def.windup;
+      const cycle = Math.max(0.75, def.cooldown + remaining) + def.startup;
       best = Math.max(best, (damage * accuracy) / cycle);
     }
     return best;
@@ -3016,7 +3016,7 @@ export class BotController {
     const target = this.target;
     const targetIsVisible =
       target !== null && this.targetVisible && target.alive && this.engageTarget;
-    const channeling = self.pendingCast !== null;
+    const channeling = self.activeCast !== null;
     // El destino solo guía el movimiento cuando no hay combate ni amenaza:
     // en esos casos el bot orbita al rival a propósito y no debe considerarse
     // un atasco. Esquivar un peligro ya lanzado tampoco es un atasco.
@@ -3350,9 +3350,8 @@ export class BotController {
 
   private canCast(self: MatchPlayerState): boolean {
     return (
-      self.castLockTimer <= 0.001 &&
-      // Las melee bloquean el casteo hasta que termina su clip.
-      self.moveLockTimer <= 0.001 &&
+      // Un casteo en curso (startup + active + recovery) bloquea el siguiente.
+      self.activeCast === null &&
       self.damageReductionTimer <= 0 &&
       // No gastar la invulnerabilidad de spawn en un ataque inmediato.
       self.invulnerableTimer <= 0.35
@@ -3498,7 +3497,7 @@ export class BotController {
     const team = this.squad[self.team];
     for (const ally of players) {
       if (ally.team !== self.team || ally.alive) continue;
-      if (ally.respawnTimer <= def.windup + 0.15) continue;
+      if (ally.respawnTimer <= def.startup + 0.15) continue;
       if (Math.hypot(ally.x - self.x, ally.z - self.z) > reach + ally.hitRadius) {
         continue;
       }
@@ -3536,7 +3535,7 @@ export class BotController {
 
       if (!ally.alive) {
         // Si va a reaparecer igualmente, el área no aporta nada.
-        if (!profile.revive || ally.respawnTimer <= def.windup + 0.15) continue;
+        if (!profile.revive || ally.respawnTimer <= def.startup + 0.15) continue;
         // Otro bot ya se ha comprometido a revivirlo: no se apilan dos Deseos.
         const claim = this.squad[self.team].reviveClaims.get(ally.slot);
         if (
@@ -3999,21 +3998,21 @@ export class BotController {
       const selfDamage = self.maxHp * def.selfDamage;
       score -= 15 + (selfDamage / Math.max(1, self.hp)) * 70;
     }
-    score -= Math.min(16, def.windup * 14);
+    score -= Math.min(16, def.startup * 14);
 
     // Aprovechar el windup rival: las habilidades instantáneas pueden cancelar
     // su preparación; las que tardan más que el rival llegan tarde y además
     // dejan al bot plantado.
-    const pending = target.pendingCast;
+    const pending = target.activeCast;
     if (pending) {
-      const remaining = pending.windup - pending.elapsed;
+      const remaining = pending.effectAt - pending.elapsed;
       if (remaining > 0) {
-        if (def.windup <= remaining) score += 18;
+        if (def.startup <= remaining) score += 18;
         else score -= 22;
         if (def.shape === 'melee' || def.shape === 'projectile' || def.shape === 'beam') {
           score += 10;
         }
-        if (!pending.def.moveWhileWindup) score += 8;
+        if (!pending.def.moveWhileStartup) score += 8;
       }
     }
 
@@ -4597,7 +4596,7 @@ export class BotController {
       const def = id ? ABILITIES[id] : null;
       consider(def, this.abilityCooldown(target, slot) <= 0.5);
     }
-    if (target.pendingCast) consider(target.pendingCast.def, true);
+    if (target.activeCast) consider(target.activeCast.def, true);
 
     return { meleeReach, beamReady, beamRange, anyReady, keyReady };
   }
@@ -4671,7 +4670,7 @@ export class BotController {
     def: AbilityDef | null,
     leadFactor = this.tuning.lead
   ): TargetPrediction {
-    const windup = def?.windup ?? 0;
+    const windup = def?.startup ?? 0;
     const projectileSpeed =
       def && def.shape === 'projectile' && def.projectileSpeed > 0
         ? def.projectileSpeed

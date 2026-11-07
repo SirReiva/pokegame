@@ -1060,7 +1060,10 @@
               "top": 19,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 5,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0001/hurt.png",
@@ -1741,7 +1744,9 @@
               "top": 18,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0001/charge.png",
@@ -2214,7 +2219,9 @@
               "top": 17,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "shake": {
           "sheet": "sprites/0001/shake.png",
@@ -2523,7 +2530,9 @@
               "top": 18,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 0,
+          "returnFrame": 4
         }
       },
       "skins": [
@@ -3520,7 +3529,10 @@
                   "top": 19,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0001/shiny/hurt.png",
@@ -4201,7 +4213,9 @@
                   "top": 18,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0001/shiny/charge.png",
@@ -4674,7 +4688,9 @@
                   "top": 17,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "shake": {
               "sheet": "sprites/0001/shiny/shake.png",
@@ -4983,7 +4999,9 @@
                   "top": 18,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 0,
+              "returnFrame": 4
             }
           }
         },
@@ -5980,7 +5998,10 @@
                   "top": 19,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0001/recolor/hurt.png",
@@ -6661,7 +6682,9 @@
                   "top": 18,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0001/recolor/charge.png",
@@ -7134,7 +7157,9 @@
                   "top": 17,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "shake": {
               "sheet": "sprites/0001/recolor/shake.png",
@@ -7443,7 +7468,9 @@
                   "top": 18,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 0,
+              "returnFrame": 4
             }
           }
         }
@@ -8460,7 +8487,10 @@
               "top": 18,
               "bottom": 3
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 6,
+          "returnFrame": 8
         },
         "hurt": {
           "sheet": "sprites/0004/hurt.png",
@@ -9265,7 +9295,9 @@
               "top": 19,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "strike": {
           "sheet": "sprites/0004/strike.png",
@@ -9697,7 +9729,10 @@
               "top": 19,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 4
         }
       },
       "skins": [
@@ -10663,7 +10698,10 @@
                   "top": 18,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 6,
+              "returnFrame": 8
             },
             "hurt": {
               "sheet": "sprites/0004/shiny/hurt.png",
@@ -11468,7 +11506,9 @@
                   "top": 19,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0004/shiny/strike.png",
@@ -11900,7 +11940,10 @@
                   "top": 19,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 4
             }
           }
         },
@@ -12866,7 +12909,10 @@
                   "top": 18,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 6,
+              "returnFrame": 8
             },
             "hurt": {
               "sheet": "sprites/0004/recolor/hurt.png",
@@ -13671,7 +13717,9 @@
                   "top": 19,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0004/recolor/strike.png",
@@ -14103,7 +14151,10 @@
                   "top": 19,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 4
             }
           }
         }
@@ -15238,7 +15289,10 @@
               "top": 17,
               "bottom": 3
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0007/hurt.png",
@@ -16124,7 +16178,9 @@
               "top": 17,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 4,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0007/charge.png",
@@ -16597,7 +16653,9 @@
               "top": 14,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -17681,7 +17739,10 @@
                   "top": 17,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0007/shiny/hurt.png",
@@ -18567,7 +18628,9 @@
                   "top": 17,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 4,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0007/shiny/charge.png",
@@ -19040,7 +19103,9 @@
                   "top": 14,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -20093,7 +20158,10 @@
               "top": 25,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0025/hurt.png",
@@ -20938,7 +21006,9 @@
               "top": 24,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "shock": {
           "sheet": "sprites/0025/shock.png",
@@ -21534,7 +21604,9 @@
               "top": 34,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 6,
+          "returnFrame": 10
         },
         "shoot": {
           "sheet": "sprites/0025/shoot.png",
@@ -22033,7 +22105,9 @@
               "top": 26,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0025/charge.png",
@@ -22506,7 +22580,9 @@
               "top": 23,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -23508,7 +23584,10 @@
                   "top": 25,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0025/shiny/hurt.png",
@@ -24353,7 +24432,9 @@
                   "top": 24,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "shock": {
               "sheet": "sprites/0025/shiny/shock.png",
@@ -24949,7 +25030,9 @@
                   "top": 34,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 6,
+              "returnFrame": 10
             },
             "shoot": {
               "sheet": "sprites/0025/shiny/shoot.png",
@@ -25448,7 +25531,9 @@
                   "top": 26,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0025/shiny/charge.png",
@@ -25921,7 +26006,9 @@
                   "top": 23,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -27120,7 +27207,10 @@
               "top": 22,
               "bottom": 3
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0094/hurt.png",
@@ -28032,7 +28122,9 @@
               "top": 22,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 6,
+          "returnFrame": 10
         },
         "charge": {
           "sheet": "sprites/0094/charge.png",
@@ -28505,7 +28597,9 @@
               "top": 21,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "strike": {
           "sheet": "sprites/0094/strike.png",
@@ -28968,7 +29062,10 @@
               "top": 24,
               "bottom": 5
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 6
         }
       },
       "skins": [
@@ -30108,7 +30205,10 @@
                   "top": 22,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0094/shiny/hurt.png",
@@ -31020,7 +31120,9 @@
                   "top": 22,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 6,
+              "returnFrame": 10
             },
             "charge": {
               "sheet": "sprites/0094/shiny/charge.png",
@@ -31493,7 +31595,9 @@
                   "top": 21,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0094/shiny/strike.png",
@@ -31956,7 +32060,10 @@
                   "top": 24,
                   "bottom": 5
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 6
             }
           }
         }
@@ -33342,7 +33449,10 @@
               "top": 15,
               "bottom": 2
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 6,
+          "returnFrame": 8
         },
         "hurt": {
           "sheet": "sprites/0100/hurt.png",
@@ -34187,7 +34297,9 @@
               "top": 15,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "twirl": {
           "sheet": "sprites/0100/twirl.png",
@@ -35193,7 +35305,9 @@
               "top": 22,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 15,
+          "returnFrame": 18
         }
       },
       "skins": [
@@ -36497,7 +36611,10 @@
                   "top": 15,
                   "bottom": 2
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 6,
+              "returnFrame": 8
             },
             "hurt": {
               "sheet": "sprites/0100/shiny/hurt.png",
@@ -37342,7 +37459,9 @@
                   "top": 15,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "twirl": {
               "sheet": "sprites/0100/shiny/twirl.png",
@@ -38348,7 +38467,9 @@
                   "top": 22,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 15,
+              "returnFrame": 18
             }
           }
         }
@@ -39402,7 +39523,9 @@
               "top": 25,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 5
         },
         "hurt": {
           "sheet": "sprites/0133/hurt.png",
@@ -40165,7 +40288,9 @@
               "top": 19,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 5
         },
         "charge": {
           "sheet": "sprites/0133/charge.png",
@@ -40638,7 +40763,9 @@
               "top": 19,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -41640,7 +41767,9 @@
                   "top": 25,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 5
             },
             "hurt": {
               "sheet": "sprites/0133/shiny/hurt.png",
@@ -42403,7 +42532,9 @@
                   "top": 19,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 5
             },
             "charge": {
               "sheet": "sprites/0133/shiny/charge.png",
@@ -42876,7 +43007,9 @@
                   "top": 19,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -44169,7 +44302,10 @@
               "top": 25,
               "bottom": 1
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 3,
+          "returnFrame": 8
         },
         "hurt": {
           "sheet": "sprites/0448/hurt.png",
@@ -45219,7 +45355,9 @@
               "top": 25,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0448/charge.png",
@@ -45692,7 +45830,9 @@
               "top": 22,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "strike": {
           "sheet": "sprites/0448/strike.png",
@@ -46109,7 +46249,10 @@
               "top": 27,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 2,
+          "returnFrame": 5
         }
       },
       "skins": [
@@ -47331,7 +47474,10 @@
                   "top": 25,
                   "bottom": 1
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 3,
+              "returnFrame": 8
             },
             "hurt": {
               "sheet": "sprites/0448/shiny/hurt.png",
@@ -48381,7 +48527,9 @@
                   "top": 25,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0448/shiny/charge.png",
@@ -48854,7 +49002,9 @@
                   "top": 22,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0448/shiny/strike.png",
@@ -49271,7 +49421,10 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 2,
+              "returnFrame": 5
             }
           }
         }
@@ -50482,7 +50635,10 @@
               "top": 27,
               "bottom": 5
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 2,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0658/hurt.png",
@@ -51254,7 +51410,9 @@
               "top": 27,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 7
         },
         "shoot": {
           "sheet": "sprites/0658/shoot.png",
@@ -51809,7 +51967,9 @@
               "top": 27,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 5
         },
         "charge": {
           "sheet": "sprites/0658/charge.png",
@@ -52282,7 +52442,9 @@
               "top": 27,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -53412,7 +53574,10 @@
                   "top": 27,
                   "bottom": 5
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 2,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0658/shiny/hurt.png",
@@ -54184,7 +54349,9 @@
                   "top": 27,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 7
             },
             "shoot": {
               "sheet": "sprites/0658/shiny/shoot.png",
@@ -54739,7 +54906,9 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 5
             },
             "charge": {
               "sheet": "sprites/0658/shiny/charge.png",
@@ -55212,7 +55381,9 @@
                   "top": 27,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -56504,7 +56675,10 @@
               "top": 28,
               "bottom": 0
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0150/hurt.png",
@@ -57472,7 +57646,9 @@
               "top": 26,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 4,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0150/charge.png",
@@ -57945,7 +58121,9 @@
               "top": 28,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "punch": {
           "sheet": "sprites/0150/punch.png",
@@ -58623,7 +58801,10 @@
               "top": 28,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 3,
+          "hitFrame": 7,
+          "returnFrame": 10
         }
       },
       "skins": [
@@ -59845,7 +60026,10 @@
                   "top": 28,
                   "bottom": 0
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0150/shiny/hurt.png",
@@ -60813,7 +60997,9 @@
                   "top": 26,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 4,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0150/shiny/charge.png",
@@ -61286,7 +61472,9 @@
                   "top": 28,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "punch": {
               "sheet": "sprites/0150/shiny/punch.png",
@@ -61964,7 +62152,10 @@
                   "top": 28,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 3,
+              "hitFrame": 7,
+              "returnFrame": 10
             }
           }
         }
@@ -63192,7 +63383,10 @@
               "top": 28,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 7,
+          "returnFrame": 10
         },
         "hurt": {
           "sheet": "sprites/0151/hurt.png",
@@ -64119,7 +64313,8 @@
               "top": 33,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 7
         },
         "charge": {
           "sheet": "sprites/0151/charge.png",
@@ -64592,7 +64787,9 @@
               "top": 23,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "twirl": {
           "sheet": "sprites/0151/twirl.png",
@@ -65065,7 +65262,8 @@
               "top": 35,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5
         }
       },
       "skins": [
@@ -66236,7 +66434,10 @@
                   "top": 28,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 7,
+              "returnFrame": 10
             },
             "hurt": {
               "sheet": "sprites/0151/shiny/hurt.png",
@@ -67163,7 +67364,8 @@
                   "top": 33,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 7
             },
             "charge": {
               "sheet": "sprites/0151/shiny/charge.png",
@@ -67636,7 +67838,9 @@
                   "top": 23,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "twirl": {
               "sheet": "sprites/0151/shiny/twirl.png",
@@ -68109,7 +68313,8 @@
                   "top": 35,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5
             }
           }
         }
@@ -69110,7 +69315,10 @@
               "top": 50,
               "bottom": 1
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0095/hurt.png",
@@ -69718,7 +69926,9 @@
               "top": 50,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0095/charge.png",
@@ -70191,7 +70401,9 @@
               "top": 50,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -71162,7 +71374,10 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0095/shiny/hurt.png",
@@ -71770,7 +71985,9 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0095/shiny/charge.png",
@@ -72243,7 +72460,9 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         },
@@ -73214,7 +73433,10 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0095/recolor/hurt.png",
@@ -73822,7 +74044,9 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0095/recolor/charge.png",
@@ -74295,7 +74519,9 @@
                   "top": 50,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -75260,7 +75486,10 @@
               "top": 26,
               "bottom": 2
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0123/hurt.png",
@@ -75878,7 +76107,9 @@
               "top": 27,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 1,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0123/charge.png",
@@ -76351,7 +76582,9 @@
               "top": 25,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -77286,7 +77519,10 @@
                   "top": 26,
                   "bottom": 2
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0123/shiny/hurt.png",
@@ -77904,7 +78140,9 @@
                   "top": 27,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0123/shiny/charge.png",
@@ -78377,7 +78615,9 @@
                   "top": 25,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         },
@@ -79312,7 +79552,10 @@
                   "top": 26,
                   "bottom": 2
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0123/recolor/hurt.png",
@@ -79930,7 +80173,9 @@
                   "top": 27,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0123/recolor/charge.png",
@@ -80403,7 +80648,9 @@
                   "top": 25,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -81354,7 +81601,10 @@
               "top": 62,
               "bottom": 0
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0130/hurt.png",
@@ -82039,7 +82289,9 @@
               "top": 62,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 6
         },
         "charge": {
           "sheet": "sprites/0130/charge.png",
@@ -82512,7 +82764,9 @@
               "top": 48,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "hop": {
           "sheet": "sprites/0130/hop.png",
@@ -82985,7 +83239,8 @@
               "top": 81,
               "bottom": 1
             }
-          ]
+          ],
+          "hitFrame": 9
         }
       },
       "skins": [
@@ -83905,7 +84160,10 @@
                   "top": 62,
                   "bottom": 0
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0130/shiny/hurt.png",
@@ -84590,7 +84848,9 @@
                   "top": 62,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 6
             },
             "charge": {
               "sheet": "sprites/0130/shiny/charge.png",
@@ -85063,7 +85323,9 @@
                   "top": 48,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "hop": {
               "sheet": "sprites/0130/shiny/hop.png",
@@ -85536,7 +85798,8 @@
                   "top": 81,
                   "bottom": 1
                 }
-              ]
+              ],
+              "hitFrame": 9
             }
           }
         }
@@ -86542,7 +86805,10 @@
               "top": 25,
               "bottom": 3
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0248/hurt.png",
@@ -87283,7 +87549,9 @@
               "top": 26,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0248/charge.png",
@@ -87756,7 +88024,9 @@
               "top": 20,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "strike": {
           "sheet": "sprites/0248/strike.png",
@@ -88270,7 +88540,10 @@
               "top": 26,
               "bottom": 6
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 6
         },
         "hop": {
           "sheet": "sprites/0248/hop.png",
@@ -88743,7 +89016,8 @@
               "top": 47,
               "bottom": 2
             }
-          ]
+          ],
+          "hitFrame": 9
         }
       },
       "skins": [
@@ -89719,7 +89993,10 @@
                   "top": 25,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0248/shiny/hurt.png",
@@ -90460,7 +90737,9 @@
                   "top": 26,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0248/shiny/charge.png",
@@ -90933,7 +91212,9 @@
                   "top": 20,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0248/shiny/strike.png",
@@ -91447,7 +91728,10 @@
                   "top": 26,
                   "bottom": 6
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 6
             },
             "hop": {
               "sheet": "sprites/0248/shiny/hop.png",
@@ -91920,7 +92204,8 @@
                   "top": 47,
                   "bottom": 2
                 }
-              ]
+              ],
+              "hitFrame": 9
             }
           }
         }
@@ -92886,7 +93171,9 @@
               "top": 46,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 5
         },
         "hurt": {
           "sheet": "sprites/0144/hurt.png",
@@ -93863,7 +94150,9 @@
               "top": 50,
               "bottom": 6
             }
-          ]
+          ],
+          "hitFrame": 12,
+          "returnFrame": 14
         },
         "charge": {
           "sheet": "sprites/0144/charge.png",
@@ -94336,7 +94625,9 @@
               "top": 48,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -95271,7 +95562,9 @@
                   "top": 46,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 5
             },
             "hurt": {
               "sheet": "sprites/0144/shiny/hurt.png",
@@ -96248,7 +96541,9 @@
                   "top": 50,
                   "bottom": 6
                 }
-              ]
+              ],
+              "hitFrame": 12,
+              "returnFrame": 14
             },
             "charge": {
               "sheet": "sprites/0144/shiny/charge.png",
@@ -96721,7 +97016,9 @@
                   "top": 48,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -97698,7 +97995,10 @@
               "bottom": 1
             },
             null
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0145/hurt.png",
@@ -98470,7 +98770,9 @@
               "top": 50,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "charge": {
           "sheet": "sprites/0145/charge.png",
@@ -98943,7 +99245,9 @@
               "top": 48,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -99889,7 +100193,10 @@
                   "bottom": 1
                 },
                 null
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0145/shiny/hurt.png",
@@ -100661,7 +100968,9 @@
                   "top": 50,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "charge": {
               "sheet": "sprites/0145/shiny/charge.png",
@@ -101134,7 +101443,9 @@
                   "top": 48,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         },
@@ -102080,7 +102391,10 @@
                   "bottom": 1
                 },
                 null
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0145/recolor/hurt.png",
@@ -102852,7 +103166,9 @@
                   "top": 50,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "charge": {
               "sheet": "sprites/0145/recolor/charge.png",
@@ -103325,7 +103641,9 @@
                   "top": 48,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -104454,7 +104772,9 @@
               "top": 49,
               "bottom": 8
             }
-          ]
+          ],
+          "hitFrame": 6,
+          "returnFrame": 9
         },
         "hurt": {
           "sheet": "sprites/0146/hurt.png",
@@ -105303,7 +105623,9 @@
               "top": 49,
               "bottom": 8
             }
-          ]
+          ],
+          "hitFrame": 6,
+          "returnFrame": 10
         },
         "charge": {
           "sheet": "sprites/0146/charge.png",
@@ -105776,7 +106098,9 @@
               "top": 44,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "strike": {
           "sheet": "sprites/0146/strike.png",
@@ -106408,7 +106732,10 @@
               "top": 44,
               "bottom": 10
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 5,
+          "returnFrame": 8
         }
       },
       "skins": [
@@ -107507,7 +107834,9 @@
                   "top": 49,
                   "bottom": 8
                 }
-              ]
+              ],
+              "hitFrame": 6,
+              "returnFrame": 9
             },
             "hurt": {
               "sheet": "sprites/0146/shiny/hurt.png",
@@ -108356,7 +108685,9 @@
                   "top": 49,
                   "bottom": 8
                 }
-              ]
+              ],
+              "hitFrame": 6,
+              "returnFrame": 10
             },
             "charge": {
               "sheet": "sprites/0146/shiny/charge.png",
@@ -108829,7 +109160,9 @@
                   "top": 44,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "strike": {
               "sheet": "sprites/0146/shiny/strike.png",
@@ -109461,7 +109794,10 @@
                   "top": 44,
                   "bottom": 10
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 8
             }
           }
         }
@@ -110943,7 +111279,10 @@
               "top": 33,
               "bottom": 4
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 5,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0243/hurt.png",
@@ -111669,7 +112008,9 @@
               "top": 33,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 7
         },
         "shock": {
           "sheet": "sprites/0243/shock.png",
@@ -112265,7 +112606,9 @@
               "top": 41,
               "bottom": 12
             }
-          ]
+          ],
+          "hitFrame": 3,
+          "returnFrame": 10
         },
         "shoot": {
           "sheet": "sprites/0243/shoot.png",
@@ -112769,7 +113112,9 @@
               "top": 28,
               "bottom": 5
             }
-          ]
+          ],
+          "hitFrame": 1,
+          "returnFrame": 3
         },
         "charge": {
           "sheet": "sprites/0243/charge.png",
@@ -113242,7 +113587,9 @@
               "top": 24,
               "bottom": 5
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -114695,7 +115042,10 @@
                   "top": 33,
                   "bottom": 4
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0243/shiny/hurt.png",
@@ -115421,7 +115771,9 @@
                   "top": 33,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "shock": {
               "sheet": "sprites/0243/shiny/shock.png",
@@ -116017,7 +116369,9 @@
                   "top": 41,
                   "bottom": 12
                 }
-              ]
+              ],
+              "hitFrame": 3,
+              "returnFrame": 10
             },
             "shoot": {
               "sheet": "sprites/0243/shiny/shoot.png",
@@ -116521,7 +116875,9 @@
                   "top": 28,
                   "bottom": 5
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 3
             },
             "charge": {
               "sheet": "sprites/0243/shiny/charge.png",
@@ -116994,7 +117350,9 @@
                   "top": 24,
                   "bottom": 5
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -118410,7 +118768,10 @@
               "top": 27,
               "bottom": 5
             }
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 4,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0244/hurt.png",
@@ -119151,7 +119512,9 @@
               "top": 31,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 4,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0244/charge.png",
@@ -119624,7 +119987,9 @@
               "top": 31,
               "bottom": 3
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -121010,7 +121375,10 @@
                   "top": 27,
                   "bottom": 5
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0244/shiny/hurt.png",
@@ -121751,7 +122119,9 @@
                   "top": 31,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 4,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0244/shiny/charge.png",
@@ -122224,7 +122594,9 @@
                   "top": 31,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         },
@@ -123610,7 +123982,10 @@
                   "top": 27,
                   "bottom": 5
                 }
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 4,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0244/recolor/hurt.png",
@@ -124351,7 +124726,9 @@
                   "top": 31,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 4,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0244/recolor/charge.png",
@@ -124824,7 +125201,9 @@
                   "top": 31,
                   "bottom": 3
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -126220,7 +126599,10 @@
               "bottom": 3
             },
             null
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 5,
+          "returnFrame": 7
         },
         "hurt": {
           "sheet": "sprites/0245/hurt.png",
@@ -126879,7 +127261,9 @@
               "top": 27,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 1,
+          "returnFrame": 3
         },
         "charge": {
           "sheet": "sprites/0245/charge.png",
@@ -127352,7 +127736,9 @@
               "top": 27,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -128718,7 +129104,10 @@
                   "bottom": 3
                 },
                 null
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0245/shiny/hurt.png",
@@ -129377,7 +129766,9 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 3
             },
             "charge": {
               "sheet": "sprites/0245/shiny/charge.png",
@@ -129850,7 +130241,9 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         },
@@ -131216,7 +131609,10 @@
                   "bottom": 3
                 },
                 null
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 5,
+              "returnFrame": 7
             },
             "hurt": {
               "sheet": "sprites/0245/recolor/hurt.png",
@@ -131875,7 +132271,9 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 3
             },
             "charge": {
               "sheet": "sprites/0245/recolor/charge.png",
@@ -132348,7 +132746,9 @@
                   "top": 27,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -133149,7 +133549,10 @@
               "top": 45,
               "bottom": 3
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 3,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0249/hurt.png",
@@ -133793,7 +134196,9 @@
               "top": 55,
               "bottom": 4
             }
-          ]
+          ],
+          "hitFrame": 1,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0249/charge.png",
@@ -134266,7 +134671,9 @@
               "top": 50,
               "bottom": 5
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -135037,7 +135444,10 @@
                   "top": 45,
                   "bottom": 3
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 3,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0249/shiny/hurt.png",
@@ -135681,7 +136091,9 @@
                   "top": 55,
                   "bottom": 4
                 }
-              ]
+              ],
+              "hitFrame": 1,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0249/shiny/charge.png",
@@ -136154,7 +136566,9 @@
                   "top": 50,
                   "bottom": 5
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -137386,7 +137800,10 @@
               "bottom": 7
             },
             null
-          ]
+          ],
+          "rushFrame": 2,
+          "hitFrame": 8,
+          "returnFrame": 11
         },
         "hurt": {
           "sheet": "sprites/0250/hurt.png",
@@ -138327,7 +138744,9 @@
               "top": 57,
               "bottom": 5
             }
-          ]
+          ],
+          "hitFrame": 8,
+          "returnFrame": 11
         },
         "charge": {
           "sheet": "sprites/0250/charge.png",
@@ -138800,7 +139219,9 @@
               "top": 57,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -140002,7 +140423,10 @@
                   "bottom": 7
                 },
                 null
-              ]
+              ],
+              "rushFrame": 2,
+              "hitFrame": 8,
+              "returnFrame": 11
             },
             "hurt": {
               "sheet": "sprites/0250/shiny/hurt.png",
@@ -140943,7 +141367,9 @@
                   "top": 57,
                   "bottom": 5
                 }
-              ]
+              ],
+              "hitFrame": 8,
+              "returnFrame": 11
             },
             "charge": {
               "sheet": "sprites/0250/shiny/charge.png",
@@ -141416,7 +141842,9 @@
                   "top": 57,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             }
           }
         }
@@ -142919,7 +143347,10 @@
               "top": 26,
               "bottom": 0
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 9,
+          "returnFrame": 12
         },
         "hurt": {
           "sheet": "sprites/0251/hurt.png",
@@ -143877,7 +144308,9 @@
               "top": 29,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 4,
+          "returnFrame": 8
         },
         "charge": {
           "sheet": "sprites/0251/charge.png",
@@ -144350,7 +144783,9 @@
               "top": 26,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "twirl": {
           "sheet": "sprites/0251/twirl.png",
@@ -145069,7 +145504,9 @@
               "top": 29,
               "bottom": 0
             }
-          ]
+          ],
+          "hitFrame": 7,
+          "returnFrame": 9
         }
       },
       "skins": [
@@ -146496,7 +146933,10 @@
                   "top": 26,
                   "bottom": 0
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 9,
+              "returnFrame": 12
             },
             "hurt": {
               "sheet": "sprites/0251/shiny/hurt.png",
@@ -147454,7 +147894,9 @@
                   "top": 29,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 4,
+              "returnFrame": 8
             },
             "charge": {
               "sheet": "sprites/0251/shiny/charge.png",
@@ -147927,7 +148369,9 @@
                   "top": 26,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "twirl": {
               "sheet": "sprites/0251/shiny/twirl.png",
@@ -148646,7 +149090,9 @@
                   "top": 29,
                   "bottom": 0
                 }
-              ]
+              ],
+              "hitFrame": 7,
+              "returnFrame": 9
             }
           }
         }
@@ -150006,7 +150452,10 @@
               "top": 36,
               "bottom": 16
             }
-          ]
+          ],
+          "rushFrame": 1,
+          "hitFrame": 4,
+          "returnFrame": 6
         },
         "hurt": {
           "sheet": "sprites/0383/hurt.png",
@@ -150706,7 +151155,9 @@
               "top": 45,
               "bottom": 16
             }
-          ]
+          ],
+          "hitFrame": 2,
+          "returnFrame": 4
         },
         "charge": {
           "sheet": "sprites/0383/charge.png",
@@ -151179,7 +151630,9 @@
               "top": 34,
               "bottom": 8
             }
-          ]
+          ],
+          "hitFrame": 5,
+          "returnFrame": 9
         },
         "hop": {
           "sheet": "sprites/0383/hop.png",
@@ -151652,7 +152105,8 @@
               "top": 66,
               "bottom": 8
             }
-          ]
+          ],
+          "hitFrame": 9
         }
       },
       "skins": [
@@ -152982,7 +153436,10 @@
                   "top": 36,
                   "bottom": 16
                 }
-              ]
+              ],
+              "rushFrame": 1,
+              "hitFrame": 4,
+              "returnFrame": 6
             },
             "hurt": {
               "sheet": "sprites/0383/shiny/hurt.png",
@@ -153682,7 +154139,9 @@
                   "top": 45,
                   "bottom": 16
                 }
-              ]
+              ],
+              "hitFrame": 2,
+              "returnFrame": 4
             },
             "charge": {
               "sheet": "sprites/0383/shiny/charge.png",
@@ -154155,7 +154614,9 @@
                   "top": 34,
                   "bottom": 8
                 }
-              ]
+              ],
+              "hitFrame": 5,
+              "returnFrame": 9
             },
             "hop": {
               "sheet": "sprites/0383/shiny/hop.png",
@@ -154628,7 +155089,8 @@
                   "top": 66,
                   "bottom": 8
                 }
-              ]
+              ],
+              "hitFrame": 9
             }
           }
         }

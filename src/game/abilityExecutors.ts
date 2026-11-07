@@ -25,7 +25,6 @@ import type {
 } from './matchState';
 import { TEAM_INFO } from './multiplayer';
 import { maxHitRadius } from './roster';
-import type { AnimationName } from './types';
 import type { World } from './world';
 
 export interface AbilityDamageOptions {
@@ -87,11 +86,6 @@ export interface AbilityExecutorDeps {
     dirZ: number,
     distance: number
   ): { x: number; z: number };
-  animationPlaybackFor(
-    player: MatchPlayerState,
-    animation: AnimationName,
-    duration: number
-  ): number;
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
@@ -240,9 +234,9 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   }
   const endX = player.x + dirX * distance;
   const endZ = player.z + dirZ * distance;
-  // Los haces con windup ya dibujaron su carril al empezar la carga. Los
+  // Los haces con startup ya dibujaron su carril al empezar la carga. Los
   // instantáneos lo crean aquí para que también se vea hasta el final del haz.
-  if (def.windup <= 0) {
+  if (def.startup <= 0) {
     deps.combatFx.spawnBeamLane(
       player.x,
       player.z,
@@ -323,7 +317,7 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   // `windup` reciben la marca ya creada para poder moverla junto al centro.
   const marker =
     deps.marker ??
-    (def.windup <= 0
+    (def.startup <= 0
       ? deps.combatFx.spawnAoeTelegraph(
           centerX,
           centerZ,
@@ -431,22 +425,15 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
     dashDistance
   );
   const distance = Math.hypot(resolved.x - player.x, resolved.z - player.z);
-  // La animación dura lo que tarda en recorrer la distancia real. Si un
-  // obstáculo acorta el dash, también se acorta QuickStrike.
+  // El desplazamiento real se reparte durante `active`. Si un obstáculo
+  // acorta el dash, también se acorta la distancia recorrida; la animación la
+  // lleva el plan de casteo.
+  const active = Math.max(0.08, def.active);
   const duration =
     distance > 0.01 && dashDistance > 0.01
-      ? Math.max(
-          0.08,
-          Math.min(def.castTime, (distance / dashDistance) * def.castTime)
-        )
+      ? Math.max(0.08, Math.min(active, (distance / dashDistance) * active))
       : 0.08;
   const speed = distance > 0.01 ? distance / duration : 0;
-  const playback =
-    def.animation === null
-      ? 1
-      : deps.animationPlaybackFor(player, def.animation, duration);
-  player.actionTimer = duration;
-  player.playback = playback;
   player.dash = {
     def,
     elapsed: 0,
@@ -456,20 +443,12 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
     speed,
     distance,
     traveled: 0,
-    playback,
     trailTimer: 0,
     hit: new Set(),
     healToken: deps.healToken
   };
   player.vx = 0;
   player.vz = 0;
-  // Fuerza el cambio de capa en el mismo frame del casteo; el bucle de copias
-  // lo mantiene después sin reiniciar el frame de la animación. Sin animación
-  // propia el dash se resuelve solo con el desplazamiento.
-  if (def.animation !== null) {
-    player.animation = def.animation;
-    for (const copy of player.copies) copy.play(def.animation, true);
-  }
 };
 
 const executeSelf: AbilityExecutor = (player, def, deps) => {

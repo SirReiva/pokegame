@@ -180,6 +180,20 @@ export class Actor {
     this.billboard.setPlayback(rate);
   }
 
+  /** Fija el frame desde la simulación; deja de avanzar automáticamente. */
+  setManualFrame(name: AnimationName, frame: number): void {
+    this.billboard.setManualFrame(name, frame);
+  }
+
+  /** Vuelve al reloj automático de idle/walk/hurt. */
+  clearManual(): void {
+    this.billboard.clearManual();
+  }
+
+  get currentFrame(): number {
+    return this.billboard.currentFrame;
+  }
+
   /** Actualiza la vida mostrada sobre el sprite (0 = KO, barra oculta). */
   setHealth(fraction: number): void {
     this.healthBar.setFraction(fraction);

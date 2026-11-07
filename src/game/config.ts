@@ -26,6 +26,11 @@ export const CONFIG = {
      * para activarlo.
      */
     showHitboxes: false as boolean,
+    /**
+     * Overlay con las fases del casteo (startup/active/recovery), el frame
+     * manual y los marcadores Hit/Return del clip. Solo para depuración.
+     */
+    showCastTimings: false as boolean,
   },
   performance: {
     /**

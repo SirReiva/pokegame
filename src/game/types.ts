@@ -59,6 +59,15 @@ export interface SpriteAnimation {
   rows: number;
   /** Duración de cada frame en ticks de 1/60 s. */
   durations: number[];
+  /**
+   * Marcadores de fase de la animación de ataque, en índice de frame (0-based).
+   * `rushFrame`: inicio del envite; `hitFrame`: impacto/lanzamiento;
+   * `returnFrame`: inicio de la vuelta al reposo. Solo existen en animaciones
+   * de ataque (Attack, Strike, Shoot, etc.).
+   */
+  rushFrame?: number;
+  hitFrame?: number;
+  returnFrame?: number;
   /** Un ancla por frame, en orden fila a fila (8 direcciones x columnas). */
   anchors: SpriteAnchor[];
   /**
@@ -75,6 +84,13 @@ export interface SpriteAnimation {
    * bajan del ancla. `-1` indica una celda vacía.
    */
   bottoms: number[];
+}
+
+/** Animación resuelta tras aplicar los fallbacks de la especie. */
+export interface ResolvedAnimation {
+  /** Nombre final tras los fallbacks (`shoot` → `attack`, etc.). */
+  name: AnimationName;
+  animation: SpriteAnimation;
 }
 
 export interface SpriteCredits {

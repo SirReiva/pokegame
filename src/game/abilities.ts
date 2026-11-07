@@ -125,11 +125,11 @@ export type AoeStyle =
 export type AoeDamageMode = 'instant' | 'overTime';
 
 /**
- * Cómo se reproduce la animación durante la preparación:
- * - `once`: se ajusta la velocidad para que el clip dure exactamente `windup`.
- * - `loop`: se usa `windupAnimationSpeed` y se repite hasta agotar `windup`.
+ * Cómo se reproduce la animación de carga durante el `startup`:
+ * - `once`: se reproduce una vez y se ancla su `HitFrame` al efecto.
+ * - `loop`: se usa `startupAnimationSpeed` y se repite hasta el efecto.
  */
-export type WindupAnimationMode = 'once' | 'loop';
+export type StartupAnimationMode = 'once' | 'loop';
 
 export interface BuffSpec {
   stat: BuffStat;
@@ -247,41 +247,39 @@ export interface AbilityDef {
   dashBlocksOnEnemies: boolean;
   /** Color del efecto, en 0-255. */
   color: [number, number, number];
-  /** Duración de la animación de ataque, en segundos. */
-  castTime: number;
   /**
-   * Duración real del clip de lanzamiento, en segundos. En las melee coincide
-   * siempre con `moveLock`; en el resto vale `castTime` por defecto.
+   * Tiempo desde el inicio del casteo hasta que ocurre el efecto. La
+   * presentación retima el clip para que su `HitFrame` caiga exactamente aquí.
    */
-  animationTime: number;
+  startup: number;
   /**
-   * Tiempo durante el que el lanzador no puede moverse con el input, en
-   * segundos. Las habilidades melee lo igualan a la mitad de `castTime` por
-   * defecto.
+   * Ventana de daño o desplazamiento que empieza con el efecto. En proyectiles
+   * y áreas instantáneas suele ser 0; en melee es el tiempo de compromiso del
+   * golpe y en dash la duración del desplazamiento.
    */
-  moveLock: number;
-  /** Preparación antes de ejecutar el efecto, en segundos. */
-  windup: number;
+  active: number;
+  /** Tiempo desde el fin del efecto hasta que el lanzador vuelve a estar libre. */
+  recovery: number;
   /**
-   * Animación distinta para la preparación; sin ella se repite `animation`.
+   * Animación de carga durante el `startup`; sin ella se usa `animation`.
    * Si ambas son `null`, no se reproduce ninguna animación.
    */
-  windupAnimation: AnimationName | null;
-  /** Modo de la animación durante la preparación. */
-  windupAnimationMode: WindupAnimationMode;
-  /** Velocidad de la animación de preparación en modo `loop` (1 = normal). */
-  windupAnimationSpeed: number;
+  startupAnimation: AnimationName | null;
+  /** Cómo se reproduce `startupAnimation`. */
+  startupAnimationMode: StartupAnimationMode;
+  /** Velocidad de `startupAnimation` en modo `loop` (1 = normal). */
+  startupAnimationSpeed: number;
   /**
    * Animación de sprite que se reproduce al lanzar la habilidad.
    * `null` = la habilidad no reproduce ninguna animación.
    */
   animation: AnimationName | null;
   /**
-   * Permite moverse durante el `windup`. El efecto sigue fijado en el centro
+   * Permite moverse durante el `startup`. El efecto sigue fijado en el centro
    * calculado al empezar el lanzamiento, así que el Pokémon puede salir de la
-   * zona mientras la marca sigue en el suelo. Sin efecto si `windup` es 0.
+   * zona mientras la marca sigue en el suelo. Sin efecto si `startup` es 0.
    */
-  moveWhileWindup: boolean;
+  moveWhileStartup: boolean;
   /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
@@ -329,17 +327,21 @@ export const DEFAULT_ABILITY: Omit<
   dashBlocksOnEnemies: false,
   preserveMomentum: false,
   color: [255, 255, 255],
-  castTime: 0.45,
-  animationTime: 0.45,
-  moveLock: 0,
-  windup: 0,
-  windupAnimation: null,
-  windupAnimationMode: 'once',
-  windupAnimationSpeed: 1,
+  startup: 0,
+  active: 0,
+  recovery: 0.45,
+  startupAnimation: null,
+  startupAnimationMode: 'once',
+  startupAnimationSpeed: 1,
   animation: null,
-  moveWhileWindup: false,
+  moveWhileStartup: false,
   description: ''
 };
+
+/** Tiempo total de ocupación del lanzador (casteo completo). */
+export function abilityTotalTime(def: AbilityDef): number {
+  return def.startup + def.active + def.recovery;
+}
 
 /**
  * Registra una habilidad rellenando los valores que no se indiquen.
@@ -349,16 +351,7 @@ export function defineAbility(
   def: Pick<AbilityDef, 'id' | 'name' | 'type' | 'category' | 'shape'> &
     Partial<AbilityDef>
 ): AbilityDef {
-  const ability = { ...DEFAULT_ABILITY, ...def };
-  if (ability.shape === 'melee') {
-    // Las melee bloquean el movimiento durante su animación y el clip dura
-    // exactamente ese mismo tiempo (la mitad del castTime por defecto).
-    if (def.moveLock === undefined) ability.moveLock = ability.castTime * 0.5;
-    ability.animationTime = ability.moveLock;
-  } else if (def.animationTime === undefined) {
-    ability.animationTime = ability.castTime;
-  }
-  return ability;
+  return { ...DEFAULT_ABILITY, ...def };
 }
 
 /**
@@ -548,38 +541,73 @@ export class AbilityBuilder {
     return this;
   }
 
-  cast(seconds: number): this {
-    this.draft.castTime = seconds;
-    return this;
-  }
-
-  /** Bloquea el movimiento del lanzador durante `seconds` al usar la habilidad. */
-  moveLock(seconds: number): this {
-    this.draft.moveLock = seconds;
-    return this;
-  }
-
-  windup(
+  /** Tiempo desde el inicio del casteo hasta que ocurre el efecto. */
+  startup(
     seconds: number,
     options: {
-      mode?: WindupAnimationMode;
+      mode?: StartupAnimationMode;
       speed?: number;
       move?: boolean;
       animation?: AnimationName;
     } = {}
   ): this {
-    this.draft.windup = seconds;
+    this.draft.startup = seconds;
     if (options.mode !== undefined) {
-      this.draft.windupAnimationMode = options.mode;
+      this.draft.startupAnimationMode = options.mode;
     }
     if (options.speed !== undefined) {
-      this.draft.windupAnimationSpeed = options.speed;
+      this.draft.startupAnimationSpeed = options.speed;
     }
-    if (options.move !== undefined) this.draft.moveWhileWindup = options.move;
+    if (options.move !== undefined) this.draft.moveWhileStartup = options.move;
     if (options.animation !== undefined) {
-      this.draft.windupAnimation = options.animation;
+      this.draft.startupAnimation = options.animation;
     }
     return this;
+  }
+
+  /** Ventana de daño/desplazamiento que empieza con el efecto. */
+  active(seconds: number): this {
+    this.draft.active = seconds;
+    return this;
+  }
+
+  /** Tiempo desde el fin del efecto hasta volver a estar libre. */
+  recovery(seconds: number): this {
+    this.draft.recovery = seconds;
+    return this;
+  }
+
+  /**
+   * Alias heredado de la API anterior. Reparte el tiempo total según la forma:
+   * melee → la mitad en `active`; dash → todo en `active`; resto → `recovery`.
+   * Se mantiene para definiciones antiguas; lo nuevo usa
+   * `startup()/active()/recovery()`.
+   */
+  cast(seconds: number): this {
+    if (this.draft.shape === 'melee') {
+      this.draft.active = seconds * 0.5;
+      this.draft.recovery = 0;
+    } else if (this.draft.shape === 'dash') {
+      this.draft.active = seconds;
+      this.draft.recovery = 0;
+    } else {
+      this.draft.active = 0;
+      this.draft.recovery = seconds;
+    }
+    return this;
+  }
+
+  /** Alias heredado de `startup()`. */
+  windup(
+    seconds: number,
+    options: {
+      mode?: StartupAnimationMode;
+      speed?: number;
+      move?: boolean;
+      animation?: AnimationName;
+    } = {}
+  ): this {
+    return this.startup(seconds, options);
   }
 
   /**
@@ -722,7 +750,7 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
     ability('proteccion', 'Protección', 'Normal', 'status', 'self')
       .cooldown(8)
       .radius(1)
-      .cast(0.15)
+      .recovery(0.15)
       .shield(2, 0.6, 0.88)
       .preserveMomentum()
       .animation(null)
@@ -736,7 +764,8 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
       .cooldown(3)
       .dash(2.2)
       .dashBlocksOnEnemies()
-      .cast(0.2)
+      .active(0.2)
+      .recovery(0)
       .animation('quickstrike')
       .color(210, 235, 255)
       .description(
@@ -759,8 +788,8 @@ registerAbility(
     .radius(0.26)
     .projectile('electric', 18)
     .impact('electric')
-    .cast(0.34)
-    .windup(0.13, { mode: 'once' })
+    .recovery(0.34)
+    .startup(0.13, { mode: 'once' })
     .animation('shock')
     .color(247, 208, 44)
     .description(
@@ -777,7 +806,7 @@ registerAbility(
     .radius(0.9)
     .dash(4.5)
     .knockback(0.4)
-    .cast(0.25)
+    .active(0.25).recovery(0)
     .animation('quickstrike')
     .color(232, 244, 255)
     .description('Se lanza hacia delante y golpea a los rivales del camino.')
@@ -791,8 +820,8 @@ registerAbility(
     .range(11)
     .radius(0.35)
     .impact('electric')
-    .cast(0.55)
-    .windup(0.35, { mode: 'once' })
+    .recovery(0.55)
+    .startup(0.35, { mode: 'once' })
     .animation('shock')
     .color(255, 238, 88)
     .description(
@@ -809,7 +838,7 @@ registerAbility(
     .radius(0.7)
     .halfAngle(50)
     .knockback(0.6)
-    .cast(0.35)
+    .active(0.175).recovery(0)
     .animation('attack')
     .impact('arc')
     .color(235, 228, 210)
@@ -829,7 +858,7 @@ registerAbility(
     .radius(0.7)
     .halfAngle(50)
     .knockback(0.25)
-    .cast(0.3)
+    .active(0.15).recovery(0)
     .animation('attack')
     .impact('electric')
     .color(247, 208, 44)
@@ -847,7 +876,7 @@ registerAbility(
     .radius(0.95)
     .dash(5)
     .knockback(0.6)
-    .cast(0.3)
+    .active(0.3).recovery(0)
     .animation('twirl')
     .impact('electric')
     .color(247, 208, 44)
@@ -865,7 +894,7 @@ registerAbility(
     .radius(0.3)
     .projectile('electric', 16)
     .impact('electric')
-    .cast(0.35)
+    .recovery(0.35)
     .animation('charge')
     .slow(0.55, 2.5)
     .color(247, 208, 44)
@@ -882,8 +911,8 @@ registerAbility(
     .range(0)
     .radius(4.2)
     .area('explosion', 'instant', 0.85)
-    .windup(0.6, { animation: 'charge' })
-    .cast(0.5)
+    .startup(0.6, { animation: 'charge' })
+    .recovery(0.5)
     .animation(null)
     .impact('electric')
     .knockback(1.2)
@@ -907,7 +936,7 @@ registerAbility(
     .radius(0.7)
     .halfAngle(50)
     .knockback(0.25)
-    .cast(0.32)
+    .active(0.16).recovery(0)
     .animation('shoot')
     .impact('ghost')
     .color(150, 110, 220)
@@ -925,7 +954,7 @@ registerAbility(
     .radius(0.3)
     .projectile('ghost', 14)
     .impact('ghost')
-    .cast(0.45)
+    .recovery(0.45)
     .animation('shoot')
     .color(150, 110, 220)
     .description(
@@ -942,8 +971,8 @@ registerAbility(
     .radius(2.4)
     .area('poison', 'overTime', 2.5, 0.5)
     .slow(0.75, 1.5)
-    .windup(0.35, { animation: 'shoot', move: true })
-    .cast(0.5)
+    .startup(0.35, { animation: 'shoot', move: true })
+    .recovery(0.5)
     .animation(null)
     .impact('poison')
     .color(150, 90, 180)
@@ -961,8 +990,8 @@ registerAbility(
     .radius(0.42)
     .beam('ghost')
     .impact('ghost')
-    .windup(0.25, { animation: 'shoot' })
-    .cast(0.55)
+    .startup(0.25, { animation: 'shoot' })
+    .recovery(0.55)
     .heal(0.15)
     .healOnHit()
     .color(160, 120, 235)
@@ -984,7 +1013,7 @@ registerAbility(
     .radius(0.65)
     .halfAngle(45)
     .knockback(0.35)
-    .cast(0.3)
+    .active(0.15).recovery(0)
     .animation('strike')
     .impact('slash')
     .color(246, 236, 220)
@@ -998,8 +1027,8 @@ registerAbility(
     .cooldown(6)
     .range(3.6)
     .radius(1.7)
-    .windup(0.5, { move: true })
-    .cast(0.45)
+    .startup(0.5, { move: true })
+    .recovery(0.45)
     .area('whirl', 'overTime', 2.4, 0.4)
     .aoeMovement(({ originX, originZ, duration, elapsed }) => {
       // Espiral hacia fuera: arranca en el centro, da 1,5 vueltas y se abre
@@ -1027,8 +1056,8 @@ registerAbility(
     .cooldown(6.5)
     .range(9.5)
     .radius(0.4)
-    .windup(0.35)
-    .cast(0.5)
+    .startup(0.35)
+    .recovery(0.5)
     .animation('charge')
     .beam('fire')
     .impact('fire')
@@ -1043,8 +1072,8 @@ registerAbility(
     .cooldown(14)
     .range(4.2)
     .radius(3.1)
-    .windup(0.75)
-    .cast(0.7)
+    .startup(0.75)
+    .recovery(0.7)
     .animation('charge')
     .area('fire', 'instant', 0.5)
     .impact('fire')
@@ -1067,8 +1096,8 @@ registerAbility(
     .radius(0.8)
     .halfAngle(50)
     .knockback(0.4)
-    .cast(0.45)
-    .windup(0.3)
+    .active(0.225).recovery(0)
+    .startup(0.3)
     .animation('charge')
     .impact('grass')
     .color(126, 214, 88)
@@ -1083,8 +1112,8 @@ registerAbility(
     .range(3)
     .radius(0.9)
     .halfAngle(60)
-    .windup(0.2)
-    .cast(0.4)
+    .startup(0.2)
+    .active(0.2).recovery(0)
     .animation('shoot')
     .impact('spore')
     .slow(0.55, 3)
@@ -1101,8 +1130,8 @@ registerAbility(
     .cooldown(14)
     .range(4.2)
     .radius(3.2)
-    .windup(0.75)
-    .cast(0.7)
+    .startup(0.75)
+    .recovery(0.7)
     .animation('shake')
     .area('grass', 'instant', 1.1)
     .impact('grass')
@@ -1125,7 +1154,7 @@ registerAbility(
     .radius(0.85)
     .dash(4.2)
     .knockback(0.3)
-    .cast(0.3)
+    .active(0.3).recovery(0)
     .animation('attack')
     .color(96, 176, 255)
     .description(
@@ -1142,8 +1171,8 @@ registerAbility(
     .radius(0.24)
     .projectile('water', 13)
     .impact('water')
-    .cast(0.4)
-    .windup(0.2)
+    .recovery(0.4)
+    .startup(0.2)
     .animation('shoot')
     .slow(0.7, 2)
     .color(104, 196, 255)
@@ -1161,8 +1190,8 @@ registerAbility(
     .radius(0.42)
     .beam('water')
     .impact('water')
-    .windup(0.3, { animation: 'charge' })
-    .cast(0.6)
+    .startup(0.3, { animation: 'charge' })
+    .recovery(0.6)
     .animation('shoot')
     .color(88, 168, 255)
     .description(
@@ -1183,7 +1212,7 @@ registerAbility(
     .radius(0.7)
     .halfAngle(45)
     .knockback(0.25)
-    .cast(0.32)
+    .active(0.16).recovery(0)
     .animation('strike')
     .impact('steel')
     .color(176, 198, 228)
@@ -1201,7 +1230,7 @@ registerAbility(
     .radius(0.9)
     .dash(5.2)
     .knockback(0.6)
-    .cast(0.25)
+    .active(0.25).recovery(0)
     .animation('quickstrike')
     .impact('fighting')
     .color(214, 236, 255)
@@ -1219,8 +1248,8 @@ registerAbility(
     .radius(0.32)
     .projectile('aura', 15)
     .impact('aura')
-    .windup(0.2, { animation: 'charge' })
-    .cast(0.4)
+    .startup(0.2, { animation: 'charge' })
+    .recovery(0.4)
     .animation('attack')
     .color(82, 152, 255)
     .description(
@@ -1237,8 +1266,8 @@ registerAbility(
     .radius(1)
     .halfAngle(65)
     .knockback(1.1)
-    .windup(0.35, { animation: 'charge' })
-    .cast(0.65)
+    .startup(0.35, { animation: 'charge' })
+    .active(0.325).recovery(0)
     .animation('strike')
     .impact('fighting')
     .color(96, 150, 255)
@@ -1260,7 +1289,7 @@ registerAbility(
     .radius(0.24)
     .projectile('shuriken', 20)
     .impact('shuriken')
-    .cast(0.3)
+    .recovery(0.3)
     .animation('shoot')
     .color(112, 196, 255)
     .description(
@@ -1277,7 +1306,7 @@ registerAbility(
     .radius(0.75)
     .halfAngle(55)
     .knockback(0.35)
-    .cast(0.32)
+    .active(0.16).recovery(0)
     .animation('attack')
     .impact('dark')
     .color(154, 120, 232)
@@ -1295,7 +1324,7 @@ registerAbility(
     .radius(0.85)
     .dash(4.8)
     .knockback(0.5)
-    .cast(0.26)
+    .active(0.26).recovery(0)
     .animation('quickstrike')
     .impact('dark')
     .color(128, 100, 216)
@@ -1313,8 +1342,8 @@ registerAbility(
     .radius(0.42)
     .beam('dark')
     .impact('dark')
-    .windup(0.25, { animation: 'charge' })
-    .cast(0.55)
+    .startup(0.25, { animation: 'charge' })
+    .recovery(0.55)
     .animation('shoot')
     .color(124, 92, 224)
     .description(
@@ -1335,8 +1364,8 @@ registerAbility(
     .radius(0.8)
     .halfAngle(55)
     .knockback(1.4)
-    .cast(0.4)
-    .windup(0.12)
+    .active(0.2).recovery(0)
+    .startup(0.12)
     .animation('punch')
     .impact('psychic')
     .color(214, 122, 255)
@@ -1353,7 +1382,7 @@ registerAbility(
     .range(0)
     .radius(0.85)
     .dash(5)
-    .cast(0.24)
+    .active(0.24).recovery(0)
     .animation('quickstrike')
     .impact('psychic')
     .color(170, 104, 255)
@@ -1369,8 +1398,8 @@ registerAbility(
     .cooldown(7)
     .range(10)
     .radius(0.42)
-    .windup(0.4, { animation: 'shoot' })
-    .cast(0.5)
+    .startup(0.4, { animation: 'shoot' })
+    .recovery(0.5)
     .beam('psychic')
     .impact('psychic')
     .color(226, 132, 255)
@@ -1386,8 +1415,8 @@ registerAbility(
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
-    .windup(0.8, { animation: 'charge' })
-    .cast(0.7)
+    .startup(0.8, { animation: 'charge' })
+    .recovery(0.7)
     .area('psychic', 'instant', 0.85)
     .radial(0.35)
     .impact('psychic')
@@ -1410,8 +1439,8 @@ registerAbility(
     .radius(0.7)
     .halfAngle(55)
     .knockback(0.5)
-    .cast(0.32)
-    .windup(0.1)
+    .active(0.16).recovery(0)
+    .startup(0.1)
     .animation('attack')
     .impact('psychic')
     .color(255, 150, 220)
@@ -1428,7 +1457,7 @@ registerAbility(
     .range(0)
     .radius(0.85)
     .dash(4.4)
-    .cast(0.26)
+    .active(0.26).recovery(0)
     .animation('quickstrike')
     .buff('speed', 1.3, 3)
     .impact('psychic')
@@ -1445,8 +1474,8 @@ registerAbility(
     .cooldown(10)
     .range(6)
     .radius(2.4)
-    .windup(0.9, { move: true })
-    .cast(0.55)
+    .startup(0.9, { move: true })
+    .recovery(0.55)
     .area('psychic', 'instant', 0.8)
     .radial(0.5)
     .impact('psychic')
@@ -1464,8 +1493,8 @@ registerAbility(
     .cooldown(14)
     .range(0)
     .radius(3.5)
-    .cast(0.75)
-    .windup(0.75)
+    .recovery(0.75)
+    .startup(0.75)
     .animation('twirl')
     .heal(0.35)
     .area('recovery', 'instant', 0.75)
@@ -1496,7 +1525,7 @@ registerAbility(
     .radius(0.8)
     .halfAngle(55)
     .knockback(0.35)
-    .cast(0.36)
+    .active(0.18).recovery(0)
     .animation('strike')
     .impact('air')
     .color(255, 190, 92)
@@ -1514,7 +1543,7 @@ registerAbility(
     .radius(0.3)
     .projectile('air', 16)
     .impact('air')
-    .cast(0.4)
+    .recovery(0.4)
     .animation('shoot')
     .color(255, 206, 122)
     .description(
@@ -1532,8 +1561,8 @@ registerAbility(
     .area('heat', 'instant', 0.9)
     .radial(0.4)
     .slow(0.82, 1.5)
-    .windup(0.3, { animation: 'shoot', move: true })
-    .cast(0.5)
+    .startup(0.3, { animation: 'shoot', move: true })
+    .recovery(0.5)
     .animation(null)
     .impact('air')
     .color(255, 150, 60)
@@ -1552,8 +1581,8 @@ registerAbility(
     .area('air', 'instant', 0.9)
     .radial(0.35)
     .knockback(0.9)
-    .windup(0.8, { animation: 'charge' })
-    .cast(0.6)
+    .startup(0.8, { animation: 'charge' })
+    .recovery(0.6)
     .animation('strike')
     .impact('air')
     .color(255, 168, 72)
@@ -1575,7 +1604,7 @@ registerAbility(
     .radius(0.8)
     .halfAngle(55)
     .knockback(0.35)
-    .cast(0.36)
+    .active(0.18).recovery(0)
     .animation('attack')
     .impact('air')
     .color(206, 242, 255)
@@ -1593,8 +1622,8 @@ registerAbility(
     .radius(0.4)
     .beam('ice')
     .impact('ice')
-    .windup(0.3, { animation: 'charge' })
-    .cast(0.5)
+    .startup(0.3, { animation: 'charge' })
+    .recovery(0.5)
     .animation('shoot')
     .slow(0.8, 1.5)
     .color(150, 225, 255)
@@ -1613,8 +1642,8 @@ registerAbility(
     .area('ice', 'instant', 0.9)
     .radial(0.5)
     .slow(0.65, 2.5)
-    .windup(0.3, { animation: 'shoot', move: true })
-    .cast(0.5)
+    .startup(0.3, { animation: 'shoot', move: true })
+    .recovery(0.5)
     .animation(null)
     .impact('ice')
     .color(130, 210, 245)
@@ -1633,8 +1662,8 @@ registerAbility(
     .area('blizzard', 'instant', 1.1)
     .radial(0.35)
     .slow(0.75, 2)
-    .windup(0.75, { animation: 'charge' })
-    .cast(0.7)
+    .startup(0.75, { animation: 'charge' })
+    .recovery(0.7)
     // El área es instantánea: la ventisca cae al terminar la carga. Sin clip
     // de lanzamiento para no reproducir el disparo cuando ya ha impactado.
     .animation(null)
@@ -1658,7 +1687,7 @@ registerAbility(
     .radius(0.75)
     .halfAngle(55)
     .knockback(0.25)
-    .cast(0.3)
+    .active(0.15).recovery(0)
     .animation('attack')
     .impact('slash')
     .color(166, 185, 26)
@@ -1676,7 +1705,7 @@ registerAbility(
     .radius(0.9)
     .dash(5)
     .knockback(0.6)
-    .cast(0.26)
+    .active(0.26).recovery(0)
     .animation('attack')
     .impact('air')
     .color(196, 240, 160)
@@ -1691,8 +1720,8 @@ registerAbility(
     .accuracy(0)
     .cooldown(12)
     .radius(1.2)
-    .windup(0.45, { animation: 'charge' })
-    .cast(0.6)
+    .startup(0.45, { animation: 'charge' })
+    .recovery(0.6)
     .animation('charge')
     .buff('attack', 1.35, 4.5)
     .color(170, 210, 60)
@@ -1710,8 +1739,8 @@ registerAbility(
     .radius(1.1)
     .halfAngle(70)
     .knockback(1.1)
-    .windup(0.35, { animation: 'charge' })
-    .cast(0.65)
+    .startup(0.35, { animation: 'charge' })
+    .active(0.325).recovery(0)
     .animation('attack')
     .impact('slash')
     .color(170, 200, 40)
@@ -1733,7 +1762,7 @@ registerAbility(
     .radius(0.8)
     .halfAngle(55)
     .knockback(0.35)
-    .cast(0.42)
+    .active(0.21).recovery(0)
     .animation('attack')
     .impact('jaw')
     .color(126, 98, 166)
@@ -1752,8 +1781,8 @@ registerAbility(
     .projectile('rock', 14)
     .impact('rock')
     .knockback(0.45)
-    .windup(0.25)
-    .cast(0.45)
+    .startup(0.25)
+    .recovery(0.45)
     .animation('shoot')
     .color(196, 166, 104)
     .description(
@@ -1769,8 +1798,8 @@ registerAbility(
     .range(0)
     .radius(3.4)
     .area('ground', 'overTime', 2.5, 0.5)
-    .windup(0.45, { animation: 'hop' })
-    .cast(0.7)
+    .startup(0.45, { animation: 'hop' })
+    .recovery(0.7)
     .animation(null)
     .impact('ground')
     .color(198, 158, 92)
@@ -1788,8 +1817,8 @@ registerAbility(
     .radius(0.5)
     .beam('rock')
     .impact('rock')
-    .windup(0.5, { animation: 'charge' })
-    .cast(0.6)
+    .startup(0.5, { animation: 'charge' })
+    .recovery(0.6)
     // El haz y las estalagmitas son el golpe: no hay clip de lanzamiento
     // después de la carga para no encadenar un Attack que no aporta nada.
     .animation(null)
@@ -1812,7 +1841,7 @@ registerAbility(
     .radius(0.85)
     .halfAngle(55)
     .knockback(0.4)
-    .cast(0.4)
+    .active(0.2).recovery(0)
     .animation('attack')
     .impact('slash')
     .color(226, 191, 101)
@@ -1831,8 +1860,8 @@ registerAbility(
     .area('ground', 'instant', 0.9)
     .radial(0.35)
     .knockback(0.6)
-    .windup(0.7, { animation: 'charge' })
-    .cast(0.7)
+    .startup(0.7, { animation: 'charge' })
+    .recovery(0.7)
     .animation(null)
     .impact('ground')
     .color(214, 170, 88)
@@ -1854,7 +1883,7 @@ registerAbility(
     .radius(0.95)
     .halfAngle(65)
     .knockback(0.55)
-    .cast(0.45)
+    .active(0.225).recovery(0)
     .animation('attack')
     .impact('rock')
     .color(182, 161, 54)
@@ -1873,8 +1902,8 @@ registerAbility(
     .projectile('rock', 13)
     .impact('rock')
     .knockback(0.3)
-    .windup(0.2, { animation: 'charge' })
-    .cast(0.45)
+    .startup(0.2, { animation: 'charge' })
+    .recovery(0.45)
     .animation('shoot')
     .color(182, 161, 54)
     .description(
@@ -1891,7 +1920,7 @@ registerAbility(
     .radius(0.95)
     .dash(5.2)
     .knockback(0.7)
-    .cast(0.35)
+    .active(0.35).recovery(0)
     .animation('attack')
     .impact('ground')
     .color(182, 161, 54)
@@ -1910,8 +1939,8 @@ registerAbility(
     .area('fissure', 'instant', 0.75)
     .radial(0.35)
     .knockback(0.9)
-    .windup(0.6, { animation: 'charge' })
-    .cast(0.6)
+    .startup(0.6, { animation: 'charge' })
+    .recovery(0.6)
     .animation(null)
     .impact('ground')
     .color(182, 161, 54)
@@ -1934,7 +1963,7 @@ registerAbility(
     .radius(0.26)
     .projectile('grass', 14)
     .impact('grass')
-    .cast(0.3)
+    .recovery(0.3)
     .animation('shoot')
     .color(143, 208, 90)
     .description(
@@ -1949,8 +1978,8 @@ registerAbility(
     .cooldown(8)
     .range(9.5)
     .radius(0.48)
-    .windup(0.65, { animation: 'charge' })
-    .cast(0.55)
+    .startup(0.65, { animation: 'charge' })
+    .recovery(0.55)
     .animation('shoot')
     .beam('grass')
     .impact('grass')
@@ -1967,8 +1996,8 @@ registerAbility(
     .cooldown(13)
     .range(0)
     .radius(3.2)
-    .windup(1.2, { mode: 'once' })
-    .cast(0.65)
+    .startup(1.2, { mode: 'once' })
+    .recovery(0.65)
     .animation('twirl')
     .area('recovery', 'instant', 0.8)
     .aoeEffect(({ fallenAllies, revive }) => {
@@ -1989,8 +2018,8 @@ registerAbility(
     .cooldown(15)
     .range(5.5)
     .radius(2.8)
-    .windup(1, { animation: 'charge' })
-    .cast(0.7)
+    .startup(1, { animation: 'charge' })
+    .recovery(0.7)
     // El área es instantánea al terminar la carga; no hay clip de lanzamiento
     // después del impacto.
     .animation(null)
@@ -2017,7 +2046,7 @@ registerAbility(
     .radius(0.28)
     .projectile('psychic', 14)
     .impact('psychic')
-    .cast(0.35)
+    .recovery(0.35)
     .animation('shoot')
     .color(138, 169, 232)
     .description(
@@ -2032,8 +2061,8 @@ registerAbility(
     .cooldown(9)
     .range(4.5)
     .radius(3.2)
-    .windup(0.35, { animation: 'charge', move: true })
-    .cast(0.5)
+    .startup(0.35, { animation: 'charge', move: true })
+    .recovery(0.5)
     .animation('shoot')
     .area('water', 'overTime', 2.5, 0.5)
     .slow(0.7, 1.2)
@@ -2051,8 +2080,8 @@ registerAbility(
     .cooldown(12)
     .range(0)
     .radius(3.6)
-    .windup(0.3, { animation: 'charge' })
-    .cast(0.55)
+    .startup(0.3, { animation: 'charge' })
+    .recovery(0.55)
     .animation('attack')
     .area('cyclone', 'instant', 1.2)
     .knockback(2.6)
@@ -2071,8 +2100,8 @@ registerAbility(
     .cooldown(16)
     .range(11)
     .radius(0.55)
-    .windup(0.8, { animation: 'charge' })
-    .cast(0.65)
+    .startup(0.8, { animation: 'charge' })
+    .recovery(0.65)
     .animation('shoot')
     .beam('air')
     .impact('air')

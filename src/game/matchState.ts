@@ -8,6 +8,7 @@ import type { AbilityDef, BuffStat } from './abilities';
 import type { AoeMovement } from './aoeEffect';
 import type { Actor } from './actor';
 import type { CameraRig } from './camera';
+import type { CastPlan } from './castPlan';
 import type { EffectHandle, FxHandle, TelegraphHandle } from './combatFx';
 import type { MatchPlayerConfig, SplitRect } from './multiplayer';
 import type { CombatStats } from './pokedex';
@@ -136,23 +137,32 @@ export interface PlayerDash {
   distance: number;
   /** Distancia recorrida; nunca supera `distance`. */
   traveled: number;
-  /** Velocidad de la animación para que dure lo mismo que el desplazamiento. */
-  playback: number;
   trailTimer: number;
   hit: Set<MatchPlayerState>;
   /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
   healToken?: HealOnHitToken;
 }
 
-export interface PendingCast {
+/**
+ * Casteo en curso: desde que se pulsa la habilidad hasta que termina su
+ * `recovery`. El plan de presentación fija qué frame del clip se dibuja en cada
+ * fase; el efecto se dispara una sola vez al llegar a `effectAt`.
+ */
+export interface ActiveCast {
   def: AbilityDef;
   slotIndex: number;
+  /** Tiempo transcurrido desde el inicio del casteo. */
   elapsed: number;
-  windup: number;
+  /** Plan de segmentos de animación y fases. */
+  plan: CastPlan;
+  /** Instante del efecto (`startup`). Lo usan bots y telegrafías. */
+  effectAt: number;
+  /** `true` cuando el efecto ya se encoló para resolverse en este frame. */
+  fired: boolean;
   /**
    * Marca en el suelo de las habilidades de área; `null` en las demás. El aro
    * del equipo sobrevive al impacto y se autodestruye al terminar el efecto;
-   * el relleno de carga solo dura el `windup`.
+   * el relleno de carga solo dura el `startup`.
    */
   marker: TelegraphHandle | null;
   /**
@@ -268,32 +278,15 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   stunTimer: number;
   /** Tiempo restante de la animación de daño. */
   hurtTimer: number;
-  /** Tiempo restante de la animación de ataque. */
-  actionTimer: number;
-  /** Velocidad del clip de ataque; las melee lo escalan a `moveLock`. */
-  actionPlayback: number;
-  /** Tiempo restante en el que el input no puede mover al jugador. */
-  moveLockTimer: number;
   /**
-   * Animación del ataque en curso. `null` cuando la habilidad no define
-   * ninguna, en cuyo caso se mantiene la animación de reposo o caminar.
+   * Frame manual que debe dibujar el billboard durante un casteo. `null` deja
+   * que idle/walk/hurt usen el reloj automático.
    */
-  actionAnimation: AnimationName | null;
-  /**
-   * Mantiene el último frame de `actionAnimation` durante el lanzamiento en
-   * vez de reiniciar el clip. Se activa cuando la preparación ya reprodujo esa
-   * misma animación: así no se ve dos veces seguidas.
-   */
-  actionHold: boolean;
-  /**
-   * Recuperación global tras lanzar una habilidad no melee. Mientras sea > 0
-   * no se puede lanzar ninguna otra, sea del hueco que sea.
-   */
-  castLockTimer: number;
+  animationFrame: number | null;
   /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
   dash: PlayerDash | null;
-  /** Habilidad en preparación (windup) o `null`. */
-  pendingCast: PendingCast | null;
+  /** Casteo en curso o `null`. */
+  activeCast: ActiveCast | null;
   /** Tiempo que el cuerpo sigue visible tras un KO. */
   deathFade: number;
   kills: number;
