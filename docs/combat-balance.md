@@ -650,6 +650,10 @@ daño radial es menor.
 
 Daño esperado contra el defensor neutro (100 en todo, sin tipos; STAB incluido):
 
+> La tabla completa, con cada ataque contra cada uno de los 24 rivales y su
+> efectividad, está en [`tabla-danos-por-ataque.md`](tabla-danos-por-ataque.md).
+> Se regenera con `node scripts/generate-damage-matrix.mjs`.
+
 | Pokémon | Básica | Habilidad 1 | Habilidad 2 | Definitiva |
 | --- | ---: | ---: | ---: | ---: |
 | Pikachu | Placaje 13 | Ataque Rápido 13 | Rayo 40 | Impactrueno 18 |
