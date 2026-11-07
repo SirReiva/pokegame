@@ -22,7 +22,7 @@
     },
     {
       "id": "arena4",
-      "name": "Arena Cuádruple",
+      "name": "Arena de las Cuatro Coronas",
       "file": "arena4.json",
       "teams": [
         "red",
@@ -30,7 +30,7 @@
         "yellow",
         "green"
       ],
-      "description": "Arena simétrica para cuatro equipos, uno en cada esquina.",
+      "description": "Arena de 128 × 128 celdas para cuatro equipos: bases cardinales, avenidas en cruz, plaza central con fuente, anillo de circulación, distritos elementales en las esquinas y muros diagonales de cobertura.",
       "preview": "maps/previews/arena4.png"
     },
     {
