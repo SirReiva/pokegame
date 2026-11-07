@@ -91,6 +91,9 @@ export function VersusScreen({
   });
   const rosters = teams.map(rosterFor);
   const twoTeams = rosters.length === 2;
+  const splitAt = Math.ceil(rosters.length / 2);
+  const leftRosters = rosters.slice(0, splitAt);
+  const rightRosters = rosters.slice(splitAt);
   const maxRows = Math.max(1, ...rosters.map((roster) => roster.players.length));
   const rowsEnd = (maxRows - 1) * ROW_DELAY_MS + ROW_DURATION_MS;
   const fullDuration =
@@ -281,10 +284,8 @@ export function VersusScreen({
       </header>
 
       <div
-        className={`relative z-10 min-h-0 flex-1 gap-[clamp(4px,1.6vw,26px)] px-[clamp(10px,2.2vw,34px)] ${
-          twoTeams
-            ? 'flex items-stretch'
-            : 'grid grid-cols-2 items-stretch overflow-y-auto'
+        className={`relative z-10 flex min-h-0 flex-1 items-stretch gap-[clamp(4px,1.6vw,26px)] px-[clamp(10px,2.2vw,34px)] ${
+          twoTeams ? '' : 'overflow-hidden'
         }`}
       >
         {twoTeams ? (
@@ -304,15 +305,51 @@ export function VersusScreen({
             />
           </>
         ) : (
-          rosters.map((roster, index) => (
-            <TeamPanel
-              key={roster.team}
-              roster={roster}
-              side={index % 2 === 0 ? 'left' : 'right'}
-              entryFor={entryFor}
-              reduced={reduced}
-            />
-          ))
+          <div className="grid min-h-0 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] grid-rows-2 gap-x-[clamp(4px,1.2vw,20px)] gap-y-[clamp(4px,1.2vh,14px)]">
+            {leftRosters.map((roster, index) => (
+              <div
+                key={roster.team}
+                className={`col-start-1 flex min-h-0 min-w-0 ${
+                  leftRosters.length === 1
+                    ? 'row-span-2 row-start-1'
+                    : index === 0
+                      ? 'row-start-1'
+                      : 'row-start-2'
+                }`}
+              >
+                <TeamPanel
+                  roster={roster}
+                  side="left"
+                  entryFor={entryFor}
+                  reduced={reduced}
+                />
+              </div>
+            ))}
+
+            <div className="col-start-2 row-span-2 row-start-1 flex min-h-0 items-stretch">
+              <VersusCore reduced={reduced} />
+            </div>
+
+            {rightRosters.map((roster, index) => (
+              <div
+                key={roster.team}
+                className={`col-start-3 flex min-h-0 min-w-0 ${
+                  rightRosters.length === 1
+                    ? 'row-span-2 row-start-1'
+                    : index === 0
+                      ? 'row-start-1'
+                      : 'row-start-2'
+                }`}
+              >
+                <TeamPanel
+                  roster={roster}
+                  side="right"
+                  entryFor={entryFor}
+                  reduced={reduced}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
