@@ -1,8 +1,8 @@
-import type { CSSProperties } from 'react';
-import { commonAbilityOption } from '../game/abilities';
-import type { InputDeviceInfo } from '../game/input';
-import type { MapIndexEntry } from '../game/map';
-import { publicUrl } from '../game/publicUrl';
+import type { CSSProperties } from "react";
+import { commonAbilityOption } from "../game/abilities";
+import type { InputDeviceInfo } from "../game/input";
+import type { MapIndexEntry } from "../game/map";
+import { publicUrl } from "../game/publicUrl";
 import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
@@ -14,15 +14,15 @@ import {
   maxPlayersFor,
   maxTeamSizeFor,
   type BotDifficulty,
-  type LobbyPlayer
-} from '../game/multiplayer';
-import type { Team } from '../game/terrain';
-import { Brand } from './Brand';
-import { btnClass } from './buttonStyles';
-import { confirmHint } from './deviceInfo';
-import { DeviceIcon } from './DeviceIcon';
-import { KeyPill } from './KeyPill';
-import { eyebrow, stepActive, stepIdle } from './styles';
+  type LobbyPlayer,
+} from "../game/multiplayer";
+import type { Team } from "../game/terrain";
+import { Brand } from "./Brand";
+import { btnClass } from "./buttonStyles";
+import { confirmHint } from "./deviceInfo";
+import { DeviceIcon } from "./DeviceIcon";
+import { KeyPill } from "./KeyPill";
+import { eyebrow, stepActive, stepIdle } from "./styles";
 
 interface LobbyScreenProps {
   players: LobbyPlayer[];
@@ -49,11 +49,11 @@ interface LobbyScreenProps {
 }
 
 const overlay =
-  'fixed inset-0 z-10 flex animate-fade-in items-start justify-center overflow-y-auto bg-[radial-gradient(circle_at_16%_10%,rgb(22_48_78/0.9),transparent_55%),linear-gradient(112deg,rgb(4_8_14/0.96),rgb(4_8_14/0.84)_55%,rgb(4_8_14/0.55))] p-[clamp(16px,2.4vw,32px)] backdrop-blur-[3px]';
+  "fixed inset-0 z-10 flex animate-fade-in items-start justify-center overflow-y-auto bg-[radial-gradient(circle_at_16%_10%,rgb(22_48_78/0.9),transparent_55%),linear-gradient(112deg,rgb(4_8_14/0.96),rgb(4_8_14/0.84)_55%,rgb(4_8_14/0.55))] p-[clamp(16px,2.4vw,32px)] backdrop-blur-[3px]";
 const shell =
-  'm-auto flex w-[min(1360px,100%)] animate-rise-in flex-col gap-[clamp(14px,2vh,24px)]';
+  "m-auto flex w-[min(1360px,100%)] animate-rise-in flex-col gap-[clamp(14px,2vh,24px)]";
 const emptyTeam =
-  'rounded-[14px] border border-dashed border-[color-mix(in_srgb,var(--team,#4b9cff)_28%,var(--color-line))] px-3 py-[18px] text-center text-12.48 leading-[1.45] text-steel-800';
+  "rounded-[14px] border border-dashed border-[color-mix(in_srgb,var(--team,#4b9cff)_28%,var(--color-line))] px-3 py-[18px] text-center text-12.48 leading-[1.45] text-steel-800";
 
 function TeamColumn({
   team,
@@ -61,7 +61,7 @@ function TeamColumn({
   maxTeamSize,
   onRename,
   onReady,
-  onLeave
+  onLeave,
 }: {
   team: Team;
   players: LobbyPlayer[];
@@ -72,7 +72,7 @@ function TeamColumn({
 }) {
   const info = TEAM_INFO[team];
   const roster = players.filter((player) => player.team === team);
-  const style = { '--team': info.color } as CSSProperties;
+  const style = { "--team": info.color } as CSSProperties;
 
   return (
     <section
@@ -93,14 +93,16 @@ function TeamColumn({
       </header>
 
       <div className="mt-3.5 flex flex-col gap-2.5">
-        {roster.length === 0 && <p className={emptyTeam}>Nadie en este equipo todavía.</p>}
+        {roster.length === 0 && (
+          <p className={emptyTeam}>Nadie en este equipo todavía.</p>
+        )}
         {roster.map((player) => (
           <article
             key={player.slot}
             className={`relative animate-pop-in rounded-[14px] border border-[color-mix(in_srgb,var(--team)_34%,var(--color-line))] border-l-[3px] border-l-(--team) px-3 py-2.5 transition-colors duration-200 ${
               player.teamReady
-                ? 'border-[color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]'
-                : 'bg-night-820/65'
+                ? "border-[color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]"
+                : "bg-night-820/65"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -119,10 +121,12 @@ function TeamColumn({
                   spellCheck={false}
                   autoComplete="off"
                   className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-px font-display text-16.8 font-extrabold text-(--team) outline-none transition-colors placeholder:text-steel-700 focus:border-(--team) focus:bg-night-950/40"
-                  onChange={(event) => onRename(player.slot, event.target.value)}
+                  onChange={(event) =>
+                    onRename(player.slot, event.target.value)
+                  }
                   onFocus={(event) => event.currentTarget.select()}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === 'Escape') {
+                    if (event.key === "Enter" || event.key === "Escape") {
                       event.currentTarget.blur();
                     }
                   }}
@@ -135,10 +139,10 @@ function TeamColumn({
               )}
               <span
                 className={`ml-auto shrink-0 font-mono text-8.96 tracking-[0.08em] uppercase ${
-                  player.teamReady ? 'text-accent-soft' : 'text-steel-650'
+                  player.teamReady ? "text-accent-soft" : "text-steel-650"
                 }`}
               >
-                {player.teamReady ? 'Listo' : 'Eligiendo'}
+                {player.teamReady ? "Listo" : "Eligiendo"}
               </span>
             </div>
 
@@ -152,27 +156,34 @@ function TeamColumn({
             </div>
 
             <div className="mt-1 font-mono text-8.96 text-steel-650">
-              Instinto:{' '}
+              Instinto:{" "}
               <span className="text-steel-350">
-                {commonAbilityOption(player.commonAbilityId)?.name ?? '—'}
+                {commonAbilityOption(player.commonAbilityId)?.name ?? "—"}
               </span>
             </div>
 
             <div className="mt-2 flex flex-wrap gap-1.5">
               <button
                 type="button"
-                className={btnClass(player.teamReady ? 'accent' : 'neutral', 'tiny')}
+                className={btnClass(
+                  player.teamReady ? "accent" : "neutral",
+                  "tiny",
+                )}
                 disabled={player.isBot}
                 onClick={() => onReady(player.slot)}
               >
-                {player.isBot ? '✓ Bot listo' : player.teamReady ? '✓ Listo' : 'Marcar listo'}
+                {player.isBot
+                  ? "✓ Bot listo"
+                  : player.teamReady
+                    ? "✓ Listo"
+                    : "Marcar listo"}
               </button>
               <button
                 type="button"
-                className={btnClass('ghost', 'tiny')}
+                className={btnClass("ghost", "tiny")}
                 onClick={() => onLeave(player.slot)}
               >
-                {player.isBot ? 'Quitar' : 'Salir'}
+                {player.isBot ? "Quitar" : "Salir"}
               </button>
             </div>
           </article>
@@ -203,7 +214,7 @@ export function LobbyScreen({
   onContinue,
   onBack,
   onOptions,
-  onEditor
+  onEditor,
 }: LobbyScreenProps) {
   const counts = countTeams(players);
   const maxTeamSize = maxTeamSizeFor(teams.length);
@@ -217,7 +228,7 @@ export function LobbyScreen({
   const canFill = !full && teams.some((team) => counts[team] < maxTeamSize);
   const mapIndex = Math.max(
     0,
-    maps.findIndex((map) => map.id === mapId)
+    maps.findIndex((map) => map.id === mapId),
   );
   const activeMap = maps[mapIndex];
 
@@ -234,18 +245,33 @@ export function LobbyScreen({
           <Brand compact />
 
           <div className="flex flex-wrap items-center gap-3">
-            <ol className="m-0 flex list-none gap-1.5 p-0" aria-label="Pasos de la configuración">
+            <ol
+              className="m-0 flex list-none gap-1.5 p-0"
+              aria-label="Pasos de la configuración"
+            >
               <li className={stepActive}>1 · Equipos</li>
               <li className={stepIdle}>2 · Pokémon</li>
             </ol>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onBack}>
+              <button
+                type="button"
+                className={btnClass("ghost", "small")}
+                onClick={onBack}
+              >
                 ← Menú
               </button>
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onEditor}>
+              <button
+                type="button"
+                className={btnClass("ghost", "small")}
+                onClick={onEditor}
+              >
                 Editor de mapas
               </button>
-              <button type="button" className={btnClass('ghost', 'small')} onClick={onOptions}>
+              <button
+                type="button"
+                className={btnClass("ghost", "small")}
+                onClick={onOptions}
+              >
                 Opciones
               </button>
             </div>
@@ -255,20 +281,16 @@ export function LobbyScreen({
         <div className="flex flex-wrap items-end justify-between gap-4.5">
           <div>
             <span className={eyebrow}>Paso 1 de 2</span>
-            <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">Elige los equipos</h2>
-            <p className="mt-2 max-w-[46ch] text-14.4 leading-[1.55] text-muted">
-              Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
-              <strong>Espacio</strong> en el teclado) para unirte. Después cambia de lado con{' '}
-              <strong>← →</strong> y marca listo. Puedes escribir el nombre de cada jugador en su
-              tarjeta con el teclado. También puedes añadir bots para completar los equipos: hasta 4
-              jugadores por equipo con dos equipos, y hasta 2 con tres o cuatro. El mapa elegido
-              decide cuántos equipos hay (de 2 a 4).
-            </p>
+            <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">
+              Elige los equipos
+            </h2>
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
             {teams.map((team, index) => (
               <span key={team} className="flex items-center gap-3">
-                {index > 0 && <span className="font-mono text-11.2 text-steel-950">vs</span>}
+                {index > 0 && (
+                  <span className="font-mono text-11.2 text-steel-950">vs</span>
+                )}
                 <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
                   <strong
                     key={counts[team]}
@@ -276,7 +298,7 @@ export function LobbyScreen({
                     style={{ color: TEAM_INFO[team].color }}
                   >
                     {counts[team]}
-                  </strong>{' '}
+                  </strong>{" "}
                   {TEAM_INFO[team].short.toLowerCase()}
                 </span>
               </span>
@@ -353,13 +375,13 @@ export function LobbyScreen({
                         {activeMap.name}
                       </strong>
                       <p className="mt-1 line-clamp-2 text-11.52 leading-[1.45] text-steel-400">
-                        {activeMap.description ?? 'Mapa listo para la partida.'}
+                        {activeMap.description ?? "Mapa listo para la partida."}
                       </p>
                       <p className="mt-1 font-mono text-9.6 tracking-[0.06em] uppercase text-steel-500">
-                        {(activeMap.teams ?? teams).length} equipos ·{' '}
+                        {(activeMap.teams ?? teams).length} equipos ·{" "}
                         {(activeMap.teams ?? teams)
                           .map((team) => TEAM_INFO[team].short)
-                          .join(' · ')}
+                          .join(" · ")}
                       </p>
                     </div>
                   </div>
@@ -371,11 +393,11 @@ export function LobbyScreen({
                           key={map.id}
                           type="button"
                           aria-label={`Ver ${map.name}`}
-                          aria-current={map.id === mapId ? 'true' : undefined}
+                          aria-current={map.id === mapId ? "true" : undefined}
                           className={`h-1.5 rounded-full transition-[width,background-color] duration-200 ${
                             map.id === mapId
-                              ? 'w-6 bg-accent'
-                              : 'w-1.5 bg-steel-900 hover:bg-steel-700'
+                              ? "w-6 bg-accent"
+                              : "w-1.5 bg-steel-900 hover:bg-steel-700"
                           }`}
                           onClick={() => onChangeMap(map.id)}
                         />
@@ -408,7 +430,10 @@ export function LobbyScreen({
                   <button
                     key={value}
                     type="button"
-                    className={btnClass(value === koTarget ? 'accent' : 'ghost', 'tiny')}
+                    className={btnClass(
+                      value === koTarget ? "accent" : "ghost",
+                      "tiny",
+                    )}
                     disabled={value === koTarget}
                     onClick={() => onChangeKoTarget(value)}
                   >
@@ -437,8 +462,8 @@ export function LobbyScreen({
                     key={difficulty}
                     type="button"
                     className={btnClass(
-                      difficulty === botDifficulty ? 'accent' : 'ghost',
-                      'tiny'
+                      difficulty === botDifficulty ? "accent" : "ghost",
+                      "tiny",
                     )}
                     disabled={difficulty === botDifficulty}
                     onClick={() => onChangeBotDifficulty(difficulty)}
@@ -452,7 +477,7 @@ export function LobbyScreen({
                   <button
                     key={team}
                     type="button"
-                    className={btnClass('ghost', 'tiny')}
+                    className={btnClass("ghost", "tiny")}
                     disabled={counts[team] >= maxTeamSize || full}
                     onClick={() => onAddBot(team)}
                   >
@@ -462,7 +487,7 @@ export function LobbyScreen({
               </div>
               <button
                 type="button"
-                className={`${btnClass('neutral', 'tiny')} mt-1.5 w-full`}
+                className={`${btnClass("neutral", "tiny")} mt-1.5 w-full`}
                 disabled={!canFill}
                 onClick={onFillBots}
               >
@@ -476,9 +501,13 @@ export function LobbyScreen({
             <span className={eyebrow}>Dispositivos detectados</span>
             <h3 className="mt-0.5 text-19.2">Unirse</h3>
             {full ? (
-              <p className={emptyTeam}>La partida está completa ({maxPlayers} jugadores).</p>
+              <p className={emptyTeam}>
+                La partida está completa ({maxPlayers} jugadores).
+              </p>
             ) : available.length === 0 ? (
-              <p className={emptyTeam}>Todos los dispositivos ya están jugando.</p>
+              <p className={emptyTeam}>
+                Todos los dispositivos ya están jugando.
+              </p>
             ) : (
               <div className="mt-3 flex flex-col gap-2">
                 {available.map((device) => (
@@ -499,7 +528,7 @@ export function LobbyScreen({
                     </div>
                     <button
                       type="button"
-                      className={btnClass('accent', 'tiny')}
+                      className={btnClass("accent", "tiny")}
                       onClick={() => onJoin(device)}
                     >
                       Unirse
@@ -530,18 +559,21 @@ export function LobbyScreen({
           <div className="text-13.12 text-steel-400">
             <strong>{players.length}</strong> / {maxPlayers} jugadores
             {players.length > 0 && !allReady && (
-              <span className="text-muted"> · marca listo a todos para continuar</span>
+              <span className="text-muted">
+                {" "}
+                · marca listo a todos para continuar
+              </span>
             )}
             {allReady && (
               <span className="animate-fade-in font-semibold text-accent-soft">
-                {' '}
+                {" "}
                 · todos listos, pulsa A
               </span>
             )}
           </div>
           <button
             type="button"
-            className={btnClass('primary', 'play')}
+            className={btnClass("primary", "play")}
             disabled={!allReady}
             onClick={onContinue}
           >

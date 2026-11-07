@@ -54,6 +54,7 @@ export const TERRAIN_SWATCHES: Record<TerrainId, string> = {
   ghost: "#3d3a4c",
   fairy: "#8fbf6b",
   desert: "#d9b66c",
+  park: "#b04b3d",
 };
 
 export interface EditorBase {

@@ -40,7 +40,8 @@ const TERRAIN_COLORS = {
   poison: '#5b3967',
   ghost: '#3d3a4c',
   fairy: '#8fbf6b',
-  desert: '#d9b66c'
+  desert: '#d9b66c',
+  park: '#b04b3d'
 };
 
 const TEAM_COLORS = {

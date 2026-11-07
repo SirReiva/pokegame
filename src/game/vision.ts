@@ -80,7 +80,8 @@ export const TERRAIN_CONCEALMENT: Record<TerrainId, number> = {
   poison: 0.3,
   ghost: 0.4,
   fairy: 0.26,
-  desert: 0.14
+  desert: 0.14,
+  park: 0.05
 };
 
 /** Cuánto mejora o empeora la ocultación según la relación tipo-terreno. */

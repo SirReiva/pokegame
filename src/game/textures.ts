@@ -203,6 +203,13 @@ const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
     accent: "#f6e3b0",
     accent2: "#8d6a36",
   },
+  park: {
+    base: "#b04b3d",
+    light: "#c65c4c",
+    dark: "#8c392f",
+    accent: "#672824",
+    accent2: "#d97d68",
+  },
   tallGrass: {
     base: "#2f6a2b",
     light: "#3f8234",
@@ -346,6 +353,87 @@ function paintTerrainZone(
     }
   };
 
+  const paintParkPanels = () => {
+    // Caucho rojo de parque: losas grandes separadas por juntas finas y un
+    // grano de virutas. Las juntas se alinean con el mundo para que dos zonas
+    // de parque contiguas compartan la misma retícula de paneles.
+    const panel = 2.4;
+    const firstX = Math.floor(bounds.minX / panel) * panel;
+    const firstZ = Math.floor(bounds.minZ / panel) * panel;
+
+    // Cada losa recibe un tono ligeramente distinto, como el caucho curado.
+    for (let x = firstX; x < bounds.maxX; x += panel) {
+      for (let z = firstZ; z < bounds.maxZ; z += panel) {
+        const tone = blockNoise(
+          Math.round(x / panel) + 991,
+          Math.round(z / panel) - 457,
+        );
+        ctx.fillStyle = tone < 0.5 ? palette.light : palette.dark;
+        ctx.globalAlpha = 0.04 + Math.abs(tone - 0.5) * 0.08;
+        ctx.fillRect(
+          Math.floor(toPxX(x)),
+          Math.floor(toPxY(z)),
+          Math.ceil(panel * scale) + 1,
+          Math.ceil(panel * scale) + 1,
+        );
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Juntas: una línea oscura fina y otra clara al lado que simula el bisel.
+    const seamWidth = Math.max(1, 0.04 * scale);
+    ctx.lineWidth = seamWidth;
+    for (let x = firstX; x <= bounds.maxX + panel; x += panel) {
+      const px = Math.round(toPxX(x));
+      ctx.strokeStyle = palette.accent;
+      ctx.beginPath();
+      ctx.moveTo(px + 0.5, toPxY(bounds.minZ));
+      ctx.lineTo(px + 0.5, toPxY(bounds.maxZ));
+      ctx.stroke();
+      ctx.strokeStyle = palette.light;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(px + 0.5 + seamWidth, toPxY(bounds.minZ));
+      ctx.lineTo(px + 0.5 + seamWidth, toPxY(bounds.maxZ));
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    for (let z = firstZ; z <= bounds.maxZ + panel; z += panel) {
+      const py = Math.round(toPxY(z));
+      ctx.strokeStyle = palette.accent;
+      ctx.beginPath();
+      ctx.moveTo(toPxX(bounds.minX), py + 0.5);
+      ctx.lineTo(toPxX(bounds.maxX), py + 0.5);
+      ctx.stroke();
+      ctx.strokeStyle = palette.light;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(toPxX(bounds.minX), py + 0.5 + seamWidth);
+      ctx.lineTo(toPxX(bounds.maxX), py + 0.5 + seamWidth);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Virutas de caucho: motas oscuras y claras repartidas por la losa.
+    const grains = Math.min(
+      1500,
+      Math.max(160, Math.round(radius * radius * 0.02)),
+    );
+    for (let i = 0; i < grains; i++) {
+      const ox = (random() * 2 - 1) * radius;
+      const oy = (random() * 2 - 1) * radius;
+      const light = random() < 0.45;
+      const size = random() < 0.18 ? 2 : 1;
+      mark(
+        ox,
+        oy,
+        size,
+        size,
+        light ? palette.accent2 : palette.dark,
+      );
+    }
+  };
+
   const mark = (
     ox: number,
     oy: number,
@@ -369,6 +457,7 @@ function paintTerrainZone(
   // La base de la zona ya la pinta `paintGridTiles` celda a celda. Aquí solo
   // se añade el borde y la decoración propia del terreno.
   if (zone.terrain === "fire") paintFirePlates();
+  if (zone.terrain === "park") paintParkPanels();
   strokeBorder();
 
   switch (zone.terrain) {
@@ -690,6 +779,21 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
               y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
               detailSize,
               detailSize,
+            );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case "park": {
+          // Grano de caucho: motas finas que rompen el rojo plano de la losa.
+          for (let i = 0; i < 8; i++) {
+            ctx.fillStyle = random() < 0.5 ? palette.accent2 : palette.dark;
+            ctx.globalAlpha = 0.2 + random() * 0.15;
+            ctx.fillRect(
+              x0 + Math.floor(random() * Math.max(1, x1 - x0)),
+              y0 + Math.floor(random() * Math.max(1, y1 - y0)),
+              1,
+              1,
             );
           }
           ctx.globalAlpha = 1;

@@ -25,7 +25,8 @@ export type TerrainId =
   | 'poison'
   | 'ghost'
   | 'fairy'
-  | 'desert';
+  | 'desert'
+  | 'park';
 
 export interface TerrainDefinition {
   /** Nombre visible del terreno. */
@@ -49,7 +50,8 @@ export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
   poison: { name: 'Ciénaga', type: 'Poison' },
   ghost: { name: 'Bosque umbrío', type: 'Ghost' },
   fairy: { name: 'Claro feérico', type: 'Fairy' },
-  desert: { name: 'Desierto', type: 'Ground' }
+  desert: { name: 'Desierto', type: 'Ground' },
+  park: { name: 'Parque', type: 'Fighting' }
 };
 
 export const TERRAIN_IDS = Object.keys(TERRAINS) as TerrainId[];
@@ -148,7 +150,8 @@ const DECORATIVE_TERRAINS: TerrainId[] = [
   'poison',
   'ghost',
   'fairy',
-  'desert'
+  'desert',
+  'park'
 ];
 
 // --- Estado del mapa activo -------------------------------------------------
