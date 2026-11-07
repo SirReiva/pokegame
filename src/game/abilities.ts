@@ -752,23 +752,25 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
 
 registerAbility(
   ability('impactrueno', 'Impactrueno', 'Electric', 'special', 'projectile')
-    .power(40)
+    .power(70)
     .accuracy(100)
     .cooldown(0.9)
     .range(8)
     .radius(0.26)
-    .projectile('electric', 14)
+    .projectile('electric', 18)
     .impact('electric')
     .cast(0.34)
     .windup(0.13, { mode: 'once' })
     .animation('shock')
     .color(247, 208, 44)
-    .description('Proyectil eléctrico rápido. Ataque básico de Pikachu.')
+    .description(
+      'Proyectil eléctrico muy rápido de 70 de potencia. Presión a media distancia de Pikachu.'
+    )
 );
 
 registerAbility(
   ability('ataqueRapido', 'Ataque Rápido', 'Normal', 'physical', 'dash')
-    .power(40)
+    .power(60)
     .accuracy(100)
     .cooldown(4)
     .range(0)
@@ -783,7 +785,7 @@ registerAbility(
 
 registerAbility(
   ability('rayo', 'Rayo', 'Electric', 'special', 'beam')
-    .power(90)
+    .power(130)
     .accuracy(100)
     .cooldown(8)
     .range(11)
@@ -794,13 +796,13 @@ registerAbility(
     .animation('shock')
     .color(255, 238, 88)
     .description(
-      'Haz eléctrico instantáneo en la dirección en la que mira Pikachu.'
+      'Definitiva: haz eléctrico instantáneo de 130 de potencia en la dirección en la que mira Pikachu.'
     )
 );
 
 registerAbility(
   ability('placaje', 'Placaje', 'Normal', 'physical', 'melee')
-    .power(40)
+    .power(55)
     .accuracy(100)
     .cooldown(0.25)
     .range(1.8)
@@ -820,7 +822,7 @@ registerAbility(
 
 registerAbility(
   ability('chispa', 'Chispa', 'Electric', 'physical', 'melee')
-    .power(65)
+    .power(80)
     .accuracy(100)
     .cooldown(0.6)
     .range(2)
@@ -838,7 +840,7 @@ registerAbility(
 
 registerAbility(
   ability('rollout', 'Rollout', 'Normal', 'physical', 'dash')
-    .power(80)
+    .power(100)
     .accuracy(100)
     .cooldown(6)
     .range(0)
@@ -874,7 +876,7 @@ registerAbility(
 
 registerAbility(
   ability('explosion', 'Explosión', 'Electric', 'special', 'aoe')
-    .power(175)
+    .power(200)
     .accuracy(100)
     .cooldown(18)
     .range(0)
@@ -898,7 +900,7 @@ registerAbility(
 
 registerAbility(
   ability('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', 'melee')
-    .power(45)
+    .power(42)
     .accuracy(100)
     .cooldown(0.7)
     .range(2)
@@ -916,7 +918,7 @@ registerAbility(
 
 registerAbility(
   ability('bolaSombra', 'Bola Sombra', 'Ghost', 'special', 'projectile')
-    .power(70)
+    .power(62)
     .accuracy(100)
     .cooldown(6)
     .range(8.5)
@@ -933,7 +935,7 @@ registerAbility(
 
 registerAbility(
   ability('bombaLodo', 'Bomba Lodo', 'Poison', 'special', 'aoe')
-    .power(25)
+    .power(20)
     .accuracy(100)
     .cooldown(9)
     .range(6.5)
@@ -946,13 +948,13 @@ registerAbility(
     .impact('poison')
     .color(150, 90, 180)
     .description(
-      'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 25 de daño por segundo y ralentiza un 25 %.'
+      'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 20 de daño por segundo y ralentiza un 25 %.'
     )
 );
 
 registerAbility(
   ability('comeSuenos', 'Come Sueños', 'Ghost', 'special', 'beam')
-    .power(90)
+    .power(80)
     .accuracy(100)
     .cooldown(11)
     .range(8)
@@ -966,7 +968,7 @@ registerAbility(
     .healOnHit()
     .color(160, 120, 235)
     .description(
-      'Definitiva: haz fantasma de 8 u y 90 de potencia que cura el 15 % de la vida máxima de Gengar si impacta en al menos un enemigo.'
+      'Definitiva: haz fantasma de 8 u y 80 de potencia que cura el 15 % de la vida máxima de Gengar si impacta en al menos un enemigo.'
     )
 );
 
@@ -976,7 +978,7 @@ registerAbility(
 
 registerAbility(
   ability('aranazo', 'Arañazo', 'Normal', 'physical', 'melee')
-    .power(40)
+    .power(55)
     .accuracy(100)
     .cooldown(0.3)
     .range(1.7)
@@ -992,7 +994,7 @@ registerAbility(
 
 registerAbility(
   ability('giroFuego', 'Giro Fuego', 'Fire', 'special', 'aoe')
-    .power(35)
+    .power(40)
     .accuracy(85)
     .cooldown(6)
     .range(3.6)
@@ -1015,13 +1017,13 @@ registerAbility(
     .slow(0.8, 1.5)
     .color(255, 132, 40)
     .description(
-      'Remolino de fuego en espiral: 35 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
+      'Remolino de fuego en espiral: 40 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
     )
 );
 
 registerAbility(
   ability('lanzallamas', 'Lanzallamas', 'Fire', 'special', 'beam')
-    .power(90)
+    .power(100)
     .accuracy(100)
     .cooldown(6.5)
     .range(9.5)
@@ -1037,7 +1039,7 @@ registerAbility(
 
 registerAbility(
   ability('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', 'aoe')
-    .power(110)
+    .power(130)
     .accuracy(85)
     .cooldown(14)
     .range(4.2)
@@ -1059,7 +1061,7 @@ registerAbility(
 
 registerAbility(
   ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', 'melee')
-    .power(60)
+    .power(100)
     .accuracy(100)
     .cooldown(5)
     .range(2.6)
@@ -1095,7 +1097,7 @@ registerAbility(
 
 registerAbility(
   ability('llueveHojas', 'Lluevehojas', 'Grass', 'special', 'aoe')
-    .power(120)
+    .power(160)
     .accuracy(95)
     .cooldown(14)
     .range(4.2)
@@ -1107,7 +1109,7 @@ registerAbility(
     .impact('grass')
     .color(112, 204, 72)
     .description(
-      'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 120 de potencia.'
+      'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 160 de potencia.'
     )
 );
 
@@ -1117,7 +1119,7 @@ registerAbility(
 
 registerAbility(
   ability('acuaJet', 'Acua Jet', 'Water', 'physical', 'dash')
-    .power(45)
+    .power(65)
     .accuracy(100)
     .cooldown(5)
     .range(0)
@@ -1134,7 +1136,7 @@ registerAbility(
 
 registerAbility(
   ability('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', 'projectile')
-    .power(65)
+    .power(80)
     .accuracy(100)
     .cooldown(3)
     .range(8)
@@ -1153,7 +1155,7 @@ registerAbility(
 
 registerAbility(
   ability('hidrobomba', 'Hidrobomba', 'Water', 'special', 'beam')
-    .power(115)
+    .power(140)
     .accuracy(90)
     .cooldown(9)
     .range(8.5)
@@ -1252,7 +1254,7 @@ registerAbility(
 
 registerAbility(
   ability('shurikenAgua', 'Shuriken de Agua', 'Water', 'special', 'projectile')
-    .power(45)
+    .power(42)
     .accuracy(100)
     .cooldown(0.65)
     .range(9)
@@ -1269,7 +1271,7 @@ registerAbility(
 
 registerAbility(
   ability('tajoUmbro', 'Tajo Umbrío', 'Dark', 'physical', 'melee')
-    .power(70)
+    .power(65)
     .accuracy(100)
     .cooldown(1.4)
     .range(2.1)
@@ -1305,7 +1307,7 @@ registerAbility(
 
 registerAbility(
   ability('pulsoUmbro', 'Pulso Umbrío', 'Dark', 'special', 'beam')
-    .power(95)
+    .power(85)
     .accuracy(100)
     .cooldown(10)
     .range(9.5)
@@ -1327,7 +1329,7 @@ registerAbility(
 
 registerAbility(
   ability('telequinesis', 'Telequinesis', 'Psychic', 'special', 'melee')
-    .power(55)
+    .power(45)
     .accuracy(100)
     .cooldown(0.6)
     .range(2.5)
@@ -1363,7 +1365,7 @@ registerAbility(
 
 registerAbility(
   ability('psiquico', 'Psíquico', 'Psychic', 'special', 'beam')
-    .power(95)
+    .power(80)
     .accuracy(100)
     .cooldown(7)
     .range(10)
@@ -1380,7 +1382,7 @@ registerAbility(
 
 registerAbility(
   ability('psicoataque', 'Psicoataque', 'Psychic', 'special', 'aoe')
-    .power(125)
+    .power(100)
     .accuracy(95)
     .cooldown(15)
     .range(4.5)
@@ -1392,7 +1394,7 @@ registerAbility(
     .impact('psychic')
     .color(198, 96, 255)
     .description(
-      'Definitiva: implosión psíquica que golpea una vez con 125 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
+      'Definitiva: implosión psíquica que golpea una vez con 100 de potencia en un área amplia. Hace el 100 % en el centro y el 35 % en el borde.'
     )
 );
 
@@ -1523,7 +1525,7 @@ registerAbility(
 
 registerAbility(
   ability('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', 'aoe')
-    .power(65)
+    .power(60)
     .accuracy(95)
     .cooldown(8)
     .range(4.2)
@@ -1537,13 +1539,13 @@ registerAbility(
     .impact('air')
     .color(255, 150, 60)
     .description(
-      'Onda de aire abrasador de 2,9 u: 65 de potencia, 40 % en el borde y 18 % de ralentización durante 1,5 s.'
+      'Onda de aire abrasador de 2,9 u: 60 de potencia, 40 % en el borde y 18 % de ralentización durante 1,5 s.'
     )
 );
 
 registerAbility(
   ability('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', 'aoe')
-    .power(130)
+    .power(115)
     .accuracy(90)
     .cooldown(15)
     .range(6)
@@ -1624,7 +1626,7 @@ registerAbility(
 
 registerAbility(
   ability('ventisca', 'Ventisca', 'Ice', 'special', 'aoe')
-    .power(110)
+    .power(100)
     .accuracy(90)
     .cooldown(15)
     .range(5.5)
@@ -1640,7 +1642,7 @@ registerAbility(
     .impact('ice')
     .color(120, 200, 250)
     .description(
-      'Definitiva: ventisca de 3,3 u que golpea una vez con 110 de potencia, 35 % en el borde y ralentización del 25 % durante 2 s.'
+      'Definitiva: ventisca de 3,3 u que golpea una vez con 100 de potencia, 35 % en el borde y ralentización del 25 % durante 2 s.'
     )
 );
 
@@ -1725,7 +1727,7 @@ registerAbility(
 
 registerAbility(
   ability('triturar', 'Triturar', 'Dark', 'physical', 'melee')
-    .power(75)
+    .power(50)
     .accuracy(100)
     .cooldown(0.85)
     .range(2)
@@ -1743,7 +1745,7 @@ registerAbility(
 
 registerAbility(
   ability('avalancha', 'Avalancha', 'Rock', 'physical', 'projectile')
-    .power(75)
+    .power(55)
     .accuracy(90)
     .cooldown(5)
     .range(8.5)
@@ -1762,7 +1764,7 @@ registerAbility(
 
 registerAbility(
   ability('terremoto', 'Terremoto', 'Ground', 'physical', 'aoe')
-    .power(40)
+    .power(18)
     .accuracy(100)
     .cooldown(9)
     .range(0)
@@ -1774,13 +1776,13 @@ registerAbility(
     .impact('ground')
     .color(198, 158, 92)
     .description(
-      'Salta y golpea el suelo: el área de 3,4 u sigue agrietada 2,5 s y hace 40 de daño por segundo (100 en total) a quien permanezca dentro.'
+      'Salta y golpea el suelo: el área de 3,4 u sigue agrietada 2,5 s y hace 18 de daño por segundo (45 en total) a quien permanezca dentro.'
     )
 );
 
 registerAbility(
   ability('rocaAfilada', 'Roca Afilada', 'Rock', 'physical', 'beam')
-    .power(125)
+    .power(90)
     .accuracy(80)
     .cooldown(12)
     .range(9)
@@ -1794,7 +1796,7 @@ registerAbility(
     .animation(null)
     .color(210, 178, 118)
     .description(
-      'Definitiva: una línea de estalagmitas de 9 u que brota del suelo y golpea con 125 de potencia a todos los rivales en línea.'
+      'Definitiva: una línea de estalagmitas de 9 u que brota del suelo y golpea con 90 de potencia a todos los rivales en línea.'
     )
 );
 
@@ -1804,7 +1806,7 @@ registerAbility(
 
 registerAbility(
   ability('cuchillada', 'Cuchillada', 'Normal', 'physical', 'melee')
-    .power(55)
+    .power(45)
     .accuracy(100)
     .cooldown(0.6)
     .range(2.2)
@@ -1822,7 +1824,7 @@ registerAbility(
 
 registerAbility(
   ability('filoAbismo', 'Filo del Abismo', 'Ground', 'physical', 'aoe')
-    .power(130)
+    .power(100)
     .accuracy(90)
     .cooldown(15)
     .range(4.5)
@@ -1836,7 +1838,7 @@ registerAbility(
     .impact('ground')
     .color(214, 170, 88)
     .description(
-      'Definitiva: abre una falla de 3,2 u a 4,5 u de distancia. Golpea una vez con 130 de potencia, el 100 % en el centro y el 35 % en el borde, y empuja a los alcanzados.'
+      'Definitiva: abre una falla de 3,2 u a 4,5 u de distancia. Golpea una vez con 100 de potencia, el 100 % en el centro y el 35 % en el borde, y empuja a los alcanzados.'
     )
 );
 
@@ -1864,7 +1866,7 @@ registerAbility(
 
 registerAbility(
   ability('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', 'projectile')
-    .power(80)
+    .power(85)
     .accuracy(95)
     .cooldown(4.5)
     .range(8)
@@ -1901,7 +1903,7 @@ registerAbility(
 
 registerAbility(
   ability('fisura', 'Fisura', 'Ground', 'physical', 'aoe')
-    .power(135)
+    .power(155)
     .accuracy(70)
     .cooldown(14)
     .range(2.5)
@@ -1915,7 +1917,7 @@ registerAbility(
     .impact('ground')
     .color(182, 161, 54)
     .description(
-      'Definitiva: abre una fisura de 3,4 u a 2,5 u de distancia. Golpea una vez con 135 de potencia, el 100 % en el centro y el 35 % en el borde; 70 % de precisión.'
+      'Definitiva: abre una fisura de 3,4 u a 2,5 u de distancia. Golpea una vez con 155 de potencia, el 100 % en el centro y el 35 % en el borde; 70 % de precisión.'
     )
 );
 
@@ -1925,7 +1927,7 @@ registerAbility(
 
 registerAbility(
   ability('hojaMagica', 'Hoja Mágica', 'Grass', 'special', 'projectile')
-    .power(40)
+    .power(45)
     // 0 = nunca falla: las hojas guiadas persiguen el objetivo hasta el final.
     .accuracy(0)
     .cooldown(0.8)
@@ -1937,13 +1939,13 @@ registerAbility(
     .animation('shoot')
     .color(143, 208, 90)
     .description(
-      'Proyectil de hojas guiadas que nunca falla. 40 de potencia y 8 u de alcance. Ataque básico de Celebi.'
+      'Proyectil de hojas guiadas que nunca falla. 45 de potencia y 8 u de alcance. Ataque básico de Celebi.'
     )
 );
 
 registerAbility(
   ability('rayoSolar', 'Rayo Solar', 'Grass', 'special', 'beam')
-    .power(75)
+    .power(85)
     .accuracy(95)
     .cooldown(8)
     .range(9.5)
@@ -1955,7 +1957,7 @@ registerAbility(
     .impact('grass')
     .color(150, 224, 96)
     .description(
-      'Se carga 0,65 s con la luz del sol y dispara un haz de 9,5 u que atraviesa a todos los rivales en línea. 75 de potencia.'
+      'Se carga 0,65 s con la luz del sol y dispara un haz de 9,5 u que atraviesa a todos los rivales en línea. 85 de potencia.'
     )
 );
 
@@ -1983,7 +1985,7 @@ registerAbility(
 
 registerAbility(
   ability('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', 'aoe')
-    .power(90)
+    .power(105)
     .accuracy(95)
     .cooldown(15)
     .range(5.5)
@@ -1999,7 +2001,7 @@ registerAbility(
     .impact('psychic')
     .color(190, 140, 255)
     .description(
-      'Definitiva: marca un punto a 5,5 u y, tras 1 s, cae una explosión psíquica de 2,8 u. 90 de potencia, el 100 % en el centro y el 35 % en el borde, y ralentiza un 35 % durante 2 s.'
+      'Definitiva: marca un punto a 5,5 u y, tras 1 s, cae una explosión psíquica de 2,8 u. 105 de potencia, el 100 % en el centro y el 35 % en el borde, y ralentiza un 35 % durante 2 s.'
     )
 );
 
@@ -2009,7 +2011,7 @@ registerAbility(
 
 registerAbility(
   ability('ondaMental', 'Onda Mental', 'Psychic', 'special', 'projectile')
-    .power(45)
+    .power(50)
     .accuracy(100)
     .cooldown(0.8)
     .range(8.5)
@@ -2020,13 +2022,13 @@ registerAbility(
     .animation('shoot')
     .color(138, 169, 232)
     .description(
-      'Proyectil psíquico compacto de 8,5 u. 45 de potencia y cadencia alta. Ataque básico de Lugia.'
+      'Proyectil psíquico compacto de 8,5 u. 50 de potencia y cadencia alta. Ataque básico de Lugia.'
     )
 );
 
 registerAbility(
   ability('marea', 'Marea', 'Water', 'special', 'aoe')
-    .power(20)
+    .power(30)
     .accuracy(95)
     .cooldown(9)
     .range(4.5)
@@ -2039,13 +2041,13 @@ registerAbility(
     .impact('water')
     .color(96, 178, 240)
     .description(
-      'Extiende una marea de 3,2 u a 4,5 u de distancia que permanece 2,5 s: 20 de daño por segundo y ralentiza un 30 % durante 1,2 s a quien siga dentro.'
+      'Extiende una marea de 3,2 u a 4,5 u de distancia que permanece 2,5 s: 30 de daño por segundo y ralentiza un 30 % durante 1,2 s a quien siga dentro.'
     )
 );
 
 registerAbility(
   ability('ciclon', 'Ciclón', 'Flying', 'special', 'aoe')
-    .power(30)
+    .power(45)
     .accuracy(100)
     .cooldown(12)
     .range(0)
@@ -2059,13 +2061,13 @@ registerAbility(
     .impact('air')
     .color(198, 224, 255)
     .description(
-      'Golpe de ala que desata un ciclón de 3,6 u alrededor de Lugia: 30 de potencia, empuja 2,6 u y ralentiza un 35 % durante 1,5 s.'
+      'Golpe de ala que desata un ciclón de 3,6 u alrededor de Lugia: 45 de potencia, empuja 2,6 u y ralentiza un 35 % durante 1,5 s.'
     )
 );
 
 registerAbility(
   ability('aerochorro', 'Aerochorro', 'Flying', 'special', 'beam')
-    .power(110)
+    .power(120)
     .accuracy(95)
     .cooldown(16)
     .range(11)
@@ -2079,7 +2081,7 @@ registerAbility(
     .slow(0.7, 2)
     .color(138, 169, 232)
     .description(
-      'Definitiva: carga 0,8 s y dispara un chorro de aire de 11 u que atraviesa a todos los rivales en línea. 110 de potencia, empuja 2,2 u y ralentiza un 30 % durante 2 s.'
+      'Definitiva: carga 0,8 s y dispara un chorro de aire de 11 u que atraviesa a todos los rivales en línea. 120 de potencia, empuja 2,2 u y ralentiza un 30 % durante 2 s.'
     )
 );
 
@@ -2092,7 +2094,7 @@ export const MOVESETS: Record<
   [AbilityId | null, AbilityId | null, AbilityId | null, AbilityId | null]
 > = {};
 
-MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'rayo', 'impactrueno'];
+MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'impactrueno', 'rayo'];
 MOVESETS['0100'] = ['chispa', 'rollout', 'ondaTrueno', 'explosion'];
 MOVESETS['0094'] = ['lenguetazo', 'bolaSombra', 'bombaLodo', 'comeSuenos'];
 MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
