@@ -578,39 +578,6 @@ export class AbilityBuilder {
   }
 
   /**
-   * Alias heredado de la API anterior. Reparte el tiempo total según la forma:
-   * melee → la mitad en `active`; dash → todo en `active`; resto → `recovery`.
-   * Se mantiene para definiciones antiguas; lo nuevo usa
-   * `startup()/active()/recovery()`.
-   */
-  cast(seconds: number): this {
-    if (this.draft.shape === 'melee') {
-      this.draft.active = seconds * 0.5;
-      this.draft.recovery = 0;
-    } else if (this.draft.shape === 'dash') {
-      this.draft.active = seconds;
-      this.draft.recovery = 0;
-    } else {
-      this.draft.active = 0;
-      this.draft.recovery = seconds;
-    }
-    return this;
-  }
-
-  /** Alias heredado de `startup()`. */
-  windup(
-    seconds: number,
-    options: {
-      mode?: StartupAnimationMode;
-      speed?: number;
-      move?: boolean;
-      animation?: AnimationName;
-    } = {}
-  ): this {
-    return this.startup(seconds, options);
-  }
-
-  /**
    * Lanzar la habilidad no detiene el movimiento actual. Pensado para
    * instantes que se usan en carrera, como Protección.
    */
@@ -1996,7 +1963,9 @@ registerAbility(
     .cooldown(13)
     .range(0)
     .radius(3.2)
-    .startup(1.2, { mode: 'once' })
+    // Deseo es una concentración larga: la carga en bucle evita que el
+    // personaje se quede congelado en la primera pose del twirl.
+    .startup(1.2, { mode: 'loop', animation: 'charge' })
     .recovery(0.65)
     .animation('twirl')
     .area('recovery', 'instant', 0.8)

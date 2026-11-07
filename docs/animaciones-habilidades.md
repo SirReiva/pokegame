@@ -119,13 +119,9 @@ Builder:
 - `active(seconds)`
 - `recovery(seconds)`
 
-Los métodos antiguos siguen existiendo como alias:
-
-- `windup(...)` → `startup(...)`.
-- `cast(x)`:
-  - melee → `active(x / 2)`, `recovery = 0`;
-  - dash → `active(x)`, `recovery = 0`;
-  - resto → `recovery(x)`.
+El builder solo expone la API nueva: `startup`, `active` y `recovery`. Los
+métodos `cast()` y `windup()` se eliminaron para que ninguna definición nueva
+pueda recuperar la semántica antigua.
 
 ## 5. Migración desde el sistema anterior
 
@@ -185,7 +181,30 @@ Un golpe de control, un choque de melee, un KO o un respawn cancelan el
 `ActiveCast`: se destruyen las marcas de área/haz y se limpia el frame manual.
 El casteo nunca deja bloqueos residuales.
 
-## 7. Reloj autoritativo
+Si el efecto ya estaba en `queuedCasts` cuando llega la cancelación, el casteo
+se marca como `canceled` y la fase de resolución lo descarta. Así un cambio
+futuro del orden de fases no puede ejecutar el efecto de una habilidad que ya
+había sido interrumpida.
+
+## 7. Paso fijo de simulación
+
+La simulación autoritativa corre a **60 Hz** con un acumulador:
+
+- `FIXED_STEP = 1/60`; cada render acumula su `dt` real y ejecuta los pasos que
+  quepan (máximo 4 para no entrar en espiral).
+- El render y la presentación (billboards, FX, daño flotante, mundo y objetos)
+  se actualizan **una vez por render** con su `dt` real.
+- Efectos, cooldowns, proyectiles, áreas, bots, visión y regeneración avanzan en
+  pasos fijos. El error del instante del efecto queda en **≤ 1/60 s**,
+  independientemente del framerate.
+- Las pulsaciones de borde (habilidades, rueda, desplazamiento de ratón) se
+  acumulan hasta el siguiente paso: a 144 Hz hay renders sin paso y no se
+  pierden.
+- Los ejes mantenidos (movimiento, cámara y zoom) se repiten en cada paso.
+- La cámara se actualiza con la simulación (60 Hz); no hay interpolación de
+  posición entre pasos.
+
+## 8. Reloj autoritativo
 
 La simulación guarda `player.animationFrame`. Las copias del billboard de cada
 viewport solo dibujan ese frame (`setManualFrame`) mientras hay casteo. Fuera
@@ -193,11 +212,20 @@ del casteo, el billboard vuelve a su reloj automático para idle, walk y hurt.
 Esto evita que dos vistas muestren frames distintos y permite garantizar que el
 `HitFrame` se dibuja en el instante del efecto.
 
-## 8. Validación
+Si un paso de simulación cruza el `HitFrame` de golpe, la simulación fuerza esa
+pose durante uno o dos frames de render (`forcedFrame`/`forcedFrames`). Así el
+efecto se resuelve en el paso en el que el reloj cruza el impacto, pero su frame
+nunca se pierde visualmente. El dash queda excluido porque su golpe es un
+barrido continuo, no un frame único.
+
+## 9. Validación
 
 ```bash
 pnpm validate:anims
 ```
+
+Requiere Node 22.18+ (o 23+) porque ejecuta un `.ts` con el *type stripping*
+nativo de Node.
 
 Comprueba, para cada habilidad × especie × skin:
 
@@ -209,7 +237,7 @@ Comprueba, para cada habilidad × especie × skin:
 - avisa de los clips que han tenido que recortar anticipación y de las cargas
   (`startupAnimation`) que no tienen hueco antes del `HitFrame`.
 
-## 9. Depuración en partida
+## 10. Depuración en partida
 
 Pon `CONFIG.debug.showCastTimings = true` en `src/game/config.ts`. Aparece un
 overlay con:
@@ -219,7 +247,7 @@ overlay con:
 - frame manual que se está dibujando;
 - `hit #frame @ tiempo` y si el efecto ya se disparó.
 
-## 10. Cómo añadir una habilidad
+## 11. Cómo añadir una habilidad
 
 1. Elige la forma y la animación (`attack`, `shoot`, `strike`, `quickstrike`…).
 2. Define `startup`, `active` y `recovery` pensando en el balance, no en el
@@ -230,7 +258,7 @@ overlay con:
 4. Ejecuta la validación y, si hace falta, activa el overlay para ver el frame
    exacto.
 
-## 11. Limitaciones conocidas
+## 12. Limitaciones conocidas
 
 - Con `startup = 0` se pierde la anticipación del clip: empieza en el
   `HitFrame`. Es el precio de conservar el timing de combate actual. Si una

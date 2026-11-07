@@ -1,5 +1,10 @@
 import * as pc from 'playcanvas';
-import { ABILITIES, COMMON_ABILITIES, MOVESETS } from './abilities';
+import {
+  ABILITIES,
+  COMMON_ABILITIES,
+  COMMON_ANIMATION_OVERRIDES,
+  MOVESETS
+} from './abilities';
 import { resolveAnimationName } from './animationTimeline';
 import { CONFIG, DEG, RAD } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
@@ -163,8 +168,12 @@ function movesetUsesAnimation(
   const uses = (ability: { animation?: AnimationName | null; startupAnimation?: AnimationName | null } | null) =>
     ability?.animation === animation || ability?.startupAnimation === animation;
   if (moveset?.some((id) => (id ? uses(ABILITIES[id]) : false))) return true;
-  // El instinto común (Impulso usa QuickStrike) también necesita su hoja.
-  return Object.values(COMMON_ABILITIES).some((ability) => uses(ability));
+  // El instinto común (Impulso usa QuickStrike) también necesita su hoja,
+  // incluidos los overrides de animación por Pokémon.
+  if (Object.values(COMMON_ABILITIES).some((ability) => uses(ability))) return true;
+  return Object.values(COMMON_ANIMATION_OVERRIDES[entry.id] ?? {}).includes(
+    animation
+  );
 }
 
 /**

@@ -238,6 +238,62 @@ const DEATH_MARKER_GROUND_Y = 0.06;
 const DEATH_MARKER_WATER_LIFT = 0.02;
 
 /**
+ * Paso fijo de la simulación autoritativa: 60 Hz, el mismo tick que los
+ * sprites. El render puede ir a otra frecuencia; la presentación se actualiza
+ * una vez por render con su `dt` real.
+ */
+const FIXED_STEP = 1 / 60;
+/** Tope de pasos por render para no entrar en una espiral de recuperación. */
+const MAX_FIXED_STEPS = 4;
+
+/** Entradas de flanco acumuladas entre pasos de simulación. */
+interface BufferedInput {
+  pointerYaw: number;
+  wheel: number;
+  ability1: boolean;
+  ability2: boolean;
+  ability3: boolean;
+  ability4: boolean;
+  commonAbility: boolean;
+}
+
+function emptyBufferedInput(): BufferedInput {
+  return {
+    pointerYaw: 0,
+    wheel: 0,
+    ability1: false,
+    ability2: false,
+    ability3: false,
+    ability4: false,
+    commonAbility: false
+  };
+}
+
+/**
+ * Snapshot sin acciones de borde. Se usa en los pasos fijos posteriores al
+ * primero de cada render: mantener pulsado movimiento o cámara sí se repite,
+ * pero una habilidad, una muesca de rueda o un desplazamiento de ratón no
+ * deben aplicarse varias veces.
+ */
+function heldOnlyInput(snapshot: DeviceInputSnapshot): DeviceInputSnapshot {
+  return {
+    ...snapshot,
+    wheel: 0,
+    pointerYaw: 0,
+    startPressed: false,
+    confirm: false,
+    cancel: false,
+    ability1: false,
+    ability2: false,
+    ability3: false,
+    ability4: false,
+    commonAbility: false,
+    navX: 0,
+    navY: 0
+  };
+}
+
+/**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
  * partida y recibe eventos de entrada y telemetría por callbacks.
  *
@@ -402,6 +458,10 @@ export class Game {
 
   private statsTimer = 0;
   private fps = 0;
+  /** Resto de tiempo real pendiente de simular (acumulador de paso fijo). */
+  private simAccumulator = 0;
+  /** Entradas de flanco acumuladas hasta el próximo paso de simulación. */
+  private readonly bufferedInputs = new Map<string, BufferedInput>();
 
   constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks, options: GameOptions = {}) {
     this.callbacks = callbacks;
@@ -1161,6 +1221,8 @@ export class Game {
     this.killFeed = [];
     this.killFeedSeq = 0;
     this.matchElapsed = 0;
+    this.simAccumulator = 0;
+    this.bufferedInputs.clear();
     this.matchOver = false;
     this.winner = null;
     this.countdown = 0;
@@ -1228,6 +1290,9 @@ export class Game {
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+    // No arrastrar tiempo ni pulsaciones de antes de la pausa.
+    this.simAccumulator = 0;
+    this.bufferedInputs.clear();
     if (this.mode === 'match' && !this.matchOver) {
       if (paused) pauseMatchMusic();
       else resumeMatchMusic();
@@ -1396,66 +1461,34 @@ export class Game {
       }
     }
 
+    // La pose de impacto forzada se consume una vez por render, no por paso:
+    // si un render ejecuta varios pasos fijos, el frame debe seguir viéndose.
+    for (const player of this.matchPlayers) {
+      const cast = player.activeCast;
+      if (cast && cast.forcedFrames > 0) cast.forcedFrames--;
+    }
+
+    let simulated = 0;
     if (!frozen) {
-      this.matchElapsed += dt;
-      // El presupuesto de A* es compartido: se reinicia una vez por frame antes
-      // de que los bots pidan rutas.
-      this.botNav?.beginFrame();
-      // Vista compacta de lo que ya está en el aire. Se construye una vez por
-      // frame y todos los bots de ambos equipos la comparten: cada uno filtra
-      // por `ownerTeam`.
-      const hazards =
-        this.bots.size > 0 ? this.buildBotHazards() : [];
-      // La visión de equipo ya se resolvió en `updateVision` para la niebla y
-      // la histéresis. Los bots consumen ese mismo conjunto en vez de repetir
-      // un barrido de visibilidad por cada rival y aliado.
-      const botViews: Record<Team, BotWorldView> = {
-        red: { visibleSlots: this.visibleByTeam.red },
-        blue: { visibleSlots: this.visibleByTeam.blue },
-        yellow: { visibleSlots: this.visibleByTeam.yellow },
-        green: { visibleSlots: this.visibleByTeam.green }
-      };
-
-      for (const player of this.matchPlayers) {
-        const bot = player.isBot ? this.bots.get(player.slot) : null;
-        const input = bot
-          ? bot.update(
-              dt,
-              player,
-              this.matchPlayers,
-              this.world.colliders,
-              this.pickupKnowledge[player.team],
-              hazards,
-              botViews[player.team]
-            )
-          : frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
-        this.stepPlayer(player, input, dt);
-        // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
-        // el resto de jugadores no debería seguir actuando.
-        if (this.matchOver) break;
+      // A 144 Hz hay renders sin paso de simulación. Las pulsaciones de borde
+      // se acumulan hasta el siguiente paso para no perderlas.
+      this.bufferHumanInputs(frame);
+      this.simAccumulator = Math.min(
+        this.simAccumulator + dt,
+        FIXED_STEP * MAX_FIXED_STEPS
+      );
+      let steps = 0;
+      while (
+        this.simAccumulator >= FIXED_STEP - 1e-9 &&
+        steps < MAX_FIXED_STEPS &&
+        !this.matchOver
+      ) {
+        this.simulateStep(FIXED_STEP, frame, steps === 0);
+        this.simAccumulator -= FIXED_STEP;
+        simulated += FIXED_STEP;
+        steps++;
       }
-
-      // Los observadores ya no se moverán hasta el siguiente frame. Se tira la
-      // caché que pudieran haber llenado efectos creados durante `stepPlayer`
-      // para que las fases de resolución usen las posiciones finales.
-      this.fxVisibilityCache.clear();
-
-      // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
-      // mismo frame. La presentación (copias, niebla, FX) sí corre siempre.
-      if (!this.matchOver) {
-        // Las acciones se resuelven aquí, después de que todos los jugadores
-        // hayan avanzado su turno. El orden es fijo y reproducible: casts
-        // instantáneos (haces y áreas sin retardo) → golpes de dash → melee →
-        // proyectiles → áreas. Dentro de cada fase se respeta el orden de
-        // lanzamiento/creación. Si varios golpes son letales para el mismo
-        // objetivo en este frame, el KO queda para el primero de ese orden.
-        this.resolveQueuedCasts();
-        if (!this.matchOver) this.resolveInstantHits();
-        if (!this.matchOver) this.resolveMeleeHits();
-        if (!this.matchOver) this.updateProjectiles(dt);
-        if (!this.matchOver) this.updateActiveAoes(dt);
-        if (!this.matchOver) this.pickups?.collect(this.matchPlayers, this.pickupHandlers);
-      }
+      if (this.simAccumulator < 0) this.simAccumulator = 0;
     }
 
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
@@ -1499,21 +1532,143 @@ export class Game {
     // equipo.
     this.castDebug?.update(this.matchPlayers);
     this.updateVision(dt);
-    if (!frozen) this.updateRegeneration(dt);
-    if (!frozen) this.updateParticipation(dt);
+    if (!frozen && simulated > 0) {
+      this.updateRegeneration(simulated);
+      this.updateParticipation(simulated);
+    }
 
     this.world.update(dt);
     this.pickups?.update(
-      dt,
+      // En partida los cooldowns de objetos siguen a la simulación; durante la
+      // cuenta atrás se usa el reloj del render para no congelar las animaciones.
+      frozen ? dt : simulated,
       this.views.map((view) => view.camera.position)
     );
     this.combatFx.update(dt);
     this.damageNumbers.update(dt);
 
-    this.statsTimer += dt;
-    if (this.statsTimer >= 0.25) {
-      this.statsTimer = 0;
-      this.emitMatchStats();
+    if (simulated > 0) {
+      this.statsTimer += simulated;
+      if (this.statsTimer >= 0.25) {
+        this.statsTimer = 0;
+        this.emitMatchStats();
+      }
+    }
+  }
+
+  /**
+   * Acumula las pulsaciones de borde de los jugadores humanos hasta el próximo
+   * paso de simulación. Se ejecuta una vez por render, no por paso.
+   */
+  private bufferHumanInputs(frame: InputFrame): void {
+    for (const player of this.views) {
+      const snapshot = frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
+      const buffered =
+        this.bufferedInputs.get(player.deviceId) ?? emptyBufferedInput();
+      buffered.pointerYaw += snapshot.pointerYaw;
+      buffered.wheel += snapshot.wheel;
+      buffered.ability1 ||= snapshot.ability1;
+      buffered.ability2 ||= snapshot.ability2;
+      buffered.ability3 ||= snapshot.ability3;
+      buffered.ability4 ||= snapshot.ability4;
+      buffered.commonAbility ||= snapshot.commonAbility;
+      this.bufferedInputs.set(player.deviceId, buffered);
+    }
+  }
+
+  /**
+   * Input efectivo de un humano en un paso fijo. El primer paso del render
+   * consume los flancos acumulados; los siguientes solo repiten los ejes
+   * mantenidos (movimiento, cámara y zoom).
+   */
+  private humanStepInput(
+    player: MatchPlayerState,
+    frame: InputFrame,
+    firstStep: boolean
+  ): DeviceInputSnapshot {
+    const snapshot = frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
+    if (!firstStep) return heldOnlyInput(snapshot);
+    const buffered = this.bufferedInputs.get(player.deviceId);
+    if (!buffered) return snapshot;
+    const input: DeviceInputSnapshot = {
+      ...snapshot,
+      pointerYaw: buffered.pointerYaw,
+      wheel: buffered.wheel,
+      startPressed: false,
+      confirm: false,
+      cancel: false,
+      ability1: buffered.ability1,
+      ability2: buffered.ability2,
+      ability3: buffered.ability3,
+      ability4: buffered.ability4,
+      commonAbility: buffered.commonAbility,
+      navX: 0,
+      navY: 0
+    };
+    this.bufferedInputs.set(player.deviceId, emptyBufferedInput());
+    return input;
+  }
+
+  /**
+   * Un paso fijo de la simulación autoritativa. Todo lo que ocurre aquí es
+   * independiente del framerate del render.
+   */
+  private simulateStep(
+    stepDt: number,
+    frame: InputFrame,
+    firstStep: boolean
+  ): void {
+    // La caché de visibilidad de FX es válida solo con las posiciones actuales.
+    this.fxVisibilityCache.clear();
+    this.matchElapsed += stepDt;
+    // El presupuesto de A* se reparte por paso de simulación.
+    this.botNav?.beginFrame();
+    // Vista compacta de lo que ya está en el aire. Se construye por paso y
+    // todos los bots de ambos equipos la comparten: cada uno filtra por equipo.
+    const hazards =
+      this.bots.size > 0 ? this.buildBotHazards() : [];
+    // La visión de equipo se resuelve en `updateVision` una vez por render.
+    const botViews: Record<Team, BotWorldView> = {
+      red: { visibleSlots: this.visibleByTeam.red },
+      blue: { visibleSlots: this.visibleByTeam.blue },
+      yellow: { visibleSlots: this.visibleByTeam.yellow },
+      green: { visibleSlots: this.visibleByTeam.green }
+    };
+
+    for (const player of this.matchPlayers) {
+      const bot = player.isBot ? this.bots.get(player.slot) : null;
+      const input = bot
+        ? bot.update(
+            stepDt,
+            player,
+            this.matchPlayers,
+            this.world.colliders,
+            this.pickupKnowledge[player.team],
+            hazards,
+            botViews[player.team]
+          )
+        : this.humanStepInput(player, frame, firstStep);
+      this.stepPlayer(player, input, stepDt);
+      // Defensivo: si alguna fase de `stepPlayer` llegara a cerrar la partida,
+      // el resto de jugadores no debería seguir actuando.
+      if (this.matchOver) break;
+    }
+
+    // Los observadores ya no se moverán hasta el siguiente paso. Se tira la
+    // caché que pudieran haber llenado efectos creados durante `stepPlayer`
+    // para que las fases de resolución usen las posiciones finales.
+    this.fxVisibilityCache.clear();
+
+    // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
+    // mismo paso. El orden es fijo y reproducible: casts instantáneos (haces y
+    // áreas sin retardo) → golpes de dash → melee → proyectiles → áreas.
+    if (!this.matchOver) {
+      this.resolveQueuedCasts();
+      if (!this.matchOver) this.resolveInstantHits();
+      if (!this.matchOver) this.resolveMeleeHits();
+      if (!this.matchOver) this.updateProjectiles(stepDt);
+      if (!this.matchOver) this.updateActiveAoes(stepDt);
+      if (!this.matchOver) this.pickups?.collect(this.matchPlayers, this.pickupHandlers);
     }
   }
 
@@ -1781,8 +1936,10 @@ export class Game {
         cast.targetZ,
         cast.marker,
         cast.dirX,
-        cast.dirZ
+        cast.dirZ,
+        cast
       );
+      this.armHitFrame(player, cast);
     }
 
     this.applyCastPresentation(player, cast);
@@ -1795,10 +1952,16 @@ export class Game {
     player.concealment = terrainConcealment(terrain, player.types);
 
     if (cast.elapsed >= cast.plan.endAt) {
-      // La marca y el carril se autodestruyen al terminar su propio efecto.
-      player.activeCast = null;
-      player.animationFrame = null;
-      return false;
+      // Si el impacto forzado aún tiene frames pendientes, se deja vivo un
+      // frame más para que se dibuje. Se limpiará en la siguiente pasada.
+      if (cast.forcedFrames > 0) {
+        cast.elapsed = cast.plan.endAt - 1e-4;
+      } else {
+        // La marca y el carril se autodestruyen al terminar su propio efecto.
+        player.activeCast = null;
+        player.animationFrame = null;
+        return false;
+      }
     }
 
     // Movimiento: bloqueado durante el startup (salvo `moveWhileStartup`) y
@@ -1816,11 +1979,54 @@ export class Game {
     return false;
   }
 
+  /**
+   * Fuerza la pose de impacto durante un par de frames de render. Evita que un
+   * `dt` grande (un tirón) salte del frame anterior al posterior al `HitFrame`
+   * sin dibujarlo. No se aplica al dash: allí el golpe es un barrido continuo.
+   */
+  private armHitFrame(player: MatchPlayerState, cast: ActiveCast): void {
+    if (cast.def.shape === 'dash') return;
+    if (cast.plan.hitClip === null || cast.plan.hitFrame === null) return;
+    // Si la presentación normal ya cae en el HitFrame, no hace falta forzar:
+    // el frame se dibuja igualmente. Solo se fuerza cuando el salto de `dt`
+    // ya lo ha rebasado (o ha caído en un hueco).
+    const asset = this.assetFor(player.pokemonId, player.skinId);
+    const segment = segmentAt(cast.plan, cast.elapsed);
+    const clip = segment ? asset?.skin.animations[segment.animation] : null;
+    const normalFrame =
+      segment && clip ? frameForSegment(segment, clip, cast.elapsed) : null;
+    if (normalFrame === cast.plan.hitFrame) return;
+    cast.forcedAnimation = cast.plan.hitClip;
+    cast.forcedFrame = cast.plan.hitFrame;
+    cast.forcedFrames = 2;
+  }
+
   /** Selecciona el frame del plan de casteo para el instante actual. */
   private applyCastPresentation(
     player: MatchPlayerState,
     cast: ActiveCast
   ): void {
+    const asset = this.assetFor(player.pokemonId, player.skinId);
+
+    // Salto de `dt`: mantén la pose de impacto aunque el reloj ya la haya
+    // rebasado. Sin esto, el efecto se dispara pero el frame nunca se ve.
+    if (
+      cast.forcedFrames > 0 &&
+      cast.forcedAnimation !== null &&
+      cast.forcedFrame !== null
+    ) {
+      const forcedClip = asset?.skin.animations[cast.forcedAnimation];
+      if (forcedClip) {
+        player.animation = cast.forcedAnimation;
+        player.animationFrame = Math.max(
+          0,
+          Math.min(forcedClip.columns - 1, cast.forcedFrame)
+        );
+        player.playback = 1;
+        return;
+      }
+    }
+
     const segment = segmentAt(cast.plan, cast.elapsed);
     if (!segment) {
       player.animationFrame = null;
@@ -1828,10 +2034,7 @@ export class Game {
       player.playback = 1;
       return;
     }
-    const clip = this.assetFor(
-      player.pokemonId,
-      player.skinId
-    )?.skin.animations[segment.animation];
+    const clip = asset?.skin.animations[segment.animation];
     if (!clip) {
       player.animationFrame = null;
       player.animation = 'idle';
@@ -1995,6 +2198,8 @@ export class Game {
       player.dash = null;
       player.vx = 0;
       player.vz = 0;
+      // El obstáculo cortó el desplazamiento: recorta también su animación.
+      this.syncDashCast(player, dash.elapsed);
       this.updateCamera(player, input, dt);
       return true;
     }
@@ -2007,6 +2212,7 @@ export class Game {
       player.dash = null;
       player.vx = 0;
       player.vz = 0;
+      this.syncDashCast(player, Math.min(dash.elapsed, dash.duration));
     }
 
     this.updateCamera(player, input, dt);
@@ -2208,6 +2414,9 @@ export class Game {
   /** Cancela el casteo activo y retira sus marcas del suelo. */
   private cancelCast(player: MatchPlayerState): void {
     if (!player.activeCast) return;
+    // Marca el casteo como cancelado antes de soltarlo: si su efecto ya estaba
+    // en `queuedCasts`, la fase de resolución lo descartará.
+    player.activeCast.canceled = true;
     player.activeCast.marker?.destroy();
     player.activeCast.lane?.destroy();
     player.activeCast = null;
@@ -2330,6 +2539,10 @@ export class Game {
       plan,
       effectAt: plan.effectAt,
       fired: false,
+      canceled: false,
+      forcedFrame: null,
+      forcedAnimation: null,
+      forcedFrames: 0,
       marker,
       lane,
       targetX,
@@ -2338,13 +2551,15 @@ export class Game {
       dirZ
     };
     player.activeCast = cast;
-    this.applyCastPresentation(player, cast);
 
     // Startup cero: el efecto se resuelve en la fase común de este mismo frame.
     if (plan.effectAt <= 0) {
       cast.fired = true;
-      this.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ);
+      this.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ, cast);
+      this.armHitFrame(player, cast);
     }
+
+    this.applyCastPresentation(player, cast);
   }
 
   /** ¿Tiene este jugador una habilidad instantánea esperando resolución? */
@@ -2361,13 +2576,23 @@ export class Game {
   private queueCast(
     player: MatchPlayerState,
     def: AbilityDef,
-    targetX?: number,
-    targetZ?: number,
-    marker?: TelegraphHandle | null,
-    dirX?: number,
-    dirZ?: number
+    targetX: number | undefined,
+    targetZ: number | undefined,
+    marker: TelegraphHandle | null | undefined,
+    dirX: number | undefined,
+    dirZ: number | undefined,
+    activeCast: ActiveCast
   ): void {
-    this.queuedCasts.push({ player, def, targetX, targetZ, marker, dirX, dirZ });
+    this.queuedCasts.push({
+      player,
+      def,
+      targetX,
+      targetZ,
+      marker,
+      dirX,
+      dirZ,
+      activeCast
+    });
   }
 
   /** Ejecuta las habilidades instantáneas encoladas en orden de lanzamiento. */
@@ -2378,6 +2603,9 @@ export class Game {
     for (const cast of casts) {
       // Un golpe anterior de esta misma tanda pudo cerrar la partida.
       if (this.matchOver) break;
+      // El casteo pudo cancelarse (control, KO, choque, respawn) entre el
+      // encolado y esta fase. En ese caso su efecto ya no debe salir.
+      if (cast.activeCast.canceled) continue;
       this.executeAbility(
         cast.player,
         cast.def,
@@ -2445,7 +2673,36 @@ export class Game {
     };
 
     ABILITY_EXECUTORS[def.shape](player, def, deps, targetX, targetZ);
+    // Si un enemigo o un obstáculo acortó el dash al lanzarlo, la animación
+    // debe durar lo mismo que el desplazamiento real, no la ventana completa.
+    if (def.shape === 'dash' && player.dash) {
+      this.syncDashCast(player, player.dash.duration);
+    }
     this.applySelfDamage(player, def);
+  }
+
+  /**
+   * Reajusta el plan de presentación de un dash a la duración real del
+   * desplazamiento. Se llama al lanzarlo (distancia ya recortada) y cuando
+   * `stepDash` lo detiene antes de tiempo por un obstáculo dinámico.
+   */
+  private syncDashCast(player: MatchPlayerState, duration: number): void {
+    const cast = player.activeCast;
+    if (!cast || cast.def.shape !== 'dash') return;
+    const active = Math.max(0, Math.min(cast.def.active, duration));
+    if (active <= 1e-4) {
+      this.cancelCast(player);
+      return;
+    }
+    if (Math.abs(cast.plan.activeEnd - (cast.plan.effectAt + active)) < 0.001) {
+      return;
+    }
+    const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
+    cast.plan = buildCastPlan(
+      { ...cast.def, active },
+      (name) => resolveAnimationClip(asset, name)
+    );
+    this.applyCastPresentation(player, cast);
   }
 
   /**

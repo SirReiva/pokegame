@@ -102,6 +102,11 @@ export interface QueuedCast {
   /** Dirección horizontal fijada al empezar la preparación. */
   dirX?: number;
   dirZ?: number;
+  /**
+   * Casteo que originó el efecto. Si se cancela entre el encolado y la
+   * resolución, el efecto se descarta en vez de ejecutarse igualmente.
+   */
+  activeCast: ActiveCast;
 }
 
 /**
@@ -159,6 +164,17 @@ export interface ActiveCast {
   effectAt: number;
   /** `true` cuando el efecto ya se encoló para resolverse en este frame. */
   fired: boolean;
+  /** `true` si el casteo se interrumpió antes de resolver su efecto. */
+  canceled: boolean;
+  /**
+   * Frame de impacto forzado para el render. Si un frame largo (`dt`) cruza el
+   * `HitFrame` de golpe, se mantiene esta pose uno o dos frames para que no se
+   * pierda visualmente.
+   */
+  forcedFrame: number | null;
+  forcedAnimation: AnimationName | null;
+  /** Frames de render que quedan mostrando `forcedFrame`. */
+  forcedFrames: number;
   /**
    * Marca en el suelo de las habilidades de área; `null` en las demás. El aro
    * del equipo sobrevive al impacto y se autodestruye al terminar el efecto;
