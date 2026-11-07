@@ -44,9 +44,13 @@ const TERRAIN_COLORS = {
 };
 
 const TEAM_COLORS = {
+  red: '#ff5f63',
   blue: '#4b9cff',
-  red: '#ff5f63'
+  yellow: '#ffd24a',
+  green: '#5ed37a'
 };
+
+const TEAM_ORDER = ['red', 'blue', 'yellow', 'green'];
 
 const MOUNTAIN_BAND = '#c4b49e';
 const MOUNTAIN_LINE = '#d8c7aa';
@@ -317,7 +321,7 @@ function renderMapPreview(map) {
 
   // Bases: el radio se convierte de unidades de mundo a píxeles.
   for (const respawn of map.respawns) {
-    if (!respawn || (respawn.team !== 'blue' && respawn.team !== 'red')) continue;
+    if (!respawn || !TEAM_COLORS[respawn.team]) continue;
     const point = toCanvas(respawn.x, respawn.z);
     const radiusWorld = typeof respawn.radius === 'number' ? respawn.radius : 3.6;
     const radius = Math.max(
@@ -368,6 +372,13 @@ async function main() {
     const raw = JSON.parse(await readFile(mapPath, 'utf8'));
     const map = parseMapFile(raw, entry);
     const { canvas, width, height } = renderMapPreview(map);
+    const teams = TEAM_ORDER.filter((team) =>
+      map.respawns.some((respawn) => respawn?.team === team)
+    );
+    if (teams.length < 2 || teams.length > 4) {
+      throw new Error(`El mapa "${entry.id}" debe tener entre 2 y 4 equipos`);
+    }
+    entry.teams = teams;
 
     const name = previewName(entry);
     if (names.has(name)) {

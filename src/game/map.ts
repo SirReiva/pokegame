@@ -7,7 +7,9 @@
  */
 
 import {
+  TEAM_IDS,
   TERRAIN_IDS,
+  isTeamId,
   isTerrainId,
   type GameMap,
   type MountainRange,
@@ -24,6 +26,8 @@ export interface MapIndexEntry {
   description?: string;
   /** Ruta de la imagen cenital generada por `pnpm maps:previews`. */
   preview?: string;
+  /** Equipos activos (2-4). Si falta se derivan de los respawns. */
+  teams?: Team[];
 }
 
 interface MapIndexFile {
@@ -42,6 +46,27 @@ async function fetchJson(url: string): Promise<unknown> {
     throw new Error(`No se pudo cargar ${url} (HTTP ${response.status})`);
   }
   return response.json();
+}
+
+function parseIndexTeams(raw: unknown, id: string): Team[] {
+  if (raw === undefined) return ['blue', 'red'];
+  if (!Array.isArray(raw)) {
+    throw new Error(`El mapa "${id}" debe declarar "teams" como una lista`);
+  }
+  const teams: Team[] = [];
+  for (const value of raw) {
+    if (!isTeamId(value)) {
+      throw new Error(
+        `El mapa "${id}" tiene un equipo desconocido: "${String(value)}". ` +
+          `Disponibles: ${TEAM_IDS.join(', ')}`
+      );
+    }
+    if (!teams.includes(value)) teams.push(value);
+  }
+  if (teams.length < 2 || teams.length > 4) {
+    throw new Error(`El mapa "${id}" debe declarar entre 2 y 4 equipos`);
+  }
+  return teams;
 }
 
 export async function loadMapIndex(): Promise<MapIndexEntry[]> {
@@ -69,7 +94,8 @@ export async function loadMapIndex(): Promise<MapIndexEntry[]> {
       name: name || id,
       file,
       description: typeof entry.description === 'string' ? entry.description : undefined,
-      preview: typeof entry.preview === 'string' ? entry.preview : undefined
+      preview: typeof entry.preview === 'string' ? entry.preview : undefined,
+      teams: parseIndexTeams(entry.teams, id)
     };
   });
 }
@@ -92,11 +118,13 @@ function parseRespawns(raw: unknown): RespawnPoint[] {
     }
     const value = entry as Record<string, unknown>;
     const team = value.team;
-    if (team !== 'blue' && team !== 'red') {
-      throw new Error(`El respawn ${index + 1} debe tener team "blue" o "red"`);
+    if (!isTeamId(team)) {
+      throw new Error(
+        `El respawn ${index + 1} debe tener un team válido (${TEAM_IDS.join(', ')})`
+      );
     }
     return {
-      team: team as Team,
+      team,
       x: number(value.x, `respawns[${index}].x`),
       z: number(value.z, `respawns[${index}].z`),
       radius:
@@ -222,14 +250,31 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
   const mountains = parseMountains(value.mountains);
   const pickups = parsePickups(value.pickups);
 
-  const blue = respawns.find((respawn) => respawn.team === 'blue');
-  const red = respawns.find((respawn) => respawn.team === 'red');
-  if (!blue || !red) {
-    throw new Error('El mapa debe tener al menos un respawn azul y uno rojo');
+  const teams = TEAM_IDS.filter((team) =>
+    respawns.some((respawn) => respawn.team === team)
+  );
+  if (teams.length < 2 || teams.length > 4) {
+    throw new Error('El mapa debe tener entre dos y cuatro equipos con respawn');
+  }
+  const declaredTeams = entry.teams ?? teams;
+  const missingTeam = declaredTeams.find(
+    (team) => !respawns.some((respawn) => respawn.team === team)
+  );
+  if (missingTeam) {
+    throw new Error(
+      `El mapa declara el equipo "${missingTeam}" en maps/index.json pero no tiene respawn`
+    );
+  }
+  const extraTeam = teams.find((team) => !declaredTeams.includes(team));
+  if (extraTeam) {
+    throw new Error(
+      `El mapa tiene una base del equipo "${extraTeam}" que no aparece en maps/index.json`
+    );
   }
 
   const rawSpawn = value.spawn;
-  let spawn = { x: blue.x, z: blue.z };
+  const fallback = respawns.find((respawn) => respawn.team === 'blue') ?? respawns[0];
+  let spawn = { x: fallback.x, z: fallback.z };
   if (rawSpawn !== undefined) {
     if (!rawSpawn || typeof rawSpawn !== 'object') {
       throw new Error('"spawn" debe ser un objeto { x, z }');
@@ -246,6 +291,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
     // partida siempre coinciden aunque el archivo cambie su `id` interno.
     id: entry.id,
     name: typeof value.name === 'string' ? value.name : entry.name,
+    teams,
     tileSize,
     tiles,
     respawns,

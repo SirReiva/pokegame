@@ -10,6 +10,7 @@ import {
 } from '../game/multiplayer';
 import { skinFor } from '../game/skins';
 import type { SpriteManifest } from '../game/types';
+import type { Team } from '../game/terrain';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
 import { XP_SOURCE_LABELS } from '../game/xp';
 import { PokemonPortrait } from './PokemonPortrait';
@@ -20,6 +21,7 @@ interface MatchHudProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
   stats: PlayerMatchStats[];
+  teams: Team[];
   koTarget: number;
   onPause: () => void;
 }
@@ -158,32 +160,42 @@ function KillFeed({
  * aquí solo van los bordes de equipo y las etiquetas de cada jugador, alineadas
  * con el mismo reparto normalizado que usan las cámaras.
  */
-export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchHudProps) {
+export function MatchHud({
+  manifest,
+  players,
+  stats,
+  teams,
+  koTarget,
+  onPause
+}: MatchHudProps) {
   const layout = computeSplitLayout(players.length);
   const statsBySlot = new Map(stats.map((entry) => [entry.slot, entry]));
   const pokemonNames = new Map(
     manifest.pokemon.map((pokemon) => [pokemon.id, pokemon.name])
   );
-  const scoreBlue = stats[0]?.blueScore ?? 0;
-  const scoreRed = stats[0]?.redScore ?? 0;
+  const scores = stats[0]?.scores;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
-      <div className="fixed top-2.5 left-1/2 z-8 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
-        <span
-          className="font-display text-14.72 font-extrabold tabular-nums"
-          style={{ color: TEAM_INFO.blue.color }}
-        >
-          {scoreBlue}
-        </span>
+      <div className="fixed top-2.5 left-1/2 z-8 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
+        {teams.map((team, index) => (
+          <span key={team} className="flex items-center gap-2.5">
+            {index > 0 && (
+              <span className="font-mono text-8.8 tracking-[0.12em] text-steel-750 uppercase">
+                vs
+              </span>
+            )}
+            <span
+              className="font-display text-14.72 font-extrabold tabular-nums"
+              style={{ color: TEAM_INFO[team].color }}
+              title={`${TEAM_INFO[team].label} · ${scores?.[team] ?? 0} KO`}
+            >
+              {scores?.[team] ?? 0}
+            </span>
+          </span>
+        ))}
         <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
           a {koTarget}
-        </span>
-        <span
-          className="font-display text-14.72 font-extrabold tabular-nums"
-          style={{ color: TEAM_INFO.red.color }}
-        >
-          {scoreRed}
         </span>
       </div>
 
@@ -452,9 +464,9 @@ export function MatchHud({ manifest, players, stats, koTarget, onPause }: MatchH
                           playerStats.discovered
                             ? `Te ve${playerStats.enemiesSeeing === 1 ? '' : 'n'} ${
                                 playerStats.enemiesSeeing
-                              } rival${playerStats.enemiesSeeing === 1 ? '' : 'es'} del otro equipo. ` +
+                              } rival${playerStats.enemiesSeeing === 1 ? '' : 'es'} enemigo${playerStats.enemiesSeeing === 1 ? '' : 's'}. ` +
                               `Ocultación del terreno ${concealmentPct}%.`
-                            : 'Ningún rival te ve ahora mismo: estás oculto para el otro equipo. ' +
+                            : 'Ningún rival te ve ahora mismo: estás oculto para los demás equipos. ' +
                               `Ocultación del terreno ${concealmentPct}%.`
                         }
                       >

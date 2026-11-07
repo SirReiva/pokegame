@@ -102,6 +102,7 @@ import {
   TEAM_INFO,
   cameraYawForTeam,
   computeSplitLayout,
+  createTeamRecord,
   facingToCenter,
   spawnForTeam,
   syncTeamsWithMap,
@@ -123,6 +124,7 @@ import {
   type XpSource
 } from './xp';
 import {
+  ACTIVE_TEAMS,
   TERRAINS,
   getActiveMap,
   resolveDeepWater,
@@ -325,7 +327,7 @@ export class Game {
   /** Golpes de dash detectados al moverse, resueltos con el resto del frame. */
   private pendingInstantHits: PendingInstantHit[] = [];
   /** Marcador de la partida; gana el primero que llegue a `koTarget`. */
-  private teamScores: Record<Team, number> = { blue: 0, red: 0 };
+  private teamScores: Record<Team, number> = createTeamRecord(() => 0);
   /** Límite de KOs de esta partida, fijado al crearla. */
   private readonly koTarget: number;
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
@@ -355,10 +357,9 @@ export class Game {
    * Slots visibles para cada equipo en el frame anterior. La visión es
    * compartida, así que la histéresis también se guarda por equipo.
    */
-  private visibleByTeam: Record<Team, Set<number>> = {
-    blue: new Set(),
-    red: new Set()
-  };
+  private visibleByTeam: Record<Team, Set<number>> = createTeamRecord(
+    () => new Set<number>()
+  );
   /**
    * Memo de capas de FX dentro del frame actual. Varios efectos de una misma
    * habilidad comparten anclas; sin esta caché cada uno repetía la prueba de
@@ -369,10 +370,9 @@ export class Game {
    * Objetos que cada equipo ve y si están disponibles. Solo contiene puntos
    * visibles: los bots no pueden consultar el estado del resto.
    */
-  private pickupKnowledge: Record<Team, Map<string, boolean>> = {
-    blue: new Map(),
-    red: new Map()
-  };
+  private pickupKnowledge: Record<Team, Map<string, boolean>> = createTeamRecord(
+    () => new Map<string, boolean>()
+  );
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -904,7 +904,7 @@ export class Game {
     const hasBots = valid.some((config) => config.isBot);
     const botNav = hasBots ? new BotNavGrid(this.world.colliders) : null;
     const botSquad = hasBots ? createBotSquad() : null;
-    const teamIndex: Record<Team, number> = { blue: 0, red: 0 };
+    const teamIndex: Record<Team, number> = createTeamRecord(() => 0);
     let viewIndex = 0;
 
     valid.forEach((config) => {
@@ -1142,7 +1142,7 @@ export class Game {
     this.pendingInstantHits = [];
     this.combatFx.clear();
     this.damageNumbers.clear();
-    this.teamScores = { blue: 0, red: 0 };
+    this.teamScores = createTeamRecord(() => 0);
     this.killFeed = [];
     this.killFeedSeq = 0;
     this.matchElapsed = 0;
@@ -1164,8 +1164,8 @@ export class Game {
     for (const mask of this.fogMasks.values()) mask.destroy();
     this.fogMasks.clear();
     this.viewCircles.length = 0;
-    this.visibleByTeam = { blue: new Set(), red: new Set() };
-    this.pickupKnowledge = { blue: new Map(), red: new Map() };
+    this.visibleByTeam = createTeamRecord(() => new Set<number>());
+    this.pickupKnowledge = createTeamRecord(() => new Map<string, boolean>());
 
     for (const markers of this.deathMarkers.values()) {
       for (const marker of markers) marker?.destroy();
@@ -3102,8 +3102,7 @@ export class Game {
         stopMatchMusic();
         const result: MatchEndResult = {
           winner: killer.team,
-          blueScore: this.teamScores.blue,
-          redScore: this.teamScores.red
+          scores: { ...this.teamScores }
         };
         this.callbacks.onMatchEnd(result);
       }
@@ -3909,8 +3908,7 @@ export class Game {
             }
           : null,
         feed: this.killFeed,
-        blueScore: this.teamScores.blue,
-        redScore: this.teamScores.red,
+        scores: { ...this.teamScores },
         winner: this.winner
       };
     });
@@ -4094,10 +4092,9 @@ export class Game {
     // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
     // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
     const previous = this.visibleByTeam;
-    const current: Record<Team, Set<number>> = {
-      blue: new Set(),
-      red: new Set()
-    };
+    const current: Record<Team, Set<number>> = createTeamRecord(
+      () => new Set<number>()
+    );
 
     for (const observer of this.matchPlayers) {
       // Un humano KO conserva su cámara y su círculo de niebla; por tanto,
@@ -4191,10 +4188,9 @@ export class Game {
   private updatePickupKnowledge(colliders: readonly Collider[]): void {
     const pickups = this.pickups;
     if (!pickups) return;
-    const knowledge: Record<Team, Map<string, boolean>> = {
-      blue: new Map(),
-      red: new Map()
-    };
+    const knowledge: Record<Team, Map<string, boolean>> = createTeamRecord(
+      () => new Map<string, boolean>()
+    );
     const seenCache = new Map<string, boolean>();
 
     const sees = (team: Team, spawn: { x: number; z: number }): boolean => {
@@ -4214,8 +4210,7 @@ export class Game {
     };
 
     pickups.forEachSpawn((spawn) => {
-      sees('blue', spawn);
-      sees('red', spawn);
+      for (const team of ACTIVE_TEAMS) sees(team, spawn);
     });
 
     this.pickupKnowledge = knowledge;

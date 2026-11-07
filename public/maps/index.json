@@ -4,18 +4,43 @@
       "id": "arena",
       "name": "Arena MOBA",
       "file": "arena.json",
+      "teams": [
+        "red",
+        "blue"
+      ],
       "preview": "maps/previews/arena.png"
     },
     {
       "id": "arena2",
       "name": "Arena 2 MOBA",
       "file": "arena2.json",
+      "teams": [
+        "red",
+        "blue"
+      ],
       "preview": "maps/previews/arena2.png"
+    },
+    {
+      "id": "arena4",
+      "name": "Arena Cuádruple",
+      "file": "arena4.json",
+      "teams": [
+        "red",
+        "blue",
+        "yellow",
+        "green"
+      ],
+      "description": "Arena simétrica para cuatro equipos, uno en cada esquina.",
+      "preview": "maps/previews/arena4.png"
     },
     {
       "id": "laberinto",
       "name": "Laberinto de las Esquinas",
       "file": "laberinto.json",
+      "teams": [
+        "red",
+        "blue"
+      ],
       "description": "Laberinto de 128 × 128 celdas con bases en esquinas opuestas y distritos temáticos.",
       "preview": "maps/previews/laberinto.png"
     },
@@ -23,6 +48,10 @@
       "id": "perf-256",
       "name": "Arena de Rendimiento 256×256",
       "file": "perf-256.json",
+      "teams": [
+        "red",
+        "blue"
+      ],
       "description": "Mapa de estrés de 256 × 256 celdas (tileSize 0.5, agua a 0.3) con ocho distritos elementales, lago central y puentes. Pensado para medir rendimiento.",
       "preview": "maps/previews/perf-256.png"
     }

@@ -113,6 +113,7 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
     <RosterScreen
       manifest={manifest}
       players={session.players.filter((player) => !player.isBot)}
+      teams={session.teams}
       botCount={session.players.filter((player) => player.isBot).length}
       flipped={flipped}
       onPick={handlePick}

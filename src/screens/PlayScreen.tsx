@@ -6,13 +6,13 @@ import { DEFAULT_SKIN_ID, skinFor } from '../game/skins';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
   TEAM_INFO,
-  TEAM_ORDER,
   type LobbyPlayer,
   type MatchEndResult,
   type MatchPlayerConfig,
   type PlayerMatchStats
 } from '../game/multiplayer';
 import type { LoadingProgress, SpriteManifest } from '../game/types';
+import type { Team } from '../game/terrain';
 import { useSession } from '../session/useSession';
 import { ErrorScreen, LoadingScreen } from '../ui/BootScreen';
 import { btnClass } from '../ui/buttonStyles';
@@ -59,6 +59,7 @@ interface PlayScreenProps {
   mapId: string;
   configs: MatchPlayerConfig[];
   players: LobbyPlayer[];
+  teams: Team[];
   koTarget: number;
   /** Oculta la carga interna cuando una intro muestra el progreso encima. */
   hideLoadingOverlay?: boolean;
@@ -80,6 +81,7 @@ function PlayScreen({
   mapId,
   configs,
   players,
+  teams,
   koTarget,
   hideLoadingOverlay = false,
   start = true,
@@ -328,6 +330,7 @@ function PlayScreen({
               manifest={manifest}
               players={players.filter((player) => !player.isBot)}
               stats={stats}
+              teams={teams}
               koTarget={koTarget}
               onPause={() => setPaused(true)}
             />
@@ -485,7 +488,12 @@ function PlayScreen({
                 Gana el {TEAM_INFO[matchResult.winner].label.toLowerCase()}
               </h2>
               <p className="mt-2 font-mono text-12.8 text-steel-400">
-                {matchResult.blueScore} KO azules · {matchResult.redScore} KO rojos
+                {teams
+                  .map(
+                    (team) =>
+                      `${matchResult.scores[team]} KO ${TEAM_INFO[team].short.toLowerCase()}`
+                  )
+                  .join(' · ')}
               </p>
             </div>
 
@@ -493,6 +501,7 @@ function PlayScreen({
               manifest={manifest}
               players={players}
               stats={stats}
+              teams={teams}
               result={matchResult}
             />
 
@@ -534,18 +543,19 @@ function MatchScoreboard({
   manifest,
   players,
   stats,
+  teams,
   result
 }: {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
   stats: PlayerMatchStats[];
+  teams: Team[];
   result: MatchEndResult;
 }) {
   const entriesById = new Map(
     manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])
   );
-  const scoreFor = (team: MatchEndResult['winner']) =>
-    team === 'blue' ? result.blueScore : result.redScore;
+  const scoreFor = (team: Team) => result.scores[team] ?? 0;
   // Al terminar la partida los stats llegan en el mismo frame que el
   // resultado. Si por cualquier motivo aún no están, se muestra la plantilla
   // con cero KOs para no dejar el marcador vacío.
@@ -601,7 +611,7 @@ function MatchScoreboard({
 
   return (
     <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
-      {TEAM_ORDER.map((team) => {
+      {teams.map((team) => {
         const info = TEAM_INFO[team];
         const rows = rowsSource
           .filter((entry) => entry.team === team)
@@ -847,7 +857,7 @@ function MatchScoreboard({
 }
 
 function PlayGuard(props: PlayRouteProps) {
-  const { manifest, mapId, matchConfigs, players, koTarget } = useSession();
+  const { manifest, mapId, matchConfigs, players, teams, koTarget } = useSession();
 
   if (!manifest || !mapId) return <Redirect to="/lobby" />;
   if (!matchConfigs) return <Redirect to={players.length > 0 ? '/roster' : '/lobby'} />;
@@ -859,6 +869,7 @@ function PlayGuard(props: PlayRouteProps) {
       mapId={mapId}
       configs={matchConfigs}
       players={players}
+      teams={teams}
       koTarget={koTarget}
     />
   );

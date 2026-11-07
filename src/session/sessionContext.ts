@@ -15,6 +15,10 @@ export interface SessionValue {
   manifest: SpriteManifest | null;
   maps: MapIndexEntry[];
   mapId: string;
+  /** Equipos activos del mapa seleccionado (2-4). */
+  teams: Team[];
+  /** Aviso al intentar cambiar a un mapa que no admite los jugadores actuales. */
+  mapNotice: string | null;
   setMapId: (id: string) => void;
   /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
   koTarget: number;

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import type { InputDeviceInfo, MenuInputEvent } from '../game/input';
-import { otherTeam } from '../game/multiplayer';
 import { useSession } from '../session/useSession';
 import { LobbyScreen } from '../ui/LobbyScreen';
 import { useMenuInput } from '../ui/useMenuInput';
@@ -40,7 +39,11 @@ function LobbyContent() {
 
       if (!player.teamReady) {
         if (action === 'left' || action === 'right') {
-          session.setPlayerTeam(player.slot, otherTeam(player.team));
+          const teams = session.teams;
+          const index = Math.max(0, teams.indexOf(player.team));
+          const step = action === 'right' ? 1 : -1;
+          const next = teams[(index + step + teams.length) % teams.length];
+          if (next) session.setPlayerTeam(player.slot, next);
         } else if (action === 'confirm') {
           session.toggleTeamReady(player.slot);
         } else if (action === 'cancel') {
@@ -78,6 +81,8 @@ function LobbyContent() {
       devices={devices}
       maps={session.maps}
       mapId={session.mapId}
+      teams={session.teams}
+      mapNotice={session.mapNotice}
       botDifficulty={session.botDifficulty}
       koTarget={session.koTarget}
       onChangeMap={session.setMapId}

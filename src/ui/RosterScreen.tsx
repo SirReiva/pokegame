@@ -12,7 +12,8 @@ import {
 import { baseStatsFor, combatStatsFor } from '../game/pokedex';
 import { speedForPokemon } from '../game/roster';
 import { skinFor, skinsFor } from '../game/skins';
-import { TEAM_INFO, countTeams, type LobbyPlayer } from '../game/multiplayer';
+import { TEAM_INFO, countTeams, maxPlayersFor, type LobbyPlayer } from '../game/multiplayer';
+import type { Team } from '../game/terrain';
 import type { PokemonEntry, PokemonSkin, SpriteManifest } from '../game/types';
 import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
@@ -24,6 +25,8 @@ import { TypeBadge } from './TypeBadge';
 interface RosterScreenProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
+  /** Equipos activos del mapa seleccionado. */
+  teams: Team[];
   /** Número de bots que completan los equipos y no ocupan panel. */
   botCount?: number;
   /** deviceId -> id del Pokémon cuya cara trasera está visible. */
@@ -80,6 +83,7 @@ const teamCardReady =
 export function RosterScreen({
   manifest,
   players,
+  teams,
   botCount = 0,
   flipped,
   onPick,
@@ -92,6 +96,7 @@ export function RosterScreen({
   onOptions
 }: RosterScreenProps) {
   const counts = countTeams(players);
+  const maxPlayers = maxPlayersFor(teams);
   const allReady = players.length > 0 && players.every((player) => player.rosterReady);
   const entryFor = (id: string): PokemonEntry | null =>
     manifest.pokemon.find((entry) => entry.id === id) ?? null;
@@ -126,29 +131,25 @@ export function RosterScreen({
               Cada jugador tiene su propio carrusel: muévete con el stick o las flechas y
               confirma con <strong>A / Espacio</strong>. Pulsa <strong>X / Y / Tab</strong> (o el
               botón de la card) para girarla y ver sus habilidades, estadísticas y aspecto. Se
-              permiten repetidos: hay {manifest.pokemon.length} especies para hasta 8 jugadores.
+              permiten repetidos: hay {manifest.pokemon.length} especies para hasta {maxPlayers} jugadores.
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5">
-            <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
-              <strong
-                key={counts.blue}
-                className="animate-pop-in font-display text-2xl leading-none text-team-blue"
-              >
-                {counts.blue}
-              </strong>{' '}
-              azul
-            </span>
-            <span className="font-mono text-11.2 text-steel-950">vs</span>
-            <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
-              <strong
-                key={counts.red}
-                className="animate-pop-in font-display text-2xl leading-none text-team-red"
-              >
-                {counts.red}
-              </strong>{' '}
-              rojo
-            </span>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5">
+            {teams.map((team, index) => (
+              <span key={team} className="flex items-center gap-3">
+                {index > 0 && <span className="font-mono text-11.2 text-steel-950">vs</span>}
+                <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
+                  <strong
+                    key={counts[team]}
+                    className="animate-pop-in font-display text-2xl leading-none"
+                    style={{ color: TEAM_INFO[team].color }}
+                  >
+                    {counts[team]}
+                  </strong>{' '}
+                  {TEAM_INFO[team].short.toLowerCase()}
+                </span>
+              </span>
+            ))}
           </div>
         </div>
 

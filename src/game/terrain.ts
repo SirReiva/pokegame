@@ -62,7 +62,15 @@ export function isTerrainId(value: unknown): value is TerrainId {
   return typeof value === 'string' && TERRAIN_INDEX.has(value as TerrainId);
 }
 
-export type Team = 'blue' | 'red';
+/** Equipos admitidos. Cada mapa activa entre dos y cuatro de ellos. */
+export type Team = 'red' | 'blue' | 'yellow' | 'green';
+
+/** Todos los equipos posibles, en el orden de presentación de la interfaz. */
+export const TEAM_IDS: readonly Team[] = ['red', 'blue', 'yellow', 'green'];
+
+export function isTeamId(value: unknown): value is Team {
+  return typeof value === 'string' && (TEAM_IDS as readonly string[]).includes(value);
+}
 
 export interface BaseZone {
   team: Team;
@@ -95,6 +103,8 @@ export interface MountainRange {
 export interface GameMap {
   id: string;
   name: string;
+  /** Equipos activos (2-4), en el orden de `TEAM_IDS`. */
+  teams: Team[];
   /** Lado de cada celda en unidades de mundo. */
   tileSize: number;
   /** Rejilla de tipos de terreno: filas (Z) × columnas (X). */
@@ -153,6 +163,8 @@ let flatTerrain = new Uint8Array(0);
 
 /** Bases del mapa activo, derivadas de sus respawns. */
 export const BASES: BaseZone[] = [];
+/** Equipos que participan en el mapa activo (2-4). */
+export const ACTIVE_TEAMS: Team[] = [...TEAM_IDS];
 /** Separadores del mapa activo (cordilleras y muros). */
 export const MOUNTAINS: MountainRange[] = [];
 /** Regiones de terrenos decorativos, para colocar props y pintar detalles. */
@@ -183,6 +195,14 @@ export function setActiveMap(map: GameMap): void {
       z: respawn.z,
       radius: respawn.radius
     });
+  }
+
+  ACTIVE_TEAMS.length = 0;
+  const declared = map.teams.length > 0
+    ? map.teams
+    : TEAM_IDS.filter((team) => map.respawns.some((respawn) => respawn.team === team));
+  for (const team of TEAM_IDS) {
+    if (declared.includes(team) && !ACTIVE_TEAMS.includes(team)) ACTIVE_TEAMS.push(team);
   }
 
   MOUNTAINS.length = 0;

@@ -47,6 +47,7 @@ import {
   type ItemId
 } from '../game/items';
 import {
+  TEAM_IDS,
   TERRAIN_IDS,
   TERRAINS,
   type BarrierKind,
@@ -54,6 +55,7 @@ import {
   type Team,
   type TerrainId
 } from '../game/terrain';
+import { TEAM_INFO } from '../game/multiplayer';
 import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
 import { KeyPill } from './KeyPill';
@@ -65,7 +67,17 @@ interface MapEditorScreenProps {
   onExit: () => void;
 }
 
-type Tool = 'pencil' | 'fill' | 'rect' | 'eraser' | 'mountain' | 'pickup' | 'base-blue' | 'base-red';
+type Tool =
+  | 'pencil'
+  | 'fill'
+  | 'rect'
+  | 'eraser'
+  | 'mountain'
+  | 'pickup'
+  | 'base-blue'
+  | 'base-red'
+  | 'base-yellow'
+  | 'base-green';
 
 interface EditorState {
   map: EditorMap | null;
@@ -118,7 +130,9 @@ const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
     title: 'Coloca pociones en la rejilla; clic derecho elimina el objeto de la celda'
   },
   { id: 'base-blue', label: 'Base azul', key: '1', title: 'Coloca o mueve la base del equipo azul' },
-  { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' }
+  { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' },
+  { id: 'base-yellow', label: 'Base amarilla', key: '3', title: 'Coloca o mueve la base del equipo amarillo' },
+  { id: 'base-green', label: 'Base verde', key: '4', title: 'Coloca o mueve la base del equipo verde' }
 ];
 
 const sectionTitle =
@@ -171,11 +185,11 @@ function setupFormFrom(map: EditorMap | null): SetupForm {
 }
 
 function teamColor(team: Team): string {
-  return team === 'blue' ? '#4b9cff' : '#ff5f63';
+  return TEAM_INFO[team].color;
 }
 
 function teamLabel(team: Team): string {
-  return team === 'blue' ? 'Azul' : 'Roja';
+  return TEAM_INFO[team].short;
 }
 
 export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
@@ -368,12 +382,22 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     const current = stateRef.current.map;
     if (!current) return;
     const bases = cloneBases(current.bases);
-    if (bases.blue) bases.blue.radius = radius;
-    if (bases.red) bases.red.radius = radius;
+    for (const team of TEAM_IDS) {
+      if (bases[team]) bases[team].radius = radius;
+    }
     updateMap(
       { ...current, meta: { ...current.meta, baseRadius: radius }, bases },
       false
     );
+  };
+
+  const removeBase = (team: Team) => {
+    mutateBases((bases) => {
+      if (!bases[team]) return false;
+      delete bases[team];
+      setToast(`Base ${teamLabel(team).toLowerCase()} eliminada.`);
+      return true;
+    });
   };
 
   /**
@@ -415,6 +439,20 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       mutateBases(
         (bases) =>
           setBaseInPlace(bases, 'red', row, col, current.meta.baseRadius),
+        pushHistory
+      );
+    },
+    'base-yellow': (row, col, current, pushHistory) => {
+      mutateBases(
+        (bases) =>
+          setBaseInPlace(bases, 'yellow', row, col, current.meta.baseRadius),
+        pushHistory
+      );
+    },
+    'base-green': (row, col, current, pushHistory) => {
+      mutateBases(
+        (bases) =>
+          setBaseInPlace(bases, 'green', row, col, current.meta.baseRadius),
         pushHistory
       );
     }
@@ -862,8 +900,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       tool === 'eraser' ||
       tool === 'mountain' ||
       tool === 'pickup' ||
-      tool === 'base-blue' ||
-      tool === 'base-red'
+      tool.startsWith('base-')
     ) {
       changeTool('pencil');
     }
@@ -1071,7 +1108,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                       ? 'base-blue'
                       : key === '2'
                         ? 'base-red'
-                        : null;
+                        : key === '3'
+                          ? 'base-yellow'
+                          : key === '4'
+                            ? 'base-green'
+                            : null;
       if (nextTool) {
         if (nextTool !== 'mountain') setDraftPoints([]);
         setTool(nextTool);
@@ -1299,12 +1340,24 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         context.font = `700 ${Math.round(cellSize * 0.82)}px ui-monospace, monospace`;
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-        context.fillText(base.team === 'blue' ? 'A' : 'R', centerX, centerY + 0.5);
+        context.fillText(
+          base.team === 'blue'
+            ? 'A'
+            : base.team === 'red'
+              ? 'R'
+              : base.team === 'yellow'
+                ? 'M'
+                : 'V',
+          centerX,
+          centerY + 0.5
+        );
       }
     };
 
-    if (map.bases.blue) drawBase(map.bases.blue);
-    if (map.bases.red) drawBase(map.bases.red);
+    for (const team of TEAM_IDS) {
+      const base = map.bases[team];
+      if (base) drawBase(base);
+    }
 
     // --- Objetos recogibles --------------------------------------------------
     map.pickups.forEach((pickup) => {
@@ -1771,7 +1824,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           <section>
             <h2 className={sectionTitle}>Bases</h2>
             <div className="flex flex-col gap-1.5">
-              {(['blue', 'red'] as const).map((team) => {
+              {TEAM_IDS.map((team) => {
                 const base = map?.bases[team];
                 return (
                   <div
@@ -1786,26 +1839,36 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                     <span className="ml-auto font-mono text-9.92 text-steel-450">
                       {base ? `fila ${base.row} · col ${base.col}` : 'sin colocar'}
                     </span>
+                    {base && (
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded border border-transparent px-1 font-mono text-9.92 text-steel-500 transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
+                        onClick={() => removeBase(team)}
+                        title={`Quitar la base ${teamLabel(team).toLowerCase()}`}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-2 flex gap-1.5">
-              <button
-                type="button"
-                className={`${btnClass('ghost', 'tiny')} flex-1`}
-                onClick={() => changeTool('base-blue')}
-              >
-                Mover azul
-              </button>
-              <button
-                type="button"
-                className={`${btnClass('ghost', 'tiny')} flex-1`}
-                onClick={() => changeTool('base-red')}
-              >
-                Mover roja
-              </button>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {TEAM_IDS.map((team) => (
+                <button
+                  key={team}
+                  type="button"
+                  className={btnClass('ghost', 'tiny')}
+                  onClick={() => changeTool(`base-${team}` as Tool)}
+                >
+                  {map?.bases[team] ? 'Mover' : 'Añadir'} {teamLabel(team).toLowerCase()}
+                </button>
+              ))}
             </div>
+            <p className="mt-2 text-10.88/normal text-muted">
+              El mapa puede tener entre 2 y 4 equipos. Los equipos sin base no participan en la
+              partida.
+            </p>
           </section>
 
           <section>

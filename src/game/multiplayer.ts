@@ -15,8 +15,20 @@ import type { XpBreakdown, XpRank } from './xp';
 
 /** 1 teclado + 7 mandos, u 8 mandos. */
 export const MAX_PLAYERS = 8;
-/** Tope por equipo para que las dos mitades quepan en la pantalla. */
+/** Tope por equipo cuando solo juegan dos equipos. */
 export const MAX_TEAM_SIZE = 4;
+/** Tope por equipo cuando hay tres o cuatro equipos en la partida. */
+export const MAX_TEAM_SIZE_MULTI = 2;
+
+/** Tamaño máximo de cada equipo según cuántos equipos tenga el mapa. */
+export function maxTeamSizeFor(teamCount: number): number {
+  return teamCount >= 3 ? MAX_TEAM_SIZE_MULTI : MAX_TEAM_SIZE;
+}
+
+/** Aforo total de la partida: equipos activos × tope de cada equipo. */
+export function maxPlayersFor(teams: readonly Team[]): number {
+  return teams.length * maxTeamSizeFor(teams.length);
+}
 /** Longitud máxima del nombre visible de un jugador. */
 export const PLAYER_NAME_MAX_LENGTH = 16;
 
@@ -69,6 +81,16 @@ export interface TeamInfo {
 }
 
 export const TEAM_INFO: Record<Team, TeamInfo> = {
+  red: {
+    label: 'Equipo rojo',
+    short: 'Rojo',
+    color: '#ff5f63',
+    dark: '#3a1116',
+    accent: [255, 103, 108],
+    x: 13.2,
+    z: -13.2,
+    radius: 3.6
+  },
   blue: {
     label: 'Equipo azul',
     short: 'Azul',
@@ -79,19 +101,49 @@ export const TEAM_INFO: Record<Team, TeamInfo> = {
     z: 13.2,
     radius: 3.6
   },
-  red: {
-    label: 'Equipo rojo',
-    short: 'Rojo',
-    color: '#ff5f63',
-    dark: '#3a1116',
-    accent: [255, 103, 108],
+  yellow: {
+    label: 'Equipo amarillo',
+    short: 'Amarillo',
+    color: '#ffd24a',
+    dark: '#3a2d0b',
+    accent: [255, 210, 74],
     x: 13.2,
+    z: 13.2,
+    radius: 3.6
+  },
+  green: {
+    label: 'Equipo verde',
+    short: 'Verde',
+    color: '#5ed37a',
+    dark: '#12341c',
+    accent: [94, 211, 122],
+    x: -13.2,
     z: -13.2,
     radius: 3.6
   }
 };
 
-export const TEAM_ORDER: Team[] = ['blue', 'red'];
+/** Orden de presentación de los equipos, de rojo a verde. */
+export const TEAM_ORDER: Team[] = ['red', 'blue', 'yellow', 'green'];
+
+/** Crea un registro con una entrada por cada equipo posible. */
+export function createTeamRecord<T>(factory: () => T): Record<Team, T> {
+  return {
+    red: factory(),
+    blue: factory(),
+    yellow: factory(),
+    green: factory()
+  };
+}
+
+/** Equipos activos del mapa actual (2-4), en el orden de presentación. */
+export function teamsForMap(map: { teams?: readonly Team[] } | null | undefined): Team[] {
+  const declared = map?.teams ?? [];
+  const teams = TEAM_ORDER.filter(
+    (team) => declared.includes(team)
+  );
+  return teams.length >= 2 ? teams : TEAM_ORDER.slice(0, 2);
+}
 
 /**
  * Copia al `TEAM_INFO` compartido la base del equipo en el mapa activo. La UI
@@ -152,8 +204,12 @@ export function cameraYawForTeam(team: Team, x?: number, z?: number): number {
   return facingToCenter(team, x, z) + Math.PI;
 }
 
-export function otherTeam(team: Team): Team {
-  return team === 'blue' ? 'red' : 'blue';
+export function otherTeams(team: Team): Team[] {
+  return TEAM_ORDER.filter((candidate) => candidate !== team);
+}
+
+export function areEnemies(a: Team, b: Team): boolean {
+  return a !== b;
 }
 
 export interface SplitRect {
@@ -373,9 +429,8 @@ export interface PlayerMatchStats {
   commonAbility: CommonAbilityHud | null;
   /** Últimos KOs de la partida, el más reciente primero. */
   feed: KillFeedEntry[];
-  /** Marcador de equipo, repetido en cada entrada para pintar el HUD. */
-  blueScore: number;
-  redScore: number;
+  /** Marcador por equipo, repetido en cada entrada para pintar el HUD. */
+  scores: Record<Team, number>;
   winner: Team | null;
 }
 
@@ -398,15 +453,25 @@ export interface KillFeedEntry {
 /** Resultado final que React usa para mostrar la pantalla de victoria. */
 export interface MatchEndResult {
   winner: Team;
-  blueScore: number;
-  redScore: number;
+  scores: Record<Team, number>;
 }
 
 export function countTeams(players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>): Record<Team, number> {
-  return {
-    blue: players.filter((player) => player.team === 'blue').length,
-    red: players.filter((player) => player.team === 'red').length
-  };
+  const counts = createTeamRecord(() => 0);
+  for (const player of players) counts[player.team] += 1;
+  return counts;
+}
+
+/** Recuenta los jugadores de una lista concreta de equipos activos. */
+export function countActiveTeams(
+  players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>,
+  teams: readonly Team[]
+): Record<Team, number> {
+  const counts = countTeams(players);
+  for (const team of teams) {
+    counts[team] = players.filter((player) => player.team === team).length;
+  }
+  return counts;
 }
 
 /** Primera plaza libre de 1 a 8. */

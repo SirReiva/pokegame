@@ -1,4 +1,5 @@
 import * as pc from "playcanvas";
+import { TEAM_INFO } from "./multiplayer";
 import {
   onMountain,
   terrainAt,
@@ -726,7 +727,7 @@ function paintBases(
   for (const base of map.respawns) {
     const bx = toPxX(base.x);
     const by = toPxY(base.z);
-    const ring = base.team === "blue" ? "#5b8fd9" : "#d96b5b";
+    const ring = TEAM_INFO[base.team].color;
     ctx.fillStyle = "#8d8577";
     ctx.beginPath();
     ctx.arc(bx, by, base.radius * scale, 0, Math.PI * 2);

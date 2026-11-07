@@ -7,13 +7,12 @@ import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
   KO_TARGET_OPTIONS,
-  MAX_PLAYERS,
-  MAX_TEAM_SIZE,
   PLAYER_NAME_MAX_LENGTH,
   TEAM_INFO,
-  TEAM_ORDER,
   countTeams,
   defaultPlayerName,
+  maxPlayersFor,
+  maxTeamSizeFor,
   type BotDifficulty,
   type LobbyPlayer
 } from '../game/multiplayer';
@@ -30,6 +29,8 @@ interface LobbyScreenProps {
   devices: InputDeviceInfo[];
   maps: MapIndexEntry[];
   mapId: string;
+  teams: Team[];
+  mapNotice: string | null;
   botDifficulty: BotDifficulty;
   koTarget: number;
   onChangeMap: (mapId: string) => void;
@@ -57,12 +58,14 @@ const emptyTeam =
 function TeamColumn({
   team,
   players,
+  maxTeamSize,
   onRename,
   onReady,
   onLeave
 }: {
   team: Team;
   players: LobbyPlayer[];
+  maxTeamSize: number;
   onRename: (slot: number, name: string) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
@@ -85,7 +88,7 @@ function TeamColumn({
           key={roster.length}
           className="animate-pop-in rounded-full border border-line px-2 py-1 font-mono text-10.88 text-steel-550"
         >
-          {roster.length} / {MAX_TEAM_SIZE}
+          {roster.length} / {maxTeamSize}
         </span>
       </header>
 
@@ -184,6 +187,8 @@ export function LobbyScreen({
   devices,
   maps,
   mapId,
+  teams,
+  mapNotice,
   botDifficulty,
   koTarget,
   onChangeMap,
@@ -201,13 +206,15 @@ export function LobbyScreen({
   onEditor
 }: LobbyScreenProps) {
   const counts = countTeams(players);
+  const maxTeamSize = maxTeamSizeFor(teams.length);
+  const maxPlayers = maxPlayersFor(teams);
   const hasHuman = players.some((player) => !player.isBot);
   const allReady = hasHuman && players.every((player) => player.teamReady);
   const joined = new Set(players.map((player) => player.deviceId));
   const available = devices.filter((device) => !joined.has(device.id));
-  const full = players.length >= MAX_PLAYERS;
+  const full = players.length >= maxPlayers;
   const bots = players.filter((player) => player.isBot).length;
-  const canFill = !full && (counts.blue < MAX_TEAM_SIZE || counts.red < MAX_TEAM_SIZE);
+  const canFill = !full && teams.some((team) => counts[team] < maxTeamSize);
   const mapIndex = Math.max(
     0,
     maps.findIndex((map) => map.id === mapId)
@@ -253,40 +260,38 @@ export function LobbyScreen({
               Cada mando es un jugador. Pulsa <strong>A</strong> en un mando (o{' '}
               <strong>Espacio</strong> en el teclado) para unirte. Después cambia de lado con{' '}
               <strong>← →</strong> y marca listo. Puedes escribir el nombre de cada jugador en su
-              tarjeta con el teclado. También puedes añadir bots para completar los equipos:
-              hasta 4 jugadores por bando.
+              tarjeta con el teclado. También puedes añadir bots para completar los equipos: hasta 4
+              jugadores por equipo con dos equipos, y hasta 2 con tres o cuatro. El mapa elegido
+              decide cuántos equipos hay (de 2 a 4).
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
-            <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
-              <strong
-                key={counts.blue}
-                className="animate-pop-in font-display text-2xl leading-none text-team-blue"
-              >
-                {counts.blue}
-              </strong>{' '}
-              azul
-            </span>
-            <span className="font-mono text-11.2 text-steel-950">vs</span>
-            <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
-              <strong
-                key={counts.red}
-                className="animate-pop-in font-display text-2xl leading-none text-team-red"
-              >
-                {counts.red}
-              </strong>{' '}
-              rojo
-            </span>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
+            {teams.map((team, index) => (
+              <span key={team} className="flex items-center gap-3">
+                {index > 0 && <span className="font-mono text-11.2 text-steel-950">vs</span>}
+                <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
+                  <strong
+                    key={counts[team]}
+                    className="animate-pop-in font-display text-2xl leading-none"
+                    style={{ color: TEAM_INFO[team].color }}
+                  >
+                    {counts[team]}
+                  </strong>{' '}
+                  {TEAM_INFO[team].short.toLowerCase()}
+                </span>
+              </span>
+            ))}
           </div>
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,340px)] items-start gap-4.5 max-[1050px]:grid-cols-1">
-          <div className="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1">
-            {TEAM_ORDER.map((team) => (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4">
+            {teams.map((team) => (
               <TeamColumn
                 key={team}
                 team={team}
                 players={players}
+                maxTeamSize={maxTeamSize}
                 onRename={onRename}
                 onReady={onReady}
                 onLeave={onLeave}
@@ -350,6 +355,12 @@ export function LobbyScreen({
                       <p className="mt-1 line-clamp-2 text-11.52 leading-[1.45] text-steel-400">
                         {activeMap.description ?? 'Mapa listo para la partida.'}
                       </p>
+                      <p className="mt-1 font-mono text-9.6 tracking-[0.06em] uppercase text-steel-500">
+                        {(activeMap.teams ?? teams).length} equipos ·{' '}
+                        {(activeMap.teams ?? teams)
+                          .map((team) => TEAM_INFO[team].short)
+                          .join(' · ')}
+                      </p>
                     </div>
                   </div>
 
@@ -376,6 +387,11 @@ export function LobbyScreen({
                 <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
                   El mapa se carga al empezar la partida.
                 </p>
+                {mapNotice && (
+                  <p className="mt-2 rounded-lg border border-danger/40 bg-danger-deep/50 px-2.5 py-2 text-10.88/normal text-danger-100">
+                    {mapNotice}
+                  </p>
+                )}
               </div>
             )}
 
@@ -432,22 +448,17 @@ export function LobbyScreen({
                 ))}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  disabled={counts.blue >= MAX_TEAM_SIZE || full}
-                  onClick={() => onAddBot('blue')}
-                >
-                  + Azul
-                </button>
-                <button
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  disabled={counts.red >= MAX_TEAM_SIZE || full}
-                  onClick={() => onAddBot('red')}
-                >
-                  + Rojo
-                </button>
+                {teams.map((team) => (
+                  <button
+                    key={team}
+                    type="button"
+                    className={btnClass('ghost', 'tiny')}
+                    disabled={counts[team] >= maxTeamSize || full}
+                    onClick={() => onAddBot(team)}
+                  >
+                    + {TEAM_INFO[team].short}
+                  </button>
+                ))}
               </div>
               <button
                 type="button"
@@ -465,7 +476,7 @@ export function LobbyScreen({
             <span className={eyebrow}>Dispositivos detectados</span>
             <h3 className="mt-0.5 text-19.2">Unirse</h3>
             {full ? (
-              <p className={emptyTeam}>La partida está completa (8 jugadores).</p>
+              <p className={emptyTeam}>La partida está completa ({maxPlayers} jugadores).</p>
             ) : available.length === 0 ? (
               <p className={emptyTeam}>Todos los dispositivos ya están jugando.</p>
             ) : (
@@ -517,7 +528,7 @@ export function LobbyScreen({
 
         <footer className="flex flex-wrap items-center justify-between gap-3.5 border-t border-line px-0 pt-3.5 pb-1">
           <div className="text-13.12 text-steel-400">
-            <strong>{players.length}</strong> / {MAX_PLAYERS} jugadores
+            <strong>{players.length}</strong> / {maxPlayers} jugadores
             {players.length > 0 && !allReady && (
               <span className="text-muted"> · marca listo a todos para continuar</span>
             )}

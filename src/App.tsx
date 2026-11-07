@@ -36,7 +36,7 @@ const playFallback = (
  * queda en pantalla hasta que el motor está listo.
  */
 function PlayIntroGate() {
-  const { bootStatus, manifest, matchConfigs, players } = useSession();
+  const { bootStatus, manifest, matchConfigs, players, teams } = useSession();
   const [entranceDone, setEntranceDone] = useState(false);
   const [introDone, setIntroDone] = useState(false);
   const [engineReady, setEngineReady] = useState(false);
@@ -92,6 +92,7 @@ function PlayIntroGate() {
         <VersusScreen
           manifest={manifest}
           players={players}
+          teams={teams}
           progress={progress}
           ready={engineReady}
           onEntranceEnd={() => setEntranceDone(true)}

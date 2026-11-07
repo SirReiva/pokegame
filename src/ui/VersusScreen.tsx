@@ -5,7 +5,7 @@ import {
   useState,
   type CSSProperties
 } from 'react';
-import { TEAM_INFO, TEAM_ORDER, type LobbyPlayer } from '../game/multiplayer';
+import { TEAM_INFO, type LobbyPlayer } from '../game/multiplayer';
 import { skinFor } from '../game/skins';
 import type { Team } from '../game/terrain';
 import type { LoadingProgress, PokemonEntry, SpriteManifest } from '../game/types';
@@ -30,6 +30,8 @@ const vsWord =
 interface VersusScreenProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
+  /** Equipos activos del mapa. */
+  teams: Team[];
   /** Progreso real de la carga de assets que se pinta en el pie. */
   progress?: LoadingProgress | null;
   /** `true` cuando el motor ya tiene todo lo necesario para empezar. */
@@ -61,6 +63,7 @@ function prefersReducedMotion(): boolean {
 export function VersusScreen({
   manifest,
   players,
+  teams,
   progress = null,
   ready = true,
   onEntranceEnd,
@@ -86,13 +89,9 @@ export function VersusScreen({
       .filter((player) => player.team === team)
       .sort((a, b) => a.slot - b.slot)
   });
-  const leftRoster = rosterFor(TEAM_ORDER[0]);
-  const rightRoster = rosterFor(TEAM_ORDER[1]);
-  const maxRows = Math.max(
-    1,
-    leftRoster.players.length,
-    rightRoster.players.length
-  );
+  const rosters = teams.map(rosterFor);
+  const twoTeams = rosters.length === 2;
+  const maxRows = Math.max(1, ...rosters.map((roster) => roster.players.length));
   const rowsEnd = (maxRows - 1) * ROW_DELAY_MS + ROW_DURATION_MS;
   const fullDuration =
     Math.max(rowsEnd, VS_DELAY_MS + VS_DURATION_MS) + HOLD_MS + FADE_MS;
@@ -152,6 +151,14 @@ export function VersusScreen({
   const entryFor = (pokemonId: string): PokemonEntry | null =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
 
+  const leftTeam = rosters[0]?.team;
+  const rightTeam = rosters[rosters.length - 1]?.team;
+  const leftColor = leftTeam ? TEAM_INFO[leftTeam].color : '#4b9cff';
+  const rightColor = rightTeam ? TEAM_INFO[rightTeam].color : '#ff5f63';
+  const progressGradient = `linear-gradient(90deg,${teams
+    .map((team) => TEAM_INFO[team].color)
+    .join(',')})`;
+
   return (
     <div
       className={`fixed inset-0 z-60 flex select-none flex-col overflow-hidden bg-night-950 transition-opacity ${
@@ -168,11 +175,17 @@ export function VersusScreen({
       {/* Mitades cromáticas del cartel. */}
       <div
         aria-hidden="true"
-        className="absolute inset-y-0 left-0 w-[54%] animate-versus-side-left bg-[radial-gradient(circle_at_30%_38%,rgb(35_111_214/0.72),rgb(4_14_32/0.97)_66%)]"
+        className="absolute inset-y-0 left-0 w-[54%] animate-versus-side-left"
+        style={{
+          background: `radial-gradient(circle at 30% 38%, ${leftColor}b8, rgb(4 14 32 / 0.97) 66%)`
+        }}
       />
       <div
         aria-hidden="true"
-        className="absolute inset-y-0 right-0 w-[54%] animate-versus-side-right bg-[radial-gradient(circle_at_70%_38%,rgb(228_48_60/0.74),rgb(30_4_12/0.97)_66%)]"
+        className="absolute inset-y-0 right-0 w-[54%] animate-versus-side-right"
+        style={{
+          background: `radial-gradient(circle at 70% 38%, ${rightColor}bc, rgb(30 4 12 / 0.97) 66%)`
+        }}
       />
       <div
         aria-hidden="true"
@@ -180,17 +193,30 @@ export function VersusScreen({
       />
 
       {/* Marcos de neón, uno por equipo, como en el cartel de VS. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-[12%] bottom-[7%] left-[2.5%] w-[44%] animate-versus-frame rounded-[10px] border-2 border-team-blue/75 shadow-[0_0_26px_rgb(75_156_255/0.55),inset_0_0_36px_rgb(75_156_255/0.18)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-[12%] right-[2.5%] bottom-[7%] w-[44%] animate-versus-frame rounded-[10px] border-2 border-team-red/75 shadow-[0_0_26px_rgb(255_95_99/0.55),inset_0_0_36px_rgb(255_95_99/0.18)]"
-        style={{ animationDelay: '90ms' }}
-      />
+      {twoTeams && (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute top-[12%] bottom-[7%] left-[2.5%] w-[44%] animate-versus-frame rounded-[10px] border-2"
+            style={{
+              borderColor: `${leftColor}bf`,
+              boxShadow: `0 0 26px ${leftColor}8c, inset 0 0 36px ${leftColor}2e`
+            }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute top-[12%] right-[2.5%] bottom-[7%] w-[44%] animate-versus-frame rounded-[10px] border-2"
+            style={{
+              animationDelay: '90ms',
+              borderColor: `${rightColor}bf`,
+              boxShadow: `0 0 26px ${rightColor}8c, inset 0 0 36px ${rightColor}2e`
+            }}
+          />
+        </>
+      )}
 
       {/* Rayo central que separa los dos bandos. */}
+      {twoTeams && (
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-y-0 left-1/2 w-[clamp(70px,9vw,150px)] -translate-x-1/2"
@@ -202,10 +228,10 @@ export function VersusScreen({
         >
           <defs>
             <linearGradient id="versus-seam" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="var(--color-team-blue)" />
+              <stop offset="0%" stopColor={leftColor} />
               <stop offset="45%" stopColor="var(--color-steel-50)" />
               <stop offset="55%" stopColor="var(--color-ink)" />
-              <stop offset="100%" stopColor="var(--color-team-red)" />
+              <stop offset="100%" stopColor={rightColor} />
             </linearGradient>
           </defs>
           <path
@@ -214,6 +240,7 @@ export function VersusScreen({
           />
         </svg>
       </div>
+      )}
 
       {/* Tramado sutil para que el fondo no se vea plano. */}
       <div
@@ -224,10 +251,13 @@ export function VersusScreen({
       <header className="relative z-20 flex shrink-0 flex-wrap items-end justify-between gap-3 px-[clamp(14px,3vw,40px)] pt-[clamp(10px,2.2vh,24px)]">
         <div className="animate-versus-header">
           <span className={`${sideLabel} text-white/45`}>Combate de equipos</span>
-          <h1 className="mt-1 font-display text-[clamp(1.3rem,2.6vw,2.1rem)] leading-none font-black tracking-[0.08em] uppercase">
-            <span className="text-team-blue">Azul</span>
-            <span className="mx-2 text-white/35">contra</span>
-            <span className="text-team-red">Rojo</span>
+          <h1 className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0 font-display text-[clamp(1.1rem,2.4vw,1.9rem)] leading-none font-black tracking-[0.08em] uppercase">
+            {teams.map((team, index) => (
+              <span key={team} className="flex items-center gap-2">
+                {index > 0 && <span className="text-white/30">·</span>}
+                <span style={{ color: TEAM_INFO[team].color }}>{TEAM_INFO[team].short}</span>
+              </span>
+            ))}
           </h1>
         </div>
 
@@ -250,20 +280,40 @@ export function VersusScreen({
         </div>
       </header>
 
-      <div className="relative z-10 flex min-h-0 flex-1 items-stretch gap-[clamp(4px,1.6vw,26px)] px-[clamp(10px,2.2vw,34px)]">
-        <TeamPanel
-          roster={leftRoster}
-          side="left"
-          entryFor={entryFor}
-          reduced={reduced}
-        />
-        <VersusCore reduced={reduced} />
-        <TeamPanel
-          roster={rightRoster}
-          side="right"
-          entryFor={entryFor}
-          reduced={reduced}
-        />
+      <div
+        className={`relative z-10 min-h-0 flex-1 gap-[clamp(4px,1.6vw,26px)] px-[clamp(10px,2.2vw,34px)] ${
+          twoTeams
+            ? 'flex items-stretch'
+            : 'grid grid-cols-2 items-stretch overflow-y-auto'
+        }`}
+      >
+        {twoTeams ? (
+          <>
+            <TeamPanel
+              roster={rosters[0]}
+              side="left"
+              entryFor={entryFor}
+              reduced={reduced}
+            />
+            <VersusCore reduced={reduced} />
+            <TeamPanel
+              roster={rosters[1]}
+              side="right"
+              entryFor={entryFor}
+              reduced={reduced}
+            />
+          </>
+        ) : (
+          rosters.map((roster, index) => (
+            <TeamPanel
+              key={roster.team}
+              roster={roster}
+              side={index % 2 === 0 ? 'left' : 'right'}
+              entryFor={entryFor}
+              reduced={reduced}
+            />
+          ))
+        )}
       </div>
 
       <footer className="relative z-20 flex shrink-0 items-center gap-3 px-[clamp(14px,3vw,40px)] pt-2 pb-[clamp(10px,2.2vh,22px)]">
@@ -272,16 +322,17 @@ export function VersusScreen({
         </span>
         <div className="h-1 min-w-16 flex-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className={`h-full origin-left rounded-full bg-[linear-gradient(90deg,var(--color-team-blue),#ffffff,var(--color-team-red))] shadow-[0_0_12px_rgb(255_255_255/0.45)] ${
+            className={`h-full origin-left rounded-full shadow-[0_0_12px_rgb(255_255_255/0.45)] ${
               percent === null
                 ? 'animate-versus-progress'
                 : 'transition-[width] duration-300 ease-out'
             }`}
-            style={
-              percent === null
+            style={{
+              backgroundImage: progressGradient,
+              ...(percent === null
                 ? { animationDuration: `${duration}ms` }
-                : { width: `${percent}%` }
-            }
+                : { width: `${percent}%` })
+            }}
           />
         </div>
         <span className={`${sideLabel} hidden shrink-0 text-white/30 sm:block`}>

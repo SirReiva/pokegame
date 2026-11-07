@@ -17,13 +17,14 @@ import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
 import {
   BOT_DIFFICULTY_LABEL,
-  MAX_PLAYERS,
-  MAX_TEAM_SIZE,
   PLAYER_NAME_MAX_LENGTH,
   countTeams,
   defaultPlayerName,
+  maxPlayersFor,
+  maxTeamSizeFor,
   nextFreeSlot,
   normalizePlayerName,
+  teamsForMap,
   type BotDifficulty,
   type LobbyPlayer,
   type MatchPlayerConfig
@@ -111,6 +112,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [maps, setMaps] = useState<MapIndexEntry[]>([]);
   const [mapId, setMapIdState] = useState('');
   const [koTarget, setKoTargetState] = useState<number>(CONFIG.combat.koTarget);
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [botDifficulty, setBotDifficultyState] = useState<BotDifficulty>('normal');
 
@@ -118,6 +120,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const mapsRef = useRef<MapIndexEntry[]>([]);
   const mapIdRef = useRef('');
   const playersRef = useRef<LobbyPlayer[]>([]);
+
+  const teams = useMemo(
+    () => teamsForMap(maps.find((entry) => entry.id === mapId)),
+    [maps, mapId]
+  );
+  const maxTeamSize = maxTeamSizeFor(teams.length);
+  const maxPlayers = maxPlayersFor(teams);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,12 +171,61 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setPlayers(next);
   }, []);
 
-  const setMapId = useCallback((next: string) => {
-    if (next === mapIdRef.current) return;
-    if (!mapsRef.current.some((entry) => entry.id === next)) return;
-    mapIdRef.current = next;
-    setMapIdState(next);
-  }, []);
+  const setMapId = useCallback(
+    (next: string) => {
+      if (next === mapIdRef.current) return;
+      const entry = mapsRef.current.find((candidate) => candidate.id === next);
+      if (!entry) return;
+
+      // El nuevo mapa puede cambiar el número de equipos y el tope por equipo.
+      const activeTeams = teamsForMap(entry);
+      const activeMaxTeamSize = maxTeamSizeFor(activeTeams.length);
+      const capacity = activeTeams.length * activeMaxTeamSize;
+      const current = playersRef.current;
+      const humanCount = current.filter((player) => !player.isBot).length;
+      if (humanCount > capacity) {
+        setMapNotice(
+          `${entry.name} admite ${capacity} jugadores (${activeMaxTeamSize} por equipo). ` +
+            `Retira ${humanCount - capacity} jugador${humanCount - capacity === 1 ? '' : 'es'} humano${humanCount - capacity === 1 ? '' : 's'} para cambiar.`
+        );
+        return;
+      }
+      setMapNotice(null);
+      mapIdRef.current = next;
+      setMapIdState(next);
+
+      // Se conservan primero los humanos (por plaza) y luego los bots hasta el
+      // aforo. Después se reparte a quien haya quedado sin equipo o por encima
+      // del tope.
+      const kept = [...current]
+        .sort(
+          (a, b) => Number(a.isBot) - Number(b.isBot) || a.slot - b.slot
+        )
+        .slice(0, capacity)
+        .sort((a, b) => a.slot - b.slot);
+      const counts = countTeams(kept);
+      let changed = kept.length !== current.length;
+      const nextPlayers = kept.map((player) => {
+        if (
+          activeTeams.includes(player.team) &&
+          counts[player.team] <= activeMaxTeamSize
+        ) {
+          return player;
+        }
+        const target = activeTeams.reduce(
+          (best, team) => (counts[team] < counts[best] ? team : best),
+          activeTeams[0]
+        );
+        if (counts[target] >= activeMaxTeamSize) return player;
+        counts[player.team] -= 1;
+        counts[target] += 1;
+        changed = true;
+        return { ...player, team: target, teamReady: player.isBot ? true : false };
+      });
+      if (changed) commitPlayers(nextPlayers);
+    },
+    [commitPlayers]
+  );
 
   const setKoTarget = useCallback((next: number) => {
     if (!Number.isFinite(next) || next <= 0) return;
@@ -177,18 +235,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const joinDevice = useCallback(
     (device: InputDeviceInfo) => {
       const current = playersRef.current;
-      if (current.length >= MAX_PLAYERS) return;
+      if (current.length >= maxPlayers) return;
       if (current.some((player) => player.deviceId === device.id)) return;
 
       const counts = countTeams(current);
-      let team: Team = 'blue';
-      if (counts.blue <= counts.red && counts.blue < MAX_TEAM_SIZE) {
-        team = 'blue';
-      } else if (counts.red < MAX_TEAM_SIZE) {
-        team = 'red';
-      } else {
-        return;
-      }
+      const available = teams.filter((team) => counts[team] < maxTeamSize);
+      if (available.length === 0) return;
+      const team = available.reduce(
+        (best, candidate) => (counts[candidate] < counts[best] ? candidate : best),
+        available[0]
+      );
 
       const slot = nextFreeSlot(current);
       if (slot === null) return;
@@ -212,7 +268,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         }
       ]);
     },
-    [commitPlayers]
+    [commitPlayers, teams]
   );
 
   const setPlayerName = useCallback(
@@ -236,8 +292,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const current = playersRef.current;
       const player = current.find((entry) => entry.slot === slot);
       if (!player) return;
+      if (!teams.includes(team)) return;
       const counts = countTeams(current);
-      if (team !== player.team && counts[team] >= MAX_TEAM_SIZE) return;
+      if (team !== player.team && counts[team] >= maxTeamSize) return;
       commitPlayers(
         current.map((entry) =>
           entry.slot === slot && entry.team !== team
@@ -246,7 +303,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         )
       );
     },
-    [commitPlayers]
+    [commitPlayers, teams]
   );
 
   const addBot = useCallback(
@@ -254,8 +311,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const current = playersRef.current;
       const manifest = manifestRef.current;
       if (!manifest || manifest.pokemon.length === 0) return;
-      if (current.length >= MAX_PLAYERS) return;
-      if (countTeams(current)[team] >= MAX_TEAM_SIZE) return;
+      if (!teams.includes(team)) return;
+      if (current.length >= maxPlayers) return;
+      if (countTeams(current)[team] >= maxTeamSize) return;
       const slot = nextFreeSlot(current);
       if (slot === null) return;
       commitPlayers([
@@ -263,7 +321,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         makeBotPlayer(manifest, slot, team, botDifficulty)
       ]);
     },
-    [botDifficulty, commitPlayers]
+    [botDifficulty, commitPlayers, teams]
   );
 
   const fillBots = useCallback(() => {
@@ -272,15 +330,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!manifest || manifest.pokemon.length === 0) return;
 
     const next = [...current];
-    for (const team of ['blue', 'red'] as const) {
-      while (next.length < MAX_PLAYERS && countTeams(next)[team] < MAX_TEAM_SIZE) {
+    for (const team of teams) {
+      while (next.length < maxPlayers && countTeams(next)[team] < maxTeamSize) {
         const slot = nextFreeSlot(next);
         if (slot === null) break;
         next.push(makeBotPlayer(manifest, slot, team, botDifficulty));
       }
     }
     if (next.length !== current.length) commitPlayers(next);
-  }, [botDifficulty, commitPlayers]);
+  }, [botDifficulty, commitPlayers, teams]);
 
   const setBotDifficulty = useCallback(
     (difficulty: BotDifficulty) => {
@@ -553,6 +611,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       manifest,
       maps,
       mapId,
+      teams,
+      mapNotice,
       setMapId,
       koTarget,
       setKoTarget,
@@ -587,6 +647,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       manifest,
       maps,
       mapId,
+      teams,
+      mapNotice,
       setMapId,
       koTarget,
       setKoTarget,

@@ -131,10 +131,10 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 
 La configuración tiene dos rutas:
 
-1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige lado azul o rojo. Hasta cuatro jugadores por equipo y ocho en total. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
+1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige uno de los equipos disponibles. El mapa seleccionado decide cuántos hay: entre dos y cuatro (rojo, azul, amarillo y verde). Con dos equipos caben hasta cuatro jugadores por equipo; con tres o cuatro, el máximo es de dos por equipo. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
 2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticinco especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
-Cada equipo aparece en su base (azul o roja). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.
+Cada equipo aparece en su base (roja, azul, amarilla o verde). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.
 
 ## Combate
 
@@ -332,7 +332,9 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
   "spawn": { "x": -4, "z": 4 },
   "respawns": [
     { "team": "blue", "x": -6, "z": 6, "radius": 3.2 },
-    { "team": "red", "x": 6, "z": -6, "radius": 3.2 }
+    { "team": "red", "x": 6, "z": -6, "radius": 3.2 },
+    { "team": "yellow", "x": 6, "z": 6, "radius": 3.2 },
+    { "team": "green", "x": -6, "z": -6, "radius": 3.2 }
   ],
   "mountains": [
     { "kind": "mountain", "width": 2.2, "points": [[-2, 0], [0, 1], [2, 0]] },
@@ -354,10 +356,10 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
 - La fila 0 es el **norte** (Z negativa) y la columna 0 el **oeste** (X negativa). Todas las filas de `tiles` deben tener el mismo número de columnas; el ancho y el alto pueden ser distintos.
 - `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua.
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy` y `desert`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`).
-- `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos.
+- `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos. Debe haber entre **2 y 4 equipos** (`red`, `blue`, `yellow`, `green`): el mapa decide cuántos participan. Con dos equipos el tope es de 4 jugadores por equipo; con tres o cuatro, de 2.
 - `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra. `kind` elige el aspecto: `mountain` (picos de piedra, por defecto) o `wall` (sillería con almenas). La colisión y la visión son idénticas en ambos.
 - `pickups` coloca objetos recogibles en coordenadas de mundo. `type` referencia el catálogo de `src/game/items.ts` (`potion`, `superPotion`); la definición del objeto (imágenes, cooldown y efecto) no se duplica en el mapa. Al recogerlo se muestra su imagen usada y reaparece en el mismo sitio cuando termina el cooldown.
-- `spawn` es el punto al que mira la cámara mientras se carga la partida. Si falta, se usa el respawn azul.
+- `spawn` es el punto al que mira la cámara mientras se carga la partida. Si falta, se usa el respawn azul (o el primero disponible).
 - Los calveros, el agua y su decoración 3D se derivan de las celdas: cada grupo conexo de un terreno decorativo se convierte en una región poligonal, y cada cuerpo de agua se triangula para colocar la lámina superficial.
 - `public/maps/map.schema.json` describe el formato para que el editor valide los archivos. Los mapas existentes lo referencian con `"$schema": "./map.schema.json"`.
 
@@ -366,10 +368,17 @@ Para añadir un mapa, crea `public/maps/<id>.json` y añade su entrada a `public
 ```json
 {
   "maps": [
-    { "id": "mi-mapa", "name": "Mi mapa", "file": "mi-mapa.json" }
+    {
+      "id": "mi-mapa",
+      "name": "Mi mapa",
+      "file": "mi-mapa.json",
+      "teams": ["red", "blue", "yellow", "green"]
+    }
   ]
 }
 ```
+
+El campo `teams` del índice declara los equipos activos del mapa (2-4) y debe coincidir con sus respawns; es lo que usa el lobby para mostrar las columnas correctas antes de cargar el escenario. `pnpm maps:previews` también lo recalcula y lo escribe automáticamente.
 
 Los previews del slider se generan con `pnpm maps:previews`: el script lee cada archivo del índice, dibuja la rejilla con la paleta del editor y guarda `public/maps/previews/<id>.png`, actualizando el campo `preview` de `index.json`. Hay que volver a ejecutarlo al añadir o editar un mapa.
 

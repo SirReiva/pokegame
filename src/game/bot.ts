@@ -33,9 +33,9 @@ import { CONFIG, DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
-import { otherTeam, type BotDifficulty } from './multiplayer';
+import { createTeamRecord, otherTeams, type BotDifficulty } from './multiplayer';
 import { maxHitRadius } from './roster';
-import { respawnsForTeam, terrainAt } from './terrain';
+import { respawnsForTeam, terrainAt, type Team } from './terrain';
 import { typeEffectiveness } from './typeChart';
 import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
 import type { Collider } from './world';
@@ -455,10 +455,7 @@ export interface TeamBlackboard {
   help: BotHelpCall | null;
 }
 
-export interface BotSquad {
-  blue: TeamBlackboard;
-  red: TeamBlackboard;
-}
+export type BotSquad = Record<Team, TeamBlackboard>;
 
 function createTeamBlackboard(): TeamBlackboard {
   return {
@@ -476,10 +473,7 @@ function createTeamBlackboard(): TeamBlackboard {
 }
 
 export function createBotSquad(): BotSquad {
-  return {
-    blue: createTeamBlackboard(),
-    red: createTeamBlackboard()
-  };
+  return createTeamRecord(createTeamBlackboard);
 }
 
 /** Peligro ya lanzado que el bot debe esquivar aunque no haya windup rival. */
@@ -2523,7 +2517,9 @@ export class BotController {
   private pickupTarget(self: MatchPlayerState): PickupSpawn | null {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const missingHp = self.maxHp - self.hp;
-    const enemyBases = respawnsForTeam(otherTeam(self.team));
+    const enemyBases = otherTeams(self.team).flatMap((team) =>
+      respawnsForTeam(team)
+    );
     const team = this.squad[self.team];
     let best: PickupSpawn | null = null;
     let bestScore = -Infinity;
@@ -2679,10 +2675,20 @@ export class BotController {
    */
   private pickSearchPoint(self: MatchPlayerState): Vec2 {
     const ownBases = respawnsForTeam(self.team);
-    const enemyBases = respawnsForTeam(otherTeam(self.team));
+    const enemyBases = otherTeams(self.team).flatMap((team) =>
+      respawnsForTeam(team)
+    );
     const bases = [...ownBases, ...enemyBases];
     const ownBase = ownBases[0] ?? self.spawn;
-    const enemyBase = enemyBases[0];
+    const enemyBase = enemyBases.reduce<(typeof enemyBases)[number] | undefined>(
+      (best, base) => {
+        if (!best) return base;
+        const bestDistance = Math.hypot(ownBase.x - best.x, ownBase.z - best.z);
+        const distance = Math.hypot(ownBase.x - base.x, ownBase.z - base.z);
+        return distance < bestDistance ? base : best;
+      },
+      undefined
+    );
     const team = this.squad[self.team];
 
     let best: Vec2 | null = null;

@@ -13,12 +13,13 @@
     "spawn": { "$ref": "#/$defs/point" },
     "respawns": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 2,
+      "description": "Bases y puntos de aparición. Debe haber entre 2 y 4 equipos distintos (red, blue, yellow, green); un equipo puede declarar varios respawns.",
       "items": {
         "type": "object",
         "required": ["team", "x", "z"],
         "properties": {
-          "team": { "enum": ["blue", "red"] },
+          "team": { "enum": ["red", "blue", "yellow", "green"] },
           "x": { "type": "number" },
           "z": { "type": "number" },
           "radius": { "type": "number", "exclusiveMinimum": 0 }

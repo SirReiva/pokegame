@@ -10,6 +10,7 @@
 import { parseMap } from "./map";
 import {
   BASE_COLLIDER_RADIUS,
+  TEAM_IDS,
   TERRAIN_IDS,
   isTerrainId,
   mountainRangeContains,
@@ -27,6 +28,14 @@ export const EDITOR_DEFAULT_TILE_SIZE = 0.5;
 export const EDITOR_DEFAULT_WATER_HEIGHT = 0.3;
 export const EDITOR_DEFAULT_BASE_RADIUS = 3.6;
 export const EDITOR_HISTORY_LIMIT = 60;
+
+/** Etiqueta de cada base, para los avisos de validación. */
+const TEAM_BASE_LABEL: Record<Team, string> = {
+  red: "roja",
+  blue: "azul",
+  yellow: "amarilla",
+  green: "verde",
+};
 
 /** Color de cada terreno en la rejilla. Copia la paleta base de `textures.ts`. */
 export const TERRAIN_SWATCHES: Record<TerrainId, string> = {
@@ -131,8 +140,9 @@ export function cloneTiles(tiles: TerrainId[][]): TerrainId[][] {
 
 export function cloneBases(bases: EditorBases): EditorBases {
   const next: EditorBases = {};
-  if (bases.blue) next.blue = { ...bases.blue };
-  if (bases.red) next.red = { ...bases.red };
+  for (const team of TEAM_IDS) {
+    if (bases[team]) next[team] = { ...bases[team] };
+  }
   return next;
 }
 
@@ -260,18 +270,13 @@ export function resizeEditorMap(
   );
 
   const bases: EditorBases = {};
-  if (map.bases.blue) {
-    bases.blue = {
-      ...map.bases.blue,
-      row: clamp(map.bases.blue.row, 0, nextRows - 1),
-      col: clamp(map.bases.blue.col, 0, nextCols - 1),
-    };
-  }
-  if (map.bases.red) {
-    bases.red = {
-      ...map.bases.red,
-      row: clamp(map.bases.red.row, 0, nextRows - 1),
-      col: clamp(map.bases.red.col, 0, nextCols - 1),
+  for (const team of TEAM_IDS) {
+    const base = map.bases[team];
+    if (!base) continue;
+    bases[team] = {
+      ...base,
+      row: clamp(base.row, 0, nextRows - 1),
+      col: clamp(base.col, 0, nextCols - 1),
     };
   }
 
@@ -449,7 +454,7 @@ export function cellCenter(
 
 export function editorMapToJson(map: EditorMap): EditorMapJson {
   const respawns: RespawnPoint[] = [];
-  for (const team of ["blue", "red"] as const) {
+  for (const team of TEAM_IDS) {
     const base = map.bases[team];
     if (!base) continue;
     const center = cellCenter(
@@ -467,10 +472,11 @@ export function editorMapToJson(map: EditorMap): EditorMapJson {
     });
   }
 
-  const blue = respawns.find((respawn) => respawn.team === "blue");
+  const firstBase =
+    respawns.find((respawn) => respawn.team === "blue") ?? respawns[0];
   const spawn = map.spawn
     ? { x: round(map.spawn.x), z: round(map.spawn.z) }
-    : { x: blue?.x ?? 0, z: blue?.z ?? 0 };
+    : { x: firstBase?.x ?? 0, z: firstBase?.z ?? 0 };
 
   const json: EditorMapJson = {
     $schema: "./map.schema.json",
@@ -604,7 +610,7 @@ export function editorMapFromJson(raw: unknown): EditorMap {
       tileSize: parsed.tileSize,
       waterHeight: parsed.waterHeight,
       baseRadius:
-        bases.blue?.radius ?? bases.red?.radius ?? EDITOR_DEFAULT_BASE_RADIUS,
+        Object.values(bases)[0]?.radius ?? EDITOR_DEFAULT_BASE_RADIUS,
     },
     cols,
     rows,
@@ -648,13 +654,12 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
       ? []
       : ["El radio de base debe ser mayor que cero."],
   (map) =>
-    [map.bases.blue, map.bases.red].flatMap((base) =>
-      base && !(base.radius > 0)
-        ? [
-            `El radio de la base ${base.team === "blue" ? "azul" : "roja"} debe ser mayor que cero.`,
-          ]
-        : [],
-    ),
+    TEAM_IDS.flatMap((team) => {
+      const base = map.bases[team];
+      return base && !(base.radius > 0)
+        ? [`El radio de la base ${TEAM_BASE_LABEL[team]} debe ser mayor que cero.`]
+        : [];
+    }),
   (map) =>
     map.cols < EDITOR_MIN_SIZE || map.cols > EDITOR_MAX_SIZE
       ? [
@@ -667,8 +672,16 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
           `El alto de la rejilla debe estar entre ${EDITOR_MIN_SIZE} y ${EDITOR_MAX_SIZE}.`,
         ]
       : [],
-  (map) => (map.bases.blue ? [] : ["Falta la base azul."]),
-  (map) => (map.bases.red ? [] : ["Falta la base roja."]),
+  (map) => {
+    const bases = TEAM_IDS.filter((team) => map.bases[team]).length;
+    if (bases < 2) {
+      return ["El mapa necesita al menos dos equipos con base."];
+    }
+    if (bases > 4) {
+      return ["El mapa no puede tener más de cuatro equipos."];
+    }
+    return [];
+  },
   (map) =>
     map.mountains.flatMap((range, index) => {
       const issues: string[] = [];
@@ -735,7 +748,8 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
       ) {
         issues.push(`El objeto ${index + 1} está dentro de un separador.`);
       }
-      for (const base of [map.bases.blue, map.bases.red]) {
+      for (const team of TEAM_IDS) {
+        const base = map.bases[team];
         if (!base) continue;
         const baseCenter = cellCenter(
           map.cols,

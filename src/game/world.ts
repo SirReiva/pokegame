@@ -1,5 +1,6 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
+import { TEAM_INFO } from './multiplayer';
 import {
   BASES,
   BASE_COLLIDER_RADIUS,
@@ -4037,7 +4038,7 @@ export function buildWorld(app: pc.Application): World {
   const stoneMaterial = standard({ diffuse: '#8b8375', specular: '#1a1a1a', gloss: 0.14 });
   materials.push(stoneMaterial);
   for (const base of BASES) {
-    const color = base.team === 'blue' ? '#5b8fd9' : '#d96b5b';
+    const color = TEAM_INFO[base.team].color;
     const crystalMaterial = standard({
       diffuse: '#22303f',
       emissive: color,
