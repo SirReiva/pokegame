@@ -1450,11 +1450,13 @@ export class Game {
     // La visibilidad de los FX se consulta muchas veces por frame con las
     // mismas anclas; la memoización solo es válida dentro de este frame.
     this.fxVisibilityCache.clear();
-    // Start/Escape/B pausan la partida. El coste de comprobarlo antes de mover
-    // es despreciable y evita un frame de movimiento fantasma.
+    // Start/Escape pausan la partida. En mando, B (cancel) solo vuelve en los
+    // menús: no pausa, para no provocar pausas accidentales al desmarcar. El
+    // coste de comprobarlo antes de mover es despreciable y evita un frame de
+    // movimiento fantasma.
     for (const player of this.views) {
       const snapshot = frame.snapshots.get(player.deviceId) ?? IDLE_INPUT;
-      if (snapshot.startPressed || snapshot.cancel) {
+      if (snapshot.startPressed || (snapshot.cancel && !snapshot.gamepad)) {
         this.setPaused(true);
         this.callbacks.onPauseRequest();
         return;

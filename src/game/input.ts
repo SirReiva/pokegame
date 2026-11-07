@@ -389,7 +389,7 @@ export class Input {
     // familias de mando.
     const flip = edge(2) || edge(3);
     const startPressed = edge(9);
-    // X, Y, RB y LB. El botón B sigue reservado para pausa/volver.
+    // X, Y, RB y LB. El botón B queda reservado para volver/continuar.
     const [ability1, ability2, ability3, ability4] =
       PAD_ABILITY_BUTTONS.map(edge);
     const commonAbility = edge(PAD_COMMON_BUTTON);
