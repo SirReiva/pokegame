@@ -173,7 +173,9 @@ cada skin por separado.
 
 El dash no tiene un instante de golpe único: el clip completo se reproduce
 durante la ventana `active` y el barrido comprueba daño cada frame. Por eso el
-`HitFrame` del `QuickStrike` no se usa como ancla.
+`HitFrame` del `QuickStrike` no se usa como ancla. Si un obstáculo o un enemigo
+acorta el desplazamiento, `syncDashCast` reconstruye el plan con la duración
+real, así que el clip termina cuando termina el dash.
 
 ### Casteo interrumpido
 
@@ -194,9 +196,11 @@ La simulación autoritativa corre a **60 Hz** con un acumulador:
   quepan (máximo 4 para no entrar en espiral).
 - El render y la presentación (billboards, FX, daño flotante, mundo y objetos)
   se actualizan **una vez por render** con su `dt` real.
-- Efectos, cooldowns, proyectiles, áreas, bots, visión y regeneración avanzan en
-  pasos fijos. El error del instante del efecto queda en **≤ 1/60 s**,
+- Efectos, cooldowns, proyectiles, áreas, bots y regeneración avanzan en pasos
+  fijos. El error del instante del efecto queda en **≤ 1/60 s**,
   independientemente del framerate.
+- La niebla y la visibilidad (`updateVision`) se resuelven **una vez por
+  render**, no por paso; los bots usan la visibilidad del render anterior.
 - Las pulsaciones de borde (habilidades, rueda, desplazamiento de ratón) se
   acumulan hasta el siguiente paso: a 144 Hz hay renders sin paso y no se
   pierden.
@@ -270,5 +274,7 @@ overlay con:
 - El playback extremo cambia la sensación de peso. El rango `0.6–1.8` está
   pensado para que ninguna especie se vea absurda; si una habilidad lo necesita,
   es señal de que el `startup` no encaja con el clip.
-- El dash conserva la animación completa aunque un obstáculo acorte el
-  desplazamiento. El movimiento se corta, pero el clip sigue su ventana.
+- El dash reproduce su clip durante la ventana `active` real. Si un obstáculo
+  acorta el desplazamiento, `syncDashCast` reconstruye el plan para que el clip
+  dure lo mismo que el movimiento; sigue sin anclarse al `HitFrame` porque su
+  golpe es un barrido continuo.

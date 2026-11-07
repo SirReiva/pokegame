@@ -17,7 +17,7 @@
 | Base | **Misma regla**: si ningún enemigo te ve, cuenta como oculto. Al reaparecer la vida ya está al máximo |
 | Icono | **Solo lo ve el jugador**. El rival nunca lo ve mientras regenera: si lo ve, la regeneración ya está cortada |
 | Uso de activos | Solo si **no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee** |
-| Bloqueo de casteo | Comparten el mismo `castLockTimer` que una habilidad no melee |
+| Bloqueo de casteo | Comparten el mismo bloqueo de casteo que una habilidad no melee |
 | Protección | Reduce un 60 % **todo el daño recibido** durante 2 s, incluidos DoT y áreas; no el autodaño. Ralentiza un 12 % y bloquea otras habilidades mientras está activa |
 | Animación de Protección | **Ninguna por defecto**; cada Pokémon puede definir una o no. El escudo esférico siempre aparece |
 | Color del escudo | **`accent` del Pokémon** en el manifiesto de sprites, no el color del equipo |
@@ -64,7 +64,7 @@ La diferencia con la antigua «Recuperación» es importante: aquella era un bot
 - Solo se puede usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 - Se puede usar mientras se mueve.
 - Lanzarla **no frena al Pokémon**: conserva su inercia (`preserveMomentum`) y solo se ajusta al multiplicador 0,8× mientras dura el escudo.
-- Comparte el mismo `castLockTimer` que una habilidad no melee.
+- Comparte el mismo bloqueo de casteo que una habilidad no melee.
 - VFX muy visible: el rival debe saber que está activa.
 
 **Contrajuego:** baitearla con un ataque débil, usar control para que no sirva o mantener daño sostenido.
@@ -129,11 +129,11 @@ El color del escudo no necesita tabla nueva: se toma de `SpriteAsset.entry.accen
 **Reglas:**
 
 - Más corto que los dash de kit (4-5 u) y con un cooldown mucho menor (3 s frente a 4-8 s).
-- No cancela animaciones ni `windup`.
+- No cancela animaciones ni `startup`.
 - No atraviesa enemigos ni separadores: se detiene en el primer choque.
 - Distancia y duración fijas; no escalan con la velocidad ni con slows.
 - Solo se puede usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
-- Comparte el mismo `castLockTimer` que una habilidad no melee.
+- Comparte el mismo bloqueo de casteo que una habilidad no melee.
 - Animación: `quickstrike`; si la especie no la tiene, el sprite cae a `attack`/`idle`.
 
 **Contrajuego:** paredes, cuerpos enemigos, control, áreas y proyectiles predictivos. Si se usa para entrar, el Pokémon se queda sin escape.
@@ -304,14 +304,14 @@ Riesgos:
 - **Impulso:** reutilizar el dash actual con colisión contra enemigos y separadores.
 - **Regeneración:** `hiddenTimer`, `regenerating` y `regenAccumulator`; comprobación de visibilidad con `isTargetVisible`; gracia de 0,2 s; tick de 5 PV/s en el bucle de `src/game/game.ts`.
 - **Cortes de Regeneración:** un helper `breakRegen(player)` que ponga `hiddenTimer = 0`, `regenerating = false` y `regenAccumulator = 0`, llamado desde pérdida de HP, ataque, casteo de cualquier habilidad, muerte y respawn.
-- **Activos:** Protección e Impulso comparten el `castLockTimer` de una habilidad no melee y solo se pueden usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
+- **Activos:** Protección e Impulso comparten el bloqueo de casteo de una habilidad no melee y solo se pueden usar si no estás casteando, ni en dash, ni en hitstun, ni en el lock de una melee.
 
 ### Input y HUD
 
 - Quinto slot en `src/ui/MatchHud.tsx` para los activos, con tecla **I** y botón **RT** del mando, y anillo de cooldown.
 - Para Regeneración, icono pasivo sin tecla, visible solo para el jugador, con cuenta atrás de 2 s y estado activo.
 - Selector de instinto por Pokémon en `src/ui/RosterScreen.tsx`, cambiable en el roster y visible para ambos equipos en el lobby; etiqueta «Activo» o «Pasivo».
-- Los activos **sí** comparten el `castLockTimer` global de una habilidad no melee.
+- Los activos **sí** comparten el bloqueo de casteo global de una habilidad no melee.
 
 ### Respawn
 
@@ -332,7 +332,7 @@ Riesgos:
 Implementado:
 
 - Slot `common` por Pokémon, selector en el roster, vista en el lobby y quinta casilla del HUD.
-- Tecla `I` y botón `RT`, con el mismo `castLockTimer` que una habilidad no melee.
+- Tecla `I` y botón `RT`, con el mismo bloqueo de casteo que una habilidad no melee.
 - **Protección:** reducción del 60 % durante 2 s, −12 % de velocidad, bloqueo de otras habilidades, escudo esférico con el `accent` del Pokémon y sin animación por defecto.
 - **Impulso:** dash de 2,2 u sin daño, con colisión contra enemigos y separadores.
 - **Regeneración:** 2 s oculto, 5 PV/s con acumulador entero, gracia de 0,2 s y cortes por daño, visibilidad, ataque o habilidad.

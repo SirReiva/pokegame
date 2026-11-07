@@ -121,6 +121,14 @@
 > solo para el decal de sombra; actores, objetos y FX vuelven a resolverse con
 > geometría exacta cada frame, así que el recompuesto a 20 Hz ya no retrasa su
 > visibilidad.
+>
+> **Actualización 2026-11-07**: sistema de animaciones y tiempos de habilidad
+> rediseñado (`3d0f7f8`). `AbilityDef` usa `startup`/`active`/`recovery` y el
+> sprite se retima para que su `HitFrame` coincida con el efecto; la simulación
+> autoritativa corre a paso fijo de 60 Hz. Las referencias de este documento a
+> `windup`, `castTime`, `moveLock`, `animationTime` y `PendingCast` describen el
+> sistema anterior; el diseño actual está en
+> [`animaciones-habilidades.md`](animaciones-habilidades.md).
 
 ## Resumen ejecutivo
 

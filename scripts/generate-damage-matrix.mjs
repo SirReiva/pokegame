@@ -408,8 +408,8 @@ try {
   );
   dpsLines.push(
     '- **Cooldown**: es el valor de la definición de la habilidad y empieza al ' +
-      'iniciar el lanzamiento. El DPS no descuenta el `cast`, el `windup`, el ' +
-      'bloqueo global ni el tiempo de movimiento entre ataques, así que es una ' +
+      'iniciar el lanzamiento. El DPS no descuenta el `startup`, el `active`, el ' +
+      '`recovery` ni el tiempo de movimiento entre ataques, así que es una ' +
       '**cota superior**.'
   );
   dpsLines.push(
