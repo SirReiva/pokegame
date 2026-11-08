@@ -1,4 +1,20 @@
 import * as pc from 'playcanvas';
+import {
+  getGraphicsSettings,
+  setActiveGraphicsBackend,
+  type GraphicsBackend
+} from './graphicsSettings';
+
+/**
+ * Orden de intentos por preferencia. `createGraphicsDevice` añade WebGL2 como
+ * último recurso, así que `auto` y `webgpu` comparten lista; el caso `webgpu`
+ * se valida después para no mentir al jugador.
+ */
+const DEVICE_TYPES: Record<GraphicsBackend, string[]> = {
+  auto: [pc.DEVICETYPE_WEBGPU, pc.DEVICETYPE_WEBGL2],
+  webgpu: [pc.DEVICETYPE_WEBGPU, pc.DEVICETYPE_WEBGL2],
+  webgl2: [pc.DEVICETYPE_WEBGL2]
+};
 
 /**
  * Crea el dispositivo gráfico y la aplicación de PlayCanvas.
@@ -8,17 +24,30 @@ import * as pc from 'playcanvas';
  * `AppBase` hay que declarar solo lo que usa el juego: los cuatro componentes
  * que aparecen en `addComponent` y el handler de audio (el resto de texturas y
  * sprites se crean a mano, sin pasar por el registro de assets).
+ *
+ * Los shaders propios (niebla, viento y efectos) tienen versión GLSL y WGSL,
+ * así que ambos backends son válidos. Ver `docs/graficos-webgpu.md`.
  */
-export async function createGameApp(canvas: HTMLCanvasElement): Promise<pc.AppBase> {
+export async function createGameApp(
+  canvas: HTMLCanvasElement,
+  backend: GraphicsBackend = getGraphicsSettings().backend
+): Promise<pc.AppBase> {
   const device = await pc.createGraphicsDevice(canvas, {
-    // Solo WebGL2 por ahora: WebGPU exigiría portar a WGSL los shaders hechos
-    // a mano (niebla, viento y los `MOTION_*` de los efectos).
-    deviceTypes: [pc.DEVICETYPE_WEBGL2],
+    deviceTypes: DEVICE_TYPES[backend],
     antialias: true,
     alpha: false,
     // En portátiles híbridos fuerza la GPU dedicada en vez de la integrada.
     powerPreference: 'high-performance'
   });
+
+  // El motor siempre deja WebGL2 como último recurso. Si el jugador pidió
+  // WebGPU explícitamente, es mejor avisar que jugar sin saberlo.
+  if (backend === 'webgpu' && !device.isWebGPU) {
+    device.destroy();
+    throw new Error(
+      'WebGPU no está disponible en este navegador. Cambia el backend a Automático o WebGL2 en Opciones.'
+    );
+  }
 
   const app = new pc.AppBase(canvas);
   const options = new pc.AppOptions();
@@ -32,5 +61,7 @@ export async function createGameApp(canvas: HTMLCanvasElement): Promise<pc.AppBa
   options.resourceHandlers = [pc.AudioHandler];
   options.soundManager = new pc.SoundManager();
   app.init(options);
+
+  setActiveGraphicsBackend(device.isWebGPU ? 'webgpu' : 'webgl2');
   return app;
 }

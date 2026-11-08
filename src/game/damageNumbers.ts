@@ -9,6 +9,7 @@
 
 import * as pc from 'playcanvas';
 import { DEG } from './config';
+import { setTextureSource } from './textures';
 
 export interface DamageNumberView {
   camera: pc.CameraComponent;
@@ -255,7 +256,7 @@ export class DamageNumbers {
       // en V=1, que es el borde superior del quad.
       flipY: true
     });
-    texture.setSource(canvas);
+    setTextureSource(texture, canvas);
     return { texture, width, height };
   }
 

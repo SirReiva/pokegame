@@ -9,6 +9,7 @@
 
 import * as pc from 'playcanvas';
 import { DEG } from './config';
+import { setTextureSource } from './textures';
 
 /** Resolución de la barra de vida; mantiene la proporción (≈ 9:1). */
 const BAR_TEXTURE_WIDTH = 256;
@@ -225,8 +226,8 @@ export class HealthBar {
 
     this.drawBar();
     this.drawBadge();
-    this.barTexture.setSource(this.barCanvas);
-    this.badgeTexture.setSource(this.badgeCanvas);
+    setTextureSource(this.barTexture, this.barCanvas);
+    setTextureSource(this.badgeTexture, this.badgeCanvas);
   }
 
   /** `fraction` va de 0 (KO) a 1 (vida completa); a 0 todo se oculta. */
@@ -236,7 +237,7 @@ export class HealthBar {
     this.fraction = next;
     this.root.enabled = next > 0;
     this.drawBar();
-    this.barTexture.setSource(this.barCanvas);
+    setTextureSource(this.barTexture, this.barCanvas);
   }
 
   /** Nivel 1-10 que se muestra delante de la barra. */
@@ -245,7 +246,7 @@ export class HealthBar {
     if (next === this.level) return;
     this.level = next;
     this.drawBadge();
-    this.badgeTexture.setSource(this.badgeCanvas);
+    setTextureSource(this.badgeTexture, this.badgeCanvas);
   }
 
   /** Redibuja el contorno, la pista y la porción de vida. */

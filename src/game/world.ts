@@ -42,6 +42,7 @@ import {
   groundTextureSize,
   textureFromCanvas
 } from './textures';
+import { applyWindShader } from './windShader';
 
 export type Collider =
   | { type: 'circle'; x: number; z: number; radius: number; sightRadius?: number }
@@ -102,87 +103,6 @@ const WALL_HEIGHT = 2.3;
  * diseño. Los charcos pequeños conservan sus partículas de siempre.
  */
 const LARGE_REGION_WEATHER = false;
-
-/**
- * Variante de `transformCoreVS` para follaje instanciado. Cada instancia lleva
- * en `instance_wind` su fase y su fuerza de viento; el vertex shader inclina la
- * mata sobre su base (y = 0) sin desplazarla. Así la animación de una región
- * entera cuesta un uniforme por material y ningún trabajo de CPU por mata.
- */
-const WIND_TRANSFORM_CORE_VS = `
-attribute vec4 vertex_position;
-uniform mat4 matrix_viewProjection;
-uniform mat4 matrix_model;
-#ifdef INSTANCING
-attribute vec4 instance_wind;
-uniform float uWindTime;
-uniform float uWindSpeed;
-uniform float uWindAmplitude;
-#endif
-#ifdef MORPHING
-	uniform vec2 morph_tex_params;
-	attribute uint morph_vertex_id;
-	ivec2 getTextureMorphCoords() {
-		ivec2 textureSize = ivec2(morph_tex_params);
-		int morphGridV = int(morph_vertex_id) / textureSize.x;
-		int morphGridU = int(morph_vertex_id) - (morphGridV * textureSize.x);
-		#ifdef WEBGPU
-			morphGridV = textureSize.y - morphGridV - 1;
-		#endif
-		return ivec2(morphGridU, morphGridV);
-	}
-	#ifdef MORPHING_POSITION
-		#ifdef MORPHING_INT
-			uniform vec3 aabbSize;
-			uniform vec3 aabbMin;
-			uniform usampler2D morphPositionTex;
-		#else
-			uniform highp sampler2D morphPositionTex;
-		#endif
-	#endif
-#endif
-#ifdef defined(BATCH)
-	#include "skinBatchVS"
-	mat4 getModelMatrix() {
-		return getBoneMatrix(vertex_boneIndices);
-	}
-#elif defined(SKIN)
-	#include "skinVS"
-	mat4 getModelMatrix() {
-		return matrix_model * getSkinMatrix(vertex_boneIndices, vertex_boneWeights);
-	}
-#elif defined(INSTANCING)
-	#include "transformInstancingVS"
-#else
-	mat4 getModelMatrix() {
-		return matrix_model;
-	}
-#endif
-vec3 getLocalPosition(vec3 vertexPosition) {
-	vec3 localPos = vertexPosition;
-	#ifdef INSTANCING
-		// Giro sobre Z en el espacio local: la base queda fija y la punta se mece.
-		float sway = sin(uWindTime * uWindSpeed + instance_wind.x) * uWindAmplitude * instance_wind.y;
-		float swaySin = sin(sway);
-		float swayCos = cos(sway);
-		localPos = vec3(
-			localPos.x * swayCos - localPos.y * swaySin,
-			localPos.x * swaySin + localPos.y * swayCos,
-			localPos.z
-		);
-	#endif
-	#ifdef MORPHING_POSITION
-		ivec2 morphUV = getTextureMorphCoords();
-		#ifdef MORPHING_INT
-			vec3 morphPos = vec3(texelFetch(morphPositionTex, ivec2(morphUV), 0).xyz) / 65535.0 * aabbSize + aabbMin;
-		#else
-			vec3 morphPos = texelFetch(morphPositionTex, ivec2(morphUV), 0).xyz;
-		#endif
-		localPos += morphPos;
-	#endif
-	return localPos;
-}
-`;
 
 /** Lote instanciado de mariposas: cuerpo y las dos alas comparten índices. */
 interface ButterflyBatch {
@@ -2271,10 +2191,7 @@ export function buildWorld(app: pc.AppBase): World {
       cull: pc.CULLFACE_NONE
     });
     material.diffuseVertexColor = true;
-    material.userAttributes.set(pc.SEMANTIC_ATTR13, 'instance_wind');
-    material
-      .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
-      .set('transformCoreVS', WIND_TRANSFORM_CORE_VS);
+    applyWindShader(material);
     material.setParameter('uWindTime', 0);
     material.setParameter('uWindSpeed', speed);
     material.setParameter('uWindAmplitude', (amplitudeDegrees * Math.PI) / 180);

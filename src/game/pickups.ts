@@ -23,7 +23,7 @@ import {
 } from './items';
 import type { MatchPlayerState } from './matchState';
 import { loadImage } from './sprite';
-import { textureFromCanvas } from './textures';
+import { setTextureSource, textureFromCanvas } from './textures';
 import type { PokemonEntry } from './types';
 
 export interface ItemTextures {
@@ -93,7 +93,7 @@ function createPlaceholderTexture(
 
 function createImageTexture(
   device: pc.GraphicsDevice,
-  image: HTMLImageElement,
+  image: ImageBitmap,
   name: string
 ): pc.Texture {
   const texture = new pc.Texture(device, {
@@ -109,7 +109,7 @@ function createImageTexture(
     addressV: pc.ADDRESS_CLAMP_TO_EDGE,
     flipY: true
   });
-  texture.setSource(image);
+  setTextureSource(texture, image);
   return texture;
 }
 

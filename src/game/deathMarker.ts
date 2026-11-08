@@ -31,7 +31,7 @@ export class DeathMarker {
   private readonly material: pc.StandardMaterial;
   private readonly texture: pc.Texture;
   private readonly canvas: HTMLCanvasElement;
-  private readonly portrait: HTMLImageElement | null;
+  private readonly portrait: ImageBitmap | null;
   /** Último segundo pintado en el centro; evita redibujar cada frame. */
   private countdownSeconds: number | null = null;
   private visible = true;
@@ -41,7 +41,7 @@ export class DeathMarker {
     x: number,
     z: number,
     y: number,
-    portrait: HTMLImageElement | null = null
+    portrait: ImageBitmap | null = null
   ) {
     this.x = x;
     this.z = z;

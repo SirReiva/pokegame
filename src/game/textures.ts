@@ -92,8 +92,40 @@ export function textureFromCanvas(
     addressV: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
     flipY,
   });
-  texture.setSource(canvas);
+  setTextureSource(texture, canvas);
   return texture;
+}
+
+/**
+ * Sube una imagen ya decodificada a una textura.
+ *
+ * WebGPU sube `ImageBitmap`/canvas con `copyExternalImageToTexture`, pero la
+ * d.ts de PlayCanvas todavía tipa `setSource` solo con elementos HTML. En
+ * runtime el soporte existe (`WebgpuTexture#isExternalImage`), así que se
+ * estrecha el tipo en un único sitio.
+ *
+ * Además, el motor fuerza `flipY: false` en esa ruta: si la textura pide
+ * `flipY`, la imagen se voltea antes de subirla para que WebGL y WebGPU se vean
+ * igual. Se lee de la propia textura para no olvidarlo en cada sitio.
+ */
+export function setTextureSource(
+  texture: pc.Texture,
+  source: ImageBitmap | HTMLCanvasElement,
+): void {
+  let upload: ImageBitmap | HTMLCanvasElement = source;
+  if (texture.flipY && texture.device.isWebGPU) {
+    const canvas = document.createElement("canvas");
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.translate(0, canvas.height);
+      ctx.scale(1, -1);
+      ctx.drawImage(source, 0, 0);
+      upload = canvas;
+    }
+  }
+  texture.setSource(upload as unknown as HTMLCanvasElement);
 }
 
 interface TerrainPalette {
@@ -1678,7 +1710,7 @@ export const DEATH_MARKER_TEXTURE_SIZE = 80;
  * número anterior sobre el retrato.
  */
 export function createDeathMarkerCanvas(
-  portrait: HTMLImageElement | null = null,
+  portrait: ImageBitmap | null = null,
   size = DEATH_MARKER_TEXTURE_SIZE,
   countdown: number | null = null,
 ): HTMLCanvasElement {
@@ -1693,7 +1725,7 @@ export function createDeathMarkerCanvas(
  */
 export function paintDeathMarkerCanvas(
   canvas: HTMLCanvasElement,
-  portrait: HTMLImageElement | null = null,
+  portrait: ImageBitmap | null = null,
   countdown: number | null = null,
 ): void {
   const ctx = canvas.getContext('2d');
@@ -1704,7 +1736,7 @@ export function paintDeathMarkerCanvas(
 function paintDeathMarker(
   ctx: CanvasRenderingContext2D,
   size: number,
-  portrait: HTMLImageElement | null,
+  portrait: ImageBitmap | null,
   countdown: number | null,
 ): void {
   const image = ctx.createImageData(size, size);

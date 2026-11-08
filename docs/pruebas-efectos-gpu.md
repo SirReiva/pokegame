@@ -81,3 +81,11 @@ Siguen con entidades por elemento:
 - El efecto se queda congelado: comprueba que `setTime()` se llame en el
   `animate` del efecto y que el material esté en la lista `materials` del
   `addEffect`.
+
+## Backends
+
+Repite la lista con **WebGPU** y con **WebGL2** (selector en Opciones). Los
+shaders de los efectos tienen versi�n GLSL y WGSL; si un efecto se anima en un
+backend y en el otro se queda quieto, falta el MOTION_*_WGSL correspondiente
+en src/game/effectMotionsWGSL.ts (la consola lo avisa). Ver
+docs/graficos-webgpu.md.

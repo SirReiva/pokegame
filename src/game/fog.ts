@@ -3,6 +3,7 @@ import { CONFIG, DEG } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { MAX_TEAM_SIZE, type SplitRect } from './multiplayer';
 import { mapHalfDepth, mapHalfWidth } from './terrain';
+import { setTextureSource } from './textures';
 
 /**
  * Niebla de guerra dibujada por el motor.
@@ -93,6 +94,83 @@ void main(void) {
   // proyectan los oclusores dentro de ella.
   float alpha = max(circle, 1.0 - mask);
   gl_FragColor = vec4(uFogColor, alpha * uFogOpacity * mapMask);
+}
+`;
+
+/** Claves de uniforms con array: GLSL usa `[0]`, WGSL el nombre base. */
+const FOG_CENTER_PARAM = 'uFogCenter';
+const FOG_RADIUS_PARAM = 'uFogRadius';
+
+const VERTEX_WGSL = `
+attribute aPosition: vec3f;
+attribute aUv0: vec2f;
+uniform matrix_model: mat4x4f;
+uniform matrix_viewProjection: mat4x4f;
+varying vUv: vec2f;
+varying vWorldPosition: vec3f;
+
+@vertex
+fn vertexMain(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+  // Posición de mundo del quad (pegado a la cámara): sirve para reconstruir
+  // en el fragment el punto del suelo bajo cada píxel.
+  let world = uniform.matrix_model * vec4f(aPosition, 1.0);
+  output.vUv = aUv0;
+  output.vWorldPosition = world.xyz;
+  output.position = uniform.matrix_viewProjection * world;
+  return output;
+}
+`;
+
+const FRAGMENT_WGSL = `
+varying vUv: vec2f;
+varying vWorldPosition: vec3f;
+uniform uFogColor: vec3f;
+uniform uFogOpacity: f32;
+uniform uFogCenter: array<vec2f, ${MAX_VISION_CIRCLES}>;
+uniform uFogRadius: array<vec2f, ${MAX_VISION_CIRCLES}>;
+uniform uFogFeather: f32;
+uniform uCameraPosition: vec3f;
+uniform uMapHalfSize: vec2f;
+uniform uMapEdgeFeather: f32;
+var uFogMask: texture_2d<f32>;
+var uFogMask_sampler: sampler;
+
+@fragment
+fn fragmentMain(input: FragmentInput) -> FragmentOutput {
+  var output: FragmentOutput;
+
+  // La visión es de equipo: el alfa es el mínimo de todos los círculos, así
+  // que basta con estar dentro de uno para que el mundo se dibuje normal.
+  var circle = 1.0;
+  for (var i = 0; i < ${MAX_VISION_CIRCLES}; i++) {
+    let offset = (vUv - uniform.uFogCenter[i].element) / max(uniform.uFogRadius[i].element, vec2f(0.0001));
+    circle = min(circle, smoothstep(1.0 - uniform.uFogFeather, 1.0, length(offset)));
+  }
+
+  // La niebla solo sombrea el interior del mapa: se interseca el rayo de
+  // cámara con el plano del suelo y se descarta lo que cae fuera de los
+  // límites. Ese mismo punto muestrea la máscara world-space del equipo.
+  var mapMask = 0.0;
+  var mask = 1.0;
+  let ray = vWorldPosition - uniform.uCameraPosition;
+  if (ray.y < -0.0001) {
+    let t = -uniform.uCameraPosition.y / ray.y;
+    let ground = uniform.uCameraPosition.xz + ray.xz * t;
+    let outside = abs(ground) - uniform.uMapHalfSize;
+    let distanceOutside = max(outside.x, outside.y);
+    mapMask = 1.0 - smoothstep(-uniform.uMapEdgeFeather, uniform.uMapEdgeFeather, distanceOutside);
+    let maskUv = ground / max(uniform.uMapHalfSize * 2.0, vec2f(0.0001)) + vec2f(0.5);
+    // Nivel 0: la máscara no tiene mipmaps y textureSample no se permite en
+    // flujo no uniforme (el if depende del píxel).
+    mask = textureSampleLevel(uFogMask, uFogMask_sampler, maskUv, 0.0).r;
+  }
+
+  // circle manda fuera de la unión de visión; 1 - mask añade la sombra que
+  // proyectan los oclusores dentro de ella.
+  let alpha = max(circle, 1.0 - mask);
+  output.color = vec4f(uniform.uFogColor, alpha * uniform.uFogOpacity * mapMask);
+  return output;
 }
 `;
 
@@ -205,6 +283,8 @@ export class FogView {
       uniqueName: 'fog-of-war',
       vertexGLSL: VERTEX_SHADER,
       fragmentGLSL: FRAGMENT_SHADER,
+      vertexWGSL: VERTEX_WGSL,
+      fragmentWGSL: FRAGMENT_WGSL,
       attributes: {
         aPosition: pc.SEMANTIC_POSITION,
         aUv0: pc.SEMANTIC_TEXCOORD0
@@ -224,8 +304,12 @@ export class FogView {
     );
     this.material.setParameter('uMapEdgeFeather', MAP_EDGE_FEATHER);
     this.material.setParameter('uFogMask', mask);
-    this.material.setParameter('uFogCenter[0]', this.screenFog.centers);
-    this.material.setParameter('uFogRadius[0]', this.screenFog.radii);
+    // GLSL enlaza el array por su primer elemento; WGSL agrupa el array entero
+    // en el uniform buffer y resuelve por el nombre base.
+    this.material.setParameter(`${FOG_CENTER_PARAM}[0]`, this.screenFog.centers);
+    this.material.setParameter(`${FOG_RADIUS_PARAM}[0]`, this.screenFog.radii);
+    this.material.setParameter(FOG_CENTER_PARAM, this.screenFog.centers);
+    this.material.setParameter(FOG_RADIUS_PARAM, this.screenFog.radii);
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
@@ -401,8 +485,10 @@ export class FogView {
       this.screenFog.radii[slot + 1] = radiusY / 100;
     }
 
-    this.material.setParameter('uFogCenter[0]', this.screenFog.centers);
-    this.material.setParameter('uFogRadius[0]', this.screenFog.radii);
+    this.material.setParameter(`${FOG_CENTER_PARAM}[0]`, this.screenFog.centers);
+    this.material.setParameter(`${FOG_RADIUS_PARAM}[0]`, this.screenFog.radii);
+    this.material.setParameter(FOG_CENTER_PARAM, this.screenFog.centers);
+    this.material.setParameter(FOG_RADIUS_PARAM, this.screenFog.radii);
     this.setOpacity(CONFIG.vision.fogOpacity);
   }
 
@@ -537,7 +623,7 @@ export class FogMask {
       addressV: pc.ADDRESS_CLAMP_TO_EDGE,
       srgb: false
     });
-    this.texture.setSource(this.maskCanvas);
+    setTextureSource(this.texture, this.maskCanvas);
   }
 
   /**

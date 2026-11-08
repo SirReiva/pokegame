@@ -10,6 +10,7 @@ import { CONFIG, DEG, RAD } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { publicUrl } from './publicUrl';
 import { defaultSkinFor } from './skins';
+import { setTextureSource } from './textures';
 import type {
   AnimationName,
   PokemonEntry,
@@ -18,6 +19,13 @@ import type {
   ResolvedAnimation,
   SpriteAnimation
 } from './types';
+
+/**
+ * Imagen ya decodificada. Se usa `ImageBitmap` (y no `HTMLImageElement`)
+ * porque WebGPU solo sube a textura bitmaps, canvas y vídeo:
+ * `texture.setSource(HTMLImageElement)` se ignora en ese backend.
+ */
+export type LoadedImage = ImageBitmap;
 
 export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
   faint?: pc.Texture;
@@ -40,7 +48,7 @@ export interface SpriteAsset {
   /** Factor de reescalado aplicado a cada hoja (puede ser menor en hojas grandes). */
   textureScales: Partial<Record<AnimationName, number>>;
   /** Retrato del aspecto, ya cargado para la marca de KO del suelo. */
-  portrait: HTMLImageElement | null;
+  portrait: LoadedImage | null;
 }
 
 const ANIMATIONS: RequiredAnimationName[] = ['idle', 'walk', 'attack', 'hurt'];
@@ -145,7 +153,7 @@ export const SPRITE_TEXTURE_SCALE =
  * GPU. Se reduce el factor solo para esas hojas; las pequeñas siguen a máxima
  * calidad.
  */
-function textureScaleFor(image: HTMLImageElement | HTMLCanvasElement): number {
+function textureScaleFor(image: LoadedImage | HTMLCanvasElement): number {
   const base = SPRITE_TEXTURE_SCALE;
   let scale = base;
   while (
@@ -184,7 +192,7 @@ function movesetUsesAnimation(
  * ahora el plano está centrado en el personaje.
  */
 function buildTightSheet(
-  image: HTMLImageElement,
+  image: LoadedImage,
   animation: SpriteAnimation
 ): { canvas: HTMLCanvasElement; animation: SpriteAnimation } | null {
   const rows = animation.contentRows;
@@ -270,17 +278,17 @@ function buildTightSheet(
   };
 }
 
-export function loadImage(url: string): Promise<HTMLImageElement> {
+export async function loadImage(url: string): Promise<LoadedImage> {
   // El manifiesto puede traer rutas absolutas (`/sprites/...`); se adaptan al
   // `base` para que funcionen también bajo el subdirectorio de GitHub Pages.
   const resolved = publicUrl(url);
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.decoding = 'async';
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`No se pudo cargar ${resolved}`));
-    image.src = resolved;
-  });
+  const response = await fetch(resolved);
+  if (!response.ok) {
+    throw new Error(`No se pudo cargar ${resolved} (HTTP ${response.status})`);
+  }
+  // `ImageBitmap` es el único formato de imagen que WebGPU sube directamente
+  // con `copyExternalImageToTexture`; además decodifica fuera del hilo principal.
+  return createImageBitmap(await response.blob());
 }
 
 /**
@@ -289,9 +297,9 @@ export function loadImage(url: string): Promise<HTMLImageElement> {
  * queda antialiaseado pero el interior conserva los bloques del píxel art.
  */
 function upscaleSheet(
-  image: HTMLImageElement | HTMLCanvasElement,
+  image: LoadedImage | HTMLCanvasElement,
   factor: number
-): HTMLCanvasElement | HTMLImageElement {
+): HTMLCanvasElement | LoadedImage {
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(image.width * factor);
   canvas.height = Math.round(image.height * factor);
@@ -304,7 +312,7 @@ function upscaleSheet(
 
 function createSpriteTexture(
   device: pc.GraphicsDevice,
-  image: HTMLImageElement | HTMLCanvasElement,
+  image: LoadedImage | HTMLCanvasElement,
   name: string,
   scale: number
 ): pc.Texture {
@@ -327,7 +335,7 @@ function createSpriteTexture(
     // El arte se sube del revés para que la fila 0 de la hoja quede en V=1.
     flipY: true
   });
-  texture.setSource(source);
+  setTextureSource(texture, source);
   return texture;
 }
 
@@ -358,7 +366,7 @@ export async function loadSpriteAsset(
 
   const createFor = (
     name: AnimationName,
-    image: HTMLImageElement,
+    image: LoadedImage,
     animation: SpriteAnimation
   ) => {
     // Charge conserva su vibración interna: se usa el frame completo y un

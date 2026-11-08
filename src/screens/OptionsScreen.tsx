@@ -4,6 +4,17 @@ import {
   setAudioSettings,
   subscribeAudioSettings
 } from '../game/audioSettings';
+import {
+  getActiveGraphicsBackend,
+  getGraphicsSettings,
+  setGraphicsSettings,
+  subscribeGraphicsSettings,
+  type GraphicsBackend
+} from '../game/graphicsSettings';
+import {
+  detectGraphicsAvailability,
+  type GraphicsAvailability
+} from '../game/graphicsAvailability';
 import { useSession } from '../session/useSession';
 import { Brand } from '../ui/Brand';
 import { btnClass } from '../ui/buttonStyles';
@@ -11,11 +22,93 @@ import { ControlsPanel, CreditsPanel } from '../ui/InfoPanels';
 import { eyebrow } from '../ui/styles';
 import { useBack } from '../ui/useBack';
 
+const BACKEND_LABELS: Record<string, string> = {
+  webgpu: 'WebGPU',
+  webgl2: 'WebGL2'
+};
+
 const panel =
   'rounded-[20px] border border-line bg-[linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-[clamp(16px,2.4vw,24px)] shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]';
 
+const BACKEND_OPTIONS: Array<{
+  id: GraphicsBackend;
+  label: string;
+  detail: string;
+}> = [
+  {
+    id: 'auto',
+    label: 'Automático',
+    detail:
+      'Usa WebGPU si el navegador lo soporta y, si no, WebGL2. Es la opción recomendada.'
+  },
+  {
+    id: 'webgpu',
+    label: 'WebGPU',
+    detail:
+      'Fuerza el backend nuevo. Si el navegador no lo ofrece, la partida avisa y puedes volver aquí para cambiarlo.'
+  },
+  {
+    id: 'webgl2',
+    label: 'WebGL2',
+    detail:
+      'Fuerza el backend clásico. Útil si WebGPU produce artefactos o problemas de driver.'
+  }
+];
+
 function percent(value: number): string {
   return `${Math.round(value * 100)} %`;
+}
+
+type AvailabilityState = 'checking' | 'available' | 'unavailable';
+
+const AVAILABILITY_LABEL: Record<AvailabilityState, string> = {
+  checking: 'Comprobando disponibilidad…',
+  available: 'Disponible en este navegador',
+  unavailable: 'No disponible en este navegador'
+};
+
+/** Icono de disponibilidad del backend: check, aspa o punto mientras se comprueba. */
+function AvailabilityIcon({
+  state,
+  onAccent = false
+}: {
+  state: AvailabilityState;
+  onAccent?: boolean;
+}) {
+  const tone = onAccent
+    ? state === 'unavailable'
+      ? 'text-danger-deep'
+      : 'text-ink-dark'
+    : state === 'available'
+      ? 'text-success'
+      : state === 'unavailable'
+        ? 'text-danger-100'
+        : 'animate-pulse text-muted';
+  return (
+    <span
+      className={`inline-flex size-3.5 shrink-0 items-center justify-center ${tone}`}
+      title={AVAILABILITY_LABEL[state]}
+      aria-label={AVAILABILITY_LABEL[state]}
+      role="img"
+    >
+      <svg
+        viewBox="0 0 16 16"
+        className="size-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="8" cy="8" r="6.1" />
+        {state === 'available' && <path d="M5.1 8.2 7 10.1l3.9-4.2" />}
+        {state === 'unavailable' && <path d="M5.6 5.6 10.4 10.4M10.4 5.6 5.6 10.4" />}
+        {state === 'checking' && <path d="M8 8h.01" />}
+      </svg>
+    </span>
+  );
 }
 
 function VolumeSlider(props: {
@@ -46,11 +139,45 @@ export function OptionsScreen() {
   const { manifest } = useSession();
   const goBack = useBack();
   const [audio, setAudio] = useState(getAudioSettings);
+  const [graphics, setGraphics] = useState(getGraphicsSettings);
+  const [activeBackend, setActiveBackend] = useState(getActiveGraphicsBackend);
+  const [availability, setAvailability] = useState<GraphicsAvailability | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void detectGraphicsAvailability().then((result) => {
+      if (!cancelled) setAvailability(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(
     () => subscribeAudioSettings(() => setAudio(getAudioSettings())),
     []
   );
+
+  useEffect(
+    () =>
+      subscribeGraphicsSettings(() => {
+        setGraphics(getGraphicsSettings());
+        setActiveBackend(getActiveGraphicsBackend());
+      }),
+    []
+  );
+
+  const availabilityFor = (id: GraphicsBackend): AvailabilityState => {
+    if (!availability) return 'checking';
+    if (id === 'auto') {
+      return availability.webgpu || availability.webgl2 ? 'available' : 'unavailable';
+    }
+    return availability[id] ? 'available' : 'unavailable';
+  };
+
+  const backendDetail =
+    BACKEND_OPTIONS.find((option) => option.id === graphics.backend)?.detail ?? '';
+  const selectedUnavailable = availabilityFor(graphics.backend) === 'unavailable';
 
   return (
     <div className="relative h-full overflow-y-auto bg-[radial-gradient(circle_at_18%_8%,#122033_0%,#080d15_46%,#05080d_100%)] p-[clamp(16px,2.4vw,32px)]">
@@ -68,11 +195,11 @@ export function OptionsScreen() {
 
         <div>
           <span className={eyebrow}>Menú · Opciones</span>
-          <h2 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)]">Controles, audio y créditos</h2>
+          <h2 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)]">Controles, audio, gráficos y créditos</h2>
           <p className="mt-2 max-w-[62ch] text-14.4 leading-[1.55] text-muted">
-            Consulta los controles de mando y teclado, ajusta el volumen y revisa la atribución de
-            los sprites y los efectos. Los ajustes de partida (mapa, equipos y Pokémon) se eligen
-            antes de jugar.
+            Consulta los controles de mando y teclado, ajusta el volumen, elige el backend de render
+            y revisa la atribución de los sprites y los efectos. Los ajustes de partida (mapa,
+            equipos y Pokémon) se eligen antes de jugar.
           </p>
         </div>
 
@@ -109,6 +236,49 @@ export function OptionsScreen() {
               en este dispositivo.
             </p>
           </section>
+
+          <section className={`${panel} xl:col-span-2`}>
+            <header className="mb-4 flex items-center justify-between gap-3 border-b border-line pb-3">
+              <div>
+                <span className={eyebrow}>Gráficos</span>
+                <h3 className="mt-0.5 text-19.2">Motor de render</h3>
+              </div>
+              <span className="rounded-full border border-line px-2 py-1 font-mono text-9.6 uppercase text-steel-650">
+                {activeBackend === null
+                  ? 'Sin iniciar'
+                  : `Activo: ${BACKEND_LABELS[activeBackend] ?? activeBackend}`}
+              </span>
+            </header>
+            <div className="flex flex-wrap gap-2">
+              {BACKEND_OPTIONS.map((option) => {
+                const selected = graphics.backend === option.id;
+                const state = availabilityFor(option.id);
+                const unavailable = state === 'unavailable';
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={unavailable}
+                    title={unavailable ? AVAILABILITY_LABEL.unavailable : undefined}
+                    className={btnClass(selected ? 'primary' : 'ghost', 'small')}
+                    onClick={() => setGraphicsSettings({ backend: option.id })}
+                  >
+                    <AvailabilityIcon state={state} onAccent={selected} />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-4 text-12.8/normal text-muted">
+              {backendDetail}
+              {selectedUnavailable
+                ? ' No está disponible en este navegador: elige Automático o WebGL2.'
+                : ''}{' '}
+              El cambio se aplica al iniciar la siguiente partida.
+            </p>
+          </section>
+
           <section className={panel}>
             <header className="mb-4 flex items-center justify-between gap-3 border-b border-line pb-3">
               <div>

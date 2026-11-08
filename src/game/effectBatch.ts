@@ -14,6 +14,7 @@
  */
 
 import * as pc from 'playcanvas';
+import * as wgslMotions from './effectMotionsWGSL';
 
 const ATTR_ANIM0 = pc.SEMANTIC_ATTR13;
 const ATTR_ANIM1 = pc.SEMANTIC_ATTR10;
@@ -199,6 +200,225 @@ vec3 getLocalPosition(vec3 vertexPosition) {
 `;
 }
 
+/** Equivalentes WGSL de las utilidades y uniforms de `EFFECT_SHADER_COMMON`. */
+const EFFECT_SHADER_COMMON_WGSL = `
+attribute vertex_position: vec4f;
+uniform matrix_viewProjection: mat4x4f;
+uniform uEffectTime: f32;
+uniform uEffectLife: f32;
+uniform uEffectOpacity: f32;
+uniform uEffectRadius: f32;
+uniform uEffectParam0: f32;
+uniform uEffectParam1: f32;
+uniform uEffectParam2: f32;
+uniform uEffectParam3: f32;
+
+const EFFECT_PI: f32 = 3.141592653589793;
+const EFFECT_DEG: f32 = 0.017453292519943295;
+
+fn effectScale(s: vec3f) -> mat4x4f {
+  return mat4x4f(
+    s.x, 0.0, 0.0, 0.0,
+    0.0, s.y, 0.0, 0.0,
+    0.0, 0.0, s.z, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  );
+}
+
+fn effectRotX(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return mat4x4f(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, c, s, 0.0,
+    0.0, -s, c, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  );
+}
+
+fn effectRotY(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return mat4x4f(
+    c, 0.0, -s, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    s, 0.0, c, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  );
+}
+
+fn effectRotZ(angle: f32) -> mat4x4f {
+  let c = cos(angle);
+  let s = sin(angle);
+  return mat4x4f(
+    c, s, 0.0, 0.0,
+    -s, c, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0
+  );
+}
+
+fn effectEuler(x: f32, y: f32, z: f32) -> mat4x4f {
+  return effectRotY(y) * effectRotX(x) * effectRotZ(z);
+}
+
+fn effectTRS(translation: vec3f, scale: vec3f, rotation: mat4x4f) -> mat4x4f {
+  var result = rotation;
+  result[0] = result[0] * scale.x;
+  result[1] = result[1] * scale.y;
+  result[2] = result[2] * scale.z;
+  result[3] = vec4f(translation, 1.0);
+  return result;
+}
+
+fn effectEnvelope(fadeIn: f32, fadeOut: f32) -> f32 {
+  let inValue = min(1.0, uniform.uEffectTime / max(fadeIn, 0.0001));
+  let outValue = min(1.0, max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / max(fadeOut, 0.0001)));
+  return min(inValue, outValue);
+}
+`;
+
+function instancedChunkWGSL(motion: string): string {
+  return `${EFFECT_SHADER_COMMON_WGSL}
+#ifdef INSTANCING
+attribute instance_line1: vec4f;
+attribute instance_line2: vec4f;
+attribute instance_line3: vec4f;
+attribute instance_line4: vec4f;
+attribute instance_anim0: vec4f;
+attribute instance_anim1: vec4f;
+attribute instance_anim2: vec4f;
+uniform matrix_model: mat4x4f;
+
+${motion}
+
+fn getModelMatrix() -> mat4x4f {
+  let base = mat4x4f(instance_line1, instance_line2, instance_line3, instance_line4);
+  return uniform.matrix_model * effectModel(base, instance_anim0, instance_anim1);
+}
+
+fn getLocalPosition(vertexPosition: vec3f) -> vec3f {
+  return effectLocalPosition(vertexPosition, instance_anim0, instance_anim1);
+}
+#else
+#ifdef MESH_INSTANCE_STORAGE
+  #include "meshInstanceStorageVS"
+  fn getModelMatrix() -> mat4x4f {
+    return getStoredModelMatrix();
+  }
+#else
+  uniform matrix_model: mat4x4f;
+  fn getModelMatrix() -> mat4x4f {
+    return uniform.matrix_model;
+  }
+#endif
+
+fn getLocalPosition(vertexPosition: vec3f) -> vec3f {
+  return vertexPosition;
+}
+#endif
+`;
+}
+
+function vertexChunkWGSL(motion: string): string {
+  return `${EFFECT_SHADER_COMMON_WGSL}
+
+${motion}
+
+#ifdef MESH_INSTANCE_STORAGE
+  #include "meshInstanceStorageVS"
+  fn getModelMatrix() -> mat4x4f {
+    return getStoredModelMatrix();
+  }
+#else
+  uniform matrix_model: mat4x4f;
+  fn getModelMatrix() -> mat4x4f {
+    return uniform.matrix_model;
+  }
+#endif
+
+fn getLocalPosition(vertexPosition: vec3f) -> vec3f {
+  return effectLocalPosition(vertexPosition);
+}
+`;
+}
+
+/**
+ * Empareja cada movimiento GLSL con su gemelo WGSL. Es explícito para que
+ * añadir un `MOTION_*` sin versión WebGPU se detecte en `applyEffectShader`.
+ * Se construye de forma perezosa porque las constantes `MOTION_*` se declaran
+ * más abajo en este mismo módulo.
+ */
+let motionWgslSources: Map<string, string> | null = null;
+
+function getMotionWgslSources(): Map<string, string> {
+  motionWgslSources ??= new Map<string, string>([
+    [MOTION_STATIC, wgslMotions.MOTION_STATIC_WGSL],
+    [MOTION_GRASS_LEAVES, wgslMotions.MOTION_GRASS_LEAVES_WGSL],
+    [MOTION_CYCLONE_PUFFS, wgslMotions.MOTION_CYCLONE_PUFFS_WGSL],
+    [MOTION_HEAT_FLAMES, wgslMotions.MOTION_HEAT_FLAMES_WGSL],
+    [MOTION_HEAT_EMBERS, wgslMotions.MOTION_HEAT_EMBERS_WGSL],
+    [MOTION_HEAT_BLADES, wgslMotions.MOTION_HEAT_BLADES_WGSL],
+    [MOTION_WATER_JETS, wgslMotions.MOTION_WATER_JETS_WGSL],
+    [MOTION_PSYCHIC_SHARDS, wgslMotions.MOTION_PSYCHIC_SHARDS_WGSL],
+    [MOTION_BLIZZARD_CRYSTALS, wgslMotions.MOTION_BLIZZARD_CRYSTALS_WGSL],
+    [MOTION_BLIZZARD_PUFFS, wgslMotions.MOTION_BLIZZARD_PUFFS_WGSL],
+    [MOTION_SNOWFLAKES, wgslMotions.MOTION_SNOWFLAKES_WGSL],
+    [MOTION_FISSURE_BRANCHES, wgslMotions.MOTION_FISSURE_BRANCHES_WGSL],
+    [MOTION_FISSURE_SLABS, wgslMotions.MOTION_FISSURE_SLABS_WGSL],
+    [MOTION_FISSURE_SPIKES, wgslMotions.MOTION_FISSURE_SPIKES_WGSL],
+    [MOTION_FISSURE_PEBBLES, wgslMotions.MOTION_FISSURE_PEBBLES_WGSL],
+    [MOTION_FIRE_WHIRL_FLAMES, wgslMotions.MOTION_FIRE_WHIRL_FLAMES_WGSL],
+    [MOTION_FLAME_JET, wgslMotions.MOTION_FLAME_JET_WGSL],
+    [MOTION_SPORE_SWARM, wgslMotions.MOTION_SPORE_SWARM_WGSL],
+    [MOTION_POISON_BUBBLES, wgslMotions.MOTION_POISON_BUBBLES_WGSL],
+    [MOTION_POISON_POP_RINGS, wgslMotions.MOTION_POISON_POP_RINGS_WGSL],
+    [MOTION_POISON_DROPS, wgslMotions.MOTION_POISON_DROPS_WGSL],
+    [MOTION_GROUND_CRACKS, wgslMotions.MOTION_GROUND_CRACKS_WGSL],
+    [MOTION_GROUND_ROCKS, wgslMotions.MOTION_GROUND_ROCKS_WGSL],
+    [MOTION_GROUND_PUFFS, wgslMotions.MOTION_GROUND_PUFFS_WGSL],
+    [MOTION_RECOVERY_MOTES, wgslMotions.MOTION_RECOVERY_MOTES_WGSL],
+    [MOTION_ICE_SPIKES, wgslMotions.MOTION_ICE_SPIKES_WGSL],
+    [MOTION_ICE_MIST, wgslMotions.MOTION_ICE_MIST_WGSL],
+    [MOTION_ICE_SPARKS, wgslMotions.MOTION_ICE_SPARKS_WGSL],
+    [MOTION_EXPLOSION_DEBRIS, wgslMotions.MOTION_EXPLOSION_DEBRIS_WGSL],
+    [MOTION_EXPLOSION_SMOKE, wgslMotions.MOTION_EXPLOSION_SMOKE_WGSL],
+    [MOTION_AIR_BLADES, wgslMotions.MOTION_AIR_BLADES_WGSL],
+    [MOTION_AIR_FEATHERS, wgslMotions.MOTION_AIR_FEATHERS_WGSL],
+    [MOTION_AIR_EMBERS, wgslMotions.MOTION_AIR_EMBERS_WGSL],
+    [MOTION_GHOST_WISPS, wgslMotions.MOTION_GHOST_WISPS_WGSL],
+    [MOTION_GHOST_EYES, wgslMotions.MOTION_GHOST_EYES_WGSL],
+    [MOTION_RING, wgslMotions.MOTION_RING_WGSL],
+    [MOTION_PSYCHIC_WAVE, wgslMotions.MOTION_PSYCHIC_WAVE_WGSL]
+  ]);
+  return motionWgslSources;
+}
+
+function applyEffectShader(
+  material: pc.StandardMaterial,
+  motion: string,
+  buildGLSL: (motion: string) => string,
+  buildWGSL: (motion: string) => string
+): void {
+  material
+    .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
+    .set('transformCoreVS', buildGLSL(motion));
+
+  const wgslMotion = getMotionWgslSources().get(motion);
+  if (wgslMotion) {
+    material
+      .getShaderChunks(pc.SHADERLANGUAGE_WGSL)
+      .set('transformCoreVS', buildWGSL(wgslMotion));
+  } else {
+    // Sin gemelo WGSL el material se quedaría con el chunk del motor en
+    // WebGPU: no falla, pero la animación desaparece. Mejor avisar.
+    console.error(
+      'Efecto sin versión WGSL; en WebGPU no se animará. Añádelo a effectMotionsWGSL.ts y a MOTION_WGSL_SOURCES.'
+    );
+  }
+  material.update();
+}
+
 /** Añade a un material el shader de instancing con la animación indicada. */
 export function applyInstancedEffectShader(
   material: pc.StandardMaterial,
@@ -207,10 +427,7 @@ export function applyInstancedEffectShader(
   material.userAttributes.set(ATTR_ANIM0, 'instance_anim0');
   material.userAttributes.set(ATTR_ANIM1, 'instance_anim1');
   material.userAttributes.set(ATTR_ANIM2, 'instance_anim2');
-  material
-    .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
-    .set('transformCoreVS', instancedChunk(motion));
-  material.update();
+  applyEffectShader(material, motion, instancedChunk, instancedChunkWGSL);
 }
 
 /** Añade a un material una deformación de vértices por shader, sin instancing. */
@@ -218,10 +435,7 @@ export function applyVertexEffectShader(
   material: pc.StandardMaterial,
   motion: string
 ): void {
-  material
-    .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
-    .set('transformCoreVS', vertexChunk(motion));
-  material.update();
+  applyEffectShader(material, motion, vertexChunk, vertexChunkWGSL);
 }
 
 /**
