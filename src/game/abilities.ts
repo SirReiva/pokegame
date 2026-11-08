@@ -118,6 +118,7 @@ export type AoeStyle =
   | 'ghost'
   | 'air'
   | 'heat'
+  | 'sacredFlame'
   | 'ice'
   | 'blizzard'
   | 'ground'
@@ -2247,17 +2248,21 @@ registerAbility(
     .power(50)
     .accuracy(95)
     .cooldown(15)
-    .range(5.5)
-    .radius(3.2)
+    // El vértice nace 1 u por delante de Ho-Oh y el cono avanza 7,5 u con una
+    // apertura total de 25° (12,5° a cada lado del eje de lanzamiento).
+    .range(1)
+    .radius(7.5)
+    .halfAngle(12.5)
+    .aoeShape('cone')
     .startup(0.8, { animation: 'charge' })
     .recovery(0.65)
     .animation(null)
-    .area('heat', 'overTime', 3, 0.5)
+    .area('sacredFlame', 'overTime', 3, 0.5)
     .slow(0.65, 1.5)
     .impact('fire')
     .color(255, 168, 56)
     .description(
-      'Definitiva: invoca una columna de fuego sagrado a 5,5 u que permanece 3 s. Hace 50 de daño por segundo y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+      'Definitiva: exhala un cono de fuego sagrado de 25° desde 1 u por delante de Ho-Oh. Avanza 7,5 u y permanece 3 s: hace 50 de daño por segundo y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
     )
 );
 

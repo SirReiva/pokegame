@@ -706,6 +706,40 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
+/** Llamarada de `Fuego Sagrado`: las lenguas viajan del vértice a la base del cono. */
+export const MOTION_FLAME_JET = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float p = fract(uEffectTime * max(0.0001, a0.w) + a0.x);
+  float distance = p * uEffectRadius;
+  // uEffectParam0 = tan(semiángulo); a1.z = factor radial 0..1.
+  float radius = distance * uEffectParam0 * a1.z;
+  float azimuth = a0.y;
+  float grow = mix(0.85, 1.45, p);
+  float flicker = 0.86 + sin(uEffectTime * 19.0 + a0.x * 53.0) * 0.14;
+  float fadeIn = smoothstep(0.0, 0.06, p);
+  float fadeOut = 1.0 - smoothstep(0.86, 1.0, p);
+  float envelope = effectEnvelope(uEffectParam1, uEffectParam2) * fadeIn * fadeOut;
+  float scale = max(0.0001, envelope * grow * flicker);
+  float yaw = (azimuth / EFFECT_DEG + uEffectTime * 100.0 + a0.x * 360.0) * EFFECT_DEG;
+  float pitch = (20.0 + sin(uEffectTime * 4.5 + a0.x * 6.28318530718) * 12.0) * EFFECT_DEG;
+  float roll = sin(uEffectTime * 5.5 + a0.x * 6.28318530718) * 13.0 * EFFECT_DEG;
+  vec3 pos = vec3(
+    sin(azimuth) * radius,
+    max(0.12, uEffectParam3 + cos(azimuth) * radius * 0.72),
+    distance
+  );
+  return effectTRS(
+    pos,
+    vec3(a1.x * scale, a1.y * scale, a1.x * scale),
+    effectEuler(pitch, yaw, roll)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
 /** Rocío de `Paralizador`: viaja del vértice al borde del cono. */
 export const MOTION_SPORE_SWARM = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {

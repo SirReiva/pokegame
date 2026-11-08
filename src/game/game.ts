@@ -295,6 +295,19 @@ function heldOnlyInput(snapshot: DeviceInputSnapshot): DeviceInputSnapshot {
 }
 
 /**
+ * Estilos de efecto que hay que precompilar para una partida. `aoeCones` son
+ * los estilos de área que alguna habilidad usa con `aoeShape: 'cone'`: su
+ * camino de render (malla del abanico y partículas) es distinto del circular.
+ */
+interface WarmupStyles {
+  projectiles: ProjectileStyle[];
+  impacts: ImpactStyle[];
+  beams: BeamStyle[];
+  aoes: AoeStyle[];
+  aoeCones: AoeStyle[];
+}
+
+/**
  * Orquestador del motor. React nunca toca la escena: pide empezar/terminar una
  * partida y recibe eventos de entrada y telemetría por callbacks.
  *
@@ -688,16 +701,12 @@ export class Game {
     }
   }
 
-  private collectWarmupStyles(): {
-    projectiles: ProjectileStyle[];
-    impacts: ImpactStyle[];
-    beams: BeamStyle[];
-    aoes: AoeStyle[];
-  } {
+  private collectWarmupStyles(): WarmupStyles {
     const projectiles = new Set<ProjectileStyle>(['orb']);
     const impacts = new Set<ImpactStyle>(['hit']);
     const beams = new Set<BeamStyle>(['electric']);
     const aoes = new Set<AoeStyle>(['ring']);
+    const aoeCones = new Set<AoeStyle>();
 
     const add = (def: AbilityDef | null | undefined) => {
       if (!def) return;
@@ -707,7 +716,10 @@ export class Game {
       // los cuatro por habilidad calentaba efectos que nunca se iban a lanzar.
       if (def.shape === 'projectile') projectiles.add(def.projectileStyle);
       if (def.shape === 'beam') beams.add(def.beamStyle);
-      if (def.shape === 'aoe') aoes.add(def.aoeStyle);
+      if (def.shape === 'aoe') {
+        aoes.add(def.aoeStyle);
+        if (def.aoeShape === 'cone') aoeCones.add(def.aoeStyle);
+      }
     };
 
     const ids = this.options.pokemonIds;
@@ -730,16 +742,12 @@ export class Game {
       projectiles: [...projectiles],
       impacts: [...impacts],
       beams: [...beams],
-      aoes: [...aoes]
+      aoes: [...aoes],
+      aoeCones: [...aoeCones]
     };
   }
 
-  private buildWarmupCalls(styles: {
-    projectiles: ProjectileStyle[];
-    impacts: ImpactStyle[];
-    beams: BeamStyle[];
-    aoes: AoeStyle[];
-  }): Array<() => void> {
+  private buildWarmupCalls(styles: WarmupStyles): Array<() => void> {
     const calls: Array<() => void> = [];
     const color: [number, number, number] = [255, 255, 255];
     const x = 0;
@@ -767,6 +775,26 @@ export class Game {
     for (const style of styles.aoes) {
       calls.push(() =>
         this.combatFx.spawnAoe(x, z, 1.5, color, style, 0.6)
+      );
+    }
+    // Los conos usan mallas y partículas propias: se precalienta el camino de
+    // cada estilo que alguna habilidad lance con `aoeShape: 'cone'`.
+    for (const style of styles.aoeCones) {
+      calls.push(() =>
+        this.combatFx.spawnAoeCone(x, z, 0, 1, 2, 12.5, color, style, 0.6)
+      );
+      calls.push(() =>
+        this.combatFx.spawnAoeConeTelegraph(
+          x,
+          z,
+          0,
+          1,
+          2,
+          12.5,
+          color,
+          0.6,
+          0.6
+        )
       );
     }
     calls.push(() =>

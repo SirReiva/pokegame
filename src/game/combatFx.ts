@@ -30,6 +30,7 @@ import {
   MOTION_FISSURE_PEBBLES,
   MOTION_FISSURE_SLABS,
   MOTION_FISSURE_SPIKES,
+  MOTION_FLAME_JET,
   MOTION_GHOST_EYES,
   MOTION_GHOST_WISPS,
   MOTION_GRASS_LEAVES,
@@ -90,6 +91,21 @@ export interface AoeFxHandle extends FxHandle {
   /** Recoloca el centro del área sin reiniciar su animación. */
   setCenter(x: number, z: number): void;
 }
+
+/**
+ * Fábrica de un estilo de área que necesita un efecto propio para el cono.
+ * Los estilos que no registren una usan el disco inscrito genérico.
+ */
+type AoeConeFactory = (
+  x: number,
+  z: number,
+  dirX: number,
+  dirZ: number,
+  length: number,
+  halfAngleDeg: number,
+  color: readonly [number, number, number],
+  duration: number
+) => AoeFxHandle;
 
 /**
  * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
@@ -253,6 +269,56 @@ function createArcMesh(
   }
   for (let i = 1; i <= segments; i++) {
     indices.push(0, i, i + 1);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Cuerpo continuo de un chorro de fuego: cono abierto con el vértice en el
+ * origen y el eje en +Z. La base está en `z = 1`; el llamador escala X/Y con
+ * `longitud * tan(semiángulo)` y Z con la longitud. El UV recorre la longitud
+ * en V, de modo que la textura de llama puede desplazarse hacia la base.
+ */
+function createFlameConeMesh(
+  device: pc.GraphicsDevice,
+  startRadius: number,
+  endRadius: number,
+  radialSegments: number,
+  lengthSegments: number
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= lengthSegments; i++) {
+    const t = i / lengthSegments;
+    const radius = startRadius + (endRadius - startRadius) * t;
+    for (let j = 0; j <= radialSegments; j++) {
+      const angle = (j / radialSegments) * Math.PI * 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      positions.push(cos * radius, sin * radius, t);
+      normals.push(cos, sin, 0);
+      // V invertida: la punta de la llama de la textura queda hacia la base del
+      // cono, de modo que el fuego parece avanzar hacia delante.
+      uvs.push(j / radialSegments, 1 - t);
+    }
+  }
+
+  for (let i = 0; i < lengthSegments; i++) {
+    for (let j = 0; j < radialSegments; j++) {
+      const base = i * (radialSegments + 1) + j;
+      const next = base + radialSegments + 1;
+      indices.push(base, next, base + 1, base + 1, next, next + 1);
+    }
   }
 
   const mesh = new pc.Mesh(device);
@@ -1187,6 +1253,11 @@ export class CombatFx {
       duration: number
     ) => void
   >;
+  /**
+   * Estilos con un efecto propio para el cono. Si un estilo no aparece aquí,
+   * `spawnAoeCone` coloca su fábrica circular inscrita en el abanico.
+   */
+  private readonly aoeConeFactories: Partial<Record<AoeStyle, AoeConeFactory>>;
 
   constructor(
     app: pc.Application,
@@ -1216,6 +1287,7 @@ export class CombatFx {
       createFlameCanvas(),
       {
         name: 'combat-flame',
+        repeat: true,
         mipmaps: true,
         minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
         magFilter: pc.FILTER_LINEAR
@@ -1407,6 +1479,10 @@ export class CombatFx {
         this.spawnCycloneAoe(x, z, radius, color, duration),
       heat: (x, z, radius, color, duration) =>
         this.spawnHeatAoe(x, z, radius, color, duration),
+      // En forma circular cae al fuego normal; el cono tiene su propio efecto
+      // (`spawnSacredFlameCone`) que ocupa todo el abanico.
+      sacredFlame: (x, z, radius, color, duration) =>
+        this.spawnFireAoe(x, z, radius, color, duration),
       ice: (x, z, radius, color, duration) =>
         this.spawnIceAoe(x, z, radius, color, duration),
       blizzard: (x, z, radius, color, duration) =>
@@ -1417,6 +1493,20 @@ export class CombatFx {
         this.spawnFissureAoe(x, z, radius, color, duration),
       recovery: (x, z, radius, color, duration) =>
         this.spawnRecoveryAoe(x, z, radius, color, duration)
+    };
+
+    this.aoeConeFactories = {
+      sacredFlame: (x, z, dirX, dirZ, length, halfAngleDeg, color, duration) =>
+        this.spawnSacredFlameCone(
+          x,
+          z,
+          dirX,
+          dirZ,
+          length,
+          halfAngleDeg,
+          color,
+          duration
+        )
     };
   }
 
@@ -4777,6 +4867,12 @@ export class CombatFx {
     const nz = rawLength > 0.0001 ? dirZ / rawLength : 1;
     const half = Math.max(8, Math.min(89, halfAngleDeg)) * DEG;
     const reach = Math.max(0.1, length);
+    // Los estilos con un efecto propio de cono (p. ej. Fuego Sagrado) no usan
+    // el disco inscrito: registran su fábrica en `aoeConeFactories`.
+    const coneFactory = this.aoeConeFactories[style];
+    if (coneFactory) {
+      return coneFactory(x, z, nx, nz, reach, halfAngleDeg, color, life);
+    }
     // El efecto del estilo se centra en la mitad del cono con un radio que
     // cabe dentro del abanico; la telegrafía sigue marcando el borde real.
     const centerX = x + nx * reach * 0.5;
@@ -4807,6 +4903,255 @@ export class CombatFx {
           base.effect.entity.setPosition(base.x + dx, position.y, base.z + dz);
           base.effect.anchors = coneAnchors(nextX, nextZ, nx, nz, reach, half);
         }
+      },
+      destroy: () => {
+        for (const effect of created) this.disposeEffect(effect);
+      }
+    };
+  }
+
+  /**
+   * `Fuego Sagrado`: llamarada 3D que sale del vértice del cono y avanza hasta
+   * su base.
+   *
+   * El cuerpo del chorro son lenguas instanciadas que viajan en espacio local
+   * desde el vértice (`z = 0`) hasta la punta (`z = reach`), abriéndose en
+   * abanico según la apertura del cono. Se suman brasas, chispas y una luz
+   * cálida en la boca para que se lea como un aliento de fuego a presión y no
+   * como una zona ardiente en el suelo.
+   */
+  private spawnSacredFlameCone(
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    length: number,
+    halfAngleDeg: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): AoeFxHandle {
+    const life = Math.max(0.2, duration);
+    const clampedHalfAngle = Math.max(8, Math.min(60, halfAngleDeg));
+    const half = clampedHalfAngle * DEG;
+    const reach = Math.max(0.5, length);
+    const yaw = Math.atan2(dirX, dirZ);
+    // Altura de la boca: el chorro vuela a la altura del pecho del lanzador en
+    // vez de arrastrarse por el suelo.
+    const jetY = 1.1;
+
+    const root = new pc.Entity('sacred-flame-cone');
+    root.setPosition(x, 0, z);
+    root.setEulerAngles(0, yaw / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createFlameMaterial([255, 248, 214], 0.72);
+    const flameMaterial = this.createFlameMaterial([255, 190, 86], 0.58);
+    const outerMaterial = this.createFlameMaterial(color, 0.44);
+    const bodyCoreMaterial = this.createFlameMaterial([255, 248, 214], 0.42);
+    const bodyFlameMaterial = this.createFlameMaterial([255, 190, 86], 0.36);
+    const bodyOuterMaterial = this.createFlameMaterial(color, 0.28);
+    const glowMaterial = this.createMaterial([255, 120, 36], 0.18);
+    const materials = [
+      coreMaterial,
+      flameMaterial,
+      outerMaterial,
+      bodyCoreMaterial,
+      bodyFlameMaterial,
+      bodyOuterMaterial,
+      glowMaterial
+    ];
+
+    // Cuerpo continuo del chorro: tres conos anidados con la textura de llama
+    // desplazándose hacia la base. Sin esto las lenguas sueltas se leían como
+    // una línea de pequeñas llamas alineadas.
+    const tanHalf = Math.tan(half);
+    const bodyMesh = this.cachedMesh('sacred-cone-body', () =>
+      createFlameConeMesh(this.device, 0.16, 1, 24, 8)
+    );
+    const bodyRadius = reach * tanHalf;
+    const bodyRoot = new pc.Entity('sacred-flame-body');
+    bodyRoot.setLocalPosition(0, jetY, 0);
+    root.addChild(bodyRoot);
+    const bodySpecs = [
+      { material: bodyOuterMaterial, scale: 1, opacity: 0.28, speed: 1.1 },
+      { material: bodyFlameMaterial, scale: 0.68, opacity: 0.36, speed: 1.5 },
+      { material: bodyCoreMaterial, scale: 0.36, opacity: 0.42, speed: 1.9 }
+    ];
+    const bodies = bodySpecs.map((spec) => {
+      const entity = this.createEntity(bodyMesh, [spec.material], bodyRoot);
+      entity.setLocalScale(
+        bodyRadius * spec.scale,
+        bodyRadius * spec.scale,
+        reach
+      );
+      spec.material.emissiveMapTiling = new pc.Vec2(3, 2);
+      spec.material.opacityMapTiling = new pc.Vec2(3, 2);
+      return {
+        material: spec.material,
+        opacity: spec.opacity,
+        speed: spec.speed
+      };
+    });
+
+    // Lenguas del chorro: cada instancia recorre el cono del vértice a la base
+    // con fase propia. Las más claras van pegadas al eje y las exteriores se
+    // abren hacia los bordes para llenar el abanico completo.
+    const makeInstances = (
+      count: number,
+      radialMax: number,
+      widthScale: number,
+      heightScale: number,
+      seed: number
+    ): EffectBatchInstance[] => {
+      const instances: EffectBatchInstance[] = [];
+      for (let index = 0; index < count; index++) {
+        // Reparto determinista en espiral: el chorro no depende de
+        // Math.random y todas las vistas dibujan la misma llamarada.
+        const phase = (index * 0.61803398875 + seed) % 1;
+        const azimuth = index * 2.399963229728653 + seed * Math.PI * 2;
+        const radial =
+          ((index * 0.754877666 + seed * 0.3) % 1) * radialMax;
+        const speed = 0.85 + ((index * 13 + seed * 17) % 9) * 0.055;
+        const width = reach * widthScale * (0.8 + radial * 0.45);
+        const height = reach * heightScale * (0.75 + radial * 0.5);
+        instances.push({
+          anim0: [phase, azimuth, 0, speed],
+          anim1: [width, height, radial, 0]
+        });
+      }
+      return instances;
+    };
+    const flameBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: flameMaterial,
+      instances: makeInstances(140, 0.92, 0.06, 0.15, 0.13),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.14, 0.3, jetY]
+    });
+    const hotBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: coreMaterial,
+      instances: makeInstances(40, 0.6, 0.05, 0.13, 0.57),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.14, 0.3, jetY]
+    });
+    const outerBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.flameMesh,
+      material: outerMaterial,
+      instances: makeInstances(90, 1, 0.07, 0.17, 0.81),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.18, 0.32, jetY]
+    });
+
+    // Puff corto pegado a la boca: marca el punto exacto del que sale el
+    // chorro. Las brasas rápidas se han quitado porque, al nacer todas en el
+    // eje, formaban una línea continua de partículas en vez de una llamarada.
+    this.spawnFlameParticles(root, {
+      x: 0,
+      y: jetY,
+      z: 0.08,
+      extents: [0.22, 0.22, 0.18],
+      velocity: [0, 0.8, 3],
+      velocityEnd: [0, 1.6, 5],
+      radialSpeed: 0.3,
+      radialSpeedEnd: 1.2,
+      sizeStart: reach * 0.05,
+      sizeMid: reach * 0.08,
+      sizeEnd: reach * 0.03,
+      lifetime: 0.28,
+      rate: 0.01,
+      numParticles: 70,
+      stretch: 0.02,
+      localSpace: true
+    });
+
+    // Resplandor en la boca y dos luces que tiñen el entorno a lo largo del
+    // recorrido del chorro.
+    const muzzle = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    muzzle.setLocalPosition(0, jetY, 0.18);
+    muzzle.setLocalScale(0.55, 0.4, 0.55);
+    const light = this.createFireLight(
+      root,
+      0,
+      jetY,
+      reach * 0.35,
+      1.8,
+      reach * 1.2
+    );
+    const tipLight = this.createFireLight(
+      root,
+      0,
+      jetY,
+      reach * 0.82,
+      0.9,
+      reach * 0.7
+    );
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.12);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const flicker =
+        0.85 + Math.sin(time * 17) * 0.1 + Math.sin(time * 31) * 0.05;
+
+      coreMaterial.opacity = (0.62 + flicker * 0.12) * envelope;
+      flameMaterial.opacity = (0.48 + flicker * 0.14) * envelope;
+      outerMaterial.opacity = (0.34 + flicker * 0.12) * envelope;
+
+      flameBatch.setTime(time);
+      hotBatch.setTime(time);
+      outerBatch.setTime(time);
+
+      // La textura del cuerpo se desplaza hacia la base: el fuego parece
+      // recorrer el cono del vértice a la punta sin mover la geometría.
+      for (const body of bodies) {
+        body.material.opacity = body.opacity * envelope * flicker;
+        const offset = time * body.speed;
+        body.material.emissiveMapOffset.set(0, offset);
+        body.material.opacityMapOffset.set(0, offset);
+      }
+
+      const muzzleScale = (0.55 + Math.sin(time * 24) * 0.08) * envelope;
+      muzzle.setLocalScale(muzzleScale, muzzleScale * 0.75, muzzleScale);
+      glowMaterial.opacity = 0.22 * envelope * (0.7 + flicker * 0.3);
+
+      light.light!.intensity = 1.8 * envelope * flicker;
+      tipLight.light!.intensity = 0.9 * envelope * flicker;
+    };
+
+    const anchors = coneAnchors(x, z, dirX, dirZ, reach, half);
+    const firstEffect = this.effects.length;
+    this.withAnchors(anchors, () =>
+      this.addEffect(root, materials, life, animate, anchors)
+    );
+    const created = this.effects.slice(firstEffect);
+    animate(0, 0);
+    return {
+      setCenter: (nextX, nextZ) => {
+        root.setPosition(nextX, root.getPosition().y, nextZ);
+        const nextAnchors = coneAnchors(
+          nextX,
+          nextZ,
+          dirX,
+          dirZ,
+          reach,
+          half
+        );
+        for (const effect of created) effect.anchors = nextAnchors;
       },
       destroy: () => {
         for (const effect of created) this.disposeEffect(effect);

@@ -133,6 +133,12 @@
 > especies con moveset; las matrices de §4.x siguen siendo la foto de 18
 > especies, mientras que las tablas regenerables ya incluyen también a Zapdos.
 >
+> **Actualización 2026-11-08 (3)**: `Fuego Sagrado` deja de ser un círculo
+> centrado a 5,5 u y pasa a un cono de 25° (12,5° de semiángulo) que nace 1 u
+> por delante de Ho-Oh y avanza 7,5 u. El daño, el ralentizamiento y la
+> duración no cambian; el estilo `sacredFlame` lanza una llamarada desde el
+> vértice que recorre todo el abanico.
+>
 > **Actualización 2026-11-07**: sistema de animaciones y tiempos de habilidad
 > rediseñado (`3d0f7f8`). `AbilityDef` usa `startup`/`active`/`recovery` y el
 > sprite se retima para que su `HitFrame` coincida con el efecto; la simulación
