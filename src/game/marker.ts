@@ -27,7 +27,7 @@ export class PlayerMarker {
   private height: number;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     diameter: number,
     height: number,
     opacity: number,

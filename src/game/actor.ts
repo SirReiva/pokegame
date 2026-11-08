@@ -25,7 +25,7 @@ const MARKER_FLOAT_SINK = 0.12;
  */
 export class Actor {
   readonly billboard: SpriteBillboard;
-  private readonly app: pc.Application;
+  private readonly app: pc.AppBase;
   private readonly shadow: pc.Entity;
   /** Barra de vida flotante sobre el sprite. */
   private readonly healthBar: HealthBar;
@@ -50,7 +50,7 @@ export class Actor {
   private readonly visibleHeight: number;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     asset: SpriteAsset,
     shadowMaterial: pc.StandardMaterial,
     position: ActorTransform,

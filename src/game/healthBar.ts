@@ -148,7 +148,7 @@ export class HealthBar {
   private fraction = 1;
   private level = 1;
 
-  constructor(app: pc.Application, parent: pc.Entity, options: HealthBarOptions) {
+  constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
     this.mesh = createQuadMesh(app.graphicsDevice);
 
     const barCanvas = document.createElement('canvas');

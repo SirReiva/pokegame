@@ -34,6 +34,7 @@ import {
   type AoeTarget
 } from './aoeEffect';
 import { Actor } from './actor';
+import { createGameApp } from './appBootstrap';
 import { CastDebugOverlay } from './castDebug';
 import { buildCastPlan, frameForSegment, segmentAt } from './castPlan';
 import {
@@ -321,7 +322,7 @@ interface WarmupStyles {
 export class Game {
   private readonly callbacks: GameCallbacks;
   private readonly options: GameOptions;
-  private readonly app: pc.Application;
+  private readonly app: pc.AppBase;
   private readonly input: Input;
 
   /**
@@ -477,20 +478,32 @@ export class Game {
   /** Entradas de flanco acumuladas hasta el próximo paso de simulación. */
   private readonly bufferedInputs = new Map<string, BufferedInput>();
 
-  constructor(canvas: HTMLCanvasElement, callbacks: GameCallbacks, options: GameOptions = {}) {
+  /**
+   * Crea el dispositivo gráfico y construye el juego.
+   *
+   * `createGraphicsDevice` es asíncrono, así que la instancia se obtiene con
+   * esta factoría en vez de con `new Game(...)`.
+   */
+  static async create(
+    canvas: HTMLCanvasElement,
+    callbacks: GameCallbacks,
+    options: GameOptions = {}
+  ): Promise<Game> {
+    const app = await createGameApp(canvas);
+    return new Game(canvas, app, callbacks, options);
+  }
+
+  private constructor(
+    canvas: HTMLCanvasElement,
+    app: pc.AppBase,
+    callbacks: GameCallbacks,
+    options: GameOptions = {}
+  ) {
     this.callbacks = callbacks;
     this.options = options;
     this.koTarget = Math.max(1, Math.floor(options.koTarget ?? KO_TARGET));
 
-    this.app = new pc.Application(canvas, {
-      graphicsDeviceOptions: {
-        antialias: true,
-        alpha: false,
-        preserveDrawingBuffer: false,
-        // En portátiles híbridos fuerza la GPU dedicada en vez de la integrada.
-        powerPreference: "high-performance"
-      }
-    });
+    this.app = app;
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);

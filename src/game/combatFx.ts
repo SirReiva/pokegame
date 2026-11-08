@@ -1153,7 +1153,7 @@ function createDashRingMesh(
 }
 
 export class CombatFx {
-  private readonly app: pc.Application;
+  private readonly app: pc.AppBase;
   private readonly layerId: number;
   /** Resuelve las capas de las vistas que pueden ver un efecto. */
   private readonly resolveLayers: FxLayerResolver;
@@ -1260,7 +1260,7 @@ export class CombatFx {
   private readonly aoeConeFactories: Partial<Record<AoeStyle, AoeConeFactory>>;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     layerId: number,
     resolveLayers: FxLayerResolver = () => [layerId]
   ) {

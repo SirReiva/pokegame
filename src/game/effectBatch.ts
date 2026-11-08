@@ -37,7 +37,7 @@ export interface EffectBatchInstance {
 }
 
 export interface EffectBatchOptions {
-  app: pc.Application;
+  app: pc.AppBase;
   parent: pc.Entity;
   mesh: pc.Mesh;
   material: pc.StandardMaterial;

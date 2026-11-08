@@ -185,7 +185,9 @@ function PlayScreen({
       ).values()
     ];
 
-    const game = new Game(
+    // `createGraphicsDevice` es asíncrono: el motor se construye en una promesa.
+    let game: Game | null = null;
+    void Game.create(
       canvas,
       {
         onReady: () => {
@@ -217,15 +219,30 @@ function PlayScreen({
         }
       },
       { mapId, manifest, koTarget, pokemonIds, pokemonSkins }
-    );
-
-    gameRef.current = game;
-    void game.init();
+    )
+      .then((created) => {
+        // El efecto se desmontó mientras se creaba el dispositivo.
+        if (disposed) {
+          created.dispose();
+          return;
+        }
+        game = created;
+        gameRef.current = created;
+        void created.init();
+      })
+      .catch((cause: unknown) => {
+        console.error('No se pudo crear el motor 3D', cause);
+        if (!disposed) {
+          handlersRef.current?.onError(
+            'No se pudo iniciar el motor 3D. Comprueba que WebGL2 está disponible.'
+          );
+        }
+      });
 
     return () => {
       disposed = true;
       gameRef.current = null;
-      game.dispose();
+      game?.dispose();
     };
   }, [mapId, manifest, koTarget]);
 

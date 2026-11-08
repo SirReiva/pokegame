@@ -107,7 +107,7 @@ export class HitboxDebug {
   private readonly fillMaterial: pc.StandardMaterial;
   private readonly ringMaterial: pc.StandardMaterial;
 
-  constructor(app: pc.Application, radius: number) {
+  constructor(app: pc.AppBase, radius: number) {
     const device = app.graphicsDevice;
     const band = Math.max(0.025, Math.min(0.06, radius * 0.12));
 
@@ -166,7 +166,7 @@ export class HitboxDebug {
  * función para liberar malla y material.
  */
 export function attachProjectileHitbox(
-  app: pc.Application,
+  app: pc.AppBase,
   root: pc.Entity,
   radius: number
 ): () => void {

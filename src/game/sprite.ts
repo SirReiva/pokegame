@@ -575,7 +575,7 @@ export class SpriteBillboard {
    */
   private motionOffset = 0;
 
-  constructor(app: pc.Application, asset: SpriteAsset, options: BillboardOptions) {
+  constructor(app: pc.AppBase, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
     this.device = app.graphicsDevice;
     this.root = new pc.Entity(`actor-${asset.entry.id}`);

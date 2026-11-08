@@ -33,7 +33,7 @@ const PRELOAD_WORKERS = 6;
 const MATCH_MUSIC_PATH = 'music/battle-team-plasma.mp3';
 
 let soundManager: pc.SoundManager | null = null;
-let currentApp: pc.Application | null = null;
+let currentApp: pc.AppBase | null = null;
 const sounds = new Map<string, pc.Sound>();
 const loading = new Map<string, Promise<pc.Sound | null>>();
 const failed = new Set<string>();
@@ -62,7 +62,7 @@ function applyVolume(): void {
  * Engancha el audio a la aplicación de PlayCanvas y precarga los sonidos.
  * Se llama al crear `Game`, antes de que empiece la partida.
  */
-export function configureAudio(app: pc.Application): void {
+export function configureAudio(app: pc.AppBase): void {
   if (currentApp === app) return;
   // La música pertenece a la aplicación anterior: se corta antes de cambiar.
   musicWanted = false;
@@ -86,7 +86,7 @@ export function configureAudio(app: pc.Application): void {
 }
 
 /** Suelta las referencias cuando se destruye la aplicación. */
-export function disposeAudio(app: pc.Application): void {
+export function disposeAudio(app: pc.AppBase): void {
   if (currentApp !== app) return;
   stopMatchMusic();
   currentApp = null;

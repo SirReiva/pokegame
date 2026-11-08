@@ -14,7 +14,7 @@ export class CameraRig {
   private readonly desired = new pc.Vec3();
   private initialized = false;
 
-  constructor(app: pc.Application, start: { x: number; z: number }) {
+  constructor(app: pc.AppBase, start: { x: number; z: number }) {
     this.entity = new pc.Entity('camera');
     this.entity.addComponent('camera', {
       clearColor: new pc.Color(CONFIG.fog.color[0], CONFIG.fog.color[1], CONFIG.fog.color[2]),

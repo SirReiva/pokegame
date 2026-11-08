@@ -117,7 +117,7 @@ function createImageTexture(
  * Carga las texturas de todos los objetos del catálogo. Si una imagen falta, se
  * usa un círculo de color para que el mapa siga siendo jugable.
  */
-export async function loadItemTextures(app: pc.Application): Promise<ItemTextureMap> {
+export async function loadItemTextures(app: pc.AppBase): Promise<ItemTextureMap> {
   const device = app.graphicsDevice;
   const entries = await Promise.all(
     ITEM_IDS.map(async (id): Promise<[ItemId, ItemTextures]> => {
@@ -186,7 +186,7 @@ export class PickupView {
   private used = false;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     textures: ItemTextures,
     height: number,
     x: number,
@@ -302,12 +302,12 @@ export class PickupView {
 /** Gestiona todos los objetos del mapa activo y sus cooldowns. */
 export class PickupField {
   private items: PickupInstance[] = [];
-  private readonly app: pc.Application;
+  private readonly app: pc.AppBase;
   private readonly shadowMaterial: pc.StandardMaterial;
   private readonly textures: ItemTextureMap;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     shadowMaterial: pc.StandardMaterial,
     textures: ItemTextureMap
   ) {

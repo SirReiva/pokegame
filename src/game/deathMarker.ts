@@ -37,7 +37,7 @@ export class DeathMarker {
   private visible = true;
 
   constructor(
-    app: pc.Application,
+    app: pc.AppBase,
     x: number,
     z: number,
     y: number,

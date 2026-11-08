@@ -140,12 +140,12 @@ function glowFor(heal: boolean, immune: boolean): string {
 }
 
 export class DamageNumbers {
-  private readonly app: pc.Application;
+  private readonly app: pc.AppBase;
   private readonly device: pc.GraphicsDevice;
   private readonly quadMesh: pc.Mesh;
   private readonly entries: DamageNumberEntry[] = [];
 
-  constructor(app: pc.Application) {
+  constructor(app: pc.AppBase) {
     this.app = app;
     this.device = app.graphicsDevice;
     this.quadMesh = this.createQuadMesh();

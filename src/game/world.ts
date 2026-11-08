@@ -300,7 +300,7 @@ function part(
   return entity;
 }
 
-export function buildWorld(app: pc.Application): World {
+export function buildWorld(app: pc.AppBase): World {
   const device = app.graphicsDevice;
   const map = getActiveMap();
   const HALF_X = mapHalfWidth();
