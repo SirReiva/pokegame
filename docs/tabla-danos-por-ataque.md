@@ -27,6 +27,7 @@
 - [Lucario](#lucario)
 - [Greninja](#greninja)
 - [Articuno](#articuno)
+- [Zapdos](#zapdos)
 - [Moltres](#moltres)
 - [Mewtwo](#mewtwo)
 - [Mew](#mew)
@@ -36,6 +37,7 @@
 - [Groudon](#groudon)
 - [Celebi](#celebi)
 - [Lugia](#lugia)
+- [Ho-Oh](#ho-oh)
 
 ## Pikachu
 
@@ -332,6 +334,39 @@ Tipos: **Ice / Flying** · HP 165 · Atk 105 · Def 120 · SpA 115 · SpD 145 ·
 | Celebi | 63 ×2 | 110 ×2 | 66 ×2 | 110 ×2 |
 | Groudon | 23 ×1 | 119 ×2 | 70 ×2 | 121 ×2 |
 | **Mediana de daño** | 35 | 61 | 35 | 62 |
+| **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
+
+## Zapdos
+
+Tipos: **Electric / Flying** · HP 165 · Atk 110 · Def 105 · SpA 145 · SpD 110 · Vel 120
+
+| Rival | Básica: Pico Taladro<br>Flying · Fís · Pot 60 | Habilidad 1: Onda Trueno<br>Electric · Estado · Pot — | Habilidad 2: Descarga<br>Electric · Esp · Pot 75 | Definitiva: Trueno<br>Electric · Esp · Pot 145 |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 123 ×2 | Estado | 40 ×½ | 69 ×½ |
+| Charmander | 67 ×1 | Estado | 98 ×1 | 169 ×1 |
+| Squirtle | 50 ×1 | Estado | 161 ×2 | 283 ×2 |
+| Pikachu | 35 ×½ | Estado | 49 ×½ | 85 ×½ |
+| Gengar | 53 ×1 | Estado | 74 ×1 | 125 ×1 |
+| Voltorb | 30 ×½ | Estado | 46 ×½ | 79 ×½ |
+| Eevee | 59 ×1 | Estado | 81 ×1 | 139 ×1 |
+| Lucario | 47 ×1 | Estado | 77 ×1 | 132 ×1 |
+| Greninja | 49 ×1 | Estado | 149 ×2 | 261 ×2 |
+| Mewtwo | 38 ×1 | Estado | 62 ×1 | 108 ×1 |
+| Mew | 37 ×1 | Estado | 56 ×1 | 100 ×1 |
+| Onix | 12 ×½ | Estado (×0) | 0 ×0 | 0 ×0 |
+| Scyther | 86 ×2 | Estado | 137 ×2 | 237 ×2 |
+| Gyarados | 43 ×1 | Estado | 225 ×4 | 401 ×4 |
+| Tyranitar | 16 ×½ | Estado | 56 ×1 | 100 ×1 |
+| Articuno | 37 ×1 | Estado | 98 ×2 | 165 ×2 |
+| Moltres | 38 ×1 | Estado | 131 ×2 | 228 ×2 |
+| Raikou | 22 ×½ | Estado | 28 ×½ | 50 ×½ |
+| Entei | 40 ×1 | Estado | 74 ×1 | 125 ×1 |
+| Suicune | 32 ×1 | Estado | 104 ×2 | 176 ×2 |
+| Lugia | 29 ×1 | Estado | 80 ×2 | 138 ×2 |
+| Ho-Oh | 38 ×1 | Estado | 80 ×2 | 138 ×2 |
+| Celebi | 74 ×2 | Estado | 28 ×½ | 50 ×½ |
+| Groudon | 28 ×1 | Estado (×0) | 0 ×0 | 0 ×0 |
+| **Mediana de daño** | 38 | — | 75 | 129 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Moltres
@@ -631,6 +666,39 @@ Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 17
 | **Mediana de daño** | 34 | 39 | 29 | 71 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
+## Ho-Oh
+
+Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 · Vel 110
+
+| Rival | Básica: Golpe Ala<br>Flying · Fís · Pot 55 | Habilidad 1: Pájaro Osado<br>Flying · Fís · Pot 100 | Habilidad 2: Recuperación<br>Fire · Estado · Pot — | Definitiva: Fuego Sagrado<br>Fire · Fís · Pot 50/s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 149 ×2 | 258 ×2 | Estado | 396 ×2 |
+| Charmander | 83 ×1 | 143 ×1 | Estado | 105 ×½ |
+| Squirtle | 61 ×1 | 106 ×1 | Estado | 81 ×½ |
+| Pikachu | 43 ×½ | 75 ×½ | Estado | 227 ×1 |
+| Gengar | 65 ×1 | 112 ×1 | Estado | 175 ×1 |
+| Voltorb | 37 ×½ | 64 ×½ | Estado | 198 ×1 |
+| Eevee | 75 ×1 | 128 ×1 | Estado | 198 ×1 |
+| Lucario | 58 ×1 | 100 ×1 | Estado | 314 ×2 |
+| Greninja | 59 ×1 | 103 ×1 | Estado | 76 ×½ |
+| Mewtwo | 49 ×1 | 82 ×1 | Estado | 128 ×1 |
+| Mew | 44 ×1 | 76 ×1 | Estado | 111 ×1 |
+| Onix | 15 ×½ | 25 ×½ | Estado | 41 ×½ |
+| Scyther | 106 ×2 | 181 ×2 | Estado | 279 ×2 |
+| Gyarados | 53 ×1 | 90 ×1 | Estado | 70 ×½ |
+| Tyranitar | 19 ×½ | 35 ×½ | Estado | 52 ×½ |
+| Articuno | 44 ×1 | 76 ×1 | Estado | 222 ×2 |
+| Zapdos | 25 ×½ | 43 ×½ | Estado | 128 ×1 |
+| Moltres | 49 ×1 | 82 ×1 | Estado | 64 ×½ |
+| Raikou | 28 ×½ | 47 ×½ | Estado | 145 ×1 |
+| Entei | 50 ×1 | 85 ×1 | Estado | 64 ×½ |
+| Suicune | 38 ×1 | 67 ×1 | Estado | 52 ×½ |
+| Lugia | 37 ×1 | 61 ×1 | Estado | 104 ×1 |
+| Celebi | 88 ×2 | 151 ×2 | Estado | 222 ×2 |
+| Groudon | 34 ×1 | 56 ×1 | Estado | 93 ×1 |
+| **Mediana de daño** | 49 | 82 | — | 120 |
+| **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
+
 ## Medianas por Pokémon
 
 Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los cuatro ataques sumados contra cada rival; las habilidades de estado cuentan como 0 en esa columna.
@@ -646,6 +714,7 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 | Lucario | 28 | 28 | 37 | 74 | 178 |
 | Greninja | 34 | 50 | 37 | 73 | 205 |
 | Articuno | 35 | 61 | 35 | 62 | 193 |
+| Zapdos | 38 | — | 75 | 129 | 249 |
 | Moltres | 38 | 53 | 46 | 72 | 208 |
 | Mewtwo | 46 | — | 82 | 97 | 225 |
 | Mew | 33 | — | 60 | — | 92 |
@@ -655,6 +724,7 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 | Groudon | 31 | 61 | 45 | 108 | 226 |
 | Celebi | 29 | 52 | — | 70 | 153 |
 | Lugia | 34 | 39 | 29 | 71 | 186 |
+| Ho-Oh | 49 | 82 | — | 120 | 243 |
 
 ## Pokémon sin moveset
 
@@ -664,12 +734,10 @@ Estas especies del roster todavía no tienen ataques asignados en `MOVESETS`, as
 | --- | --- |
 | Eevee | Normal |
 | Gyarados | Water / Flying |
-| Zapdos | Electric / Flying |
 | Raikou | Electric |
 | Entei | Fire |
 | Suicune | Water |
-| Ho-Oh | Fire / Flying |
 
 ## Cobertura
 
-Atacantes con moveset asignado: **18** de 25 especies del roster. Los rivales incluyen las 25 especies, tengan o no moveset, porque el daño solo depende de sus tipos y estadísticas.
+Atacantes con moveset asignado: **20** de 25 especies del roster. Los rivales incluyen las 25 especies, tengan o no moveset, porque el daño solo depende de sus tipos y estadísticas.

@@ -122,6 +122,17 @@
 > geometría exacta cada frame, así que el recompuesto a 20 Hz ya no retrasa su
 > visibilidad.
 >
+> **Actualización 2026-11-08**: Ho-Oh (0250) ya tiene moveset (`Golpe Ala`,
+> `Pájaro Osado`, `Recuperación` y `Fuego Sagrado`). §3.1 ya refleja las 19
+> especies con moveset; las matrices de §4.x siguen siendo la foto de 18
+> especies, mientras que las tablas regenerables `tabla-danos-por-ataque.md` y
+> `dps-por-habilidad.md` ya incluyen a Ho-Oh.
+>
+> **Actualización 2026-11-08 (2)**: Zapdos (0145) ya tiene moveset (`Pico
+> Taladro`, `Onda Trueno`, `Descarga` y `Trueno`). §3.1 y §4.2 reflejan las 20
+> especies con moveset; las matrices de §4.x siguen siendo la foto de 18
+> especies, mientras que las tablas regenerables ya incluyen también a Zapdos.
+>
 > **Actualización 2026-11-07**: sistema de animaciones y tiempos de habilidad
 > rediseñado (`3d0f7f8`). `AbilityDef` usa `startup`/`active`/`recovery` y el
 > sprite se retima para que su `HitFrame` coincida con el efecto; la simulación
@@ -139,10 +150,10 @@ especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
 
 Los cinco hallazgos más importantes:
 
-1. **6 de las 24 especies del roster siguen sin ninguna habilidad.** Eevee,
-   Zapdos, Raikou, Entei, Suicune y Ho-Oh no tienen moveset; el carrusel
-   ya las filtra. Las otras 18, incluidos Onix, Celebi, Lugia, Tyranitar y
-   Groudon, sí tienen moveset.
+1. **4 de las 24 especies del roster siguen sin ninguna habilidad.** Eevee,
+   Raikou, Entei y Suicune no tienen moveset; el carrusel ya las filtra. Las
+   otras 20, incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh y Zapdos,
+   sí tienen moveset.
 2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
    jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
    nunca.
@@ -319,7 +330,7 @@ cobertura de tipos.
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 6 de 24 especies siguen sin habilidades. |
+| 3.1 Cobertura de movesets | **pendiente** | 4 de 24 especies siguen sin habilidades. |
 | 3.2 DoT precisión/+2 por tick | **pendiente** | Sin cambios. |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas, casts encolados, golpes de dash y formas `self`. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
@@ -331,12 +342,12 @@ cobertura de tipos.
 
 Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.16) corresponden a apartados ya corregidos y retirados de la lista.
 
-### 3.1. Cobertura: 6 especies sin moveset (crítico)
+### 3.1. Cobertura: 4 especies sin moveset (crítico)
 
-`MOVESETS` define 18 ids (`src/game/abilities.ts`). El roster muestra las 24
+`MOVESETS` define 20 ids (`src/game/abilities.ts`). El roster muestra las 24
 especies de `public/sprites/manifest.json`, pero el carrusel ya filtra con
 `hasAssignedAbilities` (`src/session/SessionProvider.tsx`,
-`src/ui/RosterScreen.tsx`) y no deja elegir las 6 que no pueden combatir.
+`src/ui/RosterScreen.tsx`) y no deja elegir las 4 que no pueden combatir.
 
 `src/game/game.ts:473` hace:
 
@@ -348,8 +359,8 @@ y `game.ts:622` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
 muestra cuatro veces «Sin asignar». Esas especies no pueden atacar, defenderse
 ni usar ninguna habilidad; solo caminan.
 
-**Especies afectadas**: Eevee (0133), Zapdos (0145), Raikou (0243), Entei
-(0244), Suicune (0245) y Ho-Oh (0250).
+**Especies afectadas**: Eevee (0133), Raikou (0243), Entei (0244) y Suicune
+(0245).
 
 **Impacto**: partidas perdidas por elección, frustración y una parte importante
 del roster inutilizable.
@@ -586,12 +597,12 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Moltres | 165 | 120 | 110 | 145 | 105 | 110 | 0,56 | sí |
 | Eevee | 130 | 75 | 70 | 65 | 85 | 75 | 0,36 | **NO** |
 | Onix | 110 | 65 | 180 | 50 | 65 | 90 | 0,58 | sí |
-| Zapdos | 165 | 110 | 105 | 145 | 110 | 120 | 0,52 | **NO** |
+| Zapdos | 165 | 110 | 105 | 145 | 110 | 120 | 0,52 | sí |
 | Raikou | 165 | 105 | 95 | 135 | 120 | 135 | 0,52 | **NO** |
 | Entei | 190 | 135 | 105 | 110 | 95 | 120 | 0,50 | **NO** |
 | Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,50 | **NO** |
 | Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | sí |
-| Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | **NO** |
+| Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | sí |
 | Celebi | 175 | 120 | 120 | 120 | 120 | 120 | 0,34 | sí |
 
 **Hurtbox (`3bae0e9`)**: el radio va de 0,34 u (Voltorb, Celebi) a 0,58 u
@@ -853,9 +864,9 @@ autodaño la convierte en una mala elección en 1v1.
 
 ### P0 — rompe la partida
 
-1. **Cobertura de movesets**: quedan 6 movesets por añadir (Eevee, Zapdos,
-   Raikou, Entei, Suicune y Ho-Oh). El roster ya filtra las especies sin
-   habilidades, así que no se pueden seleccionar.
+1. **Cobertura de movesets**: quedan 4 movesets por añadir (Eevee, Raikou,
+   Entei y Suicune). El roster ya filtra las especies sin habilidades, así que
+   no se pueden seleccionar.
 2. **Validar dos equipos**: bloquear el inicio si un equipo está vacío (o añadir
    un modo práctica explícito) y añadir un límite de tiempo/condición de fin.
    Sin esto, una partida 1v0 no termina nunca.
@@ -1061,7 +1072,7 @@ así que se pueden añadir tests baratos:
   de un área `overTime` debe ser reproducible (o al menos no perder ticks por el
   tope de 8) y el primer tick debe caer en el instante esperado.
 - **Balance**: la tabla de §4.2 debe incluir las 24 especies y su `hitRadius`, y
-  la matriz de §4.3 debe seguir generándose con las 18 que tienen moveset,
+  la matriz de §4.3 debe seguir generándose con las 20 que tienen moveset,
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
   menos imprimir el hurtbox junto al daño.
 

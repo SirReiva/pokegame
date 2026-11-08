@@ -25,6 +25,7 @@
 - [Lucario](#lucario)
 - [Greninja](#greninja)
 - [Articuno](#articuno)
+- [Zapdos](#zapdos)
 - [Moltres](#moltres)
 - [Mewtwo](#mewtwo)
 - [Mew](#mew)
@@ -34,6 +35,7 @@
 - [Groudon](#groudon)
 - [Celebi](#celebi)
 - [Lugia](#lugia)
+- [Ho-Oh](#ho-oh)
 
 ## Pikachu
 
@@ -323,6 +325,38 @@ Tipos: **Ice / Flying** · HP 165 · Atk 105 · Def 120 · SpA 115 · SpD 145 ·
 | Groudon | 40,9 | 16,9 | 8,7 | 8,1 |
 | **Mediana de DPS** | 63,1 | 8,7 | 4,4 | 4,1 |
 
+## Zapdos
+
+Tipos: **Electric / Flying** · HP 165 · Atk 110 · Def 105 · SpA 145 · SpD 110 · Vel 120
+
+| Rival | Básica: Pico Taladro<br>Flying · Fís · Pot 60 · CD 0,6 s | Habilidad 1: Onda Trueno<br>Electric · Estado · Pot — · CD 5 s | Habilidad 2: Descarga<br>Electric · Esp · Pot 75 · CD 8 s | Definitiva: Trueno<br>Electric · Esp · Pot 145 · CD 15 s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 204,3 | Estado | 5 | 4,6 |
+| Charmander | 112,3 | Estado | 12,3 | 11,3 |
+| Squirtle | 83,3 | Estado | 20,2 | 18,9 |
+| Pikachu | 57,8 | Estado | 6,1 | 5,6 |
+| Gengar | 88,5 | Estado | 9,2 | 8,3 |
+| Voltorb | 49,4 | Estado | 5,7 | 5,3 |
+| Eevee | 98,8 | Estado | 10,1 | 9,3 |
+| Lucario | 78,3 | Estado | 9,6 | 8,8 |
+| Greninja | 81,7 | Estado | 18,6 | 17,4 |
+| Mewtwo | 63,1 | Estado | 7,8 | 7,2 |
+| Mew | 61,3 | Estado | 7 | 6,7 |
+| Onix | 20,4 | Estado | 0 | 0 |
+| Scyther | 142,9 | Estado | 17,1 | 15,8 |
+| Gyarados | 71,5 | Estado | 28,1 | 26,7 |
+| Tyranitar | 27,2 | Estado | 7 | 6,7 |
+| Articuno | 61,3 | Estado | 12,3 | 11 |
+| Moltres | 63,1 | Estado | 16,3 | 15,2 |
+| Raikou | 35,8 | Estado | 3,5 | 3,3 |
+| Entei | 66,3 | Estado | 9,2 | 8,3 |
+| Suicune | 52,7 | Estado | 13 | 11,8 |
+| Lugia | 47,6 | Estado | 9,9 | 9,2 |
+| Ho-Oh | 63,1 | Estado | 9,9 | 9,2 |
+| Celebi | 122,5 | Estado | 3,5 | 3,3 |
+| Groudon | 45,9 | Estado | 0 | 0 |
+| **Mediana de DPS** | 63,1 | — | 9,4 | 8,6 |
+
 ## Moltres
 
 Tipos: **Fire / Flying** · HP 165 · Atk 120 · Def 110 · SpA 145 · SpD 105 · Vel 110
@@ -611,6 +645,38 @@ Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 17
 | Groudon | 42,1 | 7,6 | 2,4 | 4,4 |
 | **Mediana de DPS** | 42,7 | 4,3 | 2,4 | 4,4 |
 
+## Ho-Oh
+
+Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 · Vel 110
+
+| Rival | Básica: Golpe Ala<br>Flying · Fís · Pot 55 · CD 0,55 s | Habilidad 1: Pájaro Osado<br>Flying · Fís · Pot 100 · CD 12 s | Habilidad 2: Recuperación<br>Fire · Estado · Pot — · CD 13 s | Definitiva: Fuego Sagrado<br>Fire · Fís · Pot 50/s · CD 15 s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 271,2 | 21,5 | Estado | 26,4 |
+| Charmander | 150,3 | 11,9 | Estado | 7 |
+| Squirtle | 111,4 | 8,8 | Estado | 5,4 |
+| Pikachu | 78 | 6,2 | Estado | 15,1 |
+| Gengar | 118,8 | 9,3 | Estado | 11,6 |
+| Voltorb | 66,8 | 5,3 | Estado | 13,2 |
+| Eevee | 135,5 | 10,7 | Estado | 13,2 |
+| Lucario | 105,9 | 8,3 | Estado | 20,9 |
+| Greninja | 107,7 | 8,6 | Estado | 5,1 |
+| Mewtwo | 89,1 | 6,9 | Estado | 8,6 |
+| Mew | 79,9 | 6,3 | Estado | 7,4 |
+| Onix | 27,8 | 2,1 | Estado | 2,7 |
+| Scyther | 193 | 15 | Estado | 18,6 |
+| Gyarados | 96,5 | 7,5 | Estado | 4,7 |
+| Tyranitar | 35,3 | 2,9 | Estado | 3,5 |
+| Articuno | 79,9 | 6,3 | Estado | 14,8 |
+| Zapdos | 44,5 | 3,6 | Estado | 8,6 |
+| Moltres | 89,1 | 6,9 | Estado | 4,3 |
+| Raikou | 50,2 | 3,9 | Estado | 9,7 |
+| Entei | 90,9 | 7,1 | Estado | 4,3 |
+| Suicune | 68,8 | 5,6 | Estado | 3,5 |
+| Lugia | 66,8 | 5,1 | Estado | 7 |
+| Celebi | 159,8 | 12,6 | Estado | 14,8 |
+| Groudon | 61,2 | 4,7 | Estado | 6,2 |
+| **Mediana de DPS** | 89,1 | 6,9 | — | 8 |
+
 ## DPS por habilidad contra un objetivo neutro
 
 Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la potencia bruta de cada habilidad sin que el matchup de tipos distorsione el resultado. STAB incluido.
@@ -626,6 +692,7 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Lucario | Garra Metal 73,6 | Velocidad Extrema 5,1 | Esfera Aura 10,4 | Combate Cercano 7,9 | 96,9 |
 | Greninja | Shuriken de Agua 51,8 | Tajo Umbrío 33,6 | Sombra Vil 5,3 | Pulso Umbrío 6,7 | 97,4 |
 | Articuno | Golpe Ala 66,9 | Rayo Hielo 9,3 | Viento Gélido 4,7 | Ventisca 4,4 | 85,4 |
+| Zapdos | Pico Taladro 71,5 | Onda Trueno — | Descarga 8,5 | Trueno 7,9 | 87,9 |
 | Moltres | Ataque Aéreo 78 | Tajo Aéreo 16,9 | Onda Ígnea 6,7 | Ataque Celeste 5,2 | 106,8 |
 | Mewtwo | Telequinesis 83,3 | Teletransporte — | Psíquico 12,7 | Psicoataque 7 | 103 |
 | Mew | Golpe Psíquico 115,7 | Agilidad — | Premonición 6,4 | Recuperación — | 122,1 |
@@ -635,7 +702,8 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Groudon | Cuchillada 54,4 | Terremoto 5,7 | Avalancha 7,2 | Filo del Abismo 6,4 | 73,7 |
 | Celebi | Hoja Mágica 43,4 | Rayo Solar 7,6 | Deseo — | Futuro Siniestro 5 | 56,1 |
 | Lugia | Onda Mental 45,9 | Marea 4,3 | Ciclón 2,6 | Aerochorro 5 | 57,9 |
+| Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 7,5 | Recuperación — | Fuego Sagrado 9,3 | 113,3 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.
 
-Atacantes con moveset asignado: **18** de 25 especies del roster.
+Atacantes con moveset asignado: **20** de 25 especies del roster.

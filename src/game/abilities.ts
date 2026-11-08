@@ -1642,6 +1642,70 @@ registerAbility(
 );
 
 /* ------------------------------------------------------------------------- */
+/* Zapdos                                                                    */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('picoTaladro', 'Pico Taladro', 'Flying', 'physical', 'melee')
+    .power(60)
+    .accuracy(100)
+    .cooldown(0.6)
+    .range(2.2)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(0.4)
+    .active(0.18).recovery(0)
+    .animation('attack')
+    .impact('air')
+    .color(247, 208, 44)
+    .description(
+      'Picotazo giratorio de corto alcance que nunca falla. Ataque básico de Zapdos.'
+    )
+);
+
+registerAbility(
+  ability('descarga', 'Descarga', 'Electric', 'special', 'aoe')
+    .power(75)
+    .accuracy(100)
+    .cooldown(8)
+    .range(0)
+    .radius(3.2)
+    .area('explosion', 'instant', 0.8)
+    .radial(0.6)
+    .slow(0.7, 1.5)
+    .startup(0.3, { animation: 'charge', move: true })
+    .recovery(0.5)
+    .animation('shock')
+    .impact('electric')
+    .color(247, 208, 44)
+    .description(
+      'Descarga eléctrica de 3,2 u alrededor de Zapdos: 75 de potencia, 60 % en el borde y ralentización del 30 % durante 1,5 s.'
+    )
+);
+
+registerAbility(
+  ability('trueno', 'Trueno', 'Electric', 'special', 'aoe')
+    .power(145)
+    .accuracy(90)
+    .cooldown(15)
+    .range(6)
+    .radius(3.6)
+    .area('explosion', 'instant', 0.95)
+    .radial(0.4)
+    .slow(0.65, 2)
+    .knockback(1)
+    .startup(0.85, { animation: 'charge' })
+    .recovery(0.6)
+    // El área cae al terminar la carga; sin clip de lanzamiento después del impacto.
+    .animation(null)
+    .impact('electric')
+    .color(255, 238, 88)
+    .description(
+      'Definitiva: marca un punto a 6 u y, tras 0,85 s, cae un rayo de 3,6 u. 145 de potencia, el 100 % en el centro y el 40 % en el borde, empuja 1 u y ralentiza un 35 % durante 2 s.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
 /* Scyther                                                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -2082,6 +2146,93 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Ho-Oh                                                                     */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('golpeAlaHoOh', 'Golpe Ala', 'Flying', 'physical', 'melee')
+    .power(55)
+    .accuracy(100)
+    .cooldown(0.55)
+    .range(2.2)
+    .radius(0.8)
+    .halfAngle(55)
+    .knockback(0.35)
+    .active(0.18).recovery(0)
+    .animation('attack')
+    .impact('air')
+    .color(255, 196, 96)
+    .description(
+      'Golpe de ala dorado de corto alcance que nunca falla. Ataque básico de Ho-Oh.'
+    )
+);
+
+registerAbility(
+  ability('pajaroOsado', 'Pájaro Osado', 'Flying', 'physical', 'dash')
+    .power(100)
+    .accuracy(95)
+    .cooldown(12)
+    .range(0)
+    .radius(1)
+    .dash(6)
+    .knockback(1.2)
+    .active(0.35).recovery(0.35)
+    .startup(0.4, { animation: 'charge' })
+    .animation('attack')
+    .impact('air')
+    .selfDamage(0.12)
+    .color(255, 176, 76)
+    .description(
+      'Se eleva 0,4 s y se lanza 6 u en picado: 100 de potencia, empuja 1,2 u y le cuesta el 12 % de su vida máxima. Entrada y escape.'
+    )
+);
+
+registerAbility(
+  ability('recuperacionHoOh', 'Recuperación', 'Fire', 'status', 'aoe')
+    .power(0)
+    .accuracy(0)
+    .cooldown(13)
+    .range(0)
+    .radius(3.2)
+    .startup(0.75, { animation: 'charge' })
+    .recovery(0.65)
+    .animation(null)
+    .heal(0.3)
+    .area('recovery', 'instant', 0.75)
+    .aoeEffect(({ targets, applyHeal }) => {
+      // Ho-Oh se cura con `healSelf`; la onda dorada reparte el 15 % restante
+      // entre los aliados que estén dentro del radio.
+      for (const target of targets) {
+        if (!target.isAlly || target.isSelf) continue;
+        applyHeal(target, 0.15);
+      }
+    })
+    .color(255, 196, 96)
+    .description(
+      'Se concentra 0,75 s entre llamas doradas: recupera el 30 % de su vida máxima y el 15 % de la de sus aliados en 3,2 u. Si le golpean durante la concentración, se cancela.'
+    )
+);
+
+registerAbility(
+  ability('fuegoSagrado', 'Fuego Sagrado', 'Fire', 'physical', 'aoe')
+    .power(50)
+    .accuracy(95)
+    .cooldown(15)
+    .range(5.5)
+    .radius(3.2)
+    .startup(0.8, { animation: 'charge' })
+    .recovery(0.65)
+    .animation(null)
+    .area('heat', 'overTime', 3, 0.5)
+    .slow(0.65, 1.5)
+    .impact('fire')
+    .color(255, 168, 56)
+    .description(
+      'Definitiva: invoca una columna de fuego sagrado a 5,5 u que permanece 3 s. Hace 50 de daño por segundo y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2105,6 +2256,7 @@ MOVESETS['0448'] = [
 ];
 MOVESETS['0658'] = ['shurikenAgua', 'tajoUmbro', 'sombraVil', 'pulsoUmbro'];
 MOVESETS['0144'] = ['golpeAla', 'rayoHielo', 'vientoGelido', 'ventisca'];
+MOVESETS['0145'] = ['picoTaladro', 'ondaTrueno', 'descarga', 'trueno'];
 MOVESETS['0146'] = [
   'ataqueAereo',
   'tajoAereo',
@@ -2129,6 +2281,12 @@ MOVESETS['0095'] = ['atadura', 'lanzarrocas', 'excavar', 'fisura'];
 MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];
 MOVESETS['0251'] = ['hojaMagica', 'rayoSolar', 'deseo', 'futuroSiniestro'];
 MOVESETS['0249'] = ['ondaMental', 'marea', 'ciclon', 'aerochorro'];
+MOVESETS['0250'] = [
+  'golpeAlaHoOh',
+  'pajaroOsado',
+  'recuperacionHoOh',
+  'fuegoSagrado'
+];
 
 export function abilityForSlot(
   pokemonId: string,

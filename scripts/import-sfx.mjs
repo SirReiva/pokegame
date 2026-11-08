@@ -71,6 +71,11 @@ const ABILITY_TRACKS = {
   rayoHielo: 'Ice Beam',
   vientoGelido: 'Icy Wind',
   ventisca: 'Blizzard',
+  // Zapdos: el álbum no tiene Drill Peck ni Discharge; se usan los cortes
+  // eléctricos y aéreos más cercanos para conservar el carácter del ave.
+  picoTaladro: 'Aerial Ace',
+  descarga: 'Spark',
+  trueno: 'Thunderbolt',
   ataqueAereo: 'Aerial Ace',
   corteAereo: 'Aerial Ace',
   tajoAereo: 'Air Slash',
@@ -105,6 +110,11 @@ const ABILITY_TRACKS = {
   marea: 'Water Pulse',
   ciclon: 'Air Slash',
   aerochorro: 'Sky Attack',
+  // Ho-Oh: el álbum no tiene Sacred Fire; Fire Blast comparte la llamarada.
+  golpeAlaHoOh: 'Wing Attack',
+  pajaroOsado: 'Sky Attack',
+  recuperacionHoOh: 'Recover',
+  fuegoSagrado: 'Fire Blast',
   proteccion: 'Protect',
   impulso: 'Quick Attack'
 };

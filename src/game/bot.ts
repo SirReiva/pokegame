@@ -321,7 +321,8 @@ interface SupportProfile {
  */
 const SUPPORT_PROFILES: Partial<Record<string, SupportProfile>> = {
   deseo: { revive: true },
-  recuperacion: { healAllies: true }
+  recuperacion: { healAllies: true },
+  recuperacionHoOh: { healAllies: true }
 };
 
 /** Radio en el que un rival cercano justifica huir con poca vida. */

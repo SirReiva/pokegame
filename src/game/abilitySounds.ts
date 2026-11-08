@@ -64,6 +64,11 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   vientoGelido: 'abilities/vientoGelido.mp3',
   ventisca: 'abilities/ventisca.mp3',
 
+  // Zapdos
+  picoTaladro: 'abilities/picoTaladro.mp3',
+  descarga: 'abilities/descarga.mp3',
+  trueno: 'abilities/trueno.mp3',
+
   // Moltres
   ataqueAereo: 'abilities/ataqueAereo.mp3',
   corteAereo: 'abilities/corteAereo.mp3',
@@ -108,7 +113,13 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   ondaMental: 'abilities/ondaMental.mp3',
   marea: 'abilities/marea.mp3',
   ciclon: 'abilities/ciclon.mp3',
-  aerochorro: 'abilities/aerochorro.mp3'
+  aerochorro: 'abilities/aerochorro.mp3',
+
+  // Ho-Oh
+  golpeAlaHoOh: 'abilities/golpeAlaHoOh.mp3',
+  pajaroOsado: 'abilities/pajaroOsado.mp3',
+  recuperacionHoOh: 'abilities/recuperacionHoOh.mp3',
+  fuegoSagrado: 'abilities/fuegoSagrado.mp3'
 };
 
 /**
