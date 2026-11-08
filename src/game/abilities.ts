@@ -124,7 +124,9 @@ export type AoeStyle =
   | 'ground'
   | 'fissure'
   | 'recovery'
-  | 'cyclone';
+  | 'cyclone'
+  /** Rayo que cae del cielo y detona la explosión eléctrica al tocar el suelo. */
+  | 'thunder';
 
 /**
  * Reparto del daño de un área:
@@ -1719,7 +1721,7 @@ registerAbility(
     .cooldown(15)
     .range(6)
     .radius(3.6)
-    .area('explosion', 'instant', 0.95)
+    .area('thunder', 'instant', 0.95)
     .radial(0.4)
     .slow(0.65, 2)
     .knockback(1)

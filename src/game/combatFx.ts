@@ -1492,7 +1492,9 @@ export class CombatFx {
       fissure: (x, z, radius, color, duration) =>
         this.spawnFissureAoe(x, z, radius, color, duration),
       recovery: (x, z, radius, color, duration) =>
-        this.spawnRecoveryAoe(x, z, radius, color, duration)
+        this.spawnRecoveryAoe(x, z, radius, color, duration),
+      thunder: (x, z, radius, color, duration) =>
+        this.spawnThunderAoe(x, z, radius, color, duration)
     };
 
     this.aoeConeFactories = {
@@ -5607,6 +5609,102 @@ export class CombatFx {
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);
+  }
+
+  /**
+   * Rayo celestial seguido de la explosión eléctrica. El bolt se dibuja como
+   * una cinta zigzagueante vertical (con un halo más ancho) que crece desde la
+   * altura del cielo hasta el centro del área; al tocar el suelo dispara
+   * `spawnExplosionAoe`, así que la deflagración de siempre nace justo en el
+   * punto de impacto. El rayo se apaga al cabo de unas décimas, mientras la
+   * explosión sigue su propio ciclo de vida.
+   */
+  private spawnThunderAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.3, duration);
+    const skyHeight = 9;
+    // Ancho de la cinta principal; el halo usa la misma malla escalada.
+    const width = Math.max(0.035, radius * 0.014);
+    const fall = 0.2;
+    const boltLife = fall + 0.25;
+    const root = new pc.Entity('thunder-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createMaterial([255, 255, 240], 0.95);
+    const glowMaterial = this.createMaterial(color, 0.35);
+    const materials = [coreMaterial, glowMaterial];
+
+    // Tres variantes de zigzag para que dos Truenos seguidos no se vean
+    // idénticos; la malla se genera una sola vez y se comparte por ancho.
+    const variant = Math.floor(Math.random() * 3);
+    const seed = 0x51ef + variant * 7919;
+    const coreMesh = this.cachedMesh(
+      `thunder-bolt-core:${width.toFixed(3)}:${variant}`,
+      () => createLightningMesh(this.device, skyHeight, width, 18, seed)
+    );
+    const glowMesh = this.cachedMesh(
+      `thunder-bolt-glow:${width.toFixed(3)}:${variant}`,
+      () => createLightningMesh(this.device, skyHeight, width * 3.4, 18, seed)
+    );
+
+    const core = this.createEntity(coreMesh, [coreMaterial], root);
+    const glow = this.createEntity(glowMesh, [glowMaterial], root);
+    for (const bolt of [core, glow]) {
+      // La malla se construye a lo largo de Z y centrada: al girarla -90° en X
+      // su longitud pasa a ser vertical. Escalar Z acorta el rayo desde arriba
+      // sin regenerar geometría.
+      bolt.setLocalEulerAngles(-90, 0, 0);
+      bolt.setLocalScale(1, 1, 0.001);
+      bolt.setLocalPosition(0, skyHeight, 0);
+    }
+
+    let detonated = false;
+    this.addEffect(root, materials, boltLife, (t) => {
+      const elapsed = t * boltLife;
+      if (elapsed < fall) {
+        // El rayo cae acelerando: el extremo superior queda fijo en el cielo
+        // y la punta baja hasta el centro del área.
+        const grow = Math.min(1, elapsed / fall);
+        const scale = Math.max(0.001, grow * grow);
+        for (const bolt of [core, glow]) {
+          bolt.setLocalScale(1, 1, scale);
+          bolt.setLocalPosition(0, skyHeight - (skyHeight * scale) / 2, 0);
+        }
+        coreMaterial.opacity = 0.95;
+        glowMaterial.opacity = 0.35;
+        return;
+      }
+
+      if (!detonated) {
+        detonated = true;
+        for (const bolt of [core, glow]) {
+          bolt.setLocalScale(1, 1, 1);
+          bolt.setLocalPosition(0, skyHeight / 2, 0);
+        }
+        // La explosión se crea con las anclas del área completa para que se
+        // dibuje en todas las vistas que ven su borde, no solo el centro.
+        this.withAnchors(areaAnchors(x, z, radius), () => {
+          const first = this.effects.length;
+          this.spawnExplosionAoe(x, z, radius, color, life);
+          // Fija el estado inicial (escalas y opacidades) en el mismo frame del
+          // impacto; si no, el área se dibujaría un frame con la escala por
+          // defecto antes de que el bucle de efectos la anime.
+          this.effects[first]?.update(0, 0);
+        });
+      }
+
+      // Fogonazo de impacto: parpadeo aditivo que se apaga rápido.
+      const fade = Math.max(0, 1 - (elapsed - fall) / 0.25);
+      const flicker = 0.55 + Math.random() * 0.45;
+      coreMaterial.opacity = 0.95 * fade * flicker;
+      glowMaterial.opacity = 0.35 * fade * flicker;
+    });
   }
 
   /**
