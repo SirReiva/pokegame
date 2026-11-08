@@ -442,12 +442,19 @@ function dashEnemyLimit(
 }
 
 const executeDash: AbilityExecutor = (player, def, deps) => {
-  const dirX = Math.sin(player.facing);
-  const dirZ = Math.cos(player.facing);
+  // La dirección se fija al empezar el casteo. Durante la preparación el
+  // jugador puede seguir girando (y el frame del lanzamiento mueve antes de
+  // resolver el efecto), pero el dash debe salir hacia donde apuntaba la
+  // habilidad al iniciarse, como las áreas con `windup`.
+  const dirX = deps.castDirX ?? Math.sin(player.facing);
+  const dirZ = deps.castDirZ ?? Math.cos(player.facing);
   const dashDistance = def.dashBlocksOnEnemies
     ? dashEnemyLimit(player, dirX, dirZ, def.dashDistance, deps)
     : def.dashDistance;
   if (dashDistance <= 0.01) return;
+  // El cuerpo mira hacia donde sale el dash: el giro del frame de lanzamiento
+  // no debe desviar ni el desplazamiento ni la orientación visible.
+  player.facing = Math.atan2(dirX, dirZ);
   // El desplazamiento real se reparte en `stepDash` durante la animación.
   const resolved = deps.dashPosition(
     player,

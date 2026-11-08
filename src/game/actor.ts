@@ -204,6 +204,11 @@ export class Actor {
     this.healthBar.setLevel(level);
   }
 
+  /** Progreso 0-1 hacia el siguiente nivel, bajo la barra de vida. */
+  setXpProgress(fraction: number): void {
+    this.healthBar.setXpFraction(fraction);
+  }
+
   setLoop(loop: boolean): void {
     this.billboard.setLoop(loop);
   }

@@ -1,8 +1,9 @@
 /**
- * Barra de vida flotante sobre un Pokémon, con el nivel delante.
+ * Barra de vida flotante sobre un Pokémon, con el nivel delante y una barra
+ * fina de experiencia debajo.
  *
- * Se dibuja dentro de PlayCanvas, igual que los números de daño: dos quads que
- * miran a la cámara del viewport. La barra mantiene su tamaño y proporción
+ * Se dibuja dentro de PlayCanvas, igual que los números de daño: varios quads
+ * que miran a la cámara del viewport. La barra mantiene su tamaño y proporción
  * originales; el nivel va en un distintivo aparte, más grande que la barra,
  * para que el número se lea a distancia.
  */
@@ -15,12 +16,18 @@ import { setTextureSource } from './textures';
 const BAR_TEXTURE_WIDTH = 256;
 const BAR_TEXTURE_HEIGHT = 28;
 
+/** Resolución de la barra de experiencia (fina, bajo la de vida). */
+const XP_TEXTURE_WIDTH = 256;
+const XP_TEXTURE_HEIGHT = 12;
+
 /** Resolución del distintivo de nivel (cuadrado). */
 const BADGE_TEXTURE_SIZE = 96;
 
 /** Grosor del contorno y de la pista, en píxeles de la textura. */
 const BORDER = 3;
 const TRACK_PADDING = BORDER + 1;
+const XP_BORDER = 2;
+const XP_TRACK_PADDING = XP_BORDER + 1;
 
 /** Colores. */
 const COLORS = {
@@ -139,6 +146,12 @@ export class HealthBar {
   private readonly barMaterial: pc.StandardMaterial;
   private readonly barRender: pc.RenderComponent;
 
+  private readonly xpCanvas: HTMLCanvasElement;
+  private readonly xpContext: CanvasRenderingContext2D;
+  private readonly xpTexture: pc.Texture;
+  private readonly xpMaterial: pc.StandardMaterial;
+  private readonly xpRender: pc.RenderComponent;
+
   private readonly badgeRoot: pc.Entity;
   private readonly badgeCanvas: HTMLCanvasElement;
   private readonly badgeContext: CanvasRenderingContext2D;
@@ -147,6 +160,7 @@ export class HealthBar {
   private readonly accent: string;
 
   private fraction = 1;
+  private xpFraction = 0;
   private level = 1;
 
   constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
@@ -168,6 +182,14 @@ export class HealthBar {
     this.badgeCanvas = badgeCanvas;
     this.badgeContext = badgeContext;
 
+    const xpCanvas = document.createElement('canvas');
+    xpCanvas.width = XP_TEXTURE_WIDTH;
+    xpCanvas.height = XP_TEXTURE_HEIGHT;
+    const xpContext = xpCanvas.getContext('2d');
+    if (!xpContext) throw new Error('No se pudo dibujar la experiencia');
+    this.xpCanvas = xpCanvas;
+    this.xpContext = xpContext;
+
     const accent = options.accent ?? [255, 224, 102];
     this.accent = `rgb(${accent[0]}, ${accent[1]}, ${accent[2]})`;
 
@@ -186,6 +208,14 @@ export class HealthBar {
       BADGE_TEXTURE_SIZE
     );
     this.badgeMaterial = createMaterial(this.badgeTexture);
+
+    this.xpTexture = createTexture(
+      app.graphicsDevice,
+      'xp-bar',
+      XP_TEXTURE_WIDTH,
+      XP_TEXTURE_HEIGHT
+    );
+    this.xpMaterial = createMaterial(this.xpTexture);
 
     this.root = new pc.Entity('health-bar');
     parent.addChild(this.root);
@@ -224,10 +254,30 @@ export class HealthBar {
     );
     this.root.addChild(this.badgeRoot);
 
+    // La barra de experiencia se ancla justo debajo de la de vida, un poco más
+    // estrecha para que se lea como un subrayado del propio Pokémon.
+    const xpWidth = options.width * 0.86;
+    const xpHeight = Math.max(0.03, options.height * 0.3);
+    const xpGap = Math.max(0.012, options.height * 0.2);
+    const xpRoot = new pc.Entity('xp-bar');
+    xpRoot.addComponent('render');
+    const xpRender = xpRoot.render!;
+    xpRender.castShadows = false;
+    xpRender.receiveShadows = false;
+    const xpInstance = new pc.MeshInstance(this.mesh, this.xpMaterial);
+    xpInstance.drawOrder = DRAW_ORDER;
+    xpRender.meshInstances = [xpInstance];
+    xpRoot.setLocalScale(xpWidth, xpHeight, 1);
+    xpRoot.setLocalPosition(0, -xpGap - xpHeight, 0);
+    this.root.addChild(xpRoot);
+    this.xpRender = xpRender;
+
     this.drawBar();
     this.drawBadge();
+    this.drawXpBar();
     setTextureSource(this.barTexture, this.barCanvas);
     setTextureSource(this.badgeTexture, this.badgeCanvas);
+    setTextureSource(this.xpTexture, this.xpCanvas);
   }
 
   /** `fraction` va de 0 (KO) a 1 (vida completa); a 0 todo se oculta. */
@@ -247,6 +297,15 @@ export class HealthBar {
     this.level = next;
     this.drawBadge();
     setTextureSource(this.badgeTexture, this.badgeCanvas);
+  }
+
+  /** `fraction` va de 0 (recién subido de nivel) a 1 (siguiente nivel). */
+  setXpFraction(fraction: number): void {
+    const next = pc.math.clamp(fraction, 0, 1);
+    if (next === this.xpFraction) return;
+    this.xpFraction = next;
+    this.drawXpBar();
+    setTextureSource(this.xpTexture, this.xpCanvas);
   }
 
   /** Redibuja el contorno, la pista y la porción de vida. */
@@ -281,6 +340,40 @@ export class HealthBar {
       TRACK_PADDING,
       width,
       Math.max(1, Math.round(innerHeight * 0.18))
+    );
+  }
+
+  /** Redibuja el contorno, la pista y la porción de experiencia. */
+  private drawXpBar(): void {
+    const context = this.xpContext;
+    context.clearRect(0, 0, XP_TEXTURE_WIDTH, XP_TEXTURE_HEIGHT);
+
+    context.fillStyle = COLORS.outline;
+    context.fillRect(0, 0, XP_TEXTURE_WIDTH, XP_TEXTURE_HEIGHT);
+
+    context.fillStyle = COLORS.track;
+    context.fillRect(
+      XP_BORDER,
+      XP_BORDER,
+      XP_TEXTURE_WIDTH - XP_BORDER * 2,
+      XP_TEXTURE_HEIGHT - XP_BORDER * 2
+    );
+
+    if (this.xpFraction <= 0) return;
+
+    const innerHeight = XP_TEXTURE_HEIGHT - XP_TRACK_PADDING * 2;
+    const maxWidth = XP_TEXTURE_WIDTH - XP_TRACK_PADDING * 2;
+    const width = Math.max(1, Math.round(maxWidth * this.xpFraction));
+
+    context.fillStyle = this.accent;
+    context.fillRect(XP_TRACK_PADDING, XP_TRACK_PADDING, width, innerHeight);
+    // Brillo superior para que el relleno no parezca plano.
+    context.fillStyle = COLORS.highlight;
+    context.fillRect(
+      XP_TRACK_PADDING,
+      XP_TRACK_PADDING,
+      width,
+      Math.max(1, Math.round(innerHeight * 0.35))
     );
   }
 
@@ -322,6 +415,7 @@ export class HealthBar {
   /** Capa de render exclusiva del viewport que debe ver esta copia. */
   setLayer(layerId: number): void {
     this.barRender.layers = [layerId];
+    this.xpRender.layers = [layerId];
     const badgeRender = this.badgeRoot.render;
     if (badgeRender) badgeRender.layers = [layerId];
   }
@@ -330,6 +424,8 @@ export class HealthBar {
     this.root.destroy();
     this.barMaterial.destroy();
     this.barTexture.destroy();
+    this.xpMaterial.destroy();
+    this.xpTexture.destroy();
     this.badgeMaterial.destroy();
     this.badgeTexture.destroy();
     this.mesh.destroy();

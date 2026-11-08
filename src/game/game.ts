@@ -132,7 +132,6 @@ import {
   XP_REWARDS,
   XP_RULES,
   emptyXpBreakdown,
-  levelFromXp,
   xpStatus,
   type XpSource
 } from './xp';
@@ -1559,7 +1558,9 @@ export class Game {
         }
         copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
-        copy.setLevel(levelFromXp(player.xp));
+        const xp = xpStatus(player.xp);
+        copy.setLevel(xp.level);
+        copy.setXpProgress(xp.progress);
         copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
       });
