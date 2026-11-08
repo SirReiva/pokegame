@@ -22,6 +22,12 @@
  */
 
 import { ABILITIES, type AbilityDef, type BuffStat } from './abilities';
+import {
+  aoeAreaFrom,
+  aoeContains,
+  aoeDistance,
+  type AoeArea
+} from './aoeGeometry';
 import { BotNavGrid, type NavHazard, type NavPoint } from './botNav';
 import {
   computeDamage,
@@ -505,6 +511,13 @@ export interface BotHazard {
   z: number;
   /** Radio propio del peligro; el bot suma después su propio `hitRadius`. */
   radius: number;
+  /** Geometría del área: `circle` o `cone`. */
+  shape?: AbilityDef['aoeShape'];
+  /** Dirección unitaria del cono. */
+  dirX?: number;
+  dirZ?: number;
+  /** Semiángulo del cono en radianes. */
+  halfAngle?: number;
   vx?: number;
   vz?: number;
   /** Segundos que el peligro seguirá activo. */
@@ -1426,18 +1439,25 @@ export class BotController {
     const dirZ = Math.cos(enemy.facing);
 
     if (def.shape === 'aoe') {
-      const dx = self.x - pending.targetX;
-      const dz = self.z - pending.targetZ;
-      const fromCenter = Math.hypot(dx, dz);
+      const area = aoeAreaFrom(
+        def,
+        pending.targetX,
+        pending.targetZ,
+        pending.dirX,
+        pending.dirZ
+      );
       // La geometría debe coincidir con `resolveAoeHit`: el cuerpo del rival
-      // cuenta desde el borde del radio, no desde su centro.
-      const dangerRadius = def.radius + maxHitRadius() + selfRadius;
-      if (fromCenter > dangerRadius) return null;
+      // cuenta desde el borde del radio o del cono, no desde su centro.
+      if (
+        !aoeContains(area, self.x, self.z, selfRadius, maxHitRadius())
+      ) {
+        return null;
+      }
       // El área tampoco golpea a través de un muro.
       if (
         segmentBlockedByColliders(
-          pending.targetX,
-          pending.targetZ,
+          area.x,
+          area.z,
           self.x,
           self.z,
           colliders
@@ -1446,24 +1466,26 @@ export class BotController {
         return null;
       }
 
-      // Cuánto se tarda en salir del círculo; los bots difíciles reaccionan
+      // Cuánto se tarda en salir del área; los bots difíciles reaccionan
       // antes y los fáciles esperan demasiado.
+      const escapeDistance = this.aoeEscapeDistance(
+        area,
+        self.x,
+        self.z
+      );
       const escapeTime =
-        (dangerRadius - fromCenter) / Math.max(2.5, self.maxSpeed) + 0.08;
+        escapeDistance / Math.max(2.5, self.maxSpeed) + 0.08;
       if (remaining > Math.max(this.tuning.evadeWindow, escapeTime)) return null;
 
-      let evadeX = dx;
-      let evadeZ = dz;
-      if (fromCenter < 0.15) {
-        evadeX = -dirX;
-        evadeZ = -dirZ;
-      }
-      const length = Math.hypot(evadeX, evadeZ) || 1;
+      const evade = this.aoeEvadeDirection(area, self);
+      const dangerRadius = area.radius + maxHitRadius();
+      const fromCenter = aoeDistance(area, self.x, self.z);
       return {
         source: enemy,
         remaining,
-        evade: { x: evadeX / length, z: evadeZ / length },
-        severity: def.power + 20 + (1 - fromCenter / dangerRadius) * 30
+        evade,
+        severity:
+          def.power + 20 + (1 - fromCenter / Math.max(0.001, dangerRadius)) * 30
       };
     }
 
@@ -1644,6 +1666,74 @@ export class BotController {
   }
 
   /**
+   * Distancia hasta el borde del área más cercano al bot. En un círculo es la
+   * diferencia con el radio; en un cono se elige el menor entre salir por la
+   * punta y salir por uno de los lados.
+   */
+  private aoeEscapeDistance(
+    area: AoeArea,
+    x: number,
+    z: number
+  ): number {
+    if (area.shape === 'circle') {
+      return Math.max(0, area.radius - aoeDistance(area, x, z));
+    }
+    const toX = x - area.x;
+    const toZ = z - area.z;
+    const along = toX * area.dirX + toZ * area.dirZ;
+    const lateral = Math.abs(toX * area.dirZ - toZ * area.dirX);
+    const radial = Math.max(0, area.radius - along);
+    const angular = Math.max(
+      0,
+      along * Math.tan(area.halfAngle) - lateral
+    );
+    return Math.min(radial, angular);
+  }
+
+  /**
+   * Dirección de huida de un área. En los círculos es radial; en los conos se
+   * escapa por el lado más cercano o hacia atrás si el bot está sobre el eje.
+   */
+  private aoeEvadeDirection(area: AoeArea, self: MatchPlayerState): Vec2 {
+    const toX = self.x - area.x;
+    const toZ = self.z - area.z;
+    if (area.shape === 'circle') {
+      const length = Math.hypot(toX, toZ);
+      if (length < 0.15) {
+        return { x: -area.dirX, z: -area.dirZ };
+      }
+      return { x: toX / length, z: toZ / length };
+    }
+
+    const along = toX * area.dirX + toZ * area.dirZ;
+    const lateral = toX * area.dirZ - toZ * area.dirX;
+    if (Math.abs(lateral) > 0.15) {
+      const sign = lateral >= 0 ? 1 : -1;
+      return { x: area.dirZ * sign, z: -area.dirX * sign };
+    }
+    if (along > 0.2) {
+      return { x: -area.dirX, z: -area.dirZ };
+    }
+    return {
+      x: area.dirZ * this.orbitSide,
+      z: -area.dirX * this.orbitSide
+    };
+  }
+
+  /** Geometría de un peligro de área ya lanzado. */
+  private hazardArea(hazard: BotHazard): AoeArea {
+    return {
+      shape: hazard.shape ?? 'circle',
+      x: hazard.x,
+      z: hazard.z,
+      radius: hazard.radius,
+      dirX: hazard.dirX ?? 0,
+      dirZ: hazard.dirZ ?? 1,
+      halfAngle: hazard.halfAngle ?? 0
+    };
+  }
+
+  /**
    * Elige el peligro ya lanzado que más urge esquivar. A diferencia de
    * `updateThreat`, aquí no hay windup: el proyectil o el área ya existen y el
    * bot debe salir de su trayectoria sin esperar a que el rival vuelva a actuar.
@@ -1736,37 +1826,28 @@ export class BotController {
       };
     }
 
-    const dx = self.x - hazard.x;
-    const dz = self.z - hazard.z;
-    const distance = Math.hypot(dx, dz);
-    const dangerRadius =
-      hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN;
-    if (distance > dangerRadius) return null;
-
-    // Las áreas tampoco atraviesan un muro: si el centro no tiene línea hasta
-    // el bot, sus ticks no le alcanzan.
+    const area = this.hazardArea(hazard);
     if (
-      segmentBlockedByColliders(hazard.x, hazard.z, self.x, self.z, colliders)
+      !aoeContains(area, self.x, self.z, self.hitRadius, HAZARD_AOE_MARGIN)
     ) {
       return null;
     }
 
-    let direction = { x: dx, z: dz };
-    let length = distance;
-    if (length < 0.05) {
-      direction = {
-        x: -Math.sin(self.facing) * this.orbitSide,
-        z: Math.cos(self.facing) * this.orbitSide
-      };
-      length = 1;
+    // Las áreas tampoco atraviesan un muro: si el centro del círculo o el
+    // vértice del cono no tiene línea hasta el bot, sus ticks no le alcanzan.
+    if (
+      segmentBlockedByColliders(area.x, area.z, self.x, self.z, colliders)
+    ) {
+      return null;
     }
-    direction = {
-      x: direction.x / length,
-      z: direction.z / length
-    };
+
+    const distance = aoeDistance(area, self.x, self.z);
+    const dangerRadius =
+      hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN;
+    const direction = this.aoeEvadeDirection(area, self);
     return {
       direction: this.pickHazardEscape(self, direction, colliders),
-      severity: 140 + (1 - distance / dangerRadius) * 80
+      severity: 140 + (1 - distance / Math.max(0.001, dangerRadius)) * 80
     };
   }
 
@@ -1806,18 +1887,42 @@ export class BotController {
       if (hazard.ownerTeam === self.team) continue;
       if (hazard.kind === 'projectile') continue;
       if ((hazard.remaining ?? Infinity) <= 0) continue;
-      const distance = pointSegmentDistance(
-        hazard.x,
-        hazard.z,
-        self.x,
-        self.z,
-        point.x,
-        point.z
-      );
-      if (
-        distance <= hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
-      ) {
-        return true;
+      const area = this.hazardArea(hazard);
+      if (area.shape === 'circle') {
+        const distance = pointSegmentDistance(
+          area.x,
+          area.z,
+          self.x,
+          self.z,
+          point.x,
+          point.z
+        );
+        if (
+          distance <= hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
+        ) {
+          return true;
+        }
+        continue;
+      }
+      // Un cono no es convexo respecto al trayecto: se muestrea el segmento
+      // para no atravesar el abanico por un punto intermedio.
+      const length = Math.hypot(point.x - self.x, point.z - self.z);
+      const steps = Math.max(1, Math.ceil(length / 0.5));
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const sampleX = self.x + (point.x - self.x) * t;
+        const sampleZ = self.z + (point.z - self.z) * t;
+        if (
+          aoeContains(
+            area,
+            sampleX,
+            sampleZ,
+            self.hitRadius,
+            HAZARD_AOE_MARGIN
+          )
+        ) {
+          return true;
+        }
       }
     }
     return false;
@@ -1833,11 +1938,28 @@ export class BotController {
       if (hazard.ownerTeam === self.team) continue;
       if (hazard.kind === 'projectile') continue;
       if ((hazard.remaining ?? Infinity) <= 0) continue;
-      hazards.push({
-        x: hazard.x,
-        z: hazard.z,
-        radius: hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
-      });
+      const padding = self.hitRadius + HAZARD_AOE_MARGIN;
+      const area = this.hazardArea(hazard);
+      if (area.shape === 'circle') {
+        hazards.push({
+          x: area.x,
+          z: area.z,
+          radius: area.radius + padding
+        });
+        continue;
+      }
+      // La navegación solo entiende círculos: un cono se aproxima con varios
+      // discos a lo largo de su eje, más anchos cuanto más lejos del vértice.
+      const segments = 4;
+      for (let index = 0; index < segments; index++) {
+        const t = (index + 0.5) / segments;
+        const width = area.radius * t * Math.tan(area.halfAngle);
+        hazards.push({
+          x: area.x + area.dirX * area.radius * t,
+          z: area.z + area.dirZ * area.radius * t,
+          radius: Math.max(0.35, width) + padding
+        });
+      }
     }
     return hazards.length > 0 ? hazards : undefined;
   }
@@ -3689,19 +3811,33 @@ export class BotController {
     const randomFactor =
       (CONFIG.combat.randomMin + CONFIG.combat.randomMax) / 2;
 
-    // Las áreas con daño radial pegan menos en el borde. Como el bot apunta al
-    // centro previsto, la distancia relevante es la diferencia entre la
-    // posición prevista del rival y el alcance del centro.
+    // El bot apunta hacia la posición prevista, así que el centro del área (o el
+    // vértice del cono) cae en esa dirección a `range` del lanzador.
+    const aimX = prediction.x - self.x;
+    const aimZ = prediction.z - self.z;
+    const aimLength = Math.hypot(aimX, aimZ);
+    const aimDirX = aimLength > 0.0001 ? aimX / aimLength : Math.sin(self.facing);
+    const aimDirZ = aimLength > 0.0001 ? aimZ / aimLength : Math.cos(self.facing);
+    const centerReach = def.range > 0.1 ? def.range : 0;
+    const area = aoeAreaFrom(
+      def,
+      self.x + aimDirX * centerReach,
+      self.z + aimDirZ * centerReach,
+      aimDirX,
+      aimDirZ
+    );
+
+    // Las áreas con daño radial pegan menos en el borde. La distancia relevante
+    // es la que separa al rival del centro del círculo o del vértice del cono.
     let power = def.power;
     if (def.shape === 'aoe' && def.radialDamage) {
-      const centerDistance = def.range > 0.1 ? def.range : 0;
-      const offset = Math.abs(prediction.distance - centerDistance);
+      const offset = aoeDistance(area, prediction.x, prediction.z);
       const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
       power *= 1 - (1 - def.radialMinDamage) * t;
     }
     // En las áreas `overTime`, `power` es daño por segundo. No se asume que el
     // rival se quede toda la duración: se estiman los ticks que llegará a
-    // recibir según lo lejos que esté del centro y lo rápido que pueda salir.
+    // recibir según lo cerca que esté del borde y lo rápido que pueda salir.
     if (
       def.shape === 'aoe' &&
       def.aoeDamageMode === 'overTime' &&
@@ -3709,9 +3845,11 @@ export class BotController {
     ) {
       const tickInterval = Math.max(0.1, def.aoeTickInterval);
       const maxTicks = Math.max(1, Math.floor(def.aoeDuration / tickInterval));
-      const centerDistance = def.range > 0.1 ? def.range : 0;
-      const offset = Math.abs(prediction.distance - centerDistance);
-      const escapeDistance = Math.max(0, def.radius - offset);
+      const escapeDistance = this.aoeEscapeDistance(
+        area,
+        prediction.x,
+        prediction.z
+      );
       const escapeTime = escapeDistance / Math.max(1, this.effectiveSpeed(target));
       const expectedTime = Math.min(
         def.aoeDuration,
@@ -3788,8 +3926,16 @@ export class BotController {
         lateralTolerance = Math.max(0.5, def.radius) + targetRadius;
         break;
       case 'aoe':
-        lateralTolerance = def.radius + maxHitRadius() + targetRadius;
-        aimDistance = def.range > 0.1 ? def.range : 0.5;
+        if (def.aoeShape === 'cone') {
+          // En un cono el error de apuntado es angular: basta con que el rival
+          // quede dentro de `halfAngle` respecto al eje del lanzamiento.
+          aimDistance = Math.max(0.5, prediction.distance);
+          lateralTolerance =
+            aimDistance * Math.tan(def.halfAngle * DEG) + targetRadius;
+        } else {
+          lateralTolerance = def.radius + maxHitRadius() + targetRadius;
+          aimDistance = def.range > 0.1 ? def.range : 0.5;
+        }
         break;
     }
 
@@ -4085,6 +4231,16 @@ export class BotController {
             )
           )
         : 0;
+    const aoeArea =
+      def.shape === 'aoe'
+        ? aoeAreaFrom(
+            def,
+            self.x + direction.x * aoeCenterReach,
+            self.z + direction.z * aoeCenterReach,
+            direction.x,
+            direction.z
+          )
+        : null;
 
     let count = 0;
     for (const enemy of this.visibleEnemies) {
@@ -4186,18 +4342,16 @@ export class BotController {
           break;
         }
         case 'aoe': {
-          const centerX = self.x + direction.x * aoeCenterReach;
-          const centerZ = self.z + direction.z * aoeCenterReach;
           if (
-            Math.hypot(enemy.x - centerX, enemy.z - centerZ) >
-            def.radius + maxHitRadius() + enemy.hitRadius
+            !aoeArea ||
+            !aoeContains(aoeArea, enemy.x, enemy.z, enemy.hitRadius, maxHitRadius())
           ) {
             break;
           }
           if (
             segmentBlockedByColliders(
-              centerX,
-              centerZ,
+              aoeArea.x,
+              aoeArea.z,
               enemy.x,
               enemy.z,
               colliders
@@ -4341,43 +4495,46 @@ export class BotController {
       }
       case 'aoe': {
         const effectiveRadius = def.radius + maxHitRadius() + targetRadius;
-        if (def.range <= 0.1) {
-          return (
-            prediction.distance <= effectiveRadius &&
-            !segmentBlockedByColliders(
-              self.x,
-              self.z,
-              prediction.x,
-              prediction.z,
-              colliders
-            )
-          );
-        }
-        // El centro cae como mucho a `range` del lanzador, así que un objetivo
-        // más lejos que eso sumado al radio efectivo no puede quedar dentro.
+        // El centro (o vértice) cae como mucho a `range` del lanzador, así que
+        // un objetivo más lejos que eso sumado al radio efectivo no puede
+        // quedar dentro.
         if (prediction.distance > def.range + effectiveRadius) return false;
         const direction = directionTo(self, prediction);
         // Sin dirección útil el centro cae sobre el propio lanzador.
         const reach =
-          direction.x === 0 && direction.z === 0
+          def.range <= 0.1
             ? 0
-            : Math.min(
-                def.range,
-                raycastColliderDistance(
-                  self.x,
-                  self.z,
-                  direction.x,
-                  direction.z,
+            : direction.x === 0 && direction.z === 0
+              ? 0
+              : Math.min(
                   def.range,
-                  colliders,
-                  CONFIG.combat.aoeSightPadding
-                )
-              );
+                  raycastColliderDistance(
+                    self.x,
+                    self.z,
+                    direction.x,
+                    direction.z,
+                    def.range,
+                    colliders,
+                    CONFIG.combat.aoeSightPadding
+                  )
+                );
         const centerX = self.x + direction.x * reach;
         const centerZ = self.z + direction.z * reach;
+        const area = aoeAreaFrom(
+          def,
+          centerX,
+          centerZ,
+          direction.x,
+          direction.z
+        );
         if (
-          Math.hypot(prediction.x - centerX, prediction.z - centerZ) >
-          effectiveRadius
+          !aoeContains(
+            area,
+            prediction.x,
+            prediction.z,
+            targetRadius,
+            maxHitRadius()
+          )
         ) {
           return false;
         }
@@ -4637,7 +4794,13 @@ export class BotController {
         case 'dash':
           return Math.max(2, def.dashDistance * 0.55);
         case 'aoe':
-          return def.range > 0.1 ? def.range : Math.max(1, def.radius * 0.6);
+          // El círculo se centra a `range`; el cono nace ahí y avanza `radius`,
+          // así que la distancia cómoda es el punto medio de su longitud.
+          return def.aoeShape === 'cone'
+            ? def.range + def.radius * 0.5
+            : def.range > 0.1
+              ? def.range
+              : Math.max(1, def.radius * 0.6);
         case 'self':
           return 2;
       }

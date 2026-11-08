@@ -15,7 +15,13 @@
  * en las áreas instantáneas.
  */
 
-import type { AbilityDef, AoeDamageMode, BuffSpec, SlowSpec } from './abilities';
+import type {
+  AbilityDef,
+  AoeDamageMode,
+  AoeShape,
+  BuffSpec,
+  SlowSpec
+} from './abilities';
 import type { HealOnHitToken, MatchPlayerState } from './matchState';
 
 /** Datos del área que ya resolvió el motor para un golpe o tick concreto. */
@@ -24,7 +30,15 @@ export interface AoeHitInput {
   def: AbilityDef;
   x: number;
   z: number;
+  /** Radio del círculo o longitud del cono. */
   radius: number;
+  /** Geometría del golpe. */
+  shape: AoeShape;
+  /** Dirección unitaria del cono; solo se usa con `shape: 'cone'`. */
+  dirX: number;
+  dirZ: number;
+  /** Semiángulo del cono en radianes. */
+  halfAngle: number;
   mode: AoeDamageMode;
   /**
    * Índice del golpe: 0 en las áreas instantáneas y en el primer tick; 1, 2...
@@ -146,6 +160,8 @@ export interface AoeEffectContext {
   x: number;
   z: number;
   radius: number;
+  /** `circle` o `cone`; útil para callbacks que quieran adaptar el efecto. */
+  shape: AoeShape;
   mode: AoeDamageMode;
   tick: number;
   elapsed: number;

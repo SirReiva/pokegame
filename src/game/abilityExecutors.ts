@@ -311,6 +311,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const centerX = targetX ?? player.x + dirX * reach;
   const centerZ = targetZ ?? player.z + dirZ * reach;
   const duration = Math.max(0.1, def.aoeDuration);
+  const shape = def.aoeShape;
+  const halfAngle = shape === 'cone' ? def.halfAngle * DEG : 0;
   // Las áreas sin preparación no pasan por la marca de `castAbility`: el aro
   // del equipo se crea aquí junto al efecto para que el límite del área se vea
   // durante toda la habilidad, no solo durante el impacto. Las áreas con
@@ -318,26 +320,51 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const marker =
     deps.marker ??
     (def.startup <= 0
-      ? deps.combatFx.spawnAoeTelegraph(
-          centerX,
-          centerZ,
-          def.radius + maxHitRadius(),
-          TEAM_INFO[player.team].accent,
-          0,
-          duration
-        )
+      ? shape === 'cone'
+        ? deps.combatFx.spawnAoeConeTelegraph(
+            centerX,
+            centerZ,
+            dirX,
+            dirZ,
+            def.radius + maxHitRadius(),
+            def.halfAngle,
+            TEAM_INFO[player.team].accent,
+            0,
+            duration
+          )
+        : deps.combatFx.spawnAoeTelegraph(
+            centerX,
+            centerZ,
+            def.radius + maxHitRadius(),
+            TEAM_INFO[player.team].accent,
+            0,
+            duration
+          )
       : null);
   // El aro y el efecto dibujan el radio máximo de golpe (área + el mayor
   // hurtbox) y la comprobación usa el mismo valor: todo el interior del aro es
   // golpeable y el borde coincide con el límite real.
-  const areaFx = deps.combatFx.spawnAoe(
-    centerX,
-    centerZ,
-    def.radius + maxHitRadius(),
-    def.color,
-    def.aoeStyle,
-    duration
-  );
+  const areaFx =
+    shape === 'cone'
+      ? deps.combatFx.spawnAoeCone(
+          centerX,
+          centerZ,
+          dirX,
+          dirZ,
+          def.radius + maxHitRadius(),
+          def.halfAngle,
+          def.color,
+          def.aoeStyle,
+          duration
+        )
+      : deps.combatFx.spawnAoe(
+          centerX,
+          centerZ,
+          def.radius + maxHitRadius(),
+          def.color,
+          def.aoeStyle,
+          duration
+        );
   if (def.aoeDamageMode === 'overTime') {
     const tickInterval = Math.max(0.05, Math.min(def.aoeTickInterval, duration));
     deps.addActiveAoe({
@@ -346,6 +373,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       x: centerX,
       z: centerZ,
       radius: def.radius,
+      shape,
+      halfAngle,
       elapsed: 0,
       duration,
       tickInterval,
@@ -373,6 +402,10 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     x: centerX,
     z: centerZ,
     radius: def.radius,
+    shape,
+    dirX,
+    dirZ,
+    halfAngle,
     mode: 'instant',
     tick: 0,
     elapsed: 0,

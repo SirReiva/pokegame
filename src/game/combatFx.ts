@@ -118,6 +118,35 @@ function areaAnchors(x: number, z: number, radius: number): FxAnchors {
   ];
 }
 
+/**
+ * Anclas de un cono: vértice, punta, punto medio y las dos esquinas del arco.
+ * La visibilidad se decide con estos puntos para que una vista que solo alcanza
+ * el extremo del cono también lo dibuje.
+ */
+function coneAnchors(
+  x: number,
+  z: number,
+  dirX: number,
+  dirZ: number,
+  length: number,
+  halfAngle: number
+): FxAnchors {
+  const yaw = Math.atan2(dirX, dirZ);
+  const points: Array<readonly [number, number]> = [
+    [x, z],
+    [x + dirX * length, z + dirZ * length],
+    [x + dirX * length * 0.5, z + dirZ * length * 0.5]
+  ];
+  for (const side of [-1, 1]) {
+    const angle = yaw + side * halfAngle;
+    points.push([
+      x + Math.sin(angle) * length,
+      z + Math.cos(angle) * length
+    ]);
+  }
+  return points;
+}
+
 function sameLayers(current: readonly number[], next: readonly number[]): boolean {
   if (current.length !== next.length) return false;
   for (let index = 0; index < current.length; index++) {
@@ -4725,6 +4754,66 @@ export class CombatFx {
     };
   }
 
+  /**
+   * Área con forma de cono: conserva el efecto 3D propio del estilo, colocado
+   * en el interior del abanico, mientras el aro/telegraph dibuja la geometría
+   * exacta. `x/z` es el vértice, `length` la longitud y `halfAngleDeg` la
+   * apertura.
+   */
+  spawnAoeCone(
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    length: number,
+    halfAngleDeg: number,
+    color: readonly [number, number, number],
+    style: AoeStyle = 'ring',
+    duration = 0.65
+  ): AoeFxHandle {
+    const life = Math.max(0.2, duration);
+    const rawLength = Math.hypot(dirX, dirZ);
+    const nx = rawLength > 0.0001 ? dirX / rawLength : 0;
+    const nz = rawLength > 0.0001 ? dirZ / rawLength : 1;
+    const half = Math.max(8, Math.min(89, halfAngleDeg)) * DEG;
+    const reach = Math.max(0.1, length);
+    // El efecto del estilo se centra en la mitad del cono con un radio que
+    // cabe dentro del abanico; la telegrafía sigue marcando el borde real.
+    const centerX = x + nx * reach * 0.5;
+    const centerZ = z + nz * reach * 0.5;
+    // Radio del círculo inscrito en el cono a media longitud: el efecto del
+    // estilo se queda dentro del abanico sin tapar la telegrafía.
+    const effectRadius = Math.max(
+      0.35,
+      reach * 0.5 * Math.tan(Math.min(half, Math.PI / 4))
+    );
+    const anchors = coneAnchors(x, z, nx, nz, reach, half);
+    const factory = this.aoeFactories[style] ?? this.aoeFactories.ring;
+    const firstEffect = this.effects.length;
+    this.withAnchors(anchors, () =>
+      factory(centerX, centerZ, effectRadius, color, life)
+    );
+    const created = this.effects.slice(firstEffect);
+    const bases = created.map((effect) => {
+      const position = effect.entity.getPosition();
+      return { effect, x: position.x, z: position.z };
+    });
+    return {
+      setCenter: (nextX, nextZ) => {
+        const dx = nextX - x;
+        const dz = nextZ - z;
+        for (const base of bases) {
+          const position = base.effect.entity.getPosition();
+          base.effect.entity.setPosition(base.x + dx, position.y, base.z + dz);
+          base.effect.anchors = coneAnchors(nextX, nextZ, nx, nz, reach, half);
+        }
+      },
+      destroy: () => {
+        for (const effect of created) this.disposeEffect(effect);
+      }
+    };
+  }
+
   /** Anillo de área genérico: crece y se desvanece en el suelo. */
   private spawnRingAoe(
     x: number,
@@ -5693,6 +5782,139 @@ export class CombatFx {
           nextZ
         );
         record.anchors = areaAnchors(nextX, nextZ, radius);
+      }
+    };
+  }
+
+  /**
+   * Marca de área en forma de cono. Funciona como la circular: el borde del
+   * equipo se ve desde el inicio de la preparación y un relleno crece hasta el
+   * borde durante el `windup`; después queda solo el contorno mientras dura el
+   * efecto. El vértice está en `x/z` y el abanico apunta a `dirX/dirZ`.
+   */
+  spawnAoeConeTelegraph(
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    length: number,
+    halfAngleDeg: number,
+    color: readonly [number, number, number],
+    duration: number,
+    effectDuration = 0
+  ): TelegraphHandle {
+    const rawLength = Math.hypot(dirX, dirZ);
+    const nx = rawLength > 0.0001 ? dirX / rawLength : 0;
+    const nz = rawLength > 0.0001 ? dirZ / rawLength : 1;
+    const half = Math.max(8, Math.min(89, halfAngleDeg)) * DEG;
+    const reach = Math.max(0.1, length);
+    const yaw = Math.atan2(nx, nz);
+
+    const root = new pc.Entity('aoe-cone-telegraph');
+    root.setPosition(x, 0.08, z);
+    root.setEulerAngles(0, yaw / DEG, 0);
+    this.app.root.addChild(root);
+
+    const hot: [number, number, number] = [
+      Math.round(color[0] + (255 - color[0]) * 0.62),
+      Math.round(color[1] + (255 - color[1]) * 0.62),
+      Math.round(color[2] + (255 - color[2]) * 0.62)
+    ];
+    const bandMaterial = this.createMaterial(color, 0.5);
+    const edgeMaterial = this.createMaterial(hot, 0.85);
+    const fillMaterial = this.createMaterial(color, 0.08);
+    const sweepMaterial = this.createMaterial(hot, 0.4);
+    const materials = [
+      bandMaterial,
+      edgeMaterial,
+      fillMaterial,
+      sweepMaterial
+    ];
+
+    const angleKey = Math.round(halfAngleDeg * 10);
+    const wedgeMesh = this.cachedMesh(`aoe-cone-fill-${angleKey}`, () =>
+      createArcMesh(this.device, 1, half, 32)
+    );
+    const bandMesh = this.cachedMesh(`aoe-cone-band-${angleKey}`, () =>
+      createArcBandMesh(this.device, 0.955, 1, half, 32).mesh
+    );
+
+    const fill = this.createEntity(wedgeMesh, [fillMaterial], root);
+    fill.setLocalPosition(0, 0.002, 0);
+    fill.setLocalScale(reach, 1, reach);
+
+    const band = this.createEntity(bandMesh, [bandMaterial], root);
+    band.setLocalPosition(0, 0.006, 0);
+    band.setLocalScale(reach, 1, reach);
+
+    const sweep = this.createEntity(wedgeMesh, [sweepMaterial], root);
+    sweep.setLocalPosition(0, 0.004, 0);
+    sweep.setLocalScale(0.01, 1, 0.01);
+
+    // Raíles laterales: marcan las dos aristas del cono desde el primer frame.
+    for (const side of [-1, 1]) {
+      const angle = side * half;
+      const rail = this.createEntity(this.boxMesh, [edgeMaterial], root);
+      rail.setLocalEulerAngles(0, angle / DEG, 0);
+      rail.setLocalPosition(
+        Math.sin(angle) * reach * 0.5,
+        0.008,
+        Math.cos(angle) * reach * 0.5
+      );
+      rail.setLocalScale(0.035, 0.012, reach);
+    }
+
+    const charge = Math.max(0, duration);
+    const effect = Math.max(0, effectDuration);
+    const total = Math.max(0.05, charge + effect);
+
+    const record: GroundTelegraph = {
+      entity: root,
+      materials,
+      elapsed: 0,
+      duration: total,
+      active: true,
+      anchors: coneAnchors(x, z, nx, nz, reach, half),
+      update: (_progress, elapsed) => {
+        const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
+        const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
+        bandMaterial.opacity = (0.3 + pulse * 0.35) * fade;
+        edgeMaterial.opacity = (0.55 + pulse * 0.35) * fade;
+        fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
+
+        const chargeProgress = charge > 0 ? Math.min(1, elapsed / charge) : 1;
+        if (charge > 0 && elapsed < charge) {
+          // El relleno crece desde el vértice hasta el borde, igual que el
+          // disco de la marca circular.
+          const sweepLength = Math.max(0.01, reach * chargeProgress);
+          sweep.setLocalScale(sweepLength, 1, sweepLength);
+          sweepMaterial.opacity = 0.34 * (1 - chargeProgress * 0.55);
+
+          if (chargeProgress > 0.82) {
+            const flash = (chargeProgress - 0.82) / 0.18;
+            bandMaterial.opacity += flash * 0.45 * fade;
+            edgeMaterial.opacity += flash * 0.35 * fade;
+            sweepMaterial.opacity += flash * 0.3;
+          }
+        } else {
+          sweep.setLocalScale(0.01, 1, 0.01);
+          sweepMaterial.opacity = 0;
+        }
+      }
+    };
+
+    const anchors = coneAnchors(x, z, nx, nz, reach, half);
+    this.applyVisibility(root, anchors);
+    this.telegraphs.add(record);
+    return {
+      destroy: () => this.disposeTelegraph(record),
+      setCenter: (nextX, nextZ) => {
+        record.entity.setPosition(
+          nextX,
+          record.entity.getPosition().y,
+          nextZ
+        );
+        record.anchors = coneAnchors(nextX, nextZ, nx, nz, reach, half);
       }
     };
   }

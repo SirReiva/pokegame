@@ -9,7 +9,8 @@
  * - `melee`: cono/arco en la dirección en la que mira el Pokémon.
  * - `projectile`: proyectil que avanza en la dirección en la que mira.
  * - `beam`: haz instantáneo en la dirección en la que mira.
- * - `aoe`: área circular sobre el suelo, centrada delante del Pokémon.
+ * - `aoe`: área sobre el suelo centrada delante del Pokémon. Puede ser un
+ *   círculo (`aoeShape: 'circle'`) o un cono (`aoeShape: 'cone'`).
  * - `dash`: desplazamiento en la dirección en la que mira; puede dañar al paso.
  * - `self`: habilidad centrada en el lanzador (buffs, escudos, curación...).
  *
@@ -37,6 +38,14 @@ export const ABILITY_SLOT_LABEL: Record<AbilitySlot, string> = {
 };
 
 export type AbilityShape = 'melee' | 'projectile' | 'beam' | 'aoe' | 'dash' | 'self';
+
+/**
+ * Geometría de las habilidades `aoe`.
+ * - `circle`: círculo de `radius` centrado a `range` del lanzador.
+ * - `cone`: cono de longitud `radius` que nace en ese mismo centro y se abre
+ *   hacia delante con `halfAngle` de semiángulo.
+ */
+export type AoeShape = 'circle' | 'cone';
 
 export type DamageCategory = 'physical' | 'special' | 'status';
 
@@ -162,9 +171,12 @@ export interface AbilityDef {
   cooldown: number;
   /** Alcance en unidades de mundo (melee, proyectil, haz o centro del área). */
   range: number;
-  /** Radio del proyectil, del área o del golpe cuerpo a cuerpo. */
+  /**
+   * Radio del proyectil, del golpe cuerpo a cuerpo o del área circular. En un
+   * área con `aoeShape: 'cone'` es la longitud del cono.
+   */
   radius: number;
-  /** Semiángulo del cono cuerpo a cuerpo, en grados. */
+  /** Semiángulo del cono (melee o `aoeShape: 'cone'`), en grados. */
   halfAngle: number;
   /** Velocidad del proyectil en u/s. */
   projectileSpeed: number;
@@ -176,6 +188,11 @@ export interface AbilityDef {
   beamStyle: BeamStyle;
   /** Aspecto visual del área (solo para `shape: 'aoe'`). */
   aoeStyle: AoeStyle;
+  /**
+   * Geometría del área. `circle` usa `radius` alrededor del centro; `cone`
+   * nace en el centro y avanza `radius` hacia delante con `halfAngle`.
+   */
+  aoeShape: AoeShape;
   /** Daño único o daño periódico mientras se permanece dentro. */
   aoeDamageMode: AoeDamageMode;
   /**
@@ -307,6 +324,7 @@ export const DEFAULT_ABILITY: Omit<
   impactStyle: 'hit',
   beamStyle: 'electric',
   aoeStyle: 'ring',
+  aoeShape: 'circle',
   aoeDamageMode: 'instant',
   radialDamage: false,
   radialMinDamage: 0,
@@ -440,6 +458,16 @@ export class AbilityBuilder {
     this.draft.aoeDamageMode = mode;
     this.draft.aoeDuration = duration;
     if (tickInterval !== undefined) this.draft.aoeTickInterval = tickInterval;
+    return this;
+  }
+
+  /**
+   * Cambia la geometría del área. `cone` usa `radius` como longitud desde el
+   * centro del lanzamiento y `halfAngle` como apertura; `circle` es el valor
+   * por defecto.
+   */
+  aoeShape(shape: AoeShape): this {
+    this.draft.aoeShape = shape;
     return this;
   }
 

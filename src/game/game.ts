@@ -24,6 +24,7 @@ import {
   ABILITY_EXECUTORS,
   type AbilityExecutorDeps
 } from './abilityExecutors';
+import { aoeAreaFrom, aoeContains, aoeDistance } from './aoeGeometry';
 import {
   defaultAoeEffect,
   type AoeEffectContext,
@@ -1439,6 +1440,10 @@ export class Game {
         // El motor compara contra el hurtbox mayor del roster, igual que el
         // aro visual; el bot suma después su propio `hitRadius`.
         radius: aoe.radius + maxHitRadius(),
+        shape: aoe.shape,
+        dirX: aoe.dirX,
+        dirZ: aoe.dirZ,
+        halfAngle: aoe.halfAngle,
         remaining: Math.max(0, aoe.duration - aoe.elapsed),
         ownerTeam: aoe.owner.team
       });
@@ -2511,14 +2516,26 @@ export class Game {
     // instantáneas crean su propio aviso en el ejecutor.
     const marker =
       def.startup > 0 && def.shape === 'aoe'
-        ? this.combatFx.spawnAoeTelegraph(
-            targetX,
-            targetZ,
-            def.radius + maxHitRadius(),
-            teamAccent,
-            def.startup,
-            Math.max(0.1, def.aoeDuration)
-          )
+        ? def.aoeShape === 'cone'
+          ? this.combatFx.spawnAoeConeTelegraph(
+              targetX,
+              targetZ,
+              dirX,
+              dirZ,
+              def.radius + maxHitRadius(),
+              def.halfAngle,
+              teamAccent,
+              def.startup,
+              Math.max(0.1, def.aoeDuration)
+            )
+          : this.combatFx.spawnAoeTelegraph(
+              targetX,
+              targetZ,
+              def.radius + maxHitRadius(),
+              teamAccent,
+              def.startup,
+              Math.max(0.1, def.aoeDuration)
+            )
         : null;
     const lane =
       def.startup > 0 && def.shape === 'beam'
@@ -2865,19 +2882,27 @@ export class Game {
   private resolveAoeHit(hit: AoeHitInput): void {
     const targets: AoeTarget[] = [];
     const fallenAllies: AoeFallenAlly[] = [];
+    // El círculo usa `radius` alrededor del centro; el cono usa la misma prueba
+    // de sector que el melee desde ese centro hacia delante. La comprobación y
+    // la telegrafía comparten `maxHitRadius()`, así que el borde dibujado es
+    // siempre el primer punto de contacto real.
+    const area = aoeAreaFrom(hit.def, hit.x, hit.z, hit.dirX, hit.dirZ);
+    const hitPadding = maxHitRadius();
     for (const player of this.matchPlayers) {
       if (!player.alive) {
         // Los aliados caídos siguen en el punto del KO hasta reaparecer: son
         // los únicos revivibles por un área.
         if (player.team !== hit.owner.team) continue;
-        const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
-        if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
+        if (!aoeContains(area, player.x, player.z, player.hitRadius, hitPadding)) {
+          continue;
+        }
+        const distance = aoeDistance(area, player.x, player.z);
         fallenAllies.push({
           player,
           distance,
           lineOfSight: !segmentBlockedByColliders(
-            hit.x,
-            hit.z,
+            area.x,
+            area.z,
             player.x,
             player.z,
             this.world.colliders
@@ -2885,8 +2910,10 @@ export class Game {
         });
         continue;
       }
-      const distance = Math.hypot(player.x - hit.x, player.z - hit.z);
-      if (distance > hit.radius + maxHitRadius() + player.hitRadius) continue;
+      if (!aoeContains(area, player.x, player.z, player.hitRadius, hitPadding)) {
+        continue;
+      }
+      const distance = aoeDistance(area, player.x, player.z);
       const radialMultiplier = this.radialDamageMultiplier(
         hit.def,
         distance,
@@ -2901,8 +2928,8 @@ export class Game {
         isEnemy: player.team !== hit.owner.team,
         isSelf: player === hit.owner,
         lineOfSight: !segmentBlockedByColliders(
-          hit.x,
-          hit.z,
+          area.x,
+          area.z,
           player.x,
           player.z,
           this.world.colliders
@@ -2917,6 +2944,7 @@ export class Game {
       x: hit.x,
       z: hit.z,
       radius: hit.radius,
+      shape: hit.shape,
       mode: hit.mode,
       tick: hit.tick,
       elapsed: hit.elapsed,
@@ -3817,6 +3845,10 @@ export class Game {
       x: aoe.x,
       z: aoe.z,
       radius: aoe.radius,
+      shape: aoe.shape,
+      dirX: aoe.dirX,
+      dirZ: aoe.dirZ,
+      halfAngle: aoe.halfAngle,
       mode: 'overTime',
       tick: aoe.tick,
       elapsed: aoe.elapsed,

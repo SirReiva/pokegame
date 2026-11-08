@@ -273,9 +273,11 @@ con `CONFIG.player.perPokemonHitbox = false`.
   `range`.
 - **beam**: instantáneo, se corta en el primer collider y atraviesa a todos los
   rivales en línea.
-- **aoe**: círculo centrado a `range` del lanzador. `instant` o `overTime`;
-  `radialDamage` interpola del 100 % en el centro a `radialMinDamage` en el
-  borde.
+- **aoe**: área centrada a `range` del lanzador. `aoeShape: 'circle'` usa
+  `radius` alrededor del centro; `aoeShape: 'cone'` nace en ese mismo centro y
+  avanza `radius` hacia delante con `halfAngle` de semiángulo. `instant` o
+  `overTime`; `radialDamage` interpola del 100 % en el centro a
+  `radialMinDamage` en el borde.
 - **dash**: se reparte en pasos y comprueba colliders por tramo. Hoy también
   choca con cualquier jugador vivo (aliado o rival); su golpe solo cuenta por
   delante del origen y revalida el tramo al resolverse, pero queda el cabo de

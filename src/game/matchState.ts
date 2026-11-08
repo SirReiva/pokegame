@@ -4,7 +4,7 @@
  * subsistemas de combate compartan tipos sin importar el orquestador.
  */
 
-import type { AbilityDef, BuffStat } from './abilities';
+import type { AbilityDef, AoeShape, BuffStat } from './abilities';
 import type { AoeMovement } from './aoeEffect';
 import type { Actor } from './actor';
 import type { CameraRig } from './camera';
@@ -200,7 +200,12 @@ export interface ActiveAoe {
   def: AbilityDef;
   x: number;
   z: number;
+  /** Radio del círculo o longitud del cono. */
   radius: number;
+  /** Geometría del área persistente. */
+  shape: AoeShape;
+  /** Semiángulo del cono en radianes; 0 en los círculos. */
+  halfAngle: number;
   elapsed: number;
   duration: number;
   tickInterval: number;
