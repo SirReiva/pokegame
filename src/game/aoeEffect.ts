@@ -152,7 +152,7 @@ export interface AoeHitOptions {
 
 /**
  * Servicios que el callback puede usar sobre un objetivo. El motor mantiene la
- * precisión, la inmunidad de tipo, el crítico, el daño real y las estadísticas.
+ * inmunidad de tipo, el crítico, el daño real y las estadísticas.
  */
 export interface AoeEffectContext {
   caster: MatchPlayerState;
@@ -171,7 +171,7 @@ export interface AoeEffectContext {
   /** Compañeros de equipo caídos con su marcador de KO dentro del radio. */
   fallenAllies: readonly AoeFallenAlly[];
   /**
-   * Aplica el golpe estándar: precisión, inmunidad, sonido, slow, daño,
+   * Aplica el golpe estándar: inmunidad, sonido, slow, daño,
    * hitstun/cancel/empuje y `healOnHit`. Devuelve `true` solo si quitó vida.
    */
   applyHit(target: AoeTarget, options?: AoeHitOptions): boolean;
@@ -179,7 +179,7 @@ export interface AoeEffectContext {
   applyHitstun(target: AoeTarget, seconds: number, cancel?: boolean): void;
   /** Empuja al objetivo desde el centro del área. */
   applyKnockback(target: AoeTarget, distance: number): void;
-  /** Aplica una ralentización sin pasar por la precisión ni la inmunidad. */
+  /** Aplica una ralentización sin pasar por la inmunidad. */
   applySlow(target: AoeTarget, slow: SlowSpec): void;
   /** Añade un buff/debuff temporal al objetivo. */
   applyBuff(target: AoeTarget, buff: BuffSpec): void;

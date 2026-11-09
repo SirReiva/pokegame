@@ -203,14 +203,13 @@ su puntuación es estrictamente positiva.
 > **Estado: arreglado.** `findInterruptSlot` descarta el corte si no hay línea
 > de visión hasta el rival, si el trayecto del proyectil/haz/melee queda tapado
 > por un collider, o si el golpe no llega antes de que termine el `windup`.
-> También pondera `def.accuracy` y devuelve el punto al que hay que apuntar,
-> adelantado con el factor de dificultad del bot.
+> También devuelve el punto al que hay que apuntar, adelantado con el factor
+> de dificultad del bot.
 
 `findInterruptSlot` (`src/game/bot.ts`) comprobaba distancia y tipo, pero no
-colliders ni precisión. Ahora añade:
+colliders. Ahora añade:
 
 - línea de visión hasta el lanzador rival,
-- `def.accuracy`,
 - que el proyectil/haz no vaya a quedar bloqueado,
 - posición proyectada del rival al terminar el `windup`.
 
@@ -315,7 +314,7 @@ porque antes podían comer daño evitable que un humano esquivaría sin pensar.
 > **Estado: arreglado.** `scoreAbility` usa `computeDamage` con ataque, defensa,
 > STAB, efectividad, buffs activos, escudo, crítico medio y factor aleatorio
 > medio. Contempla el daño radial y el total de las áreas `overTime`. El daño se
-> pondera por la probabilidad de impacto (precisión, error de apuntado, distancia
+> pondera por la probabilidad de impacto (error de apuntado, distancia
 > y velocidad lateral), por la eficiencia de cooldown y por si el golpe es letal
 > o deja al rival a remate. También valora control
 > (slow/knockback/hitstun), buffs según duración y estado, el riesgo de
@@ -329,7 +328,6 @@ pero ignora:
 
 - ataque/defensa reales,
 - STAB,
-- precisión,
 - crítico,
 - escudos y reducción de daño,
 - buffs activos,
@@ -344,7 +342,7 @@ Ya existe `computeDamage` en `src/game/combat.ts`.
 Calcular un daño esperado por habilidad y puntuar:
 
 - daño esperado / cooldown,
-- probabilidad de impacto según precisión, distancia y movimiento,
+- probabilidad de impacto según error de apuntado, distancia y movimiento,
 - si es letal o deja al objetivo en rango de remate,
 - riesgo del `windup` y del `selfDamage`,
 - valor de curar/revivir aliados,
@@ -368,8 +366,7 @@ const expected = computeDamage({
   randomFactor: 0.925
 });
 
-const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
-const expectedDamage = expected.damage * accuracy;
+const expectedDamage = expected.damage;
 const lethal = expectedDamage >= target.hp;
 ```
 
@@ -379,7 +376,7 @@ const lethal = expectedDamage >= target.hp;
 - No desperdician la definitiva en un objetivo con escudo.
 - Eligen habilidades de estado cuando aportan algo real.
 - Dejan de valorar una habilidad de 4× solo por el multiplicador si su potencia
-  o precisión son malas.
+  es mala.
 
 ---
 
@@ -766,7 +763,7 @@ Los bots usan `Math.random()` en muchas decisiones. Inyectar un RNG con semilla:
 ### Fase 3 — Evaluación de combate — ✅ Hecho
 
 - Daño esperado con `computeDamage`.
-- Puntuación por cooldown y precisión.
+- Puntuación por cooldown y probabilidad de impacto.
 - Remates.
 - Habilidades de soporte y revive.
 - `findHealSlot` con `healOnHit`.

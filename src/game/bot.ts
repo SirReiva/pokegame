@@ -2066,11 +2066,9 @@ export class BotController {
         continue;
       }
 
-      // La precisión pondera el valor del corte: un golpe que falla no
-      // cancela nada. El retardo manda, pero dentro del mismo frame vale más
-      // la habilidad más fiable.
-      const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
-      const weightedPower = def.power * effectiveness * accuracy;
+      // El retardo manda, pero dentro del mismo frame vale más la habilidad
+      // con más potencia efectiva.
+      const weightedPower = def.power * effectiveness;
       if (
         bestPlan === null ||
         delay < bestDelay - INTERRUPT_DELAY_TOLERANCE ||
@@ -2426,8 +2424,8 @@ export class BotController {
   /**
    * DPS esperado del mejor ataque disponible. El cooldown restante retrasa el
    * primer uso, así que una habilidad clave ya gastada pesa menos ahora.
-   * Para el daño entrante se usa la precisión pura: el bot debe asumir que el
-   * rival puede apuntar, no heredar su propio error.
+   * Para el daño entrante no se hereda el error de apuntado de este bot: se
+   * asume que el rival puede apuntar.
    */
   private bestDamagePerSecond(
     attacker: MatchPlayerState,
@@ -2442,7 +2440,7 @@ export class BotController {
       if (!def || def.power <= 0 || def.category === 'status') continue;
       if (typeEffectiveness(def.type, defender.types) === 0) continue;
       // El DPS entrante no hereda el adelanto imperfecto de este bot: se asume
-      // que el rival apunta con su precisión real.
+      // que el rival apunta bien.
       const prediction = this.predictTarget(
         attacker,
         defender,
@@ -2455,17 +2453,15 @@ export class BotController {
       ) {
         continue;
       }
-      const accuracy = useAimEstimate
+      const hitChance = useAimEstimate
         ? this.hitChance(attacker, defender, def, prediction)
-        : def.accuracy > 0
-          ? def.accuracy / 100
-          : 1;
+        : 1;
       const damage = this.expectedDamage(attacker, defender, def, prediction);
       const remaining = this.abilityCooldown(attacker, slot);
       // El windup también forma parte del ciclo: las habilidades lentas no se
       // pueden repetir tan rápido como sugiere el cooldown solo.
       const cycle = Math.max(0.75, def.cooldown + remaining) + def.startup;
-      best = Math.max(best, (damage * accuracy) / cycle);
+      best = Math.max(best, (damage * hitChance) / cycle);
     }
     return best;
   }
@@ -3786,9 +3782,9 @@ export class BotController {
     if (slot !== 3 && def.power < BIG_ABILITY_POWER) return;
 
     const prediction = this.predictTarget(self, target, def);
-    const accuracy = this.hitChance(self, target, def, prediction);
+    const hitChance = this.hitChance(self, target, def, prediction);
     const amount =
-      this.expectedDamage(self, target, def, prediction) * accuracy;
+      this.expectedDamage(self, target, def, prediction) * hitChance;
     team.committedDamage.set(`${target.slot}:${self.slot}`, {
       attackerSlot: self.slot,
       targetSlot: target.slot,
@@ -3799,8 +3795,8 @@ export class BotController {
 
   /**
    * Daño final esperado de un golpe, con stats reales, STAB, efectividad,
-   * buffs, escudo, crítico medio y factor aleatorio medio. La precisión se
-   * aplica aparte en `hitChance`.
+   * buffs, escudo, crítico medio y factor aleatorio medio. La probabilidad de
+   * conectar se aplica aparte en `hitChance`.
    */
   private expectedDamage(
     self: MatchPlayerState,
@@ -3896,9 +3892,9 @@ export class BotController {
   }
 
   /**
-   * Probabilidad estimada de que el golpe conecte. Combina precisión, error
-   * angular de la dificultad, distancia y el adelanto imperfecto contra la
-   * velocidad lateral del rival.
+   * Probabilidad estimada de que el golpe conecte. Combina el error angular
+   * de la dificultad, la distancia y el adelanto imperfecto contra la velocidad
+   * lateral del rival.
    */
   private hitChance(
     self: MatchPlayerState,
@@ -3906,9 +3902,7 @@ export class BotController {
     def: AbilityDef,
     prediction: TargetPrediction
   ): number {
-    const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
-    if (accuracy <= 0) return 0;
-    if (def.shape === 'self') return accuracy;
+    if (def.shape === 'self') return 1;
 
     const targetRadius = target.hitRadius;
     let lateralTolerance: number;
@@ -3964,7 +3958,7 @@ export class BotController {
       0.5,
       1
     );
-    return clamp(accuracy * aimChance * motionChance, 0, 1);
+    return clamp(aimChance * motionChance, 0, 1);
   }
 
   /**

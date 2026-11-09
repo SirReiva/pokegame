@@ -64,7 +64,6 @@ import {
   pointBlockedByColliders,
   pointSegmentDistance,
   raycastColliderDistance,
-  rollAccuracy,
   rollCritical,
   rollRandomFactor,
   sectorOverlapsCircle,
@@ -3148,7 +3147,6 @@ export class Game {
           : 0
         : options.knockback ?? 0;
     const slow = options.slow === undefined ? def.slow : options.slow;
-    if (!rollAccuracy(def.accuracy)) return false;
 
     // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
     // impacto, ni control. Así `Onda Trueno` no ralentiza a un Pokémon de tipo

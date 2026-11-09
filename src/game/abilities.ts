@@ -168,8 +168,6 @@ export interface AbilityDef {
   shape: AbilityShape;
   /** Potencia base de la fórmula de daño. 0 en habilidades de estado. */
   power: number;
-  /** Precisión 1-100. 0 = nunca falla. */
-  accuracy: number;
   /** Enfriamiento en segundos. */
   cooldown: number;
   /** Alcance en unidades de mundo (melee, proyectil, haz o centro del área). */
@@ -324,7 +322,6 @@ export const DEFAULT_ABILITY: Omit<
   'id' | 'name' | 'type' | 'category' | 'shape'
 > = {
   power: 0,
-  accuracy: 0,
   cooldown: 1,
   range: 1.5,
   radius: 0.5,
@@ -413,11 +410,6 @@ export class AbilityBuilder {
 
   power(value: number): this {
     this.draft.power = value;
-    return this;
-  }
-
-  accuracy(value: number): this {
-    this.draft.accuracy = value;
     return this;
   }
 
@@ -797,7 +789,6 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
 registerAbility(
   ability('impactrueno', 'Impactrueno', 'Electric', 'special', 'projectile')
     .power(70)
-    .accuracy(100)
     .cooldown(0.9)
     .range(8)
     .radius(0.26)
@@ -815,7 +806,6 @@ registerAbility(
 registerAbility(
   ability('ataqueRapido', 'Ataque Rápido', 'Normal', 'physical', 'dash')
     .power(60)
-    .accuracy(100)
     .cooldown(4)
     .range(0)
     .radius(0.9)
@@ -830,7 +820,6 @@ registerAbility(
 registerAbility(
   ability('rayo', 'Rayo', 'Electric', 'special', 'beam')
     .power(130)
-    .accuracy(100)
     .cooldown(8)
     .range(11)
     .radius(0.35)
@@ -847,7 +836,6 @@ registerAbility(
 registerAbility(
   ability('placaje', 'Placaje', 'Normal', 'physical', 'melee')
     .power(55)
-    .accuracy(100)
     .cooldown(0.25)
     .range(1.8)
     .radius(0.7)
@@ -867,7 +855,6 @@ registerAbility(
 registerAbility(
   ability('chispa', 'Chispa', 'Electric', 'physical', 'melee')
     .power(80)
-    .accuracy(100)
     .cooldown(0.6)
     .range(2)
     .radius(0.7)
@@ -885,7 +872,6 @@ registerAbility(
 registerAbility(
   ability('rollout', 'Rollout', 'Normal', 'physical', 'dash')
     .power(100)
-    .accuracy(100)
     .cooldown(6)
     .range(0)
     .radius(0.95)
@@ -903,7 +889,6 @@ registerAbility(
 registerAbility(
   ability('ondaTrueno', 'Onda Trueno', 'Electric', 'status', 'projectile')
     .power(0)
-    .accuracy(100)
     .cooldown(5)
     .range(9)
     .radius(0.3)
@@ -921,7 +906,6 @@ registerAbility(
 registerAbility(
   ability('explosion', 'Explosión', 'Electric', 'special', 'aoe')
     .power(200)
-    .accuracy(100)
     .cooldown(18)
     .range(0)
     .radius(4.2)
@@ -945,7 +929,6 @@ registerAbility(
 registerAbility(
   ability('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', 'melee')
     .power(42)
-    .accuracy(100)
     .cooldown(0.7)
     .range(2)
     .radius(0.7)
@@ -963,7 +946,6 @@ registerAbility(
 registerAbility(
   ability('bolaSombra', 'Bola Sombra', 'Ghost', 'special', 'projectile')
     .power(62)
-    .accuracy(100)
     .cooldown(6)
     .range(8.5)
     .radius(0.3)
@@ -980,7 +962,6 @@ registerAbility(
 registerAbility(
   ability('bombaLodo', 'Bomba Lodo', 'Poison', 'special', 'aoe')
     .power(20)
-    .accuracy(100)
     .cooldown(9)
     .range(6.5)
     .radius(2.4)
@@ -999,7 +980,6 @@ registerAbility(
 registerAbility(
   ability('comeSuenos', 'Come Sueños', 'Ghost', 'special', 'beam')
     .power(80)
-    .accuracy(100)
     .cooldown(11)
     .range(8)
     .radius(0.42)
@@ -1023,7 +1003,6 @@ registerAbility(
 registerAbility(
   ability('aranazo', 'Arañazo', 'Normal', 'physical', 'melee')
     .power(55)
-    .accuracy(100)
     .cooldown(0.3)
     .range(1.7)
     .radius(0.65)
@@ -1039,7 +1018,6 @@ registerAbility(
 registerAbility(
   ability('giroFuego', 'Giro Fuego', 'Fire', 'special', 'aoe')
     .power(40)
-    .accuracy(85)
     .cooldown(6)
     .range(3.6)
     .radius(1.7)
@@ -1068,7 +1046,6 @@ registerAbility(
 registerAbility(
   ability('lanzallamas', 'Lanzallamas', 'Fire', 'special', 'beam')
     .power(100)
-    .accuracy(100)
     .cooldown(6.5)
     .range(9.5)
     .radius(0.4)
@@ -1084,7 +1061,6 @@ registerAbility(
 registerAbility(
   ability('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', 'aoe')
     .power(130)
-    .accuracy(85)
     .cooldown(14)
     .range(4.2)
     .radius(3.1)
@@ -1106,7 +1082,6 @@ registerAbility(
 registerAbility(
   ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', 'melee')
     .power(100)
-    .accuracy(100)
     .cooldown(5)
     .range(2.6)
     .radius(0.8)
@@ -1123,7 +1098,6 @@ registerAbility(
 registerAbility(
   ability('paralizador', 'Paralizador', 'Grass', 'status', 'melee')
     .power(0)
-    .accuracy(100)
     .cooldown(7)
     .range(3)
     .radius(0.9)
@@ -1142,7 +1116,6 @@ registerAbility(
 registerAbility(
   ability('llueveHojas', 'Lluevehojas', 'Grass', 'special', 'aoe')
     .power(160)
-    .accuracy(95)
     .cooldown(14)
     .range(4.2)
     .radius(3.2)
@@ -1164,7 +1137,6 @@ registerAbility(
 registerAbility(
   ability('acuaJet', 'Acua Jet', 'Water', 'physical', 'dash')
     .power(65)
-    .accuracy(100)
     .cooldown(5)
     .range(0)
     .radius(0.85)
@@ -1181,7 +1153,6 @@ registerAbility(
 registerAbility(
   ability('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', 'projectile')
     .power(80)
-    .accuracy(100)
     .cooldown(3)
     .range(8)
     .radius(0.24)
@@ -1200,7 +1171,6 @@ registerAbility(
 registerAbility(
   ability('hidrobomba', 'Hidrobomba', 'Water', 'special', 'beam')
     .power(140)
-    .accuracy(90)
     .cooldown(9)
     .range(8.5)
     .radius(0.42)
@@ -1222,7 +1192,6 @@ registerAbility(
 registerAbility(
   ability('garraMetal', 'Garra Metal', 'Steel', 'physical', 'melee')
     .power(45)
-    .accuracy(100)
     .cooldown(0.5)
     .range(2)
     .radius(0.7)
@@ -1240,7 +1209,6 @@ registerAbility(
 registerAbility(
   ability('velocidadExtrema', 'Velocidad Extrema', 'Normal', 'physical', 'dash')
     .power(55)
-    .accuracy(100)
     .cooldown(6)
     .range(0)
     .radius(0.9)
@@ -1258,7 +1226,6 @@ registerAbility(
 registerAbility(
   ability('esferaAura', 'Esfera Aura', 'Fighting', 'special', 'projectile')
     .power(60)
-    .accuracy(0)
     .cooldown(5)
     .range(10)
     .radius(0.32)
@@ -1269,14 +1236,13 @@ registerAbility(
     .animation('attack')
     .color(82, 152, 255)
     .description(
-      'Proyectil de aura que nunca falla. Alcance largo y golpe único; remata a los rivales que huyen.'
+      'Proyectil de aura guiado. Alcance largo y golpe único; remata a los rivales que huyen.'
     )
 );
 
 registerAbility(
   ability('combateCercano', 'Combate Cercano', 'Fighting', 'physical', 'melee')
     .power(125)
-    .accuracy(100)
     .cooldown(13)
     .range(2.4)
     .radius(1)
@@ -1299,7 +1265,6 @@ registerAbility(
 registerAbility(
   ability('shurikenAgua', 'Shuriken de Agua', 'Water', 'special', 'projectile')
     .power(42)
-    .accuracy(100)
     .cooldown(0.65)
     .range(9)
     .radius(0.24)
@@ -1316,7 +1281,6 @@ registerAbility(
 registerAbility(
   ability('tajoUmbro', 'Tajo Umbrío', 'Dark', 'physical', 'melee')
     .power(65)
-    .accuracy(100)
     .cooldown(1.4)
     .range(2.1)
     .radius(0.75)
@@ -1334,7 +1298,6 @@ registerAbility(
 registerAbility(
   ability('sombraVil', 'Sombra Vil', 'Dark', 'physical', 'dash')
     .power(50)
-    .accuracy(100)
     .cooldown(7)
     .range(0)
     .radius(0.85)
@@ -1352,7 +1315,6 @@ registerAbility(
 registerAbility(
   ability('pulsoUmbro', 'Pulso Umbrío', 'Dark', 'special', 'beam')
     .power(85)
-    .accuracy(100)
     .cooldown(10)
     .range(9.5)
     .radius(0.42)
@@ -1374,7 +1336,6 @@ registerAbility(
 registerAbility(
   ability('telequinesis', 'Telequinesis', 'Psychic', 'special', 'melee')
     .power(45)
-    .accuracy(100)
     .cooldown(0.6)
     .range(2.5)
     .radius(0.8)
@@ -1393,7 +1354,6 @@ registerAbility(
 registerAbility(
   ability('teletransporte', 'Teletransporte', 'Psychic', 'status', 'dash')
     .power(0)
-    .accuracy(0)
     .cooldown(6)
     .range(0)
     .radius(0.85)
@@ -1410,7 +1370,6 @@ registerAbility(
 registerAbility(
   ability('psiquico', 'Psíquico', 'Psychic', 'special', 'beam')
     .power(80)
-    .accuracy(100)
     .cooldown(7)
     .range(10)
     .radius(0.42)
@@ -1427,7 +1386,6 @@ registerAbility(
 registerAbility(
   ability('psicoataque', 'Psicoataque', 'Psychic', 'special', 'aoe')
     .power(100)
-    .accuracy(95)
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
@@ -1449,7 +1407,6 @@ registerAbility(
 registerAbility(
   ability('psicogolpe', 'Golpe Psíquico', 'Psychic', 'special', 'melee')
     .power(45)
-    .accuracy(100)
     .cooldown(0.3)
     .range(2.1)
     .radius(0.7)
@@ -1468,7 +1425,6 @@ registerAbility(
 registerAbility(
   ability('agilidad', 'Agilidad', 'Psychic', 'status', 'dash')
     .power(0)
-    .accuracy(0)
     .cooldown(8)
     .range(0)
     .radius(0.85)
@@ -1486,7 +1442,6 @@ registerAbility(
 registerAbility(
   ability('premonicion', 'Premonición', 'Psychic', 'special', 'aoe')
     .power(85)
-    .accuracy(100)
     .cooldown(10)
     .range(6)
     .radius(2.4)
@@ -1505,7 +1460,6 @@ registerAbility(
 registerAbility(
   ability('recuperacion', 'Recuperación', 'Psychic', 'status', 'aoe')
     .power(0)
-    .accuracy(0)
     .cooldown(14)
     .range(0)
     .radius(3.5)
@@ -1535,7 +1489,6 @@ registerAbility(
 registerAbility(
   ability('ataqueAereo', 'Ataque Aéreo', 'Flying', 'physical', 'melee')
     .power(55)
-    .accuracy(0)
     .cooldown(0.55)
     .range(2.2)
     .radius(0.8)
@@ -1546,14 +1499,13 @@ registerAbility(
     .impact('air')
     .color(255, 190, 92)
     .description(
-      'Golpe alado de corto alcance que nunca falla. Ataque básico de Moltres.'
+      'Golpe alado de corto alcance. Ataque básico de Moltres.'
     )
 );
 
 registerAbility(
   ability('tajoAereo', 'Tajo Aéreo', 'Flying', 'special', 'projectile')
     .power(65)
-    .accuracy(100)
     .cooldown(3.5)
     .range(8.5)
     .radius(0.3)
@@ -1570,7 +1522,6 @@ registerAbility(
 registerAbility(
   ability('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', 'aoe')
     .power(60)
-    .accuracy(95)
     .cooldown(8)
     .range(4.2)
     .radius(2.9)
@@ -1590,7 +1541,6 @@ registerAbility(
 registerAbility(
   ability('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', 'aoe')
     .power(115)
-    .accuracy(90)
     .cooldown(15)
     .range(6)
     .radius(3.1)
@@ -1614,7 +1564,6 @@ registerAbility(
 registerAbility(
   ability('golpeAla', 'Golpe Ala', 'Flying', 'physical', 'melee')
     .power(55)
-    .accuracy(100)
     .cooldown(0.55)
     .range(2.2)
     .radius(0.8)
@@ -1632,7 +1581,6 @@ registerAbility(
 registerAbility(
   ability('rayoHielo', 'Rayo Hielo', 'Ice', 'special', 'beam')
     .power(90)
-    .accuracy(100)
     .cooldown(7)
     .range(9.5)
     .radius(0.4)
@@ -1651,7 +1599,6 @@ registerAbility(
 registerAbility(
   ability('vientoGelido', 'Viento Gélido', 'Ice', 'special', 'aoe')
     .power(55)
-    .accuracy(95)
     .cooldown(8)
     .range(4.5)
     .radius(2.8)
@@ -1671,7 +1618,6 @@ registerAbility(
 registerAbility(
   ability('ventisca', 'Ventisca', 'Ice', 'special', 'aoe')
     .power(100)
-    .accuracy(90)
     .cooldown(15)
     .range(5.5)
     .radius(3.3)
@@ -1697,7 +1643,6 @@ registerAbility(
 registerAbility(
   ability('picoTaladro', 'Pico Taladro', 'Flying', 'physical', 'melee')
     .power(60)
-    .accuracy(100)
     .cooldown(0.6)
     .range(2.2)
     .radius(0.8)
@@ -1708,14 +1653,13 @@ registerAbility(
     .impact('air')
     .color(247, 208, 44)
     .description(
-      'Picotazo giratorio de corto alcance que nunca falla. Ataque básico de Zapdos.'
+      'Picotazo giratorio de corto alcance. Ataque básico de Zapdos.'
     )
 );
 
 registerAbility(
   ability('descarga', 'Descarga', 'Electric', 'special', 'aoe')
     .power(75)
-    .accuracy(100)
     .cooldown(8)
     .range(0)
     .radius(3.2)
@@ -1735,7 +1679,6 @@ registerAbility(
 registerAbility(
   ability('trueno', 'Trueno', 'Electric', 'special', 'aoe')
     .power(145)
-    .accuracy(90)
     .cooldown(15)
     .range(6)
     .radius(3.6)
@@ -1761,7 +1704,6 @@ registerAbility(
 registerAbility(
   ability('golpeFuria', 'Golpe Furia', 'Bug', 'physical', 'melee')
     .power(45)
-    .accuracy(100)
     .cooldown(0.4)
     .range(2.1)
     .radius(0.75)
@@ -1779,7 +1721,6 @@ registerAbility(
 registerAbility(
   ability('corteAereo', 'Corte Aéreo', 'Flying', 'physical', 'dash')
     .power(60)
-    .accuracy(100)
     .cooldown(6.5)
     .range(0)
     .radius(0.9)
@@ -1797,7 +1738,6 @@ registerAbility(
 registerAbility(
   ability('danzaEspada', 'Danza Espada', 'Normal', 'status', 'self')
     .power(0)
-    .accuracy(0)
     .cooldown(12)
     .radius(1.2)
     .startup(0.45, { animation: 'charge' })
@@ -1813,7 +1753,6 @@ registerAbility(
 registerAbility(
   ability('tijeraX', 'Tijera X', 'Bug', 'physical', 'melee')
     .power(130)
-    .accuracy(100)
     .cooldown(14)
     .range(2.7)
     .radius(1.1)
@@ -1836,7 +1775,6 @@ registerAbility(
 registerAbility(
   ability('triturar', 'Triturar', 'Dark', 'physical', 'melee')
     .power(50)
-    .accuracy(100)
     .cooldown(0.85)
     .range(2)
     .radius(0.8)
@@ -1854,7 +1792,6 @@ registerAbility(
 registerAbility(
   ability('avalancha', 'Avalancha', 'Rock', 'physical', 'projectile')
     .power(55)
-    .accuracy(90)
     .cooldown(5)
     .range(8.5)
     .radius(0.34)
@@ -1873,7 +1810,6 @@ registerAbility(
 registerAbility(
   ability('terremoto', 'Terremoto', 'Ground', 'physical', 'aoe')
     .power(18)
-    .accuracy(100)
     .cooldown(9)
     .range(0)
     .radius(3.4)
@@ -1891,7 +1827,6 @@ registerAbility(
 registerAbility(
   ability('rocaAfilada', 'Roca Afilada', 'Rock', 'physical', 'beam')
     .power(90)
-    .accuracy(80)
     .cooldown(12)
     .range(9)
     .radius(0.5)
@@ -1915,7 +1850,6 @@ registerAbility(
 registerAbility(
   ability('cuchillada', 'Cuchillada', 'Normal', 'physical', 'melee')
     .power(45)
-    .accuracy(100)
     .cooldown(0.6)
     .range(2.2)
     .radius(0.85)
@@ -1933,7 +1867,6 @@ registerAbility(
 registerAbility(
   ability('filoAbismo', 'Filo del Abismo', 'Ground', 'physical', 'aoe')
     .power(100)
-    .accuracy(90)
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
@@ -1957,7 +1890,6 @@ registerAbility(
 registerAbility(
   ability('atadura', 'Atadura', 'Rock', 'physical', 'melee')
     .power(65)
-    .accuracy(100)
     .cooldown(0.7)
     .range(2.8)
     .radius(0.95)
@@ -1975,7 +1907,6 @@ registerAbility(
 registerAbility(
   ability('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', 'projectile')
     .power(85)
-    .accuracy(95)
     .cooldown(4.5)
     .range(8)
     .radius(0.32)
@@ -1994,7 +1925,6 @@ registerAbility(
 registerAbility(
   ability('excavar', 'Excavar', 'Ground', 'physical', 'dash')
     .power(85)
-    .accuracy(100)
     .cooldown(8)
     .range(0)
     .radius(0.95)
@@ -2012,7 +1942,6 @@ registerAbility(
 registerAbility(
   ability('fisura', 'Fisura', 'Ground', 'physical', 'aoe')
     .power(155)
-    .accuracy(70)
     .cooldown(14)
     .range(2.5)
     .radius(3.4)
@@ -2025,7 +1954,7 @@ registerAbility(
     .impact('ground')
     .color(182, 161, 54)
     .description(
-      'Definitiva: abre una fisura de 3,4 u a 2,5 u de distancia. Golpea una vez con 155 de potencia, el 100 % en el centro y el 35 % en el borde; 70 % de precisión.'
+      'Definitiva: abre una fisura de 3,4 u a 2,5 u de distancia. Golpea una vez con 155 de potencia, el 100 % en el centro y el 35 % en el borde.'
     )
 );
 
@@ -2036,8 +1965,7 @@ registerAbility(
 registerAbility(
   ability('hojaMagica', 'Hoja Mágica', 'Grass', 'special', 'projectile')
     .power(45)
-    // 0 = nunca falla: las hojas guiadas persiguen el objetivo hasta el final.
-    .accuracy(0)
+    // Las hojas guiadas persiguen el objetivo hasta el final.
     .cooldown(0.8)
     .range(8)
     .radius(0.26)
@@ -2047,14 +1975,13 @@ registerAbility(
     .animation('shoot')
     .color(143, 208, 90)
     .description(
-      'Proyectil de hojas guiadas que nunca falla. 45 de potencia y 8 u de alcance. Ataque básico de Celebi.'
+      'Proyectil de hojas guiadas. 45 de potencia y 8 u de alcance. Ataque básico de Celebi.'
     )
 );
 
 registerAbility(
   ability('rayoSolar', 'Rayo Solar', 'Grass', 'special', 'beam')
     .power(85)
-    .accuracy(95)
     .cooldown(8)
     .range(9.5)
     .radius(0.48)
@@ -2072,7 +1999,6 @@ registerAbility(
 registerAbility(
   ability('deseo', 'Deseo', 'Psychic', 'status', 'aoe')
     .power(0)
-    .accuracy(0)
     .cooldown(13)
     .range(0)
     .radius(3.2)
@@ -2096,7 +2022,6 @@ registerAbility(
 registerAbility(
   ability('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', 'aoe')
     .power(105)
-    .accuracy(95)
     .cooldown(15)
     .range(5.5)
     .radius(2.8)
@@ -2122,7 +2047,6 @@ registerAbility(
 registerAbility(
   ability('ondaMental', 'Onda Mental', 'Psychic', 'special', 'projectile')
     .power(50)
-    .accuracy(100)
     .cooldown(0.8)
     .range(8.5)
     .radius(0.28)
@@ -2139,7 +2063,6 @@ registerAbility(
 registerAbility(
   ability('marea', 'Marea', 'Water', 'special', 'aoe')
     .power(30)
-    .accuracy(95)
     .cooldown(9)
     .range(4.5)
     .radius(3.2)
@@ -2158,7 +2081,6 @@ registerAbility(
 registerAbility(
   ability('ciclon', 'Ciclón', 'Flying', 'special', 'aoe')
     .power(45)
-    .accuracy(100)
     .cooldown(12)
     .range(0)
     .radius(3.6)
@@ -2178,7 +2100,6 @@ registerAbility(
 registerAbility(
   ability('aerochorro', 'Aerochorro', 'Flying', 'special', 'beam')
     .power(120)
-    .accuracy(95)
     .cooldown(16)
     .range(11)
     .radius(0.55)
@@ -2202,7 +2123,6 @@ registerAbility(
 registerAbility(
   ability('golpeAlaHoOh', 'Golpe Ala', 'Flying', 'physical', 'melee')
     .power(55)
-    .accuracy(100)
     .cooldown(0.55)
     .range(2.2)
     .radius(0.8)
@@ -2213,14 +2133,13 @@ registerAbility(
     .impact('air')
     .color(255, 196, 96)
     .description(
-      'Golpe de ala dorado de corto alcance que nunca falla. Ataque básico de Ho-Oh.'
+      'Golpe de ala dorado de corto alcance. Ataque básico de Ho-Oh.'
     )
 );
 
 registerAbility(
   ability('pajaroOsado', 'Pájaro Osado', 'Flying', 'physical', 'dash')
     .power(100)
-    .accuracy(95)
     .cooldown(6)
     .range(0)
     .radius(1)
@@ -2240,7 +2159,6 @@ registerAbility(
 registerAbility(
   ability('recuperacionHoOh', 'Recuperación', 'Fire', 'status', 'aoe')
     .power(0)
-    .accuracy(0)
     .cooldown(13)
     .range(0)
     .radius(3.2)
@@ -2266,7 +2184,6 @@ registerAbility(
 registerAbility(
   ability('fuegoSagrado', 'Fuego Sagrado', 'Fire', 'physical', 'aoe')
     .power(50)
-    .accuracy(95)
     .cooldown(3)
     // El vértice nace 1 u por delante de Ho-Oh y el cono avanza 7,5 u con una
     // apertura total de 25° (12,5° a cada lado del eje de lanzamiento).

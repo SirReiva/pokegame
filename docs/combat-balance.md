@@ -214,7 +214,6 @@ input (edge) → castAbility()
         └─ applySelfDamage()
               ↓
         applyAbilityDamage() por cada objetivo
-          ├─ rollAccuracy
           ├─ inmunidad de tipo → sin daño, estado ni control
           ├─ slow (si la habilidad lo define)
           ├─ si no hace daño (estado) → control y fin
@@ -242,7 +241,8 @@ daño = floor(base × crítico) → floor(× random) → floor(× STAB) → floo
 - STAB ×1,5 si el movimiento comparte tipo con el atacante.
 - Crítico 1/24, ×1,5.
 - Factor aleatorio 0,85-1,00.
-- Precisión 0 significa «nunca falla».
+- Sin tirada de precisión: si la geometría del golpe alcanza al objetivo, el
+  golpe conecta siempre. El acierto depende del apuntado del jugador.
 - Inmunidad de tipo → 0; cualquier otro golpe válido hace al menos 1.
 
 La tabla de tipos de `src/game/typeChart.ts` es correcta para la generación VI+
@@ -339,7 +339,7 @@ cobertura de tipos.
 | Apartado | Estado | Nota |
 | --- | --- | --- |
 | 3.1 Cobertura de movesets | **pendiente** | 4 de 24 especies siguen sin habilidades. |
-| 3.2 DoT precisión/+2 por tick | **pendiente** | Sin cambios. |
+| 3.2 DoT +2 por tick | **pendiente** | Sin cambios. |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas, casts encolados, golpes de dash y formas `self`. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
 | 3.5 Explosión gratis a 1 PV | **pendiente** | El autodaño nunca quita la última vida. |
@@ -379,35 +379,30 @@ como «no disponible») hasta que tengan habilidades.
 `attack`, `hurt`, `shoot` y `charge` en el manifiesto, así que no hace falta
 volver a importar sprites para empezar.
 
-### 3.2. DoT: precisión por tick y +2 plano por tick (medio)
+### 3.2. DoT: +2 plano por tick (medio)
 
 `tickAoe` llama a `applyAbilityDamage` por cada tick
 (`src/game/game.ts:2578-2616`). Eso implica:
 
-1. **La precisión se tira en cada tick**, no una vez por lanzamiento. Giro Fuego
-   tiene 85 % de precisión nominal; con 6 ticks, el daño esperado es 6 × 0,85,
-   no «85 % de acertar todo». La varianza es menor y la etiqueta «85 %» no
-   describe el comportamiento real.
-2. **La fórmula suma +2 por cada tick**, no una vez por área. Con pocos ticks y
+1. **La fórmula suma +2 por cada tick**, no una vez por área. Con pocos ticks y
    potencia baja, el DoT se infla de forma no lineal. Con los datos actuales:
    - Giro Fuego: 6 ticks × potencia 14 → ~73,5 de daño esperado; un solo golpe
      de potencia 84 haría ~61,3 (**+20 %**).
    - Bomba Lodo: 5 ticks × potencia 12,5 → ~91,5; un solo golpe de potencia 62,5
      haría ~83,8 (**+9 %**).
 
-3. **Los ticks dependen del framerate**: `updateActiveAoes` suma `dt` antes de
+2. **Los ticks dependen del framerate**: `updateActiveAoes` suma `dt` antes de
    disparar el primer tick y limita la puesta al día a 8 ticks por frame
    (`guard < 8`, `game.ts:2549-2576`). Con un parón largo, un área de intervalo
    corto puede perder ticks y hacer menos daño que `power × duración`; con `dt`
-   normales el primer tick llega un frame tarde. No es el mismo problema que la
-   precisión, pero afecta a la reproducibilidad del DoT.
+   normales el primer tick llega un frame tarde. No es el mismo problema que el
+   +2 por tick, pero afecta a la reproducibilidad del DoT.
 
 No es un error enorme, pero rompe la linealidad «potencia/s × duración» y
 complica el ajuste fino.
 
-**Arreglo**: tirar precisión una vez al crear el área (o al entrar el objetivo)
-y aplicar el +2 de la fórmula una sola vez por área, o compensar la potencia por
-tick para que el total coincida con el nominal.
+**Arreglo**: aplicar el +2 de la fórmula una sola vez por área, o compensar la
+potencia por tick para que el total coincida con el nominal.
 
 ### 3.3. Proyectiles, áreas y golpes diferidos de jugadores muertos siguen dañando y puntuando (medio)
 
@@ -555,8 +550,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 `config.ts` y se simularon los enfrentamientos con:
 
 - Nivel 50, IV 31, EV 0.
-- Daño esperado con crítico 1/24, ×1,5, random medio 0,925 y precisión aplicada
-  (0 = nunca falla).
+- Daño esperado con crítico 1/24, ×1,5 y random medio 0,925.
 - DoT: `ticks = ceil(duración / intervalo)`, primer tick en t = 0, potencia por
   tick = `power × intervalo`. La implementación retrasa el primer tick un frame
   y puede perder ticks tras un parón (§3.2), así que estos totales son una cota
@@ -711,8 +705,7 @@ Dos observaciones:
    presión.
 2. **Las definitivas varían entre 48 (Anillo Ígneo) y 129 (Psicoataque)** contra
    el mismo objetivo neutro. La de Voltorb (83) cuesta 40 PV y 18 s; la de
-   Mewtwo (129) no cuesta nada y dura 15 s; la de Groudon (125) tiene 90 % de
-   precisión y 15 s.
+   Mewtwo (129) no cuesta nada y dura 15 s; la de Groudon (125) dura 15 s.
 
 ### 4.5. Matriz de combos (% de la vida del objetivo)
 
@@ -886,8 +879,8 @@ autodaño la convierte en una mala elección en 1v1.
    `resolveInstantHits`; descartar los golpes encolados del muerto y que ese
    daño no sume a `damageDealt`/`damageTaken`. Documentar si algún proyectil
    debe sobrevivir.
-4. **DoT**: una tirada de precisión por área/entrada y el +2 de la fórmula una
-   vez por área; o compensar la potencia por tick.
+4. **DoT**: aplicar el +2 de la fórmula una vez por área; o compensar la
+   potencia por tick.
 5. **Visión/alcance**: revelar al atacante al hacer daño o añadir un
    indicador de dirección. Queda el indicador de daño; la niebla ya oculta los
    FX.
@@ -924,7 +917,7 @@ autodaño la convierte en una mala elección en 1v1.
     0,9 → 0,8; básica elemental de ~45 de potencia.
 16. **Bulbasaur**: Hoja Afilada 60 → 70 y cooldown 5 → 4,5; Lluevehojas 120 →
     130; Paralizador 10 → 8; valorar velocidad 4,2 → 4,6 o darle un dash corto.
-17. **Squirtle**: Hidrobomba 115 → 125 y precisión 90 → 95; Rayo Burbuja 65 → 70;
+17. **Squirtle**: Hidrobomba 115 → 125; Rayo Burbuja 65 → 70;
     Acua Jet 45 → 55; valorar velocidad 4,8 → 5,1.
 18. **Charmander**: Arañazo elemental de ~48 o subir la básica a 50; Anillo Ígneo
     110 → 120; Giro Fuego 35 → 40; valorar un dash corto o más velocidad.
@@ -961,8 +954,6 @@ así que se pueden añadir tests baratos:
 - **Stats**: `combatStatsFor` devuelve 110 PV para Pikachu y 181 para Mewtwo.
 - **Fórmula**: un caso conocido de `computeDamage` con random fijo y sin
   crítico; otro con STAB; otro con inmunidad (0); otro con efectividad 0,25.
-- **Precisión**: `rollAccuracy(0) === true`; `rollAccuracy(100)` siempre acierta
-  (el `Math.random()` es < 1).
 - **Invariantes de balance** (script, no test unitario): cada especie debe poder
   hacer al menos X % de daño a al menos el 75 % del roster; ningún combo debe
   superar el 150 % de la vida media; ningún personaje debe tener 0 % contra más
@@ -975,9 +966,8 @@ así que se pueden añadir tests baratos:
 - **Invulnerabilidad de spawn**: lanzar una habilidad ofensiva con
   `invulnerableTimer > 0` debe ponerlo a 0; usar Protección o Impulso no debe
   retirarla. Durante esos 2 s el jugador sigue siendo invulnerable al daño.
-- **DoT**: que el daño total de un área `overTime` con precisión 100 sea igual a
-  `power × duration` (con la tolerancia de la fórmula), y que la precisión se
-  tire una vez, no por tick.
+- **DoT**: que el daño total de un área `overTime` sea igual a
+  `power × duration` (con la tolerancia de la fórmula).
 - **Inmunidad**: un golpe con efectividad 0 no debe mostrar impacto ni «0», ni
   aplicar slow, ni cancelar dash/preparación; `Onda Trueno` no debe ralentizar
   a un Pokémon de tipo Tierra. Un golpe de estado válido sí debe interrumpir
@@ -1093,7 +1083,7 @@ Un script de balance como el usado para este informe se puede añadir a
 
 - La separación por responsabilidades (builder, estrategias, efectos, FX,
   estado) es clara y facilita el ajuste.
-- La fórmula oficial, el STAB, la tabla de tipos, el crítico, la precisión y el
+- La fórmula oficial, el STAB, la tabla de tipos, el crítico y el
   mínimo de 1 están correctamente implementados.
 - La lógica de dash por tramos contra obstáculos, el choque de melees, la
   cancelación de windup, la invulnerabilidad de respawn y la no-letalidad del

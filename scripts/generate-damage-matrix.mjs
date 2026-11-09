@@ -47,7 +47,7 @@ try {
   const CRIT_CHANCE = 1 / 24;
   const RANDOM_FACTOR = 0.925;
 
-  /** Esperanza de daño de un impacto, con crítico y precisión. */
+  /** Esperanza de daño de un impacto, con crítico. */
   function expectedHit(attacker, defender, def, power) {
     if (power <= 0 || def.category === 'status') return 0;
     const base = {
@@ -63,8 +63,7 @@ try {
     const normal = computeDamage({ ...base, critical: false }).damage;
     const critical = computeDamage({ ...base, critical: true }).damage;
     const perHit = normal * (1 - CRIT_CHANCE) + critical * CRIT_CHANCE;
-    const accuracy = def.accuracy > 0 ? def.accuracy / 100 : 1;
-    return perHit * accuracy;
+    return perHit;
   }
 
   /** Daño total esperado de un lanzamiento completo de la habilidad. */
@@ -177,7 +176,7 @@ try {
   );
   lines.push(
     '- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, ' +
-      'random medio 0,925, crítico 1/24 (×1,5) y precisión aplicada. STAB incluido.'
+      'random medio 0,925, crítico 1/24 (×1,5). STAB incluido.'
   );
   lines.push(
     '- **Áreas**: se valoran con el rival en el centro (100 %). En el borde el ' +
@@ -414,7 +413,7 @@ try {
   );
   dpsLines.push(
     '- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, ' +
-      'random medio 0,925, crítico 1/24 (×1,5) y precisión aplicada. STAB incluido.'
+      'random medio 0,925, crítico 1/24 (×1,5). STAB incluido.'
   );
   dpsLines.push(
     '- **Áreas**: se valoran con el rival en el centro (100 %). En el borde el ' +

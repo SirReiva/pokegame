@@ -1,6 +1,6 @@
 /**
- * Reglas puras de combate: fórmula de daño, precisión, críticos y geometría
- * de impactos. No depende de PlayCanvas, así que se puede probar o reutilizar
+ * Reglas puras de combate: fórmula de daño, críticos y geometría de impactos.
+ * No depende de PlayCanvas, así que se puede probar o reutilizar
  * sin levantar el motor.
  */
 
@@ -144,12 +144,6 @@ export function computeDamage(input: DamageInput): DamageResult {
 
 export function rollCritical(): boolean {
   return Math.random() < CRIT_CHANCE;
-}
-
-/** Precisión 0 significa que el movimiento no puede fallar. */
-export function rollAccuracy(accuracy: number): boolean {
-  if (accuracy <= 0) return true;
-  return Math.random() * 100 < accuracy;
 }
 
 export function rollRandomFactor(): number {
