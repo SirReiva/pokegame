@@ -1007,6 +1007,7 @@ registerAbility(
     .impact('ghost')
     .startup(0.25, { animation: 'shoot' })
     .recovery(0.55)
+    .blockMovementDuringCast()
     .heal(0.15)
     .healOnHit()
     .color(160, 120, 235)
