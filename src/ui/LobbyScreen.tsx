@@ -7,6 +7,8 @@ import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
   KO_TARGET_OPTIONS,
+  MOVEMENT_MODES,
+  MOVEMENT_MODE_LABEL,
   PLAYER_NAME_MAX_LENGTH,
   TEAM_INFO,
   countTeams,
@@ -15,6 +17,7 @@ import {
   maxTeamSizeFor,
   type BotDifficulty,
   type LobbyPlayer,
+  type MovementMode,
 } from "../game/multiplayer";
 import type { Team } from "../game/terrain";
 import { Brand } from "./Brand";
@@ -40,6 +43,7 @@ interface LobbyScreenProps {
   onFillBots: () => void;
   onJoin: (device: InputDeviceInfo) => void;
   onRename: (slot: number, name: string) => void;
+  onSetMovementMode: (slot: number, mode: MovementMode) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
   onContinue: () => void;
@@ -60,6 +64,7 @@ function TeamColumn({
   players,
   maxTeamSize,
   onRename,
+  onSetMovementMode,
   onReady,
   onLeave,
 }: {
@@ -67,6 +72,7 @@ function TeamColumn({
   players: LobbyPlayer[];
   maxTeamSize: number;
   onRename: (slot: number, name: string) => void;
+  onSetMovementMode: (slot: number, mode: MovementMode) => void;
   onReady: (slot: number) => void;
   onLeave: (slot: number) => void;
 }) {
@@ -162,6 +168,37 @@ function TeamColumn({
               </span>
             </div>
 
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-8.96 text-steel-650">
+                Movimiento:
+              </span>
+              {player.isBot ? (
+                <span className="font-mono text-8.96 text-steel-350">
+                  {MOVEMENT_MODE_LABEL.normal}
+                </span>
+              ) : (
+                MOVEMENT_MODES.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={player.movementMode === mode}
+                    title={
+                      mode === "normal"
+                        ? "El Pokémon gira hacia donde camina"
+                        : "El Pokémon mira hacia la cámara; el eje Y avanza o retrocede y el eje X desplaza lateralmente"
+                    }
+                    className={btnClass(
+                      player.movementMode === mode ? "accent" : "ghost",
+                      "tiny",
+                    )}
+                    onClick={() => onSetMovementMode(player.slot, mode)}
+                  >
+                    {MOVEMENT_MODE_LABEL[mode]}
+                  </button>
+                ))
+              )}
+            </div>
+
             <div className="mt-2 flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -209,6 +246,7 @@ export function LobbyScreen({
   onFillBots,
   onJoin,
   onRename,
+  onSetMovementMode,
   onReady,
   onLeave,
   onContinue,
@@ -315,6 +353,7 @@ export function LobbyScreen({
                 players={players}
                 maxTeamSize={maxTeamSize}
                 onRename={onRename}
+                onSetMovementMode={onSetMovementMode}
                 onReady={onReady}
                 onLeave={onLeave}
               />
@@ -544,6 +583,10 @@ export function LobbyScreen({
               </p>
               <p className="flex items-center gap-2">
                 <KeyPill>← →</KeyPill> cambiar de equipo
+              </p>
+              <p className="flex items-center gap-2">
+                <KeyPill>X / Y</KeyPill> cambiar modo de movimiento{" "}
+                <span className="text-steel-700">(Tab / F en teclado)</span>
               </p>
               <p className="flex items-center gap-2">
                 <KeyPill>B</KeyPill> salir del equipo

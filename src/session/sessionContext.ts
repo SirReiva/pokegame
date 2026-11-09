@@ -2,7 +2,12 @@ import { createContext } from 'react';
 import type { CommonAbilityId } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
-import type { LobbyPlayer, BotDifficulty, MatchPlayerConfig } from '../game/multiplayer';
+import type {
+  BotDifficulty,
+  LobbyPlayer,
+  MatchPlayerConfig,
+  MovementMode
+} from '../game/multiplayer';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
 
@@ -32,6 +37,9 @@ export interface SessionValue {
   setBotDifficulty: (difficulty: BotDifficulty) => void;
   setPlayerName: (slot: number, name: string) => void;
   setPlayerTeam: (slot: number, team: Team) => void;
+  /** Modo de control de un jugador humano; se elige en el lobby. */
+  setPlayerMovementMode: (slot: number, mode: MovementMode) => void;
+  cyclePlayerMovementMode: (slot: number) => void;
   toggleTeamReady: (slot: number) => void;
   leavePlayer: (slot: number) => void;
   continueToRoster: () => boolean;

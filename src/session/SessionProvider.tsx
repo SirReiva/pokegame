@@ -17,6 +17,8 @@ import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
 import {
   BOT_DIFFICULTY_LABEL,
+  DEFAULT_MOVEMENT_MODE,
+  MOVEMENT_MODES,
   PLAYER_NAME_MAX_LENGTH,
   countTeams,
   defaultPlayerName,
@@ -27,7 +29,8 @@ import {
   teamsForMap,
   type BotDifficulty,
   type LobbyPlayer,
-  type MatchPlayerConfig
+  type MatchPlayerConfig,
+  type MovementMode
 } from '../game/multiplayer';
 import { DEFAULT_SKIN_ID, skinFor, skinsFor } from '../game/skins';
 import type { Team } from '../game/terrain';
@@ -94,6 +97,7 @@ function makeBotPlayer(
     pokemonId: entry?.id ?? manifest.pokemon[0]?.id ?? '',
     skinId: DEFAULT_SKIN_ID,
     commonAbilityId,
+    movementMode: DEFAULT_MOVEMENT_MODE,
     rosterReady: true,
     isBot: true,
     botDifficulty: difficulty
@@ -264,6 +268,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           pokemonId: firstPokemon,
           skinId: DEFAULT_SKIN_ID,
           commonAbilityId: DEFAULT_COMMON_ABILITY,
+          movementMode: DEFAULT_MOVEMENT_MODE,
           rosterReady: false
         }
       ]);
@@ -304,6 +309,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     },
     [commitPlayers, teams]
+  );
+
+  const setPlayerMovementMode = useCallback(
+    (slot: number, mode: MovementMode) => {
+      const current = playersRef.current;
+      const player = current.find((entry) => entry.slot === slot);
+      if (!player || player.isBot || !MOVEMENT_MODES.includes(mode)) return;
+      if (player.movementMode === mode) return;
+      commitPlayers(
+        current.map((entry) =>
+          entry.slot === slot ? { ...entry, movementMode: mode } : entry
+        )
+      );
+    },
+    [commitPlayers]
+  );
+
+  const cyclePlayerMovementMode = useCallback(
+    (slot: number) => {
+      const player = playersRef.current.find((entry) => entry.slot === slot);
+      if (!player || player.isBot) return;
+      const index = Math.max(
+        0,
+        MOVEMENT_MODES.indexOf(player.movementMode ?? DEFAULT_MOVEMENT_MODE)
+      );
+      const next = MOVEMENT_MODES[(index + 1) % MOVEMENT_MODES.length];
+      setPlayerMovementMode(slot, next);
+    },
+    [setPlayerMovementMode]
   );
 
   const addBot = useCallback(
@@ -396,6 +430,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         pokemonId: player.pokemonId || firstPokemon,
         skinId: player.skinId ?? DEFAULT_SKIN_ID,
         commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
+        movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
         // Los bots ya están listos: no deben bloquear el paso al roster ni la
         // partida, y su selección no se toca al volver a elegir humanos.
         teamReady: player.isBot ? true : player.teamReady,
@@ -597,6 +632,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ? skinFor(entry, player.skinId).id
           : (player.skinId ?? DEFAULT_SKIN_ID),
         commonAbilityId: player.commonAbilityId,
+        movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
         isBot: player.isBot,
         botDifficulty: player.botDifficulty
       };
@@ -625,6 +661,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setBotDifficulty,
       setPlayerName,
       setPlayerTeam,
+      setPlayerMovementMode,
+      cyclePlayerMovementMode,
       toggleTeamReady,
       leavePlayer,
       continueToRoster,
@@ -661,6 +699,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setBotDifficulty,
       setPlayerName,
       setPlayerTeam,
+      setPlayerMovementMode,
+      cyclePlayerMovementMode,
       toggleTeamReady,
       leavePlayer,
       continueToRoster,

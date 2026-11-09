@@ -73,7 +73,10 @@ export function ControlsPanel() {
       </section>
 
       <p className={`${note} col-span-full`}>
-        La pantalla se reparte en una vista por jugador humano. Cada equipo aparece en su base
+        Cada jugador elige su modo de movimiento por separado en el lobby: <strong>Normal</strong>{' '}
+        (el Pokémon gira hacia donde camina) o <strong>Táctico</strong> (mira siempre hacia donde
+        apunta la cámara; el eje Y avanza o retrocede y el eje X desplaza lateralmente). La
+        pantalla se reparte en una vista por jugador humano. Cada equipo aparece en su base
         (azul o roja) y se mueve libremente. Los mandos se detectan automáticamente al pulsar un
         botón. En el lobby puedes añadir bots para completar los equipos: juegan en la misma
         arena, pero no ocupan una vista del splitscreen.

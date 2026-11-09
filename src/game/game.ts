@@ -1784,6 +1784,13 @@ export class Game {
     const rightX = Math.cos(yaw);
     const rightZ = -Math.sin(yaw);
 
+    // En el modo táctico el cuerpo no gira hacia la entrada: mira siempre hacia
+    // donde apunta la cámara y el stick se interpreta como avance/retroceso
+    // (eje Y) más desplazamiento lateral (eje X). Es una elección por jugador
+    // hecha en el lobby. Los bots usan el modo normal porque su IA deriva el
+    // apuntado del movimiento.
+    const tactical = !player.isBot && player.movementMode === 'tactical';
+
     // El bloqueo de movimiento lo consume `stepActiveCast`: si el casteo está
     // en startup o en la ventana activa de una melee, este bloque no se ejecuta.
     const moveX = input.moveX;
@@ -1819,11 +1826,13 @@ export class Game {
       const dirX = desiredX / magnitude;
       const dirZ = desiredZ / magnitude;
       // De entrada se apunta a la dirección exacta pedida. Solo se sustituye
-      // por un rumbo intermedio si hace falta girar poco a poco.
+      // por un rumbo intermedio si hace falta girar poco a poco. El modo
+      // táctico no interpola: el desplazamiento lateral debe ser inmediato y
+      // no arrastrar el rumbo anterior, que es el de la cámara.
       let headingX = dirX;
       let headingZ = dirZ;
 
-      if (currentSpeed > 0.0001) {
+      if (!tactical && currentSpeed > 0.0001) {
         const currentX = player.vx / currentSpeed;
         const currentZ = player.vz / currentSpeed;
         const dot = clamp(currentX * dirX + currentZ * dirZ, -1, 1);
@@ -1871,7 +1880,7 @@ export class Game {
     player.z = resolved.z;
 
     const speed = Math.hypot(player.vx, player.vz);
-    if (speed > CONFIG.player.minFacingSpeed) {
+    if (!tactical && speed > CONFIG.player.minFacingSpeed) {
       const targetFacing = Math.atan2(player.vx, player.vz);
       player.facing = angleLerp(
         player.facing,
@@ -1957,6 +1966,16 @@ export class Game {
       player.camera.addZoom(-input.wheel * CONFIG.camera.wheelStep);
     }
     player.camera.update(dt, player, input.cameraX, input.zoom);
+
+    // Modo táctico: girar la cámara también gira al Pokémon. `camera.yaw`
+    // coloca la cámara alrededor del objetivo, así que la mirada va del punto
+    // de vista hacia el jugador: (-sin yaw, -cos yaw).
+    if (!player.isBot && player.movementMode === 'tactical') {
+      player.facing = Math.atan2(
+        -Math.sin(player.camera.yaw),
+        -Math.cos(player.camera.yaw)
+      );
+    }
   }
 
   /**
