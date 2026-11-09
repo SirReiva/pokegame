@@ -56,9 +56,9 @@ interface DamageTexture {
 const LIFETIME = 0.9;
 const FADE_START = 0.45;
 /** Tamaño objetivo en píxeles, independiente del viewport y del zoom. */
-const TARGET_PIXELS = 28;
-const TARGET_PIXELS_CRITICAL = 38;
-const TARGET_PIXELS_HEAL = 24;
+const TARGET_PIXELS = 30;
+const TARGET_PIXELS_CRITICAL = 42;
+const TARGET_PIXELS_HEAL = 26;
 
 /** Énfasis tipográfico: tamaño, margen y contorno. */
 interface NumberEmphasis {
@@ -247,8 +247,10 @@ export class DamageNumbers {
       height,
       format: pc.PIXELFORMAT_RGBA8,
       srgb: true,
-      mipmaps: false,
-      minFilter: pc.FILTER_LINEAR,
+      // El texto se dibuja con más resolución de la que ocupa en pantalla:
+      // los mipmaps evitan que el contorno y el resplandor aliaseen al reducirlo.
+      mipmaps: true,
+      minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
       magFilter: pc.FILTER_LINEAR,
       addressU: pc.ADDRESS_CLAMP_TO_EDGE,
       addressV: pc.ADDRESS_CLAMP_TO_EDGE,

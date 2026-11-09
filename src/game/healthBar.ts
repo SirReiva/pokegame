@@ -20,8 +20,12 @@ const BAR_TEXTURE_HEIGHT = 28;
 const XP_TEXTURE_WIDTH = 256;
 const XP_TEXTURE_HEIGHT = 12;
 
-/** Resolución del distintivo de nivel (cuadrado). */
-const BADGE_TEXTURE_SIZE = 96;
+/**
+ * Resolución del distintivo de nivel (cuadrado). Se dibuja con margen de sobra
+ * y se reduce con mipmaps: el badge ocupa ~20-50 px en pantalla, así que una
+ * textura de 128 px evita que el número salga dentado al minificarse.
+ */
+const BADGE_TEXTURE_SIZE = 128;
 
 /** Grosor del contorno y de la pista, en píxeles de la textura. */
 const BORDER = 3;
@@ -79,8 +83,10 @@ function createTexture(
     height,
     format: pc.PIXELFORMAT_RGBA8,
     srgb: true,
-    mipmaps: false,
-    minFilter: pc.FILTER_LINEAR,
+    // Los textos y las barras se ven más pequeños que su textura: sin mipmaps
+    // el muestreo lineal aliasea los bordes (el nivel salía dentado).
+    mipmaps: true,
+    minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR,
     addressU: pc.ADDRESS_CLAMP_TO_EDGE,
     addressV: pc.ADDRESS_CLAMP_TO_EDGE,
@@ -158,6 +164,7 @@ export class HealthBar {
   private readonly badgeTexture: pc.Texture;
   private readonly badgeMaterial: pc.StandardMaterial;
   private readonly accent: string;
+  private readonly badgeTextColor: string;
 
   private fraction = 1;
   private xpFraction = 0;
@@ -192,6 +199,11 @@ export class HealthBar {
 
     const accent = options.accent ?? [255, 224, 102];
     this.accent = `rgb(${accent[0]}, ${accent[1]}, ${accent[2]})`;
+    // Texto oscuro sobre acentos claros y blanco sobre los oscuros: así el
+    // nivel se lee también en equipos morados, azules o verdes.
+    const luminance =
+      (accent[0] * 299 + accent[1] * 587 + accent[2] * 114) / 1000;
+    this.badgeTextColor = luminance >= 150 ? COLORS.outline : '#ffffff';
 
     this.barTexture = createTexture(
       app.graphicsDevice,
@@ -236,7 +248,7 @@ export class HealthBar {
     // El distintivo es un cuadrado aparte para que no herede la altura tan
     // pequeña de la barra. Se centra verticalmente con ella y queda a su
     // izquierda, que es lo que se ve como "delante" desde la cámara.
-    const badgeSize = pc.math.clamp(options.width * 0.5, 0.32, 0.46);
+    const badgeSize = pc.math.clamp(options.width * 0.58, 0.36, 0.5);
     const gap = badgeSize * 0.15;
     this.badgeRoot = new pc.Entity('level-badge');
     this.badgeRoot.addComponent('render');
@@ -381,20 +393,51 @@ export class HealthBar {
   private drawBadge(): void {
     const context = this.badgeContext;
     const size = BADGE_TEXTURE_SIZE;
+    // Todo se dibuja relativo a los 96 px originales para no reajustar a mano
+    // el borde ni el radio al cambiar la resolución de la textura.
+    const scale = size / 96;
     context.clearRect(0, 0, size, size);
 
-    roundedRect(context, 3, 3, size - 6, size - 6, 18);
+    roundedRect(
+      context,
+      3 * scale,
+      3 * scale,
+      size - 6 * scale,
+      size - 6 * scale,
+      18 * scale
+    );
     context.fillStyle = this.accent;
     context.fill();
-    context.lineWidth = 5;
+    context.lineWidth = 5 * scale;
     context.strokeStyle = COLORS.outline;
     context.stroke();
 
-    context.fillStyle = COLORS.outline;
-    context.font = 'bold 72px ui-monospace, "Cascadia Mono", monospace';
+    const label = String(this.level);
+    // El 10 es el único nivel de dos cifras: se mide y se encoge para que no
+    // toque el borde del distintivo.
+    const maxTextWidth = size * 0.74;
+    let fontSize = size * 0.82;
+    const font = (px: number) =>
+      `900 ${px}px ui-monospace, "Cascadia Mono", monospace`;
+    context.font = font(fontSize);
+    const measured = context.measureText(label).width;
+    if (measured > maxTextWidth) {
+      fontSize = Math.floor((fontSize * maxTextWidth) / measured);
+      context.font = font(fontSize);
+    }
+
+    const centerX = size / 2;
+    const centerY = size / 2 + size * 0.02;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(String(this.level), size / 2, size / 2 + 2);
+    context.lineJoin = 'round';
+    if (this.badgeTextColor === '#ffffff') {
+      context.lineWidth = Math.max(1, size * 0.035);
+      context.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      context.strokeText(label, centerX, centerY);
+    }
+    context.fillStyle = this.badgeTextColor;
+    context.fillText(label, centerX, centerY);
   }
 
   /** Orienta la barra para que su cara mire a la cámara de su viewport. */

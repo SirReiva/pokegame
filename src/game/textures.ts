@@ -97,6 +97,16 @@ export function textureFromCanvas(
 }
 
 /**
+ * Texturas cuyo contenido debe voltearse verticalmente en **cada** subida.
+ *
+ * `flipY` es una propiedad de la textura, pero aquí se pasa a `false` después
+ * del primer volteo manual para que el motor no lo deshaga. Sin este registro,
+ * las texturas que se redibujan (el badge de nivel y las barras de vida/XP) se
+ * volvían a subir sin voltear y el texto salía del revés.
+ */
+const flippedSources = new WeakSet<pc.Texture>();
+
+/**
  * Sube una imagen ya decodificada a una textura.
  *
  * WebGPU sube `ImageBitmap`/canvas con `copyExternalImageToTexture`, pero la
@@ -118,6 +128,12 @@ export function setTextureSource(
 ): void {
   let upload: ImageBitmap | HTMLCanvasElement = source;
   if (texture.flipY) {
+    flippedSources.add(texture);
+    // La imagen va a voltearse a mano: si el motor volviera a aplicar `flipY`
+    // en WebGL, se desharía el volteo.
+    texture.flipY = false;
+  }
+  if (flippedSources.has(texture)) {
     const canvas = document.createElement("canvas");
     canvas.width = source.width;
     canvas.height = source.height;
@@ -127,9 +143,6 @@ export function setTextureSource(
       ctx.scale(1, -1);
       ctx.drawImage(source, 0, 0);
       upload = canvas;
-      // La imagen ya va volteada: si el motor volviera a aplicar `flipY` en
-      // WebGL, se desharía el volteo manual.
-      texture.flipY = false;
     }
   }
   texture.setSource(upload as unknown as HTMLCanvasElement);
