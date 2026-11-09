@@ -301,6 +301,13 @@ export interface AbilityDef {
    */
   moveWhileStartup: boolean;
   /**
+   * Clava al lanzador durante todo el casteo (`startup + active + recovery`),
+   * no solo durante el `startup`. Tiene prioridad sobre `moveWhileStartup`.
+   * Pensado para áreas canalizadas que deben impedir moverse hasta que termine
+   * la animación de lanzamiento.
+   */
+  blockMovementDuringCast: boolean;
+  /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
    * frenazo de las habilidades instantáneas que se pueden usar en movimiento.
@@ -356,6 +363,7 @@ export const DEFAULT_ABILITY: Omit<
   startupAnimationSpeed: 1,
   animation: null,
   moveWhileStartup: false,
+  blockMovementDuringCast: false,
   description: ''
 };
 
@@ -605,6 +613,15 @@ export class AbilityBuilder {
   /** Tiempo desde el fin del efecto hasta volver a estar libre. */
   recovery(seconds: number): this {
     this.draft.recovery = seconds;
+    return this;
+  }
+
+  /**
+   * Bloquea el movimiento durante todo el casteo, recuperación incluida.
+   * Tiene prioridad sobre `move: true` de `startup`.
+   */
+  blockMovementDuringCast(): this {
+    this.draft.blockMovementDuringCast = true;
     return this;
   }
 
@@ -2257,8 +2274,9 @@ registerAbility(
     .halfAngle(12.5)
     .aoeShape('cone')
     .startup(0.8, { animation: 'charge' })
-    .recovery(0.65)
-    .animation(null)
+    .recovery(3)
+    .blockMovementDuringCast()
+    .animation('shoot')
     .area('sacredFlame', 'overTime', 3, 0.5)
     .slow(0.65, 1.5)
     .impact('fire')

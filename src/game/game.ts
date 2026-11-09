@@ -2014,12 +2014,14 @@ export class Game {
     }
 
     // Movimiento: bloqueado durante el startup (salvo `moveWhileStartup`) y
-    // durante la ventana activa de las melee. El dash mueve por su cuenta.
-    const startupLocked =
-      cast.elapsed < cast.def.startup && !cast.def.moveWhileStartup;
-    const meleeLocked =
-      cast.def.shape === 'melee' && cast.elapsed < cast.plan.activeEnd;
-    if (startupLocked || meleeLocked) {
+    // durante la ventana activa de las melee. `blockMovementDuringCast` clava
+    // al lanzador durante todo el casteo, recuperación incluida. El dash mueve
+    // por su cuenta.
+    const castLocked =
+      cast.def.blockMovementDuringCast ||
+      (cast.elapsed < cast.def.startup && !cast.def.moveWhileStartup) ||
+      (cast.def.shape === 'melee' && cast.elapsed < cast.plan.activeEnd);
+    if (castLocked) {
       player.vx = 0;
       player.vz = 0;
       this.updateCamera(player, input, dt);

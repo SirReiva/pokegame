@@ -24,6 +24,8 @@ puede lanzar otra habilidad. El movimiento se bloquea:
 
 - durante el `startup`, salvo que `moveWhileStartup` sea `true`;
 - durante la ventana `active` de las melee;
+- durante todo el casteo (`startup + active + recovery`) si
+  `blockMovementDuringCast` es `true`, aunque `moveWhileStartup` también lo sea;
 - en un dash, lo controla el propio desplazamiento.
 
 ## 2. Marcadores del sprite
@@ -118,6 +120,9 @@ Builder:
   - `animation: 'charge'` → animación de carga distinta de la de lanzamiento.
 - `active(seconds)`
 - `recovery(seconds)`
+- `blockMovementDuringCast()` → `blockMovementDuringCast`. Clava al lanzador
+  durante todo el casteo, recuperación incluida, y tiene prioridad sobre
+  `move: true`. Útil para áreas canalizadas.
 
 El builder solo expone la API nueva: `startup`, `active` y `recovery`. Los
 métodos `cast()` y `windup()` se eliminaron para que ninguna definición nueva
