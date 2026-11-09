@@ -104,16 +104,20 @@ export function textureFromCanvas(
  * runtime el soporte existe (`WebgpuTexture#isExternalImage`), así que se
  * estrecha el tipo en un único sitio.
  *
- * Además, el motor fuerza `flipY: false` en esa ruta: si la textura pide
- * `flipY`, la imagen se voltea antes de subirla para que WebGL y WebGPU se vean
- * igual. Se lee de la propia textura para no olvidarlo en cada sitio.
+ * El volteo vertical se hace siempre a mano cuando la textura pide `flipY`.
+ * `UNPACK_FLIP_Y_WEBGL` se ignora para `ImageBitmap` (las hojas de sprites y
+ * los objetos son bitmaps), así que en WebGL2 la imagen se subía sin voltear y
+ * las filas de dirección quedaban espejadas: un Ho-Oh atacando mostraba la
+ * pose de otra dirección y podía acabar dibujado bajo el suelo. WebGPU además
+ * fuerza `flipY: false` en esta ruta. Al voltear el canvas y desactivar
+ * `flipY`, ambos backends suben exactamente la misma orientación.
  */
 export function setTextureSource(
   texture: pc.Texture,
   source: ImageBitmap | HTMLCanvasElement,
 ): void {
   let upload: ImageBitmap | HTMLCanvasElement = source;
-  if (texture.flipY && texture.device.isWebGPU) {
+  if (texture.flipY) {
     const canvas = document.createElement("canvas");
     canvas.width = source.width;
     canvas.height = source.height;
@@ -123,6 +127,9 @@ export function setTextureSource(
       ctx.scale(1, -1);
       ctx.drawImage(source, 0, 0);
       upload = canvas;
+      // La imagen ya va volteada: si el motor volviera a aplicar `flipY` en
+      // WebGL, se desharía el volteo manual.
+      texture.flipY = false;
     }
   }
   texture.setSource(upload as unknown as HTMLCanvasElement);
