@@ -10,6 +10,7 @@ import { CONFIG, DEG, RAD } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { publicUrl } from './publicUrl';
 import { defaultSkinFor } from './skins';
+import { FALLBACK_SPRITE_BUDGET_MB } from './spriteBudget';
 import { setTextureSource } from './textures';
 import type {
   AnimationName,
@@ -112,9 +113,8 @@ export function resolveAnimationClip(
   return animation ? { name: resolved, animation } : null;
 }
 
-/** Límites para no crear texturas gigantes que la GPU no pueda subir. */
-const MAX_TEXTURE_DIMENSION = 2048;
-const MAX_TEXTURE_AREA = MAX_TEXTURE_DIMENSION * MAX_TEXTURE_DIMENSION;
+/** Bytes por píxel de una textura RGBA8. */
+const BYTES_PER_PIXEL = 4;
 
 /** Opacidad máxima de la silueta que se ve a través de los árboles. */
 const SILHOUETTE_OPACITY = 0.72;
@@ -148,23 +148,161 @@ export const SPRITE_TEXTURE_SCALE =
   CONFIG.sprite.filter === 'smooth' ? CONFIG.sprite.smoothScale : 1;
 
 /**
- * El modo `smooth` reescala la hoja para suavizar el contorno, pero una hoja
- * de ataque grande multiplicada por 3 puede superar el límite de textura de la
- * GPU. Se reduce el factor solo para esas hojas; las pequeñas siguen a máxima
- * calidad.
+ * Dimensiones que tendrá la hoja al subirla a la GPU: el recorte tight si el
+ * motor lo va a aplicar, o el frame completo de lo contrario. Se calcula desde
+ * el manifiesto (sin decodificar la imagen) para repartir la escala de todas
+ * las animaciones antes de crearlas.
  */
-function textureScaleFor(image: LoadedImage | HTMLCanvasElement): number {
-  const base = SPRITE_TEXTURE_SCALE;
-  let scale = base;
-  while (
-    scale > 1 &&
-    (image.width * scale > MAX_TEXTURE_DIMENSION ||
-      image.height * scale > MAX_TEXTURE_DIMENSION ||
-      image.width * image.height * scale * scale > MAX_TEXTURE_AREA)
+function sheetSizeFor(
+  name: AnimationName,
+  animation: SpriteAnimation
+): { width: number; height: number } {
+  const full = {
+    width: animation.frameWidth * animation.columns,
+    height: animation.frameHeight * animation.rows
+  };
+  const rows = animation.contentRows;
+  if (
+    PRESERVE_FRAME_MOTION.has(name) ||
+    !rows ||
+    rows.length !== animation.rows
   ) {
-    scale -= 1;
+    return full;
   }
-  return scale;
+
+  let left = 0;
+  let right = 0;
+  let top = 0;
+  let bottom = 0;
+  for (const content of rows) {
+    if (!content) return full;
+    left = Math.max(left, content.left);
+    right = Math.max(right, content.right);
+    top = Math.max(top, content.top);
+    bottom = Math.max(bottom, content.bottom);
+  }
+
+  const width = left + right + 1;
+  const height = top + bottom + 1;
+  return width > 0 && height > 0 ? { width, height } : full;
+}
+
+/** Bytes que ocuparía una hoja con esta escala. */
+function textureBytes(width: number, height: number, scale: number): number {
+  return width * scale * height * scale * BYTES_PER_PIXEL;
+}
+
+/**
+ * Prioridad para conservar resolución cuando el presupuesto aprieta. Menor =
+ * más importante: primero se reduce QuickStrike/Shock/Hop y al final idle,
+ * walk, attack y hurt.
+ */
+const SCALE_PRIORITY: Partial<Record<AnimationName, number>> = {
+  idle: 0,
+  walk: 0,
+  attack: 1,
+  hurt: 1,
+  faint: 2,
+  shoot: 2,
+  charge: 2,
+  strike: 2,
+  punch: 2,
+  twirl: 2,
+  shake: 2,
+  quickstrike: 3,
+  shock: 3,
+  hop: 3
+};
+
+function scalePriority(name: AnimationName): number {
+  return SCALE_PRIORITY[name] ?? 2;
+}
+
+/**
+ * Reparte la escala de todas las hojas de un Pokémon.
+ *
+ * - Las pequeñas suben a `smoothScale` (4 por defecto).
+ * - Ninguna pasa del límite real de la GPU (`device.maxTextureSize`).
+ * - Si la suma supera el presupuesto (fijado en `textureBudgetMB` o detectado
+ *   automáticamente), se reducen primero las hojas de menor prioridad
+ *   (QuickStrike, Shock, Hop) y, dentro de la misma prioridad, las más grandes. Nunca se baja de ×2 mientras haya margen. Así las hojas
+ *   gigantes dejan de caer a ×1, que era lo que las hacía verse borrosas con
+ *   el filtrado lineal, sin sacrificar idle/walk/attack.
+ */
+function planTextureScales(
+  device: pc.GraphicsDevice,
+  sheets: ReadonlyArray<{ name: AnimationName; animation: SpriteAnimation }>,
+  budgetMB: number
+): Map<AnimationName, number> {
+  const maxDimension = device.maxTextureSize;
+  const budget = Math.max(1, budgetMB) * 1024 * 1024;
+  const items = sheets.map(({ name, animation }) => {
+    const { width, height } = sheetSizeFor(name, animation);
+    let scale = SPRITE_TEXTURE_SCALE;
+    while (
+      scale > 1 &&
+      (width * scale > maxDimension || height * scale > maxDimension)
+    ) {
+      scale -= 1;
+    }
+    return { name, width, height, scale };
+  });
+
+  const totalBytes = () =>
+    items.reduce(
+      (sum, item) => sum + textureBytes(item.width, item.height, item.scale),
+      0
+    );
+
+  const reduceLargest = (minScale: number): void => {
+    while (totalBytes() > budget) {
+      let largest: (typeof items)[number] | null = null;
+      for (const item of items) {
+        if (item.scale <= minScale) continue;
+        if (!largest) {
+          largest = item;
+          continue;
+        }
+        const priority = scalePriority(item.name);
+        const largestPriority = scalePriority(largest.name);
+        if (
+          priority > largestPriority ||
+          (priority === largestPriority &&
+            textureBytes(item.width, item.height, item.scale) >
+              textureBytes(largest.width, largest.height, largest.scale))
+        ) {
+          largest = item;
+        }
+      }
+      if (!largest) return;
+      largest.scale -= 1;
+    }
+  };
+
+  // Primero se conserva un mínimo de ×2 en todas; solo si aun así no cabe se
+  // permite bajar alguna a ×1.
+  reduceLargest(2);
+  reduceLargest(1);
+
+  return new Map(items.map((item) => [item.name, item.scale]));
+}
+
+/** Recorta la escala si la imagen real no encaja en el límite de la GPU. */
+function clampTextureScale(
+  device: pc.GraphicsDevice,
+  width: number,
+  height: number,
+  scale: number
+): number {
+  let result = scale;
+  while (
+    result > 1 &&
+    (width * result > device.maxTextureSize ||
+      height * result > device.maxTextureSize)
+  ) {
+    result -= 1;
+  }
+  return result;
 }
 
 /** ¿Alguna habilidad del moveset de este Pokémon usa esta animación? */
@@ -342,13 +480,35 @@ function createSpriteTexture(
 export async function loadSpriteAsset(
   device: pc.GraphicsDevice,
   entry: PokemonEntry,
-  skin: PokemonSkin = defaultSkinFor(entry)
+  skin: PokemonSkin = defaultSkinFor(entry),
+  budgetMB: number = CONFIG.sprite.textureBudgetMB > 0
+    ? CONFIG.sprite.textureBudgetMB
+    : FALLBACK_SPRITE_BUDGET_MB
 ): Promise<SpriteAsset> {
   // El recorte tight reemplaza las celdas de cada animación. Se trabaja sobre
   // una copia: el manifiesto lo comparten la partida, las recargas de HMR y
   // cualquier remontaje, y mutarlo hacía que la segunda carga aplicara el
   // recorte ya recortado sobre la hoja original (sprite pequeño y desalineado).
   const animations = { ...skin.animations };
+
+  // La escala se decide antes de cargar las imágenes: así el presupuesto se
+  // reparte entre todas las hojas del Pokémon (también las opcionales) y las
+  // grandes no dependen del orden en que se vayan encontrando.
+  const sheets: Array<{ name: AnimationName; animation: SpriteAnimation }> =
+    ANIMATIONS.map((name) => ({ name, animation: animations[name] }));
+  for (const optional of OPTIONAL_ANIMATIONS) {
+    const animation = animations[optional.name];
+    if (!animation) continue;
+    if (
+      optional.requiresMoveset &&
+      !movesetUsesAnimation(entry, optional.name)
+    ) {
+      continue;
+    }
+    sheets.push({ name: optional.name, animation });
+  }
+  const scales = planTextureScales(device, sheets, budgetMB);
+
   const [images, portrait] = await Promise.all([
     Promise.all(ANIMATIONS.map((name) => loadImage(animations[name].sheet))),
     // El retrato es opcional: si falta, la marca de KO cae a la X dibujada.
@@ -376,7 +536,14 @@ export async function loadSpriteAsset(
       : buildTightSheet(image, animation);
     if (tight) animations[name] = tight.animation;
     const source = tight?.canvas ?? image;
-    const scale = textureScaleFor(source);
+    // La escala planificada se recorta solo si la imagen real (por ejemplo,
+    // tras un fallback a frame completo) no cabe en la GPU.
+    const scale = clampTextureScale(
+      device,
+      source.width,
+      source.height,
+      scales.get(name) ?? 1
+    );
     textures[name] = createSpriteTexture(
       device,
       source,

@@ -58,7 +58,18 @@ export const CONFIG = {
      * (menos radio de suavizado) y más memoria de textura.
      * 2 = suave, 3 = equilibrado, 4 = casi nítido.
      */
-    smoothScale: 3,
+    smoothScale: 4,
+    /**
+     * Presupuesto de memoria de las hojas de un Pokémon, en MB.
+     * `0` = automático: se estima la GPU (renderer + RAM + límite de textura) y
+     * se reparte entre los aspectos de la partida. Un valor > 0 fija el
+     * presupuesto por aspecto y desactiva la estimación.
+     *
+     * El motor reparte la escala entre las animaciones: las pequeñas suben a
+     * `smoothScale` y las grandes (ataques de legendarios, QuickStrike) bajan
+     * solo lo necesario, sin bajar de ×2 mientras haya margen.
+     */
+    textureBudgetMB: 0,
     /**
      * Suaviza el recorte alfa usando las muestras del MSAA (`antialias`). En
      * modo 'smooth' el borde ya tiene alfa parcial, así que redondea el

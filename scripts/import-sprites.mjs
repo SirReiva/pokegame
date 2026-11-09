@@ -21,6 +21,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { inflateSync } from 'node:zlib';
+import { preprocessSprites } from './preprocess-sprites.mjs';
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, 'public', 'sprites');
@@ -721,7 +722,10 @@ async function main() {
     `- Repositorio: https://github.com/PMDCollab/SpriteCollab`,
     `- Licencia: [${LICENSE}](${LICENSE_URL})`,
     '',
-    'Se distribuyen sin modificaciones y se usan únicamente con fines no comerciales.',
+    'Los archivos se preprocesan (relleno de color bajo los píxeles transparentes)',
+    'para evitar halos oscuros al filtrarlos. El arte y el canal alfa no se',
+    'modifican. Se usan únicamente con fines no comerciales; los cambios se',
+    'indican aquí por requisito de la licencia.',
     'Cada Pokémon conserva su `credits.txt` original en su carpeta.',
     '',
     ...creditSections
@@ -733,7 +737,9 @@ async function main() {
   console.log(`Créditos:   ${path.relative(ROOT, path.join(OUT_DIR, 'CREDITS.md'))}`);
 }
 
-main().catch((error) => {
-  console.error(`\nError: ${error.message}`);
-  process.exitCode = 1;
-});
+main()
+  .then(() => preprocessSprites())
+  .catch((error) => {
+    console.error(`\nError: ${error.message}`);
+    process.exitCode = 1;
+  });

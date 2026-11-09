@@ -128,6 +128,7 @@ import {
   resolveAnimationClip,
   type SpriteAsset
 } from './sprite';
+import { detectSpriteBudget } from './spriteBudget';
 import {
   XP_REWARDS,
   XP_RULES,
@@ -601,6 +602,17 @@ export class Game {
         }));
       }
 
+      const spriteBudget = detectSpriteBudget(
+        this.app.graphicsDevice.maxTextureSize,
+        selections.length,
+        CONFIG.sprite.textureBudgetMB
+      );
+      console.info(
+        `[sprite] ${spriteBudget.perAssetMB} MB por aspecto` +
+          ` (${selections.length} aspectos, ${spriteBudget.tier}` +
+          `${spriteBudget.renderer ? `: ${spriteBudget.renderer}` : ''})`
+      );
+
       const total = selections.length * 4;
       let loaded = 0;
       this.callbacks.onProgress({ loaded, total, label: 'Cargando sprites' });
@@ -615,7 +627,8 @@ export class Game {
           const asset = await loadSpriteAsset(
             this.app.graphicsDevice,
             entry,
-            skin
+            skin,
+            spriteBudget.perAssetMB
           );
           this.assets.set(assetKey(entry.id, selection.skinId), asset);
           loaded += 4;

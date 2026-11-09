@@ -6,7 +6,10 @@ Los sprites de este directorio proceden de **PMD Sprite Collab**:
 - Repositorio: https://github.com/PMDCollab/SpriteCollab
 - Licencia: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
 
-Se distribuyen sin modificaciones y se usan únicamente con fines no comerciales.
+Los archivos se preprocesan (relleno de color bajo los píxeles transparentes)
+para evitar halos oscuros al filtrarlos. El arte y el canal alfa no se
+modifican. Se usan únicamente con fines no comerciales; los cambios se
+indican aquí por requisito de la licencia.
 Cada Pokémon conserva su `credits.txt` original en su carpeta.
 
 ## Bulbasaur (#0001)

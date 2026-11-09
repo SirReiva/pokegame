@@ -14,6 +14,7 @@
     "desktop:build:linux": "wails3 build GOOS=linux",
     "desktop:package": "wails3 package",
     "sprites": "node scripts/import-sprites.mjs",
+    "sprites:bleed": "node scripts/preprocess-sprites.mjs",
     "sprites:metadata": "node scripts/patch-sprite-metadata.mjs",
     "validate:anims": "node scripts/validate-anim-timings.ts",
     "sfx": "node scripts/import-sfx.mjs",
