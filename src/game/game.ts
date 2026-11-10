@@ -3344,7 +3344,8 @@ export class Game {
       impactZ: options.impactZ,
       sourceX: options.sourceX ?? hit.x,
       sourceZ: options.sourceZ ?? hit.z,
-      immuneMarked: hit.immuneMarked
+      immuneMarked: hit.immuneMarked,
+      flatBonusApplied: hit.flatBonusApplied
     });
   }
 
@@ -3415,6 +3416,12 @@ export class Game {
        * y objetivo, no una por tick).
        */
       immuneMarked?: Set<number>;
+      /**
+       * Objetivos que ya cobraron el `+2` de la fórmula en este lanzamiento.
+       * Las áreas persistentes lo comparten entre ticks: el primero que
+       * alcanza a un objetivo paga el término plano y los siguientes no.
+       */
+      flatBonusApplied?: Set<number>;
     } = {}
   ): boolean {
     const power = options.power ?? def.power;
@@ -3471,6 +3478,18 @@ export class Game {
       return false;
     }
 
+    // El `+2` de la fórmula es por golpe. En un área persistente cada tick es
+    // una llamada, así que el primero que alcanza a cada objetivo paga el
+    // término plano y los siguientes lo desactivan: el total no depende de
+    // cuántos ticks reciba. Un objetivo inmune no lo consume porque el retorno
+    // por inmunidad ocurre antes.
+    let flatBonus = 2;
+    if (options.flatBonusApplied) {
+      const alreadyApplied = options.flatBonusApplied.has(target.slot);
+      if (!alreadyApplied) options.flatBonusApplied.add(target.slot);
+      flatBonus = alreadyApplied ? 0 : 2;
+    }
+
     const critical = rollCritical();
     const category = def.category === 'physical' ? 'physical' : 'special';
     const physical = category === 'physical';
@@ -3484,6 +3503,7 @@ export class Game {
       defenderTypes: target.types,
       attackMultiplier: this.buffMultiplier(attacker, physical ? 'attack' : 'spAttack'),
       defenseMultiplier: this.buffMultiplier(target, physical ? 'defense' : 'spDefense'),
+      flatBonus,
       critical,
       randomFactor: rollRandomFactor()
     });
@@ -4239,6 +4259,8 @@ export class Game {
 
   private tickAoe(aoe: ActiveAoe): void {
     const basePower = aoe.def.power * aoe.tickInterval;
+    // `flatBonusApplied` viaja con el tick para que `applyAbilityDamage` cobre
+    // el `+2` de la fórmula una sola vez por objetivo y lanzamiento.
     // El callback de la habilidad decide qué se aplica en cada tick. El efecto
     // por defecto conserva el comportamiento histórico: si no hay daño ni
     // slow, el tick no hace nada, pero un callback propio puede seguir
@@ -4258,7 +4280,8 @@ export class Game {
       elapsed: aoe.elapsed,
       power: basePower,
       healToken: aoe.healToken,
-      immuneMarked: aoe.immuneMarked
+      immuneMarked: aoe.immuneMarked,
+      flatBonusApplied: aoe.flatBonusApplied
     });
     aoe.tick += 1;
   }

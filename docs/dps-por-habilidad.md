@@ -9,7 +9,7 @@
 - **Cooldown**: es el valor de la definición de la habilidad y empieza al iniciar el lanzamiento. El DPS no descuenta el `startup`, el `active`, el `recovery` ni el tiempo de movimiento entre ataques, así que es una **cota superior**.
 - **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, random medio 0,925, crítico 1/24 (×1,5). STAB incluido.
 - **Áreas**: se valoran con el rival en el centro (100 %). En el borde el daño radial baja hasta `radialMinDamage`.
-- **Áreas `overTime`**: el daño de un lanzamiento suma todos los ticks (`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`.
+- **Áreas `overTime`**: el daño de un lanzamiento suma todos los ticks (`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`. El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento.
 - **Estado**: la habilidad no hace daño; la celda muestra `Estado`.
 - **—**: hueco sin asignar o valor que no aplica.
 - **Mediana**: valor central del DPS contra los 24 rivales (con un número par, media de los dos centrales).
@@ -107,31 +107,31 @@ Tipos: **Ghost / Poison** · HP 135 · Atk 85 · Def 80 · SpA 150 · SpD 95 · 
 
 | Rival | Básica: Lengüetazo<br>Ghost · Fís · Pot 42 · CD 0,7 s | Habilidad 1: Bola Sombra<br>Ghost · Esp · Pot 62 · CD 6 s | Habilidad 2: Bomba Lodo<br>Poison · Esp · Pot 20/s · CD 9 s | Definitiva: Come Sueños<br>Ghost · Esp · Pot 80 · CD 11 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 48,1 | 11,7 | 6,8 | 8,2 |
-| Charmander | 52,5 | 14 | 8,5 | 9,8 |
-| Squirtle | 39,3 | 11,7 | 6,8 | 8,2 |
-| Pikachu | 54 | 14 | 8,5 | 9,8 |
-| Voltorb | 48,1 | 12,9 | 7,4 | 9,2 |
-| Eevee | 0 | 0 | 6,8 | 0 |
+| Bulbasaur | 48,1 | 11,7 | 5,4 | 8,2 |
+| Charmander | 52,5 | 14 | 7,1 | 9,8 |
+| Squirtle | 39,3 | 11,7 | 5,4 | 8,2 |
+| Pikachu | 54 | 14 | 7,1 | 9,8 |
+| Voltorb | 48,1 | 12,9 | 6 | 9,2 |
+| Eevee | 0 | 0 | 5,4 | 0 |
 | Lucario | 36,4 | 10,9 | 0 | 7,6 |
-| Greninja | 19 | 5,3 | 6,8 | 3,8 |
-| Mewtwo | 61,4 | 18,3 | 5,7 | 12,8 |
-| Mew | 55,6 | 16,7 | 5,1 | 11,7 |
-| Onix | 18,9 | 15 | 2,3 | 10,6 |
-| Scyther | 32,1 | 9,7 | 5,7 | 6,8 |
-| Gyarados | 32,1 | 8,3 | 5,1 | 5,8 |
-| Tyranitar | 13,2 | 4,1 | 2,3 | 2,9 |
-| Articuno | 27,8 | 6,8 | 4 | 4,8 |
-| Zapdos | 30,7 | 9,2 | 5,7 | 6,4 |
-| Moltres | 30,7 | 9,4 | 5,7 | 6,7 |
-| Raikou | 35 | 8,3 | 5,1 | 5,8 |
-| Entei | 30,7 | 10,4 | 5,7 | 7,2 |
-| Suicune | 26,1 | 7,3 | 4 | 5,1 |
-| Lugia | 46,7 | 11,6 | 3,4 | 8 |
-| Ho-Oh | 30,7 | 5,8 | 3,4 | 4 |
-| Celebi | 55,6 | 16,7 | 10,2 | 11,7 |
-| Groudon | 21,8 | 9,2 | 2,8 | 6,4 |
-| **Mediana de DPS** | 32,1 | 10 | 5,7 | 7 |
+| Greninja | 19 | 5,3 | 5,4 | 3,8 |
+| Mewtwo | 61,4 | 18,3 | 4,3 | 12,8 |
+| Mew | 55,6 | 16,7 | 3,7 | 11,7 |
+| Onix | 18,9 | 15 | 1,8 | 10,6 |
+| Scyther | 32,1 | 9,7 | 4,3 | 6,8 |
+| Gyarados | 32,1 | 8,3 | 3,7 | 5,8 |
+| Tyranitar | 13,2 | 4,1 | 1,8 | 2,9 |
+| Articuno | 27,8 | 6,8 | 2,6 | 4,8 |
+| Zapdos | 30,7 | 9,2 | 4,3 | 6,4 |
+| Moltres | 30,7 | 9,4 | 4,3 | 6,7 |
+| Raikou | 35 | 8,3 | 3,7 | 5,8 |
+| Entei | 30,7 | 10,4 | 4,3 | 7,2 |
+| Suicune | 26,1 | 7,3 | 2,6 | 5,1 |
+| Lugia | 46,7 | 11,6 | 2 | 8 |
+| Ho-Oh | 30,7 | 5,8 | 2 | 4 |
+| Celebi | 55,6 | 16,7 | 7,5 | 11,7 |
+| Groudon | 21,8 | 9,2 | 2 | 6,4 |
+| **Mediana de DPS** | 32,1 | 10 | 4,3 | 7 |
 
 ## Bulbasaur
 
@@ -171,31 +171,31 @@ Tipos: **Fire** · HP 114 · Atk 72 · Def 63 · SpA 80 · SpD 70 · Vel 85
 
 | Rival | Básica: Arañazo<br>Normal · Fís · Pot 55 · CD 0,3 s | Habilidad 1: Giro Fuego<br>Fire · Esp · Pot 40/s · CD 6 s | Habilidad 2: Lanzallamas<br>Fire · Esp · Pot 100 · CD 6,5 s | Definitiva: Anillo Ígneo<br>Fire · Esp · Pot 130 · CD 14 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 81,8 | 20,5 | 18,2 | 10,9 |
-| Squirtle | 68,1 | 5,1 | 4,6 | 2,8 |
-| Pikachu | 95,3 | 13,3 | 11,3 | 6,6 |
-| Gengar | 0 | 9,2 | 8,5 | 5 |
-| Voltorb | 81,7 | 12,3 | 10,4 | 6,3 |
-| Eevee | 81,7 | 10,3 | 9,1 | 5,5 |
-| Lucario | 30,7 | 20,5 | 17,3 | 10,5 |
-| Greninja | 68,1 | 5,1 | 4,2 | 2,6 |
-| Mewtwo | 51,1 | 9,2 | 7,2 | 4,2 |
-| Mew | 47,8 | 7,2 | 6,6 | 4 |
-| Onix | 16,9 | 6,1 | 6 | 3,6 |
-| Scyther | 57,8 | 18,3 | 16 | 9,3 |
-| Gyarados | 57,8 | 3,1 | 3,3 | 2 |
-| Tyranitar | 20,6 | 3,1 | 3,3 | 2 |
-| Articuno | 47,8 | 12,3 | 11,3 | 6,6 |
-| Zapdos | 54,4 | 9,2 | 7,2 | 4,2 |
-| Moltres | 51,1 | 4,1 | 3,8 | 2,2 |
-| Raikou | 61,3 | 7,2 | 6,6 | 4 |
-| Entei | 54,4 | 4,1 | 4,2 | 2,5 |
-| Suicune | 41 | 3,1 | 2,8 | 1,8 |
-| Lugia | 40,7 | 6,1 | 4,7 | 2,7 |
-| Ho-Oh | 51,1 | 3 | 2,4 | 1,3 |
-| Celebi | 47,8 | 14,4 | 13,2 | 8 |
-| Groudon | 37,4 | 9,2 | 7,2 | 4,2 |
-| **Mediana de DPS** | 51,1 | 8,2 | 6,9 | 4,1 |
+| Bulbasaur | 81,8 | 15,4 | 18,2 | 10,9 |
+| Squirtle | 68,1 | 3,5 | 4,6 | 2,8 |
+| Pikachu | 95,3 | 10,8 | 11,3 | 6,6 |
+| Gengar | 0 | 6,6 | 8,5 | 5 |
+| Voltorb | 81,7 | 9,7 | 10,4 | 6,3 |
+| Eevee | 81,7 | 7,7 | 9,1 | 5,5 |
+| Lucario | 30,7 | 15,4 | 17,3 | 10,5 |
+| Greninja | 68,1 | 3,5 | 4,2 | 2,6 |
+| Mewtwo | 51,1 | 6,6 | 7,2 | 4,2 |
+| Mew | 47,8 | 4,6 | 6,6 | 4 |
+| Onix | 16,9 | 5,3 | 6 | 3,6 |
+| Scyther | 57,8 | 13,3 | 16 | 9,3 |
+| Gyarados | 57,8 | 2,2 | 3,3 | 2 |
+| Tyranitar | 20,6 | 2,2 | 3,3 | 2 |
+| Articuno | 47,8 | 7,1 | 11,3 | 6,6 |
+| Zapdos | 54,4 | 6,6 | 7,2 | 4,2 |
+| Moltres | 51,1 | 3,2 | 3,8 | 2,2 |
+| Raikou | 61,3 | 4,6 | 6,6 | 4 |
+| Entei | 54,4 | 3,2 | 4,2 | 2,5 |
+| Suicune | 41 | 2,2 | 2,8 | 1,8 |
+| Lugia | 40,7 | 3,6 | 4,7 | 2,7 |
+| Ho-Oh | 51,1 | 1,4 | 2,4 | 1,3 |
+| Celebi | 47,8 | 9,3 | 13,2 | 8 |
+| Groudon | 37,4 | 6,6 | 7,2 | 4,2 |
+| **Mediana de DPS** | 51,1 | 6 | 6,9 | 4,1 |
 
 ## Squirtle
 
@@ -491,63 +491,63 @@ Tipos: **Rock / Dark** · HP 175 · Atk 154 · Def 130 · SpA 115 · SpD 120 · 
 
 | Rival | Básica: Triturar<br>Dark · Fís · Pot 50 · CD 0,85 s | Habilidad 1: Avalancha<br>Rock · Fís · Pot 55 · CD 5 s | Habilidad 2: Terremoto<br>Ground · Fís · Pot 18/s · CD 9 s | Definitiva: Roca Afilada<br>Rock · Fís · Pot 90 · CD 12 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 84,1 | 7,8 | 5,1 | 5,3 |
-| Charmander | 90 | 34,3 | 11,3 | 23 |
-| Squirtle | 66,1 | 12,5 | 4,5 | 8,5 |
-| Pikachu | 95 | 18 | 12,5 | 12,1 |
-| Gengar | 144,2 | 6,7 | 9,1 | 4,6 |
-| Voltorb | 82,8 | 15,3 | 10,2 | 10,5 |
-| Eevee | 82,8 | 15,3 | 5,1 | 10,5 |
-| Lucario | 32,4 | 2,9 | 8 | 2 |
-| Greninja | 32,5 | 12,3 | 4,5 | 8,4 |
-| Mewtwo | 103,4 | 9,8 | 3,4 | 6,6 |
-| Mew | 96,2 | 9,2 | 3,4 | 6,1 |
-| Onix | 32,4 | 3,1 | 4,5 | 2 |
+| Bulbasaur | 84,1 | 7,8 | 4,2 | 5,3 |
+| Charmander | 90 | 34,3 | 9,5 | 23 |
+| Squirtle | 66,1 | 12,5 | 3,6 | 8,5 |
+| Pikachu | 95 | 18 | 10,6 | 12,1 |
+| Gengar | 144,2 | 6,7 | 7,3 | 4,6 |
+| Voltorb | 82,8 | 15,3 | 8,4 | 10,5 |
+| Eevee | 82,8 | 15,3 | 4,2 | 10,5 |
+| Lucario | 32,4 | 2,9 | 6,1 | 2 |
+| Greninja | 32,5 | 12,3 | 3,6 | 8,4 |
+| Mewtwo | 103,4 | 9,8 | 2,5 | 6,6 |
+| Mew | 96,2 | 9,2 | 2,5 | 6,1 |
+| Onix | 32,4 | 3,1 | 2,7 | 2 |
 | Scyther | 57,6 | 44 | 0 | 28,9 |
 | Gyarados | 58,8 | 22 | 0 | 14,8 |
 | Articuno | 48,1 | 36,7 | 0 | 24,5 |
 | Zapdos | 55,3 | 20,8 | 0 | 14 |
 | Moltres | 51,7 | 39,2 | 0 | 26,5 |
-| Raikou | 61,2 | 11,2 | 8 | 7,7 |
-| Entei | 55,3 | 20,8 | 6,8 | 14 |
-| Suicune | 43,3 | 8 | 2,8 | 5,4 |
+| Raikou | 61,2 | 11,2 | 6,1 | 7,7 |
+| Entei | 55,3 | 20,8 | 5 | 14 |
+| Suicune | 43,3 | 8 | 1,9 | 5,4 |
 | Lugia | 79,2 | 14,7 | 0 | 9,7 |
 | Ho-Oh | 51,7 | 39,2 | 0 | 26,5 |
-| Celebi | 96,2 | 9,2 | 1,7 | 6,1 |
-| Groudon | 37,2 | 3,5 | 2,3 | 2,3 |
-| **Mediana de DPS** | 60 | 13,6 | 4 | 9,1 |
+| Celebi | 96,2 | 9,2 | 1,2 | 6,1 |
+| Groudon | 37,2 | 3,5 | 1,4 | 2,3 |
+| **Mediana de DPS** | 60 | 13,6 | 2,6 | 9,1 |
 
 ## Onix
 
 Tipos: **Rock / Ground** · HP 110 · Atk 65 · Def 180 · SpA 50 · SpD 65 · Vel 90
 
-| Rival | Básica: Atadura<br>Rock · Fís · Pot 65 · CD 0,7 s | Habilidad 1: Lanzarrocas<br>Rock · Fís · Pot 85 · CD 4,5 s | Habilidad 2: Excavar<br>Ground · Fís · Pot 85 · CD 8 s | Definitiva: Fisura<br>Ground · Fís · Pot 155 · CD 14 s |
+| Rival | Básica: Atadura<br>Rock · Fís · Pot 65 · CD 0,7 s | Habilidad 1: Lanzarrocas<br>Rock · Fís · Pot 85 · CD 4,5 s | Habilidad 2: Excavar<br>Ground · Fís · Pot 85 · CD 6 s | Definitiva: Fisura<br>Ground · Fís · Pot 155 · CD 14 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 26,3 | 5,7 | 6,5 | 6,6 |
-| Charmander | 122,5 | 24,9 | 14 | 14,4 |
-| Squirtle | 45,2 | 9,1 | 5,1 | 5,3 |
-| Pikachu | 62,8 | 12,9 | 14,6 | 15 |
-| Gengar | 24,8 | 4,8 | 11 | 11,4 |
-| Voltorb | 54 | 11,1 | 12,5 | 13,1 |
-| Eevee | 54 | 11,1 | 6,3 | 6,6 |
-| Lucario | 10,2 | 2 | 9,9 | 10,2 |
-| Greninja | 45,2 | 8,8 | 5 | 5,3 |
-| Mewtwo | 35 | 7,5 | 4,2 | 4,2 |
-| Mew | 32,1 | 6,8 | 3,8 | 3,8 |
+| Bulbasaur | 26,3 | 5,7 | 8,7 | 6,6 |
+| Charmander | 122,5 | 24,9 | 18,7 | 14,4 |
+| Squirtle | 45,2 | 9,1 | 6,8 | 5,3 |
+| Pikachu | 62,8 | 12,9 | 19,4 | 15 |
+| Gengar | 24,8 | 4,8 | 14,7 | 11,4 |
+| Voltorb | 54 | 11,1 | 16,7 | 13,1 |
+| Eevee | 54 | 11,1 | 8,3 | 6,6 |
+| Lucario | 10,2 | 2 | 13,3 | 10,2 |
+| Greninja | 45,2 | 8,8 | 6,6 | 5,3 |
+| Mewtwo | 35 | 7,5 | 5,6 | 4,2 |
+| Mew | 32,1 | 6,8 | 5,1 | 3,8 |
 | Scyther | 157,4 | 32,7 | 0 | 0 |
 | Gyarados | 78,7 | 16,3 | 0 | 0 |
-| Tyranitar | 30,7 | 6,1 | 6,9 | 7,1 |
+| Tyranitar | 30,7 | 6,1 | 9,2 | 7,1 |
 | Articuno | 128,6 | 27,2 | 0 | 0 |
 | Zapdos | 72,9 | 15,4 | 0 | 0 |
 | Moltres | 140 | 29,9 | 0 | 0 |
-| Raikou | 40,8 | 8,2 | 9,2 | 9,6 |
-| Entei | 72,9 | 15,4 | 8,7 | 8,8 |
-| Suicune | 27,8 | 6,1 | 3,4 | 3,4 |
+| Raikou | 40,8 | 8,2 | 12,3 | 9,6 |
+| Entei | 72,9 | 15,4 | 11,6 | 8,8 |
+| Suicune | 27,8 | 6,1 | 4,6 | 3,4 |
 | Lugia | 52,6 | 10,9 | 0 | 0 |
 | Ho-Oh | 140 | 29,9 | 0 | 0 |
-| Celebi | 32,1 | 6,8 | 1,9 | 1,9 |
-| Groudon | 13 | 2,5 | 2,8 | 2,8 |
-| **Mediana de DPS** | 48,9 | 10 | 4,6 | 4,7 |
+| Celebi | 32,1 | 6,8 | 2,5 | 1,9 |
+| Groudon | 13 | 2,5 | 3,8 | 2,8 |
+| **Mediana de DPS** | 48,9 | 10 | 6,1 | 4,7 |
 
 ## Groudon
 
@@ -555,31 +555,31 @@ Tipos: **Ground** · HP 175 · Atk 170 · Def 160 · SpA 120 · SpD 110 · Vel 1
 
 | Rival | Básica: Cuchillada<br>Normal · Fís · Pot 45 · CD 0,6 s | Habilidad 1: Terremoto<br>Ground · Fís · Pot 18/s · CD 9 s | Habilidad 2: Avalancha<br>Rock · Fís · Pot 55 · CD 5 s | Definitiva: Filo del Abismo<br>Ground · Fís · Pot 100 · CD 15 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 78,3 | 8,5 | 5,7 | 10,3 |
-| Charmander | 85,1 | 18,1 | 24,9 | 22,6 |
-| Squirtle | 63 | 6,8 | 9,4 | 8,4 |
-| Pikachu | 90,2 | 20,3 | 13,1 | 23,7 |
-| Gengar | 0 | 14,7 | 4,9 | 17,7 |
-| Voltorb | 78,3 | 16,9 | 11,2 | 20,2 |
-| Eevee | 78,3 | 8,5 | 11,2 | 10,1 |
-| Lucario | 30,6 | 13,6 | 2,1 | 15,9 |
-| Greninja | 62,9 | 6,8 | 9,2 | 8,2 |
-| Mewtwo | 49,4 | 5,7 | 7,3 | 6,5 |
-| Mew | 46 | 5,1 | 6,7 | 6 |
-| Onix | 15,3 | 6,8 | 2,2 | 7,9 |
+| Bulbasaur | 78,3 | 7,1 | 5,7 | 10,3 |
+| Charmander | 85,1 | 15,4 | 24,9 | 22,6 |
+| Squirtle | 63 | 5,4 | 9,4 | 8,4 |
+| Pikachu | 90,2 | 17,6 | 13,1 | 23,7 |
+| Gengar | 0 | 12,1 | 4,9 | 17,7 |
+| Voltorb | 78,3 | 14,3 | 11,2 | 20,2 |
+| Eevee | 78,3 | 7,1 | 11,2 | 10,1 |
+| Lucario | 30,6 | 10,9 | 2,1 | 15,9 |
+| Greninja | 62,9 | 5,4 | 9,2 | 8,2 |
+| Mewtwo | 49,4 | 4,3 | 7,3 | 6,5 |
+| Mew | 46 | 3,7 | 6,7 | 6 |
+| Onix | 15,3 | 4,1 | 2,2 | 7,9 |
 | Scyther | 54,4 | 0 | 31,9 | 0 |
 | Gyarados | 56,1 | 0 | 15,9 | 0 |
-| Tyranitar | 20,4 | 10,2 | 6,1 | 11 |
+| Tyranitar | 20,4 | 7,5 | 6,1 | 11 |
 | Articuno | 46 | 0 | 26,9 | 0 |
 | Zapdos | 52,8 | 0 | 15,1 | 0 |
 | Moltres | 49,4 | 0 | 29,4 | 0 |
-| Raikou | 57,8 | 13,6 | 8,4 | 15,1 |
-| Entei | 52,8 | 11,4 | 15,1 | 13,6 |
-| Suicune | 40,8 | 4 | 5,9 | 5,3 |
+| Raikou | 57,8 | 10,9 | 8,4 | 15,1 |
+| Entei | 52,8 | 8,7 | 15,1 | 13,6 |
+| Suicune | 40,8 | 2,6 | 5,9 | 5,3 |
 | Lugia | 37,4 | 0 | 10,6 | 0 |
 | Ho-Oh | 49,4 | 0 | 29,4 | 0 |
-| Celebi | 46 | 2,3 | 6,7 | 3 |
-| **Mediana de DPS** | 51,1 | 6,8 | 10 | 8 |
+| Celebi | 46 | 1,8 | 6,7 | 3 |
+| **Mediana de DPS** | 51,1 | 4,9 | 10 | 8 |
 
 ## Celebi
 
@@ -619,31 +619,31 @@ Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 17
 
 | Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 · CD 0,8 s | Habilidad 1: Marea<br>Water · Esp · Pot 30/s · CD 9 s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45/s · CD 4 s | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 · CD 16 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 102,2 | 2,3 | 46 | 12,3 |
-| Charmander | 62,5 | 12,5 | 28,1 | 7,3 |
-| Squirtle | 51,1 | 2,3 | 23 | 6,2 |
-| Pikachu | 62,5 | 6,2 | 14,1 | 3,6 |
-| Gengar | 92 | 4,5 | 22,9 | 5,5 |
-| Voltorb | 58,8 | 5,6 | 12,8 | 3,4 |
-| Eevee | 51,1 | 5,1 | 23 | 6,1 |
-| Lucario | 47,3 | 5,1 | 23 | 5,8 |
-| Greninja | 0 | 2,3 | 22,9 | 5,7 |
-| Mewtwo | 20,4 | 4 | 19,1 | 4,7 |
-| Mew | 19,1 | 4 | 19,1 | 4,4 |
-| Onix | 68,8 | 27,1 | 15,3 | 4 |
-| Scyther | 45,9 | 4,5 | 40,8 | 10,5 |
-| Gyarados | 38,3 | 1,7 | 19,1 | 4,4 |
-| Tyranitar | 0 | 8 | 8,9 | 2,2 |
-| Articuno | 30,6 | 3,4 | 15,3 | 3,6 |
-| Zapdos | 42,1 | 4 | 8,9 | 2,3 |
-| Moltres | 43,4 | 8 | 20,4 | 5 |
-| Raikou | 38,3 | 4 | 8,9 | 2,2 |
-| Entei | 46 | 9,1 | 22,9 | 5,5 |
-| Suicune | 31,9 | 1,7 | 16,6 | 3,9 |
-| Ho-Oh | 24,3 | 5,7 | 12,8 | 3,1 |
-| Celebi | 19,1 | 1,7 | 38,1 | 8,8 |
-| Groudon | 42,1 | 8 | 19,1 | 4,7 |
-| **Mediana de DPS** | 42,7 | 4,5 | 19,1 | 4,7 |
+| Bulbasaur | 102,2 | 1,8 | 41,9 | 12,3 |
+| Charmander | 62,5 | 10,6 | 25,1 | 7,3 |
+| Squirtle | 51,1 | 1,8 | 20,9 | 6,2 |
+| Pikachu | 62,5 | 5,3 | 12,1 | 3,6 |
+| Gengar | 92 | 3,6 | 19,8 | 5,5 |
+| Voltorb | 58,8 | 4,8 | 11,8 | 3,4 |
+| Eevee | 51,1 | 4,2 | 20,9 | 6,1 |
+| Lucario | 47,3 | 4,2 | 20,9 | 5,8 |
+| Greninja | 0 | 1,8 | 19,8 | 5,7 |
+| Mewtwo | 20,4 | 3,1 | 16,1 | 4,7 |
+| Mew | 19,1 | 3,1 | 16,1 | 4,4 |
+| Onix | 68,8 | 23,5 | 13,3 | 4 |
+| Scyther | 45,9 | 3,6 | 34,7 | 10,5 |
+| Gyarados | 38,3 | 1,3 | 16,1 | 4,4 |
+| Tyranitar | 0 | 6,1 | 7,9 | 2,2 |
+| Articuno | 30,6 | 2,5 | 12,2 | 3,6 |
+| Zapdos | 42,1 | 3,1 | 7,9 | 2,3 |
+| Moltres | 43,4 | 6,1 | 17,3 | 5 |
+| Raikou | 38,3 | 3,1 | 7,9 | 2,2 |
+| Entei | 46 | 7,3 | 19,8 | 5,5 |
+| Suicune | 31,9 | 1,2 | 13,6 | 3,9 |
+| Ho-Oh | 24,3 | 3,9 | 9,8 | 3,1 |
+| Celebi | 19,1 | 1,3 | 32,1 | 8,8 |
+| Groudon | 42,1 | 6,1 | 16,1 | 4,7 |
+| **Mediana de DPS** | 42,7 | 3,6 | 16,1 | 4,7 |
 
 ## Ho-Oh
 
@@ -651,31 +651,31 @@ Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 �
 
 | Rival | Básica: Golpe Ala<br>Flying · Fís · Pot 55 · CD 0,55 s | Habilidad 1: Pájaro Osado<br>Flying · Fís · Pot 100 · CD 6 s | Habilidad 2: Recuperación<br>Fire · Estado · Pot — · CD 13 s | Definitiva: Fuego Sagrado<br>Fire · Fís · Pot 50/s · CD 3 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 271,2 | 45,3 | Estado | 69,4 |
+| Bulbasaur | 271,2 | 45,3 | Estado | 65,3 |
 | Charmander | 150,3 | 25 | Estado | 18,4 |
-| Squirtle | 111,4 | 18,5 | Estado | 14,3 |
-| Pikachu | 78 | 13,1 | Estado | 39,8 |
-| Gengar | 118,8 | 19,6 | Estado | 30,6 |
-| Voltorb | 66,8 | 11,2 | Estado | 34,7 |
-| Eevee | 135,5 | 22,5 | Estado | 34,7 |
-| Lucario | 105,9 | 17,5 | Estado | 55,1 |
-| Greninja | 107,7 | 18 | Estado | 13,3 |
-| Mewtwo | 89,1 | 14,5 | Estado | 22,5 |
-| Mew | 79,9 | 13,3 | Estado | 19,5 |
-| Onix | 27,8 | 4,4 | Estado | 7,1 |
-| Scyther | 193 | 31,7 | Estado | 49 |
-| Gyarados | 96,5 | 15,8 | Estado | 12,3 |
-| Tyranitar | 35,3 | 6,1 | Estado | 9,2 |
-| Articuno | 79,9 | 13,3 | Estado | 38,9 |
-| Zapdos | 44,5 | 7,5 | Estado | 22,5 |
-| Moltres | 89,1 | 14,5 | Estado | 11,3 |
-| Raikou | 50,2 | 8,2 | Estado | 25,5 |
-| Entei | 90,9 | 15 | Estado | 11,3 |
-| Suicune | 68,8 | 11,7 | Estado | 9,2 |
-| Lugia | 66,8 | 10,7 | Estado | 18,3 |
-| Celebi | 159,8 | 26,5 | Estado | 38,9 |
-| Groudon | 61,2 | 9,9 | Estado | 16,3 |
-| **Mediana de DPS** | 89,1 | 14,5 | — | 21 |
+| Squirtle | 111,4 | 18,5 | Estado | 12,9 |
+| Pikachu | 78 | 13,1 | Estado | 37,8 |
+| Gengar | 118,8 | 19,6 | Estado | 28,6 |
+| Voltorb | 66,8 | 11,2 | Estado | 32,7 |
+| Eevee | 135,5 | 22,5 | Estado | 32,7 |
+| Lucario | 105,9 | 17,5 | Estado | 51 |
+| Greninja | 107,7 | 18 | Estado | 12,6 |
+| Mewtwo | 89,1 | 14,5 | Estado | 20,5 |
+| Mew | 79,9 | 13,3 | Estado | 18,7 |
+| Onix | 27,8 | 4,4 | Estado | 6,5 |
+| Scyther | 193 | 31,7 | Estado | 45 |
+| Gyarados | 96,5 | 15,8 | Estado | 10,9 |
+| Tyranitar | 35,3 | 6,1 | Estado | 8,5 |
+| Articuno | 79,9 | 13,3 | Estado | 37,4 |
+| Zapdos | 44,5 | 7,5 | Estado | 20,5 |
+| Moltres | 89,1 | 14,5 | Estado | 9,9 |
+| Raikou | 50,2 | 8,2 | Estado | 23,5 |
+| Entei | 90,9 | 15 | Estado | 9,9 |
+| Suicune | 68,8 | 11,7 | Estado | 8,5 |
+| Lugia | 66,8 | 10,7 | Estado | 16,3 |
+| Celebi | 159,8 | 26,5 | Estado | 37,4 |
+| Groudon | 61,2 | 9,9 | Estado | 14,3 |
+| **Mediana de DPS** | 89,1 | 14,5 | — | 19,6 |
 
 ## DPS por habilidad contra un objetivo neutro
 
@@ -685,9 +685,9 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Pikachu | Placaje 73,5 | Ataque Rápido 4,8 | Impactrueno 35,1 | Rayo 7,3 | 120,8 |
 | Voltorb | Chispa 42,5 | Rollout 3,7 | Onda Trueno — | Explosión 5,3 | 51,5 |
-| Gengar | Lengüetazo 32,1 | Bola Sombra 9,7 | Bomba Lodo 5,7 | Come Sueños 6,8 | 54,3 |
+| Gengar | Lengüetazo 32,1 | Bola Sombra 9,7 | Bomba Lodo 4,3 | Come Sueños 6,8 | 53 |
 | Bulbasaur | Placaje 65,3 | Paralizador — | Hoja Afilada 11 | Lluevehojas 6,1 | 82,5 |
-| Charmander | Arañazo 57,8 | Giro Fuego 9,2 | Lanzallamas 8 | Anillo Ígneo 4,7 | 79,6 |
+| Charmander | Arañazo 57,8 | Giro Fuego 6,6 | Lanzallamas 8 | Anillo Ígneo 4,7 | 77,1 |
 | Squirtle | Placaje 65,3 | Acua Jet 5,7 | Rayo Burbuja 12,3 | Hidrobomba 6,9 | 90,2 |
 | Lucario | Garra Metal 73,6 | Velocidad Extrema 5,1 | Esfera Aura 10,4 | Combate Cercano 7,9 | 96,9 |
 | Greninja | Shuriken de Agua 51,8 | Tajo Umbrío 33,6 | Sombra Vil 5,3 | Pulso Umbrío 6,7 | 97,4 |
@@ -697,12 +697,12 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Mewtwo | Telequinesis 83,3 | Teletransporte — | Psíquico 12,7 | Psicoataque 7,4 | 103,4 |
 | Mew | Golpe Psíquico 115,7 | Agilidad — | Premonición 6,4 | Recuperación — | 122,1 |
 | Scyther | Golpe Furia 92 | Corte Aéreo 7,7 | Danza Espada — | Tijera X 7,7 | 107,3 |
-| Tyranitar | Triturar 57,6 | Avalancha 11 | Terremoto 4 | Roca Afilada 7,2 | 79,9 |
-| Onix | Atadura 39,3 | Lanzarrocas 8,2 | Excavar 4,6 | Fisura 4,6 | 56,7 |
-| Groudon | Cuchillada 54,4 | Terremoto 5,7 | Avalancha 8 | Filo del Abismo 7,1 | 75,3 |
+| Tyranitar | Triturar 57,6 | Avalancha 11 | Terremoto 3,1 | Roca Afilada 7,2 | 79 |
+| Onix | Atadura 39,3 | Lanzarrocas 8,2 | Excavar 6,1 | Fisura 4,6 | 58,2 |
+| Groudon | Cuchillada 54,4 | Terremoto 4,3 | Avalancha 8 | Filo del Abismo 7,1 | 73,9 |
 | Celebi | Hoja Mágica 43,4 | Rayo Solar 8 | Deseo — | Futuro Siniestro 5,3 | 56,7 |
-| Lugia | Onda Mental 45,9 | Marea 4,5 | Ciclón 20,4 | Aerochorro 5,2 | 76,1 |
-| Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 24,5 | 136,8 |
+| Lugia | Onda Mental 45,9 | Marea 3,6 | Ciclón 17,3 | Aerochorro 5,2 | 72,1 |
+| Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 22,5 | 134,8 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.
 

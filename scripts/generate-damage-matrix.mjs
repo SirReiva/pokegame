@@ -48,7 +48,7 @@ try {
   const RANDOM_FACTOR = 0.925;
 
   /** Esperanza de daño de un impacto, con crítico. */
-  function expectedHit(attacker, defender, def, power) {
+  function expectedHit(attacker, defender, def, power, flatBonus = 2) {
     if (power <= 0 || def.category === 'status') return 0;
     const base = {
       moveType: def.type,
@@ -58,6 +58,7 @@ try {
       defender: defender.stats,
       attackerTypes: attacker.types,
       defenderTypes: defender.types,
+      flatBonus,
       randomFactor: RANDOM_FACTOR
     };
     const normal = computeDamage({ ...base, critical: false }).damage;
@@ -72,7 +73,13 @@ try {
     if (def.shape === 'aoe' && def.aoeDamageMode === 'overTime') {
       const interval = Math.max(0.05, Math.min(def.aoeTickInterval, def.aoeDuration));
       const ticks = Math.ceil(def.aoeDuration / interval);
-      return expectedHit(attacker, defender, def, def.power * interval) * ticks;
+      const perTick = def.power * interval;
+      // El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento:
+      // el primer tick lo paga y los demás van con `flatBonus: 0`.
+      return (
+        expectedHit(attacker, defender, def, perTick, 2) +
+        (ticks - 1) * expectedHit(attacker, defender, def, perTick, 0)
+      );
     }
     return expectedHit(attacker, defender, def, def.power);
   }
@@ -184,7 +191,8 @@ try {
   );
   lines.push(
     '- **Áreas `overTime`**: el total suma todos los ticks ' +
-      '(`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`.'
+      '(`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`. ' +
+      'El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento.'
   );
   lines.push(
     '- **Estado**: la habilidad no hace daño. `Estado (×0)` indica que el tipo ' +
@@ -421,7 +429,8 @@ try {
   );
   dpsLines.push(
     '- **Áreas `overTime`**: el daño de un lanzamiento suma todos los ticks ' +
-      '(`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`.'
+      '(`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`. ' +
+      'El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento.'
   );
   dpsLines.push(
     '- **Estado**: la habilidad no hace daño; la celda muestra `Estado`.'

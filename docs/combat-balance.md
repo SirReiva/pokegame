@@ -159,6 +159,17 @@
 > reducido a los avisos de `validate:anims` y 3.19 se retira al corregirse la
 > visión de los KO. Las tablas de §4.3-§4.6 son una foto
 > anterior al rebalanceo de v0.20-v0.22 y no reflejan `abilities.ts` actual.
+>
+> **Actualización 2026-11-10 (2)**: arreglado 3.2. `computeDamage` acepta un
+> `flatBonus` (2 por defecto) y `applyAbilityDamage` puede compartir un `Set`
+> de objetivos por lanzamiento. Las áreas `overTime` lo usan: el primer tick
+> que alcanza a cada rival paga el `+2` de la fórmula y los siguientes lo
+> desactivan, así que el término plano ya no se multiplica por el número de
+> ticks. El total vuelve a la banda de `power × duración`; la diferencia
+> restante es el redondeo por tick. Frente al golpe único equivalente, el
+> exceso era +20 % en Giro Fuego, +14 % en Bomba Lodo y Terremoto y +6 % en
+> Fuego Sagrado. Se mantiene el paso fijo de 60 Hz y el primer tick desplazado
+> un paso. El apartado 3.2 se retira de la lista de fallos abiertos.
 
 ## Resumen ejecutivo
 
@@ -353,12 +364,11 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-10)
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-10 (2))
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
 | 3.1 Cobertura de movesets | **pendiente** | 5 de 25 especies siguen sin habilidades (Gyarados incluido). |
-| 3.2 DoT +2 por tick | **pendiente** | El framerate ya no altera los ticks (paso fijo); el +2 por tick sigue. |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas y golpes de dash pendientes. Los casts instantáneos y buffs `self` ya se cancelan al morir. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
 | 3.5 Explosión gratis a 1 PV | **pendiente** | El autodaño nunca quita la última vida; también afecta a Pájaro Osado. |
@@ -369,8 +379,9 @@ cobertura de tipos.
 | 3.17 Ciclón | **pendiente** | El centro del área atraviesa muros, rocas y árboles. |
 | 3.18 Avisos de `validate:anims` | **pendiente** | Cuatro avisos de anticipación/carga (Pájaro Osado, Hidrobomba, Rayo Hielo y Fuego Sagrado). |
 
-Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.16 y
-3.19) corresponden a apartados ya corregidos y retirados de la lista.
+Los números conservan el identificador histórico: los huecos (3.2, 3.9,
+3.11-3.16 y 3.19) corresponden a apartados ya corregidos y retirados de la
+lista.
 
 ### 3.1. Cobertura: 5 especies sin moveset (crítico)
 
@@ -400,36 +411,6 @@ como «no disponible») hasta que tengan habilidades.
 **Arreglo completo**: añadir movesets. Todas ellas ya tienen animaciones
 `attack`, `hurt`, `shoot` y `charge` en el manifiesto, así que no hace falta
 volver a importar sprites para empezar.
-
-### 3.2. DoT: +2 plano por tick (medio)
-
-`tickAoe` llama a `applyAbilityDamage` por cada tick
-(`src/game/game.ts:4123-4147`). Eso implica:
-
-1. **La fórmula suma +2 por cada tick**, no una vez por área. Con pocos ticks y
-   potencia baja, el DoT se infla de forma no lineal. Con los datos actuales:
-   - Giro Fuego: 6 ticks × potencia 16 → el nominal es 96, pero la fórmula
-     añade +2 seis veces en vez de una (12 de base extra frente a 2).
-   - Bomba Lodo: 5 ticks × potencia 10 → nominal 50; añade 10 de base extra
-     frente a 2 de un golpe único.
-   - Fuego Sagrado: 3 ticks × potencia 25 → nominal 75; añade 6 de base extra
-     frente a 2.
-   - Terremoto: 5 ticks × potencia 9 → nominal 45; añade 10 de base extra
-     frente a 2.
-
-2. **El framerate ya no altera el número de ticks**: la simulación autoritativa
-   corre a paso fijo de 60 Hz (`FIXED_STEP`, `MAX_FIXED_STEPS = 4`,
-   `game.ts:247-249, 1552-1572`), así que `updateActiveAoes` recibe siempre
-   `1/60` y el tope `guard < 8` (`game.ts:4072-4081`) no se alcanza en juego
-   normal. Queda un detalle menor: el primer tick se dispara después de sumar
-   `dt` al área, es decir, un paso (16,7 ms) tarde. No cambia el total, pero
-   desplaza el DoT un paso.
-
-No es un error enorme, pero rompe la linealidad «potencia/s × duración» y
-complica el ajuste fino.
-
-**Arreglo**: aplicar el +2 de la fórmula una sola vez por área, o compensar la
-potencia por tick para que el total coincida con el nominal.
 
 ### 3.3. Proyectiles, áreas y golpes diferidos de jugadores muertos siguen dañando y puntuando (medio)
 
@@ -637,8 +618,10 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 - Daño esperado con crítico 1/24, ×1,5 y random medio 0,925.
 - DoT: `ticks = ceil(duración / intervalo)`, primer tick en t = 0, potencia por
   tick = `power × intervalo`. La implementación retrasa el primer tick un paso
-  fijo (16,7 ms), pero ya no pierde ticks por framerate (§3.2); estos totales
-  siguen siendo una cota del daño real por el +2 por tick.
+  fijo (16,7 ms), pero ya no pierde ticks por framerate. Desde el arreglo de
+  3.2 el `+2` se cobra una sola vez por objetivo y lanzamiento; estos totales
+  siguen siendo una cota porque suponen que todos los ticks alcanzan, no por el
+  término plano.
 - «Combo» = suma del daño esperado de las 4 habilidades contra el objetivo real,
   suponiendo que todas conectan y que el rival no esquiva.
 - «Objetivo neutro» = defensor con 100 en todas las stats y sin tipos, para
@@ -766,6 +749,11 @@ v0.22.0: 20 atacantes con moveset, 19 rivales por fila (todos los demás
 atacantes), áreas con el rival en el centro, DoT nominal y sin objetos ni
 instintos. Sirve para comparar el estado actual, no para mezclarla con la tabla
 de §4.3.
+
+> **Nota (2026-11-10)**: la foto se generó antes del arreglo de 3.2. Las filas
+> con DoT incluyen el `+2` por tick y sobreestiman un poco el combo; las tablas
+> regenerables `tabla-danos-por-ataque.md` y `dps-por-habilidad.md` ya usan el
+> `+2` único por objetivo y lanzamiento.
 
 | Pokémon | DPS básica | DPS sostenido | Combo neutro | % vida media | 100-0 | Sin daño |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1070,8 +1058,9 @@ autodaño la convierte en una mala elección en 1v1.
    `resolveInstantHits`; que ese daño no sume a `damageDealt`/`damageTaken` y
    documentar si algún proyectil debe sobrevivir. Los casts instantáneos y los
    buffs `self` ya se cancelan al morir.
-4. **DoT**: aplicar el +2 de la fórmula una vez por área; o compensar la
-   potencia por tick.
+4. ~~**DoT**: aplicar el +2 de la fórmula una vez por área; o compensar la
+   potencia por tick.~~ **Arreglado (2026-11-10)**: el `+2` se cobra una sola
+   vez por objetivo y lanzamiento.
 5. **Visión/alcance**: revelar al atacante al hacer daño o añadir un
    indicador de dirección. Queda el indicador de daño; la niebla ya oculta los
    FX.
@@ -1166,8 +1155,11 @@ así que se pueden añadir tests baratos:
 - **Invulnerabilidad de spawn**: lanzar una habilidad ofensiva con
   `invulnerableTimer > 0` debe ponerlo a 0; usar Protección o Impulso no debe
   retirarla. Durante esos 2 s el jugador sigue siendo invulnerable al daño.
-- **DoT**: que el daño total de un área `overTime` sea igual a
-  `power × duration` (con la tolerancia de la fórmula).
+- **DoT**: el daño total de un área `overTime` debe conservar la potencia
+  nominal `power × duration` (con la tolerancia de la fórmula) y el `+2` debe
+  cobrarse una sola vez por objetivo y lanzamiento, no una por tick. Repetir la
+  prueba con otro `tickInterval` no debe cambiar el término plano; la
+  diferencia restante es el redondeo por tick.
 - **Inmunidad**: un golpe con efectividad 0 no debe mostrar impacto ni «0», ni
   aplicar slow, ni cancelar dash/preparación; `Onda Trueno` no debe ralentizar
   a un Pokémon de tipo Tierra. Un golpe de estado válido sí debe interrumpir
@@ -1284,7 +1276,8 @@ así que se pueden añadir tests baratos:
 - **DoT y paso fijo**: el daño total de un área `overTime` debe ser
   reproducible con `dt` de render variables (incluido un parón simulado) porque
   la simulación usa pasos de 1/60; el primer tick debe caer en el instante
-  esperado (±1 paso), no un frame de render tarde.
+  esperado (±1 paso), no un frame de render tarde, y el `+2` no debe repetirse
+  al aumentar el número de ticks.
 - **Ciclón**: el centro no debe cruzar muros, rocas ni árboles.
 - **Descripciones**: un test de datos debe comprobar que `aoeDuration` y el
   `dash`/`aoeMovement` de Ciclón y Fuego Sagrado coinciden con sus textos.

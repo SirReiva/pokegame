@@ -31,6 +31,12 @@ export interface DamageInput {
   attackMultiplier?: number;
   /** Multiplicadores temporales de defensa (buffs). */
   defenseMultiplier?: number;
+  /**
+   * Término plano de la fórmula oficial. Vale 2 por defecto; los ticks de un
+   * área persistente lo desactivan salvo en el primero que alcanza a cada
+   * objetivo, para que el `+2` se cobre una vez por lanzamiento y no por tick.
+   */
+  flatBonus?: number;
   critical: boolean;
   randomFactor: number;
 }
@@ -101,6 +107,10 @@ export function decorateDamage(
  * La efectividad se aplica con `floor` después de cada modificador, como en el
  * juego. Un movimiento inmune hace 0; cualquier otro golpe válido hace al
  * menos 1 de daño.
+ *
+ * El término plano `+2` se puede sobrescribir con `flatBonus`: las áreas
+ * persistentes lo ponen a 0 en los ticks posteriores al primero que alcanza a
+ * cada objetivo, para no cobrarlo una vez por tick.
  */
 export function computeDamage(input: DamageInput): DamageResult {
   const attackStat =
@@ -111,10 +121,11 @@ export function computeDamage(input: DamageInput): DamageResult {
   const defense = Math.max(1, Math.floor(defenseStat * (input.defenseMultiplier ?? 1)));
 
   const levelFactor = Math.floor((2 * COMBAT_LEVEL) / 5 + 2);
+  const flatBonus = input.flatBonus ?? 2;
   const base =
     Math.floor(
       Math.floor((levelFactor * input.power * attack) / defense) / 50
-    ) + 2;
+    ) + flatBonus;
 
   const effectiveness = typeEffectiveness(input.moveType, input.defenderTypes);
   if (effectiveness === 0) {
