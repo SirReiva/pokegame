@@ -66,6 +66,8 @@ Siguen con entidades por elemento:
 - Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air`, `rock` y
   `psychic` (salvo el haz eléctrico cacheado).
 - Proyectiles e impactos pequeños.
+- El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
+  comprueba que la erupción coincide con el punto donde emerge el lanzador.
 - Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
   demás golpes con pocas entidades.
 - La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.

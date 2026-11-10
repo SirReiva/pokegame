@@ -128,6 +128,7 @@ export type AoeStyle =
   | 'blizzard'
   | 'ground'
   | 'fissure'
+  | 'burrow'
   | 'recovery'
   | 'cyclone'
   /** Rayo que cae del cielo y detona la explosión eléctrica al tocar el suelo. */
@@ -1990,19 +1991,42 @@ registerAbility(
 );
 
 registerAbility(
-  ability('excavar', 'Excavar', 'Ground', 'physical', 'dash')
+  ability('excavar', 'Excavar', 'Ground', 'physical', 'aoe')
     .power(85)
     .cooldown(8)
     .range(0)
-    .radius(0.95)
-    .dash(5.2)
-    .knockback(0.7)
-    .active(0.35).recovery(0)
+    .radius(1.2)
+    // El aviso sigue al lanzador mientras se mueve bajo tierra: al emerger,
+    // la erupción nace exactamente donde está.
+    .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    .startup(2, {  move: true })
+    .recovery(0.4)
     .animation('attack')
+    .area('burrow', 'instant', 0.75)
+    .knockback(1.2)
+    .onStart(
+      ({
+        targets,
+        applyBuff,
+        setCasterHidden,
+        setCasterInvulnerable
+      }) => {
+        setCasterHidden(true);
+        setCasterInvulnerable(true);
+        const self = targets.find((target) => target.isSelf);
+        if (self) {
+          applyBuff(self, { stat: 'speed', multiplier: 1.2, duration: 2 });
+        }
+      }
+    )
+    .onCast(({ setCasterHidden, setCasterInvulnerable }) => {
+      setCasterHidden(false);
+      setCasterInvulnerable(false);
+    })
     .impact('ground')
     .color(182, 161, 54)
     .description(
-      'Se hunde bajo tierra y emerge 5,2 u más adelante, arrollando a los rivales del camino.'
+      'Se oculta bajo tierra y se vuelve invulnerable, gana un 20 % de velocidad durante 2 s y emerge con una erupción de 2,2 u centrada en sí mismo: 85 de potencia y empuja 1,2 u a los rivales alcanzados.'
     )
 );
 

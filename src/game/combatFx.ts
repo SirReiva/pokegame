@@ -1491,6 +1491,8 @@ export class CombatFx {
         this.spawnGroundAoe(x, z, radius, color, duration),
       fissure: (x, z, radius, color, duration) =>
         this.spawnFissureAoe(x, z, radius, color, duration),
+      burrow: (x, z, radius, color, duration) =>
+        this.spawnBurrowAoe(x, z, radius, color, duration),
       recovery: (x, z, radius, color, duration) =>
         this.spawnRecoveryAoe(x, z, radius, color, duration),
       thunder: (x, z, radius, color, duration) =>
@@ -11958,6 +11960,319 @@ export class CombatFx {
       branchDark.opacity = 0.82 * envelope;
       spikeLight.opacity = 0.92 * envelope;
       spikeDark.opacity = 0.82 * envelope;
+    };
+    this.addEffect(root, materials, life, animate, areaAnchors(x, z, radius));
+    animate(0, 0);
+  }
+
+  /**
+   * Área de excavación: la tierra revienta desde debajo del lanzador. Se abre
+   * un cráter con grietas, las losas y rocas salen despedidas y una columna de
+   * polvo se deshace sobre el punto. Es el impacto de `Excavar`.
+   */
+  private spawnBurrowAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    const life = Math.max(0.4, duration);
+    const root = new pc.Entity('burrow-aoe');
+    root.setPosition(x, 0.02, z);
+    this.app.root.addChild(root);
+
+    const pitMaterial = this.createWaterMaterial([40, 31, 23], 0.66);
+    const rimMaterial = this.createWaterMaterial(color, 0.5);
+    const waveMaterial = this.createWaterMaterial(color, 0.42);
+    const crackMaterial = this.createWaterMaterial([238, 206, 150], 0.55);
+    const dustMaterial = this.createWaterMaterial([188, 164, 128], 0.38);
+    const rockLight = this.createRockMaterial([192, 168, 128], 1);
+    const rockDark = this.createRockMaterial([118, 96, 72], 1);
+    const materials = [
+      pitMaterial,
+      rimMaterial,
+      waveMaterial,
+      crackMaterial,
+      dustMaterial,
+      rockLight,
+      rockDark
+    ];
+
+    const pit = this.createEntity(this.discMesh, [pitMaterial], root);
+    pit.setLocalPosition(0, 0.006, 0);
+    pit.setLocalScale(0.001, 1, 0.001);
+
+    const rim = this.createEntity(this.torusMesh, [rimMaterial], root);
+    rim.setLocalPosition(0, 0.055, 0);
+    rim.setLocalScale(0.001, 1, 0.001);
+
+    const waves: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const wave = this.createEntity(this.torusMesh, [waveMaterial], root);
+      wave.setLocalPosition(0, 0.07 + index * 0.025, 0);
+      wave.setLocalScale(0.001, 1, 0.001);
+      waves.push(wave);
+    }
+
+    const cracks: {
+      entity: pc.Entity;
+      angle: number;
+      length: number;
+      width: number;
+    }[] = [];
+    for (let index = 0; index < 11; index++) {
+      const angle = (index / 11) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+      const length = radius * (0.45 + Math.random() * 0.5);
+      const crack = this.createEntity(this.boxMesh, [crackMaterial], root);
+      crack.setLocalEulerAngles(0, angle / DEG, 0);
+      crack.setLocalScale(0.001, 0.02, 0.001);
+      cracks.push({
+        entity: crack,
+        angle,
+        length,
+        width: radius * (0.025 + Math.random() * 0.02)
+      });
+    }
+
+    const slabs: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      size: number;
+      lift: number;
+      spin: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 9; index++) {
+      const angle = (index / 9) * Math.PI * 2 + Math.random() * 0.5;
+      const size = radius * (0.1 + Math.random() * 0.09);
+      const slab = this.createEntity(
+        this.boxMesh,
+        [index % 2 === 0 ? rockLight : rockDark],
+        root
+      );
+      slab.setLocalScale(0.001, 0.001, 0.001);
+      slabs.push({
+        entity: slab,
+        angle,
+        distance: radius * (0.12 + Math.random() * 0.55),
+        size,
+        lift: radius * (0.35 + Math.random() * 0.55),
+        spin: (Math.random() - 0.5) * 620,
+        delay: Math.random() * 0.07
+      });
+    }
+
+    const rocks: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      size: number;
+      height: number;
+      spin: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 20; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const rock = this.createEntity(
+        this.rockChunkMesh,
+        [index % 3 === 0 ? rockDark : rockLight],
+        root
+      );
+      rock.setLocalScale(0.001, 0.001, 0.001);
+      rocks.push({
+        entity: rock,
+        angle,
+        distance: radius * (0.2 + Math.random() * 0.75),
+        size: radius * (0.03 + Math.random() * 0.045),
+        height: radius * (0.55 + Math.random() * 0.9),
+        spin: (Math.random() - 0.5) * 760,
+        delay: Math.random() * 0.06
+      });
+    }
+
+    const puffs: {
+      entity: pc.Entity;
+      angle: number;
+      distance: number;
+      size: number;
+      rise: number;
+      delay: number;
+    }[] = [];
+    for (let index = 0; index < 11; index++) {
+      const angle = Math.random() * Math.PI * 2;
+      const size = radius * (0.16 + Math.random() * 0.18);
+      const puff = this.createEntity(this.sphereMesh, [dustMaterial], root);
+      puff.setLocalScale(0.001, 0.001, 0.001);
+      puffs.push({
+        entity: puff,
+        angle,
+        distance: radius * (0.04 + Math.random() * 0.3),
+        size,
+        rise: radius * (0.45 + Math.random() * 0.85),
+        delay: Math.random() * 0.08
+      });
+    }
+
+    this.spawnSporeParticles(
+      root,
+      {
+        y: 0.12,
+        extents: [radius * 0.5, 0.08, radius * 0.5],
+        velocity: [0, 0.8, 0],
+        velocityEnd: [0, 2.4, 0],
+        radialSpeed: 1.4,
+        radialSpeedEnd: 3.4,
+        sizeStart: radius * 0.08,
+        sizeMid: radius * 0.18,
+        sizeEnd: radius * 0.03,
+        lifetime: 0.55,
+        rate: 0.01,
+        numParticles: 120,
+        blendType: pc.BLEND_NORMAL,
+        preWarm: false
+      },
+      [192, 168, 132],
+      this.dustTexture
+    );
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const open = Math.min(1, time / 0.12);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / (life * 0.55)));
+      const burst = 1 - Math.pow(1 - open, 3);
+      const waveT = Math.min(1, time / 0.4);
+      const wave = 1 - Math.pow(1 - waveT, 3);
+
+      pitMaterial.opacity = 0.64 * fadeOut;
+      const craterScale = radius * 2.2 * (0.3 + burst * 0.7);
+      pit.setLocalScale(
+        Math.max(0.001, craterScale),
+        1,
+        Math.max(0.001, craterScale)
+      );
+
+      rimMaterial.opacity = (0.28 + (1 - burst) * 0.28) * fadeOut;
+      const rimScale = radius * 2.16 * (0.45 + burst * 0.55);
+      rim.setLocalScale(
+        Math.max(0.001, rimScale),
+        1,
+        Math.max(0.001, rimScale)
+      );
+      rim.setLocalEulerAngles(0, time * 12, 0);
+
+      waveMaterial.opacity = 0.42 * Math.max(0, 1 - waveT) * fadeOut;
+      for (let index = 0; index < waves.length; index++) {
+        const ring = waves[index];
+        const ringScale = radius * 2 * (0.25 + wave * (1.5 + index * 0.5));
+        ring.setLocalScale(
+          Math.max(0.001, ringScale),
+          1,
+          Math.max(0.001, ringScale)
+        );
+      }
+
+      crackMaterial.opacity = 0.5 * burst * fadeOut;
+      for (const crack of cracks) {
+        const reach = crack.length * burst;
+        crack.entity.setLocalPosition(
+          Math.sin(crack.angle) * reach * 0.5,
+          0.03,
+          Math.cos(crack.angle) * reach * 0.5
+        );
+        crack.entity.setLocalScale(
+          Math.max(0.001, crack.width * burst),
+          0.02,
+          Math.max(0.001, reach)
+        );
+      }
+
+      for (const slab of slabs) {
+        const local = Math.max(0, Math.min(1, (time - slab.delay) / 0.55));
+        if (local <= 0) {
+          slab.entity.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        const ease = 1 - Math.pow(1 - local, 2);
+        const distance = slab.distance * ease;
+        const height = Math.sin(local * Math.PI) * slab.lift;
+        const fade =
+          Math.min(1, local / 0.08) *
+          Math.max(0, 1 - Math.max(0, local - 0.72) / 0.28);
+        const scale = slab.size * fade;
+        slab.entity.setLocalPosition(
+          Math.sin(slab.angle) * distance,
+          0.04 + height,
+          Math.cos(slab.angle) * distance
+        );
+        slab.entity.setLocalScale(
+          Math.max(0.001, scale),
+          Math.max(0.001, scale * 0.38),
+          Math.max(0.001, scale * 0.8)
+        );
+        slab.entity.setLocalEulerAngles(
+          slab.spin * local,
+          slab.angle / DEG,
+          slab.spin * 0.45 * local
+        );
+      }
+
+      for (const rock of rocks) {
+        const local = Math.max(0, Math.min(1, (time - rock.delay) / 0.7));
+        if (local <= 0) {
+          rock.entity.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        const ease = 1 - Math.pow(1 - local, 2);
+        const distance = rock.distance * ease;
+        const height = Math.sin(local * Math.PI) * rock.height;
+        const fade = Math.max(0, 1 - local);
+        const scale = rock.size * (1 - local * 0.35) * fade;
+        rock.entity.setLocalPosition(
+          Math.sin(rock.angle) * distance,
+          0.1 + height,
+          Math.cos(rock.angle) * distance
+        );
+        rock.entity.setLocalScale(
+          Math.max(0.001, scale),
+          Math.max(0.001, scale * 0.82),
+          Math.max(0.001, scale * 0.94)
+        );
+        rock.entity.setLocalEulerAngles(
+          local * 300,
+          rock.angle / DEG + local * rock.spin,
+          local * 190
+        );
+      }
+
+      for (const puff of puffs) {
+        const local = Math.max(0, Math.min(1, (time - puff.delay) / 0.6));
+        if (local <= 0) {
+          puff.entity.setLocalScale(0.001, 0.001, 0.001);
+          continue;
+        }
+        const ease = 1 - Math.pow(1 - local, 2);
+        const distance = puff.distance * ease;
+        const rise = puff.rise * ease;
+        const fade = Math.max(0, 1 - local);
+        const scale = puff.size * (0.5 + ease * 1.5) * fade;
+        puff.entity.setLocalPosition(
+          Math.sin(puff.angle) * distance,
+          0.12 + rise,
+          Math.cos(puff.angle) * distance
+        );
+        puff.entity.setLocalScale(
+          Math.max(0.001, scale),
+          Math.max(0.001, scale * 0.72),
+          Math.max(0.001, scale)
+        );
+      }
+
+      dustMaterial.opacity = 0.34 * fadeOut;
+      rockLight.opacity = 0.92 * fadeOut;
+      rockDark.opacity = 0.8 * fadeOut;
     };
     this.addEffect(root, materials, life, animate, areaAnchors(x, z, radius));
     animate(0, 0);

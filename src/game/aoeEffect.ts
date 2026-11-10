@@ -220,6 +220,18 @@ export type AoeEffect = (context: AoeEffectContext) => void;
  */
 export interface AoeEventContext extends AoeEffectContext {
   combatFx: CombatFx;
+  /**
+   * Oculta o vuelve a mostrar al lanzador (y su marca de equipo) mientras dure
+   * el efecto. `Excavar` lo usa para esconderse bajo tierra en `onStart` y
+   * reaparecer en `onCast`.
+   */
+  setCasterHidden(hidden: boolean): void;
+  /**
+   * Hace invulnerable o retira la invulnerabilidad del lanzador. `Excavar` la
+   * activa mientras está oculto en `onStart` y la retira al emerger en
+   * `onCast`. La invulnerabilidad se limpia sola si el casteo se interrumpe.
+   */
+  setCasterInvulnerable(invulnerable: boolean): void;
 }
 
 /** Callback de un evento del ciclo de vida de un área. */

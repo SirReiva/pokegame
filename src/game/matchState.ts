@@ -186,6 +186,16 @@ export interface ActiveCast {
    * cuando termina el efecto del haz; `null` en las demás formas.
    */
   lane: TelegraphHandle | null;
+  /**
+   * `true` si este casteo ocultó al lanzador (por ejemplo, `Excavar` bajo
+   * tierra). Al terminar o cancelarse se vuelve a mostrar.
+   */
+  hiddenCaster: boolean;
+  /**
+   * `true` si este casteo hizo invulnerable al lanzador. Al terminar o
+   * cancelarse se retira la invulnerabilidad.
+   */
+  invulnerableCaster: boolean;
   /** Centro del área o extremo del haz fijado al empezar el lanzamiento. */
   targetX: number;
   targetZ: number;
@@ -265,6 +275,11 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   submerge: number;
   animation: AnimationName;
   playback: number;
+  /**
+   * `true` mientras una habilidad lo oculta del render y de la vista de los
+   * equipos (por ejemplo, `Excavar` durante la preparación).
+   */
+  hidden: boolean;
   terrain: TerrainId;
   terrainMultiplier: number;
   terrainSpeedReason: TerrainSpeedReason;

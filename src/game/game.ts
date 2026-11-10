@@ -1135,6 +1135,7 @@ export class Game {
         submerge: 0,
         animation: 'idle',
         playback: 1,
+        hidden: false,
         terrain,
         terrainMultiplier: spawnTerrainEffect.multiplier,
         terrainSpeedReason: spawnTerrainEffect.reason,
@@ -2079,6 +2080,8 @@ export class Game {
         cast.elapsed = cast.plan.endAt - 1e-4;
       } else {
         // La marca y el carril se autodestruyen al terminar su propio efecto.
+        if (cast.hiddenCaster) player.hidden = false;
+        if (cast.invulnerableCaster) player.invulnerableTimer = 0;
         player.activeCast = null;
         player.animationFrame = null;
         return false;
@@ -2552,6 +2555,8 @@ export class Game {
     if (cast.def.blockMovementDuringCast) this.cutCastAoes(cast);
     cast.marker?.destroy();
     cast.lane?.destroy();
+    if (cast.hiddenCaster) player.hidden = false;
+    if (cast.invulnerableCaster) player.invulnerableTimer = 0;
     player.activeCast = null;
     player.animationFrame = null;
   }
@@ -2698,6 +2703,8 @@ export class Game {
       forcedFrame: null,
       forcedAnimation: null,
       forcedFrames: 0,
+      hiddenCaster: false,
+      invulnerableCaster: false,
       marker,
       lane,
       targetX,
@@ -3188,7 +3195,26 @@ export class Game {
     };
     const context: AoeEventContext = {
       ...this.buildAoeContext(hit),
-      combatFx: this.combatFx
+      combatFx: this.combatFx,
+      setCasterHidden: (hidden) => {
+        caster.hidden = hidden;
+        // El casteo recuerda que ocultó al lanzador para volver a mostrarlo
+        // si se interrumpe antes de que llegue su `onCast`.
+        if (hidden && caster.activeCast) caster.activeCast.hiddenCaster = true;
+      },
+      setCasterInvulnerable: (invulnerable) => {
+        if (invulnerable) {
+          // La preparación entera queda cubierta; `onCast` la retira antes de
+          // que el margen extra pueda notarse.
+          caster.invulnerableTimer = Math.max(
+            caster.invulnerableTimer,
+            def.startup + 0.1
+          );
+          if (caster.activeCast) caster.activeCast.invulnerableCaster = true;
+        } else if (caster.activeCast?.invulnerableCaster) {
+          caster.invulnerableTimer = 0;
+        }
+      }
     };
     event(context);
   }
@@ -4617,9 +4643,14 @@ export class Game {
       // Un humano KO conserva su cámara y su círculo de niebla; por tanto,
       // también puede revelar actores en esa zona. Un bot KO no aporta visión.
       if (!observer.alive && observer.isBot) continue;
-      if (observer.alive) current[observer.team].add(observer.slot);
+      if (observer.alive && !observer.hidden) {
+        current[observer.team].add(observer.slot);
+      }
       for (const target of this.matchPlayers) {
         if (target === observer) continue;
+        // Una habilidad puede ocultar al lanzador (Excavar): ni los rivales ni
+        // los aliados lo ven mientras dura la preparación.
+        if (target.hidden) continue;
         // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
         // que comprobar rivales y aliados que acaban de caer.
         if (target.alive && target.team === observer.team) continue;
@@ -4675,6 +4706,11 @@ export class Game {
       for (const target of this.matchPlayers) {
         const copy = target.copies[viewIndex];
         if (!copy) continue;
+        // Oculto por una habilidad: desaparece también en su propia vista.
+        if (target.hidden) {
+          copy.setVisible(false);
+          continue;
+        }
         // Un KO deja ver la animación de daño un instante; después el cuerpo
         // desaparece hasta reaparecer.
         if (!target.alive && target.deathFade <= 0) {

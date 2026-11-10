@@ -617,33 +617,33 @@ Tipos: **Psychic / Grass** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120
 
 Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 174 · Vel 130
 
-| Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 · CD 0,8 s | Habilidad 1: Marea<br>Water · Esp · Pot 30/s · CD 9 s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45 · CD 12 s | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 · CD 16 s |
+| Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 · CD 0,8 s | Habilidad 1: Marea<br>Water · Esp · Pot 30/s · CD 9 s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45/s · CD 4 s | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 · CD 16 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 102,2 | 2,3 | 6,1 | 12,3 |
-| Charmander | 62,5 | 12,5 | 3,8 | 7,3 |
-| Squirtle | 51,1 | 2,3 | 3,1 | 6,2 |
-| Pikachu | 62,5 | 6,2 | 1,9 | 3,6 |
-| Gengar | 92 | 4,5 | 2,8 | 5,5 |
-| Voltorb | 58,8 | 5,6 | 1,8 | 3,4 |
-| Eevee | 51,1 | 5,1 | 3,1 | 6,1 |
-| Lucario | 47,3 | 5,1 | 3,1 | 5,8 |
-| Greninja | 0 | 2,3 | 2,9 | 5,7 |
-| Mewtwo | 20,4 | 4 | 2,4 | 4,7 |
-| Mew | 19,1 | 4 | 2,3 | 4,4 |
-| Onix | 68,8 | 27,1 | 2 | 4 |
-| Scyther | 45,9 | 4,5 | 5,3 | 10,5 |
-| Gyarados | 38,3 | 1,7 | 2,3 | 4,4 |
-| Tyranitar | 0 | 8 | 1,1 | 2,2 |
-| Articuno | 30,6 | 3,4 | 1,9 | 3,6 |
-| Zapdos | 42,1 | 4 | 1,2 | 2,3 |
-| Moltres | 43,4 | 8 | 2,6 | 5 |
-| Raikou | 38,3 | 4 | 1,1 | 2,2 |
-| Entei | 46 | 9,1 | 2,8 | 5,5 |
-| Suicune | 31,9 | 1,7 | 2 | 3,9 |
-| Ho-Oh | 24,3 | 5,7 | 1,5 | 3,1 |
-| Celebi | 19,1 | 1,7 | 4,6 | 8,8 |
-| Groudon | 42,1 | 8 | 2,4 | 4,7 |
-| **Mediana de DPS** | 42,7 | 4,5 | 2,4 | 4,7 |
+| Bulbasaur | 102,2 | 2,3 | 46 | 12,3 |
+| Charmander | 62,5 | 12,5 | 28,1 | 7,3 |
+| Squirtle | 51,1 | 2,3 | 23 | 6,2 |
+| Pikachu | 62,5 | 6,2 | 14,1 | 3,6 |
+| Gengar | 92 | 4,5 | 22,9 | 5,5 |
+| Voltorb | 58,8 | 5,6 | 12,8 | 3,4 |
+| Eevee | 51,1 | 5,1 | 23 | 6,1 |
+| Lucario | 47,3 | 5,1 | 23 | 5,8 |
+| Greninja | 0 | 2,3 | 22,9 | 5,7 |
+| Mewtwo | 20,4 | 4 | 19,1 | 4,7 |
+| Mew | 19,1 | 4 | 19,1 | 4,4 |
+| Onix | 68,8 | 27,1 | 15,3 | 4 |
+| Scyther | 45,9 | 4,5 | 40,8 | 10,5 |
+| Gyarados | 38,3 | 1,7 | 19,1 | 4,4 |
+| Tyranitar | 0 | 8 | 8,9 | 2,2 |
+| Articuno | 30,6 | 3,4 | 15,3 | 3,6 |
+| Zapdos | 42,1 | 4 | 8,9 | 2,3 |
+| Moltres | 43,4 | 8 | 20,4 | 5 |
+| Raikou | 38,3 | 4 | 8,9 | 2,2 |
+| Entei | 46 | 9,1 | 22,9 | 5,5 |
+| Suicune | 31,9 | 1,7 | 16,6 | 3,9 |
+| Ho-Oh | 24,3 | 5,7 | 12,8 | 3,1 |
+| Celebi | 19,1 | 1,7 | 38,1 | 8,8 |
+| Groudon | 42,1 | 8 | 19,1 | 4,7 |
+| **Mediana de DPS** | 42,7 | 4,5 | 19,1 | 4,7 |
 
 ## Ho-Oh
 
@@ -701,7 +701,7 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Onix | Atadura 39,3 | Lanzarrocas 8,2 | Excavar 4,6 | Fisura 4,6 | 56,7 |
 | Groudon | Cuchillada 54,4 | Terremoto 5,7 | Avalancha 8 | Filo del Abismo 7,1 | 75,3 |
 | Celebi | Hoja Mágica 43,4 | Rayo Solar 8 | Deseo — | Futuro Siniestro 5,3 | 56,7 |
-| Lugia | Onda Mental 45,9 | Marea 4,5 | Ciclón 2,6 | Aerochorro 5,2 | 58,3 |
+| Lugia | Onda Mental 45,9 | Marea 4,5 | Ciclón 20,4 | Aerochorro 5,2 | 76,1 |
 | Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 24,5 | 136,8 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.

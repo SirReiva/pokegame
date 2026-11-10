@@ -637,33 +637,33 @@ Tipos: **Psychic / Grass** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120
 
 Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 174 · Vel 130
 
-| Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 | Habilidad 1: Marea<br>Water · Esp · Pot 30/s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45 | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 |
+| Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 | Habilidad 1: Marea<br>Water · Esp · Pot 30/s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45/s | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 82 ×2 | 20 ×½ | 74 ×2 | 196 ×2 |
-| Charmander | 50 ×1 | 112 ×2 | 46 ×1 | 117 ×1 |
-| Squirtle | 41 ×1 | 20 ×½ | 37 ×1 | 99 ×1 |
-| Pikachu | 50 ×1 | 56 ×1 | 22 ×½ | 58 ×½ |
-| Gengar | 74 ×2 | 41 ×1 | 34 ×1 | 89 ×1 |
-| Voltorb | 47 ×1 | 51 ×1 | 21 ×½ | 55 ×½ |
-| Eevee | 41 ×1 | 46 ×1 | 37 ×1 | 98 ×1 |
-| Lucario | 38 ×1 | 46 ×1 | 37 ×1 | 93 ×1 |
-| Greninja | 0 ×0 | 20 ×½ | 35 ×1 | 92 ×1 |
-| Mewtwo | 16 ×½ | 36 ×1 | 29 ×1 | 75 ×1 |
-| Mew | 15 ×½ | 36 ×1 | 28 ×1 | 70 ×1 |
-| Onix | 55 ×1 | 244 ×4 | 25 ×½ | 64 ×½ |
-| Scyther | 37 ×1 | 41 ×1 | 63 ×2 | 168 ×2 |
-| Gyarados | 31 ×1 | 15 ×½ | 28 ×1 | 70 ×1 |
-| Tyranitar | 0 ×0 | 72 ×2 | 13 ×½ | 35 ×½ |
-| Articuno | 25 ×1 | 31 ×1 | 23 ×1 | 58 ×1 |
-| Zapdos | 34 ×1 | 36 ×1 | 14 ×½ | 37 ×½ |
-| Moltres | 35 ×1 | 72 ×2 | 31 ×1 | 80 ×1 |
-| Raikou | 31 ×1 | 36 ×1 | 13 ×½ | 35 ×½ |
-| Entei | 37 ×1 | 82 ×2 | 34 ×1 | 89 ×1 |
-| Suicune | 26 ×1 | 15 ×½ | 25 ×1 | 62 ×1 |
-| Ho-Oh | 19 ×1 | 51 ×2 | 18 ×1 | 49 ×1 |
-| Celebi | 15 ×½ | 15 ×½ | 55 ×2 | 141 ×2 |
-| Groudon | 34 ×1 | 72 ×2 | 29 ×1 | 75 ×1 |
-| **Mediana de daño** | 34 | 41 | 29 | 75 |
+| Bulbasaur | 82 ×2 | 20 ×½ | 184 ×2 | 196 ×2 |
+| Charmander | 50 ×1 | 112 ×2 | 113 ×1 | 117 ×1 |
+| Squirtle | 41 ×1 | 20 ×½ | 92 ×1 | 99 ×1 |
+| Pikachu | 50 ×1 | 56 ×1 | 56 ×½ | 58 ×½ |
+| Gengar | 74 ×2 | 41 ×1 | 91 ×1 | 89 ×1 |
+| Voltorb | 47 ×1 | 51 ×1 | 51 ×½ | 55 ×½ |
+| Eevee | 41 ×1 | 46 ×1 | 92 ×1 | 98 ×1 |
+| Lucario | 38 ×1 | 46 ×1 | 92 ×1 | 93 ×1 |
+| Greninja | 0 ×0 | 20 ×½ | 91 ×1 | 92 ×1 |
+| Mewtwo | 16 ×½ | 36 ×1 | 76 ×1 | 75 ×1 |
+| Mew | 15 ×½ | 36 ×1 | 76 ×1 | 70 ×1 |
+| Onix | 55 ×1 | 244 ×4 | 61 ×½ | 64 ×½ |
+| Scyther | 37 ×1 | 41 ×1 | 163 ×2 | 168 ×2 |
+| Gyarados | 31 ×1 | 15 ×½ | 76 ×1 | 70 ×1 |
+| Tyranitar | 0 ×0 | 72 ×2 | 36 ×½ | 35 ×½ |
+| Articuno | 25 ×1 | 31 ×1 | 61 ×1 | 58 ×1 |
+| Zapdos | 34 ×1 | 36 ×1 | 36 ×½ | 37 ×½ |
+| Moltres | 35 ×1 | 72 ×2 | 82 ×1 | 80 ×1 |
+| Raikou | 31 ×1 | 36 ×1 | 36 ×½ | 35 ×½ |
+| Entei | 37 ×1 | 82 ×2 | 91 ×1 | 89 ×1 |
+| Suicune | 26 ×1 | 15 ×½ | 66 ×1 | 62 ×1 |
+| Ho-Oh | 19 ×1 | 51 ×2 | 51 ×1 | 49 ×1 |
+| Celebi | 15 ×½ | 15 ×½ | 153 ×2 | 141 ×2 |
+| Groudon | 34 ×1 | 72 ×2 | 76 ×1 | 75 ×1 |
+| **Mediana de daño** | 34 | 41 | 76 | 75 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Ho-Oh
@@ -723,7 +723,7 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 | Onix | 34 | 45 | 37 | 66 | 208 |
 | Groudon | 31 | 61 | 50 | 121 | 242 |
 | Celebi | 29 | 55 | — | 74 | 159 |
-| Lugia | 34 | 41 | 29 | 75 | 192 |
+| Lugia | 34 | 41 | 76 | 75 | 237 |
 | Ho-Oh | 49 | 87 | — | 63 | 205 |
 
 ## Pokémon sin moveset
