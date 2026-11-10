@@ -2109,19 +2109,30 @@ registerAbility(
 registerAbility(
   ability('ciclon', 'Ciclón', 'Flying', 'special', 'aoe')
     .power(45)
-    .cooldown(12)
-    .range(0)
-    .radius(3.6)
+    .cooldown(4)
+    .aoeMovement(({ originX, originZ, dirX, dirZ, elapsed, duration }) => {
+      // Avanza hacia el frente a velocidad constante (sin frenar al final)
+      // mientras se balancea lateralmente en forma de senoide (dos ciclos).
+      const progress = Math.min(1, elapsed / duration);
+      const travel = progress * 10;
+      const sway = Math.sin(progress * Math.PI * 4) * 0.6;
+      return {
+        x: originX + dirX * travel - dirZ * sway,
+        z: originZ + dirZ * travel + dirX * sway
+      };
+    })
+    .range(2)
+    .radius(2)
     .startup(0.3, { animation: 'charge' })
     .recovery(0.55)
-    .animation('attack')
-    .area('cyclone', 'instant', 1.2)
+    .animation('shoot')
+    .area('cyclone', 'overTime', 2.5)
     .knockback(2.6)
     .slow(0.65, 1.5)
     .impact('air')
     .color(198, 224, 255)
     .description(
-      'Golpe de ala que desata un ciclón de 3,6 u alrededor de Lugia: 45 de potencia, empuja 2,6 u y ralentiza un 35 % durante 1,5 s.'
+      'Golpe de ala que desata un ciclón que avanza 6 u hacia delante a velocidad constante, con un vaivén senoidal: 45 de daño por segundo durante 2,5 s y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
     )
 );
 
