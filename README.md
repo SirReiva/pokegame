@@ -328,6 +328,8 @@ Las áreas `overTime` pueden mover su centro durante la duración con `aoeMoveme
 
 Sin `aoeMovement` el centro queda fijo donde se lanzó, como hasta ahora.
 
+Las áreas pueden escuchar tres eventos de su ciclo de vida con `onStart`, `onCast` y `onEnd`. Reciben el mismo contexto que `aoeEffect` (objetivos dentro del área y servicios para golpear, empujar, ralentizar, curar o revivir) más `combatFx`, y se ejecutan en este orden: `onStart` al empezar el lanzamiento (antes del `startup`), `onCast` al aparecer el área (antes del primer golpe o tick) y `onEnd` al terminar —cuando se agota `aoeDuration` o, en las áreas instantáneas, cuando acaba su duración visual—. El `power` del contexto es la potencia bruta de la habilidad, sin el escalado por tick.
+
 Las áreas pueden usar **daño radial** con `radialDamage: true`. El centro siempre hace el 100 % de la potencia y el borde hace `radialMinDamage`, con interpolación lineal según la distancia. Por defecto `radialMinDamage` vale `0`, así que el borde no hace daño; con `0.35` el borde hace el 35 %. Funciona igual en `instant` y en `overTime` (el multiplicador se aplica a cada tick). `Psicoataque` es el primer caso: 100 % en el centro y 35 % en el borde. El resto de áreas siguen haciendo daño completo porque `radialDamage` es `false` por defecto.
 
 `Giro Fuego` usa `overTime` (40/s durante 2,4 s, ticks de 0,4 s) y `Terremoto` también (40/s durante 2,5 s, ticks de 0,5 s), así que el área golpea varias veces a quien se quede dentro. `Anillo Ígneo` usa `instant` con `aoeDuration: 0,5`, así que su explosión golpea una vez y el estallido de llamas dura medio segundo.

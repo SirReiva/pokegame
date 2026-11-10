@@ -28,6 +28,7 @@ import { aoeAreaFrom, aoeContains, aoeDistance } from './aoeGeometry';
 import {
   defaultAoeEffect,
   type AoeEffectContext,
+  type AoeEventContext,
   type AoeFallenAlly,
   type AoeHitInput,
   type AoeHitOptions,
@@ -295,6 +296,23 @@ function heldOnlyInput(snapshot: DeviceInputSnapshot): DeviceInputSnapshot {
 }
 
 /**
+ * Área instantánea cuyo `onEnd` se retrasa hasta agotar su duración visual.
+ * Las áreas `overTime` no lo necesitan: su final coincide con su retirada.
+ */
+interface PendingAoeEnd {
+  caster: MatchPlayerState;
+  def: AbilityDef;
+  x: number;
+  z: number;
+  dirX: number;
+  dirZ: number;
+  /** Segundos que faltan para disparar el evento. */
+  remaining: number;
+  /** Tiempo transcurrido desde que apareció el área. */
+  elapsed: number;
+}
+
+/**
  * Estilos de efecto que hay que precompilar para una partida. `aoeCones` son
  * los estilos de área que alguna habilidad usa con `aoeShape: 'cone'`: su
  * camino de render (malla del abanico y partículas) es distinto del circular.
@@ -403,6 +421,8 @@ export class Game {
   private projectiles: Projectile[] = [];
   /** Áreas persistentes con daño periódico. */
   private activeAoes: ActiveAoe[] = [];
+  /** `onEnd` pendientes de áreas instantáneas. */
+  private pendingAoeEnds: PendingAoeEnd[] = [];
   /** Golpes melee del frame actual, resueltos después de mover a todos. */
   private pendingMeleeHits: PendingMeleeHit[] = [];
   /** Habilidades instantáneas que esperan al final del frame para ejecutarse. */
@@ -1265,6 +1285,7 @@ export class Game {
     for (const projectile of this.projectiles) projectile.visual.destroy();
     this.projectiles = [];
     this.activeAoes = [];
+    this.pendingAoeEnds = [];
     this.pendingMeleeHits = [];
     this.queuedCasts = [];
     this.pendingInstantHits = [];
@@ -1729,6 +1750,7 @@ export class Game {
       if (!this.matchOver) this.resolveMeleeHits();
       if (!this.matchOver) this.updateProjectiles(stepDt);
       if (!this.matchOver) this.updateActiveAoes(stepDt);
+      if (!this.matchOver) this.updatePendingAoeEnds(stepDt);
       if (!this.matchOver) this.pickups?.collect(this.matchPlayers, this.pickupHandlers);
     }
   }
@@ -2687,6 +2709,12 @@ export class Game {
     };
     player.activeCast = cast;
 
+    // Las áreas avisan de que empieza el lanzamiento antes de cualquier
+    // preparación. El centro todavía es el fijado al pulsar la habilidad.
+    if (def.shape === 'aoe') {
+      this.emitAoeEvent('start', player, def, targetX, targetZ, dirX, dirZ, 0);
+    }
+
     // Startup cero: el efecto se resuelve en la fase común de este mismo frame.
     if (plan.effectAt <= 0) {
       cast.fired = true;
@@ -2807,6 +2835,17 @@ export class Game {
       castDirX: dirX,
       castDirZ: dirZ,
       resolveAoeHit: (hit) => this.resolveAoeHit(hit),
+      emitAoeEvent: (phase, source, ability, x, z, eventDirX, eventDirZ, elapsed) =>
+        this.emitAoeEvent(
+          phase,
+          source,
+          ability,
+          x,
+          z,
+          eventDirX,
+          eventDirZ,
+          elapsed
+        ),
       healToken
     };
 
@@ -2999,10 +3038,10 @@ export class Game {
 
   /**
    * Reúne a todos los Pokémon vivos dentro del área (aliados, enemigos y el
-   * propio lanzador) y delega la aplicación de efectos en el callback de la
-   * habilidad. El motor solo aporta los datos y los servicios de golpe.
+   * propio lanzador), los aliados caídos y los servicios de golpe. Lo usan
+   * tanto los ticks de `aoeEffect` como los eventos `onStart`/`onCast`/`onEnd`.
    */
-  private resolveAoeHit(hit: AoeHitInput): void {
+  private buildAoeContext(hit: AoeHitInput): AoeEffectContext {
     const targets: AoeTarget[] = [];
     const fallenAllies: AoeFallenAlly[] = [];
     // El círculo usa `radius` alrededor del centro; el cono usa la misma prueba
@@ -3061,7 +3100,7 @@ export class Game {
       });
     }
 
-    const context: AoeEffectContext = {
+    return {
       caster: hit.owner,
       def: hit.def,
       x: hit.x,
@@ -3088,7 +3127,70 @@ export class Game {
         this.reviveAoeAlly(target, fraction, hit.def, hit.owner),
       isMatchOver: () => this.matchOver
     };
-    (hit.def.aoeEffect ?? defaultAoeEffect)(context);
+  }
+
+  /** Resuelve un golpe o tick del área con el `aoeEffect` de la habilidad. */
+  private resolveAoeHit(hit: AoeHitInput): void {
+    (hit.def.aoeEffect ?? defaultAoeEffect)(this.buildAoeContext(hit));
+  }
+
+  /**
+   * Dispara un evento del ciclo de vida del área (`onStart`, `onCast` o
+   * `onEnd`). El callback recibe el mismo contexto que `aoeEffect` —objetivos
+   * dentro del área y servicios de golpe— más `combatFx`.
+   */
+  private emitAoeEvent(
+    phase: 'start' | 'cast' | 'end',
+    caster: MatchPlayerState,
+    def: AbilityDef,
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    elapsed: number
+  ): void {
+    // Las áreas instantáneas no tienen `ActiveAoe` que se retire: su `onEnd` se
+    // programa para cuando termine la duración visual del estallido.
+    if (phase === 'cast' && def.aoeDamageMode === 'instant' && def.onEnd) {
+      this.pendingAoeEnds.push({
+        caster,
+        def,
+        x,
+        z,
+        dirX,
+        dirZ,
+        remaining: Math.max(0.1, def.aoeDuration),
+        elapsed: 0
+      });
+    }
+    const event =
+      phase === 'start'
+        ? def.onStart
+        : phase === 'cast'
+          ? def.onCast
+          : def.onEnd;
+    if (!event) return;
+    const hit: AoeHitInput = {
+      owner: caster,
+      def,
+      x,
+      z,
+      radius: def.radius,
+      shape: def.aoeShape,
+      dirX,
+      dirZ,
+      halfAngle: def.halfAngle * DEG,
+      mode: def.aoeDamageMode,
+      tick: 0,
+      elapsed,
+      power: def.power,
+      immuneMarked: new Set()
+    };
+    const context: AoeEventContext = {
+      ...this.buildAoeContext(hit),
+      combatFx: this.combatFx
+    };
+    event(context);
   }
 
   /** Ejecuta el golpe estándar de un área contra un objetivo concreto. */
@@ -3952,9 +4054,43 @@ export class Game {
         aoe.tickTimer += aoe.tickInterval;
       }
       if (aoe.elapsed >= aoe.duration) {
+        this.emitAoeEvent(
+          'end',
+          aoe.owner,
+          aoe.def,
+          aoe.x,
+          aoe.z,
+          aoe.dirX,
+          aoe.dirZ,
+          aoe.elapsed
+        );
         const index = this.activeAoes.indexOf(aoe);
         if (index >= 0) this.activeAoes.splice(index, 1);
+        if (this.matchOver) return;
       }
+    }
+  }
+
+  /** Dispara los `onEnd` de áreas instantáneas al agotar su duración visual. */
+  private updatePendingAoeEnds(dt: number): void {
+    if (this.pendingAoeEnds.length === 0) return;
+    for (let index = this.pendingAoeEnds.length - 1; index >= 0; index--) {
+      const pending = this.pendingAoeEnds[index];
+      pending.remaining -= dt;
+      pending.elapsed += dt;
+      if (pending.remaining > 0) continue;
+      this.pendingAoeEnds.splice(index, 1);
+      this.emitAoeEvent(
+        'end',
+        pending.caster,
+        pending.def,
+        pending.x,
+        pending.z,
+        pending.dirX,
+        pending.dirZ,
+        pending.elapsed
+      );
+      if (this.matchOver) return;
     }
   }
 

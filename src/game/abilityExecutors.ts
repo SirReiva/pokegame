@@ -109,6 +109,20 @@ export interface AbilityExecutorDeps {
    */
   resolveAoeHit(hit: AoeHitInput): void;
   /**
+   * Dispara un evento del ciclo de vida del área. El ejecutor lo usa para
+   * avisar de `onCast` justo cuando el área aparece.
+   */
+  emitAoeEvent(
+    phase: 'start' | 'cast' | 'end',
+    player: MatchPlayerState,
+    def: AbilityDef,
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    elapsed: number
+  ): void;
+  /**
    * Token de `healOnHit` del lanzamiento en curso. Las formas que crean
    * proyectiles, áreas o golpes diferidos lo guardan para que la curación se
    * aplique cuando el impacto ocurra de verdad.
@@ -371,6 +385,9 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
           def.aoeStyle,
           duration
         );
+  // El área ya está dibujada en su centro definitivo: los eventos ven la
+  // posición y los objetivos reales del primer golpe.
+  deps.emitAoeEvent('cast', player, def, centerX, centerZ, dirX, dirZ, 0);
   if (def.aoeDamageMode === 'overTime') {
     const tickInterval = Math.max(0.05, Math.min(def.aoeTickInterval, duration));
     deps.addActiveAoe({

@@ -22,6 +22,7 @@ import type {
   BuffSpec,
   SlowSpec
 } from './abilities';
+import type { CombatFx } from './combatFx';
 import type { HealOnHitToken, MatchPlayerState } from './matchState';
 
 /** Datos del área que ya resolvió el motor para un golpe o tick concreto. */
@@ -207,6 +208,22 @@ export interface AoeEffectContext {
 }
 
 export type AoeEffect = (context: AoeEffectContext) => void;
+
+/**
+ * Contexto de los eventos de ciclo de vida de un área. Reutiliza el contexto de
+ * `aoeEffect`, así que además de los objetivos dentro del área en ese instante
+ * incluye los servicios para golpear, empujar, ralentizar, curar o revivir, más
+ * `combatFx` para lanzar efectos propios.
+ *
+ * `tick` siempre vale 0 y `power` es la potencia bruta de la habilidad (sin el
+ * escalado por tick que usa `aoeEffect`).
+ */
+export interface AoeEventContext extends AoeEffectContext {
+  combatFx: CombatFx;
+}
+
+/** Callback de un evento del ciclo de vida de un área. */
+export type AoeEvent = (context: AoeEventContext) => void;
 
 /**
  * Comportamiento histórico de las áreas: daña a los rivales alcanzables,

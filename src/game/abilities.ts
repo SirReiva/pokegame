@@ -22,7 +22,12 @@
  * movimiento.
  */
 
-import type { AoePrepareMovement, AoeEffect, AoeMovement } from './aoeEffect';
+import type {
+  AoeEvent,
+  AoePrepareMovement,
+  AoeEffect,
+  AoeMovement
+} from './aoeEffect';
 import type { PokemonType } from './typeChart';
 import type { AnimationName } from './types';
 
@@ -233,6 +238,22 @@ export interface AbilityDef {
    * revivir. Si se omite, se usa `defaultAoeEffect`.
    */
   aoeEffect?: AoeEffect;
+  /**
+   * Evento que se ejecuta al empezar el lanzamiento del área, antes del
+   * `startup`. Solo se usa con `shape: 'aoe'`.
+   */
+  onStart?: AoeEvent;
+  /**
+   * Evento que se ejecuta al aparecer el área, justo después del `startup` y
+   * antes del primer golpe o tick. Solo se usa con `shape: 'aoe'`.
+   */
+  onCast?: AoeEvent;
+  /**
+   * Evento que se ejecuta al terminar el área: al agotar su `aoeDuration` o,
+   * en las instantáneas, cuando acaba su duración visual. Solo se usa con
+   * `shape: 'aoe'`.
+   */
+  onEnd?: AoeEvent;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
   pierce: number;
   /** Distancia del dash en unidades de mundo. */
@@ -495,6 +516,24 @@ export class AbilityBuilder {
    */
   aoeEffect(effect: AoeEffect): this {
     this.draft.aoeEffect = effect;
+    return this;
+  }
+
+  /** Evento al empezar el lanzamiento del área. */
+  onStart(event: AoeEvent): this {
+    this.draft.onStart = event;
+    return this;
+  }
+
+  /** Evento al aparecer el área, antes del primer golpe o tick. */
+  onCast(event: AoeEvent): this {
+    this.draft.onCast = event;
+    return this;
+  }
+
+  /** Evento al terminar el área. */
+  onEnd(event: AoeEvent): this {
+    this.draft.onEnd = event;
     return this;
   }
 
