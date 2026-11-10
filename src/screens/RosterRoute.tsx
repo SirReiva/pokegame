@@ -70,7 +70,7 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
         return;
       }
 
-      if (action === 'flip') {
+      if (action === 'flip' || action === 'editName') {
         toggleFlip(player.slot);
         return;
       }

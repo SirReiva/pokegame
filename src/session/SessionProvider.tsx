@@ -32,6 +32,10 @@ import {
   type MatchPlayerConfig,
   type MovementMode
 } from '../game/multiplayer';
+import {
+  loadPlayerPreference,
+  savePlayerPreference
+} from '../game/playerPreferences';
 import { DEFAULT_SKIN_ID, skinFor, skinsFor } from '../game/skins';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
@@ -254,11 +258,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (slot === null) return;
 
       const firstPokemon = firstPlayablePokemonId(manifestRef.current);
+      // El nombre y el modo de control son propios del dispositivo: al volver
+      // a conectarse se recuperan de `sessionStorage` antes de aplicar los
+      // valores por defecto de la plaza.
+      const preference = loadPlayerPreference(device.id);
       commitPlayers([
         ...current,
         {
           slot,
-          name: defaultPlayerName(slot),
+          name: preference?.name || defaultPlayerName(slot),
           deviceId: device.id,
           deviceKind: device.kind,
           deviceFamily: device.family,
@@ -268,7 +276,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           pokemonId: firstPokemon,
           skinId: DEFAULT_SKIN_ID,
           commonAbilityId: DEFAULT_COMMON_ABILITY,
-          movementMode: DEFAULT_MOVEMENT_MODE,
+          movementMode: preference?.movementMode ?? DEFAULT_MOVEMENT_MODE,
           rosterReady: false
         }
       ]);
@@ -283,6 +291,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!player || player.isBot) return;
       const nextName = name.slice(0, PLAYER_NAME_MAX_LENGTH);
       if (player.name === nextName) return;
+      savePlayerPreference(player.deviceId, { name: nextName });
       commitPlayers(
         current.map((entry) =>
           entry.slot === slot ? { ...entry, name: nextName } : entry
@@ -317,6 +326,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const player = current.find((entry) => entry.slot === slot);
       if (!player || player.isBot || !MOVEMENT_MODES.includes(mode)) return;
       if (player.movementMode === mode) return;
+      savePlayerPreference(player.deviceId, { movementMode: mode });
       commitPlayers(
         current.map((entry) =>
           entry.slot === slot ? { ...entry, movementMode: mode } : entry

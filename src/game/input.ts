@@ -8,6 +8,7 @@ export type MenuAction =
   | 'right'
   | 'confirm'
   | 'cancel'
+  | 'editName'
   | 'flip';
 
 export interface InputDeviceInfo {
@@ -119,6 +120,7 @@ const PAD_COMMON_BUTTON = 7 as const;
 const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
   'confirm',
   'cancel',
+  'editName',
   'flip',
   'up',
   'down',
@@ -384,10 +386,11 @@ export class Input {
 
     const confirm = edge(0);
     const cancel = edge(1);
-    // X / Cuadrado y Y / Triángulo: giran la card del Pokémon seleccionado en
-    // los menús. Se aceptan ambos porque el layout de botones cambia entre
-    // familias de mando.
-    const flip = edge(2) || edge(3);
+    // X (Cuadrado) abre el teclado en pantalla del nombre en el lobby y, en el
+    // roster, sigue girando la card. Y (Triángulo) conserva el cambio de modo
+    // de movimiento en el lobby y el giro en el roster.
+    const editName = edge(2);
+    const flip = edge(3);
     const startPressed = edge(9);
     // X, Y, RB y LB. El botón B queda reservado para volver/continuar.
     const [ability1, ability2, ability3, ability4] =
@@ -400,6 +403,7 @@ export class Input {
     const action = resolveMenuAction({
       confirm,
       cancel,
+      editName,
       flip,
       up,
       down,

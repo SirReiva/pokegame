@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { commonAbilityOption } from "../game/abilities";
 import type { InputDeviceInfo } from "../game/input";
 import type { MapIndexEntry } from "../game/map";
 import { publicUrl } from "../game/publicUrl";
@@ -25,6 +24,7 @@ import { btnClass } from "./buttonStyles";
 import { confirmHint } from "./deviceInfo";
 import { DeviceIcon } from "./DeviceIcon";
 import { KeyPill } from "./KeyPill";
+import { OnScreenKeyboard, type NameEditorView } from "./OnScreenKeyboard";
 import { eyebrow, stepActive, stepIdle } from "./styles";
 
 interface LobbyScreenProps {
@@ -50,6 +50,9 @@ interface LobbyScreenProps {
   onBack: () => void;
   onOptions: () => void;
   onEditor: () => void;
+  nameEditor: NameEditorView | null;
+  onKeyboardPress: (row: number, col: number) => void;
+  onKeyboardClose: () => void;
 }
 
 const overlay =
@@ -63,6 +66,9 @@ function TeamColumn({
   team,
   players,
   maxTeamSize,
+  nameEditor,
+  onKeyboardPress,
+  onKeyboardClose,
   onRename,
   onSetMovementMode,
   onReady,
@@ -71,6 +77,9 @@ function TeamColumn({
   team: Team;
   players: LobbyPlayer[];
   maxTeamSize: number;
+  nameEditor: NameEditorView | null;
+  onKeyboardPress: (row: number, col: number) => void;
+  onKeyboardClose: () => void;
   onRename: (slot: number, name: string) => void;
   onSetMovementMode: (slot: number, mode: MovementMode) => void;
   onReady: (slot: number) => void;
@@ -109,6 +118,10 @@ function TeamColumn({
               player.teamReady
                 ? "border-[color-mix(in_srgb,var(--team)_58%,white_6%)] bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_14%,rgb(7_12_19/0.8)),rgb(7_12_19/0.7))]"
                 : "bg-night-820/65"
+            } ${
+              nameEditor?.slot === player.slot
+                ? "ring-2 ring-accent/80 shadow-[0_0_24px_rgb(75_156_255/0.22)]"
+                : ""
             }`}
           >
             <div className="flex items-center gap-2">
@@ -161,12 +174,13 @@ function TeamColumn({
               <span className="truncate">{player.deviceLabel}</span>
             </div>
 
-            <div className="mt-1 font-mono text-8.96 text-steel-650">
-              Instinto:{" "}
-              <span className="text-steel-350">
-                {commonAbilityOption(player.commonAbilityId)?.name ?? "—"}
-              </span>
-            </div>
+            {nameEditor?.slot === player.slot && (
+              <OnScreenKeyboard
+                editor={nameEditor}
+                onPress={onKeyboardPress}
+                onClose={onKeyboardClose}
+              />
+            )}
 
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <span className="font-mono text-8.96 text-steel-650">
@@ -253,6 +267,9 @@ export function LobbyScreen({
   onBack,
   onOptions,
   onEditor,
+  nameEditor,
+  onKeyboardPress,
+  onKeyboardClose,
 }: LobbyScreenProps) {
   const counts = countTeams(players);
   const maxTeamSize = maxTeamSizeFor(teams.length);
@@ -352,6 +369,9 @@ export function LobbyScreen({
                 team={team}
                 players={players}
                 maxTeamSize={maxTeamSize}
+                nameEditor={nameEditor}
+                onKeyboardPress={onKeyboardPress}
+                onKeyboardClose={onKeyboardClose}
                 onRename={onRename}
                 onSetMovementMode={onSetMovementMode}
                 onReady={onReady}
@@ -585,7 +605,10 @@ export function LobbyScreen({
                 <KeyPill>← →</KeyPill> cambiar de equipo
               </p>
               <p className="flex items-center gap-2">
-                <KeyPill>X / Y</KeyPill> cambiar modo de movimiento{" "}
+                <KeyPill>X</KeyPill> escribir el nombre con el teclado en pantalla
+              </p>
+              <p className="flex items-center gap-2">
+                <KeyPill>Y</KeyPill> cambiar modo de movimiento{" "}
                 <span className="text-steel-700">(Tab / F en teclado)</span>
               </p>
               <p className="flex items-center gap-2">

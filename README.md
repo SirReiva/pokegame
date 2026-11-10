@@ -116,7 +116,8 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Volver / desmarcar | `B` | `Esc` / `Retroceso` |
 | Elegir equipo | Cruceta izquierda / stick izquierdo | `A` / `D` o flechas |
 | Navegar por tu carrusel de Pokémon | Cruceta / stick izquierdo | `WASD` / flechas |
-| Cambiar modo de movimiento (lobby) | `X` / `Y` | `Tab` / `F` |
+| Abrir el teclado del nombre (lobby) | `X` | Escribe directamente en la tarjeta |
+| Cambiar modo de movimiento (lobby) | `Y` | `Tab` / `F` |
 | Girar la card del Pokémon | `X` / `Y` | `Tab` / `F` |
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
 | Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
@@ -130,11 +131,11 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Pausa | `Start` | `Esc` |
 | Ocultar HUD | — | `H` |
 
-Cada jugador elige su **modo de movimiento** en `/lobby`, en su propia tarjeta: **Normal**, donde el Pokémon gira hacia donde camina, o **Táctico**, donde mira siempre hacia donde apunta la cámara; allí el eje vertical del stick avanza o retrocede y el horizontal desplaza lateralmente sin girar el cuerpo. Al girar la cámara en modo táctico también gira el Pokémon, y las habilidades se lanzan hacia esa mirada. También se cambia con `X`/`Y` en el mando (o `Tab`/`F` en el teclado).
+Cada jugador elige su **modo de movimiento** en `/lobby`, en su propia tarjeta: **Normal**, donde el Pokémon gira hacia donde camina, o **Táctico**, donde mira siempre hacia donde apunta la cámara; allí el eje vertical del stick avanza o retrocede y el horizontal desplaza lateralmente sin girar el cuerpo. Al girar la cámara en modo táctico también gira el Pokémon, y las habilidades se lanzan hacia esa mirada. También se cambia con `Y` en el mando (o `Tab`/`F` en el teclado).
 
 La configuración tiene dos rutas:
 
-1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige uno de los equipos disponibles. El mapa seleccionado decide cuántos hay: entre dos y cuatro (rojo, azul, amarillo y verde). Con dos equipos caben hasta cuatro jugadores por equipo; con tres o cuatro, el máximo es de dos por equipo. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
+1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige uno de los equipos disponibles. El mapa seleccionado decide cuántos hay: entre dos y cuatro (rojo, azul, amarillo y verde). Con dos equipos caben hasta cuatro jugadores por equipo; con tres o cuatro, el máximo es de dos por equipo. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; con un mando, `X` monta un teclado en pantalla dentro de su tarjeta que se maneja con la cruceta y `A`. Ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
 2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticinco especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (roja, azul, amarilla o verde). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.
