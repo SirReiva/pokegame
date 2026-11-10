@@ -484,6 +484,24 @@ export function countTeams(players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>): R
   return counts;
 }
 
+/**
+ * Especies ya ocupadas por un equipo. La selección del roster es única dentro
+ * de cada equipo (los rivales sí pueden repetir), así que las plazas y los
+ * bots del mismo bando no pueden compartir `pokemonId`.
+ */
+export function teamPokemonIds(
+  players: ReadonlyArray<Pick<LobbyPlayer, 'slot' | 'team' | 'pokemonId'>>,
+  team: Team,
+  exceptSlot?: number
+): Set<string> {
+  const ids = new Set<string>();
+  for (const player of players) {
+    if (player.team !== team || player.slot === exceptSlot) continue;
+    if (player.pokemonId) ids.add(player.pokemonId);
+  }
+  return ids;
+}
+
 /** Recuenta los jugadores de una lista concreta de equipos activos. */
 export function countActiveTeams(
   players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>,

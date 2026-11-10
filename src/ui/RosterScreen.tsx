@@ -12,7 +12,7 @@ import {
 import { baseStatsFor, combatStatsFor } from '../game/pokedex';
 import { speedForPokemon } from '../game/roster';
 import { skinFor, skinsFor } from '../game/skins';
-import { TEAM_INFO, countTeams, maxPlayersFor, type LobbyPlayer } from '../game/multiplayer';
+import { TEAM_INFO, countTeams, type LobbyPlayer } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
 import type { PokemonEntry, PokemonSkin, SpriteManifest } from '../game/types';
 import { Brand } from './Brand';
@@ -96,7 +96,6 @@ export function RosterScreen({
   onOptions
 }: RosterScreenProps) {
   const counts = countTeams(players);
-  const maxPlayers = maxPlayersFor(teams);
   const allReady = players.length > 0 && players.every((player) => player.rosterReady);
   const entryFor = (id: string): PokemonEntry | null =>
     manifest.pokemon.find((entry) => entry.id === id) ?? null;
@@ -130,8 +129,10 @@ export function RosterScreen({
             <p className="mt-2 max-w-[78ch] text-14.4 leading-[1.55] text-muted">
               Cada jugador tiene su propio carrusel: muévete con el stick o las flechas y
               confirma con <strong>A / Espacio</strong>. Pulsa <strong>X / Y / Tab</strong> (o el
-              botón de la card) para girarla y ver sus habilidades y estadísticas. Se
-              permiten repetidos: hay {manifest.pokemon.length} especies para hasta {maxPlayers} jugadores.
+              botón de la card) para girarla y ver sus habilidades y estadísticas. No se
+              puede repetir especie dentro de un mismo equipo; los equipos rivales sí
+              pueden coincidir. Los bots eligen al final entre las {manifest.pokemon.length}{' '}
+              especies, rellenando lo que quede libre.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5">
@@ -242,6 +243,15 @@ function PlayerPanel({
 }: PlayerPanelProps & { index: number }) {
   const team = TEAM_INFO[player.team];
   const choices = players.filter((entryPlayer) => entryPlayer.pokemonId === entry.id);
+  // Especies reservadas por otros humanos del mismo bando. Los bots no
+  // bloquean: eligen después, rellenando lo que quede libre.
+  const takenByTeam = new Map<string, string>();
+  for (const mate of players) {
+    if (mate.isBot || mate.team !== player.team || mate.slot === player.slot) {
+      continue;
+    }
+    if (mate.pokemonId) takenByTeam.set(mate.pokemonId, mate.name);
+  }
   const stats = combatStatsFor(baseStatsFor(entry.id));
   const speed = speedForPokemon(entry.id);
   const common = commonAbilityOption(player.commonAbilityId);
@@ -549,6 +559,7 @@ function PlayerPanel({
         entries={manifest.pokemon}
         currentId={entry.id}
         currentSkin={selectedSkin}
+        takenByTeam={takenByTeam}
         onPick={(pokemonId) => onPick(player.slot, pokemonId)}
       />
     </article>
@@ -559,11 +570,14 @@ function PokemonRail({
   entries,
   currentId,
   currentSkin,
+  takenByTeam,
   onPick
 }: {
   entries: PokemonEntry[];
   currentId: string;
   currentSkin: PokemonSkin;
+  /** id de especie -> nombre del compañero que ya la lleva. */
+  takenByTeam: ReadonlyMap<string, string>;
   onPick: (pokemonId: string) => void;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -598,27 +612,33 @@ function PokemonRail({
       {entries.map((entry) => {
         const selected = entry.id === currentId;
         const available = hasAssignedAbilities(entry.id);
+        const takenBy = takenByTeam.get(entry.id);
+        const selectable = available && (!takenBy || selected);
         return (
           <button
             key={entry.id}
             type="button"
             data-current={selected}
             aria-pressed={selected}
-            disabled={!available}
+            disabled={!selectable}
             title={
-              available
-                ? entry.name
-                : `${entry.name} · Habilidades sin definir`
+              !available
+                ? `${entry.name} · Habilidades sin definir`
+                : takenBy && !selected
+                  ? `${entry.name} · Ya lo lleva ${takenBy} en tu equipo`
+                  : entry.name
             }
             onClick={() => {
-              if (available) onPick(entry.id);
+              if (selectable) onPick(entry.id);
             }}
             className={`relative flex w-16.5 flex-none snap-center flex-col items-center gap-0.5 rounded-lg border px-1 py-1 transition-colors duration-150 ${
               !available
                 ? 'cursor-not-allowed border-line/60 bg-white/1'
-                : selected
-                  ? 'border-[color-mix(in_srgb,var(--accent)_60%,var(--color-line))] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]'
-                  : 'border-line bg-white/2.5 hover:border-line-strong hover:bg-white/6'
+                : takenBy && !selected
+                  ? 'cursor-not-allowed border-line/60 bg-white/1'
+                  : selected
+                    ? 'border-[color-mix(in_srgb,var(--accent)_60%,var(--color-line))] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]'
+                    : 'border-line bg-white/2.5 hover:border-line-strong hover:bg-white/6'
             }`}
           >
             {!available && (
@@ -626,19 +646,26 @@ function PokemonRail({
                 Soon
               </span>
             )}
+            {available && takenBy && !selected && (
+              <span className="absolute top-0.5 right-0.5 z-1 rounded-full border border-line-strong bg-night-900/90 px-1 py-px font-mono text-7.36 font-bold tracking-[0.08em] uppercase text-steel-400">
+                Ocupado
+              </span>
+            )}
             <PokemonPortrait
               entry={entry}
               skin={selected ? currentSkin : null}
               height={30}
-              className={available ? undefined : 'opacity-40'}
+              className={!available || (takenBy && !selected) ? 'opacity-40' : undefined}
             />
             <span
               className={`w-full truncate text-center font-mono text-8 leading-tight ${
                 !available
                   ? 'text-steel-700'
-                  : selected
-                    ? 'text-ink'
-                    : 'text-steel-600'
+                  : takenBy && !selected
+                    ? 'text-steel-700'
+                    : selected
+                      ? 'text-ink'
+                      : 'text-steel-600'
               }`}
             >
               {entry.name}

@@ -600,13 +600,15 @@ Variar:
 
 ### 8.3 Composición
 
-`makeBotPlayer` (`src/session/SessionProvider.tsx`) elige Pokémon al azar
-uniforme. Eso permite duplicados y equipos sin roles.
+`ensureUniqueTeamPokemon` (`src/session/SessionProvider.tsx`) da prioridad a
+los humanos: conserva sus especies y, después, asigna a los bots las que
+quedan libres en cada equipo. Ya no hay duplicados y los humanos pueden
+quitarle una especie a un bot en cualquier momento, pero los equipos siguen
+sin roles.
 
 Mejor:
 
 - elegir por arquetipo,
-- evitar especies repetidas,
 - hacer counterpick contra los tipos rivales,
 - escoger el instinto común según el kit:
   - tanque → Protección,

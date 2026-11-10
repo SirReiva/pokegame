@@ -26,6 +26,7 @@ import {
   maxTeamSizeFor,
   nextFreeSlot,
   normalizePlayerName,
+  teamPokemonIds,
   teamsForMap,
   type BotDifficulty,
   type LobbyPlayer,
@@ -65,24 +66,101 @@ function botPokemonPool(manifest: SpriteManifest) {
   return withKit.length > 0 ? withKit : manifest.pokemon;
 }
 
-/** Primer Pokémon del manifiesto con habilidades definidas. */
-function firstPlayablePokemonId(manifest: SpriteManifest | null): string {
+/**
+ * Primer Pokémon del manifiesto con habilidades definidas que no esté en
+ * `excluded`. Si todos están ocupados, cae al primer Pokémon de la lista.
+ */
+function firstPlayablePokemonId(
+  manifest: SpriteManifest | null,
+  excluded?: ReadonlySet<string>
+): string {
   if (!manifest) return '';
+  const withKit = manifest.pokemon.filter((entry) => hasAssignedAbilities(entry.id));
   return (
-    manifest.pokemon.find((entry) => hasAssignedAbilities(entry.id))?.id ??
+    withKit.find((entry) => !excluded?.has(entry.id))?.id ??
+    manifest.pokemon.find((entry) => !excluded?.has(entry.id))?.id ??
     manifest.pokemon[0]?.id ??
     ''
   );
+}
+
+/** Especies ocupadas por los jugadores humanos de un equipo. */
+function humanTeamPokemonIds(
+  players: ReadonlyArray<LobbyPlayer>,
+  team: Team,
+  exceptSlot?: number
+): Set<string> {
+  return teamPokemonIds(
+    players.filter((player) => !player.isBot),
+    team,
+    exceptSlot
+  );
+}
+
+/**
+ * Reparte especies únicas por equipo dando prioridad a los humanos: primero
+ * se conservan o corrigen sus elecciones y después los bots rellenan las
+ * especies que siga libres. Los bots no pierden su estado de listo.
+ */
+function ensureUniqueTeamPokemon(
+  players: LobbyPlayer[],
+  manifest: SpriteManifest | null
+): LobbyPlayer[] {
+  if (!manifest) return players;
+
+  const used = new Map<Team, Set<string>>();
+  let changed = false;
+
+  const teamUsed = (team: Team): Set<string> => {
+    let ids = used.get(team);
+    if (!ids) {
+      ids = new Set<string>();
+      used.set(team, ids);
+    }
+    return ids;
+  };
+
+  const assign = (player: LobbyPlayer): LobbyPlayer => {
+    const ids = teamUsed(player.team);
+    if (player.pokemonId && !ids.has(player.pokemonId)) {
+      ids.add(player.pokemonId);
+      return player;
+    }
+
+    const replacement = firstPlayablePokemonId(manifest, ids);
+    if (!replacement) return player;
+    ids.add(replacement);
+    changed = true;
+    return {
+      ...player,
+      pokemonId: replacement,
+      skinId: DEFAULT_SKIN_ID,
+      rosterReady: player.isBot ? player.rosterReady : false
+    };
+  };
+
+  // Los humanos eligen primero; sus especies siempre tienen prioridad.
+  const humansAssigned = players.map((player) =>
+    player.isBot ? player : assign(player)
+  );
+  // Los bots rellenan después con lo que siga libre.
+  const next = humansAssigned.map((player) =>
+    player.isBot ? assign(player) : player
+  );
+  return changed ? next : players;
 }
 
 function makeBotPlayer(
   manifest: SpriteManifest,
   slot: number,
   team: Team,
-  difficulty: BotDifficulty
+  difficulty: BotDifficulty,
+  taken: ReadonlySet<string>
 ): LobbyPlayer {
   const pool = botPokemonPool(manifest);
-  const entry = pool[Math.floor(Math.random() * pool.length)];
+  const free = pool.filter((entry) => !taken.has(entry.id));
+  const candidates = free.length > 0 ? free : pool;
+  const entry = candidates[Math.floor(Math.random() * candidates.length)];
   // Los bots reparten su instinto entre todas las opciones. Regeneración es
   // pasiva, pero la IA sabe buscar cobertura y esperar oculta para curarse.
   const commonAbilityId: CommonAbilityId =
@@ -230,7 +308,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         changed = true;
         return { ...player, team: target, teamReady: player.isBot ? true : false };
       });
-      if (changed) commitPlayers(nextPlayers);
+      // Al reasignar equipos pueden coincidir dos especies en el mismo bando:
+      // se conserva la del primero y se recoloca a los demás.
+      const uniquePlayers = ensureUniqueTeamPokemon(nextPlayers, manifestRef.current);
+      if (changed || uniquePlayers !== nextPlayers) commitPlayers(uniquePlayers);
     },
     [commitPlayers]
   );
@@ -257,12 +338,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const slot = nextFreeSlot(current);
       if (slot === null) return;
 
-      const firstPokemon = firstPlayablePokemonId(manifestRef.current);
+      // Dos humanos del mismo bando no arrancan con la misma especie. Los bots
+      // no bloquean: se recolocan después de que el humano entre.
+      const firstPokemon = firstPlayablePokemonId(
+        manifestRef.current,
+        humanTeamPokemonIds(current, team)
+      );
       // El nombre y el modo de control son propios del dispositivo: al volver
       // a conectarse se recuperan de `sessionStorage` antes de aplicar los
       // valores por defecto de la plaza.
       const preference = loadPlayerPreference(device.id);
-      commitPlayers([
+      const nextPlayers = [
         ...current,
         {
           slot,
@@ -279,7 +365,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           movementMode: preference?.movementMode ?? DEFAULT_MOVEMENT_MODE,
           rosterReady: false
         }
-      ]);
+      ];
+      commitPlayers(
+        ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
+      );
     },
     [commitPlayers, teams]
   );
@@ -309,12 +398,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!teams.includes(team)) return;
       const counts = countTeams(current);
       if (team !== player.team && counts[team] >= maxTeamSize) return;
+
+      // Si la especie elegida ya la lleva otro humano del equipo destino, se
+      // cambia a la primera libre. Las de los bots no cuentan: se recolocan.
+      const taken = humanTeamPokemonIds(current, team, slot);
+      const conflict = taken.has(player.pokemonId);
+      const pokemonId = conflict
+        ? firstPlayablePokemonId(manifestRef.current, taken)
+        : player.pokemonId;
+      const nextPlayers = current.map((entry) =>
+        entry.slot === slot && entry.team !== team
+          ? {
+              ...entry,
+              team,
+              pokemonId,
+              skinId: conflict ? DEFAULT_SKIN_ID : entry.skinId,
+              teamReady: entry.isBot ? true : false,
+              rosterReady:
+                conflict && !entry.isBot ? false : entry.rosterReady
+            }
+          : entry
+      );
       commitPlayers(
-        current.map((entry) =>
-          entry.slot === slot && entry.team !== team
-            ? { ...entry, team, teamReady: entry.isBot ? true : false }
-            : entry
-        )
+        ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
       );
     },
     [commitPlayers, teams]
@@ -362,7 +468,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (slot === null) return;
       commitPlayers([
         ...current,
-        makeBotPlayer(manifest, slot, team, botDifficulty)
+        makeBotPlayer(
+          manifest,
+          slot,
+          team,
+          botDifficulty,
+          teamPokemonIds(current, team)
+        )
       ]);
     },
     [botDifficulty, commitPlayers, teams]
@@ -378,7 +490,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       while (next.length < maxPlayers && countTeams(next)[team] < maxTeamSize) {
         const slot = nextFreeSlot(next);
         if (slot === null) break;
-        next.push(makeBotPlayer(manifest, slot, team, botDifficulty));
+        next.push(
+          makeBotPlayer(
+            manifest,
+            slot,
+            team,
+            botDifficulty,
+            teamPokemonIds(next, team)
+          )
+        );
       }
     }
     if (next.length !== current.length) commitPlayers(next);
@@ -431,22 +551,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!current.some((player) => !player.isBot)) return false;
 
     const firstPokemon = firstPlayablePokemonId(manifestRef.current);
-    commitPlayers(
-      current.map((player) => ({
-        ...player,
-        name: player.isBot
-          ? player.name
-          : normalizePlayerName(player.name, player.slot),
-        pokemonId: player.pokemonId || firstPokemon,
-        skinId: player.skinId ?? DEFAULT_SKIN_ID,
-        commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
-        movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
-        // Los bots ya están listos: no deben bloquear el paso al roster ni la
-        // partida, y su selección no se toca al volver a elegir humanos.
-        teamReady: player.isBot ? true : player.teamReady,
-        rosterReady: player.isBot ? true : false
-      }))
-    );
+    const nextPlayers = current.map((player) => ({
+      ...player,
+      name: player.isBot
+        ? player.name
+        : normalizePlayerName(player.name, player.slot),
+      pokemonId: player.pokemonId || firstPokemon,
+      skinId: player.skinId ?? DEFAULT_SKIN_ID,
+      commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
+      movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
+      // Los bots ya están listos: no deben bloquear el paso al roster ni la
+      // partida, y su selección no se toca al volver a elegir humanos.
+      teamReady: player.isBot ? true : player.teamReady,
+      rosterReady: player.isBot ? true : false
+    }));
+    commitPlayers(ensureUniqueTeamPokemon(nextPlayers, manifestRef.current));
     return true;
   }, [commitPlayers]);
 
@@ -471,32 +590,41 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       // El carrusel es circular: al pasar del último vuelve al primero y al
       // retroceder desde el primero salta al último. Se saltan los Pokémon sin
-      // habilidades asignadas, que aparecen deshabilitados en el selector.
+      // habilidades asignadas y los que ya lleva otro humano del equipo. Los
+      // bots no bloquean: se recolocan al final.
+      const takenByTeam = humanTeamPokemonIds(current, player.team, slot);
       const step = delta > 0 ? 1 : -1;
       let nextIndex = index;
       for (let attempt = 0; attempt < list.length; attempt++) {
         nextIndex = (nextIndex + step + list.length) % list.length;
-        if (hasAssignedAbilities(list[nextIndex].id)) break;
+        if (
+          hasAssignedAbilities(list[nextIndex].id) &&
+          !takenByTeam.has(list[nextIndex].id)
+        ) {
+          break;
+        }
       }
       if (
         nextIndex === index ||
-        !hasAssignedAbilities(list[nextIndex].id)
+        !hasAssignedAbilities(list[nextIndex].id) ||
+        takenByTeam.has(list[nextIndex].id)
       ) {
         return;
       }
+      const nextPlayers = current.map((entry) =>
+        entry.slot === slot
+          ? {
+              ...entry,
+              pokemonId: list[nextIndex].id,
+              // Los aspectos son propios de cada especie: al cambiar de
+              // Pokémon se vuelve al normal para no heredar un shiny ajeno.
+              skinId: DEFAULT_SKIN_ID,
+              rosterReady: false
+            }
+          : entry
+      );
       commitPlayers(
-        current.map((entry) =>
-          entry.slot === slot
-            ? {
-                ...entry,
-                pokemonId: list[nextIndex].id,
-                // Los aspectos son propios de cada especie: al cambiar de
-                // Pokémon se vuelve al normal para no heredar un shiny ajeno.
-                skinId: DEFAULT_SKIN_ID,
-                rosterReady: false
-              }
-            : entry
-        )
+        ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
       );
     },
     [commitPlayers]
@@ -504,12 +632,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const selectPokemon = useCallback(
     (slot: number, pokemonId: string) => {
+      const current = playersRef.current;
+      const player = current.find((entry) => entry.slot === slot);
+      if (!player) return;
+
+      const entry = manifestRef.current?.pokemon.find(
+        (candidate) => candidate.id === pokemonId
+      );
+      if (!entry || !hasAssignedAbilities(entry.id)) return;
+      // Una especie solo puede estar una vez por equipo entre los humanos.
+      // Si estaba en un bot, el bot rellenará con otra libre.
+      if (humanTeamPokemonIds(current, player.team, slot).has(pokemonId)) {
+        return;
+      }
+
+      const nextPlayers = current.map((candidate) =>
+        candidate.slot === slot && candidate.pokemonId !== pokemonId
+          ? {
+              ...candidate,
+              pokemonId,
+              skinId: DEFAULT_SKIN_ID,
+              rosterReady: false
+            }
+          : candidate
+      );
       commitPlayers(
-        playersRef.current.map((entry) =>
-          entry.slot === slot && entry.pokemonId !== pokemonId
-            ? { ...entry, pokemonId, skinId: DEFAULT_SKIN_ID, rosterReady: false }
-            : entry
-        )
+        ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
       );
     },
     [commitPlayers]

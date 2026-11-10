@@ -136,7 +136,7 @@ Cada jugador elige su **modo de movimiento** en `/lobby`, en su propia tarjeta: 
 La configuración tiene dos rutas:
 
 1. **`/lobby` · Equipos**: cada mando pulsa `A` para unirse y elige uno de los equipos disponibles. El mapa seleccionado decide cuántos hay: entre dos y cuatro (rojo, azul, amarillo y verde). Con dos equipos caben hasta cuatro jugadores por equipo; con tres o cuatro, el máximo es de dos por equipo. El nombre de cada jugador se puede escribir directamente en su tarjeta con el teclado; con un mando, `X` monta un teclado en pantalla dentro de su tarjeta que se maneja con la cruceta y `A`. Ese nombre es el que aparece después en el HUD y en el kill feed. Cuando todos marcan listo, se continúa con `A`.
-2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticinco especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. Se permiten repetidos. Cuando todos están listos, `A` inicia la partida en `/play`.
+2. **`/roster` · Pokémon**: cada jugador mueve su propio carrusel de veinticinco especies y confirma con `A`. Con `X`/`Y` (o `Tab`) gira la card del Pokémon elegido para ver sus habilidades y estadísticas; con la card girada, `←`/`→` cambia su instinto común. No se puede repetir especie dentro de un mismo equipo; los equipos rivales sí pueden coincidir. Cuando todos están listos, `A` inicia la partida en `/play`.
 
 Cada equipo aparece en su base (roja, azul, amarilla o verde). La pantalla se reparte en una vista por jugador con su propia cámara y su propio anillo de equipo. El Pokémon que controla cada vista no lleva contorno; el resto de Pokémon (aliados, rivales y bots) dibujan un borde del color de su equipo.
 
@@ -463,7 +463,7 @@ El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y P
 
 ## Bots
 
-La sala de equipos (`/lobby`) permite añadir **bots** para completar los equipos sin necesidad de más mandos. El panel **Añadir IA** tiene un selector de dificultad (`Fácil`, `Normal`, `Difícil`), un botón por equipo y **Rellenar equipos** para completar ambos bandos hasta cuatro jugadores. Los bots eligen Pokémon con moveset, instinto común y se marcan listos solos; se pueden quitar con el mismo botón que un jugador humano.
+La sala de equipos (`/lobby`) permite añadir **bots** para completar los equipos sin necesidad de más mandos. El panel **Añadir IA** tiene un selector de dificultad (`Fácil`, `Normal`, `Difícil`), un botón por equipo y **Rellenar equipos** para completar ambos bandos hasta cuatro jugadores. Los bots eligen Pokémon con moveset, instinto común y se marcan listos solos; se pueden quitar con el mismo botón que un jugador humano. Su especie se decide **después** de los jugadores humanos: si un humano elige la que llevaba un bot, el bot pasa a rellenar otra de las que queden libres en el equipo.
 
 Los bots **no ocupan un panel del splitscreen**: solo los jugadores humanos tienen cámara, capa y niebla propias. Un humano contra tres bots se sigue viendo a pantalla completa, y los bots aparecen como actores en esa vista. Aunque no tengan panel, sus ojos cuentan para la visión compartida del equipo. El motor separa `matchPlayers` (todos) de `views` (solo humanos) en `src/game/game.ts`; las copias de sprite se indexan por vista, no por jugador.
 
@@ -813,7 +813,7 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 - El catálogo de habilidades cubre 20 de las 25 especies: Eevee, Raikou, Entei, Suicune y Gyarados todavía no tienen moveset y el carrusel los filtra. Cada habilidad se define en `src/game/abilities.ts` y se asigna por Pokémon en `MOVESETS`. No hay captura ni estados alterados más allá de la ralentización.
 - El multijugador local es un **team deathmatch con límite de KOs configurable** (15 por defecto); no hay súbditos, torretas ni otros objetivos MOBA.
 - Los bots cubren las plazas que no ocupan mandos, pero **no sustituyen a una vista humana**: la partida necesita al menos un jugador local. Su IA es deliberadamente sencilla (percepción, A*, rotación de habilidades y huida) y solo usan las 20 especies con moveset definido.
-- La selección de Pokémon permite repetir especie aunque hay 25 especies para hasta 8 jugadores.
+- La selección de Pokémon es única por equipo: no se puede repetir especie dentro de un mismo bando, aunque los rivales sí pueden llevar la misma.
 - La niebla es un quad de pantalla por vista (unión de los círculos de visión del equipo) que muestrea una máscara world-space compartida por equipo para añadir las sombras de separadores y árboles. No es un polígono de visibilidad exacto: la máscara se recompone a 15 Hz y los bordes exteriores se calculan analíticamente cada frame.
 - No hay audio, guardado ni soporte táctil específico (la demo está pensada para escritorio con mandos o teclado).
 - La arena es una demostración visual de estilo MOBA: no hay oleadas de súbditos, torretas ni objetivos.
