@@ -1993,7 +1993,7 @@ registerAbility(
 registerAbility(
   ability('excavar', 'Excavar', 'Ground', 'physical', 'aoe')
     .power(85)
-    .cooldown(8)
+    .cooldown(6)
     .range(0)
     .radius(1.2)
     // El aviso sigue al lanzador mientras se mueve bajo tierra: al emerger,
@@ -2015,7 +2015,7 @@ registerAbility(
         setCasterInvulnerable(true);
         const self = targets.find((target) => target.isSelf);
         if (self) {
-          applyBuff(self, { stat: 'speed', multiplier: 1.2, duration: 2 });
+          applyBuff(self, { stat: 'speed', multiplier: 1.5, duration: 2 });
         }
       }
     )
@@ -2026,7 +2026,7 @@ registerAbility(
     .impact('ground')
     .color(182, 161, 54)
     .description(
-      'Se oculta bajo tierra y se vuelve invulnerable, gana un 20 % de velocidad durante 2 s y emerge con una erupción de 2,2 u centrada en sí mismo: 85 de potencia y empuja 1,2 u a los rivales alcanzados.'
+      'Se oculta bajo tierra durante 2 s: es invulnerable y gana un 50 % de velocidad. Al emerger, desata una erupción de 1,2 u centrada en sí mismo con 85 de potencia que empuja 1,2 u a los rivales alcanzados.'
     )
 );
 
