@@ -168,7 +168,7 @@ export class HealthBar {
 
   private fraction = 1;
   private xpFraction = 0;
-  /** Umbral de la armadura de casteo respecto a la vida máxima (0-1). */
+  /** Armadura de casteo restante respecto a la vida máxima (0-1). */
   private armorFraction = 0;
   private level = 1;
 
@@ -323,8 +323,9 @@ export class HealthBar {
   }
 
   /**
-   * Armadura de casteo activa como fracción de la vida máxima. El ancho de la
-   * franja metálica representa el daño que absorbe el lanzamiento; 0 la oculta.
+   * Armadura de casteo restante como fracción de la vida máxima. El ancho de
+   * la franja metálica representa el daño que aún puede absorber el
+   * lanzamiento; 0 la oculta.
    */
   setArmorFraction(fraction: number): void {
     const next = pc.math.clamp(fraction, 0, 1);
@@ -374,8 +375,8 @@ export class HealthBar {
   /**
    * Franja metálica de la armadura de casteo sobre la propia barra de vida.
    * Se alinea a la derecha con el tramo verde de la vida actual y comparte su
-   * altura; su ancho es el umbral de daño respecto a la vida máxima. Si el
-   * umbral supera la vida actual, se recorta contra el borde izquierdo del
+   * altura; su ancho es la armadura restante respecto a la vida máxima. Si la
+   * armadura supera la vida actual, se recorta contra el borde izquierdo del
    * tramo para no salirse de la barra.
    */
   private drawArmorBand(

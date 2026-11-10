@@ -189,6 +189,11 @@ export interface ActiveCast {
   /** Aura tenue de la armadura de casteo; `null` si la habilidad no tiene. */
   armorFx: FxHandle | null;
   /**
+   * Armadura de casteo restante. Empieza en `def.armorPool` y baja con el
+   * daño de los golpes absorbidos; al llegar a 0 el casteo se rompe.
+   */
+  armorRemaining: number;
+  /**
    * `true` si este casteo ocultó al lanzador (por ejemplo, `Excavar` bajo
    * tierra). Al terminar o cancelarse se vuelve a mostrar.
    */

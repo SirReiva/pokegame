@@ -287,8 +287,6 @@ const INTERRUPT_DELAY_TOLERANCE = 0.05;
  * importa para valorar si la armadura de casteo aguanta el golpe más probable.
  */
 const ARMOR_PRESSURE_RADIUS = 5.5;
-/** Valor de una armadura que absorbe el poke listo del rival. */
-const ARMOR_POKE_BONUS = 8;
 /** Tope del bonus de armadura, para no convertirla en la única razón de lanzar. */
 const ARMOR_BONUS_MAX = 16;
 
@@ -3929,21 +3927,30 @@ export class BotController {
   }
 
   /**
-   * ¿Absorbe la armadura del casteo de `target` este golpe? Replica la regla
-   * del motor: cubre el startup o todo el casteo según `armorWindow`; los
-   * estados, los golpes letales y el control explícito la ignoran.
+   * Armadura de casteo restante en `target`; 0 si no está casteando con
+   * armadura o su ventana ya cerró. Réplica de `activeCastArmor` del motor.
+   */
+  private castArmorRemaining(target: MatchPlayerState): number {
+    const cast = target.activeCast;
+    if (!cast || cast.def.armorPool <= 0) return 0;
+    if (cast.def.armorWindow === 'startup' && cast.fired) return 0;
+    return cast.armorRemaining;
+  }
+
+  /**
+   * ¿Absorbe la armadura del casteo de `target` este golpe? Mientras quede
+   * pozo, el golpe resta daño sin interrumpir. Los estados, los golpes letales
+   * y el control explícito la ignoran.
    */
   private castArmorAbsorbs(
     target: MatchPlayerState,
     def: AbilityDef,
     damage: number
   ): boolean {
-    const cast = target.activeCast;
-    if (!cast || cast.def.armorThreshold <= 0) return false;
-    if (cast.def.armorWindow === 'startup' && cast.fired) return false;
     if (def.category === 'status') return false;
     if (damage >= target.hp) return false;
-    return damage < cast.def.armorThreshold;
+    const armor = this.castArmorRemaining(target);
+    return armor > 0 && damage < armor;
   }
 
   /**
@@ -3967,9 +3974,8 @@ export class BotController {
     self: MatchPlayerState,
     target: MatchPlayerState
   ): boolean {
-    const cast = target.activeCast;
-    if (!cast || cast.def.armorThreshold <= 0) return true;
-    if (cast.def.armorWindow === 'startup' && cast.fired) return true;
+    const armor = this.castArmorRemaining(target);
+    if (armor <= 0) return true;
 
     const distance = Math.hypot(target.x - self.x, target.z - self.z);
     const prediction: TargetPrediction = {
@@ -3992,20 +3998,20 @@ export class BotController {
       if (def.power <= 0) continue;
       const damage = this.expectedDamage(self, target, def, prediction);
       if (damage >= target.hp) return true;
-      if (damage >= cast.def.armorThreshold) return true;
+      if (damage >= armor) return true;
     }
     return false;
   }
 
   /**
-   * Valor de la armadura de casteo para el propio bot. Si el poke más barato
-   * del rival está listo y no llega al umbral, la carga se completa bajo fuego
-   * ligero. Es un bonus pequeño: la armadura no reduce el daño, solo evita que
-   * el casteo se corte.
+   * Valor de la armadura de casteo para el propio bot. Suma el daño de las
+   * básicas rivales listas y al alcance: si entre todas no agotan el pozo, la
+   * carga se completa bajo fuego ligero. Es un bonus pequeño: la armadura no
+   * reduce el daño, solo evita que el casteo se corte.
    */
   private armorCastBonus(self: MatchPlayerState, def: AbilityDef): number {
-    if (def.armorThreshold <= 0) return 0;
-    let bonus = 0;
+    if (def.armorPool <= 0) return 0;
+    let pressure = 0;
     for (const enemy of this.visibleEnemies) {
       if (!enemy.alive || enemy.team === self.team) continue;
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
@@ -4026,12 +4032,13 @@ export class BotController {
             : poke.range + self.hitRadius;
       if (distance > reach) continue;
       const prediction = this.predictTarget(enemy, self, poke);
-      const damage = this.expectedDamage(enemy, self, poke, prediction);
-      if (damage >= def.armorThreshold) continue;
-      const margin = 1 - damage / Math.max(1, def.armorThreshold);
-      bonus += ARMOR_POKE_BONUS * (0.5 + margin * 0.5);
+      pressure += this.expectedDamage(enemy, self, poke, prediction);
     }
-    return Math.min(ARMOR_BONUS_MAX, bonus);
+    // Sin presión lista o con presión suficiente para agotar el pozo, la
+    // armadura no aporta una ventana segura.
+    if (pressure <= 0 || pressure >= def.armorPool) return 0;
+    const margin = 1 - pressure / def.armorPool;
+    return ARMOR_BONUS_MAX * (0.5 + margin * 0.5);
   }
 
   /**
@@ -4291,12 +4298,12 @@ export class BotController {
       score -= 15 + (selfDamage / Math.max(1, self.hp)) * 70;
     }
     // La armadura reduce el riesgo del startup: la habilidad puede completarse
-    // aunque el rival esté haciendo pokes. Si los pokes listos se quedan por
-    // debajo del umbral, el riesgo baja mucho; si no, solo se descuenta algo
-    // por la armadura intrínseca.
+    // aunque el rival esté haciendo pokes. Si el daño acumulado de los pokes
+    // listos se queda por debajo del pozo, el riesgo baja mucho; si no, solo se
+    // descuenta algo por la armadura intrínseca.
     const armorBonus = this.armorCastBonus(self, def);
     const startupRisk =
-      def.armorThreshold > 0 ? (armorBonus > 0 ? 0.35 : 0.7) : 1;
+      def.armorPool > 0 ? (armorBonus > 0 ? 0.35 : 0.7) : 1;
     score -= Math.min(16, def.startup * 14) * startupRisk;
     score += armorBonus;
 

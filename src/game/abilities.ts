@@ -335,11 +335,13 @@ export interface AbilityDef {
    */
   blockMovementDuringCast: boolean;
   /**
-   * PV de daño que absorbe la armadura del casteo: un golpe que haga menos no
-   * cancela el casteo, no aplica hitstun ni empuje. `0` desactiva la armadura.
-   * El umbral es absoluto y se calibra contra las básicas rápidas.
+   * PV de armadura del casteo: cada golpe resta su daño a este pozo sin
+   * mitigarlo y, mientras quede, no cancela el casteo ni aplica hitstun o
+   * empuje. Cuando el daño acumulado agota el pozo, el casteo se rompe. `0`
+   * desactiva la armadura. El valor es absoluto y se calibra contra las
+   * básicas rápidas.
    */
-  armorThreshold: number;
+  armorPool: number;
   /**
    * Ventana de la armadura: `'startup'` cubre solo la preparación; `'cast'`
    * cubre todo el casteo. En canalizaciones se infiere `'cast'`.
@@ -408,7 +410,7 @@ export const DEFAULT_ABILITY: Omit<
   animation: null,
   moveWhileStartup: false,
   blockMovementDuringCast: false,
-  armorThreshold: 0,
+  armorPool: 0,
   armorWindow: 'startup',
   blockMovementUntilEndAnimation: false,
   description: ''
@@ -698,16 +700,17 @@ export class AbilityBuilder {
   }
 
   /**
-   * Armadura de casteo: los golpes que hagan menos de `threshold` PV no
-   * cancelan la preparación ni aplican hitstun o empuje. Por defecto cubre
-   * solo el startup; en canalizaciones cubre todo el casteo. Un `force` del
-   * motor (estados, control explícito) la ignora.
+   * Armadura de casteo: los golpes restan su daño a un pozo de `pool` PV sin
+   * mitigarlo; mientras quede armadura no cancelan la preparación ni aplican
+   * hitstun o empuje. Cuando el daño acumulado agota el pozo, el casteo se
+   * rompe. Por defecto cubre solo el startup; en canalizaciones cubre todo el
+   * casteo. Un `force` del motor (estados, control explícito) la ignora.
    */
   armor(
-    threshold: number,
+    pool: number,
     options: { window?: 'startup' | 'cast' } = {}
   ): this {
-    this.draft.armorThreshold = threshold;
+    this.draft.armorPool = pool;
     if (options.window !== undefined) {
       this.draft.armorWindow = options.window;
       this.armorWindowExplicit = true;
@@ -1171,7 +1174,7 @@ registerAbility(
     .range(4.2)
     .radius(3.1)
     .startup(0.75)
-    .armor(30)
+    .armor(40)
     .recovery(0.7)
     .animation('charge')
     .area('fire', 'instant', 0.5)
@@ -1227,7 +1230,7 @@ registerAbility(
     .range(4.2)
     .radius(3.2)
     .startup(0.75)
-    .armor(30)
+    .armor(40)
     .recovery(0.7)
     .animation('shake')
     .area('grass', 'instant', 1.1)
@@ -1573,7 +1576,7 @@ registerAbility(
     .radius(3.5)
     .recovery(0.75)
     .startup(0.75)
-    .armor(30)
+    .armor(40)
     .animation('twirl')
     .heal(0.35)
     .area('recovery', 'instant', 0.75)
@@ -1587,7 +1590,7 @@ registerAbility(
     })
     .color(255, 170, 230)
     .description(
-      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si un golpe supera su armadura durante la concentración, se cancela.'
+      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -1734,7 +1737,7 @@ registerAbility(
     .radial(0.35)
     .slow(0.75, 2)
     .startup(0.75, { animation: 'charge' })
-    .armor(30)
+    .armor(40)
     .recovery(0.7)
     // El área es instantánea: la ventisca cae al terminar la carga. Sin clip
     // de lanzamiento para no reproducir el disparo cuando ya ha impactado.
@@ -2306,7 +2309,7 @@ registerAbility(
     .range(0)
     .radius(3.2)
     .startup(0.75, { animation: 'charge' })
-    .armor(30)
+    .armor(40)
     .recovery(0.65)
     .animation(null)
     .heal(0.3)
@@ -2321,7 +2324,7 @@ registerAbility(
     })
     .color(255, 196, 96)
     .description(
-      'Se concentra 0,75 s entre llamas doradas: recupera el 30 % de su vida máxima y el 15 % de la de sus aliados en 3,2 u. Si un golpe supera su armadura durante la concentración, se cancela.'
+      'Se concentra 0,75 s entre llamas doradas: recupera el 30 % de su vida máxima y el 15 % de la de sus aliados en 3,2 u. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -2338,7 +2341,7 @@ registerAbility(
     .startup(0.4, { animation: 'charge' })
     .recovery(1.5)
     .blockMovementDuringCast()
-    .armor(40)
+    .armor(60)
     .animation('shoot')
     .area('sacredFlame', 'overTime', 1.5, 0.5)
     .slow(0.65, 1.5)

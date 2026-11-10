@@ -949,26 +949,25 @@ Con un Pikachu, Bulbasaur o Squirtle golpeando cada 0,25 s, un startup de 0,75 s
 es prácticamente imposible de completar en rango cuerpo a cuerpo: el primer
 golpe lo cancela. Esto favorece a las básicas rápidas y castiga a los personajes
 lentos, justo los que más necesitan sus definitivas. La telegrafía es buena para
-el rival, pero una habilidad sin armadura ni umbral no tiene forma de completar la
-carga.
+el rival, pero una habilidad sin armadura no tiene forma de completar la carga.
 
 **Armadura de casteo aplicada**: las definitivas de 0,75 s (`Lluevehojas`,
 `Anillo Ígneo`, `Ventisca`, `Recuperación` de Mew y de Ho-Oh) tienen
-`armorThreshold: 30`: un golpe de menos de 30 PV no cancela el casteo ni aplica
-hitstun, empuje o flinch; solo resta vida. `Fuego Sagrado` usa 40 y, al ser
-canalización, cubre todo el casteo (`armorWindow: 'cast'`). Los estados y el
-control explícito ignoran la armadura; un golpe que llegue al umbral también la
-rompe. El resto de habilidades sigue sin armadura.
+`armorPool: 40`: cada golpe resta su daño a ese pozo sin mitigarlo y, mientras
+quede armadura, el casteo no se cancela ni aplica hitstun, empuje o flinch.
+Cuando el daño acumulado agota el pozo, el casteo se rompe. `Fuego Sagrado` usa
+60 y, al ser canalización, cubre todo el casteo (`armorWindow: 'cast'`). Los
+estados, el control explícito y los golpes letales ignoran la armadura. El pozo
+se reinicia en cada casteo. El resto de habilidades sigue sin armadura.
 
 **Lectura de la armadura por los bots**: `breaksCastArmor` replica la regla del
 motor, incluido que un golpe letal siempre la rompe. Un interrupt cuyo daño
-esperado no llega al umbral se descarta, y la puntuación deja de cobrar los
-bonus de hitstun, empuje y castigo si el golpe va a ser absorbido. Cuando el
+esperado no agota el pozo restante se descarta, y la puntuación deja de cobrar
+los bonus de hitstun, empuje y castigo si el golpe va a ser absorbido. Cuando el
 rival castea una curación o una reanimación, romperla suma un bonus extra. Para
-sus propias
-habilidades, la armadura reduce la penalización por startup y añade un pequeño
-bonus si los pokes listos del rival no alcanzan el umbral; no cambia la
-valoración del daño porque la armadura no lo reduce.
+sus propias habilidades, la armadura reduce la penalización por startup y añade
+un pequeño bonus si el daño acumulado de los pokes listos del rival no agota el
+pozo; no cambia la valoración del daño porque la armadura no lo reduce.
 
 **Efecto colateral**: el choque (`clash`) solo ocurre cuando dos melee ya han
 generado `PendingMeleeHit`; si una de las dos aún está en startup, no hay choque:
@@ -977,7 +976,7 @@ la rápida cancela a la lenta y le deja el enfriamiento a la mitad.
 **Mitigación aplicada**: además del reembolso de medio enfriamiento, la armadura
 reduce el castigo en las habilidades que la declaran. El problema de fondo se
 estrecha, pero no desaparece: las habilidades sin armadura de la tabla
-(0,65-2,00 s) siguen expuestas, y el umbral de 30 PV es una primera calibración
+(0,65-2,00 s) siguen expuestas, y el pozo de 40 PV es una primera calibración
 contra las básicas rápidas, no una regla universal. En las canalizaciones el
 efecto se dispara al terminar el startup, así que interrumpir el canal después
 no reembolsa enfriamiento.
@@ -1169,15 +1168,17 @@ así que se pueden añadir tests baratos:
   `min(restante, cooldown / 2)`. Si el golpe es letal o el efecto ya había
   salido, el enfriamiento no cambia. Un casteo que llega a disparar el efecto
   tampoco se reembolsa.
-- **Armadura de casteo**: un golpe de menos de `armorThreshold` sobre una
-  habilidad con armadura no debe cancelar el `ActiveCast` ni aplicar hitstun,
-  empuje o `hurtTimer`; el daño sí se descuenta. Un golpe igual o mayor, o un
-  estado, debe romperla y cancelar. En `Fuego Sagrado` la armadura debe cubrir
-  también los ticks posteriores al efecto (`armorWindow: 'cast'`).
+- **Armadura de casteo**: un golpe cuyo daño no agote el pozo `armorPool` no
+  debe cancelar el `ActiveCast` ni aplicar hitstun, empuje o `hurtTimer`; el
+  daño sí se descuenta y el pozo restante baja en esa cantidad. El golpe que lo
+  agote o lo supere, un estado o un golpe letal deben romperla y cancelar. En
+  `Fuego Sagrado` la armadura debe cubrir también los ticks posteriores al
+  efecto (`armorWindow: 'cast'`), que consumen el pozo acumulativamente.
 - **Bots y armadura**: un bot no debe intentar interrumpir con un golpe que no
-  alcanza `armorThreshold` (salvo estado o golpe letal), no debe puntuar
-  hitstun, empuje ni castigo sobre un golpe absorbido, y debe preferir una
-  habilidad con armadura cuando el poke listo del rival no llega a su umbral.
+  agote el pozo restante (salvo estado o golpe letal), no debe puntuar hitstun,
+  empuje ni castigo sobre un golpe absorbido, y debe preferir una habilidad con
+  armadura cuando el daño acumulado de los pokes listos del rival no agota su
+  pozo.
 - **Jugador muerto**: matar al lanzador y comprobar que su proyectil, área o
   golpe de dash pendiente no sigue dañando ni suma KO (o documentar la excepción
   si los proyectiles en vuelo deben sobrevivir). Comprobar también que un cast

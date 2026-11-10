@@ -196,20 +196,21 @@ Un golpe de control, un choque de melee, un KO o un respawn cancelan el
 `ActiveCast`: se destruyen las marcas de área/haz y se limpia el frame manual.
 El casteo nunca deja bloqueos residuales.
 
-Las habilidades con `armorThreshold > 0` tienen **armadura de casteo**: un golpe
-cuyo daño final no llegue al umbral no cancela el casteo y tampoco aplica
-hitstun, empuje ni `hurtTimer`; solo resta vida. Los estados y el control
-explícito (`force`) la ignoran. La ventana es el `startup`, salvo en las
+Las habilidades con `armorPool > 0` tienen **armadura de casteo**: cada golpe
+resta su daño final a un pozo sin mitigarlo y, mientras quede, no cancela el
+casteo ni aplica hitstun, empuje o `hurtTimer`. Cuando el daño acumulado agota
+el pozo, el casteo se rompe. Los estados, el control explícito (`force`) y los
+golpes letales la ignoran. La ventana es el `startup`, salvo en las
 canalizaciones con `blockMovementDuringCast`, donde se infiere `'cast'` y cubre
 todo el casteo. La armadura también dibuja un pulso al absorber y una fractura
 cuando se rompe. Además, ambas barras de vida (la flotante de PlayCanvas y la
 del HUD) muestran una franja metálica alineada a la derecha con el tramo verde
-de la vida actual y con su misma altura; su ancho es el umbral de daño respecto
-a la vida máxima y se recorta contra el borde izquierdo si lo supera. En el HUD
-el tooltip incluye el valor exacto.
+de la vida actual y con su misma altura; su ancho es la armadura restante
+respecto a la vida máxima y se recorta contra el borde izquierdo si lo supera.
+En el HUD el tooltip incluye el valor restante y el máximo.
 
-Las habilidades con `blockMovementDuringCast` son canalizaciones: cualquier
-impacto que supere su armadura las corta, incluso el tick de un área persistente.
+Las habilidades con `blockMovementDuringCast` son canalizaciones: cuando el
+daño acumulado agota su armadura la cortan, incluso los ticks de un área persistente.
 Esos ticks no aplican hitstun ni empuje, pero sí interrumpen al lanzador que está
 clavado. Si el efecto 3D ya había salido, también se acorta: el área persistente
 deja de hacer ticks y se retira en el acto.

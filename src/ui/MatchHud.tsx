@@ -214,24 +214,26 @@ export function MatchHud({
           ? Math.max(0, Math.min(100, (playerStats.hp / Math.max(1, playerStats.maxHp)) * 100))
           : 0;
         const isDead = playerStats ? !playerStats.alive : false;
-        const armorThreshold = playerStats?.armorThreshold ?? 0;
+        const armorRemaining = playerStats?.armorRemaining ?? 0;
+        const armorMax = playerStats?.armorMax ?? 0;
         const armorPct = playerStats
           ? Math.max(
               0,
               Math.min(
                 100,
-                (armorThreshold / Math.max(1, playerStats.maxHp)) * 100
+                (armorRemaining / Math.max(1, playerStats.maxHp)) * 100
               )
             )
           : 0;
         // La franja se alinea a la derecha con el tramo verde de la vida actual
-        // y se recorta contra su borde izquierdo si el umbral lo supera.
+        // y se recorta contra su borde izquierdo si la armadura restante lo
+        // supera.
         const armorVisiblePct = Math.max(0, Math.min(armorPct, hpPct));
         const armorLeftPct = Math.max(0, hpPct - armorVisiblePct);
         const hpTitle = playerStats
           ? `${Math.ceil(playerStats.hp)}/${playerStats.maxHp} PV` +
-            (armorThreshold > 0
-              ? ` · Armadura de casteo: absorbe golpes de menos de ${armorThreshold} PV`
+            (armorRemaining > 0
+              ? ` · Armadura de casteo: ${Math.ceil(armorRemaining)}/${armorMax} PV; el daño acumulado la rompe`
               : '')
           : undefined;
         const concealmentPct = playerStats ? Math.round(playerStats.concealment * 100) : 0;
@@ -371,8 +373,8 @@ export function MatchHud({
                       />
                       {/* Franja metálica de la armadura de casteo: alineada a
                           la derecha con el tramo verde de la vida actual,
-                          comparte su altura y se recorta si el umbral la
-                          supera. */}
+                          comparte su altura y se recorta si la armadura
+                          restante la supera. */}
                       {armorVisiblePct > 0 && (
                         <>
                           <div

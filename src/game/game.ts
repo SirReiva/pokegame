@@ -2717,6 +2717,7 @@ export class Game {
       marker,
       lane,
       armorFx: null,
+      armorRemaining: def.armorPool,
       targetX,
       targetZ,
       originX: targetX,
@@ -2729,7 +2730,7 @@ export class Game {
     // Aura tenue mientras la armadura está activa. La ventana corta dura el
     // startup; la de canalización dura todo el casteo. Se destruye al cancelar
     // o terminar el casteo para no dejarla pegada al cuerpo.
-    if (def.armorThreshold > 0) {
+    if (def.armorPool > 0) {
       const armorDuration =
         def.armorWindow === 'cast' ? abilityTotalTime(def) : def.startup;
       cast.armorFx = this.combatFx.spawnArmorAura(
@@ -3038,16 +3039,16 @@ export class Game {
   }
 
   /**
-   * Umbral de daño de la armadura de casteo activa en este instante; 0 si el
-   * lanzador no está casteando con armadura o su ventana ya se cerró. Lo
-   * comparten la resolución del golpe, el HUD y la barra flotante para que
-   * todos lean exactamente la misma ventana.
+   * Armadura de casteo restante en este instante; 0 si el lanzador no está
+   * casteando con armadura, ya la agotó o su ventana se cerró. Lo comparten la
+   * resolución del golpe, el HUD y la barra flotante para que todos lean
+   * exactamente el mismo estado.
    */
   private activeCastArmor(target: MatchPlayerState): number {
     const cast = target.activeCast;
-    if (!cast || cast.def.armorThreshold <= 0) return 0;
+    if (!cast || cast.def.armorPool <= 0) return 0;
     if (cast.def.armorWindow === 'startup' && cast.fired) return 0;
-    return cast.def.armorThreshold;
+    return cast.armorRemaining;
   }
 
   /**
@@ -3103,8 +3104,9 @@ export class Game {
     const armor = this.activeCastArmor(target);
     const armorActive = armor > 0;
     const wouldInterrupt = options.cancel || channeling;
-    // La armadura absorbe el golpe si no llega a su umbral. Los estados y el
-    // control explícito pasan por encima: son el contador del setup.
+    // La armadura absorbe el golpe mientras le quede pozo. Los estados, el
+    // control explícito y los golpes letales pasan por encima: son el contador
+    // del setup. El daño no se mitiga, solo consume armadura.
     const absorbed =
       wouldInterrupt &&
       armorActive &&
@@ -3113,6 +3115,9 @@ export class Game {
       options.damage < armor;
 
     if (armorActive && wouldInterrupt) {
+      if (absorbed && cast) {
+        cast.armorRemaining = Math.max(0, armor - options.damage);
+      }
       this.spawnArmorFeedback(target, !absorbed);
     }
     if (wouldInterrupt && !absorbed) {
@@ -4559,7 +4564,8 @@ export class Game {
           };
         }),
         shieldActive: player.damageReductionTimer > 0,
-        armorThreshold: this.activeCastArmor(player),
+        armorRemaining: this.activeCastArmor(player),
+        armorMax: player.activeCast?.def.armorPool ?? 0,
         commonAbility: commonOption
           ? {
               id: commonOption.id,

@@ -210,8 +210,8 @@ export class Actor {
   }
 
   /**
-   * Armadura de casteo activa como fracción de la vida máxima: la franja
-   * metálica de la barra mide cuánto daño absorbe antes de romperse.
+   * Armadura de casteo restante como fracción de la vida máxima: la franja
+   * metálica de la barra mide cuánto daño puede absorber aún antes de romperse.
    */
   setArmorFraction(fraction: number): void {
     this.healthBar.setArmorFraction(fraction);
