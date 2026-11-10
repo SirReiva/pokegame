@@ -18,6 +18,7 @@
     "sprites:metadata": "node scripts/patch-sprite-metadata.mjs",
     "validate:anims": "node scripts/validate-anim-timings.ts",
     "sfx": "node scripts/import-sfx.mjs",
+    "maps:designs": "node scripts/generate-arena-designs.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",
     "items:art": "node scripts/generate-item-art.mjs",
     "lint": "twlinter --fix --no-config --json && oxlint",

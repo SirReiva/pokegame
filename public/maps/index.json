@@ -66,6 +66,64 @@
       ],
       "description": "Mapa de estrés de 256 × 256 celdas (tileSize 0.5, agua a 0.3) con ocho distritos elementales, lago central y puentes. Pensado para medir rendimiento.",
       "preview": "maps/previews/perf-256.png"
+    },
+    {
+      "id": "delta",
+      "file": "delta.json",
+      "name": "Delta de las Mareas",
+      "description": "Arena de 112 × 112 celdas para dos equipos: un delta cruza el mapa en diagonal, con tres puentes, una isla central disputada y distritos de jungla, arena y pantano.",
+      "teams": [
+        "red",
+        "blue"
+      ],
+      "preview": "maps/previews/delta.png"
+    },
+    {
+      "id": "estaciones",
+      "file": "estaciones.json",
+      "name": "Cuatro Estaciones",
+      "description": "Arena de 128 × 128 celdas para cuatro equipos: bases cardinales, plaza central con fuente, anillo de circulación, avenidas en cruz y cuatro distritos elementales.",
+      "teams": [
+        "red",
+        "blue",
+        "yellow",
+        "green"
+      ],
+      "preview": "maps/previews/estaciones.png"
+    },
+    {
+      "id": "raices",
+      "file": "raices.json",
+      "name": "Laberinto de Raíces",
+      "description": "Laberinto de 96 × 96 celdas para dos equipos: raíces que dividen el bosque en nueve claros, varias puertas por muro para evitar callejones sin salida y un claro central de hadas.",
+      "teams": [
+        "red",
+        "blue"
+      ],
+      "preview": "maps/previews/raices.png"
+    },
+    {
+      "id": "plasma",
+      "file": "plasma.json",
+      "name": "Ciudad Plasma",
+      "description": "Ciudad de 100 × 100 celdas para tres equipos: avenidas radiales, anillo perimetral, manzanas amuralladas y una plaza central con fuente.",
+      "teams": [
+        "red",
+        "blue",
+        "yellow"
+      ],
+      "preview": "maps/previews/plasma.png"
+    },
+    {
+      "id": "caldera",
+      "file": "caldera.json",
+      "name": "Caldera de Ceniza",
+      "description": "Arena de 96 × 96 celdas para dos equipos: caldera volcánica con lago profundo, dos puentes, anillo de ceniza y una isla central con la poción grande.",
+      "teams": [
+        "red",
+        "blue"
+      ],
+      "preview": "maps/previews/caldera.png"
     }
   ]
 }
