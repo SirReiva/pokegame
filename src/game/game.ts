@@ -2495,14 +2495,28 @@ export class Game {
 
   /** Cancela el casteo activo y retira sus marcas del suelo. */
   private cancelCast(player: MatchPlayerState): void {
-    if (!player.activeCast) return;
+    const cast = player.activeCast;
+    if (!cast) return;
     // Marca el casteo como cancelado antes de soltarlo: si su efecto ya estaba
     // en `queuedCasts`, la fase de resolución lo descartará.
-    player.activeCast.canceled = true;
-    player.activeCast.marker?.destroy();
-    player.activeCast.lane?.destroy();
+    cast.canceled = true;
+    // Una canalización cortada también acorta su efecto: el área persistente
+    // deja de hacer ticks y su efecto 3D se retira en el acto.
+    if (cast.def.blockMovementDuringCast) this.cutCastAoes(cast);
+    cast.marker?.destroy();
+    cast.lane?.destroy();
     player.activeCast = null;
     player.animationFrame = null;
+  }
+
+  /** Retira las áreas persistentes que creó un casteo interrumpido. */
+  private cutCastAoes(cast: ActiveCast): void {
+    for (let index = this.activeAoes.length - 1; index >= 0; index--) {
+      const aoe = this.activeAoes[index];
+      if (aoe.cast !== cast) continue;
+      aoe.fx?.destroy();
+      this.activeAoes.splice(index, 1);
+    }
   }
 
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
@@ -2707,7 +2721,8 @@ export class Game {
         cast.targetZ,
         cast.marker,
         cast.dirX,
-        cast.dirZ
+        cast.dirZ,
+        cast.activeCast
       );
     }
   }
@@ -2724,7 +2739,8 @@ export class Game {
     targetZ?: number,
     marker?: TelegraphHandle | null,
     dirX?: number,
-    dirZ?: number
+    dirZ?: number,
+    activeCast?: ActiveCast
   ): void {
     // El sonido va con el efecto real, no con el inicio del startup: en
     // habilidades cargadas el golpe suena cuando sale, no cuando se prepara.
@@ -2758,6 +2774,7 @@ export class Game {
         this.dashPosition(source, x, z, dirX, dirZ, distance),
       addProjectile: (projectile) => this.projectiles.push(projectile),
       addActiveAoe: (aoe) => this.activeAoes.push(aoe),
+      activeCast,
       addPendingMeleeHit: (hit) => this.pendingMeleeHits.push(hit),
       marker,
       castDirX: dirX,
@@ -2919,7 +2936,11 @@ export class Game {
       sourceZ?: number;
     }
   ): void {
-    if (options.cancel) this.interruptPlayer(target);
+    // `blockMovementDuringCast` convierte el casteo en una canalización: el
+    // lanzador queda clavado y cualquier impacto la corta. Esto incluye los
+    // ticks de áreas persistentes, que por lo demás no aplican control.
+    const channeling = target.activeCast?.def.blockMovementDuringCast === true;
+    if (options.cancel || channeling) this.interruptPlayer(target);
     if (options.hitstun > 0) {
       target.stunTimer = Math.max(target.stunTimer, options.hitstun);
     }
@@ -3868,6 +3889,9 @@ export class Game {
     // según cuál se creó después. Se recorre una copia porque las áreas
     // terminadas se retiran durante el recorrido.
     for (const aoe of this.activeAoes.slice()) {
+      // Otra área del mismo frame pudo cortar la canalización que creó esta:
+      // si ya se retiró, no debe seguir haciendo ticks.
+      if (!this.activeAoes.includes(aoe)) continue;
       aoe.elapsed += dt;
       // Las áreas móviles recalculan su centro antes del tick para que el daño
       // de este frame y el aro visual se resuelvan en la misma posición. En el

@@ -198,6 +198,14 @@ export interface ActiveCast {
 export interface ActiveAoe {
   owner: MatchPlayerState;
   def: AbilityDef;
+  /**
+   * Casteo que creó el área. Las canalizaciones con
+   * `blockMovementDuringCast` se cortan por completo al ser interrumpidas:
+   * el área deja de hacer ticks y su efecto 3D se retira.
+   */
+  cast?: ActiveCast;
+  /** Handle del efecto 3D para poder retirarlo antes de que expire. */
+  fx?: FxHandle;
   x: number;
   z: number;
   /** Radio del círculo o longitud del cono. */

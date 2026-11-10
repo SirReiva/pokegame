@@ -18,6 +18,7 @@ import {
 import type { CombatFx, TelegraphHandle } from './combatFx';
 import type {
   ActiveAoe,
+  ActiveCast,
   HealOnHitToken,
   MatchPlayerState,
   PendingMeleeHit,
@@ -88,6 +89,11 @@ export interface AbilityExecutorDeps {
   ): { x: number; z: number };
   addProjectile(projectile: Projectile): void;
   addActiveAoe(aoe: ActiveAoe): void;
+  /**
+   * Casteo que está ejecutando el efecto. Permite que las áreas persistentes
+   * queden ligadas a su canalización y se retiren si esta se interrumpe.
+   */
+  readonly activeCast?: ActiveCast;
   addPendingMeleeHit(hit: PendingMeleeHit): void;
   /**
    * Marca de área creada durante el `windup`, si la hubo. El ejecutor la
@@ -370,6 +376,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     deps.addActiveAoe({
       owner: player,
       def,
+      cast: deps.activeCast,
+      fx: areaFx,
       x: centerX,
       z: centerZ,
       radius: def.radius,

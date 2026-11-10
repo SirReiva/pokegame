@@ -188,6 +188,12 @@ Un golpe de control, un choque de melee, un KO o un respawn cancelan el
 `ActiveCast`: se destruyen las marcas de área/haz y se limpia el frame manual.
 El casteo nunca deja bloqueos residuales.
 
+Las habilidades con `blockMovementDuringCast` son canalizaciones: cualquier
+impacto las corta, incluso el tick de un área persistente. Esos ticks no aplican
+hitstun ni empuje, pero sí interrumpen al lanzador que está clavado. Si el
+efecto 3D ya había salido, también se acorta: el área persistente deja de hacer
+ticks y se retira en el acto.
+
 Si el efecto ya estaba en `queuedCasts` cuando llega la cancelación, el casteo
 se marca como `canceled` y la fase de resolución lo descarta. Así un cambio
 futuro del orden de fases no puede ejecutar el efecto de una habilidad que ya
