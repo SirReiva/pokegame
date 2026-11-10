@@ -1201,7 +1201,7 @@ export function buildWorld(app: pc.AppBase): World {
     // Un desierto enorme con cuatro cactus solo se ve vacío. En zonas grandes
     // se reparten por área y se dibujan instanciados: una malla y un draw call.
     if (area > DESERT_LARGE_AREA) {
-      const count = Math.max(4, Math.min(400, Math.round(area * 0.004)));
+      const count = Math.max(1, Math.min(400, Math.round(area * 0.004)));
       const data = new Float32Array(count * 16);
 
       for (let i = 0; i < count; i++) {
@@ -1254,8 +1254,8 @@ export function buildWorld(app: pc.AppBase): World {
       return;
     }
 
-    // Zonas pequeñas: se conservan las cuatro entidades de siempre.
-    const count = 4;
+    // Zonas pequeñas: se mantiene un único cactus como mínimo.
+    const count = 1;
     const spots: Array<[number, number]> = [];
     for (let i = 0; i < count; i++) {
       let [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
@@ -2807,9 +2807,9 @@ export function buildWorld(app: pc.AppBase): World {
     const rand = random(0x7e3a + zoneIndex * 3559);
     // Antes eran 8 fijas por zona: en un claro pequeño bastaba, pero en un
     // mapa entero de claro feérico se perdían. Ahora la densidad se escala con
-    // el área (con un mínimo de 8 y un tope para no disparar la CPU).
+    // el área (con un mínimo de 2 y un tope para no disparar la CPU).
     const count = Math.max(
-      8,
+      2,
       Math.min(2000, Math.round(zoneArea(zone) * 0.025))
     );
 
