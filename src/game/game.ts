@@ -4566,9 +4566,8 @@ export class Game {
    * ¿Ve el equipo el punto de un objeto? Los objetos no se esconden por la
    * ocultación del terreno (arena, veneno, hierba alta...), solo por el radio
    * de visión y por la línea de visión (separadores y árboles). Se usa el mismo
-   * conjunto de observadores que dibuja la niebla: un humano KO conserva su
-   * círculo porque su cámara sigue al cuerpo, así que los objetos de esa zona
-   * deben seguir viéndose.
+   * conjunto de observadores que dibuja la niebla: solo los Pokémon vivos,
+   * humanos o bots, revelan objetos al equipo.
    */
   private teamSeesPickupPoint(
     team: Team,
@@ -4578,7 +4577,7 @@ export class Game {
   ): boolean {
     for (const observer of this.matchPlayers) {
       if (observer.team !== team) continue;
-      if (!observer.alive && observer.isBot) continue;
+      if (!observer.alive) continue;
       const distance = Math.hypot(x - observer.x, z - observer.z);
       if (
         distance >
@@ -4603,12 +4602,12 @@ export class Game {
     for (const player of this.matchPlayers) player.enemiesSeeing = 0;
 
     // Círculos de visión por equipo: se calculan una vez por frame y se
-    // reutilizan en todas sus vistas. Un humano KO conserva su círculo porque
-    // su cámara sigue al cuerpo hasta reaparecer; un bot KO no aporta visión.
+    // reutilizan en todas sus vistas. Solo los Pokémon vivos, humanos o bots,
+    // aportan visión; un KO no hace de vigía hasta reaparecer.
     const circlesByTeam = new Map<Team, VisionCircle[]>();
     const localCircleBySlot = new Map<number, VisionCircle>();
     for (const player of this.matchPlayers) {
-      if (!player.alive && player.isBot) continue;
+      if (!player.alive) continue;
       const circle: VisionCircle = {
         x: player.x,
         z: player.z,
@@ -4640,10 +4639,9 @@ export class Game {
     );
 
     for (const observer of this.matchPlayers) {
-      // Un humano KO conserva su cámara y su círculo de niebla; por tanto,
-      // también puede revelar actores en esa zona. Un bot KO no aporta visión.
-      if (!observer.alive && observer.isBot) continue;
-      if (observer.alive && !observer.hidden) {
+      // Un KO no revela actores al equipo, sea humano o bot.
+      if (!observer.alive) continue;
+      if (!observer.hidden) {
         current[observer.team].add(observer.slot);
       }
       for (const target of this.matchPlayers) {
@@ -4671,12 +4669,7 @@ export class Game {
         // directa de cada rival vivo, no la visión compartida del equipo.
         // `visible` ya es una comprobación geométrica por observador, así que se
         // reutiliza en vez de repetir el barrido de oclusores.
-        if (
-          observer.alive &&
-          target.alive &&
-          observer.team !== target.team &&
-          visible
-        ) {
+        if (target.alive && observer.team !== target.team && visible) {
           target.enemiesSeeing += 1;
         }
         if (!visible) continue;

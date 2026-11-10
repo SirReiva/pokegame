@@ -155,9 +155,9 @@
 > cancela su `ActiveCast`; siguen dañando los proyectiles, las áreas
 > persistentes y los golpes de dash pendientes. La simulación a paso fijo
 > elimina la dependencia del framerate de los ticks de área, pero no el +2 por
-> tick. Se añade 3.17 (Ciclón: el área atraviesa obstáculos) y 3.19 (visión de
-> un humano KO incoherente entre actores/objetos y FX); 3.18 queda reducido a
-> los avisos de `validate:anims`. Las tablas de §4.3-§4.6 son una foto
+> tick. Se añade 3.17 (Ciclón: el área atraviesa obstáculos); 3.18 queda
+> reducido a los avisos de `validate:anims` y 3.19 se retira al corregirse la
+> visión de los KO. Las tablas de §4.3-§4.6 son una foto
 > anterior al rebalanceo de v0.20-v0.22 y no reflejan `abilities.ts` actual.
 
 ## Resumen ejecutivo
@@ -368,9 +368,9 @@ cobertura de tipos.
 | 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante y `dashEnemyLimit` no comprueba LOS. |
 | 3.17 Ciclón | **pendiente** | El centro del área atraviesa muros, rocas y árboles. |
 | 3.18 Avisos de `validate:anims` | **pendiente** | Cuatro avisos de anticipación/carga (Pájaro Osado, Hidrobomba, Rayo Hielo y Fuego Sagrado). |
-| 3.19 Visión de un humano KO | **pendiente** | Ve actores y objetos, pero no los FX de la misma zona. |
 
-Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.16) corresponden a apartados ya corregidos y retirados de la lista.
+Los números conservan el identificador histórico: los huecos (3.9, 3.11-3.16 y
+3.19) corresponden a apartados ya corregidos y retirados de la lista.
 
 ### 3.1. Cobertura: 5 especies sin moveset (crítico)
 
@@ -625,25 +625,6 @@ ventana real. Es un fallo de legibilidad, no de fórmula.
 **Arreglo**: ajustar el `startup` de Pájaro Osado o su clip para que la
 anticipación se vea, y dejar hueco de carga (o quitar la animación `charge`) en
 las otras tres.
-
-### 3.19. La visión de un humano KO no es coherente entre actores, objetos y FX (bajo)
-
-`updateVision` conserva el círculo de un humano KO (`game.ts:4610-4611`) y lo
-usa para revelar actores al equipo (`game.ts:4642-4685`); los objetos hacen lo
-mismo con `teamSeesPickupPoint` (`game.ts:4573-4591`). Un humano muerto, por
-tanto, sigue haciendo de vigía hasta reaparecer: su cámara sigue al cuerpo y su
-equipo ve lo que hay alrededor.
-
-Sin embargo, `teamSeesPoint` exige `observer.alive` (`game.ts:4545-4562`) y es
-la función que decide las capas de los FX (`game.ts:4499-4507`). El resultado es
-que un humano KO ve el cuerpo de un rival y el billboard de una poción, pero no
-el proyectil, el área o el impacto que ocurren en esa misma zona. Además, un
-muerto no suma a `enemiesSeeing` (la comprobación exige `observer.alive`,
-`game.ts:4675-4680`), así que no rompe la Regeneración del rival.
-
-**Arreglo**: decidir si la visión del KO es de espectador o de combate. Si se
-mantiene, unificar `teamSeesPoint` con la misma regla que actores/objetos para
-los FX; si no, dejar de revelar actores y objetos desde un cadáver.
 
 ## 4. Estudio cuantitativo del balance
 
@@ -1130,8 +1111,6 @@ autodaño la convierte en una mala elección en 1v1.
     golpeando a través de muros y desde fuera de la visión de Lugia.
 26. **Avisos de animación**: corregir los avisos de `validate:anims` de Pájaro
     Osado, Hidrobomba, Rayo Hielo y Fuego Sagrado.
-27. **Visión de espectador**: unificar la visión de actores/objetos/FX para un
-    humano KO. Hoy ve cuerpos y pociones, pero no los FX de la misma zona.
 
 > Los números son un punto de partida para una primera pasada, no una verdad
 > absoluta. Conviene cambiarlos de pocos en pocos y volver a ejecutar la matriz.
@@ -1268,9 +1247,8 @@ así que se pueden añadir tests baratos:
 - **Ciclón**: el centro no debe cruzar muros, rocas ni árboles.
 - **Descripciones**: un test de datos debe comprobar que `aoeDuration` y el
   `dash`/`aoeMovement` de Ciclón y Fuego Sagrado coinciden con sus textos.
-- **Visión de espectador**: un humano KO debe ver actores, objetos y FX con el
-  mismo criterio; si se decide que no revela, no debe añadir actores al conjunto
-  visible del equipo.
+- **Visión de un KO**: un humano o bot KO no debe revelar actores ni objetos al
+  equipo; al reaparecer vuelve a aportar su círculo.
 - **Balance**: la tabla de §4.2 debe incluir las 25 especies y su `hitRadius`, y
   la matriz de §4.3 debe seguir generándose con las 20 que tienen moveset,
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
