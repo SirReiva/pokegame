@@ -5423,8 +5423,8 @@ export class CombatFx {
   }
 
   /**
-   * Charco de lodo: anillo y disco tenue de veneno en el suelo, y burbujas 3D
-   * que nacen del charco, suben y revientan durante toda la duración del área.
+   * Charco de lodo: disco de veneno en el suelo, sin aro, y burbujas 3D que
+   * nacen del charco, suben y revientan durante toda la duración del área.
    * Cada burbuja es una esfera translúcida con dos brillos que giran sobre su
    * superficie (así se lee el volumen) y al reventar deja un aro y gotas del
    * color del veneno.
@@ -5441,7 +5441,6 @@ export class CombatFx {
     root.setPosition(x, 0.03, z);
     this.app.root.addChild(root);
 
-    const ringMaterial = this.createWaterMaterial(color, 0.45);
     const fillMaterial = this.createWaterMaterial(color, 0.1);
     // Las burbujas aclaran el color del veneno para que el volumen se lea
     // sobre el charco oscuro; los brillos casi blancos marcan el reflejo.
@@ -5462,17 +5461,12 @@ export class CombatFx {
     // burbuja se sustituye por escala y por el fundido global del área.
     const popRingMaterial = this.createWaterMaterial(popColor, 0.8);
     const materials = [
-      ringMaterial,
       fillMaterial,
       bubbleMaterial,
       shineMaterial,
       dropMaterial,
       popRingMaterial
     ];
-
-    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
 
     const fill = this.createEntity(this.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.03, 0);
@@ -5592,14 +5586,12 @@ export class CombatFx {
       const envelope = Math.min(fadeIn, fadeOut);
       const pulse = 0.5 + Math.sin(time * 7) * 0.2;
 
-      ringMaterial.opacity = (0.35 + pulse * 0.15) * envelope;
-      fillMaterial.opacity = (0.08 + pulse * 0.04) * envelope;
+      // Sin aro, el disco es el que marca el área: sube la opacidad para que
+      // el violeta se lea como un charco lleno y no como un tinte tenue.
+      fillMaterial.opacity = (0.18 + pulse * 0.06) * envelope;
       bubbleMaterial.opacity = (0.34 + pulse * 0.1) * envelope;
       shineMaterial.opacity = 0.9 * envelope;
       dropMaterial.opacity = 0.85 * envelope;
-
-      const ringScale = radius * 2 * (0.96 + pulse * 0.05);
-      ring.setLocalScale(ringScale, 1, ringScale);
 
       bubbleBatch.setTime(time);
       highlightBatch.setTime(time);
@@ -6187,12 +6179,12 @@ export class CombatFx {
         const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
         ringMaterial.opacity = (0.3 + pulse * 0.35) * fade;
         dashMaterial.opacity = (0.55 + pulse * 0.35) * fade;
-        fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
         dash.setLocalEulerAngles(0, -elapsed * 32, 0);
 
         const chargeProgress =
           charge > 0 ? Math.min(1, elapsed / charge) : 1;
         if (charge > 0 && elapsed < charge) {
+          fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
           // Durante la preparación el disco crece hasta el radio real.
           const sweepScale = Math.max(0.01, radius * 2 * chargeProgress);
           sweep.setLocalScale(sweepScale, 1, sweepScale);
@@ -6207,7 +6199,10 @@ export class CombatFx {
           }
         } else {
           // Ya impactó: el aro queda solo como límite del área mientras dura
-          // el efecto, sin relleno de carga ni destello.
+          // el efecto, sin relleno de carga ni destello. El efecto del área
+          // (por ejemplo, el charco de Bomba Lodo) rellena el interior, así
+          // que este disco no debe sumarse encima.
+          fillMaterial.opacity = 0;
           sweep.setLocalScale(0.01, 1, 0.01);
           sweepMaterial.opacity = 0;
         }
@@ -6323,10 +6318,10 @@ export class CombatFx {
         const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
         bandMaterial.opacity = (0.3 + pulse * 0.35) * fade;
         edgeMaterial.opacity = (0.55 + pulse * 0.35) * fade;
-        fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
 
         const chargeProgress = charge > 0 ? Math.min(1, elapsed / charge) : 1;
         if (charge > 0 && elapsed < charge) {
+          fillMaterial.opacity = (0.06 + pulse * 0.05) * fade;
           // El relleno crece desde el vértice hasta el borde, igual que el
           // disco de la marca circular.
           const sweepLength = Math.max(0.01, reach * chargeProgress);
@@ -6340,6 +6335,9 @@ export class CombatFx {
             sweepMaterial.opacity += flash * 0.3;
           }
         } else {
+          // Ya impactó: queda solo el contorno. El relleno propio del efecto
+          // ocupa el abanico y no debe sumarse con este.
+          fillMaterial.opacity = 0;
           sweep.setLocalScale(0.01, 1, 0.01);
           sweepMaterial.opacity = 0;
         }
