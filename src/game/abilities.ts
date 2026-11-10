@@ -2190,12 +2190,11 @@ registerAbility(
     .recovery(0.55)
     .animation('shoot')
     .area('cyclone', 'overTime', 2.5)
-    .knockback(2.6)
     .slow(0.65, 1.5)
     .impact('air')
     .color(198, 224, 255)
     .description(
-      'Golpe de ala que desata un ciclón que avanza 6 u hacia delante a velocidad constante, con un vaivén senoidal: 45 de daño por segundo durante 2,5 s y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+      'Golpe de ala que desata un ciclón de 2 u de radio que avanza 10 u hacia delante a velocidad constante, con un vaivén senoidal de 0,6 u: 45 de daño por segundo durante 2,5 s y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
     )
 );
 
@@ -2302,7 +2301,7 @@ registerAbility(
     .impact('fire')
     .color(255, 168, 56)
     .description(
-      'Definitiva: exhala un cono de fuego sagrado de 25° desde 1 u por delante de Ho-Oh. Avanza 7,5 u y permanece 3 s: hace 50 de daño por segundo y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+      'Definitiva: exhala un cono de fuego sagrado de 25° desde 1 u por delante de Ho-Oh. Avanza 7,5 u y permanece 1,5 s: hace 50 de daño por segundo (75 en total) y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
     )
 );
 
