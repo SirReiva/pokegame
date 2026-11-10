@@ -77,6 +77,19 @@ function zoneEmitterExtents(
   return new pc.Vec3((bounds.width * factor) / 2, height, (bounds.depth * factor) / 2);
 }
 
+/** Cantidad de partículas proporcional al área, con un suelo y un techo. */
+function particleCountForArea(
+  area: number,
+  fullArea: number,
+  maxCount: number,
+  minCount: number
+): number {
+  return Math.max(
+    minCount,
+    Math.min(maxCount, Math.round((area / fullArea) * maxCount))
+  );
+}
+
 /**
  * Interruptor temporal de árboles: con `false` no se genera ninguno (ni los de
  * la jungla ni los secos del bosque umbrío) y tampoco sus colliders, así que
@@ -1192,6 +1205,10 @@ export function buildWorld(app: pc.AppBase): World {
   const cactusMesh = buildCactusMesh();
   const cactusInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
   const DESERT_LARGE_AREA = 400;
+  // 90 partículas llenan bien un claro de DESERT_LARGE_AREA; por debajo la
+  // cantidad se reduce con el área y nunca baja del mínimo.
+  const DESERT_DUST_MAX_PARTICLES = 90;
+  const DESERT_DUST_MIN_PARTICLES = 8;
   const desertZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'desert');
 
   desertZones.forEach((zone, zoneIndex) => {
@@ -1335,13 +1352,24 @@ export function buildWorld(app: pc.AppBase): World {
   // polvo y no como chispas. La densidad y el tamaño son altos para que la
   // bruma se note desde la cámara a 45º.
   desertZones.forEach((zone, zoneIndex) => {
-    if (zoneArea(zone) > DESERT_LARGE_AREA) return;
+    const area = zoneArea(zone);
+    if (area > DESERT_LARGE_AREA) return;
+
+    // En claros muy pequeños 90 partículas se amontonan: la cantidad escala
+    // con el área (90 al llegar a DESERT_LARGE_AREA) hasta un mínimo de 8.
+    const numParticles = Math.max(
+      DESERT_DUST_MIN_PARTICLES,
+      Math.min(
+        DESERT_DUST_MAX_PARTICLES,
+        Math.round((area / DESERT_LARGE_AREA) * DESERT_DUST_MAX_PARTICLES)
+      )
+    );
 
     const [dustX, dustZ] = zoneCenter(zone);
     const dust = new pc.Entity(`desert-dust-${zoneIndex}`);
     dust.setPosition(dustX, 0.8, dustZ);
     dust.addComponent('particlesystem', {
-      numParticles: 90,
+      numParticles,
       lifetime: 5.5,
       rate: 0.045,
       rate2: 0.075,
@@ -3556,6 +3584,14 @@ export function buildWorld(app: pc.AppBase): World {
   // La madera va con color por vértice, del casi negro de la base al gris
   // violeta de las puntas, así que tiene volumen desde la cámara a 45º.
   const ghostZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'ghost');
+  // La densidad llena (130 bocanadas y 18 fuegos) está pensada para un claro
+  // mediano. En zonas de un solo tile se amontonarían, así que la cantidad
+  // escala con el área por debajo de GHOST_FULL_PARTICLE_AREA.
+  const GHOST_FULL_PARTICLE_AREA = 60;
+  const GHOST_MIST_MAX_PARTICLES = 130;
+  const GHOST_MIST_MIN_PARTICLES = 4;
+  const GHOST_WISP_MAX_PARTICLES = 18;
+  const GHOST_WISP_MIN_PARTICLES = 1;
 
   const ghostMaterial = standard({
     diffuse: '#ffffff',
@@ -3843,6 +3879,19 @@ export function buildWorld(app: pc.AppBase): World {
   const ghostLights: Array<{ entity: pc.Entity; phase: number }> = [];
 
   ghostZones.forEach((zone, zoneIndex) => {
+    const area = zoneArea(zone);
+    const wispCount = particleCountForArea(
+      area,
+      GHOST_FULL_PARTICLE_AREA,
+      GHOST_WISP_MAX_PARTICLES,
+      GHOST_WISP_MIN_PARTICLES
+    );
+    const mistCount = particleCountForArea(
+      area,
+      GHOST_FULL_PARTICLE_AREA,
+      GHOST_MIST_MAX_PARTICLES,
+      GHOST_MIST_MIN_PARTICLES
+    );
     const [ghostX, ghostZ] = zoneCenter(zone);
     // Fuegos fatuos: orbes aditivos que flotan entre 0,4 y 1,3 m, derivan muy
     // despacio y parpadean. El violeta lo pone el colorGraph sobre una textura
@@ -3850,7 +3899,7 @@ export function buildWorld(app: pc.AppBase): World {
     const wisps = new pc.Entity(`ghost-wisps-${zoneIndex}`);
     wisps.setPosition(ghostX, 0.85, ghostZ);
     wisps.addComponent('particlesystem', {
-      numParticles: 18,
+      numParticles: wispCount,
       lifetime: 6.4,
       rate: 0.26,
       rate2: 0.4,
@@ -3894,12 +3943,12 @@ export function buildWorld(app: pc.AppBase): World {
 
     // Niebla rastrera: caja ancha y baja, casi sin impulso vertical, para que
     // se arrastre entre los troncos en vez de subir como el humo de la ciénaga.
-    // La densidad la marca `numParticles`: con 130 bocanadas y una vida larga
-    // el calvero queda cubierto por una capa continua, no por jirones sueltos.
+    // La densidad la marca `numParticles`: con hasta 130 bocanadas y una vida
+    // larga el calvero queda cubierto por una capa continua, no por jirones.
     const mist = new pc.Entity(`ghost-mist-${zoneIndex}`);
     mist.setPosition(ghostX, 0.45, ghostZ);
     mist.addComponent('particlesystem', {
-      numParticles: 130,
+      numParticles: mistCount,
       lifetime: 10.5,
       rate: 0.05,
       rate2: 0.08,
