@@ -26,6 +26,9 @@ puede lanzar otra habilidad. El movimiento se bloquea:
 - durante la ventana `active` de las melee;
 - durante todo el casteo (`startup + active + recovery`) si
   `blockMovementDuringCast` es `true`, aunque `moveWhileStartup` también lo sea;
+- hasta que termina de reproducirse la animación de lanzamiento si
+  `blockMovementUntilEndAnimation` es `true`; después la recuperación restante
+  ya permite moverse;
 - en un dash, lo controla el propio desplazamiento.
 
 ## 2. Marcadores del sprite
@@ -39,12 +42,12 @@ Los `animdata.xml` de PMD incluyen tres marcadores por animación de ataque, en
 | `HitFrame` | Frame en el que el golpe conecta o sale el proyectil. | `ReturnFrame`. |
 | `ReturnFrame` | Frame en el que empieza la vuelta al reposo. | Último frame. |
 
-`RushFrame` se guarda en el manifiesto para futuras animaciones de envite, pero
-el plan actual no desplaza al personaje con él: solo usa `HitFrame` y
-`ReturnFrame` para el efecto y la recuperación.
-
 Se guardan en el manifiesto como `rushFrame`, `hitFrame` y `returnFrame` junto a
-`durations` (ticks de 1/60 s). El tiempo de un marcador es:
+`durations` (ticks de 1/60 s). `RushFrame` se conserva para futuras animaciones
+de envite, pero el plan actual no lo usa para desplazar: solo `HitFrame` y
+`ReturnFrame` anclan el efecto y la recuperación.
+
+El tiempo de un marcador es:
 
 ```
 frameStart(frame) = suma(durations[0..frame-1]) / 60
@@ -123,6 +126,11 @@ Builder:
 - `blockMovementDuringCast()` → `blockMovementDuringCast`. Clava al lanzador
   durante todo el casteo, recuperación incluida, y tiene prioridad sobre
   `move: true`. Útil para áreas canalizadas.
+- `blockMovementUntilEndAnimation()` → `blockMovementUntilEndAnimation`. Clava
+  al lanzador desde el inicio del casteo hasta que termina de reproducirse la
+  animación de lanzamiento; después la recuperación restante ya permite moverse.
+  Tiene prioridad sobre `move: true`. Si no hay animación, bloquea hasta el final
+  del casteo.
 
 El builder solo expone la API nueva: `startup`, `active` y `recovery`. Los
 métodos `cast()` y `windup()` se eliminaron para que ninguna definición nueva

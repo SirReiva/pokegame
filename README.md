@@ -303,6 +303,8 @@ Las habilidades con `shape: 'aoe'` separan su aviso en dos capas. El **aro del b
 
 El flag `moveWhileStartup` (`.startup(segundos, { move: true })`) decide si el Pokémon puede moverse durante la preparación. Por defecto es `false` (queda clavado). Si es `true`, el movimiento y el giro siguen funcionando, pero el centro del área y su marca permanecen fijados donde se lanzó: el Pokémon puede salir de la zona mientras el ataque sigue cargándose. `Giro Fuego` lo tiene activo; `Anillo Ígneo` lo mantiene desactivado para que la definitiva arraigue al lanzador.
 
+`blockMovementUntilEndAnimation` clava al lanzador desde el inicio del casteo hasta que termina de reproducirse la animación de lanzamiento, y tiene prioridad sobre `moveWhileStartup`. A partir de ahí, la recuperación restante ya permite moverse, aunque la habilidad siga bloqueando otros lanzamientos. Si no hay animación de lanzamiento, el bloqueo dura hasta el final del casteo.
+
 Algunas habilidades pueden declarar un **autodaño** con `selfDamage`, como fracción de la vida máxima del lanzador. Se aplica después del efecto, así que la habilidad siempre llega a ejecutarse, y **nunca le quita la última vida**: si el golpe lo dejaría a 0, conserva 1 PV. `Explosión` de Voltorb usa `0.35`, que con sus 115 PV son 40 PV por uso.
 
 Las áreas reparten su daño de dos formas con `aoeDamageMode`:

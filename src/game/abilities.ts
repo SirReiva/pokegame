@@ -306,6 +306,13 @@ export interface AbilityDef {
    */
   blockMovementDuringCast: boolean;
   /**
+   * Clava al lanzador desde el inicio del casteo hasta que termina de
+   * reproducirse la animación de lanzamiento, aunque `moveWhileStartup` sea
+   * `true`. Después, la recuperación restante ya permite moverse. Si no hay
+   * animación, bloquea hasta el final del casteo.
+   */
+  blockMovementUntilEndAnimation: boolean;
+  /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
    * frenazo de las habilidades instantáneas que se pueden usar en movimiento.
@@ -361,6 +368,7 @@ export const DEFAULT_ABILITY: Omit<
   animation: null,
   moveWhileStartup: false,
   blockMovementDuringCast: false,
+  blockMovementUntilEndAnimation: false,
   description: ''
 };
 
@@ -614,6 +622,16 @@ export class AbilityBuilder {
    */
   blockMovementDuringCast(): this {
     this.draft.blockMovementDuringCast = true;
+    return this;
+  }
+
+  /**
+   * Bloquea el movimiento hasta que termina de reproducirse la animación de
+   * lanzamiento. Después se puede mover durante la recuperación restante.
+   * Tiene prioridad sobre `move: true` de `startup`.
+   */
+  blockMovementUntilEndAnimation(): this {
+    this.draft.blockMovementUntilEndAnimation = true;
     return this;
   }
 
@@ -987,7 +1005,7 @@ registerAbility(
     .impact('ghost')
     .startup(0.25, { animation: 'shoot' })
     .recovery(0.55)
-    .blockMovementDuringCast()
+    .blockMovementUntilEndAnimation()
     .heal(0.15)
     .healOnHit()
     .color(160, 120, 235)

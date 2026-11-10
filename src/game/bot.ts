@@ -828,7 +828,9 @@ export class BotController {
       self.hurtTimer > 0 ||
       (self.activeCast !== null &&
         (!self.activeCast.def.moveWhileStartup ||
-          self.activeCast.def.blockMovementDuringCast))
+          self.activeCast.def.blockMovementDuringCast ||
+          (self.activeCast.def.blockMovementUntilEndAnimation &&
+            self.activeCast.elapsed < self.activeCast.plan.animationEndAt)))
     ) {
       return { ...IDLE_INPUT };
     }
@@ -1309,7 +1311,11 @@ export class BotController {
           // resuelve aparte en `updateThreat`. La tirada de `readPunish` hace
           // que no todos los bots detecten o aprovechen cada windup.
           score -= this.tuning.punishBonus;
-          if (!pending.def.moveWhileStartup || pending.def.blockMovementDuringCast) {
+          if (
+            !pending.def.moveWhileStartup ||
+            pending.def.blockMovementDuringCast ||
+            pending.def.blockMovementUntilEndAnimation
+          ) {
             score -= 1.5;
           }
         }
@@ -4157,7 +4163,11 @@ export class BotController {
         if (def.shape === 'melee' || def.shape === 'projectile' || def.shape === 'beam') {
           score += 10;
         }
-        if (!pending.def.moveWhileStartup || pending.def.blockMovementDuringCast) {
+        if (
+          !pending.def.moveWhileStartup ||
+          pending.def.blockMovementDuringCast ||
+          pending.def.blockMovementUntilEndAnimation
+        ) {
           score += 8;
         }
       }

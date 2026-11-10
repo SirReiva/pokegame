@@ -59,6 +59,12 @@ export interface CastPlan {
   activeEnd: number;
   /** Fin del casteo (= `startup + active + recovery`). */
   endAt: number;
+  /**
+   * Instante en el que termina de dibujarse el clip de lanzamiento. Si no hay
+   * animación de lanzamiento, coincide con `endAt`.
+   * `blockMovementUntilEndAnimation` lo usa como fin del bloqueo de movimiento.
+   */
+  animationEndAt: number;
   /** Frame de impacto del clip de lanzamiento, para depuración. */
   hitFrame: number | null;
   /** Clip de lanzamiento resuelto, para depuración. */
@@ -334,6 +340,29 @@ function addStartupFill(
   holdSegment(segments, release, lead.startFrame, 0, lead.startAt);
 }
 
+/**
+ * Instante en el que termina de dibujarse el clip de lanzamiento. Se toma el
+ * final del último segmento posterior al efecto que usa ese clip; si el plan lo
+ * recorta, coincide con el final de la parte visible. Sin clip de lanzamiento
+ * se devuelve el fin del casteo como respaldo.
+ */
+function planAnimationEndAt(
+  segments: readonly CastSegment[],
+  release: ResolvedAnimation,
+  effectAt: number,
+  fallback: number
+): number {
+  let end = -1;
+  for (const segment of segments) {
+    if (segment.animation !== release.name) continue;
+    // La anticipación termina en el efecto: solo cuenta lo que se dibuja
+    // después del golpe/lanzamiento.
+    if (segment.endAt <= effectAt + EPSILON) continue;
+    end = Math.max(end, segment.endAt);
+  }
+  return end >= 0 ? end : fallback;
+}
+
 export function buildCastPlan(
   def: AbilityDef,
   resolve: ClipResolver
@@ -365,6 +394,7 @@ export function buildCastPlan(
         effectAt,
         activeEnd,
         endAt,
+        animationEndAt: endAt,
         hitFrame: null,
         hitClip: null
       };
@@ -375,6 +405,7 @@ export function buildCastPlan(
         effectAt,
         activeEnd,
         endAt,
+        animationEndAt: endAt,
         hitFrame: null,
         hitClip: null
       };
@@ -402,11 +433,18 @@ export function buildCastPlan(
       loop: false,
       holdEnd: true
     });
+    segments.sort((a, b) => a.startAt - b.startAt);
     return {
       segments,
       effectAt,
       activeEnd,
       endAt,
+      animationEndAt: planAnimationEndAt(
+        segments,
+        releaseClip,
+        effectAt,
+        endAt
+      ),
       hitFrame: timing.hitFrame,
       hitClip: releaseClip.name
     };
@@ -476,11 +514,18 @@ export function buildCastPlan(
     }
   }
 
+  segments.sort((a, b) => a.startAt - b.startAt);
   return {
-    segments: segments.sort((a, b) => a.startAt - b.startAt),
+    segments,
     effectAt,
     activeEnd,
     endAt,
+    animationEndAt: planAnimationEndAt(
+      segments,
+      releaseClip,
+      effectAt,
+      endAt
+    ),
     hitFrame: timing.hitFrame,
     hitClip: releaseClip.name
   };
