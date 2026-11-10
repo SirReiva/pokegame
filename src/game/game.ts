@@ -1597,6 +1597,9 @@ export class Game {
         const xp = xpStatus(player.xp);
         copy.setLevel(xp.level);
         copy.setXpProgress(xp.progress);
+        copy.setArmorFraction(
+          this.activeCastArmor(player) / Math.max(1, player.maxHp)
+        );
         copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
       });
@@ -3035,6 +3038,19 @@ export class Game {
   }
 
   /**
+   * Umbral de daño de la armadura de casteo activa en este instante; 0 si el
+   * lanzador no está casteando con armadura o su ventana ya se cerró. Lo
+   * comparten la resolución del golpe, el HUD y la barra flotante para que
+   * todos lean exactamente la misma ventana.
+   */
+  private activeCastArmor(target: MatchPlayerState): number {
+    const cast = target.activeCast;
+    if (!cast || cast.def.armorThreshold <= 0) return 0;
+    if (cast.def.armorWindow === 'startup' && cast.fired) return 0;
+    return cast.def.armorThreshold;
+  }
+
+  /**
    * Feedback visual y sonoro de la armadura de casteo: pulso si absorbe el
    * golpe, fractura si se rompe. Ayuda a que el rival entienda por qué su
    * impacto no canceló la habilidad.
@@ -3084,10 +3100,8 @@ export class Game {
     // lanzador queda clavado y cualquier impacto la corta. Esto incluye los
     // ticks de áreas persistentes, que por lo demás no aplican control.
     const channeling = cast?.def.blockMovementDuringCast === true;
-    const armor = cast?.def.armorThreshold ?? 0;
-    const armorWindowOpen =
-      cast != null && (cast.def.armorWindow === 'cast' || !cast.fired);
-    const armorActive = armorWindowOpen && armor > 0;
+    const armor = this.activeCastArmor(target);
+    const armorActive = armor > 0;
     const wouldInterrupt = options.cancel || channeling;
     // La armadura absorbe el golpe si no llega a su umbral. Los estados y el
     // control explícito pasan por encima: son el contador del setup.
@@ -4522,6 +4536,7 @@ export class Game {
           };
         }),
         shieldActive: player.damageReductionTimer > 0,
+        armorThreshold: this.activeCastArmor(player),
         commonAbility: commonOption
           ? {
               id: commonOption.id,

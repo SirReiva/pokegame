@@ -447,6 +447,11 @@ export interface PlayerMatchStats {
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;
+  /**
+   * Umbral de daño de la armadura de casteo activa; 0 si no hay armadura.
+   * Los golpes por debajo de este valor no interrumpen el lanzamiento.
+   */
+  armorThreshold: number;
   /** Instinto común elegido por este Pokémon. */
   commonAbility: CommonAbilityHud | null;
   /** Últimos KOs de la partida, el más reciente primero. */

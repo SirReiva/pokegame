@@ -168,6 +168,8 @@ export class HealthBar {
 
   private fraction = 1;
   private xpFraction = 0;
+  /** Umbral de la armadura de casteo respecto a la vida máxima (0-1). */
+  private armorFraction = 0;
   private level = 1;
 
   constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
@@ -320,6 +322,18 @@ export class HealthBar {
     setTextureSource(this.xpTexture, this.xpCanvas);
   }
 
+  /**
+   * Armadura de casteo activa como fracción de la vida máxima. El ancho de la
+   * franja metálica representa el daño que absorbe el lanzamiento; 0 la oculta.
+   */
+  setArmorFraction(fraction: number): void {
+    const next = pc.math.clamp(fraction, 0, 1);
+    if (next === this.armorFraction) return;
+    this.armorFraction = next;
+    this.drawBar();
+    setTextureSource(this.barTexture, this.barCanvas);
+  }
+
   /** Redibuja el contorno, la pista y la porción de vida. */
   private drawBar(): void {
     const context = this.barContext;
@@ -353,6 +367,61 @@ export class HealthBar {
       width,
       Math.max(1, Math.round(innerHeight * 0.18))
     );
+
+    this.drawArmorBand(context, innerHeight, maxWidth, width);
+  }
+
+  /**
+   * Franja metálica de la armadura de casteo sobre la propia barra de vida.
+   * Se alinea a la derecha con el tramo verde de la vida actual y comparte su
+   * altura; su ancho es el umbral de daño respecto a la vida máxima. Si el
+   * umbral supera la vida actual, se recorta contra el borde izquierdo del
+   * tramo para no salirse de la barra.
+   */
+  private drawArmorBand(
+    context: CanvasRenderingContext2D,
+    innerHeight: number,
+    maxWidth: number,
+    hpWidth: number
+  ): void {
+    if (this.armorFraction <= 0) return;
+
+    const armorWidth = Math.max(2, Math.round(maxWidth * this.armorFraction));
+    const width = Math.min(armorWidth, hpWidth);
+    const x = TRACK_PADDING + hpWidth - width;
+    const y = TRACK_PADDING;
+    const height = innerHeight;
+
+    const gradient = context.createLinearGradient(0, y, 0, y + height);
+    gradient.addColorStop(0, '#eef6fd');
+    gradient.addColorStop(0.42, '#a9bccd');
+    gradient.addColorStop(1, '#5f7285');
+    context.fillStyle = gradient;
+    context.fillRect(x, y, width, height);
+
+    // Rayado diagonal para que la franja se lea como metal.
+    context.save();
+    context.beginPath();
+    context.rect(x, y, width, height);
+    context.clip();
+    context.strokeStyle = 'rgba(20, 30, 40, 0.3)';
+    context.lineWidth = 1;
+    for (let offset = -height; offset < width + height; offset += 5) {
+      context.beginPath();
+      context.moveTo(x + offset, y + height);
+      context.lineTo(x + offset + height, y);
+      context.stroke();
+    }
+    context.restore();
+
+    context.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    context.fillRect(x, y, width, 1);
+    context.fillStyle = 'rgba(5, 8, 6, 0.45)';
+    context.fillRect(x, y, 1, height);
+    context.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    context.fillRect(x + width - 1, y, 1, height);
+    context.fillStyle = 'rgba(5, 8, 6, 0.5)';
+    context.fillRect(x, y + height - 1, width, 1);
   }
 
   /** Redibuja el contorno, la pista y la porción de experiencia. */

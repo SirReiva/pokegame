@@ -202,7 +202,11 @@ hitstun, empuje ni `hurtTimer`; solo resta vida. Los estados y el control
 explícito (`force`) la ignoran. La ventana es el `startup`, salvo en las
 canalizaciones con `blockMovementDuringCast`, donde se infiere `'cast'` y cubre
 todo el casteo. La armadura también dibuja un pulso al absorber y una fractura
-cuando se rompe.
+cuando se rompe. Además, ambas barras de vida (la flotante de PlayCanvas y la
+del HUD) muestran una franja metálica alineada a la derecha con el tramo verde
+de la vida actual y con su misma altura; su ancho es el umbral de daño respecto
+a la vida máxima y se recorta contra el borde izquierdo si lo supera. En el HUD
+el tooltip incluye el valor exacto.
 
 Las habilidades con `blockMovementDuringCast` son canalizaciones: cualquier
 impacto que supere su armadura las corta, incluso el tick de un área persistente.

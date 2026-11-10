@@ -214,6 +214,26 @@ export function MatchHud({
           ? Math.max(0, Math.min(100, (playerStats.hp / Math.max(1, playerStats.maxHp)) * 100))
           : 0;
         const isDead = playerStats ? !playerStats.alive : false;
+        const armorThreshold = playerStats?.armorThreshold ?? 0;
+        const armorPct = playerStats
+          ? Math.max(
+              0,
+              Math.min(
+                100,
+                (armorThreshold / Math.max(1, playerStats.maxHp)) * 100
+              )
+            )
+          : 0;
+        // La franja se alinea a la derecha con el tramo verde de la vida actual
+        // y se recorta contra su borde izquierdo si el umbral lo supera.
+        const armorVisiblePct = Math.max(0, Math.min(armorPct, hpPct));
+        const armorLeftPct = Math.max(0, hpPct - armorVisiblePct);
+        const hpTitle = playerStats
+          ? `${Math.ceil(playerStats.hp)}/${playerStats.maxHp} PV` +
+            (armorThreshold > 0
+              ? ` · Armadura de casteo: absorbe golpes de menos de ${armorThreshold} PV`
+              : '')
+          : undefined;
         const concealmentPct = playerStats ? Math.round(playerStats.concealment * 100) : 0;
         const concealmentClass = concealmentClassFor(playerStats);
         const concealmentTitle = playerStats
@@ -340,7 +360,7 @@ export function MatchHud({
                       className={`relative w-full overflow-hidden rounded-full bg-black/60 ${
                         compact ? 'h-3' : 'h-3.5'
                       }`}
-                      title={`${Math.ceil(playerStats.hp)}/${playerStats.maxHp} PV`}
+                      title={hpTitle}
                     >
                       <div
                         className="h-full rounded-full transition-[width,background-color] duration-150"
@@ -349,6 +369,33 @@ export function MatchHud({
                           backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
                         }}
                       />
+                      {/* Franja metálica de la armadura de casteo: alineada a
+                          la derecha con el tramo verde de la vida actual,
+                          comparte su altura y se recorta si el umbral la
+                          supera. */}
+                      {armorVisiblePct > 0 && (
+                        <>
+                          <div
+                            className="pointer-events-none absolute inset-y-0 border-x border-white/60"
+                            style={{
+                              left: `${armorLeftPct}%`,
+                              width: `${armorVisiblePct}%`,
+                              backgroundImage:
+                                'repeating-linear-gradient(115deg, rgb(20 30 40 / 0.28) 0 1px, transparent 1px 5px), linear-gradient(180deg, #eef6fd 0%, #a9bccd 45%, #5f7285 100%)'
+                            }}
+                            aria-hidden="true"
+                          />
+                          <svg
+                            className="pointer-events-none absolute bottom-0.5 size-2 text-night-950/80"
+                            style={{ left: `calc(${armorLeftPct}% + 2px)` }}
+                            viewBox="0 0 12 14"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path d="M6 .5 1.5 2.4v4c0 2.8 1.9 5.6 4.5 7 2.6-1.4 4.5-4.2 4.5-7v-4L6 .5Z" />
+                          </svg>
+                        </>
+                      )}
                       <span
                         className={`absolute inset-0 grid place-items-center font-mono font-bold tabular-nums leading-none text-ink drop-shadow-[0_1px_1px_rgb(0_0_0/0.85)] ${
                           compact ? 'text-7.36' : 'text-8'
