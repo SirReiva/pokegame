@@ -22,7 +22,7 @@
  * movimiento.
  */
 
-import type { AoeEffect, AoeMovement } from './aoeEffect';
+import type { AoePrepareMovement, AoeEffect, AoeMovement } from './aoeEffect';
 import type { PokemonType } from './typeChart';
 import type { AnimationName } from './types';
 
@@ -211,6 +211,13 @@ export interface AbilityDef {
   aoeDuration: number;
   /** Intervalo entre golpes en modo `overTime` (segundos). */
   aoeTickInterval: number;
+  /**
+   * Función opcional que recoloca el centro de un área durante el `startup`.
+   * El motor mueve con ella la marca del suelo; el centro resultante se usa al
+   * disparar el efecto. Sirve para que el aviso siga al lanzador mientras se
+   * mueve antes del impacto.
+   */
+  aoePrepareMovement?: AoePrepareMovement;
   /**
    * Función opcional que recoloca el centro de un área `overTime` en cada
    * frame. Recibe el tiempo transcurrido y el centro original, y devuelve el
@@ -488,6 +495,16 @@ export class AbilityBuilder {
    */
   aoeEffect(effect: AoeEffect): this {
     this.draft.aoeEffect = effect;
+    return this;
+  }
+
+  /**
+   * Función que recoloca el centro y la marca del área durante la preparación.
+   * Se evalúa cada frame del `startup`; al disparar el efecto manda
+   * `aoeMovement`.
+   */
+  aoePrepareMovement(movement: AoePrepareMovement): this {
+    this.draft.aoePrepareMovement = movement;
     return this;
   }
 
@@ -1036,27 +1053,21 @@ registerAbility(
   ability('giroFuego', 'Giro Fuego', 'Fire', 'special', 'aoe')
     .power(40)
     .cooldown(6)
-    .range(3.6)
+    // Sin desplazamiento: el remolino nace sobre Charmander y lo acompaña.
+    .range(0)
     .radius(1.7)
     .startup(0.5, { move: true })
     .recovery(0.45)
     .area('whirl', 'overTime', 2.4, 0.4)
-    .aoeMovement(({ originX, originZ, duration, elapsed }) => {
-      // Espiral hacia fuera: arranca en el centro, da 1,5 vueltas y se abre
-      // hasta 1,2 u. El remolino barre la zona sin dejar de cubrir el origen.
-      const progress = Math.min(1, elapsed / duration);
-      const angle = progress * Math.PI * 3;
-      const radius = progress * 1.2;
-      return {
-        x: originX + Math.cos(angle) * radius,
-        z: originZ + Math.sin(angle) * radius
-      };
-    })
+    // El remolino nace pegado a Charmander y lo sigue tanto durante la
+    // preparación como mientras dura el área.
+    .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    .aoeMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     .impact('fire')
     .slow(0.8, 1.5)
     .color(255, 132, 40)
     .description(
-      'Remolino de fuego en espiral: 40 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
+      'Remolino de fuego que gira alrededor de Charmander: 40 de daño por segundo durante 2,4 s y ralentiza un 20 % durante 1,5 s a quien siga dentro.'
     )
 );
 

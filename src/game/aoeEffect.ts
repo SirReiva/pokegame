@@ -59,13 +59,13 @@ export interface AoeHitInput {
 }
 
 /**
- * Datos que recibe cada frame la función de movimiento de un área `overTime`.
- * El centro se expresa en coordenadas de mundo.
+ * Datos que recibe cada frame la función de movimiento de un área. El centro se
+ * expresa en coordenadas de mundo.
  */
 export interface AoeMovementContext {
   caster: MatchPlayerState;
   def: AbilityDef;
-  /** Centro donde apareció el área. */
+  /** Centro del área al empezar la fase que mueve la función. */
   originX: number;
   originZ: number;
   /**
@@ -74,9 +74,12 @@ export interface AoeMovementContext {
    */
   dirX: number;
   dirZ: number;
-  /** Duración total del área en segundos. */
+  /**
+   * Duración de la fase: el `startup` del casteo en `aoePrepareMovement` o la
+   * `aoeDuration` del área en `aoeMovement`.
+   */
   duration: number;
-  /** Segundos transcurridos desde que apareció el área. */
+  /** Segundos transcurridos desde que empezó esa fase. */
   elapsed: number;
 }
 
@@ -89,6 +92,15 @@ export type AoeMovement = (context: AoeMovementContext) => {
   x: number;
   z: number;
 };
+
+/**
+ * Función que recoloca el centro y la marca del área durante la preparación del
+ * casteo, antes de que aparezca el efecto. Comparte firma con `AoeMovement`,
+ * pero `duration` es el `startup` y `elapsed` cuenta desde que empezó el
+ * casteo. Sirve para que el aviso acompañe al lanzador mientras se mueve; al
+ * dispararse el efecto, el área pasa a usar `aoeMovement`.
+ */
+export type AoePrepareMovement = AoeMovement;
 
 /** Un Pokémon dentro del área en el momento del golpe. */
 export interface AoeTarget {

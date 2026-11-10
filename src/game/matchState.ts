@@ -189,6 +189,12 @@ export interface ActiveCast {
   /** Centro del área o extremo del haz fijado al empezar el lanzamiento. */
   targetX: number;
   targetZ: number;
+  /**
+   * Centro inicial del área antes de aplicar `aoePrepareMovement`. Es la base que
+   * recibe la función que mueve el aviso durante el `startup`.
+   */
+  originX: number;
+  originZ: number;
   /** Dirección horizontal fijada al empezar la preparación. */
   dirX: number;
   dirZ: number;

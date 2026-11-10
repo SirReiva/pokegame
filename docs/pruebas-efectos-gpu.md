@@ -22,7 +22,7 @@ habilidad, prueba esta lista.
 | Bulbasaur | **Lluevehojas** | 120 hojas en dos lotes instanciados | Que las hojas sigan girando en espiral, abriéndose en embudo y sin quedarse quietas ni todas alineadas. |
 | Bulbasaur | **Paralizador** | 104 motas de espora en un lote | Que el rocío salga del vértice del cono, cubra toda la abertura y desaparezca al llegar al borde. |
 | Charmander | **Anillo Ígneo** | 36 llamas en dos lotes | Que las llamas broten del suelo, parpadeen y se mezan; el centro debe conservar su llama más alta. |
-| Charmander | **Giro Fuego** | 27 llamas en dos lotes | Que las llamas recorran los tres brazos espirales y que el remolino gire sin saltos. |
+| Charmander | **Giro Fuego** | 27 llamas en dos lotes | Que las llamas recorran los tres brazos espirales, que el remolino gire sin saltos y que siga a Charmander sin despegarse de él mientras se mueve. |
 | Moltres | **Onda Ígnea** | 44 llamas, 10 brasas y 6 aspas en lotes | Llamas en tres anillos, brasas subiendo y aspas de viento girando por encima. |
 | Lugia | **Marea** | 18 chorros repartidos en cuatro lotes (uno por variante de malla) | Que se sigan viendo las cuatro siluetas de chorro, que respiren en altura/grosor y que giren suavemente. |
 | Lugia | **Ciclón** | 74 nubes y 12 brazos en lotes | Que el huracán mantenga volumen, que las nubes suban/bajen con fases distintas y que los brazos giren con el vórtice. |

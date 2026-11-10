@@ -2006,6 +2006,25 @@ export class Game {
 
     cast.elapsed += dt;
 
+    // Las áreas que declaran `aoePrepareMovement` recalculan su centro durante la
+    // preparación: el aviso del suelo sigue el punto que devuelve la función
+    // (por ejemplo, el propio lanzador si se mueve con `moveWhileStartup`).
+    if (!cast.fired && cast.def.aoePrepareMovement && cast.def.shape === 'aoe') {
+      const next = cast.def.aoePrepareMovement({
+        caster: player,
+        def: cast.def,
+        originX: cast.originX,
+        originZ: cast.originZ,
+        dirX: cast.dirX,
+        dirZ: cast.dirZ,
+        duration: cast.def.startup,
+        elapsed: cast.elapsed
+      });
+      cast.targetX = next.x;
+      cast.targetZ = next.z;
+      cast.marker?.setCenter?.(next.x, next.z);
+    }
+
     // Efecto: una sola vez, al llegar al instante de impacto/lanzamiento.
     if (!cast.fired && cast.elapsed >= cast.effectAt) {
       cast.fired = true;
@@ -2661,6 +2680,8 @@ export class Game {
       lane,
       targetX,
       targetZ,
+      originX: targetX,
+      originZ: targetZ,
       dirX,
       dirZ
     };
