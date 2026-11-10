@@ -283,6 +283,19 @@ const FINISH_HP_FRACTION = 0.18;
 const INTERRUPT_DELAY_TOLERANCE = 0.05;
 
 /**
+ * Radio en el que el poke rival se considera una amenaza para el startup. Solo
+ * importa para valorar si la armadura de casteo aguanta el golpe más probable.
+ */
+const ARMOR_PRESSURE_RADIUS = 5.5;
+/** Valor de una armadura que absorbe el poke listo del rival. */
+const ARMOR_POKE_BONUS = 8;
+/** Tope del bonus de armadura, para no convertirla en la única razón de lanzar. */
+const ARMOR_BONUS_MAX = 16;
+
+/** Bonus por romper el casteo de una curación o reanimación enemiga. */
+const SUPPORT_DENY_BONUS = 35;
+
+/**
  * Puntuación mínima para gastar una habilidad. Por debajo de este umbral no
  * compensa el cooldown: curas a vida casi llena o ataques que el rival va a
  * castigar puntúan negativo, y elegir "la menos mala" solo desperdicia el
@@ -1305,7 +1318,14 @@ export class BotController {
       if (pending) {
         const remaining = pending.effectAt - pending.elapsed;
         const read = this.readPunish(enemy);
-        if (remaining > 0 && read?.commit) {
+        // Si su armadura absorbe todos los golpes que el bot tiene listos, el
+        // windup no es una ventana de castigo: solo un rival que sigue siendo
+        // un objetivo normal.
+        if (
+          remaining > 0 &&
+          read?.commit &&
+          this.canBreakCast(self, enemy)
+        ) {
           // Un rival preparando una habilidad es una ventana: si está clavado,
           // se convierte en el objetivo prioritario. La amenaza concreta se
           // resuelve aparte en `updateThreat`. La tirada de `readPunish` hace
@@ -2071,6 +2091,17 @@ export class BotController {
       ) {
         continue;
       }
+
+      // La armadura del casteo rival solo se rompe si el golpe llega a su
+      // umbral; si no, hace daño pero no cancela y no sirve como interrupt.
+      const prediction: TargetPrediction = {
+        x: aim.x,
+        z: aim.z,
+        time: delay,
+        distance
+      };
+      const damage = this.expectedDamage(self, source, def, prediction);
+      if (!this.breaksCastArmor(source, def, damage)) continue;
 
       // El retardo manda, pero dentro del mismo frame vale más la habilidad
       // con más potencia efectiva.
@@ -3898,6 +3929,112 @@ export class BotController {
   }
 
   /**
+   * ¿Absorbe la armadura del casteo de `target` este golpe? Replica la regla
+   * del motor: cubre el startup o todo el casteo según `armorWindow`; los
+   * estados, los golpes letales y el control explícito la ignoran.
+   */
+  private castArmorAbsorbs(
+    target: MatchPlayerState,
+    def: AbilityDef,
+    damage: number
+  ): boolean {
+    const cast = target.activeCast;
+    if (!cast || cast.def.armorThreshold <= 0) return false;
+    if (cast.def.armorWindow === 'startup' && cast.fired) return false;
+    if (def.category === 'status') return false;
+    if (damage >= target.hp) return false;
+    return damage < cast.def.armorThreshold;
+  }
+
+  /**
+   * ¿Rompe `def` la armadura del casteo de `target`? Sin armadura, o si su
+   * ventana ya cerró, cualquier golpe válido interrumpe.
+   */
+  private breaksCastArmor(
+    target: MatchPlayerState,
+    def: AbilityDef,
+    damage: number
+  ): boolean {
+    return !this.castArmorAbsorbs(target, def, damage);
+  }
+
+  /**
+   * ¿Tiene el bot alguna habilidad lista que rompa el casteo actual del rival?
+   * Evita que la selección de objetivo trate un windup protegido como una
+   * ventana de castigo cuando ningún golpe disponible puede cortarlo.
+   */
+  private canBreakCast(
+    self: MatchPlayerState,
+    target: MatchPlayerState
+  ): boolean {
+    const cast = target.activeCast;
+    if (!cast || cast.def.armorThreshold <= 0) return true;
+    if (cast.def.armorWindow === 'startup' && cast.fired) return true;
+
+    const distance = Math.hypot(target.x - self.x, target.z - self.z);
+    const prediction: TargetPrediction = {
+      x: target.x,
+      z: target.z,
+      time: 0,
+      distance
+    };
+    for (let slot = 0; slot < 4; slot++) {
+      if (self.cooldowns[slot] > 0.001) continue;
+      const id = self.abilityIds[slot];
+      const def = id ? ABILITIES[id] : null;
+      if (!def) continue;
+      // Mismo filtro de formas que `findInterruptSlot`: lo que no puede
+      // alcanzar a tiempo no cuenta como herramienta.
+      if (def.shape === 'aoe' || def.shape === 'self') continue;
+      if (def.shape === 'dash' && def.power <= 0) continue;
+      if (typeEffectiveness(def.type, target.types) === 0) continue;
+      if (def.category === 'status') return true;
+      if (def.power <= 0) continue;
+      const damage = this.expectedDamage(self, target, def, prediction);
+      if (damage >= target.hp) return true;
+      if (damage >= cast.def.armorThreshold) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Valor de la armadura de casteo para el propio bot. Si el poke más barato
+   * del rival está listo y no llega al umbral, la carga se completa bajo fuego
+   * ligero. Es un bonus pequeño: la armadura no reduce el daño, solo evita que
+   * el casteo se corte.
+   */
+  private armorCastBonus(self: MatchPlayerState, def: AbilityDef): number {
+    if (def.armorThreshold <= 0) return 0;
+    let bonus = 0;
+    for (const enemy of this.visibleEnemies) {
+      if (!enemy.alive || enemy.team === self.team) continue;
+      const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
+      if (distance > ARMOR_PRESSURE_RADIUS) continue;
+      // La básica es el poke que suele cortar los casteos. Si el bot no la ha
+      // visto lanzarse, se asume lista, como haría un jugador sin la cuenta.
+      if (this.abilityCooldown(enemy, 0) > 0.5) continue;
+      const id = enemy.abilityIds[0];
+      const poke = id ? ABILITIES[id] : null;
+      if (!poke || poke.power <= 0 || poke.category === 'status') continue;
+      if (typeEffectiveness(poke.type, self.types) === 0) continue;
+      // Solo cuenta si el poke puede alcanzar al bot desde donde está.
+      const reach =
+        poke.shape === 'melee'
+          ? poke.range + maxHitRadius() + self.hitRadius
+          : poke.shape === 'dash'
+            ? poke.dashDistance + Math.max(0.5, poke.radius) + self.hitRadius
+            : poke.range + self.hitRadius;
+      if (distance > reach) continue;
+      const prediction = this.predictTarget(enemy, self, poke);
+      const damage = this.expectedDamage(enemy, self, poke, prediction);
+      if (damage >= def.armorThreshold) continue;
+      const margin = 1 - damage / Math.max(1, def.armorThreshold);
+      bonus += ARMOR_POKE_BONUS * (0.5 + margin * 0.5);
+    }
+    return Math.min(ARMOR_BONUS_MAX, bonus);
+  }
+
+  /**
    * Probabilidad estimada de que el golpe conecte. Combina el error angular
    * de la dificultad, la distancia y el adelanto imperfecto contra la velocidad
    * lateral del rival.
@@ -4043,6 +4180,9 @@ export class BotController {
       prediction
     );
     const expectedHit = expectedDamage * hitChance;
+    // La armadura del casteo rival absorbe el control de este golpe: el daño
+    // entra, pero no hay hitstun, empuje ni cancelación.
+    const armorAbsorbed = this.castArmorAbsorbs(target, def, expectedDamage);
 
     const offensive = def.power > 0 || def.slow !== null;
     // La gracia de reaparición se ve como estado, pero no su tiempo restante:
@@ -4073,8 +4213,9 @@ export class BotController {
         return -Infinity;
       }
       score += expectedHit * cooldownWeight;
-      // Un impacto también aplica hitstun y cancela dash/preparaciones.
-      score += 8 * hitChance;
+      // Un impacto también aplica hitstun y cancela dash/preparaciones, salvo
+      // que la armadura del casteo lo absorba.
+      if (!armorAbsorbed) score += 8 * hitChance;
       if (expectedHit >= target.hp) {
         score += LETHAL_BONUS;
       } else if (
@@ -4104,7 +4245,7 @@ export class BotController {
       score +=
         (15 + slowStrength * 70) * durationFactor * hitChance;
     }
-    if (def.knockback > 0) {
+    if (def.knockback > 0 && !armorAbsorbed) {
       score += Math.min(20, def.knockback * 12) * hitChance;
     }
 
@@ -4149,17 +4290,39 @@ export class BotController {
       const selfDamage = self.maxHp * def.selfDamage;
       score -= 15 + (selfDamage / Math.max(1, self.hp)) * 70;
     }
-    score -= Math.min(16, def.startup * 14);
+    // La armadura reduce el riesgo del startup: la habilidad puede completarse
+    // aunque el rival esté haciendo pokes. Si los pokes listos se quedan por
+    // debajo del umbral, el riesgo baja mucho; si no, solo se descuenta algo
+    // por la armadura intrínseca.
+    const armorBonus = this.armorCastBonus(self, def);
+    const startupRisk =
+      def.armorThreshold > 0 ? (armorBonus > 0 ? 0.35 : 0.7) : 1;
+    score -= Math.min(16, def.startup * 14) * startupRisk;
+    score += armorBonus;
 
     // Aprovechar el windup rival: las habilidades instantáneas pueden cancelar
     // su preparación; las que tardan más que el rival llegan tarde y además
-    // dejan al bot plantado.
+    // dejan al bot plantado. Si la armadura del casteo absorbe el golpe, no
+    // hay interrupción y no se cobran los bonus de castigo.
     const pending = target.activeCast;
     if (pending) {
       const remaining = pending.effectAt - pending.elapsed;
-      if (remaining > 0) {
+      if (
+        remaining > 0 &&
+        this.breaksCastArmor(target, def, expectedDamage)
+      ) {
         if (def.startup <= remaining) score += 18;
         else score -= 22;
+        // Cortar una curación o reanimación enemiga vale más que castigar un
+        // ataque: esos PV (o ese aliado) vuelven a la pelea si se completa.
+        const supportCast = SUPPORT_PROFILES[pending.def.id];
+        if (
+          pending.def.healSelf > 0 ||
+          supportCast?.revive ||
+          supportCast?.healAllies
+        ) {
+          score += SUPPORT_DENY_BONUS;
+        }
         if (def.shape === 'melee' || def.shape === 'projectile' || def.shape === 'beam') {
           score += 10;
         }

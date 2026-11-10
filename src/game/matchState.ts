@@ -186,6 +186,8 @@ export interface ActiveCast {
    * cuando termina el efecto del haz; `null` en las demás formas.
    */
   lane: TelegraphHandle | null;
+  /** Aura tenue de la armadura de casteo; `null` si la habilidad no tiene. */
+  armorFx: FxHandle | null;
   /**
    * `true` si este casteo ocultó al lanzador (por ejemplo, `Excavar` bajo
    * tierra). Al terminar o cancelarse se vuelve a mostrar.

@@ -335,6 +335,17 @@ export interface AbilityDef {
    */
   blockMovementDuringCast: boolean;
   /**
+   * PV de daño que absorbe la armadura del casteo: un golpe que haga menos no
+   * cancela el casteo, no aplica hitstun ni empuje. `0` desactiva la armadura.
+   * El umbral es absoluto y se calibra contra las básicas rápidas.
+   */
+  armorThreshold: number;
+  /**
+   * Ventana de la armadura: `'startup'` cubre solo la preparación; `'cast'`
+   * cubre todo el casteo. En canalizaciones se infiere `'cast'`.
+   */
+  armorWindow: 'startup' | 'cast';
+  /**
    * Clava al lanzador desde el inicio del casteo hasta que termina de
    * reproducirse la animación de lanzamiento, aunque `moveWhileStartup` sea
    * `true`. Después, la recuperación restante ya permite moverse. Si no hay
@@ -397,6 +408,8 @@ export const DEFAULT_ABILITY: Omit<
   animation: null,
   moveWhileStartup: false,
   blockMovementDuringCast: false,
+  armorThreshold: 0,
+  armorWindow: 'startup',
   blockMovementUntilEndAnimation: false,
   description: ''
 };
@@ -440,6 +453,8 @@ type AbilitySeed = Pick<
 
 export class AbilityBuilder {
   private readonly draft: AbilitySeed & Partial<AbilityDef>;
+  /** Distingue una ventana de armadura explícita de la inferida. */
+  private armorWindowExplicit = false;
 
   constructor(seed: AbilitySeed) {
     this.draft = { ...seed };
@@ -683,6 +698,24 @@ export class AbilityBuilder {
   }
 
   /**
+   * Armadura de casteo: los golpes que hagan menos de `threshold` PV no
+   * cancelan la preparación ni aplican hitstun o empuje. Por defecto cubre
+   * solo el startup; en canalizaciones cubre todo el casteo. Un `force` del
+   * motor (estados, control explícito) la ignora.
+   */
+  armor(
+    threshold: number,
+    options: { window?: 'startup' | 'cast' } = {}
+  ): this {
+    this.draft.armorThreshold = threshold;
+    if (options.window !== undefined) {
+      this.draft.armorWindow = options.window;
+      this.armorWindowExplicit = true;
+    }
+    return this;
+  }
+
+  /**
    * Bloquea el movimiento hasta que termina de reproducirse la animación de
    * lanzamiento. Después se puede mover durante la recuperación restante.
    * Tiene prioridad sobre `move: true` de `startup`.
@@ -716,6 +749,11 @@ export class AbilityBuilder {
   }
 
   build(): AbilityDef {
+    // Las canalizaciones no pueden esquivar: su armadura cubre todo el casteo
+    // salvo que la habilidad indique otra ventana explícitamente.
+    if (!this.armorWindowExplicit && this.draft.blockMovementDuringCast) {
+      this.draft.armorWindow = 'cast';
+    }
     return defineAbility(this.draft);
   }
 }
@@ -1133,6 +1171,7 @@ registerAbility(
     .range(4.2)
     .radius(3.1)
     .startup(0.75)
+    .armor(30)
     .recovery(0.7)
     .animation('charge')
     .area('fire', 'instant', 0.5)
@@ -1188,6 +1227,7 @@ registerAbility(
     .range(4.2)
     .radius(3.2)
     .startup(0.75)
+    .armor(30)
     .recovery(0.7)
     .animation('shake')
     .area('grass', 'instant', 1.1)
@@ -1533,6 +1573,7 @@ registerAbility(
     .radius(3.5)
     .recovery(0.75)
     .startup(0.75)
+    .armor(30)
     .animation('twirl')
     .heal(0.35)
     .area('recovery', 'instant', 0.75)
@@ -1546,7 +1587,7 @@ registerAbility(
     })
     .color(255, 170, 230)
     .description(
-      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si le golpean durante la concentración, se cancela.'
+      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si un golpe supera su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -1693,6 +1734,7 @@ registerAbility(
     .radial(0.35)
     .slow(0.75, 2)
     .startup(0.75, { animation: 'charge' })
+    .armor(30)
     .recovery(0.7)
     // El área es instantánea: la ventisca cae al terminar la carga. Sin clip
     // de lanzamiento para no reproducir el disparo cuando ya ha impactado.
@@ -2264,6 +2306,7 @@ registerAbility(
     .range(0)
     .radius(3.2)
     .startup(0.75, { animation: 'charge' })
+    .armor(30)
     .recovery(0.65)
     .animation(null)
     .heal(0.3)
@@ -2278,7 +2321,7 @@ registerAbility(
     })
     .color(255, 196, 96)
     .description(
-      'Se concentra 0,75 s entre llamas doradas: recupera el 30 % de su vida máxima y el 15 % de la de sus aliados en 3,2 u. Si le golpean durante la concentración, se cancela.'
+      'Se concentra 0,75 s entre llamas doradas: recupera el 30 % de su vida máxima y el 15 % de la de sus aliados en 3,2 u. Si un golpe supera su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -2295,6 +2338,7 @@ registerAbility(
     .startup(0.4, { animation: 'charge' })
     .recovery(1.5)
     .blockMovementDuringCast()
+    .armor(40)
     .animation('shoot')
     .area('sacredFlame', 'overTime', 1.5, 0.5)
     .slow(0.65, 1.5)

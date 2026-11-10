@@ -7,6 +7,7 @@ import {
   MOVESETS,
   REGENERATION_DELAY_SECONDS,
   REGENERATION_HP_PER_SECOND,
+  abilityTotalTime,
   commonAbilityOption,
   commonAnimationFor,
   isCommonAbilityId,
@@ -44,6 +45,7 @@ import {
   pauseMatchMusic,
   playAbilityCast,
   playAbilityImpact,
+  playArmorBlock,
   resumeMatchMusic,
   startMatchMusic,
   stopMatchMusic
@@ -2082,6 +2084,8 @@ export class Game {
         // La marca y el carril se autodestruyen al terminar su propio efecto.
         if (cast.hiddenCaster) player.hidden = false;
         if (cast.invulnerableCaster) player.invulnerableTimer = 0;
+        cast.armorFx?.destroy();
+        cast.armorFx = null;
         player.activeCast = null;
         player.animationFrame = null;
         return false;
@@ -2555,6 +2559,8 @@ export class Game {
     if (cast.def.blockMovementDuringCast) this.cutCastAoes(cast);
     cast.marker?.destroy();
     cast.lane?.destroy();
+    cast.armorFx?.destroy();
+    cast.armorFx = null;
     if (cast.hiddenCaster) player.hidden = false;
     if (cast.invulnerableCaster) player.invulnerableTimer = 0;
     player.activeCast = null;
@@ -2707,6 +2713,7 @@ export class Game {
       invulnerableCaster: false,
       marker,
       lane,
+      armorFx: null,
       targetX,
       targetZ,
       originX: targetX,
@@ -2715,6 +2722,20 @@ export class Game {
       dirZ
     };
     player.activeCast = cast;
+
+    // Aura tenue mientras la armadura está activa. La ventana corta dura el
+    // startup; la de canalización dura todo el casteo. Se destruye al cancelar
+    // o terminar el casteo para no dejarla pegada al cuerpo.
+    if (def.armorThreshold > 0) {
+      const armorDuration =
+        def.armorWindow === 'cast' ? abilityTotalTime(def) : def.startup;
+      cast.armorFx = this.combatFx.spawnArmorAura(
+        player,
+        player.accent,
+        Math.max(0.7, player.hitRadius * 1.8),
+        armorDuration
+      );
+    }
 
     // Las áreas avisan de que empieza el lanzamiento antes de cualquier
     // preparación. El centro todavía es el fijado al pulsar la habilidad.
@@ -2992,11 +3013,54 @@ export class Game {
   }
 
   /**
+   * Interrumpe por un impacto válido. Si el efecto del casteo aún no había
+   * salido y el golpe no es letal, el enfriamiento de esa habilidad se queda
+   * como máximo a la mitad: un casteo cortado no debe costar la habilidad
+   * entera. No se aplica a muerte, respawn ni cancelaciones internas, que no
+   * pasan por aquí.
+   */
+  private interruptWithRefund(
+    target: MatchPlayerState,
+    lethal: boolean
+  ): void {
+    const cast = target.activeCast;
+    const beforeEffect = cast != null && !cast.fired;
+    this.interruptPlayer(target);
+    if (!cast || !beforeEffect || lethal) return;
+    const remaining = target.cooldowns[cast.slotIndex] ?? 0;
+    target.cooldowns[cast.slotIndex] = Math.min(
+      remaining,
+      cast.def.cooldown * 0.5
+    );
+  }
+
+  /**
+   * Feedback visual y sonoro de la armadura de casteo: pulso si absorbe el
+   * golpe, fractura si se rompe. Ayuda a que el rival entienda por qué su
+   * impacto no canceló la habilidad.
+   */
+  private spawnArmorFeedback(
+    target: MatchPlayerState,
+    broke: boolean
+  ): void {
+    const radius = Math.max(0.7, target.hitRadius * 1.8);
+    if (broke) {
+      this.combatFx.spawnArmorBreak(target.x, target.z, target.accent, radius);
+      return;
+    }
+    this.combatFx.spawnArmorPulse(target.x, target.z, target.accent, radius);
+    playArmorBlock();
+  }
+
+  /**
    * Control de un golpe que conecta: puede cancelar dash/preparación, aplicar
    * hitstun y empujar. Lo comparten las habilidades dañinas y las de estado: en
    * ambos casos el objetivo ha recibido un impacto válido. El empuje sale de
    * `sourceX/sourceZ` (punto de entrada del proyectil o centro del área); sin
    * origen explícito, del atacante.
+   *
+   * Devuelve `true` si la armadura del casteo absorbió el golpe: en ese caso no
+   * hay cancelación, hitstun ni empuje, solo daño.
    */
   private applyHitControl(
     attacker: MatchPlayerState,
@@ -3005,26 +3069,55 @@ export class Game {
       cancel: boolean;
       hitstun: number;
       knockback: number;
+      /** Daño final del golpe; decide si la armadura del casteo lo absorbe. */
+      damage: number;
+      /** El golpe mata al objetivo; interrumpir no debe reembolsar cooldown. */
+      lethal?: boolean;
+      /** Estado o control duro: ignora la armadura del casteo. */
+      force?: boolean;
       sourceX?: number;
       sourceZ?: number;
     }
-  ): void {
+  ): boolean {
+    const cast = target.activeCast;
     // `blockMovementDuringCast` convierte el casteo en una canalización: el
     // lanzador queda clavado y cualquier impacto la corta. Esto incluye los
     // ticks de áreas persistentes, que por lo demás no aplican control.
-    const channeling = target.activeCast?.def.blockMovementDuringCast === true;
-    if (options.cancel || channeling) this.interruptPlayer(target);
-    if (options.hitstun > 0) {
-      target.stunTimer = Math.max(target.stunTimer, options.hitstun);
+    const channeling = cast?.def.blockMovementDuringCast === true;
+    const armor = cast?.def.armorThreshold ?? 0;
+    const armorWindowOpen =
+      cast != null && (cast.def.armorWindow === 'cast' || !cast.fired);
+    const armorActive = armorWindowOpen && armor > 0;
+    const wouldInterrupt = options.cancel || channeling;
+    // La armadura absorbe el golpe si no llega a su umbral. Los estados y el
+    // control explícito pasan por encima: son el contador del setup.
+    const absorbed =
+      wouldInterrupt &&
+      armorActive &&
+      options.force !== true &&
+      options.lethal !== true &&
+      options.damage < armor;
+
+    if (armorActive && wouldInterrupt) {
+      this.spawnArmorFeedback(target, !absorbed);
     }
-    if (options.knockback > 0) {
-      this.applyKnockback(
-        target,
-        options.sourceX ?? attacker.x,
-        options.sourceZ ?? attacker.z,
-        options.knockback
-      );
+    if (wouldInterrupt && !absorbed) {
+      this.interruptWithRefund(target, options.lethal === true);
     }
+    if (!absorbed) {
+      if (options.hitstun > 0) {
+        target.stunTimer = Math.max(target.stunTimer, options.hitstun);
+      }
+      if (options.knockback > 0) {
+        this.applyKnockback(
+          target,
+          options.sourceX ?? attacker.x,
+          options.sourceZ ?? attacker.z,
+          options.knockback
+        );
+      }
+    }
+    return absorbed;
   }
 
   /**
@@ -3247,7 +3340,7 @@ export class Game {
     seconds: number,
     cancel: boolean
   ): void {
-    if (cancel) this.interruptPlayer(target.player);
+    if (cancel) this.interruptWithRefund(target.player, false);
     if (seconds > 0) {
       target.player.stunTimer = Math.max(target.player.stunTimer, seconds);
     }
@@ -3355,6 +3448,9 @@ export class Game {
         cancel,
         hitstun,
         knockback,
+        // Los estados siempre rompen la armadura del casteo.
+        damage: 0,
+        force: true,
         sourceX: options.sourceX,
         sourceZ: options.sourceZ
       });
@@ -3401,10 +3497,12 @@ export class Game {
 
     // El control puede venir del `control` estándar o de los ajustes propios
     // del callback de un área (cancel, hitstun y empuje por separado).
-    this.applyHitControl(attacker, target, {
+    const absorbed = this.applyHitControl(attacker, target, {
       cancel,
       hitstun,
       knockback,
+      damage: finalDamage,
+      lethal,
       sourceX: options.sourceX,
       sourceZ: options.sourceZ
     });
@@ -3418,7 +3516,12 @@ export class Game {
     if (attacker.team !== target.team) attacker.damageDealt += appliedDamage;
     this.awardCombatXp(attacker, target, appliedDamage, result.damage, finalDamage);
     this.breakRegen(target);
-    target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
+    // Un golpe absorbido por la armadura no debe reproducir el flinch: la
+    // animación de daño tiene prioridad sobre el casteo y lo haría parecer
+    // cancelado aunque siga vivo.
+    if (!absorbed) {
+      target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
+    }
     this.vibrateOnDamage(target, appliedDamage);
     if (target.hp <= 0) this.knockOut(target, attacker);
 

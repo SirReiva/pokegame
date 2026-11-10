@@ -196,11 +196,19 @@ Un golpe de control, un choque de melee, un KO o un respawn cancelan el
 `ActiveCast`: se destruyen las marcas de área/haz y se limpia el frame manual.
 El casteo nunca deja bloqueos residuales.
 
+Las habilidades con `armorThreshold > 0` tienen **armadura de casteo**: un golpe
+cuyo daño final no llegue al umbral no cancela el casteo y tampoco aplica
+hitstun, empuje ni `hurtTimer`; solo resta vida. Los estados y el control
+explícito (`force`) la ignoran. La ventana es el `startup`, salvo en las
+canalizaciones con `blockMovementDuringCast`, donde se infiere `'cast'` y cubre
+todo el casteo. La armadura también dibuja un pulso al absorber y una fractura
+cuando se rompe.
+
 Las habilidades con `blockMovementDuringCast` son canalizaciones: cualquier
-impacto las corta, incluso el tick de un área persistente. Esos ticks no aplican
-hitstun ni empuje, pero sí interrumpen al lanzador que está clavado. Si el
-efecto 3D ya había salido, también se acorta: el área persistente deja de hacer
-ticks y se retira en el acto.
+impacto que supere su armadura las corta, incluso el tick de un área persistente.
+Esos ticks no aplican hitstun ni empuje, pero sí interrumpen al lanzador que está
+clavado. Si el efecto 3D ya había salido, también se acorta: el área persistente
+deja de hacer ticks y se retira en el acto.
 
 Si el efecto ya estaba en `queuedCasts` cuando llega la cancelación, el casteo
 se marca como `canceled` y la fase de resolución lo descarta. Así un cambio

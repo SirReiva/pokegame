@@ -6864,6 +6864,125 @@ export class CombatFx {
   }
 
   /**
+   * Aura tenue de armadura de casteo: un anillo bajo que sigue al lanzador
+   * mientras la ventana está activa. Se destruye al terminar o cancelarse el
+   * casteo; el pulso de absorción y la fractura van aparte.
+   */
+  spawnArmorAura(
+    position: { x: number; z: number },
+    color: readonly [number, number, number],
+    radius: number,
+    duration: number
+  ): FxHandle {
+    const material = this.createMaterial(color, 0.28);
+    const ring = this.createEntity(this.torusMesh, [material]);
+    const base = Math.max(0.45, radius);
+    const anchor: [number, number] = [position.x, position.z];
+
+    return this.addEffect(
+      ring,
+      [material],
+      Math.max(0.1, duration),
+      (t) => {
+        anchor[0] = position.x;
+        anchor[1] = position.z;
+        ring.setPosition(position.x, 0.08, position.z);
+        const pulse = 1 + Math.sin(t * Math.PI * 8) * 0.04;
+        ring.setLocalScale(base * pulse, 1, base * pulse);
+        material.opacity = 0.28 * (1 - t);
+      },
+      [anchor]
+    );
+  }
+
+  /**
+   * Pulso de armadura de casteo: un anillo bajo y un destello esférico que se
+   * expanden y se apagan. Se dibuja cuando un golpe no rompe la armadura.
+   */
+  spawnArmorPulse(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number
+  ): void {
+    const root = new pc.Entity('armor-pulse');
+    root.setPosition(x, 0.05, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 0.9);
+    const glowMaterial = this.createShieldMaterial(
+      color,
+      0.3,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    const base = Math.max(0.45, radius);
+    const glowHeight = Math.max(0.55, base * 0.9);
+    glow.setLocalPosition(0, glowHeight, 0);
+    const glowScale = base * 2;
+
+    this.addEffect(
+      root,
+      [ringMaterial, glowMaterial],
+      0.3,
+      (t) => {
+        const ease = 1 - (1 - t) * (1 - t);
+        const ringScale = base * (0.7 + 1.4 * ease);
+        ring.setLocalScale(ringScale, 1, ringScale);
+        ringMaterial.opacity = 0.9 * (1 - t);
+        const scale = glowScale * (0.8 + 0.4 * ease);
+        glow.setLocalScale(scale, scale * 0.7, scale);
+        glowMaterial.opacity = 0.3 * (1 - t);
+      },
+      [[x, z]]
+    );
+  }
+
+  /**
+   * La armadura se rompe: anillo del color del caster y destello blanco que se
+   * abren rápido. El impacto normal y el control posterior siguen su curso.
+   */
+  spawnArmorBreak(
+    x: number,
+    z: number,
+    color: readonly [number, number, number],
+    radius: number
+  ): void {
+    const root = new pc.Entity('armor-break');
+    root.setPosition(x, 0.05, z);
+    this.app.root.addChild(root);
+
+    const ringMaterial = this.createMaterial(color, 1);
+    const flashMaterial = this.createShieldMaterial(
+      [255, 255, 255],
+      0.85,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+    const flash = this.createEntity(this.sphereMesh, [flashMaterial], root);
+    const base = Math.max(0.5, radius);
+    const flashHeight = Math.max(0.55, base * 0.9);
+    flash.setLocalPosition(0, flashHeight, 0);
+
+    this.addEffect(
+      root,
+      [ringMaterial, flashMaterial],
+      0.22,
+      (t) => {
+        const ease = 1 - (1 - t) * (1 - t);
+        const ringScale = base * (0.8 + 2.2 * ease);
+        ring.setLocalScale(ringScale, 1, ringScale);
+        ringMaterial.opacity = 1 - t;
+        const scale = base * 2 * (1 - 0.55 * ease);
+        flash.setLocalScale(scale, scale * 0.7, scale);
+        flashMaterial.opacity = 0.85 * (1 - t);
+      },
+      [[x, z]]
+    );
+  }
+
+  /**
    * Escudo esférico de Protección. Sigue al Pokémon, usa su color accent y
    * mantiene la esfera centrada en el cuerpo durante toda la duración. No
    * dibuja anillo horizontal: solo la esfera y su halo.
