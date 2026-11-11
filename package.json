@@ -2,6 +2,7 @@
   "name": "newpoke",
   "private": true,
   "version": "0.23.0",
+  "homepage": "https://sirreiva.github.io/pokegame/",
   "type": "module",
   "packageManager": "pnpm@12.16.1",
   "scripts": {
@@ -25,21 +26,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "playcanvas": "2.23.3",
+    "playcanvas": "2.24.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "wouter": "3.13.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.3.4",
+    "@tailwindcss/vite": "4.3.5",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.2.1",
-    "oxlint": "1.91.0",
-    "tailwindcss": "4.3.4",
+    "@vitejs/plugin-react": "6.3.0",
+    "oxlint": "1.93.0",
+    "tailwindcss": "4.3.5",
     "twlinter": "0.8.0",
     "typescript": "7.0.2",
-    "vite": "8.3.6"
+    "vite": "8.3.7"
   }
 }
