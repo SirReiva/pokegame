@@ -265,7 +265,8 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       def.radius + maxHitRadius(),
       TEAM_INFO[player.team].accent,
       0,
-      def.beamStyle
+      def.beamStyle,
+      { slot: player.slot, team: player.team }
     );
   }
   deps.combatFx.spawnBeam(
@@ -350,7 +351,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
             def.halfAngle,
             TEAM_INFO[player.team].accent,
             0,
-            duration
+            duration,
+            { slot: player.slot, team: player.team }
           )
         : deps.combatFx.spawnAoeTelegraph(
             centerX,
@@ -358,7 +360,8 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
             def.radius + maxHitRadius(),
             TEAM_INFO[player.team].accent,
             0,
-            duration
+            duration,
+            { slot: player.slot, team: player.team }
           )
       : null);
   // El aro y el efecto dibujan el radio máximo de golpe (área + el mayor

@@ -13,6 +13,7 @@ import * as pc from 'playcanvas';
 import type { AoeStyle, BeamStyle, ImpactStyle, ProjectileStyle } from './abilities';
 import { CONFIG, DEG } from './config';
 import { attachProjectileHitbox } from './hitboxDebug';
+import type { Team } from './terrain';
 import {
   applyVertexEffectShader,
   EffectBatch,
@@ -118,13 +119,26 @@ type AoeConeFactory = (
 ) => AoeFxHandle;
 
 /**
+ * Lanzador de una marca de área o de haz. Permite filtrar por vista las
+ * marcas aliadas: cada jugador solo ve las suyas y las de los rivales.
+ */
+export interface TelegraphOwner {
+  /** Plaza del jugador que lanzó la habilidad. */
+  slot: number;
+  /** Equipo del lanzador. */
+  team: Team;
+}
+
+/**
  * Capas de render de las vistas que deben dibujar un efecto en `(x, z)`.
- * Devuelve un array vacío si ninguna vista lo ve.
+ * Devuelve un array vacío si ninguna vista lo ve. `owner` solo lo pasan las
+ * marcas de área y de haz, para poder ocultarlas a sus aliados.
  */
 export type FxLayerResolver = (
   x: number,
   z: number,
-  ignoreTerrainConcealment?: boolean
+  ignoreTerrainConcealment?: boolean,
+  owner?: TelegraphOwner
 ) => readonly number[];
 
 /** Puntos que anclan un efecto para decidir en qué vistas se dibuja. */
@@ -230,6 +244,8 @@ interface GroundTelegraph {
   duration: number;
   active: boolean;
   anchors: FxAnchors;
+  /** Lanzador de la marca; se usa para ocultarla a sus aliados. */
+  owner?: TelegraphOwner;
   update: (progress: number, elapsed: number) => void;
 }
 
@@ -2288,7 +2304,8 @@ export class CombatFx {
   private applyVisibility(
     entity: pc.Entity,
     anchors: FxAnchors,
-    ignoreTerrainConcealment = false
+    ignoreTerrainConcealment = false,
+    owner?: TelegraphOwner
   ): void {
     if (this.warmupLayer !== null) {
       this.setEntityLayers(entity, [this.warmupLayer]);
@@ -2297,7 +2314,7 @@ export class CombatFx {
 
     const layers: number[] = [];
     for (const [x, z] of anchors) {
-      for (const id of this.resolveLayers(x, z, ignoreTerrainConcealment)) {
+      for (const id of this.resolveLayers(x, z, ignoreTerrainConcealment, owner)) {
         if (!layers.includes(id)) layers.push(id);
       }
     }
@@ -6218,7 +6235,8 @@ export class CombatFx {
     radius: number,
     color: readonly [number, number, number],
     duration: number,
-    effectDuration = 0
+    effectDuration = 0,
+    owner?: TelegraphOwner
   ): TelegraphHandle {
     const root = new pc.Entity('aoe-telegraph');
     root.setPosition(x, 0.08, z);
@@ -6282,6 +6300,7 @@ export class CombatFx {
       duration: total,
       active: true,
       anchors: areaAnchors(x, z, radius),
+      owner,
       update: (_progress, elapsed) => {
         const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
         // El aro se apaga en el último tramo del efecto, a la vez que el
@@ -6321,7 +6340,7 @@ export class CombatFx {
       }
     };
 
-    this.applyVisibility(root, areaAnchors(x, z, radius));
+    this.applyVisibility(root, areaAnchors(x, z, radius), false, owner);
     this.telegraphs.add(record);
     return {
       destroy: () => this.disposeTelegraph(record),
@@ -6351,7 +6370,8 @@ export class CombatFx {
     halfAngleDeg: number,
     color: readonly [number, number, number],
     duration: number,
-    effectDuration = 0
+    effectDuration = 0,
+    owner?: TelegraphOwner
   ): TelegraphHandle {
     const rawLength = Math.hypot(dirX, dirZ);
     const nx = rawLength > 0.0001 ? dirX / rawLength : 0;
@@ -6445,6 +6465,7 @@ export class CombatFx {
       duration: total,
       active: true,
       anchors: coneAnchors(x, z, nx, nz, reach, half),
+      owner,
       update: (_progress, elapsed) => {
         const pulse = 0.5 + Math.sin(elapsed * 14) * 0.18;
         const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
@@ -6479,7 +6500,7 @@ export class CombatFx {
     };
 
     const anchors = coneAnchors(x, z, nx, nz, reach, half);
-    this.applyVisibility(root, anchors);
+    this.applyVisibility(root, anchors, false, owner);
     this.telegraphs.add(record);
     return {
       destroy: () => this.disposeTelegraph(record),
@@ -6516,7 +6537,8 @@ export class CombatFx {
     halfWidth: number,
     color: readonly [number, number, number],
     windup: number,
-    style: BeamStyle
+    style: BeamStyle,
+    owner?: TelegraphOwner
   ): TelegraphHandle {
     const dx = x2 - x1;
     const dz = z2 - z1;
@@ -6597,6 +6619,7 @@ export class CombatFx {
       duration: total,
       active: true,
       anchors,
+      owner,
       update: (_progress, elapsed) => {
         const firing = elapsed >= windup;
         const sinceFire = firing ? elapsed - windup : 0;
@@ -6625,7 +6648,7 @@ export class CombatFx {
       }
     };
 
-    this.applyVisibility(root, anchors);
+    this.applyVisibility(root, anchors, false, owner);
     this.telegraphs.add(record);
     return { destroy: () => this.disposeTelegraph(record) };
   }
@@ -12688,7 +12711,12 @@ export class CombatFx {
       // La visibilidad se recalcula a intervalos: una marca creada en la niebla
       // aparece en cuanto el jugador se acerca lo suficiente a verla.
       if (refreshVisibility) {
-        this.applyVisibility(telegraph.entity, telegraph.anchors);
+        this.applyVisibility(
+          telegraph.entity,
+          telegraph.anchors,
+          false,
+          telegraph.owner
+        );
       }
       for (const material of telegraph.materials) material.update();
       // Pequeña prórroga: el lanzamiento la retira explícitamente al impactar;

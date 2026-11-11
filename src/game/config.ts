@@ -199,6 +199,17 @@ export const CONFIG = {
     randomMin: 0.85,
     randomMax: 1,
   },
+  telegraphs: {
+    /**
+     * Si es `true`, cada jugador solo dibuja las marcas de área, cono y carril
+     * de haz de su propio Pokémon. Las marcas aliadas (mismo equipo, otra
+     * plaza) se ocultan en su vista; las rivales se siguen viendo siempre que
+     * la visión las alcance.
+     *
+     * Con `false` se muestran todas las marcas visibles, aliadas incluidas.
+     */
+    hideAllied: true as boolean,
+  },
   vision: {
     /**
      * Margen extra (u) al pasar de oculto a visible. Evita el parpadeo justo en

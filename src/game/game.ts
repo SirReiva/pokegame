@@ -85,7 +85,7 @@ import {
   segmentBlockedByColliders
 } from './combat';
 import { CombatFx } from './combatFx';
-import type { TelegraphHandle } from './combatFx';
+import type { TelegraphHandle, TelegraphOwner } from './combatFx';
 import { CONFIG, DEG, RAD } from './config';
 import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { DeathMarker } from './deathMarker';
@@ -575,8 +575,8 @@ export class Game {
     this.combatFx = new CombatFx(
       this.app,
       worldLayerId,
-      (x, z, ignoreTerrainConcealment) =>
-        this.fxLayersAt(x, z, ignoreTerrainConcealment)
+      (x, z, ignoreTerrainConcealment, owner) =>
+        this.fxLayersAt(x, z, ignoreTerrainConcealment, owner)
     );
     this.damageNumbers = new DamageNumbers(this.app);
     if (CONFIG.debug.showCastTimings) {
@@ -2752,6 +2752,10 @@ export class Game {
     const targetX = player.x + dirX * reach;
     const targetZ = player.z + dirZ * reach;
     const teamAccent = TEAM_INFO[player.team].accent;
+    // Las marcas propias se pueden ocultar a los aliados: la vista del lanzador
+    // las dibuja, pero las demás vistas de su mismo equipo no (ver
+    // `CONFIG.telegraphs.hideAllied`).
+    const owner: TelegraphOwner = { slot: player.slot, team: player.team };
     // Las marcas solo existen si hay preparación visible. Las habilidades
     // instantáneas crean su propio aviso en el ejecutor.
     const marker =
@@ -2766,7 +2770,8 @@ export class Game {
               def.halfAngle,
               teamAccent,
               def.startup,
-              Math.max(0.1, def.aoeDuration)
+              Math.max(0.1, def.aoeDuration),
+              owner
             )
           : this.combatFx.spawnAoeTelegraph(
               targetX,
@@ -2774,7 +2779,8 @@ export class Game {
               def.radius + maxHitRadius(),
               teamAccent,
               def.startup,
-              Math.max(0.1, def.aoeDuration)
+              Math.max(0.1, def.aoeDuration),
+              owner
             )
         : null;
     const lane =
@@ -2787,7 +2793,8 @@ export class Game {
             def.radius + maxHitRadius(),
             teamAccent,
             def.startup,
-            def.beamStyle
+            def.beamStyle,
+            owner
           )
         : null;
 
@@ -4709,16 +4716,24 @@ export class Game {
    * del terreno) y no hay una montaña o un árbol entre medias. Así la niebla
    * tapa también proyectiles, haces, áreas e impactos, no solo los sprites.
    * Devuelve `[]` cuando ninguna vista lo ve: el efecto no se dibuja.
+   *
+   * `owner` solo lo pasan las marcas de área y de haz. Si
+   * `CONFIG.telegraphs.hideAllied` está activo, las vistas aliadas del
+   * lanzador (mismo equipo y otra plaza) no dibujan su marca; su propia vista
+   * y las rivales sí.
    */
   private fxLayersAt(
     x: number,
     z: number,
-    ignoreTerrainConcealment = false
+    ignoreTerrainConcealment = false,
+    owner?: TelegraphOwner
   ): number[] {
     if (this.mode !== 'match' || this.views.length === 0) {
       return [this.worldLayerId];
     }
-    const cacheKey = `${ignoreTerrainConcealment ? 1 : 0}:${x}:${z}`;
+    const hideAllied = owner !== undefined && CONFIG.telegraphs.hideAllied;
+    const ownerKey = hideAllied ? `${owner.team}#${owner.slot}` : '-';
+    const cacheKey = `${ignoreTerrainConcealment ? 1 : 0}:${x}:${z}:${ownerKey}`;
     const cached = this.fxVisibilityCache.get(cacheKey);
     if (cached) return cached;
     const colliders = this.world.colliders;
@@ -4750,6 +4765,16 @@ export class Game {
     this.views.forEach((observer, index) => {
       const layer = this.viewLayers[index];
       if (!layer) return;
+      // Marca aliada: solo la dibuja la vista de su lanzador. El resto de su
+      // equipo no necesita el aviso, pero los rivales sí para poder esquivar.
+      if (
+        owner !== undefined &&
+        CONFIG.telegraphs.hideAllied &&
+        observer.team === owner.team &&
+        observer.slot !== owner.slot
+      ) {
+        return;
+      }
       if (!seenTeams.has(observer.team)) {
         if (this.teamSeesPoint(observer.team, x, z, concealment, colliders)) {
           seenTeams.add(observer.team);
