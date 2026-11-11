@@ -1027,6 +1027,7 @@ registerAbility(
     .radius(4.2)
     .area('explosion', 'instant', 0.85)
     .startup(0.6, { animation: 'charge' })
+    .armor(40)
     .recovery(0.5)
     .animation(null)
     .impact('electric')
@@ -1084,6 +1085,7 @@ registerAbility(
     .area('poison', 'overTime', 2.5, 0.5)
     .slow(0.75, 1.5)
     .startup(0.35, { animation: 'shoot', move: true })
+    .armor(20)
     .recovery(0.5)
     .animation(null)
     .impact('poison')
@@ -1138,6 +1140,7 @@ registerAbility(
     .range(0)
     .radius(1.7)
     .startup(0.5, { move: true })
+    .armor(25)
     .recovery(0.45)
     .area('whirl', 'overTime', 2.4, 0.4)
     // El remolino nace pegado a Charmander y lo sigue tanto durante la
@@ -1501,6 +1504,7 @@ registerAbility(
     .range(4.5)
     .radius(3.2)
     .startup(0.8, { animation: 'charge' })
+    .armor(40)
     .recovery(0.7)
     .area('psychic', 'instant', 0.85)
     .radial(0.35)
@@ -1557,6 +1561,7 @@ registerAbility(
     .range(6)
     .radius(2.4)
     .startup(0.9, { move: true })
+    .armor(40)
     .recovery(0.55)
     .area('psychic', 'instant', 0.8)
     .radial(0.5)
@@ -1641,6 +1646,7 @@ registerAbility(
     .radial(0.4)
     .slow(0.82, 1.5)
     .startup(0.3, { animation: 'shoot', move: true })
+    .armor(20)
     .recovery(0.5)
     .animation(null)
     .impact('air')
@@ -1660,6 +1666,7 @@ registerAbility(
     .radial(0.35)
     .knockback(0.9)
     .startup(0.8, { animation: 'charge' })
+    .armor(40)
     .recovery(0.6)
     .animation('strike')
     .impact('air')
@@ -1718,6 +1725,7 @@ registerAbility(
     .radial(0.5)
     .slow(0.65, 2.5)
     .startup(0.3, { animation: 'shoot', move: true })
+    .armor(20)
     .recovery(0.5)
     .animation(null)
     .impact('ice')
@@ -1780,6 +1788,7 @@ registerAbility(
     .radial(0.6)
     .slow(0.7, 1.5)
     .startup(0.3, { animation: 'charge', move: true })
+    .armor(20)
     .recovery(0.5)
     .animation('shock')
     .impact('electric')
@@ -1800,6 +1809,7 @@ registerAbility(
     .slow(0.65, 2)
     .knockback(1)
     .startup(0.85, { animation: 'charge' })
+    .armor(45)
     .recovery(0.6)
     // El área cae al terminar la carga; sin clip de lanzamiento después del impacto.
     .animation(null)
@@ -1928,6 +1938,7 @@ registerAbility(
     .radius(3.4)
     .area('ground', 'overTime', 2.5, 0.5)
     .startup(0.45, { animation: 'hop' })
+    .armor(25)
     .recovery(0.7)
     .animation(null)
     .impact('ground')
@@ -1987,6 +1998,7 @@ registerAbility(
     .radial(0.35)
     .knockback(0.6)
     .startup(0.7, { animation: 'charge' })
+    .armor(40)
     .recovery(0.7)
     .animation(null)
     .impact('ground')
@@ -2044,6 +2056,7 @@ registerAbility(
     // El aviso sigue al lanzador mientras se mueve bajo tierra: al emerger,
     // la erupción nace exactamente donde está.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    // Sin armadura: `onStart` ya lo hace invulnerable durante toda la carga.
     .startup(2, {  move: true })
     .recovery(0.4)
     .animation('attack')
@@ -2085,6 +2098,7 @@ registerAbility(
     .radial(0.35)
     .knockback(0.9)
     .startup(0.6, { animation: 'charge' })
+    .armor(40)
     .recovery(0.6)
     .animation(null)
     .impact('ground')
@@ -2141,6 +2155,7 @@ registerAbility(
     // Deseo es una concentración larga: la carga en bucle evita que el
     // personaje se quede congelado en la primera pose del twirl.
     .startup(1.2, { mode: 'loop', animation: 'charge' })
+    .armor(55)
     .recovery(0.65)
     .animation('twirl')
     .area('recovery', 'instant', 0.8)
@@ -2151,7 +2166,7 @@ registerAbility(
     })
     .color(156, 224, 112)
     .description(
-      'Pide un deseo: se concentra 1,2 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si le golpean durante la concentración, se cancela.'
+      'Pide un deseo: se concentra 1,2 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -2162,6 +2177,7 @@ registerAbility(
     .range(5.5)
     .radius(2.8)
     .startup(1, { animation: 'charge' })
+    .armor(50)
     .recovery(0.7)
     // El área es instantánea al terminar la carga; no hay clip de lanzamiento
     // después del impacto.
@@ -2203,6 +2219,7 @@ registerAbility(
     .range(4.5)
     .radius(3.2)
     .startup(0.35, { animation: 'charge', move: true })
+    .armor(20)
     .recovery(0.5)
     .animation('shoot')
     .area('water', 'overTime', 2.5, 0.5)
@@ -2232,6 +2249,7 @@ registerAbility(
     .range(2)
     .radius(2)
     .startup(0.3, { animation: 'charge' })
+    .armor(25)
     .recovery(0.55)
     .animation('shoot')
     .area('cyclone', 'overTime', 2.5)

@@ -951,14 +951,20 @@ golpe lo cancela. Esto favorece a las básicas rápidas y castiga a los personaj
 lentos, justo los que más necesitan sus definitivas. La telegrafía es buena para
 el rival, pero una habilidad sin armadura no tiene forma de completar la carga.
 
-**Armadura de casteo aplicada**: las definitivas de 0,75 s (`Lluevehojas`,
-`Anillo Ígneo`, `Ventisca`, `Recuperación` de Mew y de Ho-Oh) tienen
-`armorPool: 40`: cada golpe resta su daño a ese pozo sin mitigarlo y, mientras
-quede armadura, el casteo no se cancela ni aplica hitstun, empuje o flinch.
-Cuando el daño acumulado agota el pozo, el casteo se rompe. `Fuego Sagrado` usa
-60 y, al ser canalización, cubre todo el casteo (`armorWindow: 'cast'`). Los
-estados, el control explícito y los golpes letales ignoran la armadura. El pozo
-se reinicia en cada casteo. El resto de habilidades sigue sin armadura.
+**Armadura de casteo aplicada**: todas las habilidades con `shape: 'aoe'`
+tienen armadura, calibrada por startup y daño. Las ráfagas cortas de
+0,3-0,35 s usan 20 (`Bomba Lodo`, `Onda Ígnea`, `Viento Gélido`, `Descarga`,
+`Marea`); `Giro Fuego` y `Terremoto` usan 25; `Ciclón` usa 25 y `Explosión` 40.
+Las de 0,56-0,9 s con daño medio-alto usan 40 (`Anillo Ígneo`, `Lluevehojas`,
+`Ventisca`, `Psicoataque`, `Ataque Celeste`, `Premonición`, `Filo del Abismo`,
+`Fisura` y las recuperaciones de Mew y Ho-Oh). `Trueno` usa 45, `Futuro
+Siniestro` 50 y `Deseo` 55. `Fuego Sagrado` usa 60 y, al ser canalización,
+cubre todo el casteo (`armorWindow: 'cast'`). `Excavar` queda sin armadura
+porque ya es invulnerable durante toda la carga. Cada golpe resta su daño al
+pozo sin mitigarlo y, mientras quede armadura, el casteo no se cancela ni
+aplica hitstun, empuje o flinch; cuando el daño acumulado lo agota, el casteo se
+rompe. Los estados, el control explícito y los golpes letales ignoran la
+armadura. El pozo se reinicia en cada casteo.
 
 **Lectura de la armadura por los bots**: `breaksCastArmor` replica la regla del
 motor, incluido que un golpe letal siempre la rompe. Un interrupt cuyo daño
@@ -976,8 +982,8 @@ la rápida cancela a la lenta y le deja el enfriamiento a la mitad.
 **Mitigación aplicada**: además del reembolso de medio enfriamiento, la armadura
 reduce el castigo en las habilidades que la declaran. El problema de fondo se
 estrecha, pero no desaparece: las habilidades sin armadura de la tabla
-(0,65-2,00 s) siguen expuestas, y el pozo de 40 PV es una primera calibración
-contra las básicas rápidas, no una regla universal. En las canalizaciones el
+(0,65-2,00 s) siguen expuestas, y los pozos de 20-60 PV son una primera
+calibración contra las básicas rápidas, no una regla universal. En las canalizaciones el
 efecto se dispara al terminar el startup, así que interrumpir el canal después
 no reembolsa enfriamiento.
 
@@ -1173,7 +1179,9 @@ así que se pueden añadir tests baratos:
   daño sí se descuenta y el pozo restante baja en esa cantidad. El golpe que lo
   agote o lo supere, un estado o un golpe letal deben romperla y cancelar. En
   `Fuego Sagrado` la armadura debe cubrir también los ticks posteriores al
-  efecto (`armorWindow: 'cast'`), que consumen el pozo acumulativamente.
+  efecto (`armorWindow: 'cast'`), que consumen el pozo acumulativamente. Todas
+  las habilidades `aoe` deben declarar `armorPool > 0` salvo `Excavar`, que ya
+  es invulnerable durante la carga.
 - **Bots y armadura**: un bot no debe intentar interrumpir con un golpe que no
   agote el pozo restante (salvo estado o golpe letal), no debe puntuar hitstun,
   empuje ni castigo sobre un golpe absorbido, y debe preferir una habilidad con
