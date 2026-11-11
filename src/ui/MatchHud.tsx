@@ -609,7 +609,7 @@ export function MatchHud({
                           }
                         >
                           <span
-                            className={`grid shrink-0 place-items-center rounded-[4px] border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
+                            className={`grid shrink-0 place-items-center rounded-sm border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
                               compact
                                 ? 'h-4 min-w-4 px-0.75 text-7.36'
                                 : 'h-5 min-w-5 px-1 text-8.32'
@@ -665,7 +665,7 @@ export function MatchHud({
                         title={`${common.name} · Instinto común · ${common.description}`}
                       >
                         <span
-                          className={`grid shrink-0 place-items-center rounded-[4px] border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
+                          className={`grid shrink-0 place-items-center rounded-sm border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
                             compact
                               ? 'h-4 min-w-4 px-0.75 text-7.36'
                               : 'h-5 min-w-5 px-1 text-8.32'

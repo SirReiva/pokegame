@@ -11,7 +11,7 @@ const note = 'border-t border-line pt-3.5 text-12.32 leading-[1.6] text-muted';
 /** Controles de mando y teclado, compartidos por la pantalla de opciones y la pausa. */
 export function ControlsPanel() {
   return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-6 max-[640px]:grid-cols-1">
+    <div className="grid grid-cols-2 gap-x-8 gap-y-6 max-sm:grid-cols-1">
       <section>
         <h3 className={sectionTitle}>Mando (1-8 jugadores)</h3>
         <ul className={list}>
@@ -121,7 +121,7 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
           const actions = entry.credits.flatMap((credit) => credit.actions);
           return (
             <div
-              className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-line-faint py-2.25 text-12.8 last:border-b-0 max-[640px]:grid-cols-1 max-[640px]:gap-1"
+              className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-line-faint py-2.25 text-12.8 last:border-b-0 max-sm:grid-cols-1 max-sm:gap-1"
               key={entry.id}
             >
               <div className="flex items-baseline gap-1.75">

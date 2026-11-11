@@ -375,7 +375,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
       );
     },
-    [commitPlayers, teams]
+    [commitPlayers, maxPlayers, maxTeamSize, teams]
   );
 
   const setPlayerName = useCallback(
@@ -428,7 +428,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ensureUniqueTeamPokemon(nextPlayers, manifestRef.current)
       );
     },
-    [commitPlayers, teams]
+    [commitPlayers, maxTeamSize, teams]
   );
 
   const setPlayerMovementMode = useCallback(
@@ -482,7 +482,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         )
       ]);
     },
-    [botDifficulty, commitPlayers, teams]
+    [botDifficulty, commitPlayers, maxPlayers, maxTeamSize, teams]
   );
 
   const fillBots = useCallback(() => {
@@ -507,7 +507,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
     }
     if (next.length !== current.length) commitPlayers(next);
-  }, [botDifficulty, commitPlayers, teams]);
+  }, [botDifficulty, commitPlayers, maxPlayers, maxTeamSize, teams]);
 
   const setBotDifficulty = useCallback(
     (difficulty: BotDifficulty) => {
