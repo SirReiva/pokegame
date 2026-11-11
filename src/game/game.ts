@@ -1806,10 +1806,22 @@ export class Game {
       this.bots.size > 0 ? this.buildBotHazards() : [];
     // La visión de equipo se resuelve en `updateVision` una vez por render.
     const botViews: Record<Team, BotWorldView> = {
-      red: { visibleSlots: this.visibleByTeam.red },
-      blue: { visibleSlots: this.visibleByTeam.blue },
-      yellow: { visibleSlots: this.visibleByTeam.yellow },
-      green: { visibleSlots: this.visibleByTeam.green }
+      red: {
+        visibleSlots: this.visibleByTeam.red,
+        atmosphere: this.atmosphere
+      },
+      blue: {
+        visibleSlots: this.visibleByTeam.blue,
+        atmosphere: this.atmosphere
+      },
+      yellow: {
+        visibleSlots: this.visibleByTeam.yellow,
+        atmosphere: this.atmosphere
+      },
+      green: {
+        visibleSlots: this.visibleByTeam.green,
+        atmosphere: this.atmosphere
+      }
     };
 
     for (const player of this.matchPlayers) {

@@ -23,6 +23,15 @@
 
 import { ABILITIES, type AbilityDef, type BuffStat } from './abilities';
 import {
+  atmosphereIncomingMultiplier,
+  atmosphereMoveMultiplier,
+  atmosphereResidual,
+  atmosphereShapeMultiplier,
+  atmosphereSpeedMultiplier,
+  atmosphereVisionMultiplier,
+  type AtmosphereId
+} from './atmosphere';
+import {
   aoeAreaFrom,
   aoeContains,
   aoeDistance,
@@ -268,6 +277,14 @@ const BIG_ABILITY_MITIGATION_THRESHOLD = 0.4;
 const COOLDOWN_REFERENCE = 4;
 const COOLDOWN_WEIGHT_MIN = 0.45;
 const COOLDOWN_WEIGHT_MAX = 1.25;
+
+/**
+ * Penalización de puntuación cuando la habilidad ya arrastra una racha de
+ * repetición. La puntuación se divide por `1 + extra × factor`, de modo que un
+ * +10 % apenas cambia la elección y un +50 % invita a alternar con otra
+ * habilidad si está disponible.
+ */
+const REPEAT_SCORE_FACTOR = 1.5;
 
 /** Bonus por un golpe que se espera letal, y por dejar al rival a remate. */
 const LETHAL_BONUS = 60;
@@ -547,9 +564,14 @@ const NO_HAZARDS: readonly BotHazard[] = [];
 export interface BotWorldView {
   /** Slots de actores visibles para el equipo en este frame. */
   readonly visibleSlots: ReadonlySet<number>;
+  /** Clima activo, para estimar daño, velocidad y visión. */
+  readonly atmosphere: AtmosphereId;
 }
 
-const EMPTY_BOT_WORLD_VIEW: BotWorldView = { visibleSlots: new Set() };
+const EMPTY_BOT_WORLD_VIEW: BotWorldView = {
+  visibleSlots: new Set(),
+  atmosphere: 'clear'
+};
 
 /** Amenaza inmediata creada por el windup visible de un rival. */
 interface IncomingThreat {
@@ -653,12 +675,13 @@ export class BotController {
   private readonly squad: BotSquad;
 
   private clock = 0;
+  private atmosphere: AtmosphereId = 'clear';
   private target: MatchPlayerState | null = null;
   private targetVisible = false;
   /**
-   * Mejor multiplicador de tipo del bot contra el objetivo y del objetivo
-   * contra el bot. Se calcula al elegir objetivo y guía tanto el ataque como
-   * la cautela al moverse.
+   * Mejor multiplicador de daño del bot contra el objetivo y del objetivo
+   * contra el bot, con tipo y clima. Se calcula al elegir objetivo y guía tanto
+   * el ataque como la cautela al moverse.
    */
   private targetMatchupOffense = 1;
   private targetMatchupDefense = 1;
@@ -691,6 +714,11 @@ export class BotController {
   private readonly enemyReadyAt = new Map<number, Float32Array>();
   /** Último cooldown observado de cada rival, para detectar lanzamientos. */
   private readonly enemyCooldownSeen = new Map<number, Float32Array>();
+  /**
+   * Duración total del último lanzamiento observado de cada rival. Incluye la
+   * rampa de repetición, así que el DPS estimado no asume siempre el base.
+   */
+  private readonly enemyCooldownTotals = new Map<number, Float32Array>();
 
   private decisionTimer = 0;
   private abilitySlot: number | null = null;
@@ -805,6 +833,7 @@ export class BotController {
     view: BotWorldView = EMPTY_BOT_WORLD_VIEW
   ): DeviceInputSnapshot {
     this.clock += dt;
+    this.atmosphere = view.atmosphere;
     this.pickupKnowledge = knownPickups;
     this.rememberPickups(self, knownPickups);
     if (!self.alive) {
@@ -1273,8 +1302,8 @@ export class BotController {
 
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
       const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
-      const offense = this.bestTypeMultiplier(self, enemy);
-      const defense = this.bestTypeMultiplier(enemy, self);
+      const offense = this.bestDamageMultiplier(self, enemy);
+      const defense = this.bestDamageMultiplier(enemy, self);
       const typeWeight = this.tuning.matchupWeight;
       // Los remates valen más que perseguir al tanque lleno. El pequeño sesgo
       // por distancia evita que dos bots crucen el mapa por el mismo herido.
@@ -1384,7 +1413,7 @@ export class BotController {
           focusEnemy !== null &&
           focusEnemy.alive &&
           this.visibleEnemies.includes(focusEnemy) &&
-          this.bestTypeMultiplier(self, focusEnemy) > 0;
+          this.bestDamageMultiplier(self, focusEnemy) > 0;
         if (focus.slot === null || !focusUsable) {
           focus.slot = chosen.slot;
           focus.until = this.clock + FOCUS_HOLD_SECONDS;
@@ -1502,7 +1531,7 @@ export class BotController {
         self.z
       );
       const escapeTime =
-        escapeDistance / Math.max(2.5, self.maxSpeed) + 0.08;
+        escapeDistance / Math.max(2.5, this.effectiveSpeed(self)) + 0.08;
       if (remaining > Math.max(this.tuning.evadeWindow, escapeTime)) return null;
 
       const evade = this.aoeEvadeDirection(area, self);
@@ -2407,7 +2436,10 @@ export class BotController {
     return nearest;
   }
 
-  /** Velocidad efectiva actual, con terreno, buffs, ralentización y escudo. */
+  /**
+   * Velocidad efectiva actual, con terreno, clima, buffs, ralentización y
+   * escudo.
+   */
   private effectiveSpeed(player: MatchPlayerState): number {
     const shieldSpeed =
       player.damageReductionTimer > 0 ? player.shieldSpeedMultiplier : 1;
@@ -2415,10 +2447,21 @@ export class BotController {
       0.5,
       player.maxSpeed *
         player.terrainMultiplier *
+        atmosphereSpeedMultiplier(this.atmosphere, player.types) *
         this.statMultiplier(player, 'speed') *
         player.slowMultiplier *
         shieldSpeed
     );
+  }
+
+  /** Daño residual del clima que recibe `player`, en PV por segundo. */
+  private residualDps(player: MatchPlayerState): number {
+    const residual = atmosphereResidual(this.atmosphere);
+    if (!residual) return 0;
+    if (player.types.some((type) => residual.immuneTypes.includes(type))) {
+      return 0;
+    }
+    return (player.maxHp * residual.fraction) / residual.interval;
   }
 
   /**
@@ -2493,9 +2536,14 @@ export class BotController {
         : 1;
       const damage = this.expectedDamage(attacker, defender, def, prediction);
       const remaining = this.abilityCooldown(attacker, slot);
-      // El windup también forma parte del ciclo: las habilidades lentas no se
-      // pueden repetir tan rápido como sugiere el cooldown solo.
-      const cycle = Math.max(0.75, def.cooldown + remaining) + def.startup;
+      // El ciclo usa el cooldown que tendría el próximo lanzamiento, no solo el
+      // base: si la habilidad arrastra una racha de repetición, repetirla sale
+      // más caro y el DPS esperado baja.
+      const cycle =
+        Math.max(
+          0.75,
+          this.plannedCooldown(attacker, slot, remaining) + remaining
+        ) + def.startup;
       best = Math.max(best, (damage * hitChance) / cycle);
     }
     return best;
@@ -2513,8 +2561,12 @@ export class BotController {
     pickup: PickupSpawn | null,
     colliders: readonly Collider[]
   ): FightAssessment {
-    const selfDps = this.bestDamagePerSecond(self, target, true, colliders);
-    const enemyDps = this.bestDamagePerSecond(target, self, false, colliders);
+    const selfDps =
+      this.bestDamagePerSecond(self, target, true, colliders) +
+      this.residualDps(target);
+    const enemyDps =
+      this.bestDamagePerSecond(target, self, false, colliders) +
+      this.residualDps(self);
     const selfEffectiveHp = this.effectiveHp(self, pickup);
     const targetEffectiveHp = this.effectiveHp(target, null);
 
@@ -2671,24 +2723,38 @@ export class BotController {
   }
 
   /**
-   * Mejor multiplicador de tipo que `attacker` puede aplicar a `defender` con
-   * sus habilidades dañinas. Si no tiene ninguna registrada, usa sus propios
-   * tipos como aproximación. Devuelve 0 cuando todo su daño es inmune.
+   * Mejor multiplicador de daño que `attacker` puede aplicar a `defender` con
+   * sus habilidades dañinas, incluyendo tipo y clima. Si no tiene ninguna
+   * registrada, usa sus propios tipos como aproximación. Devuelve 0 cuando todo
+   * su daño es inmune.
    */
-  private bestTypeMultiplier(
+  private bestDamageMultiplier(
     attacker: MatchPlayerState,
     defender: MatchPlayerState
   ): number {
+    const incoming = atmosphereIncomingMultiplier(
+      this.atmosphere,
+      defender.types
+    );
     let best = -1;
     for (let slot = 0; slot < 4; slot++) {
       const id = attacker.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def || def.power <= 0) continue;
-      best = Math.max(best, typeEffectiveness(def.type, defender.types));
+      const multiplier =
+        typeEffectiveness(def.type, defender.types) *
+        atmosphereMoveMultiplier(this.atmosphere, def.type) *
+        atmosphereShapeMultiplier(this.atmosphere, def.shape) *
+        incoming;
+      best = Math.max(best, multiplier);
     }
     if (best < 0) {
       for (const type of attacker.types) {
-        best = Math.max(best, typeEffectiveness(type, defender.types));
+        const multiplier =
+          typeEffectiveness(type, defender.types) *
+          atmosphereMoveMultiplier(this.atmosphere, type) *
+          incoming;
+        best = Math.max(best, multiplier);
       }
       if (best < 0) best = 1;
     }
@@ -2879,7 +2945,15 @@ export class BotController {
       const z = self.z + (point.z - self.z) * t;
       const concealment = terrainConcealment(terrainAt(x, z), self.types).value;
       for (const enemy of enemies) {
-        if (isTargetVisible(enemy, { x, z }, concealment, colliders, false)) {
+        const observer = {
+          x: enemy.x,
+          z: enemy.z,
+          visionRange:
+            enemy.visionRange * atmosphereVisionMultiplier(this.atmosphere)
+        };
+        if (
+          isTargetVisible(observer, { x, z }, concealment, colliders, false)
+        ) {
           return false;
         }
       }
@@ -3923,7 +3997,14 @@ export class BotController {
       critical * CONFIG.combat.critChance;
     const reduction =
       target.damageReductionTimer > 0 ? target.damageReduction : 0;
-    return Math.max(1, Math.round(expected * (1 - reduction)));
+    const weatherMultiplier =
+      atmosphereMoveMultiplier(this.atmosphere, def.type) *
+      atmosphereShapeMultiplier(this.atmosphere, def.shape) *
+      atmosphereIncomingMultiplier(this.atmosphere, target.types);
+    return Math.max(
+      1,
+      Math.round(expected * (1 - reduction) * weatherMultiplier)
+    );
   }
 
   /**
@@ -4197,7 +4278,7 @@ export class BotController {
     if (offensive && target.invulnerableTimer > 0) return -Infinity;
 
     const cooldownWeight = clamp(
-      COOLDOWN_REFERENCE / Math.max(0.5, def.cooldown),
+      COOLDOWN_REFERENCE / Math.max(0.5, this.nextCastCooldown(self, slot)),
       COOLDOWN_WEIGHT_MIN,
       COOLDOWN_WEIGHT_MAX
     );
@@ -4348,6 +4429,12 @@ export class BotController {
     const targetHp = target.hp / Math.max(1, target.maxHp);
     if (slot === 3 && targetHp > 0.65) score -= 14;
     if (slot === 0) score += 8;
+    // Repetir la misma habilidad alarga su próximo cooldown. La puntuación baja
+    // con la racha para que el bot prefiera alternar si hay otra opción viable.
+    const repeatExtra = this.repeatCooldownExtra(self, slot);
+    if (repeatExtra > 0) {
+      score /= 1 + repeatExtra * REPEAT_SCORE_FACTOR;
+    }
     return score;
   }
 
@@ -4872,6 +4959,7 @@ export class BotController {
   private observeEnemyCooldowns(enemy: MatchPlayerState): void {
     let ready = this.enemyReadyAt.get(enemy.slot);
     let seen = this.enemyCooldownSeen.get(enemy.slot);
+    let totals = this.enemyCooldownTotals.get(enemy.slot);
     if (!ready) {
       ready = new Float32Array(5);
       this.enemyReadyAt.set(enemy.slot, ready);
@@ -4880,6 +4968,10 @@ export class BotController {
       seen = new Float32Array(5);
       seen.fill(-1);
       this.enemyCooldownSeen.set(enemy.slot, seen);
+    }
+    if (!totals) {
+      totals = new Float32Array(5);
+      this.enemyCooldownTotals.set(enemy.slot, totals);
     }
 
     for (let slot = 0; slot < 5; slot++) {
@@ -4890,6 +4982,7 @@ export class BotController {
         const def = id ? ABILITIES[id] : null;
         const duration = Math.max(current, def?.cooldown ?? 0);
         ready[slot] = this.clock + duration;
+        totals[slot] = duration;
       }
       seen[slot] = current;
     }
@@ -4904,6 +4997,68 @@ export class BotController {
     const ready = this.enemyReadyAt.get(player.slot);
     if (!ready) return 0;
     return Math.max(0, ready[slot] - this.clock);
+  }
+
+  /**
+   * Fracción extra que acumularía el próximo lanzamiento propio por repetir la
+   * misma habilidad. Devuelve 0 si la habilidad no tiene rampa o la racha ya
+   * expiró.
+   */
+  private repeatCooldownExtra(
+    player: MatchPlayerState,
+    slot: number,
+    delaySeconds = 0
+  ): number {
+    const id = player.abilityIds[slot];
+    const def = id ? ABILITIES[id] : null;
+    const repeat = def?.repeatCooldown;
+    if (!repeat || repeat.step <= 0 || repeat.max <= 0) return 0;
+    const continues =
+      player.repeatAbilityId === id &&
+      this.clock + delaySeconds - player.repeatAbilityAt <= repeat.resetAfter;
+    const count = continues ? player.repeatAbilityCount + 1 : 0;
+    return Math.min(count * repeat.step, repeat.max);
+  }
+
+  /** Cooldown que tendría el próximo lanzamiento propio de ese slot. */
+  private nextCastCooldown(
+    player: MatchPlayerState,
+    slot: number,
+    delaySeconds = 0
+  ): number {
+    const id = player.abilityIds[slot];
+    const def = id ? ABILITIES[id] : null;
+    if (!def) return 0;
+    return (
+      def.cooldown * (1 + this.repeatCooldownExtra(player, slot, delaySeconds))
+    );
+  }
+
+  /**
+   * Cooldown para planificar el DPS. El propio es exacto; el del rival usa la
+   * última duración observada, que ya incluye su rampa de repetición.
+   */
+  private plannedCooldown(
+    player: MatchPlayerState,
+    slot: number,
+    delaySeconds = 0
+  ): number {
+    if (player.slot === this.slot) {
+      return this.nextCastCooldown(player, slot, delaySeconds);
+    }
+    const id = player.abilityIds[slot];
+    const def = id ? ABILITIES[id] : null;
+    const base = def?.cooldown ?? 0;
+    const observed = this.enemyCooldownTotals.get(player.slot)?.[slot] ?? 0;
+    const repeat = def?.repeatCooldown;
+    if (observed <= base || !repeat) return base;
+    // La rampa caduca: si el último lanzamiento observado queda fuera de la
+    // ventana de reinicio, el próximo vuelve al cooldown base.
+    const readyAt = this.enemyReadyAt.get(player.slot)?.[slot] ?? 0;
+    const castAt = readyAt - observed;
+    return this.clock + delaySeconds - castAt <= repeat.resetAfter
+      ? observed
+      : base;
   }
 
   /** Perfil de habilidades ofensivas del rival que ya puede usar. */
