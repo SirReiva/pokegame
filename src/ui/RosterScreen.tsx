@@ -126,14 +126,6 @@ export function RosterScreen({
           <div>
             <span className={eyebrow}>Paso 2 de 2</span>
             <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">Elige tu Pokémon</h2>
-            <p className="mt-2 max-w-[78ch] text-14.4 leading-[1.55] text-muted">
-              Cada jugador tiene su propio carrusel: muévete con el stick o las flechas y
-              confirma con <strong>A / Espacio</strong>. Pulsa <strong>X / Y / Tab</strong> (o el
-              botón de la card) para girarla y ver sus habilidades y estadísticas. No se
-              puede repetir especie dentro de un mismo equipo; los equipos rivales sí
-              pueden coincidir. Los bots eligen al final entre las {manifest.pokemon.length}{' '}
-              especies, rellenando lo que quede libre.
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5">
             {teams.map((team, index) => (
