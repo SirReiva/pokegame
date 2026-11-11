@@ -67,6 +67,22 @@ function botPokemonPool(manifest: SpriteManifest) {
 }
 
 /**
+ * Aspecto aleatorio para un bot entre todos los de su especie: igual que un
+ * humano, el bot puede salir con el normal, shiny o un recolor.
+ */
+function randomBotSkinId(
+  manifest: SpriteManifest | null,
+  pokemonId: string
+): string {
+  const entry = manifest?.pokemon.find(
+    (candidate) => candidate.id === pokemonId
+  );
+  if (!entry) return DEFAULT_SKIN_ID;
+  const skins = skinsFor(entry);
+  return skins[Math.floor(Math.random() * skins.length)].id;
+}
+
+/**
  * Primer Pokémon del manifiesto con habilidades definidas que no esté en
  * `excluded`. Si todos están ocupados, cae al primer Pokémon de la lista.
  */
@@ -134,7 +150,11 @@ function ensureUniqueTeamPokemon(
     return {
       ...player,
       pokemonId: replacement,
-      skinId: DEFAULT_SKIN_ID,
+      // Los bots eligen un aspecto nuevo al cambiar de especie; los humanos
+      // vuelven al normal porque los aspectos son propios de cada Pokémon.
+      skinId: player.isBot
+        ? randomBotSkinId(manifest, replacement)
+        : DEFAULT_SKIN_ID,
       rosterReady: player.isBot ? player.rosterReady : false
     };
   };
@@ -177,7 +197,7 @@ function makeBotPlayer(
     team,
     teamReady: true,
     pokemonId: entry?.id ?? manifest.pokemon[0]?.id ?? '',
-    skinId: DEFAULT_SKIN_ID,
+    skinId: randomBotSkinId(manifest, entry?.id ?? manifest.pokemon[0]?.id ?? ''),
     commonAbilityId,
     movementMode: DEFAULT_MOVEMENT_MODE,
     rosterReady: true,
