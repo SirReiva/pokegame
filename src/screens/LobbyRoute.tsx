@@ -102,6 +102,22 @@ function LobbyContent() {
         return;
       }
 
+      // RB/R1 y LB/L1 recorren los mapas disponibles desde cualquier
+      // dispositivo, incluso antes de unirse a un equipo.
+      if (action === 'prevMap' || action === 'nextMap') {
+        const maps = session.maps;
+        if (maps.length > 1) {
+          const index = Math.max(
+            0,
+            maps.findIndex((entry) => entry.id === session.mapId)
+          );
+          const step = action === 'nextMap' ? 1 : -1;
+          const next = maps[(index + step + maps.length) % maps.length];
+          if (next) session.setMapId(next.id);
+        }
+        return;
+      }
+
       if (!player) {
         if (action === 'confirm') {
           const device =

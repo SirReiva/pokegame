@@ -9,7 +9,9 @@ export type MenuAction =
   | 'confirm'
   | 'cancel'
   | 'editName'
-  | 'flip';
+  | 'flip'
+  | 'prevMap'
+  | 'nextMap';
 
 export interface InputDeviceInfo {
   /** Identidad estable del dispositivo: `kbd` o `pad-<index>`. */
@@ -122,6 +124,8 @@ const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
   'cancel',
   'editName',
   'flip',
+  'prevMap',
+  'nextMap',
   'up',
   'down',
   'left',
@@ -392,6 +396,10 @@ export class Input {
     const editName = edge(2);
     const flip = edge(3);
     const startPressed = edge(9);
+    // LB y RB cambian de mapa en el lobby. En partida siguen siendo las
+    // habilidades 3 y 4; las acciones de menú no afectan al juego.
+    const prevMap = edge(4);
+    const nextMap = edge(5);
     // X, Y, RB y LB. El botón B queda reservado para volver/continuar.
     const [ability1, ability2, ability3, ability4] =
       PAD_ABILITY_BUTTONS.map(edge);
@@ -405,6 +413,8 @@ export class Input {
       cancel,
       editName,
       flip,
+      prevMap,
+      nextMap,
       up,
       down,
       left,

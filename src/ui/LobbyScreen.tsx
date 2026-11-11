@@ -60,7 +60,11 @@ interface LobbyScreenProps {
 const overlay =
   "fixed inset-0 z-10 flex animate-fade-in items-start justify-center overflow-y-auto bg-[radial-gradient(circle_at_16%_10%,rgb(22_48_78/0.9),transparent_55%),linear-gradient(112deg,rgb(4_8_14/0.96),rgb(4_8_14/0.84)_55%,rgb(4_8_14/0.55))] p-[clamp(16px,2.4vw,32px)] backdrop-blur-[3px]";
 const shell =
-  "m-auto flex w-[min(1360px,100%)] animate-rise-in flex-col gap-[clamp(14px,2vh,24px)]";
+  "flex min-h-full w-[min(2360px,100%)] animate-rise-in flex-col gap-[clamp(12px,1.8vh,20px)]";
+const card =
+  "min-w-0 rounded-[18px] border border-line bg-[linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-3.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]";
+const note =
+  "mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500";
 const emptyTeam =
   "rounded-[14px] border border-dashed border-[color-mix(in_srgb,var(--team,#4b9cff)_28%,var(--color-line))] px-3 py-[18px] text-center text-12.48 leading-[1.45] text-steel-800";
 
@@ -93,7 +97,7 @@ function TeamColumn({
 
   return (
     <section
-      className="rounded-[20px] border border-[color-mix(in_srgb,var(--team)_34%,var(--color-line))] bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--team)_16%,transparent),transparent_60%),linear-gradient(170deg,rgb(17_26_40/0.92),rgb(8_13_21/0.92))] p-4 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]"
+      className="flex min-w-0 flex-1 basis-55 max-w-175 flex-col rounded-[20px] border border-[color-mix(in_srgb,var(--team)_34%,var(--color-line))] bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--team)_16%,transparent),transparent_60%),linear-gradient(170deg,rgb(17_26_40/0.92),rgb(8_13_21/0.92))] p-3.5 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)]"
       style={style}
     >
       <header className="flex items-start justify-between gap-2.5">
@@ -109,7 +113,7 @@ function TeamColumn({
         </span>
       </header>
 
-      <div className="mt-3.5 flex flex-col gap-2.5">
+      <div className="mt-3 flex flex-1 flex-col gap-2.5">
         {roster.length === 0 && (
           <p className={emptyTeam}>Nadie en este equipo todavía.</p>
         )}
@@ -300,7 +304,7 @@ export function LobbyScreen({
   return (
     <div className={overlay}>
       <div className={shell}>
-        <header className="flex flex-wrap items-center justify-between gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <Brand compact />
 
           <div className="flex flex-wrap items-center gap-3">
@@ -337,36 +341,46 @@ export function LobbyScreen({
           </div>
         </header>
 
-        <div className="flex flex-wrap items-end justify-between gap-4.5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className={eyebrow}>Paso 1 de 2</span>
-            <h2 className="mt-1 text-[clamp(1.6rem,3vw,2.4rem)]">
+            <h2 className="mt-0.5 text-[clamp(1.5rem,2.4vw,2.2rem)]">
               Elige los equipos
             </h2>
           </div>
-          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
-            {teams.map((team, index) => (
-              <span key={team} className="flex items-center gap-3">
-                {index > 0 && (
-                  <span className="font-mono text-11.2 text-steel-950">vs</span>
-                )}
-                <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
-                  <strong
-                    key={counts[team]}
-                    className="animate-pop-in font-display text-2xl leading-none"
-                    style={{ color: TEAM_INFO[team].color }}
-                  >
-                    {counts[team]}
-                  </strong>{" "}
-                  {TEAM_INFO[team].short.toLowerCase()}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-night-750/72 px-4 py-2.5 max-[760px]:hidden">
+              {teams.map((team, index) => (
+                <span key={team} className="flex items-center gap-3">
+                  {index > 0 && (
+                    <span className="font-mono text-11.2 text-steel-950">vs</span>
+                  )}
+                  <span className="flex items-baseline gap-1.5 font-mono text-11.2 tracking-[0.08em] uppercase">
+                    <strong
+                      key={counts[team]}
+                      className="animate-pop-in font-display text-2xl leading-none"
+                      style={{ color: TEAM_INFO[team].color }}
+                    >
+                      {counts[team]}
+                    </strong>{" "}
+                    {TEAM_INFO[team].short.toLowerCase()}
+                  </span>
                 </span>
-              </span>
-            ))}
+              ))}
+            </div>
+            <button
+              type="button"
+              className={btnClass("primary", "play")}
+              disabled={!allReady}
+              onClick={onContinue}
+            >
+              Elegir Pokémon →
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(280px,340px)] items-start gap-4.5 max-[1050px]:grid-cols-1">
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4">
+        <div className="grid flex-1 items-start gap-4 max-[1050px]:grid-cols-1 min-[1051px]:grid-cols-[minmax(0,1fr)_minmax(300px,340px)] min-[1900px]:grid-cols-[minmax(0,1fr)_minmax(680px,860px)] min-[1900px]:items-stretch">
+          <div className="flex flex-wrap justify-center gap-3.5">
             {teams.map((team) => (
               <TeamColumn
                 key={team}
@@ -384,17 +398,12 @@ export function LobbyScreen({
             ))}
           </div>
 
-          <aside className="rounded-[20px] border border-line bg-[linear-gradient(170deg,rgb(16_25_38/0.9),rgb(7_12_19/0.92))] p-4 max-[1050px]:order-first">
+          <aside className="flex min-w-0 flex-col gap-3 max-[1050px]:order-first min-[1900px]:grid min-[1900px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] min-[1900px]:content-start min-[1900px]:items-start">
             {maps.length > 0 && activeMap && (
-              <div className="mb-4 border-b border-dashed border-line pb-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={eyebrow}>Mapa</span>
-                  <span className="font-mono text-9.6 text-steel-500">
-                    {mapIndex + 1} / {maps.length}
-                  </span>
-                </div>
-
-                <div className="group relative mt-2 overflow-hidden rounded-[14px] border border-line bg-[radial-gradient(circle_at_50%_40%,rgb(22_48_78/0.45),transparent_65%),linear-gradient(160deg,rgb(10_17_26/0.95),rgb(4_8_14/0.95))]">
+              <section
+                className={`${card} min-[1900px]:col-span-2 min-[1900px]:col-start-1 min-[1900px]:row-start-1 min-[1900px]:flex min-[1900px]:min-w-0 min-[1900px]:gap-3.5`}
+              >
+                <div className="group relative overflow-hidden rounded-[14px] border border-line bg-[radial-gradient(circle_at_50%_40%,rgb(22_48_78/0.45),transparent_65%),linear-gradient(160deg,rgb(10_17_26/0.95),rgb(4_8_14/0.95))] min-[1900px]:w-65 min-[1900px]:flex-none">
                   <div className="relative aspect-4/3">
                     {activeMap.preview ? (
                       <img
@@ -409,8 +418,6 @@ export function LobbyScreen({
                         Sin vista previa
                       </div>
                     )}
-
-                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgb(4_8_14/0.94),transparent_52%)]" />
 
                     {maps.length > 1 && (
                       <>
@@ -432,21 +439,6 @@ export function LobbyScreen({
                         </button>
                       </>
                     )}
-
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3">
-                      <strong className="block font-display text-16.8/tight text-ink">
-                        {activeMap.name}
-                      </strong>
-                      <p className="mt-1 line-clamp-2 text-11.52 leading-[1.45] text-steel-400">
-                        {activeMap.description ?? "Mapa listo para la partida."}
-                      </p>
-                      <p className="mt-1 font-mono text-9.6 tracking-[0.06em] uppercase text-steel-500">
-                        {(activeMap.teams ?? teams).length} equipos ·{" "}
-                        {(activeMap.teams ?? teams)
-                          .map((team) => TEAM_INFO[team].short)
-                          .join(" · ")}
-                      </p>
-                    </div>
                   </div>
 
                   {maps.length > 1 && (
@@ -469,201 +461,242 @@ export function LobbyScreen({
                   )}
                 </div>
 
-                <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
-                  El mapa se carga al empezar la partida.
-                </p>
-                {mapNotice && (
-                  <p className="mt-2 rounded-lg border border-danger/40 bg-danger-deep/50 px-2.5 py-2 text-10.88/normal text-danger-100">
-                    {mapNotice}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="mb-4 border-b border-dashed border-line pb-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className={eyebrow}>Puntuación</span>
-                <span className="font-mono text-9.6 text-steel-500">
-                  {koTarget} KO
-                </span>
-              </div>
-              <h3 className="mt-0.5 text-19.2">Límite de KOs</h3>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {KO_TARGET_OPTIONS.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={btnClass(
-                      value === koTarget ? "accent" : "ghost",
-                      "tiny",
-                    )}
-                    disabled={value === koTarget}
-                    onClick={() => onChangeKoTarget(value)}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
-                Gana el primer equipo que alcance el límite.
-              </p>
-            </div>
-
-            <div className="mb-4 border-b border-dashed border-line pb-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className={eyebrow}>Clima</span>
-                <span className="font-mono text-9.6 text-steel-500">
-                  {atmosphereEnabled ? "Aleatorio" : "Despejado"}
-                </span>
-              </div>
-              <h3 className="mt-0.5 text-19.2">Cambios atmosféricos</h3>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  className={btnClass(
-                    atmosphereEnabled ? "ghost" : "accent",
-                    "tiny",
-                  )}
-                  disabled={!atmosphereEnabled}
-                  onClick={() => onChangeAtmosphereEnabled(false)}
-                >
-                  Desactivado
-                </button>
-                <button
-                  type="button"
-                  className={btnClass(
-                    atmosphereEnabled ? "accent" : "ghost",
-                    "tiny",
-                  )}
-                  disabled={atmosphereEnabled}
-                  onClick={() => onChangeAtmosphereEnabled(true)}
-                >
-                  Aleatorio
-                </button>
-              </div>
-              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
-                Desactivado: siempre despejado. Activado: cada partida sortea un clima.
-              </p>
-            </div>
-
-            <div className="mb-4 border-b border-dashed border-line pb-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className={eyebrow}>Bots</span>
-                {bots > 0 && (
-                  <span className="font-mono text-9.6 text-steel-500">
-                    {bots} en partida
-                  </span>
-                )}
-              </div>
-              <h3 className="mt-0.5 text-19.2">Añadir IA</h3>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {BOT_DIFFICULTIES.map((difficulty) => (
-                  <button
-                    key={difficulty}
-                    type="button"
-                    className={btnClass(
-                      difficulty === botDifficulty ? "accent" : "ghost",
-                      "tiny",
-                    )}
-                    disabled={difficulty === botDifficulty}
-                    onClick={() => onChangeBotDifficulty(difficulty)}
-                  >
-                    {BOT_DIFFICULTY_LABEL[difficulty]}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
-                {teams.map((team) => (
-                  <button
-                    key={team}
-                    type="button"
-                    className={btnClass("ghost", "tiny")}
-                    disabled={counts[team] >= maxTeamSize || full}
-                    onClick={() => onAddBot(team)}
-                  >
-                    + {TEAM_INFO[team].short}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className={`${btnClass("neutral", "tiny")} mt-1.5 w-full`}
-                disabled={!canFill}
-                onClick={onFillBots}
-              >
-                Rellenar equipos
-              </button>
-              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
-                Los bots eligen Pokémon solos y no ocupan panel de pantalla.
-              </p>
-            </div>
-
-            <span className={eyebrow}>Dispositivos detectados</span>
-            <h3 className="mt-0.5 text-19.2">Unirse</h3>
-            {full ? (
-              <p className={emptyTeam}>
-                La partida está completa ({maxPlayers} jugadores).
-              </p>
-            ) : available.length === 0 ? (
-              <p className={emptyTeam}>
-                Todos los dispositivos ya están jugando.
-              </p>
-            ) : (
-              <div className="mt-3 flex flex-col gap-2">
-                {available.map((device) => (
-                  <div
-                    className="flex items-center gap-2.5 rounded-xl border border-line bg-white/2.5 px-2.5 py-2.25"
-                    key={device.id}
-                  >
-                    <DeviceIcon
-                      kind={device.kind}
-                      family={device.family}
-                      className="size-4.5 flex-none"
-                    />
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <strong className="text-12.8">{device.label}</strong>
-                      <span className="truncate font-mono text-9.28 tracking-[0.06em] uppercase text-steel-650">
-                        {confirmHint(device.kind, device.family)}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className={btnClass("accent", "tiny")}
-                      onClick={() => onJoin(device)}
-                    >
-                      Unirse
-                    </button>
+                <div className="mt-3 flex min-w-0 flex-col min-[1900px]:mt-0 min-[1900px]:flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={eyebrow}>Mapa</span>
+                    <span className="font-mono text-9.6 text-steel-500">
+                      {mapIndex + 1} / {maps.length}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  <h3 className="mt-0.5 text-19.2/tight">{activeMap.name}</h3>
+                  <p className="mt-1 line-clamp-3 text-11.52 leading-[1.45] text-steel-400">
+                    {activeMap.description ?? "Mapa listo para la partida."}
+                  </p>
+                  <p className="mt-1 font-mono text-9.6 tracking-[0.06em] uppercase text-steel-500">
+                    {(activeMap.teams ?? teams).length} equipos ·{" "}
+                    {(activeMap.teams ?? teams)
+                      .map((team) => TEAM_INFO[team].short)
+                      .join(" · ")}
+                  </p>
+                  <div className="min-[1900px]:mt-auto">
+                    <p className={note}>El mapa se carga al empezar la partida.</p>
+                    {mapNotice && (
+                      <p className="mt-2 rounded-lg border border-danger/40 bg-danger-deep/50 px-2.5 py-2 text-10.88/normal text-danger-100">
+                        {mapNotice}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
             )}
 
-            <div className="mt-3.5 flex flex-col gap-1.5 border-t border-dashed border-line pt-3 text-11.84 text-steel-500">
-              <p className="flex items-center gap-2">
-                <KeyPill>A</KeyPill> unirse / confirmar
-              </p>
-              <p className="flex items-center gap-2">
-                <KeyPill>← →</KeyPill> cambiar de equipo
-              </p>
-              <p className="flex items-center gap-2">
-                <KeyPill>X</KeyPill> escribir el nombre con el teclado en pantalla
-              </p>
-              <p className="flex items-center gap-2">
-                <KeyPill>Y</KeyPill> cambiar modo de movimiento{" "}
-                <span className="text-steel-700">(Tab / F en teclado)</span>
-              </p>
-              <p className="flex items-center gap-2">
-                <KeyPill>B</KeyPill> salir del equipo
-              </p>
-              <p className="flex items-center gap-2">
-                <KeyPill>1 teclado</KeyPill> + hasta 8 mandos
-              </p>
+            <div className="contents">
+              <section
+                className={`${card} min-[1900px]:col-start-1 min-[1900px]:row-start-2`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={eyebrow}>Puntuación</span>
+                  <span className="font-mono text-9.6 text-steel-500">
+                    {koTarget} KO
+                  </span>
+                </div>
+                <h3 className="mt-0.5 text-19.2">Límite de KOs</h3>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {KO_TARGET_OPTIONS.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={btnClass(
+                        value === koTarget ? "accent" : "ghost",
+                        "tiny",
+                      )}
+                      disabled={value === koTarget}
+                      onClick={() => onChangeKoTarget(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                <p className={note}>Gana el primer equipo que alcance el límite.</p>
+              </section>
+
+              <section
+                className={`${card} min-[1900px]:col-start-2 min-[1900px]:row-start-2`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={eyebrow}>Clima</span>
+                  <span className="font-mono text-9.6 text-steel-500">
+                    {atmosphereEnabled ? "Aleatorio" : "Despejado"}
+                  </span>
+                </div>
+                <h3 className="mt-0.5 text-19.2">Cambios atmosféricos</h3>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    className={btnClass(
+                      atmosphereEnabled ? "ghost" : "accent",
+                      "tiny",
+                    )}
+                    disabled={!atmosphereEnabled}
+                    onClick={() => onChangeAtmosphereEnabled(false)}
+                  >
+                    Desactivado
+                  </button>
+                  <button
+                    type="button"
+                    className={btnClass(
+                      atmosphereEnabled ? "accent" : "ghost",
+                      "tiny",
+                    )}
+                    disabled={atmosphereEnabled}
+                    onClick={() => onChangeAtmosphereEnabled(true)}
+                  >
+                    Aleatorio
+                  </button>
+                </div>
+                <p className={note}>
+                  Desactivado: siempre despejado. Activado: cada partida sortea
+                  un clima.
+                </p>
+              </section>
+            </div>
+
+            <div className="contents">
+              <section
+                className={`${card} min-[1900px]:col-start-3 min-[1900px]:row-start-1`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={eyebrow}>Bots</span>
+                  {bots > 0 && (
+                    <span className="font-mono text-9.6 text-steel-500">
+                      {bots} en partida
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-0.5 text-19.2">Añadir IA</h3>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {BOT_DIFFICULTIES.map((difficulty) => (
+                    <button
+                      key={difficulty}
+                      type="button"
+                      className={btnClass(
+                        difficulty === botDifficulty ? "accent" : "ghost",
+                        "tiny",
+                      )}
+                      disabled={difficulty === botDifficulty}
+                      onClick={() => onChangeBotDifficulty(difficulty)}
+                    >
+                      {BOT_DIFFICULTY_LABEL[difficulty]}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {teams.map((team) => (
+                    <button
+                      key={team}
+                      type="button"
+                      className={btnClass("ghost", "tiny")}
+                      disabled={counts[team] >= maxTeamSize || full}
+                      onClick={() => onAddBot(team)}
+                    >
+                      + {TEAM_INFO[team].short}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={`${btnClass("neutral", "tiny")} mt-1.5 w-full`}
+                  disabled={!canFill}
+                  onClick={onFillBots}
+                >
+                  Rellenar equipos
+                </button>
+                <p className={note}>
+                  Los bots eligen Pokémon solos y no ocupan panel de pantalla.
+                </p>
+              </section>
+
+              <section
+                className={`${card} min-[1900px]:col-start-3 min-[1900px]:row-start-2`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={eyebrow}>Dispositivos detectados</span>
+                  <span className="font-mono text-9.6 text-steel-500">
+                    {available.length} libres
+                  </span>
+                </div>
+                <h3 className="mt-0.5 text-19.2">Unirse</h3>
+                {full ? (
+                  <p className={`${emptyTeam} mt-2`}>
+                    La partida está completa ({maxPlayers} jugadores).
+                  </p>
+                ) : available.length === 0 ? (
+                  <p className={`${emptyTeam} mt-2`}>
+                    Todos los dispositivos ya están jugando.
+                  </p>
+                ) : (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {available.map((device) => (
+                      <div
+                        className="flex items-center gap-2.5 rounded-xl border border-line bg-white/2.5 px-2.5 py-2.25"
+                        key={device.id}
+                      >
+                        <DeviceIcon
+                          kind={device.kind}
+                          family={device.family}
+                          className="size-4.5 flex-none"
+                        />
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <strong className="text-12.8">{device.label}</strong>
+                          <span className="truncate font-mono text-9.28 tracking-[0.06em] uppercase text-steel-650">
+                            {confirmHint(device.kind, device.family)}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={btnClass("accent", "tiny")}
+                          onClick={() => onJoin(device)}
+                        >
+                          Unirse
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           </aside>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3.5 border-t border-line px-0 pt-3.5 pb-1">
-          <div className="text-13.12 text-steel-400">
+        <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-0 pt-3 pb-1">
+          <span className="shrink-0 font-mono text-10.56 tracking-[0.19em] uppercase text-muted">
+            Controles
+          </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-11.84 text-steel-500">
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>A</KeyPill> unirse / confirmar
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>← →</KeyPill> cambiar de equipo
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>RB / LB</KeyPill> cambiar de mapa
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>X</KeyPill> escribir el nombre
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>Y</KeyPill> modo de movimiento
+              <span className="text-steel-700">(Tab / F)</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>B</KeyPill> salir del equipo
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyPill>1 teclado</KeyPill> + hasta 8 mandos
+            </span>
+          </div>
+          <div className="ml-auto text-13.12 text-steel-400">
             <strong>{players.length}</strong> / {maxPlayers} jugadores
             {players.length > 0 && !allReady && (
               <span className="text-muted">
@@ -678,14 +711,6 @@ export function LobbyScreen({
               </span>
             )}
           </div>
-          <button
-            type="button"
-            className={btnClass("primary", "play")}
-            disabled={!allReady}
-            onClick={onContinue}
-          >
-            Elegir Pokémon →
-          </button>
         </footer>
       </div>
     </div>
