@@ -478,6 +478,8 @@ export interface KillFeedEntry {
   victimTeam: Team;
   victimSlot: number;
   victimPokemonId: string;
+  /** Nombre de la habilidad con la que se logró el KO. */
+  abilityName: string;
 }
 
 /** Resultado final que React usa para mostrar la pantalla de victoria. */

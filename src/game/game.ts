@@ -3720,7 +3720,7 @@ export class Game {
       target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
     }
     this.vibrateOnDamage(target, appliedDamage);
-    if (target.hp <= 0) this.knockOut(target, attacker);
+    if (target.hp <= 0) this.knockOut(target, attacker, def.name);
 
     // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida
     // de verdad. Así funciona en todas las formas (melee, proyectil, haz, área
@@ -3824,7 +3824,11 @@ export class Game {
     });
   }
 
-  private knockOut(target: MatchPlayerState, killer: MatchPlayerState): void {
+  private knockOut(
+    target: MatchPlayerState,
+    killer: MatchPlayerState,
+    abilityName: string
+  ): void {
     // El fin de partida es idempotente: el primer KO que alcanza `koTarget`
     // decide el ganador y los KO posteriores del mismo frame ni suman ni
     // vuelven a llamar a `onMatchEnd`.
@@ -3865,7 +3869,7 @@ export class Game {
     for (const copy of target.copies) copy.play(target.animation, true);
     this.spawnDeathMarker(target);
 
-    this.pushKillFeed(killer, target);
+    this.pushKillFeed(killer, target, abilityName);
 
     if (killer.team !== target.team) {
       killer.kills += 1;
@@ -3899,7 +3903,11 @@ export class Game {
    * Guarda el KO para el feed de las vistas. Se conservan los últimos
    * `KILL_FEED_MAX_ENTRIES`; al entrar uno nuevo se descarta el más antiguo.
    */
-  private pushKillFeed(killer: MatchPlayerState, victim: MatchPlayerState): void {
+  private pushKillFeed(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState,
+    abilityName: string
+  ): void {
     const entry: KillFeedEntry = {
       id: ++this.killFeedSeq,
       at: this.matchElapsed,
@@ -3910,7 +3918,8 @@ export class Game {
       victimName: victim.name,
       victimTeam: victim.team,
       victimSlot: victim.slot,
-      victimPokemonId: victim.pokemonId
+      victimPokemonId: victim.pokemonId,
+      abilityName
     };
     this.killFeed = [entry, ...this.killFeed].slice(0, KILL_FEED_MAX_ENTRIES);
   }

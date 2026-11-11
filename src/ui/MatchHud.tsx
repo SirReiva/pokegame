@@ -123,7 +123,7 @@ function KillFeed({
             className={`flex max-w-full animate-fade-in items-center gap-2 rounded-lg border border-line bg-night-850/80 px-2.5 py-1.5 leading-none shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] ${
               compact ? 'text-9.6' : 'text-11.2'
             }`}
-            title={`${entry.killerName} (${killerPokemon}) eliminó a ${entry.victimName} (${victimPokemon})`}
+            title={`${entry.killerName} (${killerPokemon}) eliminó a ${entry.victimName} (${victimPokemon}) con ${entry.abilityName}`}
           >
             <span
               className="size-2 shrink-0 rounded-full"
@@ -140,6 +140,9 @@ function KillFeed({
             </span>
             <span className="shrink-0 font-mono text-7.36 font-bold tracking-[0.08em] text-steel-450 uppercase">
               KO
+            </span>
+            <span className="max-w-28 shrink-0 truncate font-mono text-9.6 text-steel-450">
+              ({entry.abilityName})
             </span>
             <span
               className="size-2 shrink-0 rounded-full"
