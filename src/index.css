@@ -153,6 +153,26 @@
   --animate-versus-sheen: versus-sheen 900ms ease-out both;
   --animate-versus-progress: versus-progress 2400ms linear both;
 
+  /*
+   * Ambiente en bucle. La pantalla sigue viva mientras carga: aura, rayos,
+   * barrido, chispas y brillos no tocan los `transform` de entrada porque van
+   * en capas hermanas.
+   */
+  --animate-versus-aura: versus-aura 4.2s ease-in-out infinite;
+  --animate-versus-rays: versus-rays 26s linear infinite;
+  --animate-versus-scan: versus-scan 5.5s linear infinite;
+  --animate-versus-drift: versus-drift 1.4s linear infinite;
+  --animate-versus-pulse: versus-pulse 3.2s ease-in-out infinite;
+  --animate-versus-shock: versus-shock 900ms ease-out both;
+  --animate-versus-seam-pulse: versus-seam-pulse 2.6s ease-in-out infinite;
+  --animate-versus-avatar: versus-avatar 3.4s ease-in-out infinite;
+  --animate-versus-glint: versus-glint 4.6s ease-in-out infinite;
+  --animate-versus-band-glow: versus-band-glow 3.6s ease-in-out infinite;
+  --animate-versus-spark: versus-spark 5.2s ease-out infinite;
+  --animate-versus-streak: versus-streak 780ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  --animate-versus-bar-shimmer: versus-bar-shimmer 1.9s linear infinite;
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -328,6 +348,162 @@
     }
     to {
       transform: scaleX(1);
+    }
+  }
+
+  @keyframes versus-aura {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.06);
+    }
+  }
+
+  @keyframes versus-rays {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes versus-scan {
+    from {
+      transform: translateY(-160%);
+    }
+    to {
+      transform: translateY(520%);
+    }
+  }
+
+  @keyframes versus-drift {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 18px 0;
+    }
+  }
+
+  @keyframes versus-pulse {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(0.94);
+    }
+    50% {
+      opacity: 0.75;
+      transform: scale(1.08);
+    }
+  }
+
+  @keyframes versus-shock {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    12% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2.1);
+    }
+  }
+
+  @keyframes versus-seam-pulse {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes versus-avatar {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.14);
+    }
+  }
+
+  @keyframes versus-glint {
+    0% {
+      opacity: 0;
+      transform: translateX(-160%) skewX(-18deg);
+    }
+    6% {
+      opacity: 0.85;
+    }
+    48% {
+      opacity: 0.85;
+      transform: translateX(430%) skewX(-18deg);
+    }
+    58%,
+    100% {
+      opacity: 0;
+      transform: translateX(430%) skewX(-18deg);
+    }
+  }
+
+  @keyframes versus-band-glow {
+    0%,
+    100% {
+      opacity: 0.2;
+    }
+    50% {
+      opacity: 0.75;
+    }
+  }
+
+  @keyframes versus-spark {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, 16px, 0) scale(0.35);
+    }
+    18% {
+      opacity: 0.95;
+    }
+    70% {
+      opacity: 0.6;
+    }
+    100% {
+      opacity: 0;
+      transform: translate3d(var(--spark-drift, 0px), -84px, 0) scale(1.1);
+    }
+  }
+
+  @keyframes versus-streak {
+    0% {
+      opacity: 0;
+      transform: scaleX(0.05);
+    }
+    18% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes versus-bar-shimmer {
+    from {
+      transform: translateX(-110%);
+    }
+    to {
+      transform: translateX(360%);
     }
   }
 }

@@ -22,6 +22,20 @@ const FADE_MS = 360;
 /** Con movimiento reducido solo se muestra un fundido breve. */
 const REDUCED_DURATION_MS = 320;
 
+/** Chispas de ambiente que suben por el cartel mientras se carga. */
+const SPARKS = [
+  { x: 7, y: 68, size: 4, drift: 16, delay: 0 },
+  { x: 16, y: 82, size: 3, drift: -14, delay: 1400 },
+  { x: 24, y: 55, size: 5, drift: 22, delay: 2600 },
+  { x: 33, y: 76, size: 3, drift: -18, delay: 700 },
+  { x: 41, y: 44, size: 4, drift: 12, delay: 3300 },
+  { x: 58, y: 58, size: 4, drift: -16, delay: 1900 },
+  { x: 66, y: 79, size: 3, drift: 20, delay: 400 },
+  { x: 74, y: 47, size: 5, drift: -22, delay: 3000 },
+  { x: 83, y: 72, size: 3, drift: 14, delay: 1100 },
+  { x: 92, y: 62, size: 4, drift: -12, delay: 2300 }
+];
+
 const sideLabel =
   'font-mono text-[clamp(8px,1.1vh,11px)] tracking-[0.24em] uppercase';
 const vsWord =
@@ -195,6 +209,73 @@ export function VersusScreen({
         className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,transparent_12%,rgb(2_5_10/0.72)_78%),linear-gradient(180deg,rgb(2_5_10/0.7),transparent_22%,transparent_78%,rgb(2_5_10/0.8))]"
       />
 
+      {/* Aura que respira sobre cada mitad, como un cartel de neón vivo. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 w-[54%] animate-versus-aura mix-blend-screen"
+        style={{
+          background: `radial-gradient(circle at 30% 38%, ${leftColor}5c, transparent 64%)`
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 w-[54%] animate-versus-aura mix-blend-screen"
+        style={{
+          animationDelay: '1.4s',
+          background: `radial-gradient(circle at 70% 38%, ${rightColor}5c, transparent 64%)`
+        }}
+      />
+
+      {/* Rayado diagonal en movimiento, uno por bando. */}
+      {twoTeams && (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-[54%] overflow-hidden opacity-40"
+          >
+            <div className="absolute inset-[-30%] -rotate-24">
+              <div className="size-full animate-versus-drift bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.16)_0_2px,transparent_2px_18px)]" />
+            </div>
+          </div>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-0 w-[54%] overflow-hidden opacity-40"
+          >
+            <div className="absolute inset-[-30%] rotate-24">
+              <div className="size-full animate-versus-drift bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.16)_0_2px,transparent_2px_18px)] [animation-direction:reverse]" />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Chispas de energía que suben por el cartel. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        {SPARKS.map((spark) => {
+          const color = spark.x < 50 ? leftColor : rightColor;
+          return (
+            <span
+              key={`${spark.x}-${spark.y}`}
+              className="absolute animate-versus-spark rounded-full"
+              style={
+                {
+                  left: `${spark.x}%`,
+                  top: `${spark.y}%`,
+                  width: spark.size,
+                  height: spark.size,
+                  background: color,
+                  boxShadow: `0 0 10px ${color}`,
+                  animationDelay: `${spark.delay}ms`,
+                  '--spark-drift': `${spark.drift}px`
+                } as CSSProperties
+              }
+            />
+          );
+        })}
+      </div>
+
       {/* Marcos de neón, uno por equipo, como en el cartel de VS. */}
       {twoTeams && (
         <>
@@ -220,36 +301,61 @@ export function VersusScreen({
 
       {/* Rayo central que separa los dos bandos. */}
       {twoTeams && (
+        <>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-1/2 w-[clamp(120px,14vw,240px)] -translate-x-1/2"
+          >
+            <div className="size-full animate-versus-seam-pulse bg-[radial-gradient(ellipse_at_center,rgb(255_255_255/0.4),transparent_70%)] blur-2xl" />
+          </div>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-1/2 w-[clamp(70px,9vw,150px)] -translate-x-1/2"
+          >
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              className="size-full animate-versus-seam drop-shadow-[0_0_18px_rgb(255_255_255/0.6)]"
+            >
+              <defs>
+                <linearGradient id="versus-seam" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={leftColor} />
+                  <stop offset="45%" stopColor="var(--color-steel-50)" />
+                  <stop offset="55%" stopColor="var(--color-ink)" />
+                  <stop offset="100%" stopColor={rightColor} />
+                </linearGradient>
+              </defs>
+              <path
+                d="M53 0 L46 17 L57 28 L44 45 L56 58 L45 76 L51 100 L59 82 L49 68 L62 51 L49 36 L59 20 L55 0 Z"
+                fill="url(#versus-seam)"
+              />
+            </svg>
+          </div>
+        </>
+      )}
+
+      {/* Destello horizontal en el momento del impacto del VS. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-1/2 w-[clamp(70px,9vw,150px)] -translate-x-1/2"
-      >
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="size-full animate-versus-seam drop-shadow-[0_0_18px_rgb(255_255_255/0.6)]"
-        >
-          <defs>
-            <linearGradient id="versus-seam" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={leftColor} />
-              <stop offset="45%" stopColor="var(--color-steel-50)" />
-              <stop offset="55%" stopColor="var(--color-ink)" />
-              <stop offset="100%" stopColor={rightColor} />
-            </linearGradient>
-          </defs>
-          <path
-            d="M53 0 L46 17 L57 28 L44 45 L56 58 L45 76 L51 100 L59 82 L49 68 L62 51 L49 36 L59 20 L55 0 Z"
-            fill="url(#versus-seam)"
-          />
-        </svg>
-      </div>
-      )}
+        className="pointer-events-none absolute inset-x-0 top-[calc(50%-1px)] z-10 h-0.5 animate-versus-streak bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.9),transparent)] shadow-[0_0_26px_rgb(255_255_255/0.9)]"
+        style={{
+          animationDelay: `${reduced ? 0 : VS_DELAY_MS + VS_DURATION_MS * 0.55}ms`
+        }}
+      />
 
       {/* Tramado sutil para que el fondo no se vea plano. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.12] mix-blend-overlay bg-[repeating-linear-gradient(0deg,rgb(255_255_255/0.45)_0_1px,transparent_1px_4px)]"
       />
+
+      {/* Barrido de luz descendente, como un monitor CRT encendido. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div className="absolute inset-x-0 top-0 h-[26%] animate-versus-scan bg-[linear-gradient(180deg,transparent,rgb(255_255_255/0.07)_45%,rgb(255_255_255/0.16)_50%,rgb(255_255_255/0.07)_55%,transparent)]" />
+      </div>
 
       <header className="relative z-20 flex shrink-0 flex-wrap items-end justify-between gap-3 px-[clamp(14px,3vw,40px)] pt-[clamp(10px,2.2vh,24px)]">
         <div className="animate-versus-header">
@@ -296,7 +402,11 @@ export function VersusScreen({
               entryFor={entryFor}
               reduced={reduced}
             />
-            <VersusCore reduced={reduced} />
+            <VersusCore
+              reduced={reduced}
+              leftColor={leftColor}
+              rightColor={rightColor}
+            />
             <TeamPanel
               roster={rosters[1]}
               side="right"
@@ -327,7 +437,11 @@ export function VersusScreen({
             ))}
 
             <div className="col-start-2 row-span-2 row-start-1 flex min-h-0 items-stretch">
-              <VersusCore reduced={reduced} />
+              <VersusCore
+                reduced={reduced}
+                leftColor={leftColor}
+                rightColor={rightColor}
+              />
             </div>
 
             {rightRosters.map((roster, index) => (
@@ -359,7 +473,7 @@ export function VersusScreen({
         </span>
         <div className="h-1 min-w-16 flex-1 overflow-hidden rounded-full bg-white/10">
           <div
-            className={`h-full origin-left rounded-full shadow-[0_0_12px_rgb(255_255_255/0.45)] ${
+            className={`h-full origin-left overflow-hidden rounded-full shadow-[0_0_12px_rgb(255_255_255/0.45)] ${
               percent === null
                 ? 'animate-versus-progress'
                 : 'transition-[width] duration-300 ease-out'
@@ -370,7 +484,12 @@ export function VersusScreen({
                 ? { animationDuration: `${duration}ms` }
                 : { width: `${percent}%` })
             }}
-          />
+          >
+            <div
+              aria-hidden="true"
+              className="h-full w-1/3 animate-versus-bar-shimmer bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.55),transparent)]"
+            />
+          </div>
         </div>
         <span className={`${sideLabel} hidden shrink-0 text-white/30 sm:block`}>
           {percent === null ? 'Cargando assets' : `${percent}%`}
@@ -450,14 +569,46 @@ function TeamDot() {
 }
 
 /** Banda vertical "VERSUS" con el emblema VS montado encima. */
-function VersusCore({ reduced }: { reduced: boolean }) {
+function VersusCore({
+  reduced,
+  leftColor,
+  rightColor
+}: {
+  reduced: boolean;
+  leftColor: string;
+  rightColor: string;
+}) {
   return (
     <div className="relative flex w-[clamp(58px,8vw,118px)] shrink-0 items-center justify-center">
+      {/* Rayos de luz girando detrás del emblema. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 grid animate-versus-rays place-items-center opacity-40 mask-[radial-gradient(circle,black_8%,transparent_68%)]"
+      >
+        <div
+          className="size-[clamp(260px,34vw,460px)] rounded-full"
+          style={{
+            backgroundImage: `conic-gradient(from 0deg, transparent 0deg, ${leftColor}88 8deg, transparent 22deg, transparent 160deg, ${rightColor}88 168deg, transparent 182deg, transparent 340deg, ${leftColor}55 348deg, transparent 360deg)`
+          }}
+        />
+      </div>
+
+      {/* Onda expansiva justo cuando el VS golpea el cartel. */}
+      <div
+        aria-hidden="true"
+        className="absolute size-[clamp(120px,18vw,260px)] animate-versus-shock rounded-full border-2 border-white/80"
+        style={{ animationDelay: `${reduced ? 0 : VS_DELAY_MS}ms` }}
+      />
+
       <div className="absolute inset-y-[3%] left-1/2 w-[78%] -translate-x-1/2">
         <div className="relative flex h-full animate-versus-band flex-col items-center justify-between overflow-hidden rounded-md border-2 border-vs-gold/80 bg-[linear-gradient(180deg,#1a3475,#091433_48%,#1a3475)] px-1 py-[9%] shadow-[0_0_28px_rgb(75_156_255/0.4)]">
           <div
             aria-hidden="true"
             className="absolute inset-0 opacity-25 bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.5)_0_1px,transparent_1px_9px)]"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 animate-versus-band-glow bg-[radial-gradient(ellipse_at_center,rgb(255_210_74/0.35),transparent_72%)]"
           />
           <span
             aria-hidden="true"
@@ -485,6 +636,12 @@ function VersusCore({ reduced }: { reduced: boolean }) {
         style={{ animationDelay: `${reduced ? 0 : VS_DELAY_MS}ms` }}
       >
         <div className="relative -rotate-6">
+          <span
+            aria-hidden="true"
+            className={`${vsWord} absolute inset-0 animate-versus-pulse text-white blur-lg`}
+          >
+            VS
+          </span>
           <span
             aria-hidden="true"
             className={`${vsWord} absolute inset-0 translate-x-[0.05em] text-team-red opacity-80 blur-[1px]`}
@@ -556,6 +713,11 @@ function VersusRow({ player, playerIndex, side, entry, reduced }: VersusRowProps
         className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 animate-versus-sheen bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.3),transparent)]"
         style={{ animationDelay: `${sheenDelay}ms` }}
       />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 animate-versus-glint bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.22),transparent)]"
+        style={{ animationDelay: `${sheenDelay + 900}ms` }}
+      />
 
       <span
         aria-hidden="true"
@@ -569,7 +731,8 @@ function VersusRow({ player, playerIndex, side, entry, reduced }: VersusRowProps
       <div className="relative z-1 grid size-[clamp(50px,10vh,94px)] shrink-0 place-items-center">
         <span
           aria-hidden="true"
-          className="absolute inset-0 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--team)_55%,transparent),transparent_70%)] blur-[6px]"
+          className="absolute inset-0 animate-versus-avatar rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--team)_55%,transparent),transparent_70%)] blur-[6px]"
+          style={{ animationDelay: `${delay}ms` }}
         />
         {entry ? (
           <PokemonPortrait
