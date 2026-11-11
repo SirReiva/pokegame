@@ -1,4 +1,6 @@
 import * as pc from 'playcanvas';
+import { type AtmosphereId } from './atmosphere';
+import { createAtmosphereVisuals } from './atmosphereVisuals';
 import { CONFIG } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { TEAM_INFO } from './multiplayer';
@@ -31,6 +33,7 @@ import {
   createMistCanvas,
   createMountainRockCanvas,
   createPollenCanvas,
+  createRainCanvas,
   createShadowCanvas,
   createSkyCanvas,
   createSmokeCanvas,
@@ -63,6 +66,8 @@ export interface World {
   waterHeight: number;
   shadowMaterial: pc.StandardMaterial;
 
+  /** Aplica el clima indicado al cielo, las luces y las partículas. */
+  setAtmosphere(id: AtmosphereId): void;
   update(dt: number): void;
   dispose(): void;
 }
@@ -343,6 +348,12 @@ export function buildWorld(app: pc.AppBase): World {
   });
   const skyTexture = textureFromCanvas(device, createSkyCanvas(), {
     name: 'sky',
+    mipmaps: false,
+    minFilter: pc.FILTER_LINEAR,
+    magFilter: pc.FILTER_LINEAR
+  });
+  const rainTexture = textureFromCanvas(device, createRainCanvas(), {
+    name: 'rain-drop',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
@@ -4078,6 +4089,26 @@ export function buildWorld(app: pc.AppBase): World {
   app.root.addChild(sky);
   created.push(sky);
 
+  // --- Clima ---------------------------------------------------------------
+  // El mundo se construye siempre despejado; la partida sortea su clima al
+  // arrancar y llama a `setAtmosphere`. La capa visual reutiliza la textura de
+  // lluvia y las partículas procedurales que ya usa el terreno.
+  const atmosphere = createAtmosphereVisuals({
+    app,
+    device,
+    bounds: { x: HALF_X, z: HALF_Z },
+    sun,
+    fill,
+    skyMaterial,
+    textures: {
+      rain: rainTexture,
+      dust: dustTexture,
+      frost: frostTexture,
+      mist: mistTexture,
+      pollen: pollenTexture
+    }
+  });
+
   // --- Sombra de contacto --------------------------------------------------
   const shadowMaterial = new pc.StandardMaterial();
   shadowMaterial.useLighting = false;
@@ -4112,8 +4143,12 @@ export function buildWorld(app: pc.AppBase): World {
     bounds: { x: HALF_X, z: HALF_Z },
     waterHeight,
     shadowMaterial,
+    setAtmosphere(id: AtmosphereId) {
+      atmosphere.set(id);
+    },
     update(dt: number) {
       time += dt;
+      atmosphere.update(dt);
 
       // Parpadeo de la luz de lava: dos senos desfasados, uno lento y otro
       // rápido, para que el resplandor no parezca una bombilla fija.
@@ -4275,6 +4310,7 @@ export function buildWorld(app: pc.AppBase): World {
 
     },
     dispose() {
+      atmosphere.dispose();
       for (const entity of created) entity.destroy();
       for (const buffer of instancedFoliageBuffers) buffer.destroy();
       for (const batch of butterflyBatches) {
@@ -4298,6 +4334,7 @@ export function buildWorld(app: pc.AppBase): World {
       pollenTexture.destroy();
       sparkTexture.destroy();
       skyTexture.destroy();
+      rainTexture.destroy();
       barkTexture.destroy();
       mountainRockTexture.destroy();
       wallStoneTexture.destroy();

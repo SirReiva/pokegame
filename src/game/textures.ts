@@ -1883,6 +1883,27 @@ export function createSkyCanvas(width = 8, height = 256): HTMLCanvasElement {
 }
 
 /**
+ * Gota de lluvia: una estela vertical fina que se desvanece en los extremos.
+ * La usan las partículas de lluvia, tormenta y diluvio; el color final lo pone
+ * el `colorGraph` de cada sistema, así que aquí solo se dibuja el alfa.
+ */
+export function createRainCanvas(width = 16, height = 64): HTMLCanvasElement {
+  const ctx = canvas2d(width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0)");
+  gradient.addColorStop(0.18, "rgba(226, 242, 255, 0.85)");
+  gradient.addColorStop(0.78, "rgba(198, 226, 255, 0.45)");
+  gradient.addColorStop(1, "rgba(178, 214, 255, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(width * 0.38, 0, width * 0.24, height);
+  // Un segundo trazo más tenue y desplazado rompe la simetría de la gota sin
+  // convertirla en una banda ancha cuando se ve a tamaño de juego.
+  ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+  ctx.fillRect(width * 0.62, height * 0.12, Math.max(1, width * 0.08), height * 0.7);
+  return ctx.canvas;
+}
+
+/**
  * Textura de corteza para los troncos. La hoja es 16x32 para que, con el
  * aspect ratio del cilindro, los téxeles queden aproximadamente cuadrados.
  * Todo se dibuja a píxel completo, sin antialiasing.

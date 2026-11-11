@@ -28,6 +28,9 @@ export interface SessionValue {
   /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
   koTarget: number;
   setKoTarget: (value: number) => void;
+  /** Si está desactivado, todas las partidas se juegan en despejado. */
+  atmosphereEnabled: boolean;
+  setAtmosphereEnabled: (enabled: boolean) => void;
   players: LobbyPlayer[];
   matchConfigs: MatchPlayerConfig[] | null;
   joinDevice: (device: InputDeviceInfo) => void;

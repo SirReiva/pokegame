@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { BuffStat } from '../game/abilities';
+import type { AtmosphereState } from '../game/atmosphere';
 import {
   TEAM_INFO,
   computeSplitLayout,
@@ -23,6 +24,8 @@ interface MatchHudProps {
   stats: PlayerMatchStats[];
   teams: Team[];
   koTarget: number;
+  /** Clima sorteado para esta partida, si ya ha empezado. */
+  atmosphere: AtmosphereState | null;
   onPause: () => void;
 }
 
@@ -166,6 +169,7 @@ export function MatchHud({
   stats,
   teams,
   koTarget,
+  atmosphere,
   onPause
 }: MatchHudProps) {
   const layout = computeSplitLayout(players.length);
@@ -197,6 +201,18 @@ export function MatchHud({
         <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
           a {koTarget}
         </span>
+        {atmosphere && (
+          <span
+            className="flex items-center gap-1.5 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
+            style={{ color: atmosphere.color }}
+            title={`${atmosphere.name}: ${atmosphere.description}`}
+          >
+            <span aria-hidden="true" className="text-11.2 leading-none">
+              {atmosphere.icon}
+            </span>
+            {atmosphere.short}
+          </span>
+        )}
       </div>
 
       {players.map((player, index) => {
@@ -239,7 +255,7 @@ export function MatchHud({
         const concealmentPct = playerStats ? Math.round(playerStats.concealment * 100) : 0;
         const concealmentClass = concealmentClassFor(playerStats);
         const concealmentTitle = playerStats
-          ? `Visión base ${playerStats.visionRange.toFixed(1)} u. ` +
+          ? `Visión ${playerStats.visionRange.toFixed(1)} u. ` +
             `Ocultación ${concealmentPct}% (base ${Math.round(
               playerStats.concealmentBase * 100
             )}% ×${playerStats.concealmentMultiplier.toFixed(2)}, ` +

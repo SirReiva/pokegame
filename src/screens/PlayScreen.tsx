@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Redirect, useLocation } from 'wouter';
 import { Game, type PokemonSkinSelection } from '../game/game';
 import { commonAbilityOption } from '../game/abilities';
+import type { AtmosphereState } from '../game/atmosphere';
 import { DEFAULT_SKIN_ID, skinFor } from '../game/skins';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
@@ -52,6 +53,7 @@ interface PlayHandlers {
   onMatchStats: (stats: PlayerMatchStats[]) => void;
   onMatchEnd: (result: MatchEndResult) => void;
   onCountdown: (remaining: number | null) => void;
+  onAtmosphere: (state: AtmosphereState | null) => void;
 }
 
 interface PlayScreenProps {
@@ -61,6 +63,8 @@ interface PlayScreenProps {
   players: LobbyPlayer[];
   teams: Team[];
   koTarget: number;
+  /** Si es `false`, la partida se juega siempre en despejado. */
+  atmosphereEnabled: boolean;
   /** Oculta la carga interna cuando una intro muestra el progreso encima. */
   hideLoadingOverlay?: boolean;
   /** Permite arrancar la partida; la intro lo activa al terminar. */
@@ -83,6 +87,7 @@ function PlayScreen({
   players,
   teams,
   koTarget,
+  atmosphereEnabled,
   hideLoadingOverlay = false,
   start = true,
   onProgress,
@@ -110,6 +115,7 @@ function PlayScreen({
   const [stats, setStats] = useState<PlayerMatchStats[]>([]);
   const [matchResult, setMatchResult] = useState<MatchEndResult | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [atmosphere, setAtmosphere] = useState<AtmosphereState | null>(null);
 
   useEffect(() => {
     configsRef.current = configs;
@@ -147,7 +153,8 @@ function PlayScreen({
       onPauseRequest: () => setPaused(true),
       onMatchStats: (next) => setStats(next),
       onMatchEnd: (result) => setMatchResult(result),
-      onCountdown: (remaining) => setCountdown(remaining)
+      onCountdown: (remaining) => setCountdown(remaining),
+      onAtmosphere: (state) => setAtmosphere(state)
     };
   });
 
@@ -216,9 +223,12 @@ function PlayScreen({
         },
         onCountdown: (remaining) => {
           if (!disposed) handlersRef.current?.onCountdown(remaining);
+        },
+        onAtmosphere: (state) => {
+          if (!disposed) handlersRef.current?.onAtmosphere(state);
         }
       },
-      { mapId, manifest, koTarget, pokemonIds, pokemonSkins }
+      { mapId, manifest, koTarget, atmosphereEnabled, pokemonIds, pokemonSkins }
     )
       .then((created) => {
         // El efecto se desmontó mientras se creaba el dispositivo.
@@ -244,7 +254,7 @@ function PlayScreen({
       gameRef.current = null;
       game?.dispose();
     };
-  }, [mapId, manifest, koTarget]);
+  }, [mapId, manifest, koTarget, atmosphereEnabled]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused || modal !== null);
@@ -349,6 +359,7 @@ function PlayScreen({
               stats={stats}
               teams={teams}
               koTarget={koTarget}
+              atmosphere={atmosphere}
               onPause={() => setPaused(true)}
             />
           )}
@@ -874,7 +885,15 @@ function MatchScoreboard({
 }
 
 function PlayGuard(props: PlayRouteProps) {
-  const { manifest, mapId, matchConfigs, players, teams, koTarget } = useSession();
+  const {
+    manifest,
+    mapId,
+    matchConfigs,
+    players,
+    teams,
+    koTarget,
+    atmosphereEnabled
+  } = useSession();
 
   if (!manifest || !mapId) return <Redirect to="/lobby" />;
   if (!matchConfigs) return <Redirect to={players.length > 0 ? '/roster' : '/lobby'} />;
@@ -888,6 +907,7 @@ function PlayGuard(props: PlayRouteProps) {
       players={players}
       teams={teams}
       koTarget={koTarget}
+      atmosphereEnabled={atmosphereEnabled}
     />
   );
 }

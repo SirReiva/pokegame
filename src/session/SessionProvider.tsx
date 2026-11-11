@@ -198,6 +198,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [maps, setMaps] = useState<MapIndexEntry[]>([]);
   const [mapId, setMapIdState] = useState('');
   const [koTarget, setKoTargetState] = useState<number>(CONFIG.combat.koTarget);
+  const [atmosphereEnabled, setAtmosphereEnabledState] = useState(false);
   const [mapNotice, setMapNotice] = useState<string | null>(null);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
   const [botDifficulty, setBotDifficultyState] = useState<BotDifficulty>('normal');
@@ -319,6 +320,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setKoTarget = useCallback((next: number) => {
     if (!Number.isFinite(next) || next <= 0) return;
     setKoTargetState(Math.floor(next));
+  }, []);
+
+  const setAtmosphereEnabled = useCallback((enabled: boolean) => {
+    setAtmosphereEnabledState(enabled === true);
   }, []);
 
   const joinDevice = useCallback(
@@ -810,6 +815,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setMapId,
       koTarget,
       setKoTarget,
+      atmosphereEnabled,
+      setAtmosphereEnabled,
       players,
       matchConfigs,
       joinDevice,
@@ -848,6 +855,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setMapId,
       koTarget,
       setKoTarget,
+      atmosphereEnabled,
+      setAtmosphereEnabled,
       players,
       matchConfigs,
       joinDevice,

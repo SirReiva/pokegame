@@ -36,9 +36,11 @@ interface LobbyScreenProps {
   mapNotice: string | null;
   botDifficulty: BotDifficulty;
   koTarget: number;
+  atmosphereEnabled: boolean;
   onChangeMap: (mapId: string) => void;
   onChangeBotDifficulty: (difficulty: BotDifficulty) => void;
   onChangeKoTarget: (value: number) => void;
+  onChangeAtmosphereEnabled: (enabled: boolean) => void;
   onAddBot: (team: Team) => void;
   onFillBots: () => void;
   onJoin: (device: InputDeviceInfo) => void;
@@ -253,9 +255,11 @@ export function LobbyScreen({
   mapNotice,
   botDifficulty,
   koTarget,
+  atmosphereEnabled,
   onChangeMap,
   onChangeBotDifficulty,
   onChangeKoTarget,
+  onChangeAtmosphereEnabled,
   onAddBot,
   onFillBots,
   onJoin,
@@ -502,6 +506,43 @@ export function LobbyScreen({
               </div>
               <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
                 Gana el primer equipo que alcance el límite.
+              </p>
+            </div>
+
+            <div className="mb-4 border-b border-dashed border-line pb-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className={eyebrow}>Clima</span>
+                <span className="font-mono text-9.6 text-steel-500">
+                  {atmosphereEnabled ? "Aleatorio" : "Despejado"}
+                </span>
+              </div>
+              <h3 className="mt-0.5 text-19.2">Cambios atmosféricos</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  className={btnClass(
+                    atmosphereEnabled ? "ghost" : "accent",
+                    "tiny",
+                  )}
+                  disabled={!atmosphereEnabled}
+                  onClick={() => onChangeAtmosphereEnabled(false)}
+                >
+                  Desactivado
+                </button>
+                <button
+                  type="button"
+                  className={btnClass(
+                    atmosphereEnabled ? "accent" : "ghost",
+                    "tiny",
+                  )}
+                  disabled={atmosphereEnabled}
+                  onClick={() => onChangeAtmosphereEnabled(true)}
+                >
+                  Aleatorio
+                </button>
+              </div>
+              <p className="mt-2 font-mono text-9.92 tracking-[0.04em] text-steel-500">
+                Desactivado: siempre despejado. Activado: cada partida sortea un clima.
               </p>
             </div>
 

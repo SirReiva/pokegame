@@ -60,6 +60,18 @@ import {
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
+  atmosphereIncomingMultiplier,
+  atmosphereMoveMultiplier,
+  atmosphereResidual,
+  atmosphereShapeMultiplier,
+  atmosphereSpeedMultiplier,
+  atmosphereState,
+  atmosphereVisionMultiplier,
+  rollAtmosphere,
+  type AtmosphereId,
+  type AtmosphereState
+} from './atmosphere';
+import {
   KO_TARGET,
   closestPointOnCollider,
   closestPointOnSegment,
@@ -171,6 +183,8 @@ export interface GameCallbacks {
   onMatchEnd(result: MatchEndResult): void;
   /** Segundos restantes de la cuenta atrás inicial; `null` al terminar. */
   onCountdown(remaining: number | null): void;
+  /** Clima de la partida; `null` al volver al menú o terminar. */
+  onAtmosphere(state: AtmosphereState | null): void;
 }
 
 /** Combinación especie + aspecto que hay que cargar para una partida. */
@@ -198,6 +212,11 @@ export interface GameOptions {
   pokemonSkins?: readonly PokemonSkinSelection[];
   /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
   koTarget?: number;
+  /**
+   * Si es `true`, cada partida sortea un clima; si es `false` o falta, todas
+   * las partidas se juegan en despejado.
+   */
+  atmosphereEnabled?: boolean;
 }
 
 /** Clave del caché de sprites: la especie y el aspecto son independientes. */
@@ -352,6 +371,12 @@ export class Game {
   private menuCamera!: CameraRig;
   private mapIndex: MapIndexEntry[] = [];
   private activeMapId = '';
+  /** Clima de la partida; se sortea en `startMatch`. */
+  private atmosphere: AtmosphereId = 'clear';
+  /** Factor de visión del clima, cacheado para no recalcularlo por observador. */
+  private atmosphereVision = 1;
+  /** Acumulador del daño residual (arena, granizo). */
+  private atmosphereTick = 0;
 
   private readonly baseCameraLayers: number[];
   /** Capa del mundo: respaldo de los FX fuera de partida. */
@@ -435,6 +460,8 @@ export class Game {
   private teamScores: Record<Team, number> = createTeamRecord(() => 0);
   /** Límite de KOs de esta partida, fijado al crearla. */
   private readonly koTarget: number;
+  /** El lobby decide si cada partida sortea clima o se juega en despejado. */
+  private readonly atmosphereEnabled: boolean;
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
   private killFeed: KillFeedEntry[] = [];
   private killFeedSeq = 0;
@@ -523,6 +550,7 @@ export class Game {
     this.callbacks = callbacks;
     this.options = options;
     this.koTarget = Math.max(1, Math.floor(options.koTarget ?? KO_TARGET));
+    this.atmosphereEnabled = options.atmosphereEnabled === true;
 
     this.app = app;
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
@@ -893,6 +921,9 @@ export class Game {
 
     setActiveMap(map);
     syncTeamsWithMap();
+    this.atmosphere = 'clear';
+    this.atmosphereVision = 1;
+    this.atmosphereTick = 0;
     this.world = buildWorld(this.app);
     // Los objetos se validan contra el mundo ya construido: un centro fuera de
     // los límites, en agua profunda o dentro de un collider (muro, roca, árbol,
@@ -913,6 +944,55 @@ export class Game {
     this.rebuildSightOccluders();
     this.menuCamera = new CameraRig(this.app, map.spawn);
     this.refreshSunShadows();
+  }
+
+  /** Aplica un clima a la escena y avisa al HUD. */
+  private setAtmosphere(id: AtmosphereId): void {
+    this.atmosphere = id;
+    this.atmosphereVision = atmosphereVisionMultiplier(id);
+    this.atmosphereTick = 0;
+    this.world.setAtmosphere(id);
+    this.callbacks.onAtmosphere(atmosphereState(id));
+  }
+
+  /** Vuelve al aspecto despejado y retira el aviso del HUD. */
+  private clearAtmosphere(): void {
+    this.atmosphere = 'clear';
+    this.atmosphereVision = 1;
+    this.atmosphereTick = 0;
+    this.world?.setAtmosphere('clear');
+    this.callbacks.onAtmosphere(null);
+  }
+
+  /**
+   * Daño residual de arena y granizo. Se aplica cada `interval` segundos a los
+   * Pokémon vivos que no sean inmunes, nunca por debajo de 1 PV: el clima no
+   * puede dar KOs ni robar la puntuación de una pelea.
+   */
+  private updateAtmosphere(dt: number): void {
+    const residual = atmosphereResidual(this.atmosphere);
+    if (!residual || this.matchOver) return;
+    this.atmosphereTick += dt;
+    if (this.atmosphereTick < residual.interval) return;
+    this.atmosphereTick -= residual.interval;
+
+    let changed = false;
+    for (const player of this.matchPlayers) {
+      if (!player.alive || player.invulnerableTimer > 0 || player.hp <= 1) continue;
+      if (player.types.some((type) => residual.immuneTypes.includes(type))) continue;
+      const amount = Math.min(
+        player.hp - 1,
+        Math.max(1, Math.round(player.maxHp * residual.fraction))
+      );
+      if (amount <= 0) continue;
+      player.hp -= amount;
+      player.damageTaken += amount;
+      player.hurtTimer = Math.max(player.hurtTimer, 0.18);
+      this.showDamagePopup(player, amount, false, 1, false);
+      this.vibrateOnDamage(player, amount);
+      changed = true;
+    }
+    if (changed) this.emitMatchStats();
   }
 
   /**
@@ -1040,6 +1120,10 @@ export class Game {
 
     this.mode = 'match';
     this.paused = false;
+    // El clima se sortea una vez por partida y se mantiene hasta el final.
+    // Si el lobby desactiva los cambios atmosféricos, siempre se juega en
+    // despejado y no se aplica ningún efecto de combate.
+    this.setAtmosphere(this.atmosphereEnabled ? rollAtmosphere() : 'clear');
     startMatchMusic();
     this.statsTimer = 0;
     this.fps = 0;
@@ -1280,6 +1364,7 @@ export class Game {
     this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.menuCamera.setEnabled(true);
     this.refreshSunShadows();
+    this.clearAtmosphere();
     this.callbacks.onMatchStats([]);
     this.callbacks.onCountdown(null);
   }
@@ -1747,6 +1832,10 @@ export class Game {
     // para que las fases de resolución usen las posiciones finales.
     this.fxVisibilityCache.clear();
 
+    // El daño residual del clima se cobra una vez por tick y antes de resolver
+    // golpes: así un Pokémon que ya estaba a 1 PV no muere por arena o granizo.
+    if (!this.matchOver) this.updateAtmosphere(stepDt);
+
     // Cada fase puede cerrar la partida; el resto no debe ejecutarse en el
     // mismo paso. El orden es fijo y reproducible: casts instantáneos (haces y
     // áreas sin retardo) → golpes de dash → melee → proyectiles → áreas.
@@ -1850,6 +1939,7 @@ export class Game {
     const maxSpeed =
       player.maxSpeed *
       terrainEffect.multiplier *
+      atmosphereSpeedMultiplier(this.atmosphere, player.types) *
       this.buffMultiplier(player, 'speed') *
       player.slowMultiplier *
       shieldSpeed;
@@ -3517,7 +3607,18 @@ export class Game {
     // siempre resta al menos 1 PV y puede mostrar su impacto y su número.
     const reduction =
       target.damageReductionTimer > 0 ? target.damageReduction : 0;
-    const finalDamage = Math.max(1, Math.round(result.damage * (1 - reduction)));
+    // El clima se aplica al final del pipeline, junto a la reducción de
+    // Protección. Los multiplicadores de tipo (sol, lluvia), la penalización a
+    // proyectiles (turbulencias) y la defensa del Hielo bajo la nieve se
+    // acumulan en un solo factor.
+    const weatherMultiplier =
+      atmosphereMoveMultiplier(this.atmosphere, def.type) *
+      atmosphereShapeMultiplier(this.atmosphere, def.shape) *
+      atmosphereIncomingMultiplier(this.atmosphere, target.types);
+    const finalDamage = Math.max(
+      1,
+      Math.round(result.damage * (1 - reduction) * weatherMultiplier)
+    );
     const lethal = finalDamage >= target.hp;
     this.combatFx.spawnImpact(
       options.impactX ?? target.x,
@@ -4516,8 +4617,11 @@ export class Game {
         terrainType: terrain.type,
         terrainSpeedMultiplier: player.terrainMultiplier,
         terrainSpeedReason: player.terrainSpeedReason,
-        visionRange: player.visionRange,
-        detectionRange: effectiveVisionRange(player.visionRange, player.concealment.value),
+        visionRange: player.visionRange * player.visionFactor * this.atmosphereVision,
+        detectionRange: effectiveVisionRange(
+          player.visionRange * player.visionFactor * this.atmosphereVision,
+          player.concealment.value
+        ),
         concealment: player.concealment.value,
         concealmentBase: player.concealment.base,
         concealmentMultiplier: player.concealment.multiplier,
@@ -4674,7 +4778,7 @@ export class Game {
   ): boolean {
     const distance = Math.hypot(target.x - observer.x, target.z - observer.z);
     const effective = effectiveVisionRange(
-      observer.visionRange * observer.visionFactor,
+      observer.visionRange * observer.visionFactor * this.atmosphereVision,
       target.concealment.value
     );
     const limit = alreadyVisible ? effective + CONFIG.vision.hysteresis : effective;
@@ -4700,7 +4804,7 @@ export class Game {
       if (!observer.alive || observer.team !== team) continue;
       const distance = Math.hypot(x - observer.x, z - observer.z);
       const effective = effectiveVisionRange(
-        observer.visionRange * observer.visionFactor,
+        observer.visionRange * observer.visionFactor * this.atmosphereVision,
         concealment
       );
       if (distance > effective) continue;
@@ -4728,7 +4832,7 @@ export class Game {
       const distance = Math.hypot(x - observer.x, z - observer.z);
       if (
         distance >
-        effectiveVisionRange(observer.visionRange * observer.visionFactor, 0)
+        effectiveVisionRange(observer.visionRange * observer.visionFactor * this.atmosphereVision, 0)
       ) {
         continue;
       }
@@ -4758,7 +4862,8 @@ export class Game {
       const circle: VisionCircle = {
         x: player.x,
         z: player.z,
-        visionRange: player.visionRange * player.visionFactor
+        visionRange:
+          player.visionRange * player.visionFactor * this.atmosphereVision
       };
       localCircleBySlot.set(player.slot, circle);
       let circles = circlesByTeam.get(player.team);

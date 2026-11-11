@@ -414,6 +414,26 @@ Los previews del slider se generan con `pnpm maps:previews`: el script lee cada 
 
 `perf-256.json` es un mapa de estrés de 256 × 256 celdas (`tileSize` 0.5 y `waterHeight` 0.3) con quince de los dieciséis terrenos, ocho distritos elementales, un lago central y puentes. Sirve para medir el rendimiento de mapas grandes en el lobby.
 
+## Estado atmosférico
+
+Los cambios atmosféricos se activan en el lobby, en **Clima · Cambios atmosféricos**, y están **desactivados por defecto**. Con el ajuste desactivado todas las partidas se juegan en **Despejado**; al activarlo, cada partida sortea un **clima global** al arrancar. El estado se mantiene durante toda la partida, se anuncia en la barra superior del HUD y se aplica a la vez al render y al combate. La definición completa vive en `src/game/atmosphere.ts`; `src/game/atmosphereVisuals.ts` se encarga de la capa visual y `src/game/world.ts` le pasa el cielo, las luces y las texturas.
+
+| Estado | Efecto de combate | Aspecto |
+| --- | --- | --- |
+| Despejado | Sin efectos | Cielo y luz base |
+| Sol | Fuego +25 %, Agua -25 % | Luz cálida y motas doradas |
+| Sol abrasador | Fuego +50 %, Agua -50 % | Cielo anaranjado y resplandor |
+| Lluvia | Agua +25 %, Fuego -25 % | Cielo gris, lluvia y niebla baja |
+| Diluvio | Agua +50 %, Fuego -50 % | Lluvia densa, ambiente oscuro |
+| Tormenta de arena | 2 % de PV cada 3 s a quien no sea Tierra, Roca o Acero; Visión -10 % | Rachas de polvo y calima |
+| Granizo | 2 % de PV cada 3 s a quien no sea Hielo | Granos de hielo y cielo frío |
+| Niebla | Visión -25 % | Bancos de niebla y niebla de escena cerrada |
+| Turbulencias | Proyectiles y haces -20 %; movimiento -10 %, Volador +10 % | Ráfagas de polvo y viento |
+| Tormenta | Eléctrico +30 %, Agua +15 %, Fuego -25 % | Lluvia oscura con rayos |
+| Nieve | El Hielo recibe 25 % menos daño | Nevada y luz fría |
+
+El daño residual de arena y granizo **nunca baja de 1 PV**: el clima no puede dar KOs ni sumar al marcador. Los multiplicadores de clima se aplican al final del cálculo de daño, después de crítico, STAB, efectividad y Protección, y los proyectiles de turbulencias usan el mismo pipeline que el resto de golpes. El clima también modula la niebla de guerra: el factor de visión se multiplica por el rango de cada observador, incluidos los bots, y el HUD muestra el rango efectivo.
+
 ## Editor de mapas
 
 El menú principal (`/`) y la sala de equipos (`/lobby`) enlazan a **Editor**, que también se abre directo en `/editor`. Permite crear un mapa jugable sin editar el JSON a mano:
@@ -500,6 +520,7 @@ Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo meno
 - **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
 - **Pixel art configurable**: `CONFIG.sprite.filter` elige el muestreo. `'nearest'` deja los bloques duros; `'smooth'` precarga la hoja con NEAREST a `smoothScale` y luego filtra con LINEAR, de modo que el contorno se antialiasea 1-2 px sin emborronar el interior; `'linear'` interpola directamente sobre la hoja original (el más suave y borroso). `CONFIG.sprite.alphaToCoverage` delega el recorte alfa en las muestras del MSAA, y las UVs mantienen medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
 - **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y separadores declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
+- **Clima de partida opcional**: el lobby permite activar los cambios atmosféricos (desactivados por defecto). Con ellos activos, once estados se sortean al empezar y cambian a la vez cielo, luz, niebla, partículas, visión y daño de tipo; con ellos desactivados, siempre se juega en despejado. El HUD muestra el estado activo y su efecto; arena y granizo cobran daño residual sin poder dar KOs.
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando. El páramo añade rayos con luz azul y chispas crepitando entre la hierba seca.
 - **Terrenos tipados**: el catálogo tiene dieciséis terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua.
 - **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios y un team deathmatch con límite de KOs configurable (15 por defecto) con reaparición.
