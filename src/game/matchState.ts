@@ -382,6 +382,18 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   lastActionAt: number;
   /** Enfriamiento restante de cada habilidad, en segundos. */
   cooldowns: number[];
+  /**
+   * Cooldown total del último lanzamiento de cada habilidad. Puede superar el
+   * base si la habilidad acumuló la rampa de repetición; el HUD lo usa para
+   * que la barra no se llene antes de tiempo.
+   */
+  cooldownTotals: number[];
+  /** Id de la última habilidad con rampa de repetición. */
+  repeatAbilityId: string | null;
+  /** Repeticiones consecutivas de `repeatAbilityId`. */
+  repeatAbilityCount: number;
+  /** Instante de la última repetición, para la ventana de reinicio. */
+  repeatAbilityAt: number;
   buffs: ActiveBuff[];
   /** Ralentizaciones activas, cada una con su propio tiempo restante. */
   slowEffects: SlowEffect[];

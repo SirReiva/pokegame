@@ -1269,6 +1269,10 @@ export class Game {
         participationAwarded: 0,
         lastActionAt: 0,
         cooldowns: [0, 0, 0, 0, 0],
+        cooldownTotals: [0, 0, 0, 0, 0],
+        repeatAbilityId: null,
+        repeatAbilityCount: 0,
+        repeatAbilityAt: 0,
         buffs: [],
         slowEffects: [],
         slowMultiplier: 1,
@@ -2495,11 +2499,13 @@ export class Game {
     player.animationFrame = null;
     player.dash = null;
     this.cancelCast(player);
+    this.clearRepeatCooldown(player);
     player.deathFade = 0;
     // Los enfriamientos del kit siguen corriendo durante los 5 s de muerte: no
     // se reinician al reaparecer. El instinto activo sí se resetea, como pide
     // `docs/common-abilities.md` (sección Respawn).
     player.cooldowns[4] = 0;
+    player.cooldownTotals[4] = 0;
     player.buffs = [];
     player.slowEffects = [];
     player.slowMultiplier = 1;
@@ -2670,6 +2676,37 @@ export class Game {
     }
   }
 
+  private clearRepeatCooldown(player: MatchPlayerState): void {
+    player.repeatAbilityId = null;
+    player.repeatAbilityCount = 0;
+    player.repeatAbilityAt = 0;
+  }
+
+  /**
+   * Calcula el enfriamiento real de un lanzamiento. Las habilidades con
+   * `repeatCooldown` acumulan una racha mientras se repitan sin cambiar de
+   * habilidad ni dejar pasar la ventana de reinicio.
+   */
+  private cooldownForCast(
+    player: MatchPlayerState,
+    abilityId: string,
+    def: AbilityDef
+  ): number {
+    const repeat = def.repeatCooldown;
+    if (!repeat || repeat.step <= 0 || repeat.max <= 0) {
+      this.clearRepeatCooldown(player);
+      return def.cooldown;
+    }
+    const continues =
+      player.repeatAbilityId === abilityId &&
+      this.matchElapsed - player.repeatAbilityAt <= repeat.resetAfter;
+    player.repeatAbilityCount = continues ? player.repeatAbilityCount + 1 : 0;
+    player.repeatAbilityId = abilityId;
+    player.repeatAbilityAt = this.matchElapsed;
+    const extra = Math.min(player.repeatAbilityCount * repeat.step, repeat.max);
+    return def.cooldown * (1 + extra);
+  }
+
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
     if (!player.alive || this.matchOver) return;
     if (player.activeCast || player.dash) return;
@@ -2707,7 +2744,9 @@ export class Game {
     if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null)) {
       player.invulnerableTimer = 0;
     }
-    player.cooldowns[slotIndex] = def.cooldown;
+    const cooldown = this.cooldownForCast(player, abilityId, def);
+    player.cooldowns[slotIndex] = cooldown;
+    player.cooldownTotals[slotIndex] = cooldown;
     // Las habilidades pensadas para usarse en movimiento conservan la inercia:
     // poner la velocidad a cero producía un frenazo brusco y luego el jugador
     // volvía a acelerar, justo el efecto que no queremos en Protección.
@@ -3129,10 +3168,9 @@ export class Game {
     this.interruptPlayer(target);
     if (!cast || !beforeEffect || lethal) return;
     const remaining = target.cooldowns[cast.slotIndex] ?? 0;
-    target.cooldowns[cast.slotIndex] = Math.min(
-      remaining,
-      cast.def.cooldown * 0.5
-    );
+    const total =
+      target.cooldownTotals[cast.slotIndex] ?? cast.def.cooldown;
+    target.cooldowns[cast.slotIndex] = Math.min(remaining, total * 0.5);
   }
 
   /**
@@ -3798,6 +3836,7 @@ export class Game {
     target.animationFrame = null;
     target.dash = null;
     this.cancelCast(target);
+    this.clearRepeatCooldown(target);
     target.vx = 0;
     target.vz = 0;
     target.buffs = [];
@@ -4671,7 +4710,8 @@ export class Game {
             type: def?.type ?? '',
             category: def?.category ?? 'status',
             cooldown: player.cooldowns[abilityIndex] ?? 0,
-            duration: def?.cooldown ?? 0
+            duration:
+              player.cooldownTotals[abilityIndex] || (def?.cooldown ?? 0)
           };
         }),
         shieldActive: player.damageReductionTimer > 0,
@@ -4684,7 +4724,8 @@ export class Game {
               short: commonOption.short,
               passive: commonOption.passive,
               cooldown: player.cooldowns[4] ?? 0,
-              duration: commonDef?.cooldown ?? 0,
+              duration:
+                player.cooldownTotals[4] || (commonDef?.cooldown ?? 0),
               readyIn: commonOption.passive
                 ? Math.max(0, REGENERATION_DELAY_SECONDS - player.hiddenTimer)
                 : 0,

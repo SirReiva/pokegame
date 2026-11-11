@@ -250,6 +250,8 @@ Las habilidades de estado pueden declarar una `slow` (`{ multiplier, duration }`
 
 También pueden curar al lanzador con `healSelf`, una fracción de la vida máxima (`0.35` = 35 %; `0` por defecto). Por defecto la curación se aplica al ejecutar la habilidad; con `healOnHit` solo se activa si la habilidad impacta en al menos un enemigo. Nunca supera la vida máxima y muestra un número flotante verde con prefijo `+`. Las áreas pueden repartir curación a otros objetivos con `applyHeal` desde su `aoeEffect`. `Recuperación` de Mew usa `healSelf: 0.35` para sí misma y un área autocentrada de `3,5 u` que cura el `25 %` a los aliados; se concentra `0,75 s` y se cancela si le golpean antes de completarla. `Come Sueños` de Gengar combina `healSelf: 0.15` con `healOnHit`: si el haz no alcanza a nadie, no cura. Las áreas también pueden revivir aliados caídos con `revive` desde su `aoeEffect`: `Deseo` de Celebi es el primer caso y devuelve a la vida con el `50 %` de la vida máxima a los compañeros cuyo marcador de KO esté dentro del radio.
 
+Las básicas melee pueden declarar una rampa de enfriamiento al repetirse: `.repeatCooldown({ step: 0.1, max: 0.5, resetAfter: 1.5 })` suma un `10 %` del cooldown base por uso consecutivo, hasta un `50 %`, y reinicia la racha al usar otra habilidad o tras `1,5 s` sin volver a usar esa misma básica. Sin esa declaración el cooldown es fijo; las habilidades 1-3 no la tienen por defecto. El HUD usa el cooldown real del último lanzamiento para que la barra no se llene antes de tiempo.
+
 ### Arquitectura y patrones
 
 El combate está separado por responsabilidades para que `game.ts` solo orqueste:

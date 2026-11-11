@@ -165,6 +165,17 @@ export interface SlowSpec {
   duration: number;
 }
 
+/**
+ * Rampa de enfriamiento al repetir la misma habilidad de forma consecutiva.
+ * `step` y `max` son fracciones del cooldown base; `resetAfter` son los
+ * segundos sin volver a usarla que reinician la racha.
+ */
+export interface RepeatCooldownSpec {
+  step: number;
+  max: number;
+  resetAfter: number;
+}
+
 export interface AbilityDef {
   /** Identificador único; se usa en `MOVESETS`. */
   id: string;
@@ -176,6 +187,11 @@ export interface AbilityDef {
   power: number;
   /** Enfriamiento en segundos. */
   cooldown: number;
+  /**
+   * Rampa opcional al repetir la habilidad sin alternar con otra. `null` deja
+   * el cooldown fijo. Las básicas melee la usan para desincentivar el spam.
+   */
+  repeatCooldown: RepeatCooldownSpec | null;
   /** Alcance en unidades de mundo (melee, proyectil, haz o centro del área). */
   range: number;
   /**
@@ -372,6 +388,7 @@ export const DEFAULT_ABILITY: Omit<
 > = {
   power: 0,
   cooldown: 1,
+  repeatCooldown: null,
   range: 1.5,
   radius: 0.5,
   halfAngle: 45,
@@ -414,6 +431,17 @@ export const DEFAULT_ABILITY: Omit<
   armorWindow: 'startup',
   blockMovementUntilEndAnimation: false,
   description: ''
+};
+
+/**
+ * Rampa por defecto de las básicas melee: +10 % por uso consecutivo, tope
+ * +50 % y reinicio tras 1,5 s sin repetirla. Cada habilidad puede declarar su
+ * propia configuración si necesita otro ritmo.
+ */
+const BASIC_MELEE_REPEAT_COOLDOWN: RepeatCooldownSpec = {
+  step: 0.1,
+  max: 0.5,
+  resetAfter: 1.5
 };
 
 /** Tiempo total de ocupación del lanzador (casteo completo). */
@@ -469,6 +497,16 @@ export class AbilityBuilder {
 
   cooldown(value: number): this {
     this.draft.cooldown = value;
+    return this;
+  }
+
+  /**
+   * Aumenta el cooldown al repetir la misma habilidad de forma consecutiva.
+   * `step` y `max` son fracciones del cooldown base; `resetAfter` son los
+   * segundos sin volver a usarla que reinician la racha.
+   */
+  repeatCooldown(spec: RepeatCooldownSpec): this {
+    this.draft.repeatCooldown = { ...spec };
     return this;
   }
 
@@ -953,6 +991,7 @@ registerAbility(
   ability('placaje', 'Placaje', 'Normal', 'physical', 'melee')
     .power(55)
     .cooldown(0.25)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(1.8)
     .radius(0.7)
     .halfAngle(50)
@@ -972,6 +1011,7 @@ registerAbility(
   ability('chispa', 'Chispa', 'Electric', 'physical', 'melee')
     .power(80)
     .cooldown(0.6)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
     .radius(0.7)
     .halfAngle(50)
@@ -1047,6 +1087,7 @@ registerAbility(
   ability('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', 'melee')
     .power(42)
     .cooldown(0.7)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
     .radius(0.7)
     .halfAngle(50)
@@ -1121,6 +1162,7 @@ registerAbility(
   ability('aranazo', 'Arañazo', 'Normal', 'physical', 'melee')
     .power(55)
     .cooldown(0.3)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(1.7)
     .radius(0.65)
     .halfAngle(45)
@@ -1307,6 +1349,7 @@ registerAbility(
   ability('garraMetal', 'Garra Metal', 'Steel', 'physical', 'melee')
     .power(45)
     .cooldown(0.5)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
     .radius(0.7)
     .halfAngle(45)
@@ -1451,6 +1494,7 @@ registerAbility(
   ability('telequinesis', 'Telequinesis', 'Psychic', 'special', 'melee')
     .power(45)
     .cooldown(0.6)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.5)
     .radius(0.8)
     .halfAngle(55)
@@ -1523,6 +1567,7 @@ registerAbility(
   ability('psicogolpe', 'Golpe Psíquico', 'Psychic', 'special', 'melee')
     .power(45)
     .cooldown(0.3)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.1)
     .radius(0.7)
     .halfAngle(55)
@@ -1607,6 +1652,7 @@ registerAbility(
   ability('ataqueAereo', 'Ataque Aéreo', 'Flying', 'physical', 'melee')
     .power(55)
     .cooldown(0.55)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
     .radius(0.8)
     .halfAngle(55)
@@ -1684,6 +1730,7 @@ registerAbility(
   ability('golpeAla', 'Golpe Ala', 'Flying', 'physical', 'melee')
     .power(55)
     .cooldown(0.55)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
     .radius(0.8)
     .halfAngle(55)
@@ -1765,6 +1812,7 @@ registerAbility(
   ability('picoTaladro', 'Pico Taladro', 'Flying', 'physical', 'melee')
     .power(60)
     .cooldown(0.6)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
     .radius(0.8)
     .halfAngle(55)
@@ -1828,6 +1876,7 @@ registerAbility(
   ability('golpeFuria', 'Golpe Furia', 'Bug', 'physical', 'melee')
     .power(45)
     .cooldown(0.4)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.1)
     .radius(0.75)
     .halfAngle(55)
@@ -1899,6 +1948,7 @@ registerAbility(
   ability('triturar', 'Triturar', 'Dark', 'physical', 'melee')
     .power(50)
     .cooldown(0.85)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
     .radius(0.8)
     .halfAngle(55)
@@ -1975,6 +2025,7 @@ registerAbility(
   ability('cuchillada', 'Cuchillada', 'Normal', 'physical', 'melee')
     .power(45)
     .cooldown(0.6)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
     .radius(0.85)
     .halfAngle(55)
@@ -2016,6 +2067,7 @@ registerAbility(
   ability('atadura', 'Atadura', 'Rock', 'physical', 'melee')
     .power(65)
     .cooldown(0.7)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.8)
     .radius(0.95)
     .halfAngle(65)
@@ -2288,6 +2340,7 @@ registerAbility(
   ability('golpeAlaHoOh', 'Golpe Ala', 'Flying', 'physical', 'melee')
     .power(55)
     .cooldown(0.55)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
     .radius(0.8)
     .halfAngle(55)
