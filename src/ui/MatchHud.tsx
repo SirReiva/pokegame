@@ -470,7 +470,9 @@ export function MatchHud({
                         compact ? 'text-8' : 'text-8.8'
                       }`}
                     >
-                      <TypeBadge type={playerStats.terrainType} />
+                      {playerStats.terrainType && (
+                        <TypeBadge type={playerStats.terrainType} />
+                      )}
                       {!compact && <span>{playerStats.terrainName}</span>}
                       <span
                         className={`whitespace-nowrap ${

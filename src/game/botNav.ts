@@ -12,13 +12,16 @@
 
 import { CONFIG } from './config';
 import {
+  TEAM_IDS,
   mapCols,
   mapHalfDepth,
   mapHalfWidth,
   mapRows,
   mapTileSize,
   onMountain,
-  terrainAtCell
+  terrainAtCell,
+  terrainTeam,
+  type Team
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
 import { terrainConcealment } from './vision';
@@ -59,6 +62,11 @@ export interface NavPathOptions {
   preferConcealment?: boolean;
   /** Áreas enemigas que conviene rodear. */
   hazards?: readonly NavHazard[];
+  /**
+   * Equipo del Pokémon que traza la ruta. Sus santuarios son transitables;
+   * los del resto se tratan como muros.
+   */
+  team?: Team;
 }
 
 /** Tope de expansiones de una sola búsqueda de A*. */
@@ -89,6 +97,8 @@ export class BotNavGrid {
   readonly halfZ: number;
 
   private readonly blocked: Uint8Array;
+  /** Equipo propietario por celda: 0 = público, 1-4 = índice en `TEAM_IDS`. */
+  private readonly teamOwners: Uint8Array;
   private readonly radius: number;
 
   // Buffers reutilizados por cada búsqueda de A*. Se reservan una sola vez y se
@@ -111,6 +121,7 @@ export class BotNavGrid {
   private cacheGoal = -1;
   private cacheTypeHash = 0;
   private cacheHazardHash = 0;
+  private cacheTeam: Team | null = null;
   private cachePreferConcealment = false;
   private cachePath: NavPoint[] | null = null;
   private cacheStatus: NavPathStatus = 'ok';
@@ -124,6 +135,7 @@ export class BotNavGrid {
     this.radius = CONFIG.player.radius + 0.08;
     const total = this.rows * this.cols;
     this.blocked = new Uint8Array(total);
+    this.teamOwners = new Uint8Array(total);
 
     this.gScore = new Float32Array(total);
     this.cameFrom = new Int32Array(total);
@@ -135,6 +147,7 @@ export class BotNavGrid {
     this.heapScore = new Float32Array(total);
 
     this.markDeepWater();
+    this.markTeamTerritories();
     for (const collider of colliders) this.markCollider(collider);
   }
 
@@ -148,9 +161,14 @@ export class BotNavGrid {
     return row * this.cols + col;
   }
 
-  isWalkable(row: number, col: number): boolean {
+  isWalkable(row: number, col: number, team?: Team): boolean {
     if (row < 0 || row >= this.rows || col < 0 || col >= this.cols) return false;
-    return this.blocked[this.index(row, col)] === 0;
+    const index = this.index(row, col);
+    if (this.blocked[index] !== 0) return false;
+    // Sin equipo explícito se asume un observador neutral: cualquier santuario
+    // ajeno (o todos, si no se conoce el equipo) bloquea el paso.
+    const owner = this.teamOwners[index];
+    return owner === 0 || (team !== undefined && TEAM_IDS[owner - 1] === team);
   }
 
   worldToCell(x: number, z: number): { row: number; col: number } {
@@ -172,8 +190,12 @@ export class BotNavGrid {
   }
 
   /** Celda transitable más cercana; la propia si ya lo es. */
-  nearestWalkable(row: number, col: number): { row: number; col: number } | null {
-    if (this.isWalkable(row, col)) return { row, col };
+  nearestWalkable(
+    row: number,
+    col: number,
+    team?: Team
+  ): { row: number; col: number } | null {
+    if (this.isWalkable(row, col, team)) return { row, col };
     const maxRing = Math.max(this.rows, this.cols);
     for (let ring = 1; ring <= maxRing; ring++) {
       for (let dr = -ring; dr <= ring; dr++) {
@@ -181,7 +203,7 @@ export class BotNavGrid {
           if (Math.abs(dr) !== ring && Math.abs(dc) !== ring) continue;
           const r = row + dr;
           const c = col + dc;
-          if (this.isWalkable(r, c)) return { row: r, col: c };
+          if (this.isWalkable(r, c, team)) return { row: r, col: c };
         }
       }
     }
@@ -203,8 +225,9 @@ export class BotNavGrid {
   ): NavPathResult {
     const startCell = this.worldToCell(sx, sz);
     const goalCell = this.worldToCell(gx, gz);
-    const start = this.nearestWalkable(startCell.row, startCell.col);
-    const goal = this.nearestWalkable(goalCell.row, goalCell.col);
+    const team = options.team;
+    const start = this.nearestWalkable(startCell.row, startCell.col, team);
+    const goal = this.nearestWalkable(goalCell.row, goalCell.col, team);
     if (!start || !goal) return { points: [], status: 'unreachable' };
 
     const startIndex = this.index(start.row, start.col);
@@ -228,6 +251,7 @@ export class BotNavGrid {
       this.cacheGoal === goalIndex &&
       this.cacheTypeHash === typeHash &&
       this.cacheHazardHash === hazardHash &&
+      this.cacheTeam === team &&
       this.cachePreferConcealment === preferConcealment
     ) {
       return {
@@ -279,10 +303,15 @@ export class BotNavGrid {
       for (const { dr, dc, cost } of NEIGHBOURS) {
         const nr = row + dr;
         const nc = col + dc;
-        if (!this.isWalkable(nr, nc)) continue;
+        if (!this.isWalkable(nr, nc, team)) continue;
         // Sin cortar esquinas en diagonal: ambos ortogonales deben ser libres.
         if (dr !== 0 && dc !== 0) {
-          if (!this.isWalkable(row, nc) || !this.isWalkable(nr, col)) continue;
+          if (
+            !this.isWalkable(row, nc, team) ||
+            !this.isWalkable(nr, col, team)
+          ) {
+            continue;
+          }
         }
         const nextIndex = this.index(nr, nc);
         this.ensureVisited(nextIndex);
@@ -320,6 +349,7 @@ export class BotNavGrid {
     this.cacheGoal = goalIndex;
     this.cacheTypeHash = typeHash;
     this.cacheHazardHash = hazardHash;
+    this.cacheTeam = team ?? null;
     this.cachePreferConcealment = preferConcealment;
     this.cachePath = result.slice();
     this.cacheStatus = status;
@@ -475,7 +505,8 @@ export class BotNavGrid {
     az: number,
     bx: number,
     bz: number,
-    hazards?: readonly NavHazard[]
+    hazards?: readonly NavHazard[],
+    team?: Team
   ): boolean {
     const distance = Math.hypot(bx - ax, bz - az);
     const steps = Math.max(1, Math.ceil(distance / 0.28));
@@ -493,7 +524,12 @@ export class BotNavGrid {
         0,
         Math.min(this.rows - 1, Math.floor((z + this.halfZ) / this.tileSize))
       );
-      if (this.blocked[this.index(row, col)] !== 0) return false;
+      const index = this.index(row, col);
+      if (this.blocked[index] !== 0) return false;
+      const owner = this.teamOwners[index];
+      if (owner !== 0 && (team === undefined || TEAM_IDS[owner - 1] !== team)) {
+        return false;
+      }
       if (hazards && hazards.length > 0) {
         for (const hazard of hazards) {
           if (Math.hypot(x - hazard.x, z - hazard.z) <= hazard.radius) {
@@ -559,7 +595,8 @@ export class BotNavGrid {
           anchor.z,
           points[next].x,
           points[next].z,
-          options.hazards
+          options.hazards,
+          options.team
         )
       ) {
         next--;
@@ -577,6 +614,21 @@ export class BotNavGrid {
         if (terrainAtCell(row, col) === 'waterHigh') {
           this.blocked[this.index(row, col)] = 1;
         }
+      }
+    }
+  }
+
+  /**
+   * Guarda el equipo propietario de cada santuario. No los marca como
+   * bloqueados porque la rejilla es compartida por todos los bots: el filtro se
+   * aplica al consultar con el equipo de cada uno.
+   */
+  private markTeamTerritories(): void {
+    for (let row = 0; row < this.rows; row++) {
+      for (let col = 0; col < this.cols; col++) {
+        const team = terrainTeam(terrainAtCell(row, col));
+        if (team === null) continue;
+        this.teamOwners[this.index(row, col)] = TEAM_IDS.indexOf(team) + 1;
       }
     }
   }

@@ -10,6 +10,16 @@
 
 import type { PickupSpawn } from './items';
 
+/** Equipos admitidos. Cada mapa activa entre dos y cuatro de ellos. */
+export type Team = 'red' | 'blue' | 'yellow' | 'green';
+
+/** Todos los equipos posibles, en el orden de presentación de la interfaz. */
+export const TEAM_IDS: readonly Team[] = ['red', 'blue', 'yellow', 'green'];
+
+export function isTeamId(value: unknown): value is Team {
+  return typeof value === 'string' && (TEAM_IDS as readonly string[]).includes(value);
+}
+
 export type TerrainId =
   | 'jungle'
   | 'lane'
@@ -26,13 +36,25 @@ export type TerrainId =
   | 'ghost'
   | 'fairy'
   | 'desert'
-  | 'park';
+  | 'park'
+  | 'teamRed'
+  | 'teamBlue'
+  | 'teamYellow'
+  | 'teamGreen';
 
 export interface TerrainDefinition {
   /** Nombre visible del terreno. */
   name: string;
-  /** Tipo Pokémon asociado (misma clave que el manifiesto de sprites). */
+  /**
+   * Tipo Pokémon asociado (misma clave que el manifiesto de sprites). Vacío en
+   * los terrenos sin tipo, como los santuarios de equipo.
+   */
   type: string;
+  /**
+   * Equipo propietario. Si existe, solo ese equipo puede entrar en las celdas;
+   * el resto las trata como un obstáculo, igual que las aguas profundas.
+   */
+  team?: Team;
 }
 
 export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
@@ -51,7 +73,11 @@ export const TERRAINS: Record<TerrainId, TerrainDefinition> = {
   ghost: { name: 'Bosque umbrío', type: 'Ghost' },
   fairy: { name: 'Claro feérico', type: 'Fairy' },
   desert: { name: 'Desierto', type: 'Ground' },
-  park: { name: 'Parque', type: 'Fighting' }
+  park: { name: 'Parque', type: 'Fighting' },
+  teamRed: { name: 'Santuario rojo', type: '', team: 'red' },
+  teamBlue: { name: 'Santuario azul', type: '', team: 'blue' },
+  teamYellow: { name: 'Santuario amarillo', type: '', team: 'yellow' },
+  teamGreen: { name: 'Santuario verde', type: '', team: 'green' }
 };
 
 export const TERRAIN_IDS = Object.keys(TERRAINS) as TerrainId[];
@@ -64,14 +90,14 @@ export function isTerrainId(value: unknown): value is TerrainId {
   return typeof value === 'string' && TERRAIN_INDEX.has(value as TerrainId);
 }
 
-/** Equipos admitidos. Cada mapa activa entre dos y cuatro de ellos. */
-export type Team = 'red' | 'blue' | 'yellow' | 'green';
+/** Equipo que controla un terreno exclusivo, o `null` si es público. */
+export function terrainTeam(terrain: TerrainId): Team | null {
+  return TERRAINS[terrain].team ?? null;
+}
 
-/** Todos los equipos posibles, en el orden de presentación de la interfaz. */
-export const TEAM_IDS: readonly Team[] = ['red', 'blue', 'yellow', 'green'];
-
-export function isTeamId(value: unknown): value is Team {
-  return typeof value === 'string' && (TEAM_IDS as readonly string[]).includes(value);
+/** Verdadero si el terreno pertenece a un equipo y no tiene tipo Pokémon. */
+export function isTeamTerrain(terrain: TerrainId): boolean {
+  return TERRAINS[terrain].team !== undefined;
 }
 
 export interface BaseZone {
@@ -312,10 +338,16 @@ export function onMountain(x: number, z: number): boolean {
 }
 
 /**
- * Empuja un círculo fuera de las celdas de agua profunda. Devuelve la posición
- * corregida; el llamador decide si el Pokémon puede cruzarla según su tipo.
+ * Empuja un círculo fuera de las celdas que bloquea un predicado. Devuelve la
+ * posición corregida; el llamador decide qué celdas bloquean según el tipo o el
+ * equipo del Pokémon.
  */
-export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
+function resolveBlockedCells(
+  x: number,
+  z: number,
+  radius: number,
+  blocks: (row: number, col: number) => boolean
+): Point2 {
   if (!activeMap) return [x, z];
   let px = x;
   let pz = z;
@@ -341,7 +373,7 @@ export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
 
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
-        if (terrainAtCell(row, col) !== 'waterHigh') continue;
+        if (!blocks(row, col)) continue;
 
         const cellMinX = col * activeTileSize - activeHalfX;
         const cellMaxX = cellMinX + activeTileSize;
@@ -377,6 +409,37 @@ export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
   }
 
   return [px, pz];
+}
+
+/**
+ * Empuja un círculo fuera de las celdas de agua profunda. Devuelve la posición
+ * corregida; el llamador decide si el Pokémon puede cruzarla según su tipo.
+ */
+export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
+  return resolveBlockedCells(
+    x,
+    z,
+    radius,
+    (row, col) => terrainAtCell(row, col) === 'waterHigh'
+  );
+}
+
+/**
+ * Empuja un círculo fuera de los santuarios de equipo ajenos. Las celdas del
+ * propio equipo son transitables; las de cualquier otro equipo se comportan
+ * como un muro. Se llama después de resolver el agua profunda para que ambos
+ * bloqueos compartan las mismas iteraciones de empuje.
+ */
+export function resolveTeamTerrain(
+  x: number,
+  z: number,
+  radius: number,
+  team: Team
+): Point2 {
+  return resolveBlockedCells(x, z, radius, (row, col) => {
+    const owner = terrainTeam(terrainAtCell(row, col));
+    return owner !== null && owner !== team;
+  });
 }
 
 export function terrainAtCell(row: number, col: number): TerrainId {

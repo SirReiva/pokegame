@@ -269,6 +269,34 @@ const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
     accent: "#5a9c3d",
     accent2: "#9ccf6f",
   },
+  teamRed: {
+    base: "#8f343b",
+    light: "#a9444b",
+    dark: "#74262d",
+    accent: "#ff9a9e",
+    accent2: "#5c1b21",
+  },
+  teamBlue: {
+    base: "#315d8f",
+    light: "#42739f",
+    dark: "#24496f",
+    accent: "#9cc8ff",
+    accent2: "#193755",
+  },
+  teamYellow: {
+    base: "#8f7429",
+    light: "#a98a34",
+    dark: "#705b1d",
+    accent: "#ffe89a",
+    accent2: "#574614",
+  },
+  teamGreen: {
+    base: "#337544",
+    light: "#428c55",
+    dark: "#275d34",
+    accent: "#a8f0b9",
+    accent2: "#1c4626",
+  },
 };
 
 /**
@@ -861,6 +889,23 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
               tuftWidth,
               tuftHeight,
             );
+          }
+          ctx.globalAlpha = 1;
+          break;
+        }
+        case "teamRed":
+        case "teamBlue":
+        case "teamYellow":
+        case "teamGreen": {
+          // Santuario de equipo: franjas verticales claras sobre el color del
+          // equipo. Se alinean con el mundo para que celdas contiguas formen
+          // una sola trama y el territorio se lea como una zona protegida.
+          ctx.fillStyle = palette.accent;
+          ctx.globalAlpha = 0.3;
+          const stripe = Math.max(1, Math.round(pixelsPerUnit * 0.07));
+          const gap = Math.max(3, stripe * 4);
+          for (let px = Math.ceil(x0 / gap) * gap; px < x1; px += gap) {
+            ctx.fillRect(px, y0, Math.min(stripe, x1 - px), y1 - y0);
           }
           ctx.globalAlpha = 1;
           break;

@@ -51,7 +51,13 @@ import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import type { MatchPlayerState } from './matchState';
 import { createTeamRecord, otherTeams, type BotDifficulty } from './multiplayer';
 import { maxHitRadius } from './roster';
-import { respawnsForTeam, terrainAt, type Team } from './terrain';
+import {
+  respawnsForTeam,
+  terrainAt,
+  terrainAtCell,
+  terrainTeam,
+  type Team
+} from './terrain';
 import { typeEffectiveness } from './typeChart';
 import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
 import type { Collider } from './world';
@@ -378,6 +384,19 @@ const RETREAT_COVER_SECONDS = 3;
 const RETREAT_ARRIVE_DISTANCE = 2.5;
 /** Espera antes de poder volver a huir tras llegar a la base sin curación. */
 const RETREAT_COOLDOWN_SECONDS = 4;
+/**
+ * Radio de mundo en el que se busca un santuario propio al iniciar una huida.
+ * Si no hay ninguno cerca, se mantiene la base como destino de siempre.
+ */
+const SANCTUARY_SEARCH_RADIUS = 32;
+/** Bono al elegir un punto de regeneración dentro del propio santuario. */
+const SANCTUARY_REGEN_BONUS = 5;
+/**
+ * Penalización al elegir como objetivo a un rival refugiado en su santuario.
+ * Se aplica cuando está fuera del alcance útil: perseguirlo solo lleva al bot
+ * a empujar contra el borde sin poder golpearlo.
+ */
+const SANCTUARY_TARGET_PENALTY = 6;
 
 /** Umbrales dinámicos de retirada según el intercambio y el número de vivos. */
 const RETREAT_EXCHANGE_LOSS = 0.8;
@@ -737,6 +756,8 @@ export class BotController {
   /** Punto de cobertura intermedio elegido para romper la línea de visión. */
   private retreatCover: Vec2 | null = null;
   private retreatCoverUntil = 0;
+  /** Celda propia de santuario a la que se retira, o `null` si no hay cerca. */
+  private retreatSanctuary: Vec2 | null = null;
   /** `true` mientras espera oculto para curarse con Regeneración. */
   private recovering = false;
   private regenUntil = 0;
@@ -944,6 +965,7 @@ export class BotController {
     this.retreatCooldownUntil = 0;
     this.retreatCover = null;
     this.retreatCoverUntil = 0;
+    this.retreatSanctuary = null;
     this.recovering = false;
     this.regenUntil = 0;
     this.regenCooldownUntil = 0;
@@ -1223,7 +1245,14 @@ export class BotController {
     const nearAlly = this.nearestAllyDistance(self, players) <= ORBIT_ALLY_RADIUS;
     if (
       !nearAlly ||
-      !this.nav.lineClear(self.x, self.z, this.goal.x, this.goal.z)
+      !this.nav.lineClear(
+        self.x,
+        self.z,
+        this.goal.x,
+        this.goal.z,
+        undefined,
+        self.team
+      )
     ) {
       this.resetProgress();
       return false;
@@ -1305,9 +1334,18 @@ export class BotController {
       const offense = this.bestDamageMultiplier(self, enemy);
       const defense = this.bestDamageMultiplier(enemy, self);
       const typeWeight = this.tuning.matchupWeight;
+      const sheltered =
+        terrainTeam(terrainAt(enemy.x, enemy.z)) === enemy.team;
       // Los remates valen más que perseguir al tanque lleno. El pequeño sesgo
       // por distancia evita que dos bots crucen el mapa por el mismo herido.
       let score = distance + hpFraction * 7 - (1 - hpFraction) * 4;
+      // Un rival dentro de su propio santuario no se puede perseguir cuerpo a
+      // cuerpo. Si está fuera del alcance útil, se le resta prioridad: el bot
+      // busca otra pelea en vez de empujar contra el borde del santuario.
+      if (sheltered) {
+        const reach = this.maxUsefulRange(this.selectedDef(self), enemy);
+        if (distance > reach + 0.5) score += SANCTUARY_TARGET_PENALTY;
+      }
       if (this.target === enemy) score -= 1.5;
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
       // visible, en vez de repartirse al azar por el mapa. Un rival inmune a
@@ -2306,6 +2344,10 @@ export class BotController {
       !(atBase && !canRecover)
     ) {
       this.retreat = true;
+      // El santuario propio es la primera opción: una vez dentro, los rivales
+      // cuerpo a cuerpo no pueden seguirlo. Si no hay ninguno cerca, se usará
+      // la cobertura o la base como hasta ahora.
+      this.retreatSanctuary = this.nearestOwnSanctuaryPoint(self);
       this.retreatUntil = this.clock + this.retreatTime(self, pickup);
       this.retreatCover = this.pickRetreatCover(self, colliders);
       this.retreatCoverUntil = this.clock + RETREAT_COVER_SECONDS;
@@ -2332,9 +2374,29 @@ export class BotController {
           this.retreatCover = null;
         }
       }
-      if (pickup) {
+      const insideOwnSanctuary =
+        terrainTeam(terrainAt(self.x, self.z)) === self.team;
+      // Ya refugiado, no cruza el mapa por una poción exterior: primero
+      // conserva la ventaja del santuario. Solo sale si la poción también está
+      // dentro de su territorio.
+      const pickupSafe =
+        pickup !== null &&
+        (!insideOwnSanctuary ||
+          terrainTeam(terrainAt(pickup.x, pickup.z)) === self.team);
+      if (pickup && pickupSafe) {
         this.claimPickup(self, pickup);
         this.setGoal(pickup, pickup);
+      } else if (insideOwnSanctuary) {
+        // Ya está a salvo del cuerpo a cuerpo: no abandona el santuario para
+        // esconderse en una cobertura peor. Si su base también está dentro,
+        // se acerca a ella; si no, mantiene la posición protegida.
+        const spawnInSanctuary =
+          terrainTeam(terrainAt(self.spawn.x, self.spawn.z)) === self.team;
+        this.setGoal(
+          spawnInSanctuary ? self.spawn : { x: self.x, z: self.z }
+        );
+      } else if (this.retreatSanctuary) {
+        this.setGoal(this.retreatSanctuary);
       } else if (cover) {
         this.setGoal(cover);
       } else {
@@ -2418,6 +2480,7 @@ export class BotController {
     this.retreat = false;
     this.retreatCover = null;
     this.retreatCoverUntil = 0;
+    this.retreatSanctuary = null;
     if (cooldown) this.retreatCooldownUntil = this.clock + RETREAT_COOLDOWN_SECONDS;
     this.lastSeen = null;
     this.patrolTimer = 0;
@@ -2629,20 +2692,22 @@ export class BotController {
   }
 
   /**
-   * Duración de la huida según el trayecto real hasta la base o la poción. La
-   * base no cura sola, pero el tiempo se calcula igual: si no hay recursos, el
-   * bot dejará de huir al llegar y volverá a buscar una pelea favorable.
+   * Duración de la huida según el trayecto real hasta la poción, el santuario
+   * propio o la base. La base no cura sola, pero el tiempo se calcula igual: si
+   * no hay recursos, el bot dejará de huir al llegar y volverá a buscar una
+   * pelea favorable.
    */
   private retreatTime(
     self: MatchPlayerState,
     pickup: PickupSpawn | null
   ): number {
-    const goal = pickup ?? self.spawn;
+    const goal = pickup ?? this.retreatSanctuary ?? self.spawn;
     let distance = Math.hypot(goal.x - self.x, goal.z - self.z);
     const route = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
       types: self.types,
       preferConcealment: true,
-      hazards: this.navHazards(self)
+      hazards: this.navHazards(self),
+      team: self.team
     });
     if (route.status === 'ok' && route.points.length > 0) {
       let length = 0;
@@ -2658,6 +2723,51 @@ export class BotController {
       RETREAT_MIN_SECONDS,
       RETREAT_MAX_SECONDS
     );
+  }
+
+  /**
+   * Celda transitable del santuario propio más cercana a la posición actual.
+   * Devuelve `null` si el bot ya está dentro o si no hay ningún santuario a
+   * menos de `SANCTUARY_SEARCH_RADIUS` unidades de mundo. La búsqueda va por
+   * anillos para no recorrer el mapa entero en cada huida.
+   */
+  private nearestOwnSanctuaryPoint(self: MatchPlayerState): Vec2 | null {
+    if (terrainTeam(terrainAt(self.x, self.z)) === self.team) return null;
+    const start = this.nav.worldToCell(self.x, self.z);
+    const maxRing = Math.min(
+      Math.max(this.nav.rows, this.nav.cols),
+      Math.max(1, Math.ceil(SANCTUARY_SEARCH_RADIUS / this.nav.tileSize))
+    );
+
+    for (let ring = 1; ring <= maxRing; ring++) {
+      let best: Vec2 | null = null;
+      let bestDistance = Infinity;
+      for (let dr = -ring; dr <= ring; dr++) {
+        for (let dc = -ring; dc <= ring; dc++) {
+          if (Math.abs(dr) !== ring && Math.abs(dc) !== ring) continue;
+          const row = start.row + dr;
+          const col = start.col + dc;
+          if (
+            row < 0 ||
+            col < 0 ||
+            row >= this.nav.rows ||
+            col >= this.nav.cols
+          ) {
+            continue;
+          }
+          if (terrainTeam(terrainAtCell(row, col)) !== self.team) continue;
+          if (!this.nav.isWalkable(row, col, self.team)) continue;
+          const point = this.nav.cellCenter(row, col);
+          const distance = Math.hypot(point.x - self.x, point.z - self.z);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = point;
+          }
+        }
+      }
+      if (best) return best;
+    }
+    return null;
   }
 
   /**
@@ -2687,12 +2797,23 @@ export class BotController {
       const x = self.x + Math.cos(angle) * distance;
       const z = self.z + Math.sin(angle) * distance;
       const cell = this.nav.worldToCell(x, z);
-      if (!this.nav.isWalkable(cell.row, cell.col)) continue;
+      if (!this.nav.isWalkable(cell.row, cell.col, self.team)) continue;
 
       const point = this.nav.cellCenter(cell.row, cell.col);
       const realDistance = Math.hypot(point.x - self.x, point.z - self.z);
       if (realDistance < 1 || realDistance > RETREAT_COVER_RADIUS) continue;
-      if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) continue;
+      if (
+        !this.nav.lineClear(
+          self.x,
+          self.z,
+          point.x,
+          point.z,
+          undefined,
+          self.team
+        )
+      ) {
+        continue;
+      }
       if (this.hazardPathBlocked(self, point)) continue;
 
       const concealment = terrainConcealment(
@@ -2857,7 +2978,7 @@ export class BotController {
       const x = self.x + Math.cos(angle) * distance;
       const z = self.z + Math.sin(angle) * distance;
       const cell = this.nav.worldToCell(x, z);
-      if (!this.nav.isWalkable(cell.row, cell.col)) continue;
+      if (!this.nav.isWalkable(cell.row, cell.col, self.team)) continue;
 
       const point = this.nav.cellCenter(cell.row, cell.col);
       const realDistance = Math.hypot(point.x - self.x, point.z - self.z);
@@ -2876,8 +2997,13 @@ export class BotController {
         );
       }
 
-      // Preferir cobertura, no alejarse demasiado y mantener distancia.
+      // Preferir cobertura, no alejarse demasiado y mantener distancia. Un
+      // punto dentro del santuario propio recibe un bono: aunque no oculte,
+      // los rivales cuerpo a cuerpo no pueden alcanzarlo mientras regenera.
+      const ownSanctuary =
+        terrainTeam(terrainAt(point.x, point.z)) === self.team;
       let score = concealment * 3 - realDistance * 0.12 + Math.random() * 0.35;
+      if (ownSanctuary) score += SANCTUARY_REGEN_BONUS;
       if (nearestEnemy < Infinity) score += Math.min(nearestEnemy, 10) * 0.08;
       if (score > bestScore) {
         bestScore = score;
@@ -2895,8 +3021,19 @@ export class BotController {
     colliders: readonly Collider[]
   ): boolean {
     const cell = this.nav.worldToCell(point.x, point.z);
-    if (!this.nav.isWalkable(cell.row, cell.col)) return false;
-    if (!this.nav.lineClear(self.x, self.z, point.x, point.z)) return false;
+    if (!this.nav.isWalkable(cell.row, cell.col, self.team)) return false;
+    if (
+      !this.nav.lineClear(
+        self.x,
+        self.z,
+        point.x,
+        point.z,
+        undefined,
+        self.team
+      )
+    ) {
+      return false;
+    }
     // Tampoco vale esconderse dentro de un charco o cruzar uno camino del
     // punto: los ticks del área seguirían haciendo daño aunque no hubiera nadie
     // a la vista.
@@ -2911,8 +3048,15 @@ export class BotController {
     ).value;
 
     // Sin rivales conocidos, exige algo de cobertura para no pasearse por una
-    // zona completamente abierta.
-    if (enemies.length === 0 && concealment < REGEN_MIN_CONCEALMENT) {
+    // zona completamente abierta. El santuario propio es la excepción: es un
+    // refugio seguro aunque su suelo no oculte.
+    const ownSanctuary =
+      terrainTeam(terrainAt(point.x, point.z)) === self.team;
+    if (
+      enemies.length === 0 &&
+      !ownSanctuary &&
+      concealment < REGEN_MIN_CONCEALMENT
+    ) {
       return false;
     }
 
@@ -3156,7 +3300,7 @@ export class BotController {
     for (let attempt = 0; attempt < 40; attempt++) {
       const row = Math.floor(Math.random() * this.nav.rows);
       const col = Math.floor(Math.random() * this.nav.cols);
-      if (!this.nav.isWalkable(row, col)) continue;
+      if (!this.nav.isWalkable(row, col, self.team)) continue;
 
       const point = this.nav.cellCenter(row, col);
       const distanceFromSelf = Math.hypot(point.x - self.x, point.z - self.z);
@@ -4848,6 +4992,26 @@ export class BotController {
     facingError: number,
     dt: number
   ): Vec2 {
+    // Un rival refugiado en su santuario no se puede perseguir: el bot se
+    // acerca al borde exterior y, si no llega con su alcance, orbita desde
+    // fuera en vez de empujar contra la barrera. Así sigue amenazando sin
+    // regalar el cuerpo a cuerpo y sin quedarse atascado.
+    if (terrainTeam(terrainAt(target.x, target.z)) === target.team) {
+      const cell = this.nav.worldToCell(target.x, target.z);
+      const standCell = this.nav.nearestWalkable(
+        cell.row,
+        cell.col,
+        self.team
+      );
+      if (standCell) {
+        const stand = this.nav.cellCenter(standCell.row, standCell.col);
+        const standDistance = Math.hypot(stand.x - self.x, stand.z - self.z);
+        const reach = this.maxUsefulRange(def, target);
+        if (standDistance > 0.65) return this.moveTowards(self, stand, dt);
+        if (distance > reach + 0.5) return this.orbit(target, self);
+      }
+    }
+
     const threat = this.enemyThreatProfile(target);
     let preferred = this.adjustPreferredRange(
       self,
@@ -5260,7 +5424,14 @@ export class BotController {
       if (
         !directBlockedByHazard &&
         (directPickup ||
-          this.nav.lineClear(self.x, self.z, goal.x, goal.z))
+          this.nav.lineClear(
+            self.x,
+            self.z,
+            goal.x,
+            goal.z,
+            undefined,
+            self.team
+          ))
       ) {
         this.path = [];
         this.pathTimer = 0;
@@ -5270,7 +5441,14 @@ export class BotController {
     }
     if (
       !directBlockedByHazard &&
-      this.nav.lineClear(self.x, self.z, goal.x, goal.z)
+      this.nav.lineClear(
+        self.x,
+        self.z,
+        goal.x,
+        goal.z,
+        undefined,
+        self.team
+      )
     ) {
       this.path = [];
       this.pathTimer = 0;
@@ -5286,7 +5464,8 @@ export class BotController {
       const result = this.nav.findPath(self.x, self.z, goal.x, goal.z, {
         types: self.types,
         preferConcealment: this.retreat || this.recovering,
-        hazards: this.navHazards(self)
+        hazards: this.navHazards(self),
+        team: self.team
       });
       this.path = result.points;
       this.pathGoal = { ...goal };
@@ -5499,7 +5678,9 @@ export class BotController {
       self.x,
       self.z,
       self.x + dx * 1.4,
-      self.z + dz * 1.4
+      self.z + dz * 1.4,
+      undefined,
+      self.team
     );
   }
 

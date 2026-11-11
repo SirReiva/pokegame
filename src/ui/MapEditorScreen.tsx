@@ -1603,7 +1603,11 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                 <button
                   key={id}
                   type="button"
-                  title={`${TERRAINS[id].name} · ${TERRAINS[id].type}`}
+                  title={
+                    TERRAINS[id].type
+                      ? `${TERRAINS[id].name} · ${TERRAINS[id].type}`
+                      : `${TERRAINS[id].name} · sin tipo`
+                  }
                   className={`flex w-full cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-left transition-colors ${
                     terrain === id
                       ? 'border-accent/70 bg-accent/10'
@@ -1618,7 +1622,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
                   <span className="min-w-0 flex-1 truncate text-xs text-steel-200">
                     {TERRAINS[id].name}
                   </span>
-                  <TypeBadge type={TERRAINS[id].type} />
+                  {TERRAINS[id].type && (
+                    <TypeBadge type={TERRAINS[id].type} />
+                  )}
                   <span className="w-8 text-right font-mono text-9.28 tabular-nums text-steel-800">
                     {counts[id]}
                   </span>

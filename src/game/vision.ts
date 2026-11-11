@@ -81,7 +81,12 @@ export const TERRAIN_CONCEALMENT: Record<TerrainId, number> = {
   ghost: 0.4,
   fairy: 0.26,
   desert: 0.14,
-  park: 0.05
+  park: 0.05,
+  // Los santuarios de equipo son suelo abierto: no ocultan.
+  teamRed: 0,
+  teamBlue: 0,
+  teamYellow: 0,
+  teamGreen: 0
 };
 
 /** Cuánto mejora o empeora la ocultación según la relación tipo-terreno. */

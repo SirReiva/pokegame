@@ -155,6 +155,7 @@ import {
   TERRAINS,
   getActiveMap,
   resolveDeepWater,
+  resolveTeamTerrain,
   setActiveMap,
   terrainAt,
   type GameMap,
@@ -1158,7 +1159,7 @@ export class Game {
       // si un collider o el agua profunda invaden la base, la primera copia y
       // la cámara deben nacer ya en una posición válida.
       const resolvedSpawn = this.resolvePosition(
-        { types: asset.entry.types },
+        { types: asset.entry.types, team: config.team },
         spawn.x,
         spawn.z
       );
@@ -5129,7 +5130,7 @@ export class Game {
   }
 
   private resolvePosition(
-    self: Pick<MatchPlayerState, 'types'>,
+    self: Pick<MatchPlayerState, 'types' | 'team'>,
     x: number,
     z: number
   ): { x: number; z: number } {
@@ -5166,6 +5167,15 @@ export class Game {
           pz = resolved[1];
           pushed = true;
         }
+      }
+
+      // Santuarios de equipo: solo los Pokémon del equipo propietario pueden
+      // pisarlos. El resto los trata como un muro infranqueable.
+      const resolvedTeam = resolveTeamTerrain(px, pz, radius, self.team);
+      if (resolvedTeam[0] !== px || resolvedTeam[1] !== pz) {
+        px = resolvedTeam[0];
+        pz = resolvedTeam[1];
+        pushed = true;
       }
 
       // Colisión entre jugadores vivos; un KO no bloquea el paso.

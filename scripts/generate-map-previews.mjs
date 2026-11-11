@@ -41,7 +41,11 @@ const TERRAIN_COLORS = {
   ghost: '#3d3a4c',
   fairy: '#8fbf6b',
   desert: '#d9b66c',
-  park: '#b04b3d'
+  park: '#b04b3d',
+  teamRed: '#8f343b',
+  teamBlue: '#315d8f',
+  teamYellow: '#8f7429',
+  teamGreen: '#337544'
 };
 
 const TEAM_COLORS = {

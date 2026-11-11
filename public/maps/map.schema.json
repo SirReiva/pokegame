@@ -85,7 +85,11 @@
             "ghost",
             "fairy",
             "desert",
-            "park"
+            "park",
+            "teamRed",
+            "teamBlue",
+            "teamYellow",
+            "teamGreen"
           ]
         }
       }

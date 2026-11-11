@@ -57,6 +57,7 @@ export function terrainTypeRelation(
   pokemonTypes: readonly string[]
 ): TerrainRelation {
   const terrainType = TERRAINS[terrain].type;
+  if (!terrainType) return { terrainType, reason: 'neutral' };
   if (pokemonTypes.includes(terrainType)) {
     return { terrainType, reason: 'home' };
   }
