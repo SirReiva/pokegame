@@ -10,6 +10,7 @@
 
 import * as pc from 'playcanvas';
 import { DEG } from './config';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { setTextureSource } from './textures';
 
 /** Resolución de la barra de vida; mantiene la proporción (≈ 9:1). */
@@ -71,6 +72,18 @@ function createQuadMesh(device: pc.GraphicsDevice): pc.Mesh {
   return mesh;
 }
 
+/**
+ * Marca el quad para que la niebla de guerra no lo tiña. El Pokémon ya escribe
+ * esténcil 1 (ver `sprite.ts`), pero la barra es una entidad aparte: sin esto
+ * se oscurece con la sombra del suelo que queda detrás, aunque el Pokémon y la
+ * propia barra estén a la vista.
+ */
+function excludeFromFog(instance: pc.MeshInstance, device: pc.GraphicsDevice): void {
+  if (!device.supportsStencil) return;
+  instance.stencilFront = FOG_EXCLUDED_STENCIL;
+  instance.stencilBack = FOG_EXCLUDED_STENCIL;
+}
+
 function createTexture(
   device: pc.GraphicsDevice,
   name: string,
@@ -107,7 +120,10 @@ function createMaterial(texture: pc.Texture): pc.StandardMaterial {
   material.opacityMap = texture;
   material.opacityMapChannel = 'a';
   material.opacity = 1;
-  material.alphaTest = 0;
+  // Recorta los píxeles transparentes del canvas: con `alphaTest` en 0 el quad
+  // entero escribiría esténcil —incluidas las esquinas redondeadas del
+  // distintivo— y la niebla dejaría un hueco rectangular a su alrededor.
+  material.alphaTest = 0.05;
   material.blendType = pc.BLEND_NORMAL;
   material.depthWrite = false;
   // Debe leerse aunque el Pokémon esté pegado a un árbol o al agua.
@@ -173,6 +189,7 @@ export class HealthBar {
   private level = 1;
 
   constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
+    const device = app.graphicsDevice;
     this.mesh = createQuadMesh(app.graphicsDevice);
 
     const barCanvas = document.createElement('canvas');
@@ -242,6 +259,7 @@ export class HealthBar {
     barRender.receiveShadows = false;
     const barInstance = new pc.MeshInstance(this.mesh, this.barMaterial);
     barInstance.drawOrder = DRAW_ORDER;
+    excludeFromFog(barInstance, device);
     barRender.meshInstances = [barInstance];
     barRoot.setLocalScale(options.width, options.height, 1);
     this.root.addChild(barRoot);
@@ -259,6 +277,7 @@ export class HealthBar {
     badgeRender.receiveShadows = false;
     const badgeInstance = new pc.MeshInstance(this.mesh, this.badgeMaterial);
     badgeInstance.drawOrder = DRAW_ORDER;
+    excludeFromFog(badgeInstance, device);
     badgeRender.meshInstances = [badgeInstance];
     this.badgeRoot.setLocalScale(badgeSize, badgeSize, 1);
     this.badgeRoot.setLocalPosition(
@@ -280,6 +299,7 @@ export class HealthBar {
     xpRender.receiveShadows = false;
     const xpInstance = new pc.MeshInstance(this.mesh, this.xpMaterial);
     xpInstance.drawOrder = DRAW_ORDER;
+    excludeFromFog(xpInstance, device);
     xpRender.meshInstances = [xpInstance];
     xpRoot.setLocalScale(xpWidth, xpHeight, 1);
     xpRoot.setLocalPosition(0, -xpGap - xpHeight, 0);
