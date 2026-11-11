@@ -57,6 +57,16 @@ import {
 } from './effectBatch';
 import { createDustCanvas, createFlameCanvas, createFrostCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from './textures';
 
+/**
+ * Altura de la pared vertical de los telegraphs de área y de haz. Es baja a
+ * propósito: da volumen al aviso sin tapar a los Pokémon. La pared se apoya en
+ * el borde exacto de la zona de impacto.
+ */
+const TELEGRAPH_WALL_HEIGHT = 0.75;
+
+/** Opacidad de la pared: suficiente para leerla sin bloquear la vista. */
+const TELEGRAPH_WALL_OPACITY = 0.42;
+
 /** Opacidad base del arco melee según el estilo de impacto. */
 const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   poison: 0.38,
@@ -366,6 +376,51 @@ function createArcBandMesh(
   mesh.setIndices(indices);
   mesh.update();
   return { mesh, positions };
+}
+
+/**
+ * Pared vertical continua a partir de una polilínea en el plano XZ. La base
+ * queda en `y = 0` y la malla se extiende hasta `y = 1`; el llamador escala la
+ * altura con el eje Y. Se usa en los telegraphs de área y de haz para que el
+ * aviso tenga volumen y se lea desde cualquier ángulo de cámara.
+ */
+function createWallMesh(
+  device: pc.GraphicsDevice,
+  points: ReadonlyArray<readonly [number, number]>,
+  closed: boolean
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const segments = closed ? points.length : points.length - 1;
+
+  for (let i = 0; i < segments; i++) {
+    const [ax, az] = points[i];
+    const [bx, bz] = points[(i + 1) % points.length];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.0001) continue;
+
+    // Normal horizontal del paño. La cara se dibuja por ambos lados
+    // (`CULLFACE_NONE`), así que su signo no afecta al render.
+    const nx = dz / length;
+    const nz = -dx / length;
+    const base = positions.length / 3;
+    positions.push(ax, 0, az, bx, 0, bz, bx, 1, bz, ax, 1, az);
+    for (let vertex = 0; vertex < 4; vertex++) normals.push(nx, 0, nz);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
 }
 
 /**
@@ -1527,6 +1582,35 @@ export class CombatFx {
     material.emissiveIntensity = 1;
     material.opacity = opacity;
     material.blendType = pc.BLEND_ADDITIVEALPHA;
+    material.depthWrite = false;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_NONE;
+    material.update();
+    return material;
+  }
+
+  /**
+   * Material de la pared de los telegraphs. Usa mezcla normal (no aditiva)
+   * para que la pared tenga opacidad propia y se lea como un volumen; sin
+   * escritura de profundidad para que no oculte lo que queda detrás.
+   */
+  private createTelegraphWallMaterial(
+    color: readonly [number, number, number],
+    opacity = TELEGRAPH_WALL_OPACITY
+  ): pc.StandardMaterial {
+    const material = new pc.StandardMaterial();
+    material.useLighting = false;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.diffuse = new pc.Color(0, 0, 0);
+    material.emissive = new pc.Color(
+      color[0] / 255,
+      color[1] / 255,
+      color[2] / 255
+    );
+    material.emissiveIntensity = 0.85;
+    material.opacity = opacity;
+    material.blendType = pc.BLEND_NORMAL;
     material.depthWrite = false;
     material.depthTest = true;
     material.cull = pc.CULLFACE_NONE;
@@ -6149,7 +6233,14 @@ export class CombatFx {
     const dashMaterial = this.createMaterial(hot, 0.85);
     const fillMaterial = this.createMaterial(color, 0.08);
     const sweepMaterial = this.createMaterial(hot, 0.4);
-    const materials = [ringMaterial, dashMaterial, fillMaterial, sweepMaterial];
+    const wallMaterial = this.createTelegraphWallMaterial(color);
+    const materials = [
+      ringMaterial,
+      dashMaterial,
+      fillMaterial,
+      sweepMaterial,
+      wallMaterial
+    ];
 
     const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
     ring.setLocalScale(radius * 2, 1, radius * 2);
@@ -6162,6 +6253,23 @@ export class CombatFx {
 
     const sweep = this.createEntity(this.discMesh, [sweepMaterial], root);
     sweep.setLocalScale(0.01, 1, 0.01);
+
+    // Pared vertical en el borde del área: convierte el aro plano en un aviso
+    // con volumen, legible desde cualquier ángulo de cámara.
+    const wall = this.createEntity(
+      this.cachedMesh('telegraph-wall-circle', () => {
+        const points: Array<readonly [number, number]> = [];
+        const segments = 64;
+        for (let i = 0; i < segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          points.push([Math.sin(angle), Math.cos(angle)]);
+        }
+        return createWallMesh(this.device, points, true);
+      }),
+      [wallMaterial],
+      root
+    );
+    wall.setLocalScale(radius, TELEGRAPH_WALL_HEIGHT, radius);
 
     const charge = Math.max(0, duration);
     const effect = Math.max(0, effectDuration);
@@ -6181,6 +6289,8 @@ export class CombatFx {
         const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
         ringMaterial.opacity = (0.3 + pulse * 0.35) * fade;
         dashMaterial.opacity = (0.55 + pulse * 0.35) * fade;
+        wallMaterial.opacity = TELEGRAPH_WALL_OPACITY * fade;
+        wall.enabled = fade > 0.001;
         dash.setLocalEulerAngles(0, -elapsed * 32, 0);
 
         const chargeProgress =
@@ -6264,11 +6374,13 @@ export class CombatFx {
     const edgeMaterial = this.createMaterial(hot, 0.85);
     const fillMaterial = this.createMaterial(color, 0.08);
     const sweepMaterial = this.createMaterial(hot, 0.4);
+    const wallMaterial = this.createTelegraphWallMaterial(color);
     const materials = [
       bandMaterial,
       edgeMaterial,
       fillMaterial,
-      sweepMaterial
+      sweepMaterial,
+      wallMaterial
     ];
 
     const angleKey = Math.round(halfAngleDeg * 10);
@@ -6304,6 +6416,24 @@ export class CombatFx {
       rail.setLocalScale(0.035, 0.012, reach);
     }
 
+    // Pared que recorre el borde del cono (las dos aristas y el arco exterior)
+    // para que el abanico también tenga volumen.
+    const wall = this.createEntity(
+      this.cachedMesh(`telegraph-wall-cone-${angleKey}`, () => {
+        const points: Array<readonly [number, number]> = [[0, 0]];
+        const segments = 32;
+        for (let i = 0; i <= segments; i++) {
+          const angle = -half + (2 * half * i) / segments;
+          points.push([Math.sin(angle), Math.cos(angle)]);
+        }
+        points.push([0, 0]);
+        return createWallMesh(this.device, points, false);
+      }),
+      [wallMaterial],
+      root
+    );
+    wall.setLocalScale(reach, TELEGRAPH_WALL_HEIGHT, reach);
+
     const charge = Math.max(0, duration);
     const effect = Math.max(0, effectDuration);
     const total = Math.max(0.05, charge + effect);
@@ -6320,6 +6450,8 @@ export class CombatFx {
         const fade = Math.max(0, Math.min(1, (total - elapsed) / 0.3));
         bandMaterial.opacity = (0.3 + pulse * 0.35) * fade;
         edgeMaterial.opacity = (0.55 + pulse * 0.35) * fade;
+        wallMaterial.opacity = TELEGRAPH_WALL_OPACITY * fade;
+        wall.enabled = fade > 0.001;
 
         const chargeProgress = charge > 0 ? Math.min(1, elapsed / charge) : 1;
         if (charge > 0 && elapsed < charge) {
@@ -6407,7 +6539,8 @@ export class CombatFx {
     const fillMaterial = this.createMaterial(color, 0.08);
     const railMaterial = this.createMaterial(color, 0.45);
     const edgeMaterial = this.createMaterial(hot, 0.8);
-    const materials = [fillMaterial, railMaterial, edgeMaterial];
+    const wallMaterial = this.createTelegraphWallMaterial(color);
+    const materials = [fillMaterial, railMaterial, edgeMaterial, wallMaterial];
 
     // Relleno que avanza desde el lanzador: marca el carril y su dirección.
     const fill = this.createEntity(this.boxMesh, [fillMaterial], root);
@@ -6427,6 +6560,23 @@ export class CombatFx {
     const cap = this.createEntity(this.boxMesh, [edgeMaterial], root);
     cap.setLocalScale(width, 0.014, Math.max(0.05, railWidth * 1.4));
     cap.setLocalPosition(0, 0.008, length);
+
+    // Paredes verticales en los dos costados y en el extremo del carril. La
+    // forma es una U abierta por el lado del lanzador para no taparlo.
+    const wall = this.createEntity(
+      this.cachedMesh('telegraph-wall-beam', () => {
+        const points: Array<readonly [number, number]> = [
+          [-0.5, 0],
+          [-0.5, 1],
+          [0.5, 1],
+          [0.5, 0]
+        ];
+        return createWallMesh(this.device, points, false);
+      }),
+      [wallMaterial],
+      root
+    );
+    wall.setLocalScale(width, TELEGRAPH_WALL_HEIGHT, length);
 
     const perpX = -dz / length;
     const perpZ = dx / length;
@@ -6470,6 +6620,8 @@ export class CombatFx {
           (firing ? 0.2 + flash * 0.18 : 0.06 + charge * 0.1) * fade;
         railMaterial.opacity = (0.35 + pulse * 0.2 + flash * 0.4) * fade;
         edgeMaterial.opacity = (0.6 + pulse * 0.22 + flash * 0.4) * fade;
+        wallMaterial.opacity = TELEGRAPH_WALL_OPACITY * fade;
+        wall.enabled = fade > 0.001;
       }
     };
 
