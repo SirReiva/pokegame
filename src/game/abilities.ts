@@ -2423,6 +2423,83 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Gyarados                                                                  */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('acuaCola', 'Acua Cola', 'Water', 'physical', 'melee')
+    .power(55)
+    .cooldown(0.7)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(2.5)
+    .radius(0.9)
+    .halfAngle(60)
+    .knockback(0.55)
+    .active(0.22).recovery(0)
+    .animation('attack')
+    .impact('water')
+    .color(76, 143, 214)
+    .description(
+      'Barrido amplio de su cola envuelta en agua. Golpe básico de Gyarados; alcanza a varios rivales en cono y los empuja.'
+    )
+);
+
+registerAbility(
+  ability('cascada', 'Cascada', 'Water', 'physical', 'dash')
+    .power(70)
+    .cooldown(5.5)
+    .range(0)
+    .radius(0.9)
+    .dash(4.6)
+    .knockback(0.9)
+    .startup(0.2, { animation: 'charge' })
+    .active(0.3).recovery(0.2)
+    .animation('attack')
+    .impact('water')
+    .color(76, 143, 214)
+    .description(
+      'Se enrosca y se lanza 4,6 u con una estela de agua, arrollando a quien encuentre. Su herramienta para entrar o salir.'
+    )
+);
+
+registerAbility(
+  ability('triturarGyarados', 'Triturar', 'Dark', 'physical', 'melee')
+    .power(85)
+    .cooldown(6)
+    .range(2.2)
+    .radius(0.9)
+    .halfAngle(50)
+    .knockback(0.8)
+    .startup(0.25)
+    .active(0.25).recovery(0.1)
+    .animation('attack')
+    .impact('jaw')
+    .color(126, 98, 166)
+    .description(
+      'Abre sus fauces y muerde con fuerza bruta. Golpe corto pero brutal que castiga a Psíquicos y Fantasmas.'
+    )
+);
+
+registerAbility(
+  ability('dragoaliento', 'Dragoaliento', 'Dragon', 'physical', 'beam')
+    .power(150)
+    .cooldown(15)
+    .range(10)
+    .radius(0.55)
+    .beam('psychic')
+    .impact('psychic')
+    .slow(0.55, 2.5)
+    .startup(0.55, { animation: 'charge' })
+    .armor(40)
+    .recovery(0.6)
+    .animation('shoot')
+    .color(128, 96, 230)
+    .description(
+      'Definitiva: exhala un dragoaliento en línea de 10 u que atraviesa a todos los rivales. 150 de potencia y ralentiza un 45 % durante 2,5 s: su parálisis. Se carga 0,55 s con 40 de armadura.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2477,6 +2554,7 @@ MOVESETS['0250'] = [
   'recuperacionHoOh',
   'fuegoSagrado'
 ];
+MOVESETS['0130'] = ['acuaCola', 'cascada', 'triturarGyarados', 'dragoaliento'];
 
 export function abilityForSlot(
   pokemonId: string,

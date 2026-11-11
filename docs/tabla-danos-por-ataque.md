@@ -38,6 +38,7 @@
 - [Celebi](#celebi)
 - [Lugia](#lugia)
 - [Ho-Oh](#ho-oh)
+- [Gyarados](#gyarados)
 
 ## Pikachu
 
@@ -699,6 +700,39 @@ Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 �
 | **Mediana de daño** | 49 | 87 | — | 59 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
+## Gyarados
+
+Tipos: **Water / Flying** · HP 170 · Atk 145 · Def 99 · SpA 80 · SpD 120 · Vel 101
+
+| Rival | Básica: Acua Cola<br>Water · Fís · Pot 55 | Habilidad 1: Cascada<br>Water · Fís · Pot 70 | Habilidad 2: Triturar<br>Dark · Fís · Pot 85 | Definitiva: Dragoaliento<br>Dragon · Fís · Pot 150 |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 37 ×½ | 46 ×½ | 76 ×1 | 132 ×1 |
+| Charmander | 159 ×2 | 202 ×2 | 83 ×1 | 144 ×1 |
+| Squirtle | 30 ×½ | 37 ×½ | 61 ×1 | 107 ×1 |
+| Pikachu | 84 ×1 | 107 ×1 | 87 ×1 | 151 ×1 |
+| Gengar | 62 ×1 | 80 ×1 | 129 ×2 | 113 ×1 |
+| Voltorb | 74 ×1 | 92 ×1 | 75 ×1 | 130 ×1 |
+| Eevee | 74 ×1 | 92 ×1 | 75 ×1 | 130 ×1 |
+| Lucario | 56 ×1 | 71 ×1 | 29 ×½ | 50 ×½ |
+| Greninja | 29 ×½ | 37 ×½ | 30 ×½ | 105 ×1 |
+| Mewtwo | 46 ×1 | 58 ×1 | 96 ×2 | 84 ×1 |
+| Mew | 43 ×1 | 55 ×1 | 88 ×2 | 76 ×1 |
+| Onix | 114 ×4 | 147 ×4 | 30 ×1 | 51 ×1 |
+| Scyther | 52 ×1 | 64 ×1 | 52 ×1 | 91 ×1 |
+| Tyranitar | 76 ×2 | 100 ×2 | 19 ×½ | 70 ×1 |
+| Articuno | 43 ×1 | 55 ×1 | 44 ×1 | 76 ×1 |
+| Zapdos | 49 ×1 | 61 ×1 | 50 ×1 | 88 ×1 |
+| Moltres | 92 ×2 | 117 ×2 | 48 ×1 | 84 ×1 |
+| Raikou | 53 ×1 | 68 ×1 | 55 ×1 | 96 ×1 |
+| Entei | 98 ×2 | 123 ×2 | 50 ×1 | 88 ×1 |
+| Suicune | 18 ×½ | 25 ×½ | 39 ×1 | 67 ×1 |
+| Lugia | 35 ×1 | 43 ×1 | 71 ×2 | 61 ×1 |
+| Ho-Oh | 92 ×2 | 117 ×2 | 48 ×1 | 84 ×1 |
+| Celebi | 21 ×½ | 28 ×½ | 88 ×2 | 76 ×1 |
+| Groudon | 63 ×2 | 80 ×2 | 33 ×1 | 57 ×1 |
+| **Mediana de daño** | 55 | 70 | 54 | 86 |
+| **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
+
 ## Medianas por Pokémon
 
 Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los cuatro ataques sumados contra cada rival; las habilidades de estado cuentan como 0 en esa columna.
@@ -725,6 +759,7 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 | Celebi | 29 | 55 | — | 74 | 159 |
 | Lugia | 34 | 33 | 64 | 75 | 216 |
 | Ho-Oh | 49 | 87 | — | 59 | 200 |
+| Gyarados | 55 | 70 | 54 | 86 | 269 |
 
 ## Pokémon sin moveset
 
@@ -733,11 +768,10 @@ Estas especies del roster todavía no tienen ataques asignados en `MOVESETS`, as
 | Pokémon | Tipos |
 | --- | --- |
 | Eevee | Normal |
-| Gyarados | Water / Flying |
 | Raikou | Electric |
 | Entei | Fire |
 | Suicune | Water |
 
 ## Cobertura
 
-Atacantes con moveset asignado: **20** de 25 especies del roster. Los rivales incluyen las 25 especies, tengan o no moveset, porque el daño solo depende de sus tipos y estadísticas.
+Atacantes con moveset asignado: **21** de 25 especies del roster. Los rivales incluyen las 25 especies, tengan o no moveset, porque el daño solo depende de sus tipos y estadísticas.

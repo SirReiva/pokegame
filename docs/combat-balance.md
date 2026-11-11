@@ -170,6 +170,10 @@
 > exceso era +20 % en Giro Fuego, +14 % en Bomba Lodo y Terremoto y +6 % en
 > Fuego Sagrado. Se mantiene el paso fijo de 60 Hz y el primer tick desplazado
 > un paso. El apartado 3.2 se retira de la lista de fallos abiertos.
+>
+> **Actualización 2026-11-11**: Gyarados (0130) ya tiene moveset (`Acua Cola`,
+> `Cascada`, `Triturar` y `Dragoaliento`). Quedan cuatro especies sin moveset
+> (Eevee, Raikou, Entei y Suicune); las tablas de §4.x no se han regenerado.
 
 ## Resumen ejecutivo
 
