@@ -47,6 +47,13 @@ import {
   MOTION_POISON_BUBBLES,
   MOTION_POISON_DROPS,
   MOTION_POISON_POP_RINGS,
+  MOTION_PSYCHIC_BEAM_BODY,
+  MOTION_PSYCHIC_BEAM_FLASH,
+  MOTION_PSYCHIC_BEAM_RINGS,
+  MOTION_PSYCHIC_ORB_RINGS,
+  MOTION_PSYCHIC_RAYS,
+  MOTION_PSYCHIC_RIM,
+  MOTION_PSYCHIC_SHELL,
   MOTION_PSYCHIC_SHARDS,
   MOTION_PSYCHIC_WAVE,
   MOTION_RECOVERY_MOTES,
@@ -1240,6 +1247,8 @@ export class CombatFx {
   private readonly sphereMesh: pc.Mesh;
   private readonly boxMesh: pc.Mesh;
   private readonly torusMesh: pc.Mesh;
+  /** Aro más fino para los bucles psíquicos, que necesitan leerse como cintas. */
+  private readonly psychicRingMesh: pc.Mesh;
   /** Textura de lengua de fuego y malla de tres quads cruzados. */
   private readonly flameTexture: pc.Texture;
   private readonly flameMesh: pc.Mesh;
@@ -1347,6 +1356,10 @@ export class CombatFx {
       ringRadius: 0.5,
       tubeRadius: 0.05
     });
+    this.psychicRingMesh = pc.createTorus(this.device, {
+      ringRadius: 0.5,
+      tubeRadius: 0.022
+    });
     this.waterJetMeshes = [0, 1, 2, 3].map((variant) =>
       createWaterJetMesh(this.device, variant * 1.7)
     );
@@ -1395,6 +1408,7 @@ export class CombatFx {
     this.sphereMesh.incRefCount();
     this.boxMesh.incRefCount();
     this.torusMesh.incRefCount();
+    this.psychicRingMesh.incRefCount();
     this.flameMesh.incRefCount();
     for (const mesh of this.waterJetMeshes) mesh.incRefCount();
     for (const mesh of this.cycloneArmMeshes) mesh.incRefCount();
@@ -3997,8 +4011,14 @@ export class CombatFx {
   }
 
   /**
-   * Haz psíquico: un núcleo luminoso estirado con anillos de energía que
-   * recorren la línea de fuego y una punta pulsante al final.
+   * Haz psíquico: una descarga mental con el lenguaje visual de los juegos
+   * principales. El lanzador abre el disparo con un fogonazo blanco y un aro
+   * que se expande; la línea se llena de aros de energía ondulados y la punta
+   * estalla al llegar al final.
+   *
+   * Todo el movimiento vive en lotes instanciados y vertex shaders: el update
+   * solo avanza `uEffectTime`, así que no se transforma ninguna entidad por
+   * frame.
    */
   private spawnPsychicBeam(
     x1: number,
@@ -4016,73 +4036,97 @@ export class CombatFx {
     root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     this.app.root.addChild(root);
 
-    const glowMaterial = this.createMaterial(color, 0.42);
-    const coreMaterial = this.createMaterial([255, 240, 255], 0.9);
-    const ringMaterial = this.createMaterial([238, 182, 255], 0.72);
-    const materials = [glowMaterial, coreMaterial, ringMaterial];
+    const life = 0.52;
+    const bodyMaterial = this.createMaterial(color, 0.18);
+    const ringMaterial = this.createMaterial([255, 238, 255], 0.85);
+    const flashMaterial = this.createMaterial([255, 250, 255], 0.95);
+    const flashRingMaterial = this.createMaterial([255, 232, 255], 0.85);
+    const materials = [
+      bodyMaterial,
+      ringMaterial,
+      flashMaterial,
+      flashRingMaterial
+    ];
 
-    const glowWidth = Math.max(0.06, width * 2.4);
-    const glow = this.createEntity(this.sphereMesh, [glowMaterial], root);
-    glow.setLocalPosition(0, 0, length / 2);
-    glow.setLocalScale(glowWidth, glowWidth, length);
+    // Tres capas concéntricas del cuerpo del haz: halo, cuerpo y núcleo. El
+    // cuerpo es tenue para que manden los aros, como en la referencia.
+    const bodyInstances: EffectBatchInstance[] = [
+      { anim0: [width * 2.6, 0, 0, 0] },
+      { anim0: [width * 0.95, 0, 0, 0] },
+      { anim0: [width * 0.32, 0, 0, 0] }
+    ];
+    const bodyBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: bodyMaterial,
+      instances: bodyInstances,
+      motion: MOTION_PSYCHIC_BEAM_BODY,
+      life,
+      params: [length, width, 0, 0]
+    });
 
-    const coreWidth = Math.max(0.04, width * 0.7);
-    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
-    core.setLocalPosition(0, 0, length / 2);
-    core.setLocalScale(coreWidth, coreWidth, length);
-
-    // Anillos perpendiculares al haz que viajan hacia la punta.
-    const rings: pc.Entity[] = [];
-    const ringCount = 7;
+    // Aros que recorren la línea. Alternan sentido de giro y fase.
+    const ringInstances: EffectBatchInstance[] = [];
+    const ringCount = 8;
     for (let index = 0; index < ringCount; index++) {
-      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0, ((index + 1) / (ringCount + 1)) * length);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
+      ringInstances.push({
+        anim0: [
+          index / ringCount,
+          (index % 3 - 1) * 12,
+          (index % 2 === 0 ? 1 : -1) * (150 + index * 22),
+          index * 1.7
+        ],
+        anim1: [Math.max(0.1, width * 3), 0, 0, 0]
+      });
     }
+    const ringBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.psychicRingMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_PSYCHIC_BEAM_RINGS,
+      life,
+      params: [length, width, 0.06, 0]
+    });
 
-    const tip = this.createEntity(this.sphereMesh, [coreMaterial], root);
-    tip.setLocalPosition(0, 0, length);
-    tip.setLocalScale(width * 3, width * 3, width * 3);
+    // Fogonazos esféricos en el lanzador y en la punta.
+    const flashSphereBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: flashMaterial,
+      instances: [
+        { anim0: [0.02, 0, Math.max(0.35, width * 2.4), 0] },
+        { anim0: [length, 0.09, Math.max(0.35, width * 2.6), 0] }
+      ],
+      motion: MOTION_PSYCHIC_BEAM_FLASH,
+      life,
+      params: [0, 0, 0, 0]
+    });
 
-    let time = 0;
-    this.addEffect(root, materials, 0.42, (_t, dt) => {
-      time += dt;
-      const advance = Math.min(1, time / 0.12);
-      const reveal = 1 - (1 - advance) * (1 - advance);
-      const pulse = 0.82 + Math.random() * 0.18;
-      const fade = 1 - Math.max(0, (time - 0.24) / 0.18);
+    // Aros de choque en el lanzador y en la punta, perpendiculares al haz.
+    const flashRingBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.psychicRingMesh,
+      material: flashRingMaterial,
+      instances: [
+        { anim0: [0.02, 0.02, Math.max(0.4, width * 3.2), 90] },
+        { anim0: [length, 0.11, Math.max(0.4, width * 3.6), 90] }
+      ],
+      motion: MOTION_PSYCHIC_BEAM_FLASH,
+      life,
+      params: [0, 0, 0, 0]
+    });
 
-      glow.setLocalPosition(0, 0, (length * reveal) / 2);
-      glow.setLocalScale(
-        glowWidth * pulse,
-        glowWidth * pulse,
-        Math.max(0.02, length * reveal)
-      );
-      core.setLocalPosition(0, 0, (length * reveal) / 2);
-      core.setLocalScale(
-        coreWidth,
-        coreWidth,
-        Math.max(0.02, length * reveal)
-      );
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 2.1 + index / ringCount) % 1;
-        ring.setLocalPosition(0, 0, length * reveal * (0.12 + path * 0.88));
-        const ringScale =
-          width * (1.4 + pulse * 0.9) * (0.55 + Math.sin(path * Math.PI) * 0.9);
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 240 + index * 42);
-      }
-
-      tip.setLocalPosition(0, 0, length * reveal);
-      const tipScale = width * 3 * (0.8 + Math.sin(time * 36) * 0.25);
-      tip.setLocalScale(tipScale, tipScale, tipScale);
-
-      glowMaterial.opacity = 0.42 * pulse * fade;
-      coreMaterial.opacity = 0.9 * pulse * fade;
-      ringMaterial.opacity = 0.72 * fade;
+    this.addEffect(root, materials, life, (t) => {
+      const now = t * life;
+      bodyBatch.setTime(now);
+      ringBatch.setTime(now);
+      flashSphereBatch.setTime(now);
+      flashRingBatch.setTime(now);
     });
   }
 
@@ -7601,86 +7645,205 @@ export class CombatFx {
     });
   }
 
-  /** Impacto psíquico: núcleo blanco, anillo violeta y esquirlas radiales. */
+  /**
+   * Impacto psíquico: el objetivo queda envuelto en una esfera mental
+   * translúcida. Dentro giran aros blancos deformados en el vertex shader —el
+   * motivo central de la animación de Psíquico en los juegos principales— y
+   * del núcleo salen rayos y esquirlas de energía.
+   *
+   * La esfera, los aros, los rayos y las esquirlas son lotes instanciados: el
+   * update solo avanza `uEffectTime`.
+   */
   spawnPsychicBurst(
     x: number,
     z: number,
     color: readonly [number, number, number],
     _effectiveness: number
   ): void {
+    const life = 0.68;
+    const centerY = 0.9;
+    const shellDiameter = 1.95;
     const root = new pc.Entity('psychic-burst');
     root.setPosition(x, 0.04, z);
     this.app.root.addChild(root);
 
-    const coreMaterial = this.createMaterial([255, 236, 255], 0.95);
-    const ringMaterial = this.createMaterial(color, 0.55);
-    const shardMaterial = this.createMaterial([242, 190, 255], 0.92);
-    const materials = [coreMaterial, ringMaterial, shardMaterial];
+    const shellMaterial = this.createShieldMaterial(
+      color,
+      0.2,
+      pc.BLEND_NORMAL
+    );
+    const haloMaterial = this.createShieldMaterial(
+      [255, 210, 255],
+      0.1,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const coreMaterial = this.createMaterial([255, 244, 255], 0.85);
+    const ringMaterial = this.createMaterial([255, 232, 255], 0.7);
+    const rimMaterial = this.createShieldMaterial(
+      color,
+      0.95,
+      pc.BLEND_NORMAL
+    );
+    const rimEdgeMaterial = this.createMaterial([255, 246, 255], 0.95);
+    const rayMaterial = this.createMaterial([255, 226, 255], 0.8);
+    const shardMaterial = this.createMaterial([246, 198, 255], 0.9);
+    const materials = [
+      shellMaterial,
+      haloMaterial,
+      coreMaterial,
+      ringMaterial,
+      rimMaterial,
+      rimEdgeMaterial,
+      rayMaterial,
+      shardMaterial
+    ];
 
-    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
-    core.setLocalPosition(0, 0.68, 0);
-    core.setLocalScale(0.26, 0.26, 0.26);
+    // Esfera translúcida y su halo. El núcleo comparte la misma animación de
+    // crecimiento, con otro diámetro y un fundido más corto.
+    const shellBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: shellMaterial,
+      instances: [{ anim0: [shellDiameter, 0, 0.14, 0] }],
+      motion: MOTION_PSYCHIC_SHELL,
+      life,
+      params: [centerY, 0.26, 0, 0]
+    });
+    const haloBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: haloMaterial,
+      instances: [{ anim0: [shellDiameter * 1.06, 0, 0.14, 0] }],
+      motion: MOTION_PSYCHIC_SHELL,
+      life,
+      params: [centerY, 0.26, 0, 0]
+    });
+    const coreBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: coreMaterial,
+      instances: [{ anim0: [0.42, 0, 0.18, 0.3] }],
+      motion: MOTION_PSYCHIC_SHELL,
+      life,
+      params: [centerY, 0.32, 0, 0]
+    });
 
-    const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.12, 0);
-    ring.setLocalScale(0.5, 1, 0.5);
+    // Aros concéntricos que miran a cámara, con pequeños desplazamientos para
+    // que no queden perfectamente centrados, como en la referencia.
+    const ringDefs = [
+      { size: 1.85, offsetX: 0, offsetY: 0, spin: 14, delay: 0.02 },
+      { size: 1.6, offsetX: 0.05, offsetY: 0.03, spin: -18, delay: 0.05 },
+      { size: 1.38, offsetX: -0.04, offsetY: -0.02, spin: 22, delay: 0.08 },
+      { size: 1.12, offsetX: 0.03, offsetY: -0.05, spin: -26, delay: 0.04 },
+      { size: 0.88, offsetX: -0.02, offsetY: 0.04, spin: 24, delay: 0.1 }
+    ];
+    const ringInstances: EffectBatchInstance[] = ringDefs.map(
+      (def, index) => ({
+        anim0: [def.offsetX, def.offsetY, def.size, def.delay],
+        anim1: [def.spin, index * 1.7, 0, 0]
+      })
+    );
+    const ringBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.psychicRingMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_PSYCHIC_ORB_RINGS,
+      life,
+      params: [centerY, 0, 0.035, 0]
+    });
 
-    const shards: {
-      entity: pc.Entity;
-      angle: number;
-      lift: number;
-      size: number;
-      spin: number;
-    }[] = [];
-    for (let index = 0; index < 16; index++) {
-      const angle = (index / 16) * Math.PI * 2 + Math.random() * 0.25;
-      const size = 0.09 + Math.random() * 0.09;
-      const shard = this.createEntity(this.sphereMesh, [shardMaterial], root);
-      shard.setLocalPosition(
-        Math.cos(angle) * 0.2,
-        0.6,
-        Math.sin(angle) * 0.2
-      );
-      shard.setLocalScale(size, size, size);
-      shards.push({
-        entity: shard,
-        angle,
-        lift: 0.6 + Math.random() * 1.1,
-        size,
-        spin: 120 + Math.random() * 260
+    // Aro exterior: el borde magenta con filo blanco que enmarca la esfera en
+    // la referencia. El toro grueso y el aro fino comparten la animación de la
+    // esfera, así que crecen y se apagan con ella.
+    const rimBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.torusMesh,
+      material: rimMaterial,
+      instances: [{ anim0: [2.05, 0, 0.14, 0] }],
+      motion: MOTION_PSYCHIC_RIM,
+      life,
+      params: [centerY, 0.26, 0, 0]
+    });
+    const rimEdgeBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.psychicRingMesh,
+      material: rimEdgeMaterial,
+      instances: [{ anim0: [2.05, 0, 0.14, 0] }],
+      motion: MOTION_PSYCHIC_RIM,
+      life,
+      params: [centerY, 0.26, 0, 0]
+    });
+
+    // Rayos que salen del núcleo, como los destellos blancos de la referencia.
+    const rayInstances: EffectBatchInstance[] = [];
+    for (let index = 0; index < 12; index++) {
+      rayInstances.push({
+        anim0: [
+          (index / 12) * Math.PI * 2 + Math.random() * 0.22,
+          0.85 + Math.random() * 0.55,
+          (Math.random() - 0.5) * 0.5,
+          Math.random() * 0.04
+        ],
+        anim1: [0.014 + Math.random() * 0.018, 0, 0, 0]
       });
     }
+    const rayBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: rayMaterial,
+      instances: rayInstances,
+      motion: MOTION_PSYCHIC_RAYS,
+      life,
+      params: [centerY, 0, 0, 0]
+    });
 
-    this.addEffect(root, materials, 0.55, (t) => {
-      const scale = 0.26 + t * 1.05;
-      core.setLocalScale(scale, scale, scale);
-      core.setLocalPosition(0, 0.68 + t * 0.3, 0);
-      coreMaterial.opacity = 0.95 * (1 - t);
+    const shardInstances: EffectBatchInstance[] = [];
+    const shardCount = 34;
+    for (let index = 0; index < shardCount; index++) {
+      shardInstances.push({
+        anim0: [
+          Math.random() * Math.PI * 2,
+          0.2 + Math.random() * 0.85,
+          0.35 + Math.random() * 0.65,
+          Math.random() * 0.08
+        ],
+        anim1: [
+          0.32 + Math.random() * 0.22,
+          0.035 + Math.random() * 0.05,
+          Math.random() * Math.PI * 2,
+          0
+        ]
+      });
+    }
+    const shardBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: shardMaterial,
+      instances: shardInstances,
+      motion: MOTION_PSYCHIC_SHARDS,
+      radius: 1.05,
+      life
+    });
 
-      const ringScale = 0.5 + t * 1.7;
-      ring.setLocalScale(ringScale, 1, ringScale);
-      ringMaterial.opacity = 0.55 * (1 - t);
-
-      for (const shard of shards) {
-        const distance = 0.2 + t * 1.5;
-        shard.entity.setLocalPosition(
-          Math.cos(shard.angle) * distance,
-          0.6 + t * shard.lift - t * t * shard.lift * 1.15,
-          Math.sin(shard.angle) * distance
-        );
-        shard.entity.setLocalEulerAngles(
-          t * shard.spin,
-          t * shard.spin * 0.7,
-          t * shard.spin * 0.45
-        );
-        const fade = Math.max(0, 1 - t * 1.2);
-        shard.entity.setLocalScale(
-          shard.size * fade,
-          shard.size * fade,
-          shard.size * fade
-        );
-      }
-      shardMaterial.opacity = 0.92 * (1 - t);
+    this.addEffect(root, materials, life, (t) => {
+      const now = t * life;
+      shellBatch.setTime(now);
+      haloBatch.setTime(now);
+      coreBatch.setTime(now);
+      ringBatch.setTime(now);
+      rimBatch.setTime(now);
+      rimEdgeBatch.setTime(now);
+      rayBatch.setTime(now);
+      shardBatch.setTime(now);
     });
   }
 

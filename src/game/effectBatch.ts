@@ -361,6 +361,13 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_HEAT_BLADES, wgslMotions.MOTION_HEAT_BLADES_WGSL],
     [MOTION_WATER_JETS, wgslMotions.MOTION_WATER_JETS_WGSL],
     [MOTION_PSYCHIC_SHARDS, wgslMotions.MOTION_PSYCHIC_SHARDS_WGSL],
+    [MOTION_PSYCHIC_BEAM_BODY, wgslMotions.MOTION_PSYCHIC_BEAM_BODY_WGSL],
+    [MOTION_PSYCHIC_BEAM_RINGS, wgslMotions.MOTION_PSYCHIC_BEAM_RINGS_WGSL],
+    [MOTION_PSYCHIC_BEAM_FLASH, wgslMotions.MOTION_PSYCHIC_BEAM_FLASH_WGSL],
+    [MOTION_PSYCHIC_ORB_RINGS, wgslMotions.MOTION_PSYCHIC_ORB_RINGS_WGSL],
+    [MOTION_PSYCHIC_RAYS, wgslMotions.MOTION_PSYCHIC_RAYS_WGSL],
+    [MOTION_PSYCHIC_SHELL, wgslMotions.MOTION_PSYCHIC_SHELL_WGSL],
+    [MOTION_PSYCHIC_RIM, wgslMotions.MOTION_PSYCHIC_RIM_WGSL],
     [MOTION_BLIZZARD_CRYSTALS, wgslMotions.MOTION_BLIZZARD_CRYSTALS_WGSL],
     [MOTION_BLIZZARD_PUFFS, wgslMotions.MOTION_BLIZZARD_PUFFS_WGSL],
     [MOTION_SNOWFLAKES, wgslMotions.MOTION_SNOWFLAKES_WGSL],
@@ -713,6 +720,248 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
     vec3(cos(angle) * distance, y, sin(angle) * distance),
     vec3(s),
     effectEuler(pitch, yaw, roll)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Cuerpo del haz de `Psíquico`: tres esferas estiradas (halo, cuerpo y núcleo)
+ * crecen desde el lanzador hasta la punta. La longitud viaja en
+ * `uEffectParam0`; el ancho de cada capa en `anim0.x`. Todo se anima en el
+ * vertex shader, sin transformar entidades por frame.
+ */
+export const MOTION_PSYCHIC_BEAM_BODY = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / 0.1), 2.0);
+  float length = max(0.0001, uEffectParam0 * reveal);
+  float pulse = 0.9 + sin(uEffectTime * 34.0) * 0.08;
+  float fade = effectEnvelope(0.05, 0.22);
+  float width = max(0.0001, a0.x * pulse * fade);
+  return effectTRS(
+    vec3(0.0, 0.0, length * 0.5),
+    vec3(width, width, length),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros del haz de `Psíquico`: recorren la línea, se mecen, giran y se ondulan
+ * en el vertex shader. `uEffectParam0` es la longitud del haz, `uEffectParam1`
+ * el ancho de la habilidad y `uEffectParam2` la amplitud de la ondulación.
+ * `anim0 = [offset, inclinación, giro, fase]`; `anim1.x` es la escala base.
+ */
+export const MOTION_PSYCHIC_BEAM_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float time = uEffectTime;
+  float reveal = 1.0 - pow(1.0 - min(1.0, time / 0.1), 2.0);
+  float path = fract(time * 2.5 + a0.x);
+  float sway = uEffectParam1 * 0.22;
+  float pulse = 0.9 + sin(time * 34.0) * 0.08;
+  float fade = effectEnvelope(0.04, 0.22);
+  float scale = max(
+    0.0001,
+    a1.x * (0.7 + pulse * 0.5) *
+    (0.55 + sin(path * EFFECT_PI) * 0.9) * fade
+  );
+  vec3 position = vec3(
+    sin(time * 9.0 + a0.x * 6.28318530718) * sway,
+    cos(time * 7.0 + a0.x * 6.28318530718) * sway,
+    uEffectParam0 * reveal * (0.06 + path * 0.94)
+  );
+  float tilt = (90.0 + a0.y) * EFFECT_DEG;
+  float swayYaw = sin(time * 5.0 + a0.x * 6.0) * 18.0 * EFFECT_DEG;
+  float spin = (time * a0.z + a0.x * 180.0) * EFFECT_DEG;
+  return effectTRS(position, vec3(scale), effectEuler(tilt, swayYaw, spin));
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  float angle = atan(vertexPosition.x, vertexPosition.z);
+  float wave = sin(angle * 4.0 + uEffectTime * 11.0 + a0.w * 6.28318530718);
+  return vec3(
+    vertexPosition.x,
+    vertexPosition.y + wave * uEffectParam2,
+    vertexPosition.z
+  );
+}
+`;
+
+/**
+ * Fogonazos del haz de `Psíquico`: `anim0 = [z, retardo, escala, giroX]`.
+ * Las esferas y los aros crecen y se apagan al alcanzar su punto.
+ */
+export const MOTION_PSYCHIC_BEAM_FLASH = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.y) / 0.16, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float fade = effectEnvelope(0.02, 0.2);
+  float scale = max(
+    0.0001,
+    a0.z * (0.35 + ease * 0.65) * (1.0 - local) * fade
+  );
+  return effectTRS(
+    vec3(0.0, 0.0, a0.x),
+    vec3(scale),
+    effectRotX(a0.w * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros de la esfera de `Psíquico`: miran a cámara, giran y crecen alrededor
+ * del objetivo y se ondulan en el vertex shader. `anim0 = [offsetX, offsetY,
+ * tamaño, retardo]`; `anim1 = [giro, fase, 0, 0]`. `uEffectParam0` es la altura
+ * del centro y `uEffectParam2` la amplitud de la ondulación.
+ */
+export const MOTION_PSYCHIC_ORB_RINGS = `
+#ifndef LINEAR_DEPTH
+uniform mat4 matrix_view;
+#endif
+
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float time = uEffectTime;
+  float local = clamp((time - a0.w) / 0.22, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float fade = effectEnvelope(0.04, 0.26);
+  float scale = max(
+    0.0001,
+    a0.z * (0.22 + 0.78 * ease) *
+    (0.98 + sin(time * 11.0 + a1.y) * 0.02) * fade
+  );
+  vec3 right = vec3(matrix_view[0][0], matrix_view[1][0], matrix_view[2][0]);
+  vec3 up = vec3(matrix_view[0][1], matrix_view[1][1], matrix_view[2][1]);
+  vec3 forward = vec3(matrix_view[0][2], matrix_view[1][2], matrix_view[2][2]);
+  float spin = (time * a1.x + a1.y * 41.0) * EFFECT_DEG;
+  vec3 spinRight = right * cos(spin) + up * sin(spin);
+  vec3 spinUp = up * cos(spin) - right * sin(spin);
+  mat4 billboard = mat4(
+    vec4(spinRight, 0.0),
+    vec4(forward, 0.0),
+    vec4(spinUp, 0.0),
+    vec4(0.0, 0.0, 0.0, 1.0)
+  );
+  vec3 position = vec3(0.0, uEffectParam0, 0.0) + right * a0.x + up * a0.y;
+  return effectTRS(position, vec3(scale), billboard);
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  float angle = atan(vertexPosition.x, vertexPosition.z);
+  float wave = sin(angle * 5.0 + uEffectTime * 11.0 + a1.y * 6.28318530718);
+  vec2 radial = normalize(vertexPosition.xz);
+  return vec3(
+    vertexPosition.x + radial.x * wave * uEffectParam2,
+    vertexPosition.y,
+    vertexPosition.z + radial.y * wave * uEffectParam2
+  );
+}
+`;
+
+/**
+ * Rayos del impacto psíquico: salen del núcleo, se estiran y se apagan.
+ * `anim0 = [ángulo, longitud, altura, retardo]`; `anim1.x` es el grosor.
+ * `uEffectParam0` es la altura del centro.
+ */
+export const MOTION_PSYCHIC_RAYS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.w) / 0.24, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 3.0);
+  float fadeIn = min(1.0, local * 4.0);
+  float fadeOut = min(
+    1.0,
+    max(0.0, (uEffectLife - uEffectTime) / 0.28)
+  );
+  float fade = fadeIn * fadeOut;
+  float length = max(0.0001, a0.y * ease);
+  float distance = 0.08 + length * 0.5;
+  float thickness = max(0.0001, a1.x * fade);
+  return effectTRS(
+    vec3(
+      sin(a0.x) * distance,
+      uEffectParam0 + a0.z * ease,
+      cos(a0.x) * distance
+    ),
+    vec3(thickness, thickness, max(0.0001, length * fade)),
+    effectRotY(a0.x)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Esfera de `Psíquico`: crece de golpe alrededor del objetivo y se apaga.
+ * `anim0 = [diámetro, retardo, tiempo de crecimiento, fundido temprano]`.
+ * `uEffectParam0` es la altura del centro y `uEffectParam1` la duración del
+ * fundido final. Un `anim0.w` mayor que cero permite que el núcleo se apague
+ * antes que la esfera.
+ */
+export const MOTION_PSYCHIC_SHELL = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.y) / max(0.0001, a0.z), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float lifeFade = effectEnvelope(0.05, uEffectParam1);
+  float earlyFade = a0.w > 0.0
+    ? max(0.0, 1.0 - (uEffectTime - a0.y) / max(0.0001, a0.w))
+    : 1.0;
+  float scale = max(0.0001, a0.x * (0.35 + 0.65 * ease) * lifeFade * earlyFade);
+  return effectTRS(
+    vec3(0.0, uEffectParam0, 0.0),
+    vec3(scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aro exterior de `Psíquico` orientado a cámara: usa la matriz de vista para
+ * que el círculo se lea de frente en cada vista del splitscreen. Comparte la
+ * animación de crecimiento de la esfera. `anim0 = [diámetro, retardo,
+ * crecimiento, fundido temprano]`; `uEffectParam0` es la altura del centro.
+ */
+export const MOTION_PSYCHIC_RIM = `
+#ifndef LINEAR_DEPTH
+uniform mat4 matrix_view;
+#endif
+
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.y) / max(0.0001, a0.z), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float lifeFade = effectEnvelope(0.05, uEffectParam1);
+  float earlyFade = a0.w > 0.0
+    ? max(0.0, 1.0 - (uEffectTime - a0.y) / max(0.0001, a0.w))
+    : 1.0;
+  float scale = max(0.0001, a0.x * (0.35 + 0.65 * ease) * lifeFade * earlyFade);
+  vec3 right = vec3(matrix_view[0][0], matrix_view[1][0], matrix_view[2][0]);
+  vec3 up = vec3(matrix_view[0][1], matrix_view[1][1], matrix_view[2][1]);
+  vec3 forward = vec3(matrix_view[0][2], matrix_view[1][2], matrix_view[2][2]);
+  mat4 billboard = mat4(
+    vec4(right, 0.0),
+    vec4(forward, 0.0),
+    vec4(up, 0.0),
+    vec4(0.0, 0.0, 0.0, 1.0)
+  );
+  return effectTRS(
+    vec3(0.0, uEffectParam0, 0.0),
+    vec3(scale),
+    billboard
   );
 }
 

@@ -180,6 +180,229 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 }
 `;
 
+/**
+ * Cuerpo del haz de `Psíquico`: tres esferas estiradas crecen desde el
+ * lanzador hasta la punta. La longitud viaja en `uEffectParam0`.
+ */
+export const MOTION_PSYCHIC_BEAM_BODY_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = 1.0 - pow(1.0 - min(1.0, uniform.uEffectTime / 0.1), 2.0);
+  let length = max(0.0001, uniform.uEffectParam0 * reveal);
+  let pulse = 0.9 + sin(uniform.uEffectTime * 34.0) * 0.08;
+  let fade = effectEnvelope(0.05, 0.22);
+  let width = max(0.0001, a0.x * pulse * fade);
+  return effectTRS(
+    vec3f(0.0, 0.0, length * 0.5),
+    vec3f(width, width, length),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros del haz de `Psíquico`: recorren la línea, se mecen, giran y se ondulan.
+ * `anim0 = [offset, inclinación, giro, fase]`; `anim1.x` es la escala base.
+ */
+export const MOTION_PSYCHIC_BEAM_RINGS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let time = uniform.uEffectTime;
+  let reveal = 1.0 - pow(1.0 - min(1.0, time / 0.1), 2.0);
+  let path = fract(time * 2.5 + a0.x);
+  let sway = uniform.uEffectParam1 * 0.22;
+  let pulse = 0.9 + sin(time * 34.0) * 0.08;
+  let fade = effectEnvelope(0.04, 0.22);
+  let scale = max(
+    0.0001,
+    a1.x * (0.7 + pulse * 0.5) *
+    (0.55 + sin(path * EFFECT_PI) * 0.9) * fade
+  );
+  let position = vec3f(
+    sin(time * 9.0 + a0.x * 6.28318530718) * sway,
+    cos(time * 7.0 + a0.x * 6.28318530718) * sway,
+    uniform.uEffectParam0 * reveal * (0.06 + path * 0.94)
+  );
+  let tilt = (90.0 + a0.y) * EFFECT_DEG;
+  let swayYaw = sin(time * 5.0 + a0.x * 6.0) * 18.0 * EFFECT_DEG;
+  let spin = (time * a0.z + a0.x * 180.0) * EFFECT_DEG;
+  return effectTRS(position, vec3f(scale), effectEuler(tilt, swayYaw, spin));
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let angle = atan2(vertexPosition.x, vertexPosition.z);
+  let wave = sin(angle * 4.0 + uniform.uEffectTime * 11.0 + a0.w * 6.28318530718);
+  return vec3f(
+    vertexPosition.x,
+    vertexPosition.y + wave * uniform.uEffectParam2,
+    vertexPosition.z
+  );
+}
+`;
+
+/** Fogonazos del haz de `Psíquico`: `anim0 = [z, retardo, escala, giroX]`. */
+export const MOTION_PSYCHIC_BEAM_FLASH_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = clamp((uniform.uEffectTime - a0.y) / 0.16, 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - local, 2.0);
+  let fade = effectEnvelope(0.02, 0.2);
+  let scale = max(
+    0.0001,
+    a0.z * (0.35 + ease * 0.65) * (1.0 - local) * fade
+  );
+  return effectTRS(
+    vec3f(0.0, 0.0, a0.x),
+    vec3f(scale),
+    effectRotX(a0.w * EFFECT_DEG)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros de la esfera de `Psíquico`: miran a cámara, giran, crecen y se ondulan.
+ * `anim0 = [offsetX, offsetY, tamaño, retardo]`; `anim1 = [giro, fase, 0, 0]`.
+ */
+export const MOTION_PSYCHIC_ORB_RINGS_WGSL = `
+#ifndef LINEAR_DEPTH
+uniform matrix_view: mat4x4f;
+#endif
+
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let time = uniform.uEffectTime;
+  let local = clamp((time - a0.w) / 0.22, 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - local, 2.0);
+  let fade = effectEnvelope(0.04, 0.26);
+  let scale = max(
+    0.0001,
+    a0.z * (0.22 + 0.78 * ease) *
+    (0.98 + sin(time * 11.0 + a1.y) * 0.02) * fade
+  );
+  let right = vec3f(uniform.matrix_view[0][0], uniform.matrix_view[1][0], uniform.matrix_view[2][0]);
+  let up = vec3f(uniform.matrix_view[0][1], uniform.matrix_view[1][1], uniform.matrix_view[2][1]);
+  let forward = vec3f(uniform.matrix_view[0][2], uniform.matrix_view[1][2], uniform.matrix_view[2][2]);
+  let spin = (time * a1.x + a1.y * 41.0) * EFFECT_DEG;
+  let spinRight = right * cos(spin) + up * sin(spin);
+  let spinUp = up * cos(spin) - right * sin(spin);
+  let billboard = mat4x4f(
+    vec4f(spinRight, 0.0),
+    vec4f(forward, 0.0),
+    vec4f(spinUp, 0.0),
+    vec4f(0.0, 0.0, 0.0, 1.0)
+  );
+  let position = vec3f(0.0, uniform.uEffectParam0, 0.0) + right * a0.x + up * a0.y;
+  return effectTRS(position, vec3f(scale), billboard);
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let angle = atan2(vertexPosition.x, vertexPosition.z);
+  let wave = sin(angle * 5.0 + uniform.uEffectTime * 11.0 + a1.y * 6.28318530718);
+  let radial = normalize(vertexPosition.xz);
+  return vec3f(
+    vertexPosition.x + radial.x * wave * uniform.uEffectParam2,
+    vertexPosition.y,
+    vertexPosition.z + radial.y * wave * uniform.uEffectParam2
+  );
+}
+`;
+
+/** Rayos del impacto psíquico: `anim0 = [ángulo, longitud, altura, retardo]`. */
+export const MOTION_PSYCHIC_RAYS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = clamp((uniform.uEffectTime - a0.w) / 0.24, 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - local, 3.0);
+  let fadeIn = min(1.0, local * 4.0);
+  let fadeOut = min(
+    1.0,
+    max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.28)
+  );
+  let fade = fadeIn * fadeOut;
+  let length = max(0.0001, a0.y * ease);
+  let distance = 0.08 + length * 0.5;
+  let thickness = max(0.0001, a1.x * fade);
+  return effectTRS(
+    vec3f(
+      sin(a0.x) * distance,
+      uniform.uEffectParam0 + a0.z * ease,
+      cos(a0.x) * distance
+    ),
+    vec3f(thickness, thickness, max(0.0001, length * fade)),
+    effectRotY(a0.x)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Esfera de `Psíquico`: `anim0 = [diámetro, retardo, crecimiento, fundido]`. */
+export const MOTION_PSYCHIC_SHELL_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = clamp((uniform.uEffectTime - a0.y) / max(0.0001, a0.z), 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - local, 2.0);
+  let lifeFade = effectEnvelope(0.05, uniform.uEffectParam1);
+  var earlyFade = 1.0;
+  if (a0.w > 0.0) {
+    earlyFade = max(0.0, 1.0 - (uniform.uEffectTime - a0.y) / max(0.0001, a0.w));
+  }
+  let scale = max(0.0001, a0.x * (0.35 + 0.65 * ease) * lifeFade * earlyFade);
+  return effectTRS(
+    vec3f(0.0, uniform.uEffectParam0, 0.0),
+    vec3f(scale),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aro exterior de `Psíquico` orientado a cámara. Usa `matrix_view` para que el
+ * círculo mire a la cámara de cada vista.
+ */
+export const MOTION_PSYCHIC_RIM_WGSL = `
+#ifndef LINEAR_DEPTH
+uniform matrix_view: mat4x4f;
+#endif
+
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = clamp((uniform.uEffectTime - a0.y) / max(0.0001, a0.z), 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - local, 2.0);
+  let lifeFade = effectEnvelope(0.05, uniform.uEffectParam1);
+  var earlyFade = 1.0;
+  if (a0.w > 0.0) {
+    earlyFade = max(0.0, 1.0 - (uniform.uEffectTime - a0.y) / max(0.0001, a0.w));
+  }
+  let scale = max(0.0001, a0.x * (0.35 + 0.65 * ease) * lifeFade * earlyFade);
+  let right = vec3f(uniform.matrix_view[0][0], uniform.matrix_view[1][0], uniform.matrix_view[2][0]);
+  let up = vec3f(uniform.matrix_view[0][1], uniform.matrix_view[1][1], uniform.matrix_view[2][1]);
+  let forward = vec3f(uniform.matrix_view[0][2], uniform.matrix_view[1][2], uniform.matrix_view[2][2]);
+  let billboard = mat4x4f(
+    vec4f(right, 0.0),
+    vec4f(forward, 0.0),
+    vec4f(up, 0.0),
+    vec4f(0.0, 0.0, 0.0, 1.0)
+  );
+  return effectTRS(
+    vec3f(0.0, uniform.uEffectParam0, 0.0),
+    vec3f(scale),
+    billboard
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
 /** Cristales de `Ventisca`: caen, se clavan y se asientan. */
 export const MOTION_BLIZZARD_CRYSTALS_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {

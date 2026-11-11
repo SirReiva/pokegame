@@ -39,6 +39,7 @@ habilidad, prueba esta lista.
 | Articuno | **Viento Gélido** | 26 púas, 10 nieblas y 12 chispas en lotes | Que las púas broten del suelo, la niebla se abra y las chispas suban y se apaguen. |
 | Tyranitar | **Terremoto** | 28 rocas, 28 puffs y 14 grietas en lotes | Que las rocas caigan, levanten polvo y las grietas oscilen. |
 | Groudon | **Filo del Abismo** | 28 rocas, 28 puffs y 14 grietas en lotes | Mismo chequeo, con el radio y el color de Groudon. |
+| Mewtwo | **Psíquico** | Haz y esfera con lotes instanciados; aros ondulados en vertex shader | Que el haz salga del lanzador, los aros recorran la línea y el objetivo quede dentro de la esfera con los aros ondulando. El update solo debe avanzar `uEffectTime`. |
 | Mewtwo | **Telequinesis** | Onda psíquica deformada en vertex shader | Que la cinta del cono ondulo en altura y se retuerza entre borde interior y exterior, sin que la malla se quede plana. |
 | Mew | **Golpe Psíquico** | Onda psíquica deformada en vertex shader | Mismo chequeo, con el color y alcance de Mew. |
 | Pikachu | **Rayo** | Rayos unitarios cacheados y escalados | Que el haz siga avanzando desde el lanzador, que los dos rayos giren en sentidos opuestos y que no se vea estirado ni cortado. |
@@ -63,8 +64,8 @@ Ahora todas las áreas (`ring`, `grass`, `water`, `cyclone`, `heat`, `fire`,
 
 Siguen con entidades por elemento:
 
-- Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air`, `rock` y
-  `psychic` (salvo el haz eléctrico cacheado).
+- Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air` y `rock`
+  (salvo el haz eléctrico cacheado y el haz psíquico, que ya usan lotes).
 - Proyectiles e impactos pequeños.
 - El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
   comprueba que la erupción coincide con el punto donde emerge el lanzador.
