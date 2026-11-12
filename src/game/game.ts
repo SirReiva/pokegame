@@ -13,12 +13,8 @@ import {
   isCommonAbilityId,
   type AbilityDef,
   type AbilitySlot,
-  type AoeStyle,
-  type BeamStyle,
   type BuffSpec,
   type BuffStat,
-  type ImpactStyle,
-  type ProjectileStyle,
   type SlowSpec
 } from './abilities';
 import {
@@ -387,19 +383,6 @@ interface PendingAoeEnd {
   remaining: number;
   /** Tiempo transcurrido desde que apareció el área. */
   elapsed: number;
-}
-
-/**
- * Estilos de efecto que hay que precompilar para una partida. `aoeCones` son
- * los estilos de área que alguna habilidad usa con `aoeShape: 'cone'`: su
- * camino de render (malla del abanico y partículas) es distinto del circular.
- */
-interface WarmupStyles {
-  projectiles: ProjectileStyle[];
-  impacts: ImpactStyle[];
-  beams: BeamStyle[];
-  aoes: AoeStyle[];
-  aoeCones: AoeStyle[];
 }
 
 /**
@@ -816,7 +799,7 @@ export class Game {
 
     this.combatFx.setWarmupLayer(layer.id);
 
-    const calls = this.buildWarmupCalls(this.collectWarmupStyles());
+    const calls = this.buildWarmupCalls(this.collectWarmupAbilities());
     const batchSize = Math.max(1, CONFIG.performance.warmUpBatchSize);
     const batches = Math.ceil(calls.length / batchSize);
 
@@ -853,25 +836,15 @@ export class Game {
     }
   }
 
-  private collectWarmupStyles(): WarmupStyles {
-    const projectiles = new Set<ProjectileStyle>(['orb']);
-    const impacts = new Set<ImpactStyle>(['hit']);
-    const beams = new Set<BeamStyle>(['electric']);
-    const aoes = new Set<AoeStyle>(['ring']);
-    const aoeCones = new Set<AoeStyle>();
-
+  /**
+   * Habilidades que pueden lanzarse en esta partida. Se deduplican por id y se
+   * calientan con sus valores reales (radio, ángulo y color) para que las
+   * mallas y los emisores queden cacheados antes del primer casteo.
+   */
+  private collectWarmupAbilities(): AbilityDef[] {
+    const abilities = new Map<string, AbilityDef>();
     const add = (def: AbilityDef | null | undefined) => {
-      if (!def) return;
-      // El impacto lo puede usar cualquier forma (melee, proyectil, haz...).
-      impacts.add(def.impactStyle);
-      // El resto de estilos solo se usa con su forma correspondiente. Añadir
-      // los cuatro por habilidad calentaba efectos que nunca se iban a lanzar.
-      if (def.shape === 'projectile') projectiles.add(def.projectileStyle);
-      if (def.shape === 'beam') beams.add(def.beamStyle);
-      if (def.shape === 'aoe') {
-        aoes.add(def.aoeStyle);
-        if (def.aoeShape === 'cone') aoeCones.add(def.aoeStyle);
-      }
+      if (def) abilities.set(def.id, def);
     };
 
     const ids = this.options.pokemonIds;
@@ -890,74 +863,128 @@ export class Game {
     }
     for (const def of Object.values(COMMON_ABILITIES)) add(def);
 
-    return {
-      projectiles: [...projectiles],
-      impacts: [...impacts],
-      beams: [...beams],
-      aoes: [...aoes],
-      aoeCones: [...aoeCones]
-    };
+    return [...abilities.values()];
   }
 
-  private buildWarmupCalls(styles: WarmupStyles): Array<() => void> {
+  private buildWarmupCalls(abilities: AbilityDef[]): Array<() => void> {
     const calls: Array<() => void> = [];
-    const color: [number, number, number] = [255, 255, 255];
+    const white: [number, number, number] = [255, 255, 255];
     const x = 0;
     const z = 0;
+    const seen = new Set<string>();
+    const push = (key: string, call: () => void) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      calls.push(call);
+    };
 
-    for (const style of styles.projectiles) {
-      calls.push(() =>
-        this.combatFx.spawnProjectile(x, z, color, 0.45, style, 1, 0)
+    for (const def of abilities) {
+      const radius = Math.max(0.08, def.radius);
+      const padding = maxHitRadius();
+      const colorKey = `${def.color[0]},${def.color[1]},${def.color[2]}`;
+
+      push(`impact:${def.impactStyle}:${colorKey}`, () =>
+        this.combatFx.spawnImpact(x, z, def.color, 1, def.impactStyle)
       );
+
+      if (def.shape === 'projectile') {
+        push(
+          `projectile:${def.projectileStyle}:${radius.toFixed(3)}:${colorKey}`,
+          () =>
+            this.combatFx.spawnProjectile(
+              x,
+              z,
+              def.color,
+              radius,
+              def.projectileStyle,
+              1,
+              0
+            )
+        );
+      } else if (def.shape === 'beam') {
+        push(`beam:${def.beamStyle}:${radius.toFixed(3)}:${colorKey}`, () =>
+          this.combatFx.spawnBeam(-1, 0, 1, 0, def.color, radius, def.beamStyle)
+        );
+      } else if (def.shape === 'aoe') {
+        const length = radius + padding;
+        if (def.aoeShape === 'cone') {
+          push(
+            `aoe-cone:${def.aoeStyle}:${length.toFixed(3)}:${def.halfAngle}:${colorKey}`,
+            () => {
+              this.combatFx.spawnAoeCone(
+                x,
+                z,
+                0,
+                1,
+                length,
+                def.halfAngle,
+                def.color,
+                def.aoeStyle,
+                Math.max(0.1, def.aoeDuration)
+              );
+              this.combatFx.spawnAoeConeTelegraph(
+                x,
+                z,
+                0,
+                1,
+                length,
+                def.halfAngle,
+                def.color,
+                0.4,
+                0.4
+              );
+            }
+          );
+        } else {
+          push(`aoe:${def.aoeStyle}:${length.toFixed(3)}:${colorKey}`, () =>
+            this.combatFx.spawnAoe(
+              x,
+              z,
+              length,
+              def.color,
+              def.aoeStyle,
+              Math.max(0.1, def.aoeDuration)
+            )
+          );
+        }
+      } else if (def.shape === 'melee') {
+        push(
+          `melee:${def.impactStyle}:${(def.range + padding).toFixed(3)}:${def.halfAngle}:${colorKey}`,
+          () =>
+            this.combatFx.spawnMelee(
+              x,
+              z,
+              0,
+              def.range + padding,
+              def.halfAngle,
+              def.color,
+              def.impactStyle
+            )
+        );
+      } else if (def.shape === 'dash') {
+        push(`dash:${colorKey}`, () =>
+          this.combatFx.spawnDash(-1, 0, 1, 0, def.color)
+        );
+      } else if (!def.shield && def.healSelf <= 0) {
+        push(`buff:${colorKey}`, () =>
+          this.combatFx.spawnBuff(x, z, def.color, Math.max(0.8, def.radius))
+        );
+      }
     }
-    for (const style of styles.impacts) {
-      calls.push(() => this.combatFx.spawnImpact(x, z, color, 1, style));
-      calls.push(() =>
-        this.combatFx.spawnMelee(x, z, 0, 2, 45, color, style)
-      );
-    }
-    for (const style of styles.beams) {
-      calls.push(() =>
-        this.combatFx.spawnBeam(-1, 0, 1, 0, color, 0.3, style)
-      );
-    }
-    calls.push(() =>
-      this.combatFx.spawnBeamLane(-1, 0, 1, 0, 0.3, color, 0, 'electric')
+
+    // Efectos compartidos que no dependen de una habilidad concreta.
+    push('lane', () =>
+      this.combatFx.spawnBeamLane(-1, 0, 1, 0, 0.3, white, 0, 'electric')
     );
-    for (const style of styles.aoes) {
-      calls.push(() =>
-        this.combatFx.spawnAoe(x, z, 1.5, color, style, 0.6)
-      );
-    }
-    // Los conos usan mallas y partículas propias: se precalienta el camino de
-    // cada estilo que alguna habilidad lance con `aoeShape: 'cone'`.
-    for (const style of styles.aoeCones) {
-      calls.push(() =>
-        this.combatFx.spawnAoeCone(x, z, 0, 1, 2, 12.5, color, style, 0.6)
-      );
-      calls.push(() =>
-        this.combatFx.spawnAoeConeTelegraph(
-          x,
-          z,
-          0,
-          1,
-          2,
-          12.5,
-          color,
-          0.6,
-          0.6
-        )
-      );
-    }
-    calls.push(() =>
-      this.combatFx.spawnAoeTelegraph(x, z, 1.5, color, 0.6, 0.6)
+    push('telegraph', () =>
+      this.combatFx.spawnAoeTelegraph(x, z, 1.5, white, 0.6, 0.6)
     );
-    calls.push(() => this.combatFx.spawnDash(-1, 0, 1, 0, color));
-    calls.push(() => this.combatFx.spawnBuff(x, z, color, 1));
-    calls.push(() =>
-      this.combatFx.spawnProtectionShield({ x, z }, color, 1, 1, 0.5)
+    push('dash', () => this.combatFx.spawnDash(-1, 0, 1, 0, white));
+    push('buff', () => this.combatFx.spawnBuff(x, z, white, 1));
+    push('shield', () =>
+      this.combatFx.spawnProtectionShield({ x, z }, white, 1, 1, 0.5)
     );
-    calls.push(() => this.combatFx.spawnHeal(x, z, color, 1));
+    push('heal', () => this.combatFx.spawnHeal(x, z, white, 1));
 
     return calls;
   }

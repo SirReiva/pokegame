@@ -38,8 +38,11 @@ export const CONFIG = {
      * que juegan la partida. Evita el tirón del primer casteo de cada estilo.
      */
     warmUpShaders: true as boolean,
-    /** Efectos creados por lote de precarga. Menos = menos pico de memoria. */
-    warmUpBatchSize: 4,
+    /**
+     * Efectos creados por lote de precarga. Menos = menos pico de memoria y
+     * menos bloqueo del hilo principal; el catálogo completo se calienta igual.
+     */
+    warmUpBatchSize: 2,
   },
   sprite: {
     pixelScale: PIXEL_SCALE,

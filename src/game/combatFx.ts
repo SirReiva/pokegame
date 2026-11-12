@@ -83,6 +83,14 @@ const TELEGRAPH_WALL_HEIGHT = 0.75;
 /** Opacidad de la pared: suficiente para leerla sin bloquear la vista. */
 const TELEGRAPH_WALL_OPACITY = 0.42;
 
+/**
+ * Tope de recursos ociosos por pool. Sin límite, un pico de efectos (8 vistas,
+ * varias habilidades a la vez) dejaría vivos para siempre cientos de materiales
+ * y emisores. Al superar el tope se destruye el recurso sobrante.
+ */
+const MATERIAL_POOL_LIMIT = 48;
+const PARTICLE_POOL_LIMIT = 8;
+
 /** Opacidad base del arco melee según el estilo de impacto. */
 const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   poison: 0.38,
@@ -1366,6 +1374,21 @@ export class CombatFx {
    */
   private readonly meshCache = new Map<string, pc.Mesh>();
   /**
+   * Materiales liberados por efectos terminados, agrupados por fábrica. Evita
+   * crear un `StandardMaterial` nuevo (y sus bind groups) en cada casteo.
+   */
+  private readonly materialPools = new Map<string, pc.StandardMaterial[]>();
+  /** Fábrica de origen de cada material, para devolverlo a su pool. */
+  private readonly materialKinds = new WeakMap<pc.StandardMaterial, string>();
+  /**
+   * Emisores de partículas retirados de escena, agrupados por configuración.
+   * Reutilizarlos evita reconstruir buffers y precalentar el emisor en cada
+   * impacto.
+   */
+  private readonly particlePools = new Map<string, pc.Entity[]>();
+  /** Configuración de cada emisor cedido por un pool. */
+  private readonly particleKeys = new Map<pc.Entity, string>();
+  /**
    * Duración del efecto visual de cada haz. El carril del suelo se mantiene
    * vivo lo que dura el propio haz para que ambos desaparezcan a la vez.
    */
@@ -1718,7 +1741,7 @@ export class CombatFx {
     color: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('basic');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1756,7 +1779,7 @@ export class CombatFx {
     color: readonly [number, number, number],
     opacity = TELEGRAPH_WALL_OPACITY
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('telegraph-wall');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1785,7 +1808,7 @@ export class CombatFx {
     opacity: number,
     blendType: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('shield');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1813,7 +1836,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('flame');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1824,9 +1847,11 @@ export class CombatFx {
       tint[2] / 255
     );
     material.emissiveMap = this.flameTexture;
+    material.emissiveMapTiling.set(1, 1);
     material.emissiveIntensity = 1.12;
     material.opacityMap = this.flameTexture;
     material.opacityMapChannel = 'a';
+    material.opacityMapTiling.set(1, 1);
     material.opacity = opacity;
     material.blendType = pc.BLEND_ADDITIVEALPHA;
     material.depthWrite = false;
@@ -1841,7 +1866,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('leaf');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1873,7 +1898,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('water');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1902,7 +1927,7 @@ export class CombatFx {
     opacity: number,
     blendType: number = pc.BLEND_NORMAL
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('vertex-color');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -1942,7 +1967,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('ice');
     material.useLighting = true;
     material.useSkybox = false;
     material.useFog = true;
@@ -1982,7 +2007,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('rock');
     material.useLighting = true;
     material.useSkybox = false;
     material.useFog = true;
@@ -2039,7 +2064,7 @@ export class CombatFx {
     tint: readonly [number, number, number],
     opacity: number
   ): pc.StandardMaterial {
-    const material = new pc.StandardMaterial();
+    const material = this.acquireMaterial('spore');
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = true;
@@ -2097,11 +2122,6 @@ export class CombatFx {
     parent: pc.Entity,
     options: FlameParticleOptions
   ): void {
-    const entity = new pc.Entity('flame-particles');
-    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
-    if (options.yaw) entity.setLocalEulerAngles(0, options.yaw, 0);
-    parent.addChild(entity);
-
     const data: Record<string, unknown> = {
       numParticles: options.numParticles,
       lifetime: options.lifetime,
@@ -2165,7 +2185,15 @@ export class CombatFx {
         keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
       };
     }
-    entity.addComponent('particlesystem', data);
+    this.attachParticleEntity(
+      parent,
+      'flame',
+      'flame-particles',
+      options,
+      data,
+      [255, 255, 255],
+      this.flameTexture
+    );
   }
 
   /**
@@ -2177,10 +2205,6 @@ export class CombatFx {
     options: FlameParticleOptions,
     tint: readonly [number, number, number]
   ): void {
-    const entity = new pc.Entity('leaf-particles');
-    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
-    parent.addChild(entity);
-
     const r = tint[0] / 255;
     const g = tint[1] / 255;
     const b = tint[2] / 255;
@@ -2247,7 +2271,15 @@ export class CombatFx {
         keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
       };
     }
-    entity.addComponent('particlesystem', data);
+    this.attachParticleEntity(
+      parent,
+      'leaf',
+      'leaf-particles',
+      options,
+      data,
+      tint,
+      this.leafTexture
+    );
   }
 
   /**
@@ -2260,10 +2292,6 @@ export class CombatFx {
     tint: readonly [number, number, number],
     texture: pc.Texture = this.sporeTexture
   ): void {
-    const entity = new pc.Entity('spore-particles');
-    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
-    parent.addChild(entity);
-
     const r = tint[0] / 255;
     const g = tint[1] / 255;
     const b = tint[2] / 255;
@@ -2328,7 +2356,15 @@ export class CombatFx {
         keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
       };
     }
-    entity.addComponent('particlesystem', data);
+    this.attachParticleEntity(
+      parent,
+      'spore',
+      'spore-particles',
+      options,
+      data,
+      tint,
+      texture
+    );
   }
 
   /** Luz omni corta y cálida: tiñe el suelo y los sprites alrededor del fuego. */
@@ -2363,6 +2399,167 @@ export class CombatFx {
     mesh.incRefCount();
     this.meshCache.set(key, mesh);
     return mesh;
+  }
+
+  /** Malla compartida del anillo de media luna que usan áreas e impactos. */
+  private cachedArcBand(
+    innerRadius: number,
+    outerRadius: number,
+    halfAngle: number,
+    segments: number
+  ): pc.Mesh {
+    const key = `arc-band:${innerRadius.toFixed(3)}:${outerRadius.toFixed(3)}:${halfAngle.toFixed(3)}:${segments}`;
+    return this.cachedMesh(key, () => createArcBandMesh(
+      this.device,
+      innerRadius,
+      outerRadius,
+      halfAngle,
+      segments
+    ).mesh);
+  }
+
+  /** Estrella de cuatro puntas compartida entre proyectiles e impactos. */
+  private cachedShuriken(outerRadius: number, innerRadius: number): pc.Mesh {
+    const key = `shuriken:${outerRadius.toFixed(3)}:${innerRadius.toFixed(3)}`;
+    return this.cachedMesh(key, () =>
+      createShurikenMesh(this.device, outerRadius, innerRadius)
+    );
+  }
+
+  /** Aspa de viento compartida; sus dimensiones dependen del radio del efecto. */
+  private cachedWindBlade(
+    length: number,
+    width: number,
+    bend: number,
+    segments: number
+  ): pc.Mesh {
+    const key = `wind-blade:${length.toFixed(3)}:${width.toFixed(3)}:${bend.toFixed(3)}:${segments}`;
+    return this.cachedMesh(key, () =>
+      createWindBladeMesh(this.device, length, width, bend, segments)
+    );
+  }
+
+  private acquireMaterial(kind: string): pc.StandardMaterial {
+    const material = this.materialPools.get(kind)?.pop();
+    if (material) return material;
+    const created = new pc.StandardMaterial();
+    this.materialKinds.set(created, kind);
+    return created;
+  }
+
+  private releaseMaterial(material: pc.StandardMaterial): void {
+    const kind = this.materialKinds.get(material);
+    if (!kind) {
+      material.destroy();
+      return;
+    }
+    let pool = this.materialPools.get(kind);
+    if (!pool) {
+      pool = [];
+      this.materialPools.set(kind, pool);
+    }
+    if (pool.length >= MATERIAL_POOL_LIMIT) {
+      material.destroy();
+      return;
+    }
+    pool.push(material);
+  }
+
+  /**
+   * Devuelve varios materiales al pool sin duplicarlos: algunos efectos
+   * comparten el mismo material entre varias entidades.
+   */
+  private releaseMaterials(materials: readonly pc.StandardMaterial[]): void {
+    for (const material of new Set(materials)) this.releaseMaterial(material);
+  }
+
+  /**
+   * Clave estructural del emisor. Incluye el tinte y todas las opciones que
+   * definen sus curvas para que un emisor reutilizado se comporte igual que
+   * uno recién creado.
+   */
+  private particleKey(
+    kind: string,
+    options: FlameParticleOptions,
+    tint: readonly [number, number, number],
+    texture: pc.Texture
+  ): string {
+    const textureKey =
+      texture === this.waterTexture
+        ? 'water'
+        : texture === this.leafTexture
+          ? 'leaf'
+          : texture === this.flameTexture
+            ? 'flame'
+            : 'spore';
+    return JSON.stringify({ kind, options, tint, texture: textureKey });
+  }
+
+  /**
+   * Retira el emisor del efecto y lo guarda para el siguiente casteo. Se
+   * deshabilita para que deje de simular mientras espera en el pool.
+   */
+  private releasePooledParticles(root: pc.Entity): void {
+    for (const child of [...root.children] as pc.Entity[]) {
+      const key = this.particleKeys.get(child);
+      if (key) {
+        child.parent?.removeChild(child);
+        child.particlesystem?.stop();
+        child.enabled = false;
+        let pool = this.particlePools.get(key);
+        if (!pool) {
+          pool = [];
+          this.particlePools.set(key, pool);
+        }
+        if (pool.length >= PARTICLE_POOL_LIMIT) {
+          this.particleKeys.delete(child);
+          child.destroy();
+        } else {
+          pool.push(child);
+        }
+        continue;
+      }
+      this.releasePooledParticles(child);
+    }
+  }
+
+  /**
+   * Destruye la raíz de un efecto devolviendo antes sus emisores al pool. Es
+   * obligatorio usarlo en lugar de `entity.destroy()` para no destruir los
+   * emisores compartidos.
+   */
+  private destroyFxRoot(entity: pc.Entity): void {
+    this.releasePooledParticles(entity);
+    entity.destroy();
+  }
+
+  /** Añade un emisor al padre, reutilizando uno del pool si hay disponible. */
+  private attachParticleEntity(
+    parent: pc.Entity,
+    kind: string,
+    name: string,
+    options: FlameParticleOptions,
+    data: Record<string, unknown>,
+    tint: readonly [number, number, number],
+    texture: pc.Texture
+  ): void {
+    const key = this.particleKey(kind, options, tint, texture);
+    const pooled = this.particlePools.get(key)?.pop();
+    const entity = pooled ?? new pc.Entity(name);
+    if (!pooled) {
+      entity.addComponent('particlesystem', data);
+      this.particleKeys.set(entity, key);
+    } else {
+      entity.enabled = true;
+    }
+    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
+    if (options.yaw) entity.setLocalEulerAngles(0, options.yaw, 0);
+    parent.addChild(entity);
+    if (pooled) {
+      // `reset()` vuelve a precalentar el emisor y reinicia colores y tiempos.
+      pooled.particlesystem?.reset();
+      pooled.particlesystem?.play();
+    }
   }
 
   private createEntity(
@@ -2413,8 +2610,8 @@ export class CombatFx {
     const index = this.effects.indexOf(effect);
     if (index < 0) return;
     this.effects.splice(index, 1);
-    effect.entity.destroy();
-    for (const material of effect.materials) material.destroy();
+    this.destroyFxRoot(effect.entity);
+    this.releaseMaterials(effect.materials);
   }
 
   /**
@@ -2553,8 +2750,8 @@ export class CombatFx {
       update: () => {},
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        entity.destroy();
-        material.destroy();
+        this.destroyFxRoot(entity);
+        this.releaseMaterial(material);
       }
     };
   }
@@ -2650,8 +2847,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -2792,8 +2989,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -2858,6 +3055,7 @@ export class CombatFx {
         );
         leafRing.setLocalEulerAngles(0, time * 420, 0);
         leafMaterial.opacity = 0.75 + Math.random() * 0.25;
+        leafMaterial.update();
       }
     };
     visual.update(0);
@@ -2868,8 +3066,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -2937,8 +3135,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3071,8 +3269,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3112,12 +3310,12 @@ export class CombatFx {
     glow.setLocalScale(radius * 3, radius * 3, radius * 3);
 
     const star = this.createEntity(
-      createShurikenMesh(this.device, radius * 2.1, radius * 0.56),
+      this.cachedShuriken(radius * 2.1, radius * 0.56),
       [bladeMaterial],
       root
     );
     const starEdge = this.createEntity(
-      createShurikenMesh(this.device, radius * 1.62, radius * 0.42),
+      this.cachedShuriken(radius * 1.62, radius * 0.42),
       [edgeMaterial],
       star
     );
@@ -3178,8 +3376,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3284,8 +3482,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3427,8 +3625,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3536,8 +3734,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -3714,8 +3912,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -7395,8 +7593,8 @@ export class CombatFx {
     if (!telegraph.active) return;
     telegraph.active = false;
     this.telegraphs.delete(telegraph);
-    telegraph.entity.destroy();
-    for (const material of telegraph.materials) material.destroy();
+    this.destroyFxRoot(telegraph.entity);
+    this.releaseMaterials(telegraph.materials);
   }
 
   /**
@@ -9451,13 +9649,13 @@ export class CombatFx {
     starPivot.setLocalPosition(0, 0.62, 0);
     root.addChild(starPivot);
     const star = this.createEntity(
-      createShurikenMesh(this.device, 0.95, 0.26),
+      this.cachedShuriken(0.95, 0.26),
       [bladeMaterial],
       starPivot
     );
     star.setLocalEulerAngles(90, 0, 0);
     const innerStar = this.createEntity(
-      createShurikenMesh(this.device, 0.58, 0.16),
+      this.cachedShuriken(0.58, 0.16),
       [coreMaterial],
       star
     );
@@ -10110,13 +10308,13 @@ export class CombatFx {
     root.addChild(crossWheel);
     for (let index = 0; index < 3; index++) {
       const blade = this.createEntity(
-        createWindBladeMesh(this.device, radius * 5, 1.08, radius * 1.35, 10),
+        this.cachedWindBlade(radius * 5, 1.08, radius * 1.35, 10),
         [index === 1 ? hotMaterial : bladeMaterial],
         wheel
       );
       blade.setLocalEulerAngles(0, 0, index * 120);
       const cross = this.createEntity(
-        createWindBladeMesh(this.device, radius * 3.9, 0.98, radius * 1.05, 10),
+        this.cachedWindBlade(radius * 3.9, 0.98, radius * 1.05, 10),
         [index === 2 ? hotMaterial : bladeMaterial],
         crossWheel
       );
@@ -10208,8 +10406,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -10249,7 +10447,7 @@ export class CombatFx {
     glow.setLocalPosition(0, 0.62, 0);
 
     const rings: pc.Entity[] = [];
-    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    const ringMesh = this.cachedArcBand(0.955, 1, Math.PI, 64);
     for (let index = 0; index < 3; index++) {
       const ring = this.createEntity(ringMesh, [ringMaterial], root);
       ring.setLocalPosition(0, 0.1 + index * 0.02, 0);
@@ -10265,7 +10463,7 @@ export class CombatFx {
     for (let index = 0; index < 6; index++) {
       const angle = (index / 6) * Math.PI * 2 + 0.3;
       const blade = this.createEntity(
-        createWindBladeMesh(this.device, 0.55, 1.15, 0.16, 10),
+        this.cachedWindBlade(0.55, 1.15, 0.16, 10),
         [bladeMaterial],
         root
       );
@@ -10407,7 +10605,7 @@ export class CombatFx {
     ];
 
     const rings: pc.Entity[] = [];
-    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    const ringMesh = this.cachedArcBand(0.955, 1, Math.PI, 64);
     for (let index = 0; index < 2; index++) {
       const ring = this.createEntity(ringMesh, [ringMaterial], root);
       ring.setLocalPosition(0, 0.1 + index * 0.02, 0);
@@ -11485,8 +11683,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -11531,7 +11729,7 @@ export class CombatFx {
     body.setLocalPosition(0, 0.6, 0);
 
     const rings: pc.Entity[] = [];
-    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    const ringMesh = this.cachedArcBand(0.955, 1, Math.PI, 64);
     for (let index = 0; index < 2; index++) {
       const ring = this.createEntity(ringMesh, [ringMaterial], root);
       ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
@@ -11882,7 +12080,7 @@ export class CombatFx {
     floor.setLocalScale(radius * 2, 1, radius * 2);
 
     const rings: pc.Entity[] = [];
-    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    const ringMesh = this.cachedArcBand(0.955, 1, Math.PI, 64);
     for (let index = 0; index < 2; index++) {
       const ring = this.createEntity(ringMesh, [ringMaterial], root);
       ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
@@ -12059,7 +12257,7 @@ export class CombatFx {
     floor.setLocalScale(radius * 2, 1, radius * 2);
 
     const rings: pc.Entity[] = [];
-    const ringMesh = createArcBandMesh(this.device, 0.955, 1, Math.PI, 64).mesh;
+    const ringMesh = this.cachedArcBand(0.955, 1, Math.PI, 64);
     for (let index = 0; index < 2; index++) {
       const ring = this.createEntity(ringMesh, [ringMaterial], root);
       ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
@@ -12295,8 +12493,8 @@ export class CombatFx {
       update: (dt) => visual.update(dt),
       destroy: () => {
         if (!this.projectiles.delete(visual)) return;
-        root.destroy();
-        for (const material of materials) material.destroy();
+        this.destroyFxRoot(root);
+        this.releaseMaterials(materials);
       }
     };
   }
@@ -13761,8 +13959,8 @@ export class CombatFx {
     }
 
     for (const visual of this.projectiles) {
-      visual.entity.destroy();
-      for (const material of visual.materials) material.destroy();
+      this.destroyFxRoot(visual.entity);
+      this.releaseMaterials(visual.materials);
     }
     this.projectiles.clear();
   }
@@ -13784,6 +13982,15 @@ export class CombatFx {
     this.rockChunkMesh.destroy();
     for (const mesh of this.meshCache.values()) mesh.destroy();
     this.meshCache.clear();
+    for (const pool of this.particlePools.values()) {
+      for (const entity of pool) entity.destroy();
+    }
+    this.particlePools.clear();
+    this.particleKeys.clear();
+    for (const pool of this.materialPools.values()) {
+      for (const material of pool) material.destroy();
+    }
+    this.materialPools.clear();
     this.dustTexture.destroy();
   }
 }
