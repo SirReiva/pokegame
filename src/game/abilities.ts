@@ -65,6 +65,7 @@ export type ProjectileStyle =
   | 'poison'
   | 'psychic'
   | 'water'
+  | 'waterJet'
   | 'aura'
   | 'shuriken'
   | 'shadow'
@@ -126,6 +127,7 @@ export type AoeStyle =
   | 'sacredFlame'
   | 'ice'
   | 'blizzard'
+  | 'sheerCold'
   | 'ground'
   | 'fissure'
   | 'burrow'
@@ -2500,6 +2502,69 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Suicune                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('golpeCuerpo', 'Golpe Cuerpo', 'Normal', 'physical', 'melee')
+    .power(80)
+    .cooldown(0.8)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(2.2)
+    .radius(0.9)
+    .halfAngle(60)
+    .knockback(0.85)
+    .active(0.24).recovery(0)
+    .animation('attack')
+    .impact('hit')
+    .color(235, 228, 210)
+    .description(
+      'Embestida con todo el cuerpo que aparta a los rivales: 80 de potencia y 0,85 u de empuje. Ataque básico de Suicune; exige estar cerca.'
+    )
+);
+
+registerAbility(
+  ability('chorroAgua', 'Chorro de Agua', 'Water', 'special', 'projectile')
+    .power(68)
+    .cooldown(1.5)
+    .range(8.5)
+    .radius(0.22)
+    .projectile('waterJet', 14)
+    .impact('water')
+    .recovery(0.3)
+    .animation('shoot')
+    .color(96, 176, 255)
+    .description(
+      'Dispara un chorro compacto de agua a 8,5 u con 68 de potencia. Ataque básico a distancia de Suicune.'
+    )
+);
+
+registerAbility(
+  ability('frioPolar', 'Frío Polar', 'Ice', 'special', 'aoe')
+    .power(140)
+    .cooldown(8)
+    // El vértice nace 0,75 u por delante de Suicune y el cono avanza 7 u con
+    // una apertura total de 60° (30° a cada lado del eje).
+    .range(0.75)
+    .radius(7)
+    .halfAngle(30)
+    .aoeShape('cone')
+    .area('sheerCold', 'instant', 0.5)
+    .blockMovementDuringCast()
+    .radial(0.4)
+    .slow(0.45, 2.5)
+    .startup(0.85, { animation: 'charge' })
+    .armor(50)
+    // El cono es instantáneo al terminar la carga: sin clip de lanzamiento.
+    .animation(null)
+    .impact('ice')
+    .color(200, 240, 255)
+    .description(
+      'Definitiva: canaliza el aire polar durante 1,3 s sin poder moverse (0,85 s de carga y 0,45 s de recuperación) y exhala un cono de 60° que nace 0,75 u por delante de Suicune y avanza 7 u. El golpe ocurre al terminar la carga: 140 de potencia (el 40 % en el borde) y 55 % de ralentización durante 2,5 s. La carga tiene 50 de armadura, el cono se disipa en 0,5 s y el enfriamiento es de 8 s. Si el daño agota la armadura durante la canalización, se cancela.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2555,6 +2620,7 @@ MOVESETS['0250'] = [
   'fuegoSagrado'
 ];
 MOVESETS['0130'] = ['acuaCola', 'cascada', 'triturarGyarados', 'dragoaliento'];
+MOVESETS['0245'] = ['golpeCuerpo', 'chorroAgua', 'rayoHielo', 'frioPolar'];
 
 export function abilityForSlot(
   pokemonId: string,

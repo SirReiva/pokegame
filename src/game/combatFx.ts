@@ -1500,6 +1500,8 @@ export class CombatFx {
         this.spawnOrbProjectile(x, z, color, radius),
       water: (x, z, color, radius, dirX, dirZ) =>
         this.spawnWaterProjectile(x, z, radius, dirX, dirZ, color),
+      waterJet: (x, z, color, radius, dirX, dirZ) =>
+        this.spawnWaterJetProjectile(x, z, radius, dirX, dirZ, color),
       aura: (x, z, color, radius, dirX, dirZ) =>
         this.spawnAuraProjectile(x, z, color, radius, dirX, dirZ),
       shuriken: (x, z, color, radius, dirX, dirZ) =>
@@ -1572,6 +1574,10 @@ export class CombatFx {
         this.spawnIceAoe(x, z, radius, color, duration),
       blizzard: (x, z, radius, color, duration) =>
         this.spawnBlizzardAoe(x, z, radius, color, duration),
+      // En forma circular reutiliza la ventisca; el cono tiene su propio
+      // aliento helado (`spawnSheerColdCone`).
+      sheerCold: (x, z, radius, color, duration) =>
+        this.spawnBlizzardAoe(x, z, radius, color, duration),
       ground: (x, z, radius, color, duration) =>
         this.spawnGroundAoe(x, z, radius, color, duration),
       fissure: (x, z, radius, color, duration) =>
@@ -1587,6 +1593,17 @@ export class CombatFx {
     this.aoeConeFactories = {
       sacredFlame: (x, z, dirX, dirZ, length, halfAngleDeg, color, duration) =>
         this.spawnSacredFlameCone(
+          x,
+          z,
+          dirX,
+          dirZ,
+          length,
+          halfAngleDeg,
+          color,
+          duration
+        ),
+      sheerCold: (x, z, dirX, dirZ, length, halfAngleDeg, color, duration) =>
+        this.spawnSheerColdCone(
           x,
           z,
           dirX,
@@ -3412,6 +3429,184 @@ export class CombatFx {
   }
 
   /**
+   * Proyectil de chorro de agua: una gota alargada con núcleo blanco, cola de
+   * gotas que se desprenden y dos anillos de presión. La punta apunta a +Z
+   * local y la cola queda detrás, así que se orienta con la dirección de vuelo.
+   */
+  private spawnWaterJetProjectile(
+    x: number,
+    z: number,
+    radius: number,
+    dirX: number,
+    dirZ: number,
+    color: readonly [number, number, number]
+  ): EffectHandle {
+    const root = new pc.Entity('water-jet-projectile');
+    root.setPosition(x, 0.7, z);
+    root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
+    this.app.root.addChild(root);
+
+    const coreMaterial = this.createWaterMaterial([238, 253, 255], 0.95);
+    const bodyMaterial = this.createWaterMaterial(color, 0.55);
+    const foamMaterial = this.createWaterMaterial([210, 244, 255], 0.8);
+    const mistMaterial = this.createWaterMaterial(color, 0.14);
+    const trailMaterial = this.createWaterMaterial(color, 0.34);
+    const ringMaterial = this.createWaterMaterial([204, 242, 255], 0.72);
+    const materials = [
+      coreMaterial,
+      bodyMaterial,
+      foamMaterial,
+      mistMaterial,
+      trailMaterial,
+      ringMaterial
+    ];
+
+    // Halo translúcido: da volumen de agua sin tapar el núcleo.
+    const halo = this.createEntity(this.sphereMesh, [mistMaterial], root);
+    halo.setLocalPosition(0, 0, -radius * 0.3);
+    halo.setLocalScale(radius * 3.4, radius * 3, radius * 5.2);
+
+    // Cuerpo alargado en el eje de vuelo.
+    const body = this.createEntity(this.sphereMesh, [bodyMaterial], root);
+    body.setLocalScale(radius * 2.3, radius * 1.9, radius * 4.6);
+
+    // Núcleo y punta: la parte que más brilla.
+    const core = this.createEntity(this.sphereMesh, [coreMaterial], root);
+    core.setLocalPosition(0, 0, radius * 1.2);
+    core.setLocalScale(radius * 1.2, radius * 1.2, radius * 2.6);
+
+    const nose = this.createEntity(this.sphereMesh, [foamMaterial], root);
+    nose.setLocalPosition(0, 0, radius * 2.7);
+    nose.setLocalScale(radius, radius * 0.92, radius * 2);
+
+    // Cola: gotas cada vez más pequeñas que se separan del cuerpo.
+    const tail: {
+      entity: pc.Entity;
+      z: number;
+      size: number;
+      phase: number;
+    }[] = [];
+    for (let index = 0; index < 5; index++) {
+      const size = radius * (1.45 - index * 0.22);
+      const bead = this.createEntity(this.sphereMesh, [trailMaterial], root);
+      const beadZ = -radius * (2.7 + index * 1.05);
+      bead.setLocalPosition(0, 0, beadZ);
+      bead.setLocalScale(size, size, size * 1.7);
+      tail.push({ entity: bead, z: beadZ, size, phase: index * 1.3 });
+    }
+
+    // Gotas satélite: se desprenden del cuerpo y giran alrededor del eje.
+    const droplets: {
+      entity: pc.Entity;
+      angle: number;
+      orbit: number;
+      z: number;
+      phase: number;
+      speed: number;
+    }[] = [];
+    for (let index = 0; index < 6; index++) {
+      const size = radius * (0.2 + Math.random() * 0.16);
+      const drop = this.createEntity(this.sphereMesh, [foamMaterial], root);
+      drop.setLocalScale(size, size, size * 1.4);
+      droplets.push({
+        entity: drop,
+        angle: (index / 6) * Math.PI * 2,
+        orbit: radius * (1.5 + Math.random() * 0.8),
+        z: -radius * (0.4 + index * 0.55),
+        phase: Math.random() * Math.PI * 2,
+        speed: 2.4 + Math.random() * 1.8
+      });
+    }
+
+    // Anillos de presión: dos aros perpendiculares al vuelo que se expanden.
+    const rings: pc.Entity[] = [];
+    for (let index = 0; index < 2; index++) {
+      const ring = this.createEntity(this.torusMesh, [ringMaterial], root);
+      // El toro nace en el plano XZ; girarlo 90° en X lo deja mirando a +Z.
+      ring.setLocalEulerAngles(90, 0, 0);
+      ring.setLocalPosition(0, 0, radius * (0.6 + index * 1.1));
+      ring.setLocalScale(radius * 3, radius * 3, radius * 3);
+      rings.push(ring);
+    }
+
+    let time = 0;
+    const visual: ProjectileVisual = {
+      entity: root,
+      materials,
+      update: (dt) => {
+        time += dt;
+
+        const bodyPulse = 1 + Math.sin(time * 18) * 0.045;
+        const lengthPulse = 1 + Math.sin(time * 24 + 0.7) * 0.06;
+        body.setLocalScale(
+          radius * 2.3 * bodyPulse,
+          radius * 1.9 * bodyPulse,
+          radius * 4.6 * lengthPulse
+        );
+
+        const corePulse = 1 + Math.sin(time * 30) * 0.08;
+        core.setLocalScale(
+          radius * 1.2 * corePulse,
+          radius * 1.2 * corePulse,
+          radius * 2.6 * (1 + Math.sin(time * 26) * 0.1)
+        );
+        coreMaterial.opacity = 0.84 + Math.sin(time * 28) * 0.09;
+        bodyMaterial.opacity = 0.48 + Math.sin(time * 21) * 0.06;
+        foamMaterial.opacity = 0.72 + Math.sin(time * 24) * 0.08;
+        mistMaterial.opacity = 0.12 + Math.sin(time * 14) * 0.03;
+        trailMaterial.opacity = 0.28 + Math.sin(time * 17) * 0.05;
+        ringMaterial.opacity = 0.6 + Math.sin(time * 23) * 0.1;
+
+        for (const bead of tail) {
+          const sway = Math.sin(time * 8 + bead.phase) * radius * 0.22;
+          const bob = Math.cos(time * 10 + bead.phase) * radius * 0.14;
+          bead.entity.setLocalPosition(sway, bob, bead.z);
+          const pulse = 1 + Math.sin(time * 20 + bead.phase) * 0.12;
+          bead.entity.setLocalScale(
+            bead.size * pulse,
+            bead.size * pulse,
+            bead.size * 1.7 * pulse
+          );
+        }
+
+        for (const drop of droplets) {
+          const angle = drop.angle + time * drop.speed;
+          drop.entity.setLocalPosition(
+            Math.cos(angle) * drop.orbit,
+            Math.sin(angle) * drop.orbit * 0.7,
+            drop.z + Math.sin(time * 13 + drop.phase) * radius * 0.35
+          );
+        }
+
+        rings.forEach((ring, index) => {
+          const phase = (time * 1.6 + index * 0.5) % 1;
+          const scale = radius * (2.6 + phase * 1.8);
+          ring.setLocalScale(scale, scale, scale);
+          ring.setLocalPosition(
+            0,
+            0,
+            radius * (0.6 + index * 1.1 + phase * 0.9)
+          );
+        });
+
+        for (const material of materials) material.update();
+      }
+    };
+    visual.update(0);
+    this.projectiles.add(visual);
+
+    return {
+      setPosition: (nextX, nextZ) => root.setPosition(nextX, 0.7, nextZ),
+      update: (dt) => visual.update(dt),
+      destroy: () => {
+        if (!this.projectiles.delete(visual)) return;
+        root.destroy();
+        for (const material of materials) material.destroy();
+      }
+    };
+  }
+
+  /**
    * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
    * `markerColor` tiñe solo la guía del área (el cono); el resto del efecto
    * conserva el color de la habilidad.
@@ -5204,33 +5399,12 @@ export class CombatFx {
       params: [tanHalf, 0.18, 0.32, jetY]
     });
 
-    // Puff corto pegado a la boca: marca el punto exacto del que sale el
-    // chorro. Las brasas rápidas se han quitado porque, al nacer todas en el
-    // eje, formaban una línea continua de partículas en vez de una llamarada.
-    this.spawnFlameParticles(root, {
-      x: 0,
-      y: jetY,
-      z: 0.08,
-      extents: [0.22, 0.22, 0.18],
-      velocity: [0, 0.8, 3],
-      velocityEnd: [0, 1.6, 5],
-      radialSpeed: 0.3,
-      radialSpeedEnd: 1.2,
-      sizeStart: reach * 0.05,
-      sizeMid: reach * 0.08,
-      sizeEnd: reach * 0.03,
-      lifetime: 0.28,
-      rate: 0.01,
-      numParticles: 70,
-      stretch: 0.02,
-      localSpace: true
-    });
-
     // Resplandor en la boca y dos luces que tiñen el entorno a lo largo del
-    // recorrido del chorro.
+    // recorrido del chorro. Sin puff de partículas: el cuerpo del cono ya nace
+    // en el vértice y el puff formaba un óvalo pálido que no seguía el chorro.
     const muzzle = this.createEntity(this.sphereMesh, [glowMaterial], root);
     muzzle.setLocalPosition(0, jetY, 0.18);
-    muzzle.setLocalScale(0.55, 0.4, 0.55);
+    muzzle.setLocalScale(0.28, 0.2, 0.28);
     const light = this.createFireLight(
       root,
       0,
@@ -5274,12 +5448,238 @@ export class CombatFx {
         body.material.opacityMapOffset.set(0, offset);
       }
 
-      const muzzleScale = (0.55 + Math.sin(time * 24) * 0.08) * envelope;
+      const muzzleScale = (0.25 + Math.sin(time * 24) * 0.04) * envelope;
       muzzle.setLocalScale(muzzleScale, muzzleScale * 0.75, muzzleScale);
-      glowMaterial.opacity = 0.22 * envelope * (0.7 + flicker * 0.3);
+      glowMaterial.opacity = 0.12 * envelope * (0.7 + flicker * 0.3);
 
       light.light!.intensity = 1.8 * envelope * flicker;
       tipLight.light!.intensity = 0.9 * envelope * flicker;
+    };
+
+    const anchors = coneAnchors(x, z, dirX, dirZ, reach, half);
+    const firstEffect = this.effects.length;
+    this.withAnchors(anchors, () =>
+      this.addEffect(root, materials, life, animate, anchors)
+    );
+    const created = this.effects.slice(firstEffect);
+    animate(0, 0);
+    return {
+      setCenter: (nextX, nextZ) => {
+        root.setPosition(nextX, root.getPosition().y, nextZ);
+        const nextAnchors = coneAnchors(
+          nextX,
+          nextZ,
+          dirX,
+          dirZ,
+          reach,
+          half
+        );
+        for (const effect of created) effect.anchors = nextAnchors;
+      },
+      destroy: () => {
+        for (const effect of created) this.disposeEffect(effect);
+      }
+    };
+  }
+
+  /**
+   * Aliento helado de `Frío Polar`: un cono de niebla con cristales de hielo y
+   * copos que recorren el abanico desde el vértice hasta la base.
+   */
+  private spawnSheerColdCone(
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number,
+    length: number,
+    halfAngleDeg: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): AoeFxHandle {
+    const life = Math.max(0.2, duration);
+    const clampedHalfAngle = Math.max(8, Math.min(60, halfAngleDeg));
+    const half = clampedHalfAngle * DEG;
+    const reach = Math.max(0.5, length);
+    const yaw = Math.atan2(dirX, dirZ);
+    // El aliento vuela a la altura del pecho, no pegado al suelo.
+    const jetY = 1.05;
+    const tanHalf = Math.tan(half);
+
+    const root = new pc.Entity('sheer-cold-cone');
+    root.setPosition(x, 0, z);
+    root.setEulerAngles(0, yaw / DEG, 0);
+    this.app.root.addChild(root);
+
+    const hazeMaterial = this.createWaterMaterial(color, 0.08);
+    const mistMaterial = this.createWaterMaterial(color, 0.12);
+    const bodyMaterial = this.createWaterMaterial([214, 244, 255], 0.18);
+    const coreMaterial = this.createWaterMaterial([240, 253, 255], 0.26);
+    const plumeMaterial = this.createWaterMaterial([222, 248, 255], 0.16);
+    const puffMaterial = this.createWaterMaterial(color, 0.07);
+    const shardMaterial = this.createIceCrystalMaterial([222, 248, 255], 0.92);
+    const deepMaterial = this.createIceCrystalMaterial([118, 198, 242], 0.8);
+    const snowMaterial = this.createWaterMaterial([236, 250, 255], 0.36);
+    const glowMaterial = this.createMaterial(color, 0.26);
+    const materials = [
+      hazeMaterial,
+      mistMaterial,
+      bodyMaterial,
+      coreMaterial,
+      plumeMaterial,
+      puffMaterial,
+      shardMaterial,
+      deepMaterial,
+      snowMaterial,
+      glowMaterial
+    ];
+
+    // Cuerpo del aliento: cuatro conos anidados de niebla que van del vértice
+    // a la base. El más externo sobresale un poco del AoE para que el borde
+    // del abanico también tenga volumen y no se lea como una línea fina.
+    const bodyMesh = this.cachedMesh('sheer-cold-body', () =>
+      createFlameConeMesh(this.device, 0.06, 1, 28, 10)
+    );
+    const bodyRadius = reach * tanHalf;
+    const bodyRoot = new pc.Entity('sheer-cold-body');
+    bodyRoot.setLocalPosition(0, jetY, 0);
+    root.addChild(bodyRoot);
+    const bodySpecs = [
+      { material: hazeMaterial, scale: 1, opacity: 0.07 },
+      { material: mistMaterial, scale: 0.92, opacity: 0.12 },
+      { material: bodyMaterial, scale: 0.68, opacity: 0.18 },
+      { material: coreMaterial, scale: 0.36, opacity: 0.26 }
+    ];
+    const bodies = bodySpecs.map((spec) => {
+      const entity = this.createEntity(bodyMesh, [spec.material], bodyRoot);
+      entity.setLocalScale(
+        bodyRadius * spec.scale,
+        bodyRadius * spec.scale,
+        reach
+      );
+      return { material: spec.material, opacity: spec.opacity };
+    });
+
+    // Reparto determinista en espiral: cristales y copos no se apelotonan en
+    // el eje y todas las vistas dibujan la misma silueta.
+    const makeInstances = (
+      count: number,
+      radialMax: number,
+      sizeScale: number,
+      seed: number
+    ): EffectBatchInstance[] => {
+      const instances: EffectBatchInstance[] = [];
+      for (let index = 0; index < count; index++) {
+        const phase = (index * 0.61803398875 + seed) % 1;
+        const azimuth = index * 2.399963229728653 + seed * Math.PI * 2;
+        const radial = ((index * 0.754877666 + seed * 0.3) % 1) * radialMax;
+        const speed = 1.1 + ((index * 13 + seed * 17) % 9) * 0.06;
+        const size = reach * sizeScale * (0.7 + radial * 0.9);
+        instances.push({
+          anim0: [phase, azimuth, 0, speed],
+          anim1: [size, size, radial, 0]
+        });
+      }
+      return instances;
+    };
+
+    // Todos los lotes viajan en el espacio local del cono: el vértice queda en
+    // z=0 y la base en z=reach. Así la pluma siempre respeta el ángulo del AoE.
+    const shardBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.iceCrystalMesh,
+      material: shardMaterial,
+      instances: makeInstances(90, 0.98, 0.03, 0.17),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf * 0.9, 0.12, 0.3, jetY]
+    });
+    const deepBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.iceCrystalMesh,
+      material: deepMaterial,
+      instances: makeInstances(36, 1, 0.024, 0.53),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf * 0.9, 0.14, 0.32, jetY]
+    });
+    const snowBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: snowMaterial,
+      instances: makeInstances(180, 1, 0.01, 0.71),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.18, 0.36, jetY]
+    });
+    // Niebla media: rellena el cuerpo del cono y sustituye la pluma continua,
+    // que podía desalinearse del ángulo del AoE.
+    const plumeBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: plumeMaterial,
+      instances: makeInstances(70, 1, 0.045, 0.29),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.12, 0.32, jetY]
+    });
+    // Velo exterior: puffs grandes y muy transparentes que dan amplitud al
+    // abanico y se salen un poco del borde para suavizarlo.
+    const puffBatch = new EffectBatch({
+      app: this.app,
+      parent: root,
+      mesh: this.sphereMesh,
+      material: puffMaterial,
+      instances: makeInstances(32, 0.92, 0.07, 0.91),
+      motion: MOTION_FLAME_JET,
+      radius: reach,
+      life,
+      params: [tanHalf, 0.1, 0.3, jetY]
+    });
+
+    // Boca del aliento: núcleo brillante y aro de escarcha en el vértice.
+    const muzzle = this.createEntity(this.sphereMesh, [glowMaterial], root);
+    muzzle.setLocalPosition(0, jetY, 0.14);
+    muzzle.setLocalScale(0.38, 0.3, 0.38);
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      time += dt;
+      const fadeIn = Math.min(1, time / 0.1);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.25));
+      const envelope = Math.min(fadeIn, fadeOut);
+      const shimmer =
+        0.88 + Math.sin(time * 21) * 0.08 + Math.sin(time * 37) * 0.04;
+
+      hazeMaterial.opacity = 0.07 * envelope * shimmer;
+      mistMaterial.opacity = 0.12 * envelope * shimmer;
+      bodyMaterial.opacity = 0.18 * envelope * shimmer;
+      coreMaterial.opacity = 0.26 * envelope * shimmer;
+      plumeMaterial.opacity = 0.16 * envelope * shimmer;
+      puffMaterial.opacity = 0.07 * envelope * shimmer;
+      shardMaterial.opacity = 0.9 * envelope * shimmer;
+      deepMaterial.opacity = 0.75 * envelope;
+      snowMaterial.opacity = 0.4 * envelope;
+      glowMaterial.opacity = 0.18 * envelope * shimmer;
+
+      for (const body of bodies) {
+        body.material.opacity = body.opacity * envelope * shimmer;
+      }
+      shardBatch.setTime(time);
+      deepBatch.setTime(time);
+      snowBatch.setTime(time);
+      plumeBatch.setTime(time);
+      puffBatch.setTime(time);
+
+      const muzzleScale = (0.34 + Math.sin(time * 18) * 0.04) * envelope;
+      muzzle.setLocalScale(muzzleScale, muzzleScale * 0.8, muzzleScale);
     };
 
     const anchors = coneAnchors(x, z, dirX, dirZ, reach, half);

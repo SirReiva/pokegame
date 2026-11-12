@@ -174,6 +174,17 @@
 > **Actualización 2026-11-11**: Gyarados (0130) ya tiene moveset (`Acua Cola`,
 > `Cascada`, `Triturar` y `Dragoaliento`). Quedan cuatro especies sin moveset
 > (Eevee, Raikou, Entei y Suicune); las tablas de §4.x no se han regenerado.
+>
+> **Actualización 2026-11-12**: Suicune (0245) ya tiene moveset (`Golpe
+> Cuerpo`, `Chorro de Agua`, `Rayo Hielo` y `Frío Polar`). Quedan tres especies sin
+> moveset (Eevee, Raikou y Entei). Las tablas regenerables
+> `tabla-danos-por-ataque.md` y `dps-por-habilidad.md` ya incluyen a Suicune;
+> las matrices de §4.x no se han regenerado. Valores actuales del kit: Golpe
+> Cuerpo 80 pot / 0,8 s, Chorro de Agua 68 pot / 1,5 s, Rayo Hielo 90 pot / 7 s
+> y Frío Polar 140 pot / 8 s. Frío Polar canaliza 1,3 s sin poder moverse
+> (0,85 s de carga + 0,45 s de recuperación) y su cono visual dura 0,5 s. El
+> enfriamiento de Frío Polar queda por debajo de la banda 12-18 s que usa el
+> resto de definitivas.
 
 ## Resumen ejecutivo
 
@@ -184,11 +195,10 @@ especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
 
 Los cinco hallazgos más importantes:
 
-1. **5 de las 25 especies del roster siguen sin ninguna habilidad.** Eevee,
-   Gyarados, Raikou, Entei y Suicune no tienen moveset; el carrusel ya las
-   filtra. Las otras 20, incluidos Onix, Celebi, Lugia, Tyranitar, Groudon,
-   Ho-Oh y Zapdos, sí tienen moveset. Gyarados se añadió al manifiesto, a
-   `pokedex.ts`, a `roster.ts` y a `vision.ts`, pero no a `MOVESETS`.
+1. **3 de las 25 especies del roster siguen sin ninguna habilidad.** Eevee,
+   Raikou y Entei no tienen moveset; el carrusel ya las filtra. Las otras 22,
+   incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh, Zapdos, Gyarados y
+   Suicune, sí tienen moveset.
 2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
    jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
    nunca.
@@ -372,7 +382,7 @@ cobertura de tipos.
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 5 de 25 especies siguen sin habilidades (Gyarados incluido). |
+| 3.1 Cobertura de movesets | **pendiente** | 3 de 25 especies siguen sin habilidades (Eevee, Raikou y Entei). |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas y golpes de dash pendientes. Los casts instantáneos y buffs `self` ya se cancelan al morir. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
 | 3.5 Explosión gratis a 1 PV | **pendiente** | El autodaño nunca quita la última vida; también afecta a Pájaro Osado. |
@@ -387,12 +397,12 @@ Los números conservan el identificador histórico: los huecos (3.2, 3.9,
 3.11-3.16 y 3.19) corresponden a apartados ya corregidos y retirados de la
 lista.
 
-### 3.1. Cobertura: 5 especies sin moveset (crítico)
+### 3.1. Cobertura: 3 especies sin moveset (crítico)
 
-`MOVESETS` define 20 ids (`src/game/abilities.ts:2313-2362`). El roster muestra
-las 25 especies de `public/sprites/manifest.json`, pero el carrusel ya filtra
-con `hasAssignedAbilities` (`src/session/SessionProvider.tsx:63`,
-`src/ui/RosterScreen.tsx:600`) y no deja elegir las 5 que no pueden combatir.
+`MOVESETS` define 22 ids (`src/game/abilities.ts`). El roster muestra las 25
+especies de `public/sprites/manifest.json`, pero el carrusel ya filtra con
+`hasAssignedAbilities` (`src/session/SessionProvider.tsx:63`,
+`src/ui/RosterScreen.tsx:600`) y no deja elegir las 3 que no pueden combatir.
 
 `src/game/game.ts:1084` hace:
 
@@ -404,8 +414,7 @@ y `game.ts:1189` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
 muestra cuatro veces «Sin asignar». Esas especies no pueden atacar, defenderse
 ni usar ninguna habilidad; solo caminan.
 
-**Especies afectadas**: Eevee (0133), Gyarados (0130), Raikou (0243), Entei
-(0244) y Suicune (0245).
+**Especies afectadas**: Eevee (0133), Raikou (0243) y Entei (0244).
 
 **Impacto**: partidas perdidas por elección, frustración y una parte importante
 del roster inutilizable.
@@ -675,7 +684,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Zapdos | 165 | 110 | 105 | 145 | 110 | 120 | 0,52 | sí |
 | Raikou | 165 | 105 | 95 | 135 | 120 | 135 | 0,52 | **NO** |
 | Entei | 190 | 135 | 105 | 110 | 95 | 120 | 0,50 | **NO** |
-| Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,50 | **NO** |
+| Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,50 | sí |
 | Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | sí |
 | Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | sí |
 | Celebi | 175 | 120 | 120 | 120 | 120 | 120 | 0,34 | sí |
@@ -685,8 +694,8 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 golpe, así que un cuerpo grande recibe antes y uno pequeño puede esquivar por el
 borde. Esta columna no interviene en las tablas de daño de §4.3-§4.5: son una
 cota de daño suponiendo que todas las habilidades conectan, no un ranking de
-facilidad de impacto (véase §4.1). El roster tiene 25 especies; 20 tienen moveset
-y 5 no (Eevee, Gyarados, Raikou, Entei y Suicune).
+facilidad de impacto (véase §4.1). El roster tiene 25 especies; 22 tienen moveset
+y 3 no (Eevee, Raikou y Entei).
 
 ### 4.3. Poder por Pokémon (matriz histórica)
 
@@ -1053,9 +1062,9 @@ autodaño la convierte en una mala elección en 1v1.
 
 ### P0 — rompe la partida
 
-1. **Cobertura de movesets**: quedan 5 movesets por añadir (Eevee, Gyarados,
-   Raikou, Entei y Suicune). El roster ya filtra las especies sin habilidades,
-   así que no se pueden seleccionar.
+1. **Cobertura de movesets**: quedan 3 movesets por añadir (Eevee, Raikou y
+   Entei). El roster ya filtra las especies sin habilidades, así que no se
+   pueden seleccionar.
 2. **Validar dos equipos**: bloquear el inicio si un equipo está vacío (o añadir
    un modo práctica explícito) y añadir un límite de tiempo/condición de fin.
    Sin esto, una partida 1v0 no termina nunca.
@@ -1148,7 +1157,7 @@ No hay tests en el proyecto. El sistema de combate es casi todo funciones puras,
 así que se pueden añadir tests baratos:
 
 - **Cobertura**: `MOVESETS` tiene entrada para todas las especies del manifiesto
-  (o el roster filtra las que no la tienen); hoy son 25 especies y 20 movesets.
+  (o el roster filtra las que no la tienen); hoy son 25 especies y 22 movesets.
 - **Stats**: `combatStatsFor` devuelve 110 PV para Pikachu y 181 para Mewtwo.
 - **Fórmula**: un caso conocido de `computeDamage` con random fijo y sin
   crítico; otro con STAB; otro con inmunidad (0); otro con efectividad 0,25.
@@ -1297,7 +1306,7 @@ así que se pueden añadir tests baratos:
 - **Visión de un KO**: un humano o bot KO no debe revelar actores ni objetos al
   equipo; al reaparecer vuelve a aportar su círculo.
 - **Balance**: la tabla de §4.2 debe incluir las 25 especies y su `hitRadius`, y
-  la matriz de §4.3 debe seguir generándose con las 20 que tienen moveset,
+  la matriz de §4.3 debe seguir generándose con las 22 que tienen moveset,
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
   menos imprimir el hurtbox junto al daño.
 

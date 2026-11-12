@@ -37,6 +37,7 @@
 - [Lugia](#lugia)
 - [Ho-Oh](#ho-oh)
 - [Gyarados](#gyarados)
+- [Suicune](#suicune)
 
 ## Pikachu
 
@@ -710,6 +711,38 @@ Tipos: **Water / Flying** · HP 170 · Atk 145 · Def 99 · SpA 80 · SpD 120 ·
 | Groudon | 90,4 | 14,5 | 5,4 | 3,8 |
 | **Mediana de DPS** | 78 | 12,7 | 8,9 | 5,7 |
 
+## Suicune
+
+Tipos: **Water** · HP 175 · Atk 95 · Def 135 · SpA 110 · SpD 135 · Vel 105
+
+| Rival | Básica: Golpe Cuerpo<br>Normal · Fís · Pot 80 · CD 0,8 s | Habilidad 1: Chorro de Agua<br>Water · Esp · Pot 68 · CD 1,5 s | Habilidad 2: Rayo Hielo<br>Ice · Esp · Pot 90 · CD 7 s | Definitiva: Frío Polar<br>Ice · Esp · Pot 140 · CD 8 s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 58,7 | 18,4 | 14,3 | 18,9 |
+| Charmander | 63,8 | 91,2 | 4,2 | 5,7 |
+| Squirtle | 47,2 | 18,4 | 3,5 | 4,7 |
+| Pikachu | 66,4 | 45,6 | 8,6 | 11,5 |
+| Gengar | 0 | 33,3 | 6,3 | 8,5 |
+| Voltorb | 57,4 | 41,5 | 8 | 10,8 |
+| Eevee | 57,4 | 37,4 | 7,1 | 9,4 |
+| Lucario | 22,9 | 35,4 | 3,4 | 4,5 |
+| Greninja | 47,2 | 17,7 | 3,2 | 4,5 |
+| Mewtwo | 37 | 28,6 | 5,4 | 7,4 |
+| Mew | 33,2 | 26,5 | 5,1 | 6,8 |
+| Onix | 11,5 | 196 | 18,4 | 25 |
+| Scyther | 40,8 | 31,3 | 12 | 16,1 |
+| Gyarados | 40,8 | 12,9 | 5,1 | 6,8 |
+| Tyranitar | 15,3 | 53,1 | 5,1 | 6,8 |
+| Articuno | 33,2 | 22,4 | 4,2 | 5,6 |
+| Zapdos | 38,3 | 28,6 | 10,8 | 14,8 |
+| Moltres | 37 | 61,2 | 5,7 | 7,8 |
+| Raikou | 43,3 | 26,5 | 5,1 | 6,8 |
+| Entei | 38,3 | 66,7 | 3,1 | 4,2 |
+| Lugia | 28,1 | 18,4 | 7 | 9,4 |
+| Ho-Oh | 37 | 36,7 | 3,5 | 4,7 |
+| Celebi | 33,2 | 12,9 | 10,2 | 13,5 |
+| Groudon | 25,5 | 57,2 | 10,8 | 14,8 |
+| **Mediana de DPS** | 37,7 | 32,3 | 5,5 | 7,6 |
+
 ## DPS por habilidad contra un objetivo neutro
 
 Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la potencia bruta de cada habilidad sin que el matchup de tipos distorsione el resultado. STAB incluido.
@@ -737,7 +770,8 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Lugia | Onda Mental 45,9 | Marea 3,6 | Ciclón 17,3 | Aerochorro 5,2 | 72,1 |
 | Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 22,5 | 134,8 |
 | Gyarados | Acua Cola 74,3 | Cascada 11,7 | Triturar 8,7 | Dragoaliento 6,1 | 100,7 |
+| Suicune | Golpe Cuerpo 40,8 | Chorro de Agua 31,3 | Rayo Hielo 6 | Frío Polar 8 | 86,2 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.
 
-Atacantes con moveset asignado: **21** de 25 especies del roster.
+Atacantes con moveset asignado: **22** de 25 especies del roster.
