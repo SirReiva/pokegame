@@ -793,35 +793,35 @@ Tipos: **Water** · HP 175 · Atk 95 · Def 135 · SpA 110 · SpD 135 · Vel 105
 
 Tipos: **Water** · HP 175 · Atk 120 · Def 110 · SpA 170 · SpD 160 · Vel 110
 
-| Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 · CD 0,85 s | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s · CD 8 s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — · CD 12 s | Definitiva: Origen del Mar<br>Water · Esp · Pot 125 · CD 16 s |
+| Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 · CD 0,85 s | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s · CD 8 s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — · CD 12 s | Definitiva: Pulso Primigenio<br>Water · Esp · Pot 160/s · CD 16 s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 33,7 | 5,9 | Estado | 4,9 |
-| Charmander | 168,1 | 31,4 | Estado | 23,7 |
-| Squirtle | 33,7 | 6 | Estado | 5 |
-| Pikachu | 84,1 | 15,7 | Estado | 11,9 |
-| Gengar | 62,5 | 11,6 | Estado | 8,8 |
-| Voltorb | 76,9 | 13,8 | Estado | 11,1 |
-| Eevee | 68,5 | 11,9 | Estado | 9,8 |
-| Lucario | 66 | 11,9 | Estado | 9,3 |
-| Greninja | 32,4 | 5,7 | Estado | 4,6 |
-| Mewtwo | 54 | 9,9 | Estado | 7,7 |
-| Mew | 48,1 | 8,7 | Estado | 7 |
-| Onix | 351 | 65,3 | Estado | 51,3 |
-| Scyther | 58,8 | 10,5 | Estado | 8,3 |
-| Gyarados | 24 | 4,1 | Estado | 3,4 |
-| Tyranitar | 96,2 | 17,3 | Estado | 13,9 |
-| Articuno | 40,8 | 6,8 | Estado | 5,8 |
-| Zapdos | 54 | 9,9 | Estado | 7,7 |
-| Moltres | 110,6 | 20,9 | Estado | 16,1 |
-| Raikou | 48,1 | 8,7 | Estado | 7 |
-| Entei | 124,9 | 23,2 | Estado | 17,6 |
-| Suicune | 21,6 | 4 | Estado | 3,1 |
-| Lugia | 33,6 | 6,1 | Estado | 4,8 |
-| Ho-Oh | 67,3 | 12,2 | Estado | 9,6 |
-| Celebi | 24 | 4,1 | Estado | 3,4 |
-| Groudon | 108 | 19,8 | Estado | 15,3 |
-| Rayquaza | 26,4 | 4,7 | Estado | 3,8 |
-| **Mediana de DPS** | 56,4 | 10,2 | — | 8 |
+| Bulbasaur | 33,7 | 5,9 | Estado | 6,2 |
+| Charmander | 168,1 | 31,4 | Estado | 30,2 |
+| Squirtle | 33,7 | 6 | Estado | 6,3 |
+| Pikachu | 84,1 | 15,7 | Estado | 15,1 |
+| Gengar | 62,5 | 11,6 | Estado | 11 |
+| Voltorb | 76,9 | 13,8 | Estado | 14 |
+| Eevee | 68,5 | 11,9 | Estado | 12,4 |
+| Lucario | 66 | 11,9 | Estado | 11,7 |
+| Greninja | 32,4 | 5,7 | Estado | 5,7 |
+| Mewtwo | 54 | 9,9 | Estado | 9,5 |
+| Mew | 48,1 | 8,7 | Estado | 8,7 |
+| Onix | 351 | 65,3 | Estado | 65,3 |
+| Scyther | 58,8 | 10,5 | Estado | 10,5 |
+| Gyarados | 24 | 4,1 | Estado | 4,3 |
+| Tyranitar | 96,2 | 17,3 | Estado | 17,5 |
+| Articuno | 40,8 | 6,8 | Estado | 7,2 |
+| Zapdos | 54 | 9,9 | Estado | 9,5 |
+| Moltres | 110,6 | 20,9 | Estado | 19,8 |
+| Raikou | 48,1 | 8,7 | Estado | 8,7 |
+| Entei | 124,9 | 23,2 | Estado | 22,1 |
+| Suicune | 21,6 | 4 | Estado | 3,9 |
+| Lugia | 33,6 | 6,1 | Estado | 6,1 |
+| Ho-Oh | 67,3 | 12,2 | Estado | 12,1 |
+| Celebi | 24 | 4,1 | Estado | 4,3 |
+| Groudon | 108 | 19,8 | Estado | 19 |
+| Rayquaza | 26,4 | 4,7 | Estado | 4,7 |
+| **Mediana de DPS** | 56,4 | 10,2 | — | 10 |
 
 ## Rayquaza
 
@@ -885,7 +885,7 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 22,5 | 134,8 |
 | Gyarados | Acua Cola 74,3 | Cascada 11,7 | Triturar 8,7 | Dragoaliento 6,1 | 100,7 |
 | Suicune | Golpe Cuerpo 40,8 | Chorro de Agua 31,3 | Rayo Hielo 6 | Frío Polar 8 | 86,2 |
-| Kyogre | Ráfaga Marina 58,8 | Remolino Marino 10,5 | Aguas Curativas — | Origen del Mar 8,3 | 77,6 |
+| Kyogre | Ráfaga Marina 58,8 | Remolino Marino 10,5 | Aguas Curativas — | Pulso Primigenio 10,5 | 79,8 |
 | Rayquaza | Garra Dragón 78,6 | Vuelo Dragón 12,4 | Furia Dragón 10,2 | Ascenso Draco 8,7 | 109,9 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.

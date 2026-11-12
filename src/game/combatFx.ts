@@ -53,11 +53,19 @@ import {
   MOTION_PSYCHIC_ORB_RINGS,
   MOTION_PSYCHIC_RAYS,
   MOTION_PSYCHIC_RIM,
+  MOTION_PRESSURE_BAND,
+  MOTION_PRESSURE_DOME,
+  MOTION_PRESSURE_ORBIT,
+  MOTION_PRIMORDIAL_POOL,
+  MOTION_PRIMORDIAL_RING,
+  MOTION_PULSE_SPHERE,
   MOTION_PSYCHIC_SHELL,
   MOTION_PSYCHIC_SHARDS,
   MOTION_PSYCHIC_WAVE,
   MOTION_RECOVERY_MOTES,
   MOTION_RING,
+  MOTION_SACRED_FLAME_BODY,
+  MOTION_SHEER_COLD_BODY,
   MOTION_SNOWFLAKES,
   MOTION_SPORE_SWARM,
   MOTION_STATIC,
@@ -1186,6 +1194,82 @@ function createDiscMesh(device: pc.GraphicsDevice, segments = 48): pc.Mesh {
 }
 
 /**
+ * Semiesfera unitaria abierta por la base para la cúpula de `Pulso Primigenio`.
+ * El vértice superior queda en y=1 y el borde en y=0, con radio 1. El color por
+ * vértice dibuja un borde blanco-cyan, un centro azul profundo y una corona
+ * clara, de modo que la cáscara translúcida conserve volumen desde cualquier
+ * cámara sin necesitar texturas ni escrituras de material por frame.
+ */
+function createPressureDomeMesh(
+  device: pc.GraphicsDevice,
+  longitudeSegments = 48,
+  latitudeSegments = 18
+): pc.Mesh {
+  type Vec3 = [number, number, number];
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const rim: Vec3 = [214, 250, 255];
+  const mid: Vec3 = [44, 142, 212];
+  const crown: Vec3 = [234, 253, 255];
+
+  const smooth = (edge0: number, edge1: number, value: number): number => {
+    const t = Math.max(
+      0,
+      Math.min(1, (value - edge0) / Math.max(0.0001, edge1 - edge0))
+    );
+    return t * t * (3 - 2 * t);
+  };
+  const mix = (a: Vec3, b: Vec3, t: number): Vec3 => [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t)
+  ];
+  const sampleColor = (y: number): Vec3 =>
+    y < 0.45
+      ? mix(rim, mid, smooth(0, 0.45, y))
+      : mix(mid, crown, smooth(0.45, 1, y));
+
+  for (let lat = 0; lat <= latitudeSegments; lat++) {
+    const phi = (lat / latitudeSegments) * (Math.PI / 2);
+    const y = Math.cos(phi);
+    const radius = Math.sin(phi);
+    for (let lon = 0; lon <= longitudeSegments; lon++) {
+      const theta = (lon / longitudeSegments) * Math.PI * 2;
+      const x = Math.sin(theta) * radius;
+      const z = Math.cos(theta) * radius;
+      positions.push(x, y, z);
+      // En una semiesfera centrada en el origen la normal es la posición.
+      normals.push(x, y, z);
+      uvs.push(lon / longitudeSegments, lat / latitudeSegments);
+      const [r, g, b] = sampleColor(y);
+      colors.push(r, g, b, 255);
+    }
+  }
+
+  const stride = longitudeSegments + 1;
+  for (let lat = 0; lat < latitudeSegments; lat++) {
+    for (let lon = 0; lon < longitudeSegments; lon++) {
+      const a = lat * stride + lon;
+      const b = a + stride;
+      indices.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setColors(colors, 4);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
  * Anillo discontinuo unitario (radio exterior 0,5) para la marca de área.
  * Los huecos entre segmentos lo distinguen de un simple círculo de efecto.
  */
@@ -1564,6 +1648,8 @@ export class CombatFx {
         this.spawnAirAoe(x, z, radius, color, duration),
       cyclone: (x, z, radius, color, duration) =>
         this.spawnCycloneAoe(x, z, radius, color, duration),
+      primordialPulse: (x, z, radius, color, duration) =>
+        this.spawnPrimordialPulseAoe(x, z, radius, color, duration),
       heat: (x, z, radius, color, duration) =>
         this.spawnHeatAoe(x, z, radius, color, duration),
       // En forma circular cae al fuego normal; el cono tiene su propio efecto
@@ -1787,7 +1873,10 @@ export class CombatFx {
    * agua (chorros de `Marea`) y de nubes (brazos del huracán de `Ciclón`); la
    * malla ya trae el degradado y el material solo controla la opacidad.
    */
-  private createVertexColorMaterial(opacity: number): pc.StandardMaterial {
+  private createVertexColorMaterial(
+    opacity: number,
+    blendType: number = pc.BLEND_NORMAL
+  ): pc.StandardMaterial {
     const material = new pc.StandardMaterial();
     material.useLighting = false;
     material.useSkybox = false;
@@ -1798,7 +1887,7 @@ export class CombatFx {
     material.diffuseVertexColor = true;
     material.emissiveVertexColor = true;
     material.opacity = opacity;
-    material.blendType = pc.BLEND_NORMAL;
+    material.blendType = blendType;
     material.depthWrite = false;
     material.depthTest = true;
     material.cull = pc.CULLFACE_NONE;
@@ -5294,7 +5383,7 @@ export class CombatFx {
     const bodyCoreMaterial = this.createFlameMaterial([255, 248, 214], 0.42);
     const bodyFlameMaterial = this.createFlameMaterial([255, 190, 86], 0.36);
     const bodyOuterMaterial = this.createFlameMaterial(color, 0.28);
-    const glowMaterial = this.createMaterial([255, 120, 36], 0.18);
+    const glowMaterial = this.createMaterial([255, 120, 36], 0.12);
     const materials = [
       coreMaterial,
       flameMaterial,
@@ -5305,37 +5394,44 @@ export class CombatFx {
       glowMaterial
     ];
 
-    // Cuerpo continuo del chorro: tres conos anidados con la textura de llama
-    // desplazándose hacia la base. Sin esto las lenguas sueltas se leían como
-    // una línea de pequeñas llamas alineadas.
+    // Cuerpo continuo del chorro: tres conos anidados que crecen desde la boca,
+    // ondulan en el vertex shader y se retraen al final.
     const tanHalf = Math.tan(half);
     const bodyMesh = this.cachedMesh('sacred-cone-body', () =>
       createFlameConeMesh(this.device, 0.16, 1, 24, 8)
     );
     const bodyRadius = reach * tanHalf;
-    const bodyRoot = new pc.Entity('sacred-flame-body');
-    bodyRoot.setLocalPosition(0, jetY, 0);
-    root.addChild(bodyRoot);
     const bodySpecs = [
-      { material: bodyOuterMaterial, scale: 1, opacity: 0.28, speed: 1.1 },
-      { material: bodyFlameMaterial, scale: 0.68, opacity: 0.36, speed: 1.5 },
-      { material: bodyCoreMaterial, scale: 0.36, opacity: 0.42, speed: 1.9 }
+      { material: bodyOuterMaterial, scale: 1, phase: 0, speed: 11 },
+      { material: bodyFlameMaterial, scale: 0.68, phase: 1.3, speed: 15 },
+      { material: bodyCoreMaterial, scale: 0.36, phase: 2.7, speed: 19 }
     ];
-    const bodies = bodySpecs.map((spec) => {
-      const entity = this.createEntity(bodyMesh, [spec.material], bodyRoot);
-      entity.setLocalScale(
-        bodyRadius * spec.scale,
-        bodyRadius * spec.scale,
-        reach
-      );
+    const batches: EffectBatch[] = [];
+    for (let index = 0; index < bodySpecs.length; index++) {
+      const spec = bodySpecs[index];
+      // El tiling de la textura de llama se mantiene; lo que desaparece es su
+      // scroll por CPU, sustituido por la ondulación de vértices.
       spec.material.emissiveMapTiling = new pc.Vec2(3, 2);
       spec.material.opacityMapTiling = new pc.Vec2(3, 2);
-      return {
-        material: spec.material,
-        opacity: spec.opacity,
-        speed: spec.speed
-      };
-    });
+      batches.push(
+        new EffectBatch({
+          app: this.app,
+          parent: root,
+          mesh: bodyMesh,
+          material: spec.material,
+          instances: [
+            {
+              y: jetY,
+              anim0: [reach, bodyRadius * spec.scale, spec.phase, spec.speed]
+            }
+          ],
+          motion: MOTION_SACRED_FLAME_BODY,
+          radius: reach,
+          life,
+          params: [0.12, 0.3, 0, 0]
+        })
+      );
+    }
 
     // Lenguas del chorro: cada instancia recorre el cono del vértice a la base
     // con fase propia. Las más claras van pegadas al eje y las exteriores se
@@ -5365,46 +5461,69 @@ export class CombatFx {
       }
       return instances;
     };
-    const flameBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.flameMesh,
-      material: flameMaterial,
-      instances: makeInstances(140, 0.92, 0.06, 0.15, 0.13),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.14, 0.3, jetY]
-    });
-    const hotBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.flameMesh,
-      material: coreMaterial,
-      instances: makeInstances(40, 0.6, 0.05, 0.13, 0.57),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.14, 0.3, jetY]
-    });
-    const outerBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.flameMesh,
-      material: outerMaterial,
-      instances: makeInstances(90, 1, 0.07, 0.17, 0.81),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.18, 0.32, jetY]
-    });
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.flameMesh,
+        material: flameMaterial,
+        instances: makeInstances(140, 0.92, 0.06, 0.15, 0.13),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.14, 0.3, jetY]
+      })
+    );
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.flameMesh,
+        material: coreMaterial,
+        instances: makeInstances(40, 0.6, 0.05, 0.13, 0.57),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.14, 0.3, jetY]
+      })
+    );
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.flameMesh,
+        material: outerMaterial,
+        instances: makeInstances(90, 1, 0.07, 0.17, 0.81),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.18, 0.32, jetY]
+      })
+    );
 
-    // Resplandor en la boca y dos luces que tiñen el entorno a lo largo del
-    // recorrido del chorro. Sin puff de partículas: el cuerpo del cono ya nace
-    // en el vértice y el puff formaba un óvalo pálido que no seguía el chorro.
-    const muzzle = this.createEntity(this.sphereMesh, [glowMaterial], root);
-    muzzle.setLocalPosition(0, jetY, 0.18);
-    muzzle.setLocalScale(0.28, 0.2, 0.28);
+    // Resplandor en la boca con pulso y fundido en GPU. Las dos luces siguen
+    // en CPU porque son luces reales de escena, no geometría del efecto.
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: glowMaterial,
+        instances: [
+          {
+            y: jetY,
+            z: 0.18,
+            anim0: [0.25, 24, 0.16, 0],
+            anim1: [0.75, 0, 0, 0]
+          }
+        ],
+        motion: MOTION_PULSE_SPHERE,
+        radius: reach,
+        life,
+        params: [0.08, 0.2, 0, 0]
+      })
+    );
+
     const light = this.createFireLight(
       root,
       0,
@@ -5431,27 +5550,9 @@ export class CombatFx {
       const flicker =
         0.85 + Math.sin(time * 17) * 0.1 + Math.sin(time * 31) * 0.05;
 
-      coreMaterial.opacity = (0.62 + flicker * 0.12) * envelope;
-      flameMaterial.opacity = (0.48 + flicker * 0.14) * envelope;
-      outerMaterial.opacity = (0.34 + flicker * 0.12) * envelope;
-
-      flameBatch.setTime(time);
-      hotBatch.setTime(time);
-      outerBatch.setTime(time);
-
-      // La textura del cuerpo se desplaza hacia la base: el fuego parece
-      // recorrer el cono del vértice a la punta sin mover la geometría.
-      for (const body of bodies) {
-        body.material.opacity = body.opacity * envelope * flicker;
-        const offset = time * body.speed;
-        body.material.emissiveMapOffset.set(0, offset);
-        body.material.opacityMapOffset.set(0, offset);
-      }
-
-      const muzzleScale = (0.25 + Math.sin(time * 24) * 0.04) * envelope;
-      muzzle.setLocalScale(muzzleScale, muzzleScale * 0.75, muzzleScale);
-      glowMaterial.opacity = 0.12 * envelope * (0.7 + flicker * 0.3);
-
+      // La geometría y los fundidos viven en el vertex shader; solo las luces
+      // de escena necesitan intensidad por frame.
+      for (const batch of batches) batch.setTime(time);
       light.light!.intensity = 1.8 * envelope * flicker;
       tipLight.light!.intensity = 0.9 * envelope * flicker;
     };
@@ -5510,16 +5611,16 @@ export class CombatFx {
     root.setEulerAngles(0, yaw / DEG, 0);
     this.app.root.addChild(root);
 
-    const hazeMaterial = this.createWaterMaterial(color, 0.08);
+    const hazeMaterial = this.createWaterMaterial(color, 0.07);
     const mistMaterial = this.createWaterMaterial(color, 0.12);
     const bodyMaterial = this.createWaterMaterial([214, 244, 255], 0.18);
     const coreMaterial = this.createWaterMaterial([240, 253, 255], 0.26);
     const plumeMaterial = this.createWaterMaterial([222, 248, 255], 0.16);
     const puffMaterial = this.createWaterMaterial(color, 0.07);
-    const shardMaterial = this.createIceCrystalMaterial([222, 248, 255], 0.92);
-    const deepMaterial = this.createIceCrystalMaterial([118, 198, 242], 0.8);
-    const snowMaterial = this.createWaterMaterial([236, 250, 255], 0.36);
-    const glowMaterial = this.createMaterial(color, 0.26);
+    const shardMaterial = this.createIceCrystalMaterial([222, 248, 255], 0.9);
+    const deepMaterial = this.createIceCrystalMaterial([118, 198, 242], 0.75);
+    const snowMaterial = this.createWaterMaterial([236, 250, 255], 0.4);
+    const glowMaterial = this.createMaterial(color, 0.18);
     const materials = [
       hazeMaterial,
       mistMaterial,
@@ -5540,24 +5641,39 @@ export class CombatFx {
       createFlameConeMesh(this.device, 0.06, 1, 28, 10)
     );
     const bodyRadius = reach * tanHalf;
-    const bodyRoot = new pc.Entity('sheer-cold-body');
-    bodyRoot.setLocalPosition(0, jetY, 0);
-    root.addChild(bodyRoot);
     const bodySpecs = [
-      { material: hazeMaterial, scale: 1, opacity: 0.07 },
-      { material: mistMaterial, scale: 0.92, opacity: 0.12 },
-      { material: bodyMaterial, scale: 0.68, opacity: 0.18 },
-      { material: coreMaterial, scale: 0.36, opacity: 0.26 }
+      { material: hazeMaterial, scale: 1 },
+      { material: mistMaterial, scale: 0.92 },
+      { material: bodyMaterial, scale: 0.68 },
+      { material: coreMaterial, scale: 0.36 }
     ];
-    const bodies = bodySpecs.map((spec) => {
-      const entity = this.createEntity(bodyMesh, [spec.material], bodyRoot);
-      entity.setLocalScale(
-        bodyRadius * spec.scale,
-        bodyRadius * spec.scale,
-        reach
+    const batches: EffectBatch[] = [];
+    for (let index = 0; index < bodySpecs.length; index++) {
+      const spec = bodySpecs[index];
+      batches.push(
+        new EffectBatch({
+          app: this.app,
+          parent: root,
+          mesh: bodyMesh,
+          material: spec.material,
+          instances: [
+            {
+              y: jetY,
+              anim0: [
+                reach,
+                bodyRadius * spec.scale,
+                index * 1.7,
+                18 + index * 3
+              ]
+            }
+          ],
+          motion: MOTION_SHEER_COLD_BODY,
+          radius: reach,
+          life,
+          params: [0.1, 0.25, 0, 0]
+        })
       );
-      return { material: spec.material, opacity: spec.opacity };
-    });
+    }
 
     // Reparto determinista en espiral: cristales y copos no se apelotonan en
     // el eje y todas las vistas dibujan la misma silueta.
@@ -5584,102 +5700,104 @@ export class CombatFx {
 
     // Todos los lotes viajan en el espacio local del cono: el vértice queda en
     // z=0 y la base en z=reach. Así la pluma siempre respeta el ángulo del AoE.
-    const shardBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.iceCrystalMesh,
-      material: shardMaterial,
-      instances: makeInstances(90, 0.98, 0.03, 0.17),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf * 0.9, 0.12, 0.3, jetY]
-    });
-    const deepBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.iceCrystalMesh,
-      material: deepMaterial,
-      instances: makeInstances(36, 1, 0.024, 0.53),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf * 0.9, 0.14, 0.32, jetY]
-    });
-    const snowBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.sphereMesh,
-      material: snowMaterial,
-      instances: makeInstances(180, 1, 0.01, 0.71),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.18, 0.36, jetY]
-    });
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.iceCrystalMesh,
+        material: shardMaterial,
+        instances: makeInstances(90, 0.98, 0.03, 0.17),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf * 0.9, 0.12, 0.3, jetY]
+      })
+    );
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.iceCrystalMesh,
+        material: deepMaterial,
+        instances: makeInstances(36, 1, 0.024, 0.53),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf * 0.9, 0.14, 0.32, jetY]
+      })
+    );
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: snowMaterial,
+        instances: makeInstances(180, 1, 0.01, 0.71),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.18, 0.36, jetY]
+      })
+    );
     // Niebla media: rellena el cuerpo del cono y sustituye la pluma continua,
     // que podía desalinearse del ángulo del AoE.
-    const plumeBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.sphereMesh,
-      material: plumeMaterial,
-      instances: makeInstances(70, 1, 0.045, 0.29),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.12, 0.32, jetY]
-    });
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: plumeMaterial,
+        instances: makeInstances(70, 1, 0.045, 0.29),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.12, 0.32, jetY]
+      })
+    );
     // Velo exterior: puffs grandes y muy transparentes que dan amplitud al
     // abanico y se salen un poco del borde para suavizarlo.
-    const puffBatch = new EffectBatch({
-      app: this.app,
-      parent: root,
-      mesh: this.sphereMesh,
-      material: puffMaterial,
-      instances: makeInstances(32, 0.92, 0.07, 0.91),
-      motion: MOTION_FLAME_JET,
-      radius: reach,
-      life,
-      params: [tanHalf, 0.1, 0.3, jetY]
-    });
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: puffMaterial,
+        instances: makeInstances(32, 0.92, 0.07, 0.91),
+        motion: MOTION_FLAME_JET,
+        radius: reach,
+        life,
+        params: [tanHalf, 0.1, 0.3, jetY]
+      })
+    );
 
-    // Boca del aliento: núcleo brillante y aro de escarcha en el vértice.
-    const muzzle = this.createEntity(this.sphereMesh, [glowMaterial], root);
-    muzzle.setLocalPosition(0, jetY, 0.14);
-    muzzle.setLocalScale(0.38, 0.3, 0.38);
+    // Boca del aliento: núcleo brillante en el vértice, con pulso y fundido
+    // también en GPU.
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: glowMaterial,
+        instances: [
+          {
+            y: jetY,
+            z: 0.14,
+            anim0: [0.34, 18, 0.12, 0],
+            anim1: [0.8, 0, 0, 0]
+          }
+        ],
+        motion: MOTION_PULSE_SPHERE,
+        radius: reach,
+        life,
+        params: [0.08, 0.2, 0, 0]
+      })
+    );
 
     let time = 0;
     const animate = (_t: number, dt: number): void => {
+      // Toda la animación vive en el vertex shader; solo avanza el reloj.
       time += dt;
-      const fadeIn = Math.min(1, time / 0.1);
-      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.25));
-      const envelope = Math.min(fadeIn, fadeOut);
-      const shimmer =
-        0.88 + Math.sin(time * 21) * 0.08 + Math.sin(time * 37) * 0.04;
-
-      hazeMaterial.opacity = 0.07 * envelope * shimmer;
-      mistMaterial.opacity = 0.12 * envelope * shimmer;
-      bodyMaterial.opacity = 0.18 * envelope * shimmer;
-      coreMaterial.opacity = 0.26 * envelope * shimmer;
-      plumeMaterial.opacity = 0.16 * envelope * shimmer;
-      puffMaterial.opacity = 0.07 * envelope * shimmer;
-      shardMaterial.opacity = 0.9 * envelope * shimmer;
-      deepMaterial.opacity = 0.75 * envelope;
-      snowMaterial.opacity = 0.4 * envelope;
-      glowMaterial.opacity = 0.18 * envelope * shimmer;
-
-      for (const body of bodies) {
-        body.material.opacity = body.opacity * envelope * shimmer;
-      }
-      shardBatch.setTime(time);
-      deepBatch.setTime(time);
-      snowBatch.setTime(time);
-      plumeBatch.setTime(time);
-      puffBatch.setTime(time);
-
-      const muzzleScale = (0.34 + Math.sin(time * 18) * 0.04) * envelope;
-      muzzle.setLocalScale(muzzleScale, muzzleScale * 0.8, muzzleScale);
+      for (const batch of batches) batch.setTime(time);
     };
 
     const anchors = coneAnchors(x, z, dirX, dirZ, reach, half);
@@ -5964,6 +6082,277 @@ export class CombatFx {
 
       for (const batch of jetBatches) batch.setTime(time);
       jetMaterial.opacity = 0.92 * envelope;
+    };
+    this.addEffect(root, materials, life, animate);
+    animate(0, 0);
+  }
+
+  /**
+   * Doble cúpula de presión de `Pulso Primigenio`, animada íntegramente en GPU.
+   *
+   * Cada pulso abre una semiesfera de agua comprimida que crece desde el suelo,
+   * vibra como una membrana y colapsa antes del golpe siguiente. El estanque y
+   * el aro de borde mantienen el área entre beats; las bandas de refracción
+   * siguen la superficie de la cúpula y las gotas orbitan dentro del volumen.
+   * No hay chorros verticales: la CPU solo crea los lotes y avanza
+   * `uEffectTime`, sin transforms ni opacidades por frame.
+   */
+  private spawnPrimordialPulseAoe(
+    x: number,
+    z: number,
+    radius: number,
+    color: readonly [number, number, number],
+    duration: number
+  ): void {
+    // La vida visual sobrevive un poco al último tick para que la segunda
+    // cúpula pueda colapsar sin cortarse en seco. Los dos golpes siguen
+    // ocurriendo a 0 s y 0,5 s; esto solo cambia la forma de apagarse.
+    const life = Math.max(1, duration + 0.35);
+    const root = new pc.Entity('primordial-pulse-aoe');
+    root.setPosition(x, 0.03, z);
+    this.app.root.addChild(root);
+
+    // El estanque usa un azul más profundo que el color de la habilidad; la
+    // cúpula y las crestas se aclaran hacia el blanco para separar capas.
+    const deepColor: [number, number, number] = [
+      Math.round(color[0] * 0.44),
+      Math.round(color[1] * 0.54),
+      Math.round(color[2] * 0.78)
+    ];
+    const glowColor = tintColor(color, 0.45);
+    const crestColor = tintColor(color, 0.85);
+    const whiteColor: [number, number, number] = [236, 253, 255];
+    // Verde-cyan reservado para la curación: no comparte tono con el daño.
+    const healColor: [number, number, number] = [104, 246, 198];
+    const healCoreColor: [number, number, number] = [186, 255, 228];
+
+    const poolMaterial = this.createWaterMaterial(deepColor, 0.18);
+    const shimmerMaterial = this.createWaterMaterial(glowColor, 0.07);
+    const rimMaterial = this.createWaterMaterial(crestColor, 0.34);
+    const domeMaterial = this.createVertexColorMaterial(0.13);
+    const innerDomeMaterial = this.createVertexColorMaterial(
+      0.2,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const coreDomeMaterial = this.createVertexColorMaterial(
+      0.26,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const bandMaterial = this.createWaterMaterial(whiteColor, 0.42);
+    const dropletMaterial = this.createMaterial(whiteColor, 0.42);
+    const shockMaterial = this.createWaterMaterial(whiteColor, 0.8);
+    const healCoreMaterial = this.createWaterMaterial(healCoreColor, 0.75);
+    const healHaloMaterial = this.createWaterMaterial(healColor, 0.22);
+    const materials = [
+      poolMaterial,
+      shimmerMaterial,
+      rimMaterial,
+      domeMaterial,
+      innerDomeMaterial,
+      coreDomeMaterial,
+      bandMaterial,
+      dropletMaterial,
+      shockMaterial,
+      healCoreMaterial,
+      healHaloMaterial
+    ];
+
+    const batches: EffectBatch[] = [];
+    const addBatch = (
+      mesh: pc.Mesh,
+      material: pc.StandardMaterial,
+      motion: string,
+      instance: EffectBatchInstance,
+      params?: readonly [number, number, number, number]
+    ): void => {
+      batches.push(
+        new EffectBatch({
+          app: this.app,
+          parent: root,
+          mesh,
+          material,
+          instances: [instance],
+          motion,
+          radius,
+          life,
+          params
+        })
+      );
+    };
+
+    // --- Estanque y borde -------------------------------------------------
+    // El disco profundo mantiene el área legible entre los dos golpes.
+    addBatch(
+      this.discMesh,
+      poolMaterial,
+      MOTION_PRIMORDIAL_POOL,
+      { anim0: [0.34, 0, 0, 0], anim1: [0.6, 1, 0.025, 0] },
+      [0.22, 0.12, 0.35, 0]
+    );
+    addBatch(
+      this.discMesh,
+      shimmerMaterial,
+      MOTION_PRIMORDIAL_POOL,
+      { anim0: [0.52, 1.7, 0, 0], anim1: [0.44, 0.84, 0.05, 0] },
+      [0.18, 0.16, 0.32, 0]
+    );
+    // Aro de borde: se mantiene toda la habilidad y se afina al final.
+    addBatch(
+      this.torusMesh,
+      rimMaterial,
+      MOTION_PRIMORDIAL_RING,
+      { anim0: [0, 0.24, 0.92, 1], anim1: [0.09, 0.05, 0, 0] },
+      [Math.max(0.1, life - 0.62), 0.38, 0, 0]
+    );
+
+    // --- Cúpulas de presión ----------------------------------------------
+    // Cada beat tiene tres cáscaras: volumen oscuro, membrana luminosa y
+    // núcleo brillante. La segunda cúpula es más ancha y más alta.
+    type Beat = readonly [number, number, number, number];
+    const firstBeat: Beat = [0, 0.06, 0.3, 0.16];
+    const secondBeat: Beat = [0.36, 0.14, 0.64, 0.32];
+    const domeMesh = this.cachedMesh('pressure-dome', () =>
+      createPressureDomeMesh(this.device)
+    );
+    const addDome = (
+      material: pc.StandardMaterial,
+      beat: Beat,
+      peakScale: number,
+      heightScale: number,
+      wobble: number,
+      phase: number
+    ): void => {
+      batches.push(
+        new EffectBatch({
+          app: this.app,
+          parent: root,
+          mesh: domeMesh,
+          material,
+          instances: [
+            {
+              anim0: [beat[0], beat[1], beat[2], beat[3]],
+              anim1: [peakScale, heightScale, wobble, phase]
+            }
+          ],
+          motion: MOTION_PRESSURE_DOME,
+          radius,
+          life
+        })
+      );
+    };
+    addDome(domeMaterial, firstBeat, 0.82, 0.55, 0.025, 0);
+    addDome(innerDomeMaterial, firstBeat, 0.68, 0.48, 0.04, 0.9);
+    addDome(coreDomeMaterial, firstBeat, 0.34, 0.4, 0.06, 1.7);
+    addDome(domeMaterial, secondBeat, 1, 0.62, 0.035, 2.4);
+    addDome(innerDomeMaterial, secondBeat, 0.86, 0.56, 0.05, 3.3);
+    addDome(coreDomeMaterial, secondBeat, 0.46, 0.46, 0.075, 4.1);
+
+    // --- Refracción sobre la cúpula --------------------------------------
+    // Un solo lote para las seis bandas: siguen la escala del beat y su
+    // latitud, así que se leen pegadas a la superficie mientras crece.
+    const bandInstances: EffectBatchInstance[] = [];
+    const addBands = (
+      beat: Beat,
+      peakScale: number,
+      heightScale: number
+    ): void => {
+      const heights = [0.26, 0.56, 0.84];
+      for (let index = 0; index < heights.length; index++) {
+        bandInstances.push({
+          anim0: [beat[0], beat[1], beat[2], beat[3]],
+          anim1: [
+            heights[index],
+            peakScale * 0.98,
+            peakScale * heightScale,
+            index * 0.018
+          ]
+        });
+      }
+    };
+    addBands(firstBeat, 0.82, 0.55);
+    addBands(secondBeat, 1, 0.62);
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.torusMesh,
+        material: bandMaterial,
+        instances: bandInstances,
+        motion: MOTION_PRESSURE_BAND,
+        radius,
+        life
+      })
+    );
+
+    // --- Gotas suspendidas ------------------------------------------------
+    // Reparto determinista en espiral: orbitan dentro del volumen y se
+    // encogen en el hueco entre pulsos, sin salir nunca hacia arriba.
+    const dropletInstances: EffectBatchInstance[] = [];
+    const dropletCount = 52;
+    for (let index = 0; index < dropletCount; index++) {
+      const angle = index * 2.399963229728653;
+      const radial = 0.32 + ((index * 0.61803398875) % 1) * 0.62;
+      const height = ((index * 0.754877666) % 1) * 0.94;
+      const speed = 0.32 + ((index * 7) % 9) * 0.05;
+      const size = radius * (0.009 + ((index * 11) % 5) * 0.0018);
+      dropletInstances.push({
+        anim0: [angle, radial, height, speed],
+        anim1: [size, index * 0.73, 0, 0]
+      });
+    }
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.sphereMesh,
+        material: dropletMaterial,
+        instances: dropletInstances,
+        motion: MOTION_PRESSURE_ORBIT,
+        radius,
+        life
+      })
+    );
+
+    // --- Ondas de choque en el suelo --------------------------------------
+    batches.push(
+      new EffectBatch({
+        app: this.app,
+        parent: root,
+        mesh: this.torusMesh,
+        material: shockMaterial,
+        instances: [
+          { anim0: [0, 0.26, 0.1, 1.03], anim1: [0.04, 0.05, 0, 0] },
+          { anim0: [0.4, 0.34, 0.18, 1.06], anim1: [0.06, 0.05, 0, 0] }
+        ],
+        motion: MOTION_PRIMORDIAL_RING,
+        radius,
+        life,
+        params: [0.08, 0.34, 0, 0]
+      })
+    );
+
+    // --- Onda curativa del segundo pulso ----------------------------------
+    // Verde-cyan para distinguirla del daño; nace con el tick que cura.
+    addBatch(
+      this.torusMesh,
+      healCoreMaterial,
+      MOTION_PRIMORDIAL_RING,
+      { anim0: [0.44, 0.42, 0.22, 1.02], anim1: [0.05, 0.07, 0.04, 0] },
+      [0.04, 0.3, 0, 0]
+    );
+    addBatch(
+      this.psychicRingMesh,
+      healHaloMaterial,
+      MOTION_PRIMORDIAL_RING,
+      { anim0: [0.46, 0.48, 0.3, 1.08], anim1: [0.08, 0.04, 0.02, 0] },
+      [0.06, 0.34, 0, 0]
+    );
+
+    let time = 0;
+    const animate = (_t: number, dt: number): void => {
+      // Toda la animación vive en el vertex shader; solo avanza el reloj.
+      time += dt;
+      for (const batch of batches) batch.setTime(time);
     };
     this.addEffect(root, materials, life, animate);
     animate(0, 0);

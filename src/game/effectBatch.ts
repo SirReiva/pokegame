@@ -150,6 +150,19 @@ float effectEnvelope(float fadeIn, float fadeOut) {
   float outValue = min(1.0, max(0.0, (uEffectLife - uEffectTime) / max(fadeOut, 0.0001)));
   return min(inValue, outValue);
 }
+
+/**
+ * Curva de un pulso: sube desde birth, se mantiene hold segundos y cae durante
+ * fall. Devuelve 0 fuera de la ventana, de modo que la geometría puede nacer y
+ * colapsar sin escribir opacidades por frame.
+ */
+float effectBeat(float birth, float rise, float hold, float fall) {
+  float local = uEffectTime - birth;
+  if (local <= 0.0) return 0.0;
+  float up = smoothstep(0.0, max(rise, 0.0001), local);
+  float down = 1.0 - smoothstep(hold, hold + max(fall, 0.0001), local);
+  return max(0.0, up * down);
+}
 `;
 
 function instancedChunk(motion: string): string {
@@ -276,6 +289,17 @@ fn effectEnvelope(fadeIn: f32, fadeOut: f32) -> f32 {
   let outValue = min(1.0, max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / max(fadeOut, 0.0001)));
   return min(inValue, outValue);
 }
+
+/** Curva de un pulso: nace en birth, se mantiene hold y cae fall. */
+fn effectBeat(birth: f32, rise: f32, hold: f32, fall: f32) -> f32 {
+  let local = uniform.uEffectTime - birth;
+  if (local <= 0.0) {
+    return 0.0;
+  }
+  let up = smoothstep(0.0, max(rise, 0.0001), local);
+  let down = 1.0 - smoothstep(hold, hold + max(fall, 0.0001), local);
+  return max(0.0, up * down);
+}
 `;
 
 function instancedChunkWGSL(motion: string): string {
@@ -360,6 +384,14 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_HEAT_EMBERS, wgslMotions.MOTION_HEAT_EMBERS_WGSL],
     [MOTION_HEAT_BLADES, wgslMotions.MOTION_HEAT_BLADES_WGSL],
     [MOTION_WATER_JETS, wgslMotions.MOTION_WATER_JETS_WGSL],
+    [MOTION_PRIMORDIAL_RING, wgslMotions.MOTION_PRIMORDIAL_RING_WGSL],
+    [MOTION_PRIMORDIAL_POOL, wgslMotions.MOTION_PRIMORDIAL_POOL_WGSL],
+    [MOTION_PRESSURE_DOME, wgslMotions.MOTION_PRESSURE_DOME_WGSL],
+    [MOTION_PRESSURE_BAND, wgslMotions.MOTION_PRESSURE_BAND_WGSL],
+    [MOTION_PRESSURE_ORBIT, wgslMotions.MOTION_PRESSURE_ORBIT_WGSL],
+    [MOTION_PULSE_SPHERE, wgslMotions.MOTION_PULSE_SPHERE_WGSL],
+    [MOTION_SACRED_FLAME_BODY, wgslMotions.MOTION_SACRED_FLAME_BODY_WGSL],
+    [MOTION_SHEER_COLD_BODY, wgslMotions.MOTION_SHEER_COLD_BODY_WGSL],
     [MOTION_PSYCHIC_SHARDS, wgslMotions.MOTION_PSYCHIC_SHARDS_WGSL],
     [MOTION_PSYCHIC_BEAM_BODY, wgslMotions.MOTION_PSYCHIC_BEAM_BODY_WGSL],
     [MOTION_PSYCHIC_BEAM_RINGS, wgslMotions.MOTION_PSYCHIC_BEAM_RINGS_WGSL],
@@ -694,6 +726,181 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
     vec3(width, height, width),
     effectRotY(yaw)
   );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Anillos de `Pulso Primigenio`: cada instancia se expande con su propio
+ * retardo y se funde contrayendo el tubo del toro hacia su línea central. Así
+ * el anillo se afina sin encogerse y la onda no parece retroceder.
+ * `anim0 = [nacimiento, crecimiento, escala inicial, escala final]`.
+ * `anim1 = [fundido de entrada, altura, deriva vertical, 0]`.
+ * `uEffectParam0` es la espera antes de fundirse y `uEffectParam1` el fundido.
+ */
+export const MOTION_PRIMORDIAL_RING = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = max(0.0, uEffectTime - a0.x);
+  float progress = clamp(local / max(a0.y, 0.0001), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - progress, 3.0);
+  float scale = uEffectRadius * 2.0 * mix(a0.z, a0.w, ease);
+  float y = a1.y + a1.z * ease;
+  return effectTRS(
+    vec3(base[3].x, y, base[3].z),
+    vec3(scale, 1.0, scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  float local = uEffectTime - a0.x;
+  float rise = clamp(local / max(a1.x, 0.0001), 0.0, 1.0);
+  float fall = clamp(
+    (a0.y + uEffectParam0 + uEffectParam1 - local) /
+      max(uEffectParam1, 0.0001),
+    0.0,
+    1.0
+  );
+  float fade = min(rise, fall);
+  vec2 radial = vertexPosition.xz;
+  vec2 dir = dot(radial, radial) > 0.000001 ? normalize(radial) : vec2(0.0);
+  vec3 center = vec3(dir.x * 0.5, 0.0, dir.y * 0.5);
+  return center + (vertexPosition - center) * max(0.0, fade);
+}
+`;
+
+/**
+ * Cúpula de presión de `Pulso Primigenio`: cada pulso abre una semiesfera de
+ * agua comprimida que crece desde el suelo, respira con una ondulación por
+ * latitud y colapsa antes del golpe siguiente. No hay columnas ni chorros: el
+ * volumen es la propia cúpula.
+ *
+ * `anim0 = [nacimiento, subida, mantenimiento, caída]`.
+ * `anim1 = [escala máxima, escala en Y, amplitud de ondulación, fase]`.
+ */
+export const MOTION_PRESSURE_DOME = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float beat = effectBeat(a0.x, a0.y, a0.z, a0.w);
+  float breathe = 1.0 + sin(uEffectTime * 9.0 + a1.w) * a1.z * beat;
+  float scale = max(0.0001, uEffectRadius * a1.x * beat * breathe);
+  return effectTRS(
+    base[3].xyz,
+    vec3(scale, scale * a1.y, scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  // Ondulación por latitud: la cáscara vibra como una membrana a presión. La
+  // base queda anclada al suelo para que la cúpula no se despegue.
+  float lat = asin(clamp(vertexPosition.y, 0.0, 1.0));
+  float wave = sin(lat * 12.0 - uEffectTime * 10.0 + a1.w);
+  float weight = smoothstep(0.0, 0.18, vertexPosition.y);
+  float bulge = 1.0 + wave * a1.z * 0.9 * weight;
+  return vec3(
+    vertexPosition.x * bulge,
+    vertexPosition.y * (1.0 + wave * a1.z * 0.35 * weight),
+    vertexPosition.z * bulge
+  );
+}
+`;
+
+/**
+ * Banda de refracción sobre la cúpula de `Pulso Primigenio`: un toro que sigue
+ * la escala del pulso y se coloca a una latitud concreta de la semiesfera.
+ * Así el anillo queda pegado a la superficie mientras la cúpula crece.
+ *
+ * `anim0 = [nacimiento, subida, mantenimiento, caída]`.
+ * `anim1 = [altura 0..1, escala XZ, escala Y, retardo]`.
+ */
+export const MOTION_PRESSURE_BAND = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float birth = a0.x + a1.w;
+  float hold = max(0.0, a0.z - a1.w);
+  float fall = max(0.0001, a0.w - a1.w);
+  float beat = effectBeat(birth, a0.y, hold, fall);
+  float h = clamp(a1.x, 0.0, 0.995);
+  float xzScale = max(0.0001, uEffectRadius * a1.y * beat);
+  float yScale = max(0.0001, uEffectRadius * a1.z * beat);
+  float ringRadius = xzScale * sqrt(max(0.0, 1.0 - h * h));
+  float y = yScale * h;
+  return effectTRS(
+    vec3(base[3].x, y, base[3].z),
+    vec3(max(0.0001, ringRadius * 2.0), 1.0, max(0.0001, ringRadius * 2.0)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  // Pequeña ondulación azimutal para que la banda no sea un círculo rígido.
+  float r = length(vertexPosition.xz);
+  if (r <= 0.0001) return vertexPosition;
+  float wave = sin(atan(vertexPosition.z, vertexPosition.x) * 5.0 + uEffectTime * 3.0 + a1.w);
+  vec2 dir = vertexPosition.xz / r;
+  vec2 offset = dir * wave * 0.008;
+  return vec3(vertexPosition.x + offset.x, vertexPosition.y, vertexPosition.z + offset.y);
+}
+`;
+
+/**
+ * Gotas suspendidas dentro de la cúpula de `Pulso Primigenio`: orbitan a
+ * distintas alturas y radios, siempre dentro del volumen, sin salir hacia
+ * arriba. Se encogen en los huecos entre pulsos.
+ *
+ * `anim0 = [ángulo, radio 0..1, altura 0..1, velocidad angular]`.
+ * `anim1 = [tamaño, fase vertical, 0, 0]`.
+ */
+export const MOTION_PRESSURE_ORBIT = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  // Los dos beats replican los tiempos de spawnPrimordialPulseAoe. Las gotas
+  // siguen el máximo para no desaparecer en el cruce entre pulsos.
+  float beat = max(
+    effectBeat(0.0, 0.06, 0.3, 0.16),
+    effectBeat(0.36, 0.14, 0.64, 0.32)
+  );
+  float angle = a0.x + uEffectTime * a0.w;
+  float heightNorm = clamp(0.08 + a0.z * 0.84, 0.0, 0.96);
+  float height = uEffectRadius * 0.42 * beat;
+  float radius = uEffectRadius * a0.y * sqrt(max(0.0, 1.0 - heightNorm * heightNorm)) * beat;
+  float bob = sin(uEffectTime * 3.1 + a1.y) * 0.06 * beat;
+  float size = max(
+    0.0001,
+    a1.x * beat * (0.72 + 0.28 * sin(uEffectTime * 5.0 + a1.y))
+  );
+  return effectTRS(
+    vec3(
+      base[3].x + cos(angle) * radius,
+      heightNorm * height + bob,
+      base[3].z + sin(angle) * radius
+    ),
+    vec3(size),
+    effectRotY(angle)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Estanque de `Pulso Primigenio`: disco que crece, respira y se desvanece con
+ * el envelope global. `anim0 = [velocidad de respiración, fase, 0, 0]`;
+ * `anim1 = [escala inicial, escala final, amplitud, 0]`.
+ * `uEffectParam0` es la duración del crecimiento y `uEffectParam1/2` los
+ * fundidos de entrada y salida.
+ */
+export const MOTION_PRIMORDIAL_POOL = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float grow = clamp(uEffectTime / max(uEffectParam0, 0.0001), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - grow, 3.0);
+  float breathe = 1.0 + sin(uEffectTime * a0.x * 6.28318530718 + a0.y) * a1.z;
+  float envelope = effectEnvelope(uEffectParam1, uEffectParam2);
+  float scale = uEffectRadius * 2.0 * mix(a1.x, a1.y, ease) * breathe * envelope;
+  return effectTRS(base[3].xyz, vec3(scale, 1.0, scale), effectRotY(0.0));
 }
 
 vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
@@ -1195,6 +1402,98 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
     pos,
     vec3(a1.x * scale, a1.y * scale, a1.x * scale),
     effectEuler(pitch, yaw, roll)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Cuerpo del chorro de `Fuego Sagrado`: tres conos anidados que crecen desde
+ * la boca, ondulan como llamas y se retraen al final. La textura de llama queda
+ * estática; el movimiento viene de la deformación de vértices.
+ * `anim0 = [longitud, radio, fase, velocidad]`.
+ * `uEffectParam0/1` son los fundidos de entrada y salida.
+ */
+export const MOTION_SACRED_FLAME_BODY = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float reveal = smoothstep(0.0, 0.12, uEffectTime);
+  float fade = effectEnvelope(uEffectParam0, uEffectParam1);
+  float flicker = 0.94 + sin(uEffectTime * a0.w + a0.z) * 0.06;
+  float lengthScale = max(0.0001, a0.x * reveal * fade);
+  float radialScale = max(0.0001, a0.y * flicker * reveal * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3(radialScale, radialScale, lengthScale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  // Ondulación y torsión de la superficie: las lenguas parecen subir por el
+  // cono sin mover la textura ni escribir materiales por frame.
+  float wave = sin(vertexPosition.z * 7.0 - uEffectTime * 16.0 + a0.z);
+  float widen = 1.0 + wave * 0.07 * (0.25 + vertexPosition.z * 0.75);
+  float twist = sin(vertexPosition.z * 5.0 - uEffectTime * 9.0 + a0.z) * 0.18;
+  float angle = atan(vertexPosition.y, vertexPosition.x) + twist;
+  float radius = length(vertexPosition.xy) * widen;
+  return vec3(cos(angle) * radius, sin(angle) * radius, vertexPosition.z);
+}
+`;
+
+/**
+ * Cuerpo del aliento de `Frío Polar`: el cono crece desde la boca, respira con
+ * una ondulación radial y se retrae al final. La opacidad es estática; todo el
+ * fundido es geométrico para no escribir materiales por frame.
+ * `anim0 = [longitud, radio, fase, velocidad de ondulación]`.
+ * `uEffectParam0/1` son los fundidos de entrada y salida.
+ */
+export const MOTION_SHEER_COLD_BODY = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float reveal = smoothstep(0.0, 0.12, uEffectTime);
+  float fade = effectEnvelope(uEffectParam0, uEffectParam1);
+  float ripple = sin(uEffectTime * a0.w + a0.z) * 0.035;
+  float lengthScale = max(0.0001, a0.x * reveal * fade);
+  float radialScale = max(0.0001, a0.y * (1.0 + ripple) * reveal * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3(radialScale, radialScale, lengthScale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  // Ondulación del radio a lo largo del cono: la niebla parece avanzar en
+  // oleadas desde la boca hasta la base.
+  float ripple = sin(
+    vertexPosition.z * 8.0 - uEffectTime * 22.0 + a0.z
+  ) * 0.06;
+  float widen = 1.0 + ripple * (0.2 + vertexPosition.z * 0.8);
+  return vec3(
+    vertexPosition.x * widen,
+    vertexPosition.y * widen,
+    vertexPosition.z
+  );
+}
+`;
+
+/**
+ * Esfera pulsante de la boquilla de `Frío Polar`.
+ * `anim0 = [escala, velocidad, amplitud, fase]`; `anim1.x` es la escala en Y.
+ * `uEffectParam0/1` son los fundidos de entrada y salida.
+ */
+export const MOTION_PULSE_SPHERE = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float pulse = 1.0 + sin(uEffectTime * a0.y + a0.w) * a0.z;
+  float fade = effectEnvelope(uEffectParam0, uEffectParam1);
+  float yScale = a1.x > 0.001 ? a1.x : 1.0;
+  float scale = max(0.0001, a0.x * pulse * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3(scale, scale * yScale, scale),
+    effectRotY(0.0)
   );
 }
 

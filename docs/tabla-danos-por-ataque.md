@@ -817,35 +817,35 @@ Tipos: **Water** · HP 175 · Atk 95 · Def 135 · SpA 110 · SpD 135 · Vel 105
 
 Tipos: **Water** · HP 175 · Atk 120 · Def 110 · SpA 170 · SpD 160 · Vel 110
 
-| Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — | Definitiva: Origen del Mar<br>Water · Esp · Pot 125 |
+| Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — | Definitiva: Pulso Primigenio<br>Water · Esp · Pot 160/s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 29 ×½ | 47 ×½ | Estado | 79 ×½ |
-| Charmander | 143 ×2 | 251 ×2 | Estado | 380 ×2 |
-| Squirtle | 29 ×½ | 48 ×½ | Estado | 80 ×½ |
-| Pikachu | 71 ×1 | 126 ×1 | Estado | 190 ×1 |
-| Gengar | 53 ×1 | 93 ×1 | Estado | 141 ×1 |
-| Voltorb | 65 ×1 | 111 ×1 | Estado | 178 ×1 |
-| Eevee | 58 ×1 | 95 ×1 | Estado | 157 ×1 |
-| Lucario | 56 ×1 | 95 ×1 | Estado | 148 ×1 |
-| Greninja | 28 ×½ | 46 ×½ | Estado | 74 ×½ |
-| Mewtwo | 46 ×1 | 79 ×1 | Estado | 123 ×1 |
-| Mew | 41 ×1 | 69 ×1 | Estado | 111 ×1 |
-| Onix | 298 ×4 | 522 ×4 | Estado | 821 ×4 |
-| Scyther | 50 ×1 | 84 ×1 | Estado | 133 ×1 |
-| Gyarados | 20 ×½ | 33 ×½ | Estado | 55 ×½ |
-| Tyranitar | 82 ×2 | 139 ×2 | Estado | 223 ×2 |
-| Articuno | 35 ×1 | 54 ×1 | Estado | 93 ×1 |
-| Zapdos | 46 ×1 | 79 ×1 | Estado | 123 ×1 |
-| Moltres | 94 ×2 | 168 ×2 | Estado | 257 ×2 |
-| Raikou | 41 ×1 | 69 ×1 | Estado | 111 ×1 |
-| Entei | 106 ×2 | 185 ×2 | Estado | 282 ×2 |
-| Suicune | 18 ×½ | 32 ×½ | Estado | 49 ×½ |
-| Lugia | 29 ×1 | 49 ×1 | Estado | 77 ×1 |
-| Ho-Oh | 57 ×2 | 98 ×2 | Estado | 153 ×2 |
-| Celebi | 20 ×½ | 33 ×½ | Estado | 55 ×½ |
-| Groudon | 92 ×2 | 159 ×2 | Estado | 245 ×2 |
-| Rayquaza | 22 ×½ | 38 ×½ | Estado | 61 ×½ |
-| **Mediana de daño** | 48 | 82 | — | 128 |
+| Bulbasaur | 29 ×½ | 47 ×½ | Estado | 99 ×½ |
+| Charmander | 143 ×2 | 251 ×2 | Estado | 484 ×2 |
+| Squirtle | 29 ×½ | 48 ×½ | Estado | 100 ×½ |
+| Pikachu | 71 ×1 | 126 ×1 | Estado | 242 ×1 |
+| Gengar | 53 ×1 | 93 ×1 | Estado | 177 ×1 |
+| Voltorb | 65 ×1 | 111 ×1 | Estado | 225 ×1 |
+| Eevee | 58 ×1 | 95 ×1 | Estado | 199 ×1 |
+| Lucario | 56 ×1 | 95 ×1 | Estado | 188 ×1 |
+| Greninja | 28 ×½ | 46 ×½ | Estado | 92 ×½ |
+| Mewtwo | 46 ×1 | 79 ×1 | Estado | 152 ×1 |
+| Mew | 41 ×1 | 69 ×1 | Estado | 140 ×1 |
+| Onix | 298 ×4 | 522 ×4 | Estado | 1046 ×4 |
+| Scyther | 50 ×1 | 84 ×1 | Estado | 168 ×1 |
+| Gyarados | 20 ×½ | 33 ×½ | Estado | 69 ×½ |
+| Tyranitar | 82 ×2 | 139 ×2 | Estado | 280 ×2 |
+| Articuno | 35 ×1 | 54 ×1 | Estado | 115 ×1 |
+| Zapdos | 46 ×1 | 79 ×1 | Estado | 152 ×1 |
+| Moltres | 94 ×2 | 168 ×2 | Estado | 317 ×2 |
+| Raikou | 41 ×1 | 69 ×1 | Estado | 140 ×1 |
+| Entei | 106 ×2 | 185 ×2 | Estado | 353 ×2 |
+| Suicune | 18 ×½ | 32 ×½ | Estado | 62 ×½ |
+| Lugia | 29 ×1 | 49 ×1 | Estado | 97 ×1 |
+| Ho-Oh | 57 ×2 | 98 ×2 | Estado | 194 ×2 |
+| Celebi | 20 ×½ | 33 ×½ | Estado | 69 ×½ |
+| Groudon | 92 ×2 | 159 ×2 | Estado | 304 ×2 |
+| Rayquaza | 22 ×½ | 38 ×½ | Estado | 76 ×½ |
+| **Mediana de daño** | 48 | 82 | — | 160 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Rayquaza
@@ -911,7 +911,7 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 | Ho-Oh | 49 | 87 | — | 56 | 189 |
 | Gyarados | 53 | 66 | 51 | 86 | 266 |
 | Suicune | 30 | 45 | 39 | 61 | 184 |
-| Kyogre | 48 | 82 | — | 128 | 257 |
+| Kyogre | 48 | 82 | — | 160 | 290 |
 | Rayquaza | 51 | 68 | 83 | 127 | 330 |
 
 ## Pokémon sin moveset

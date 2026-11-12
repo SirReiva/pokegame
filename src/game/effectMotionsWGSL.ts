@@ -153,6 +153,166 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 }
 `;
 
+/**
+ * Anillos de `Pulso Primigenio`: expansión con retardo y fundido contrayendo
+ * el tubo del toro hacia su línea central.
+ * `anim0 = [nacimiento, crecimiento, escala inicial, escala final]`.
+ * `anim1 = [fundido de entrada, altura, deriva vertical, 0]`.
+ * `uEffectParam0` espera antes del fundido y `uEffectParam1` su duración.
+ */
+export const MOTION_PRIMORDIAL_RING_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = max(0.0, uniform.uEffectTime - a0.x);
+  let progress = clamp(local / max(a0.y, 0.0001), 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - progress, 3.0);
+  let scale = uniform.uEffectRadius * 2.0 * mix(a0.z, a0.w, ease);
+  let y = a1.y + a1.z * ease;
+  return effectTRS(
+    vec3f(base[3].x, y, base[3].z),
+    vec3f(scale, 1.0, scale),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let local = uniform.uEffectTime - a0.x;
+  let rise = clamp(local / max(a1.x, 0.0001), 0.0, 1.0);
+  let fall = clamp(
+    (a0.y + uniform.uEffectParam0 + uniform.uEffectParam1 - local) /
+      max(uniform.uEffectParam1, 0.0001),
+    0.0,
+    1.0
+  );
+  let fade = min(rise, fall);
+  let radial = vertexPosition.xz;
+  let dir = radial / max(length(radial), 0.0001);
+  let center = vec3f(dir.x * 0.5, 0.0, dir.y * 0.5);
+  return center + (vertexPosition - center) * max(0.0, fade);
+}
+`;
+
+/**
+ * Cúpula de presión de `Pulso Primigenio`: crecimiento, ondulación por latitud
+ * y colapso. `anim0 = [nacimiento, subida, mantenimiento, caída]`.
+ * `anim1 = [escala máxima, escala en Y, amplitud, fase]`.
+ */
+export const MOTION_PRESSURE_DOME_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let beat = effectBeat(a0.x, a0.y, a0.z, a0.w);
+  let breathe = 1.0 + sin(uniform.uEffectTime * 9.0 + a1.w) * a1.z * beat;
+  let scale = max(0.0001, uniform.uEffectRadius * a1.x * beat * breathe);
+  return effectTRS(
+    base[3].xyz,
+    vec3f(scale, scale * a1.y, scale),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let lat = asin(clamp(vertexPosition.y, 0.0, 1.0));
+  let wave = sin(lat * 12.0 - uniform.uEffectTime * 10.0 + a1.w);
+  let weight = smoothstep(0.0, 0.18, vertexPosition.y);
+  let bulge = 1.0 + wave * a1.z * 0.9 * weight;
+  return vec3f(
+    vertexPosition.x * bulge,
+    vertexPosition.y * (1.0 + wave * a1.z * 0.35 * weight),
+    vertexPosition.z * bulge
+  );
+}
+`;
+
+/**
+ * Banda de refracción pegada a la cúpula de `Pulso Primigenio`.
+ * `anim0 = [nacimiento, subida, mantenimiento, caída]`.
+ * `anim1 = [altura 0..1, escala XZ, escala Y, retardo]`.
+ */
+export const MOTION_PRESSURE_BAND_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let birth = a0.x + a1.w;
+  let hold = max(0.0, a0.z - a1.w);
+  let fall = max(0.0001, a0.w - a1.w);
+  let beat = effectBeat(birth, a0.y, hold, fall);
+  let h = clamp(a1.x, 0.0, 0.995);
+  let xzScale = max(0.0001, uniform.uEffectRadius * a1.y * beat);
+  let yScale = max(0.0001, uniform.uEffectRadius * a1.z * beat);
+  let ringRadius = xzScale * sqrt(max(0.0, 1.0 - h * h));
+  let y = yScale * h;
+  return effectTRS(
+    vec3f(base[3].x, y, base[3].z),
+    vec3f(max(0.0001, ringRadius * 2.0), 1.0, max(0.0001, ringRadius * 2.0)),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let r = length(vertexPosition.xz);
+  if (r <= 0.0001) {
+    return vertexPosition;
+  }
+  let wave = sin(atan2(vertexPosition.z, vertexPosition.x) * 5.0 + uniform.uEffectTime * 3.0 + a1.w);
+  let dir = vertexPosition.xz / r;
+  let offset = dir * wave * 0.008;
+  return vec3f(vertexPosition.x + offset.x, vertexPosition.y, vertexPosition.z + offset.y);
+}
+`;
+
+/**
+ * Gotas suspendidas dentro de la cúpula de `Pulso Primigenio`.
+ * `anim0 = [ángulo, radio 0..1, altura 0..1, velocidad angular]`.
+ * `anim1 = [tamaño, fase vertical, 0, 0]`.
+ */
+export const MOTION_PRESSURE_ORBIT_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  // Los dos beats replican los tiempos de spawnPrimordialPulseAoe.
+  let beat = max(
+    effectBeat(0.0, 0.06, 0.3, 0.16),
+    effectBeat(0.36, 0.14, 0.64, 0.32)
+  );
+  let angle = a0.x + uniform.uEffectTime * a0.w;
+  let heightNorm = clamp(0.08 + a0.z * 0.84, 0.0, 0.96);
+  let height = uniform.uEffectRadius * 0.42 * beat;
+  let radius = uniform.uEffectRadius * a0.y * sqrt(max(0.0, 1.0 - heightNorm * heightNorm)) * beat;
+  let bob = sin(uniform.uEffectTime * 3.1 + a1.y) * 0.06 * beat;
+  let size = max(
+    0.0001,
+    a1.x * beat * (0.72 + 0.28 * sin(uniform.uEffectTime * 5.0 + a1.y))
+  );
+  return effectTRS(
+    vec3f(
+      base[3].x + cos(angle) * radius,
+      heightNorm * height + bob,
+      base[3].z + sin(angle) * radius
+    ),
+    vec3f(size),
+    effectRotY(angle)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Estanque de `Pulso Primigenio`: crecimiento, respiración y envelope global.
+ * `anim0 = [velocidad de respiración, fase, 0, 0]`;
+ * `anim1 = [escala inicial, escala final, amplitud, 0]`.
+ */
+export const MOTION_PRIMORDIAL_POOL_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let grow = clamp(uniform.uEffectTime / max(uniform.uEffectParam0, 0.0001), 0.0, 1.0);
+  let ease = 1.0 - pow(1.0 - grow, 3.0);
+  let breathe = 1.0 + sin(uniform.uEffectTime * a0.x * 6.28318530718 + a0.y) * a1.z;
+  let envelope = effectEnvelope(uniform.uEffectParam1, uniform.uEffectParam2);
+  let scale = uniform.uEffectRadius * 2.0 * mix(a1.x, a1.y, ease) * breathe * envelope;
+  return effectTRS(base[3].xyz, vec3f(scale, 1.0, scale), effectRotY(0.0));
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
 /** Esquirlas de `Psíquico`: salen del centro, giran y se desvanecen. */
 export const MOTION_PSYCHIC_SHARDS_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
@@ -628,6 +788,89 @@ fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
     pos,
     vec3f(a1.x * scale, a1.y * scale, a1.x * scale),
     effectEuler(pitch, yaw, roll)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Cuerpo del chorro de `Fuego Sagrado`: crecimiento, ondulación y retracción
+ * geométrica. `anim0 = [longitud, radio, fase, velocidad]`.
+ * `uEffectParam0/1` son los fundidos de entrada y salida.
+ */
+export const MOTION_SACRED_FLAME_BODY_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = smoothstep(0.0, 0.12, uniform.uEffectTime);
+  let fade = effectEnvelope(uniform.uEffectParam0, uniform.uEffectParam1);
+  let flicker = 0.94 + sin(uniform.uEffectTime * a0.w + a0.z) * 0.06;
+  let lengthScale = max(0.0001, a0.x * reveal * fade);
+  let radialScale = max(0.0001, a0.y * flicker * reveal * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3f(radialScale, radialScale, lengthScale),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let wave = sin(vertexPosition.z * 7.0 - uniform.uEffectTime * 16.0 + a0.z);
+  let widen = 1.0 + wave * 0.07 * (0.25 + vertexPosition.z * 0.75);
+  let twist = sin(vertexPosition.z * 5.0 - uniform.uEffectTime * 9.0 + a0.z) * 0.18;
+  let angle = atan2(vertexPosition.y, vertexPosition.x) + twist;
+  let radius = length(vertexPosition.xy) * widen;
+  return vec3f(cos(angle) * radius, sin(angle) * radius, vertexPosition.z);
+}
+`;
+
+/**
+ * Cuerpo del aliento de `Frío Polar`: crecimiento, ondulación radial y
+ * retracción geométrica. `anim0 = [longitud, radio, fase, velocidad]`.
+ * `uEffectParam0/1` son los fundidos de entrada y salida.
+ */
+export const MOTION_SHEER_COLD_BODY_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = smoothstep(0.0, 0.12, uniform.uEffectTime);
+  let fade = effectEnvelope(uniform.uEffectParam0, uniform.uEffectParam1);
+  let ripple = sin(uniform.uEffectTime * a0.w + a0.z) * 0.035;
+  let lengthScale = max(0.0001, a0.x * reveal * fade);
+  let radialScale = max(0.0001, a0.y * (1.0 + ripple) * reveal * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3f(radialScale, radialScale, lengthScale),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  let ripple = sin(
+    vertexPosition.z * 8.0 - uniform.uEffectTime * 22.0 + a0.z
+  ) * 0.06;
+  let widen = 1.0 + ripple * (0.2 + vertexPosition.z * 0.8);
+  return vec3f(
+    vertexPosition.x * widen,
+    vertexPosition.y * widen,
+    vertexPosition.z
+  );
+}
+`;
+
+/**
+ * Esfera pulsante de la boquilla de `Frío Polar`.
+ * `anim0 = [escala, velocidad, amplitud, fase]`; `anim1.x` es la escala en Y.
+ */
+export const MOTION_PULSE_SPHERE_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let pulse = 1.0 + sin(uniform.uEffectTime * a0.y + a0.w) * a0.z;
+  let fade = effectEnvelope(uniform.uEffectParam0, uniform.uEffectParam1);
+  let yScale = select(1.0, a1.x, a1.x > 0.001);
+  let scale = max(0.0001, a0.x * pulse * fade);
+  return effectTRS(
+    base[3].xyz,
+    vec3f(scale, scale * yScale, scale),
+    effectRotY(0.0)
   );
 }
 

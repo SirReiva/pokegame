@@ -190,8 +190,9 @@
 > roster con sprites, stats, velocidad, hurtbox, visión y moveset completo, así
 > que el manifiesto pasa a 27 especies y `MOVESETS` a 24. Siguen sin moveset las
 > mismas tres (Eevee, Raikou y Entei). Kit de Kyogre: Ráfaga Marina 46 pot /
-> 0,85 s, Remolino Marino 34 pot/s / 8 s, Aguas Curativas (estado) y Origen del
-> Mar 125 pot / 16 s. Kit de Rayquaza: Garra Dragón 50 pot / 0,7 s, Vuelo Dragón
+> 0,85 s, Remolino Marino 34 pot/s / 8 s, Aguas Curativas (estado) y Pulso
+> Primigenio 160 pot en dos pulsos / 16 s (60 + 100, cura un 10 % a los aliados
+> con el segundo). Kit de Rayquaza: Garra Dragón 50 pot / 0,7 s, Vuelo Dragón
 > 70 pot / 6 s, Furia Dragón 85 pot / 9 s y Ascenso Draco 130 pot / 16 s. Las
 > tablas regenerables `tabla-danos-por-ataque.md` y `dps-por-habilidad.md`
 > incluyen ya a ambos; las matrices de §4.x no se han regenerado. Kyogre trae el
@@ -1033,7 +1034,7 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 | Charmander | 5,8 | 9,5 | no | 9,5 u haz |
 | Tyranitar | 4,5 | 9,6 | no | 9 u haz / 8,5 u proyectil |
 | Groudon | 5,6 | 10,6 | no | 8,5 u proyectil / 7,7 u área |
-| Kyogre | 5,9 | 12,2 | no | 8,5 u proyectil / 8,6 u área |
+| Kyogre | 5,9 | 12,2 | no | 8,5 u proyectil / 8,4 u área |
 | Rayquaza | 7,6 | 12,6 | Vuelo Dragón 5,5 u | 9,5 u haz / 3,2 u área |
 
 > La tabla es una muestra de los personajes citados en el análisis, no el roster

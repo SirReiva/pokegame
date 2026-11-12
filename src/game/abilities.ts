@@ -133,6 +133,8 @@ export type AoeStyle =
   | 'burrow'
   | 'recovery'
   | 'cyclone'
+  /** Doble pulso de agua de Pulso Primigenio: dos ondas y una erupción central. */
+  | 'primordialPulse'
   /** Rayo que cae del cielo y detona la explosión eléctrica al tocar el suelo. */
   | 'thunder';
 
@@ -2569,6 +2571,14 @@ registerAbility(
 /* Kyogre                                                                    */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Reparto de `Pulso Primigenio`: el primer pulso aporta el 37,5 % de la potencia
+ * total y el resto se reparte entre los ticks siguientes. Con `.power(160)` y
+ * dos ticks, son 60 + 100. Así `power` y `aoeDuration` son la única fuente de
+ * verdad y el callback no puede desincronizarse de las tablas ni del HUD.
+ */
+const PRIMORDIAL_PULSE_FIRST_SHARE = 0.375;
+
 registerAbility(
   ability('rafagaMarina', 'Ráfaga Marina', 'Water', 'special', 'projectile')
     .power(46)
@@ -2631,23 +2641,57 @@ registerAbility(
 );
 
 registerAbility(
-  ability('origenMar', 'Origen del Mar', 'Water', 'special', 'aoe')
-    .power(125)
+  ability('pulsoPrimigenio', 'Pulso Primigenio', 'Water', 'special', 'aoe')
+    // En un área `overTime` el motor lee `power` como daño por segundo: 160
+    // durante 1 s son 160 totales. El callback reparte 60 + 100 a partir de
+    // este valor y de la duración.
+    .power(160)
     .cooldown(16)
     .range(5)
-    .radius(3.6)
-    .startup(0.85, { animation: 'charge' })
+    .radius(3.4)
+    .startup(0.8, { animation: 'charge' })
     .armor(50)
-    .recovery(0.7)
+    .recovery(0.6)
     .animation(null)
-    .area('water', 'instant', 0.9)
+    // Dos ticks: el primero cae al aparecer el área y el segundo a los 0,5 s.
+    .area('primordialPulse', 'overTime', 1, 0.5)
     .radial(0.4)
-    .knockback(0.6)
-    .slow(0.6, 2.5)
     .impact('water')
     .color(64, 150, 240)
+    .aoeEffect(({ def, targets, tick, applyHit, applyHeal }) => {
+      const first = tick === 0;
+      // El motor cobra `def.power` por segundo en áreas `overTime`; la duración
+      // da el total del lanzamiento y el número de ticks reparte el segundo
+      // pulso. Con power 160 y 1 s salen 60 + 100.
+      const ticks = Math.max(
+        1,
+        Math.ceil(def.aoeDuration / def.aoeTickInterval)
+      );
+      const totalPower = def.power * def.aoeDuration;
+      const firstShare = ticks === 1 ? 1 : PRIMORDIAL_PULSE_FIRST_SHARE;
+      const power = first
+        ? totalPower * firstShare
+        : (totalPower * (1 - firstShare)) / Math.max(1, ticks - 1);
+      const knockback = first ? 0.5 : 1.1;
+
+      for (const target of targets) {
+        if (target.isAlly) {
+          // La curación llega con el segundo pulso para premiar quedarse
+          // dentro del área hasta el final.
+          if (!first) applyHeal(target, 0.1);
+          continue;
+        }
+        if (!target.hittable || !target.lineOfSight) continue;
+        applyHit(target, {
+          power: power * target.radialMultiplier,
+          control: false,
+          knockback,
+          slow: first ? null : { multiplier: 0.65, duration: 2 }
+        });
+      }
+    })
     .description(
-      'Definitiva: invoca una marea primigenia de 3,6 u a 5 u de distancia tras 0,85 s de carga. 125 de potencia, el 100 % en el centro y el 40 % en el borde, empuja 0,6 u y ralentiza un 40 % durante 2,5 s. La carga tiene 50 de armadura.'
+      'Definitiva: marca una zona de 3,4 u a 5 u y libera dos pulsos primigenios. El primero golpea al aparecer con 60 de potencia y 0,5 u de empuje; el segundo, a los 0,5 s, golpea con 100 de potencia, empuja 1,1 u y ralentiza un 35 % durante 2 s. El daño cae al 40 % en el borde (160 en total en el centro) y el segundo pulso cura un 10 % a los aliados dentro del área, incluido Kyogre. La carga de 0,8 s tiene 50 de armadura.'
     )
 );
 
@@ -2808,7 +2852,7 @@ MOVESETS['0250'] = [
 ];
 MOVESETS['0130'] = ['acuaCola', 'cascada', 'triturarGyarados', 'dragoaliento'];
 MOVESETS['0245'] = ['golpeCuerpo', 'chorroAgua', 'rayoHielo', 'frioPolar'];
-MOVESETS['0382'] = ['rafagaMarina', 'remolinoMarino', 'aguasCurativas', 'origenMar'];
+MOVESETS['0382'] = ['rafagaMarina', 'remolinoMarino', 'aguasCurativas', 'pulsoPrimigenio'];
 MOVESETS['0384'] = ['garraDraco', 'vueloDraco', 'furiaDraco', 'ascensoDraco'];
 
 export function abilityForSlot(
