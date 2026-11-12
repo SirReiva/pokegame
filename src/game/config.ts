@@ -210,6 +210,19 @@ export const CONFIG = {
      */
     hideAllied: true as boolean,
   },
+  damageNumbers: {
+    /**
+     * Si es `true`, cada vista solo muestra los números que afectan a su
+     * jugador: el daño que hace y el que recibe (incluido el autodaño de
+     * habilidades como Explosión) y la curación que reparte (también con
+     * pociones) y la que recibe. El daño del entorno, como el clima, cuenta
+     * como recibido.
+     *
+     * Con `false` se muestran todos los números visibles, de cualquier
+     * Pokémon.
+     */
+    onlyOwn: true as boolean,
+  },
   vision: {
     /**
      * Margen extra (u) al pasar de oculto a visible. Evita el parpadeo justo en

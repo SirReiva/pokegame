@@ -357,6 +357,13 @@ function heldOnlyInput(snapshot: DeviceInputSnapshot): DeviceInputSnapshot {
  */
 interface PendingPopup {
   target: MatchPlayerState;
+  /**
+   * Quién provocó el número: el atacante o el lanzador de la curación. `null`
+   * cuando la fuente es el entorno (por ejemplo, el clima). Se usa para el
+   * filtro de «solo los míos»: cada vista muestra lo que hace o recibe su
+   * jugador, incluido el autodaño y las pociones.
+   */
+  source: MatchPlayerState | null;
   amount: number;
   critical: boolean;
   effectiveness: number;
@@ -462,7 +469,7 @@ export class Game {
       }
       return healed;
     },
-    showHeal: (player, amount) => this.showHealPopup(player, amount),
+    showHeal: (player, amount) => this.showHealPopup(player, amount, player),
     onCollected: (player, definition) => {
       this.combatFx.spawnBuff(player.x, player.z, hexToRgb(definition.color), 1.05);
       this.awardXp(player, 'pickup', XP_REWARDS.pickup);
@@ -1059,7 +1066,7 @@ export class Game {
       player.hp -= amount;
       player.damageTaken += amount;
       player.hurtTimer = Math.max(player.hurtTimer, 0.18);
-      this.showDamagePopup(player, amount, false, 1, false);
+      this.showDamagePopup(player, amount, false, 1, false, null);
       this.vibrateOnDamage(player, amount);
       changed = true;
     }
@@ -2764,7 +2771,7 @@ export class Game {
     // o una cordillera entre ambos impide revivir, igual que impide el daño.
     if (!target.lineOfSight) return false;
     this.revivePlayer(player, player.x, player.z, fraction);
-    this.showHealPopup(player, player.hp);
+    this.showHealPopup(player, player.hp, caster);
     this.combatFx.spawnBuff(player.x, player.z, def.color, 1.1);
     // La XP de revivir premia al lanzador, igual que la de curación: el
     // aliado recupera su vida, pero el logro de devolverlo al combate es suyo.
@@ -2866,7 +2873,7 @@ export class Game {
       if (healed > 0) {
         player.abilityHealing += healed;
         this.awardXp(player, 'healing', healed * XP_REWARDS.healingPerHp);
-        this.showHealPopup(player, healed);
+        this.showHealPopup(player, healed, player);
       }
       if (player.hp >= player.maxHp) player.regenerating = false;
     }
@@ -3200,7 +3207,7 @@ export class Game {
       def,
       combatFx: this.combatFx,
       showHealPopup: (target, amount) => {
-        this.showHealPopup(target, amount);
+        this.showHealPopup(target, amount, player);
         this.awardXp(target, 'healing', amount * XP_REWARDS.healingPerHp);
       }
     });
@@ -3294,7 +3301,7 @@ export class Game {
     this.breakRegen(player);
     player.hurtTimer = Math.max(player.hurtTimer, 0.25);
     this.vibrateOnDamage(player, amount);
-    this.showDamagePopup(player, amount, false, 1);
+    this.showDamagePopup(player, amount, false, 1, false, player);
   }
 
   /**
@@ -3750,7 +3757,7 @@ export class Game {
       def,
       this.combatFx,
       (healedPlayer, amount) => {
-        this.showHealPopup(healedPlayer, amount);
+        this.showHealPopup(healedPlayer, amount, caster);
       },
       // La estadística y la XP de curación son para quien lanza la habilidad.
       caster
@@ -3814,7 +3821,7 @@ export class Game {
       // En áreas persistentes el mismo rival inmune recibe un tick tras otro:
       // la marca se muestra solo la primera vez para no apilar avisos.
       if (!options.immuneMarked || !options.immuneMarked.has(target.slot)) {
-        this.showImmunePopup(target);
+        this.showImmunePopup(target, attacker);
         options.immuneMarked?.add(target.slot);
       }
       return false;
@@ -3903,7 +3910,8 @@ export class Game {
       finalDamage,
       result.critical,
       result.effectiveness,
-      lethal
+      lethal,
+      attacker
     );
 
     // El control puede venir del `control` estándar o de los ajustes propios
@@ -3943,7 +3951,7 @@ export class Game {
     if (def.healOnHit && options.healToken && !options.healToken.healed) {
       options.healToken.healed = true;
       applyHealSelf(attacker, def, this.combatFx, (healed, amount) => {
-        this.showHealPopup(healed, amount);
+        this.showHealPopup(healed, amount, attacker);
         this.awardXp(healed, 'healing', amount * XP_REWARDS.healingPerHp);
       });
     }
@@ -3953,15 +3961,21 @@ export class Game {
   /**
    * Crea un número de daño en cada viewport donde se ve al objetivo. El texto,
    * el quad y la animación los gestiona `DamageNumbers` dentro de PlayCanvas.
+   *
+   * `source` es el atacante (o el propio jugador en el autodaño) y `null` para
+   * el daño del entorno; el filtro de `CONFIG.damageNumbers.onlyOwn` lo usa para
+   * decidir qué vistas muestran el número.
    */
   private showDamagePopup(
     target: MatchPlayerState,
     amount: number,
     critical: boolean,
     effectiveness: number,
-    lethal = false
+    lethal: boolean,
+    source: MatchPlayerState | null
   ): void {
     this.spawnNumberPopup(target, {
+      source,
       amount,
       critical,
       effectiveness,
@@ -3971,8 +3985,13 @@ export class Game {
   }
 
   /** Número de curación flotante, con el mismo sistema que el daño. */
-  private showHealPopup(target: MatchPlayerState, amount: number): void {
+  private showHealPopup(
+    target: MatchPlayerState,
+    amount: number,
+    source: MatchPlayerState | null
+  ): void {
     this.spawnNumberPopup(target, {
+      source,
       amount,
       critical: false,
       effectiveness: 1,
@@ -3982,8 +4001,12 @@ export class Game {
   }
 
   /** Marca de inmunidad cuando la habilidad conecta pero el tipo la anula. */
-  private showImmunePopup(target: MatchPlayerState): void {
+  private showImmunePopup(
+    target: MatchPlayerState,
+    source: MatchPlayerState | null
+  ): void {
     this.spawnNumberPopup(target, {
+      source,
       amount: 0,
       critical: false,
       effectiveness: 1,
@@ -4001,6 +4024,8 @@ export class Game {
   private spawnNumberPopup(
     target: MatchPlayerState,
     options: {
+      /** Atacante o lanzador; `null` si la fuente es el entorno. */
+      source: MatchPlayerState | null;
       amount: number;
       critical: boolean;
       effectiveness: number;
@@ -4012,6 +4037,7 @@ export class Game {
     if (this.pendingPopups.length >= MAX_PENDING_POPUPS) this.pendingPopups.shift();
     this.pendingPopups.push({
       target,
+      source: options.source,
       amount: options.amount,
       critical: options.critical,
       effectiveness: options.effectiveness,
@@ -4047,6 +4073,15 @@ export class Game {
 
     const views: DamageNumberView[] = [];
     this.views.forEach((viewer, viewIndex) => {
+      // «Solo los míos»: cada vista muestra lo que hace o recibe su jugador.
+      // El autodaño y las pociones cumplen ambas condiciones a la vez.
+      if (
+        CONFIG.damageNumbers.onlyOwn &&
+        viewer !== target &&
+        viewer !== popup.source
+      ) {
+        return;
+      }
       const copy = target.copies[viewIndex];
       const camera = viewer.camera.entity.camera;
       const layer = this.viewLayers[viewIndex];
