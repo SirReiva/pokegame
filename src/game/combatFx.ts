@@ -1762,7 +1762,7 @@ export class CombatFx {
     material: pc.StandardMaterial,
     color: readonly [number, number, number]
   ): void {
-    material.emissive = new pc.Color(
+    material.emissive.set(
       color[0] / 255,
       color[1] / 255,
       color[2] / 255

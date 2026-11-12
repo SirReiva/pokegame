@@ -1,4 +1,10 @@
-import { memo, useMemo, type CSSProperties } from 'react';
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useSyncExternalStore,
+  type CSSProperties
+} from 'react';
 import type { BuffStat } from '../game/abilities';
 import type { AtmosphereState } from '../game/atmosphere';
 import {
@@ -19,11 +25,12 @@ import { XP_SOURCE_LABELS } from '../game/xp';
 import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
 import { TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
+import type { MatchStatsStore } from './matchStatsStore';
 
 interface MatchHudProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
-  stats: PlayerMatchStats[];
+  statsStore: MatchStatsStore;
   teams: Team[];
   modeId: GameModeId;
   scoreTarget: number | null;
@@ -178,7 +185,7 @@ const KillFeed = memo(function KillFeed({
 
 /**
  * Identidad de una vista: nivel, retrato y nombre. Es estable durante toda la
- * partida, así que se memoriza para que el HUD de 4 Hz no vuelva a reconciliar
+ * partida, así que se memoriza para que los ticks del HUD no vuelvan a reconciliar
  * esta rama cuando solo cambian vida, cooldowns o velocidad.
  */
 const PlayerIdentity = memo(function PlayerIdentity({
@@ -914,55 +921,59 @@ const PlayerHud = memo(function PlayerHud({
 }, samePlayerHud);
 
 /**
- * Capa HTML del splitscreen. Los viewports 3D los dibuja PlayCanvas debajo;
- * aquí solo van los bordes de equipo y las etiquetas de cada jugador, alineadas
- * con el mismo reparto normalizado que usan las cámaras.
+ * Suscribe un `PlayerHud` a su plaza. El armazón del HUD no se entera de los
+ * ticks de estadísticas: solo se vuelve a renderizar el panel cuya plaza ha
+ * cambiado, y `PlayerHud` sigue aplicando su comparador de campos visibles.
  */
-export function MatchHud({
-  manifest,
-  players,
-  stats,
+function PlayerHudHost({
+  statsStore,
+  slot,
+  ...props
+}: Omit<PlayerHudProps, 'stats'> & {
+  statsStore: MatchStatsStore;
+  slot: number;
+}) {
+  const subscribe = useCallback(
+    (listener: () => void) => statsStore.subscribeSlot(slot, listener),
+    [statsStore, slot]
+  );
+  const getSnapshot = useCallback(
+    () => statsStore.getSlotSnapshot(slot),
+    [statsStore, slot]
+  );
+  const stats = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return <PlayerHud {...props} stats={stats} />;
+}
+
+interface MatchHeaderProps {
+  statsStore: MatchStatsStore;
+  teams: Team[];
+  modeId: GameModeId;
+  fallbackScoreTarget: number | null;
+  timeLimitSeconds: number;
+  atmosphere: AtmosphereState | null;
+}
+
+/**
+ * Cabecera del marcador. Se suscribe al snapshot global porque el reloj y la
+ * puntuación cambian aunque ninguna plaza concreta lo haga.
+ */
+function MatchHeader({
+  statsStore,
   teams,
   modeId,
-  scoreTarget: fallbackScoreTarget,
+  fallbackScoreTarget,
   timeLimitSeconds,
-  atmosphere,
-  onPause
-}: MatchHudProps) {
-  const layout = useMemo(
-    () => computeSplitLayout(players.length),
-    [players.length]
+  atmosphere
+}: MatchHeaderProps) {
+  const stats = useSyncExternalStore(
+    statsStore.subscribe,
+    statsStore.getSnapshot,
+    statsStore.getSnapshot
   );
-  const statsBySlot = useMemo(
-    () => new Map(stats.map((entry) => [entry.slot, entry])),
-    [stats]
-  );
-  const pokemonNames = useMemo(
-    () => new Map(manifest.pokemon.map((pokemon) => [pokemon.id, pokemon.name])),
-    [manifest.pokemon]
-  );
-  const pokemonById = useMemo(
-    () => new Map(manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])),
-    [manifest.pokemon]
-  );
-  // Retratos y aspectos son estables durante la partida: resolverlos una vez
-  // por plantilla evita recrear `skinFor` en cada tick del HUD.
-  const visuals = useMemo(() => {
-    const map = new Map<
-      number,
-      { entry: PokemonEntry | undefined; skin: PokemonSkin | null }
-    >();
-    for (const player of players) {
-      const entry = pokemonById.get(player.pokemonId);
-      map.set(player.slot, {
-        entry,
-        skin: entry ? skinFor(entry, player.skinId) : null
-      });
-    }
-    return map;
-  }, [players, pokemonById]);
-  const scores = stats[0]?.scores;
-  const mode = stats[0]?.mode ?? null;
+  const current = stats[0];
+  const scores = current?.scores;
+  const mode = current?.mode ?? null;
   const effectiveModeName = mode?.name ?? GAME_MODE_INFO[modeId].name;
   const effectiveUnit = mode?.scoreUnit ?? GAME_MODE_INFO[modeId].scoreUnit;
   const scoreTarget = mode?.scoreTarget ?? fallbackScoreTarget;
@@ -988,87 +999,148 @@ export function MatchHud({
       : '#8b9aad';
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
-      <div className="fixed top-2.5 left-1/2 z-8 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
-        <span
-          className="font-mono text-8.8 tracking-[0.12em] text-steel-650 uppercase"
-          title={effectiveModeName}
-        >
-          {modeId === 'koth' ? 'Colina' : 'KOs'}
+    <div className="fixed top-2.5 left-1/2 z-8 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
+      <span
+        className="font-mono text-8.8 tracking-[0.12em] text-steel-650 uppercase"
+        title={effectiveModeName}
+      >
+        {modeId === 'koth' ? 'Colina' : 'KOs'}
+      </span>
+      {teams.map((team, index) => (
+        <span key={team} className="flex items-center gap-2.5">
+          {index > 0 && (
+            <span className="font-mono text-8.8 tracking-[0.12em] text-steel-750 uppercase">
+              vs
+            </span>
+          )}
+          <span
+            className="font-display text-14.72 font-extrabold tabular-nums"
+            style={{ color: TEAM_INFO[team].color }}
+            title={`${TEAM_INFO[team].label} · ${scores?.[team] ?? 0} ${effectiveUnit}`}
+          >
+            {Math.floor(scores?.[team] ?? 0)}
+          </span>
         </span>
-        {teams.map((team, index) => (
-          <span key={team} className="flex items-center gap-2.5">
-            {index > 0 && (
-              <span className="font-mono text-8.8 tracking-[0.12em] text-steel-750 uppercase">
-                vs
-              </span>
-            )}
+      ))}
+      {scoreTarget !== null && (
+        <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
+          a {scoreTarget} {effectiveUnit}
+        </span>
+      )}
+      {effectiveTimeLimit > 0 && (
+        <span
+          className={`border-l border-line-strong pl-2.5 font-mono text-11.2 font-bold tabular-nums ${
+            timeRemaining <= 30 ? 'text-danger-100' : 'text-steel-150'
+          }`}
+          title="Tiempo restante"
+        >
+          {formatClock(timeRemaining)}
+        </span>
+      )}
+      {objective && (
+        <span
+          className="flex items-center gap-2 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
+          style={{ color: objectiveColor }}
+          title={`Zona de control · ${objective.contested ? 'varios equipos dentro' : objective.owner ? `${TEAM_INFO[objective.owner].label} controla` : 'sin control'}`}
+        >
+          <span>{objectiveLabel}</span>
+          <span className="h-1.5 w-20 overflow-hidden rounded-full bg-black/55">
             <span
-              className="font-display text-14.72 font-extrabold tabular-nums"
-              style={{ color: TEAM_INFO[team].color }}
-              title={`${TEAM_INFO[team].label} · ${scores?.[team] ?? 0} ${effectiveUnit}`}
-            >
-              {Math.floor(scores?.[team] ?? 0)}
-            </span>
+              className="block h-full rounded-full transition-[width] duration-200"
+              style={{
+                width: `${objective.progress * 100}%`,
+                backgroundColor:
+                  leader !== null ? TEAM_INFO[leader].color : '#8b9aad'
+              }}
+            />
           </span>
-        ))}
-        {scoreTarget !== null && (
-          <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
-            a {scoreTarget} {effectiveUnit}
+        </span>
+      )}
+      {atmosphere && (
+        <span
+          className="flex items-center gap-1.5 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
+          style={{ color: atmosphere.color }}
+          title={`${atmosphere.name}: ${atmosphere.description}`}
+        >
+          <span aria-hidden="true" className="text-11.2 leading-none">
+            {atmosphere.icon}
           </span>
-        )}
-        {effectiveTimeLimit > 0 && (
-          <span
-            className={`border-l border-line-strong pl-2.5 font-mono text-11.2 font-bold tabular-nums ${
-              timeRemaining <= 30 ? 'text-danger-100' : 'text-steel-150'
-            }`}
-            title="Tiempo restante"
-          >
-            {formatClock(timeRemaining)}
-          </span>
-        )}
-        {objective && (
-          <span
-            className="flex items-center gap-2 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
-            style={{ color: objectiveColor }}
-            title={`Zona de control · ${objective.contested ? 'varios equipos dentro' : objective.owner ? `${TEAM_INFO[objective.owner].label} controla` : 'sin control'}`}
-          >
-            <span>{objectiveLabel}</span>
-            <span className="h-1.5 w-20 overflow-hidden rounded-full bg-black/55">
-              <span
-                className="block h-full rounded-full transition-[width] duration-200"
-                style={{
-                  width: `${objective.progress * 100}%`,
-                  backgroundColor:
-                    leader !== null ? TEAM_INFO[leader].color : '#8b9aad'
-                }}
-              />
-            </span>
-          </span>
-        )}
-        {atmosphere && (
-          <span
-            className="flex items-center gap-1.5 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
-            style={{ color: atmosphere.color }}
-            title={`${atmosphere.name}: ${atmosphere.description}`}
-          >
-            <span aria-hidden="true" className="text-11.2 leading-none">
-              {atmosphere.icon}
-            </span>
-            {atmosphere.short}
-          </span>
-        )}
-      </div>
+          {atmosphere.short}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Capa HTML del splitscreen. Los viewports 3D los dibuja PlayCanvas debajo;
+ * aquí solo van los bordes de equipo y las etiquetas de cada jugador, alineadas
+ * con el mismo reparto normalizado que usan las cámaras.
+ *
+ * El armazón no se suscribe a las estadísticas: la cabecera y cada
+ * `PlayerHudHost` lo hacen por su cuenta.
+ */
+export function MatchHud({
+  manifest,
+  players,
+  statsStore,
+  teams,
+  modeId,
+  scoreTarget,
+  timeLimitSeconds,
+  atmosphere,
+  onPause
+}: MatchHudProps) {
+  const layout = useMemo(
+    () => computeSplitLayout(players.length),
+    [players.length]
+  );
+  const pokemonNames = useMemo(
+    () => new Map(manifest.pokemon.map((pokemon) => [pokemon.id, pokemon.name])),
+    [manifest.pokemon]
+  );
+  const pokemonById = useMemo(
+    () => new Map(manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])),
+    [manifest.pokemon]
+  );
+  // Retratos y aspectos son estables durante la partida: resolverlos una vez
+  // por plantilla evita recrear `skinFor` en cada tick del HUD.
+  const visuals = useMemo(() => {
+    const map = new Map<
+      number,
+      { entry: PokemonEntry | undefined; skin: PokemonSkin | null }
+    >();
+    for (const player of players) {
+      const entry = pokemonById.get(player.pokemonId);
+      map.set(player.slot, {
+        entry,
+        skin: entry ? skinFor(entry, player.skinId) : null
+      });
+    }
+    return map;
+  }, [players, pokemonById]);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
+      <MatchHeader
+        statsStore={statsStore}
+        teams={teams}
+        modeId={modeId}
+        fallbackScoreTarget={scoreTarget}
+        timeLimitSeconds={timeLimitSeconds}
+        atmosphere={atmosphere}
+      />
 
       {players.map((player, index) => {
         const rect = layout[index];
         if (!rect) return null;
         const visual = visuals.get(player.slot);
         return (
-          <PlayerHud
+          <PlayerHudHost
             key={player.slot}
+            statsStore={statsStore}
+            slot={player.slot}
             player={player}
-            stats={statsBySlot.get(player.slot)}
             entry={visual?.entry}
             skin={visual?.skin ?? null}
             rect={rect}

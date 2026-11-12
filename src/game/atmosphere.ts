@@ -419,6 +419,14 @@ export function atmosphereState(id: AtmosphereId): AtmosphereState {
   };
 }
 
+/**
+ * Final de la niebla del clima. La cámara de juego no necesita dibujar más
+ * allá: el terreno y los props quedan completamente ocultos.
+ */
+export function atmosphereFogFar(id: AtmosphereId): number {
+  return ATMOSPHERES[id].visual.fogFar;
+}
+
 /** Multiplicador de daño de un movimiento según su tipo. */
 export function atmosphereMoveMultiplier(
   id: AtmosphereId,

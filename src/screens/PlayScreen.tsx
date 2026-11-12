@@ -97,7 +97,7 @@ type PlayRouteProps = Pick<
   'hideLoadingOverlay' | 'start' | 'onProgress' | 'onEngineReady' | 'onEngineError'
 >;
 
-/** Contador de FPS aislado para no re-renderizar `PlayScreen` a 4 Hz. */
+/** Contador de FPS aislado para no re-renderizar `PlayScreen` a 2 Hz. */
 function MatchFpsBadge({ statsStore }: { statsStore: MatchStatsStore }) {
   const stats = useSyncExternalStore(
     statsStore.subscribe,
@@ -166,7 +166,7 @@ function PlayScreen({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [atmosphere, setAtmosphere] = useState<AtmosphereState | null>(null);
 
-  // El HUD se recalcula cada 250 ms. Mantener estables la lista de vistas y el
+  // El HUD se recalcula cada 500 ms. Mantener estables la lista de vistas y el
   // callback evita invalidar los componentes memorizados sin motivo.
   const hudPlayers = useMemo(
     () => players.filter((player) => !player.isBot),

@@ -56,6 +56,7 @@ import {
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
+  atmosphereFogFar,
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
   atmosphereResidual,
@@ -270,6 +271,12 @@ const KILL_FEED_MAX_ENTRIES = 4;
 const MATCH_COUNTDOWN_SECONDS = 5;
 /** Tiempo que se mantiene el cartel de salida después de la cuenta atrás. */
 const MATCH_COUNTDOWN_GO_SECONDS = 0.8;
+/**
+ * Frecuencia de las estadísticas periódicas del HUD. Los eventos discretos
+ * (daño, KO, reaparición) siguen emitiendo al momento; este temporizador solo
+ * refresca timers y cooldowns, que se pintan con precisión de 0,1 s.
+ */
+const MATCH_STATS_INTERVAL_SECONDS = 0.5;
 /** Altura del decal de KO sobre el suelo. */
 const DEATH_MARKER_GROUND_Y = 0.06;
 /** Separación de la marca sobre la superficie cuando el KO ocurre en el agua. */
@@ -483,6 +490,9 @@ export class Game {
   /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
   private botNav: BotNavGrid | null = null;
   private viewLayers: pc.Layer[] = [];
+  /** Cielo propio de cada vista, pegado a su cámara para el recorte lejano. */
+  private readonly viewSkyLayers: pc.Layer[] = [];
+  private readonly viewSkies = new Map<CameraRig, pc.Entity>();
   /** Marca de KO en el suelo, una copia por vista. Solo la ve su equipo. */
   private deathMarkers = new Map<number, Array<DeathMarker | null>>();
   /** Proyectiles activos de todas las vistas. */
@@ -1074,6 +1084,7 @@ export class Game {
     this.atmosphereVision = atmosphereVisionMultiplier(id);
     this.atmosphereTick = 0;
     this.world.setAtmosphere(id);
+    this.updateViewFarClip();
     this.callbacks.onAtmosphere(atmosphereState(id));
   }
 
@@ -1083,7 +1094,48 @@ export class Game {
     this.atmosphereVision = 1;
     this.atmosphereTick = 0;
     this.world?.setAtmosphere('clear');
+    this.updateViewFarClip();
     this.callbacks.onAtmosphere(null);
+  }
+
+  /**
+   * Ajusta el plano lejano de cada vista al final de la niebla. Con `far` en
+   * 260 se cullaban y enviaban props que la niebla ya ocultaba por completo;
+   * en partidas de 8 vistas ese trabajo se multiplica por ocho.
+   */
+  private updateViewFarClip(): void {
+    const far = Math.min(
+      CONFIG.camera.far,
+      Math.max(60, atmosphereFogFar(this.atmosphere) + CONFIG.camera.fogMargin)
+    );
+    for (const view of this.views) view.camera.setFarClip(far);
+  }
+
+  /**
+   * Cielo de una vista. Es una copia pequeña y pegada a la cámara: así cabe
+   * dentro del plano lejano recortado por la niebla y no aparece el hueco que
+   * dejaría la esfera grande del menú.
+   */
+  private createViewSky(
+    layerId: number,
+    index: number,
+    camera: CameraRig
+  ): pc.Entity {
+    const sky = new pc.Entity(`match-sky-${index + 1}`);
+    sky.addComponent('render');
+    const render = sky.render!;
+    render.castShadows = false;
+    render.receiveShadows = false;
+    render.layers = [layerId];
+    render.meshInstances = [
+      new pc.MeshInstance(this.world.skyMesh, this.world.skyMaterial)
+    ];
+    // Radio 40: cabe incluso en el recorte mínimo de 60 u (niebla densa).
+    sky.setLocalScale(80, 80, 80);
+    const position = camera.entity.getPosition();
+    sky.setPosition(position.x, position.y, position.z);
+    this.app.root.addChild(sky);
+    return sky;
   }
 
   /**
@@ -1307,9 +1359,14 @@ export class Game {
         : DEFAULT_COMMON_ABILITY;
 
       let layer: pc.Layer | null = null;
+      let skyLayer: pc.Layer | null = null;
       if (!isBot) {
-        layer = new pc.Layer({ name: `match-view-${currentView + 1}` });
         const layerComposition = this.app.scene.layers;
+        layer = new pc.Layer({ name: `match-view-${currentView + 1}` });
+        skyLayer = new pc.Layer({ name: `match-sky-${currentView + 1}` });
+        // El cielo va primero: al no escribir profundidad, el mundo lo tapa sin
+        // necesidad de ordenar por distancia.
+        layerComposition.insertOpaque(skyLayer, 0);
         const worldLayer = layerComposition.getLayerByName('World');
         // El cuerpo del sprite es opaco (alphaTest): debe ir antes de las
         // transparencias del mundo (agua, partículas) para que el agua pueda
@@ -1324,13 +1381,22 @@ export class Game {
         );
         layerComposition.pushTransparent(layer);
         this.viewLayers.push(layer);
+        this.viewSkyLayers.push(skyLayer);
       }
 
       const camera = new CameraRig(this.app, spawnPoint);
-      if (layer) {
+      if (layer && skyLayer) {
+        const skyboxId = this.app.scene.layers.getLayerByName('Skybox')?.id;
+        const viewBaseLayers = this.baseCameraLayers.filter(
+          (id) => id !== skyboxId
+        );
         camera.setViewport(layout[currentView]);
-        camera.setLayers([...this.baseCameraLayers, layer.id]);
+        camera.setLayers([...viewBaseLayers, layer.id, skyLayer.id]);
         camera.setEnabled(true);
+        this.viewSkies.set(
+          camera,
+          this.createViewSky(skyLayer.id, currentView, camera)
+        );
       } else {
         // Los bots conservan una cámara deshabilitada porque `stepPlayer` usa
         // su yaw para convertir la entrada en movimiento relativo.
@@ -1482,6 +1548,7 @@ export class Game {
     // Copias de los objetos por viewport: cada una vive en la capa de su vista
     // y se muestra únicamente cuando el equipo de esa vista ve el objeto.
     this.pickups?.setViewLayers(this.viewLayers.map((layer) => layer.id));
+    this.updateViewFarClip();
 
     // Con sombras del sol activas, el encuadre depende de la cámara: se
     // rehornean al empezar para cubrir las bases de ambos equipos.
@@ -1555,6 +1622,11 @@ export class Game {
       for (const marker of markers) marker?.destroy();
     }
     this.deathMarkers.clear();
+
+    for (const sky of this.viewSkies.values()) sky.destroy();
+    this.viewSkies.clear();
+    for (const layer of this.viewSkyLayers) this.app.scene.layers.remove(layer);
+    this.viewSkyLayers.length = 0;
 
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
@@ -1923,6 +1995,7 @@ export class Game {
     // la cámara del viewport que la va a dibujar.
     this.views.forEach((cameraOwner, viewIndex) => {
       const cameraPosition = cameraOwner.camera.position;
+      this.viewSkies.get(cameraOwner.camera)?.setPosition(cameraPosition);
       this.matchPlayers.forEach((player) => {
         const copy = player.copies[viewIndex];
         if (!copy) return;
@@ -1983,7 +2056,7 @@ export class Game {
 
     if (simulated > 0) {
       this.statsTimer += simulated;
-      if (this.statsTimer >= 0.25) {
+      if (this.statsTimer >= MATCH_STATS_INTERVAL_SECONDS) {
         this.statsTimer = 0;
         this.emitMatchStats();
       }

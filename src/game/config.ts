@@ -89,6 +89,12 @@ export const CONFIG = {
     fov: 42,
     near: 0.5,
     far: 260,
+    /**
+     * Margen más allá del final de la niebla antes de recortar la cámara de
+     * juego. Todo lo que quede detrás ya es invisible, así que no hace falta
+     * cullarlo ni enviarlo a la GPU.
+     */
+    fogMargin: 24,
     pitch: PITCH_DEG,
     distance: 17,
     minDistance: 10,

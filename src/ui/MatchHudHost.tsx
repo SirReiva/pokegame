@@ -1,23 +1,13 @@
-import { useSyncExternalStore, type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 import { MatchHud } from './MatchHud';
-import type { MatchStatsStore } from './matchStatsStore';
-
-type MatchHudHostProps = Omit<ComponentProps<typeof MatchHud>, 'stats'> & {
-  statsStore: MatchStatsStore;
-};
 
 /**
- * Suscribe el HUD al store de estadísticas sin arrastrar a `PlayScreen`.
+ * Punto de entrada del HUD desde `PlayScreen`.
  *
- * `useSyncExternalStore` devuelve la misma referencia mientras no llegue una
- * emisión nueva, así que el resto de la pantalla no se vuelve a renderizar a
- * 4 Hz. El HUD en sí sigue actualizándose con cada snapshot.
+ * La suscripción ya no vive aquí: `MatchHud` separa la cabecera y cada
+ * `PlayerHud` en componentes suscritos a su propia porción del store. Mantener
+ * el host evita que `PlayScreen` dependa de esa estructura interna.
  */
-export function MatchHudHost({ statsStore, ...props }: MatchHudHostProps) {
-  const stats = useSyncExternalStore(
-    statsStore.subscribe,
-    statsStore.getSnapshot,
-    statsStore.getSnapshot
-  );
-  return <MatchHud {...props} stats={stats} />;
+export function MatchHudHost(props: ComponentProps<typeof MatchHud>) {
+  return <MatchHud {...props} />;
 }

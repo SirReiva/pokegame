@@ -167,6 +167,14 @@ interface DamageNumberEntry {
 /** Colores de emisión por estilo; se comparten entre materiales. */
 const TINT_CACHE = new Map<string, pc.Color>();
 
+/**
+ * Cuaterniones reutilizados por `orient`. Se llama una vez por entrada y vista
+ * en cada frame; crear dos `pc.Quat` ahí generaba cientos de objetos por frame
+ * en partidas de 8 vistas.
+ */
+const ORIENT_ROTATION = new pc.Quat();
+const ORIENT_TILT = new pc.Quat();
+
 function tintFor(css: string): pc.Color {
   const cached = TINT_CACHE.get(css);
   if (cached) return cached;
@@ -472,8 +480,8 @@ export class DamageNumbers {
     // La inclinación se calcula con la elevación real de la cámara respecto al
     // número; así el quad mira exactamente a esa cámara, no a un ángulo fijo.
     const pitch = Math.atan2(dy, Math.hypot(dx, dz)) / DEG;
-    const rotation = new pc.Quat().setFromEulerAngles(0, yaw, 0);
-    const tilt = new pc.Quat().setFromEulerAngles(-pitch, 0, 0);
+    const rotation = ORIENT_ROTATION.setFromEulerAngles(0, yaw, 0);
+    const tilt = ORIENT_TILT.setFromEulerAngles(-pitch, 0, 0);
     rotation.mul(tilt);
     entity.setRotation(rotation);
   }

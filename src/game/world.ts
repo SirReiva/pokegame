@@ -65,6 +65,9 @@ export interface World {
   bounds: { x: number; z: number };
   waterHeight: number;
   shadowMaterial: pc.StandardMaterial;
+  /** Malla y material del cielo, compartidos por las vistas del splitscreen. */
+  skyMesh: pc.Mesh;
+  skyMaterial: pc.StandardMaterial;
 
   /** Aplica el clima indicado al cielo, las luces y las partículas. */
   setAtmosphere(id: AtmosphereId): void;
@@ -4085,9 +4088,14 @@ export function buildWorld(app: pc.AppBase): World {
   sky.render!.material = skyMaterial;
   sky.render!.castShadows = false;
   sky.render!.receiveShadows = false;
+  // La esfera original queda como cielo del menú. Las cámaras de partida usan
+  // una copia pegada a cada cámara para poder recortar el plano lejano sin
+  // dejar un agujero en el cielo.
+  sky.render!.layers = [pc.LAYERID_SKYBOX];
   sky.setLocalScale(460, 460, 460);
   app.root.addChild(sky);
   created.push(sky);
+  const skyMesh = sky.render!.meshInstances[0].mesh!;
 
   // --- Clima ---------------------------------------------------------------
   // El mundo se construye siempre despejado; la partida sortea su clima al
@@ -4143,6 +4151,8 @@ export function buildWorld(app: pc.AppBase): World {
     bounds: { x: HALF_X, z: HALF_Z },
     waterHeight,
     shadowMaterial,
+    skyMesh,
+    skyMaterial,
     setAtmosphere(id: AtmosphereId) {
       atmosphere.set(id);
     },
