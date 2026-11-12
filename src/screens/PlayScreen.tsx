@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties
+} from 'react';
 import { Redirect, useLocation } from 'wouter';
 import { Game, type PokemonSkinSelection } from '../game/game';
 import { commonAbilityOption } from '../game/abilities';
@@ -21,7 +29,8 @@ import { btnClass } from '../ui/buttonStyles';
 import { InfoDialog, type InfoKind } from '../ui/InfoDialog';
 import { KeyPill } from '../ui/KeyPill';
 import { MatchCountdown } from '../ui/MatchCountdown';
-import { MatchHud } from '../ui/MatchHud';
+import { MatchHudHost } from '../ui/MatchHudHost';
+import { createMatchStatsStore, type MatchStatsStore } from '../ui/matchStatsStore';
 import { PokemonPortrait } from '../ui/PokemonPortrait';
 import { eyebrow } from '../ui/styles';
 import { VirtualMouseLayer } from '../ui/VirtualMouse';
@@ -88,6 +97,36 @@ type PlayRouteProps = Pick<
   'hideLoadingOverlay' | 'start' | 'onProgress' | 'onEngineReady' | 'onEngineError'
 >;
 
+/** Contador de FPS aislado para no re-renderizar `PlayScreen` a 4 Hz. */
+function MatchFpsBadge({ statsStore }: { statsStore: MatchStatsStore }) {
+  const stats = useSyncExternalStore(
+    statsStore.subscribe,
+    statsStore.getSnapshot,
+    statsStore.getSnapshot
+  );
+  const fps = stats[0]?.fps ?? 0;
+  const fpsTone =
+    fps === 0
+      ? 'text-steel-450'
+      : fps >= 55
+        ? 'text-accent-soft'
+        : fps >= 30
+          ? 'text-warning'
+          : 'text-danger-100';
+
+  return (
+    <span
+      className="flex items-baseline gap-1 rounded-xl border border-line bg-night-850/80 px-2.5 py-1.75 font-mono text-11.2 tabular-nums text-steel-450 backdrop-blur-sm"
+      title="Fotogramas por segundo"
+    >
+      <strong className={`font-semibold transition-colors duration-300 ${fpsTone}`}>
+        {fps > 0 ? fps : '—'}
+      </strong>{' '}
+      FPS
+    </span>
+  );
+}
+
 function PlayScreen({
   manifest,
   mapId,
@@ -122,10 +161,18 @@ function PlayScreen({
   const [paused, setPaused] = useState(false);
   const [modal, setModal] = useState<InfoKind | null>(null);
   const [hudVisible, setHudVisible] = useState(true);
-  const [stats, setStats] = useState<PlayerMatchStats[]>([]);
+  const [statsStore] = useState(createMatchStatsStore);
   const [matchResult, setMatchResult] = useState<MatchEndResult | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [atmosphere, setAtmosphere] = useState<AtmosphereState | null>(null);
+
+  // El HUD se recalcula cada 250 ms. Mantener estables la lista de vistas y el
+  // callback evita invalidar los componentes memorizados sin motivo.
+  const hudPlayers = useMemo(
+    () => players.filter((player) => !player.isBot),
+    [players]
+  );
+  const openPause = useCallback(() => setPaused(true), []);
 
   useEffect(() => {
     configsRef.current = configs;
@@ -161,7 +208,7 @@ function PlayScreen({
         }
       },
       onPauseRequest: () => setPaused(true),
-      onMatchStats: (next) => setStats(next),
+      onMatchStats: (next) => statsStore.setSnapshot(next),
       onMatchEnd: (result) => setMatchResult(result),
       onCountdown: (remaining) => setCountdown(remaining),
       onAtmosphere: (state) => setAtmosphere(state)
@@ -320,22 +367,13 @@ function PlayScreen({
   const rematch = () => {
     if (!gameRef.current?.startMatch(configsRef.current)) return;
     setMatchResult(null);
-    setStats([]);
+    statsStore.setSnapshot([]);
     setPaused(false);
   };
 
   const selectedEntryFor = (pokemonId: string) =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
   const scoreTarget = modeScoreTarget(modeId, modeSettings);
-  const fps = stats[0]?.fps ?? 0;
-  const fpsTone =
-    fps === 0
-      ? 'text-steel-450'
-      : fps >= 55
-        ? 'text-accent-soft'
-        : fps >= 30
-          ? 'text-warning'
-          : 'text-danger-100';
 
   return (
     <div className="relative size-full">
@@ -364,16 +402,16 @@ function PlayScreen({
       {!error && playing && (
         <>
           {hudVisible && (
-            <MatchHud
+            <MatchHudHost
+              statsStore={statsStore}
               manifest={manifest}
-              players={players.filter((player) => !player.isBot)}
-              stats={stats}
+              players={hudPlayers}
               teams={teams}
               modeId={modeId}
               scoreTarget={scoreTarget}
               timeLimitSeconds={timeLimitSeconds}
               atmosphere={atmosphere}
-              onPause={() => setPaused(true)}
+              onPause={openPause}
             />
           )}
 
@@ -402,15 +440,7 @@ function PlayScreen({
             >
               {hudVisible ? 'Ocultar HUD (H)' : 'Mostrar HUD (H)'}
             </button>
-            <span
-              className="flex items-baseline gap-1 rounded-xl border border-line bg-night-850/80 px-2.5 py-1.75 font-mono text-11.2 tabular-nums text-steel-450 backdrop-blur-sm"
-              title="Fotogramas por segundo"
-            >
-              <strong className={`font-semibold transition-colors duration-300 ${fpsTone}`}>
-                {fps > 0 ? fps : '—'}
-              </strong>{' '}
-              FPS
-            </span>
+            <MatchFpsBadge statsStore={statsStore} />
           </div>
         </>
       )}
@@ -551,7 +581,7 @@ function PlayScreen({
             <MatchScoreboard
               manifest={manifest}
               players={players}
-              stats={stats}
+              statsStore={statsStore}
               teams={teams}
               result={matchResult}
             />
@@ -593,16 +623,21 @@ function PlayScreen({
 function MatchScoreboard({
   manifest,
   players,
-  stats,
+  statsStore,
   teams,
   result
 }: {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
-  stats: PlayerMatchStats[];
+  statsStore: MatchStatsStore;
   teams: Team[];
   result: MatchEndResult;
 }) {
+  const stats = useSyncExternalStore(
+    statsStore.subscribe,
+    statsStore.getSnapshot,
+    statsStore.getSnapshot
+  );
   const entriesById = new Map(
     manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])
   );

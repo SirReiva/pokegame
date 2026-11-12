@@ -962,15 +962,32 @@ export class Game {
     return calls;
   }
 
-  private waitFrames(count: number): Promise<void> {
+  private waitFrames(count: number, timeoutMs = 2000): Promise<void> {
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
       let remaining = count;
       const step = () => {
         remaining -= 1;
-        if (remaining <= 0) resolve();
-        else requestAnimationFrame(step);
+        if (remaining <= 0) {
+          finish();
+          return;
+        }
+        requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
+      // Compilar/rasterizar una textura grande puede bloquear el compositor y
+      // dejar de entregar rAF. La precarga es best-effort: si eso pasa, se
+      // continúa para que la pantalla de carga no se quede clavada.
+      setTimeout(() => {
+        if (settled) return;
+        console.warn('[shaders] rAF bloqueado durante la precarga; se continúa');
+        finish();
+      }, timeoutMs);
     });
   }
 

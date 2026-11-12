@@ -44,11 +44,12 @@ function blockNoise(x: number, y: number): number {
 export function canvas2d(
   width: number,
   height = width,
+  options?: CanvasRenderingContext2DSettings,
 ): CanvasRenderingContext2D {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", options);
   if (!ctx) throw new Error("No se pudo crear el contexto 2D");
   return ctx;
 }
@@ -1025,7 +1026,11 @@ export function createGroundCanvas(
   const toPxX = (world: number) => ((world + halfX) / worldWidth) * width;
   const toPxY = (world: number) => ((world + halfZ) / worldDepth) * height;
   const random = mulberry32(0x5eed);
-  const ctx = canvas2d(width, height);
+  // El canvas del suelo puede ser grande (2-3 M de píxeles). Forzarlo a memoria
+  // evita que Skia lo rasterice en el proceso GPU al subirlo como textura, que
+  // bloqueaba el compositor y congelaba la pantalla de carga en mapas como
+  // Caldera de Ceniza.
+  const ctx = canvas2d(width, height, { willReadFrequently: true });
 
   ctx.fillStyle = TERRAIN_PALETTES.jungle.base;
   ctx.fillRect(0, 0, width, height);

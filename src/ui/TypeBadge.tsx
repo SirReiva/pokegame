@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { TYPE_ICONS, TYPE_LABELS, typeStyle } from './typeInfo';
 
 // Los SVG se inlinean para que `fill="currentColor"` herede el color del texto
@@ -15,7 +16,11 @@ interface TypeBadgeProps {
   size?: 'md' | 'sm';
 }
 
-export function TypeBadge({ type, className = '', size = 'md' }: TypeBadgeProps) {
+export const TypeBadge = memo(function TypeBadge({
+  type,
+  className = '',
+  size = 'md'
+}: TypeBadgeProps) {
   const slug = TYPE_ICONS[type];
   const svg = slug ? TYPE_ICON_SVGS[`../assets/types/${slug}.svg`] : undefined;
 
@@ -36,4 +41,4 @@ export function TypeBadge({ type, className = '', size = 'md' }: TypeBadgeProps)
       {TYPE_LABELS[type] ?? type}
     </span>
   );
-}
+});

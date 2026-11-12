@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { publicUrl } from '../game/publicUrl';
 import type { PokemonEntry, PokemonSkin } from '../game/types';
 
@@ -15,7 +16,7 @@ interface PokemonPortraitProps {
  * Retrato de PMD Sprite Collab para las interfaces HTML, opcionalmente con el
  * aspecto elegido. El mundo 3D sigue usando las hojas animadas del aspecto.
  */
-export function PokemonPortrait({
+export const PokemonPortrait = memo(function PokemonPortrait({
   entry,
   skin = null,
   height = 64,
@@ -35,4 +36,4 @@ export function PokemonPortrait({
       style={fluid ? undefined : { width: height, height }}
     />
   );
-}
+});
