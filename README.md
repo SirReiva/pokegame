@@ -98,7 +98,7 @@ La navegación usa **wouter**. El estado compartido (manifiesto, mapas y jugador
 | Ruta | Pantalla |
 | --- | --- |
 | `/` | Menú principal: **Jugar**, **Editor** y **Opciones**. |
-| `/opciones` | Controles, créditos y licencia. Vuelve a la pantalla desde la que se abrió. |
+| `/opciones` | Controles, audio, gráficos, ayuda de apuntado, créditos y licencia. Vuelve a la pantalla desde la que se abrió. |
 | `/editor` | Editor de mapas a pantalla completa. |
 | `/lobby` | Paso 1: unirse con cada mando, elegir equipo y mapa. |
 | `/roster` | Paso 2: cada jugador elige su Pokémon y marca listo. |
@@ -144,7 +144,7 @@ Cada equipo aparece en su base (roja, azul, amarilla o verde). La pantalla se re
 
 La partida es un **team deathmatch con límite de KOs configurable** en `/lobby` (15 por defecto; también 30 o 50): cada baja suma un punto al equipo que la consigue y gana el primero que llegue al objetivo. Al morir se reaparece en la base a los 5 s, con 2 s de invulnerabilidad; los enfriamientos del kit siguen corriendo durante la muerte y solo se reinicia el del instinto activo. Atacar retira la invulnerabilidad de spawn. El HUD muestra el marcador, la vida, los KO/muertes, el daño hecho y los enfriamientos de las cuatro habilidades y del instinto común de cada jugador. La pantalla de fin de partida añade, por jugador, el **daño hecho** y el **daño recibido** acumulados. Cada vista tiene además su propio **kill feed** en el lateral derecho: muestra hasta cuatro KOs, coloreados por equipo, cada uno durante 6 s. Si entra uno nuevo con el feed lleno, desaparece el más antiguo.
 
-Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`), sin ayuda de apuntado: el jugador apunta colocándose y girando con el movimiento. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
+Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`): el jugador apunta colocándose y girando con el movimiento. Los proyectiles y los haces de jugadores humanos pueden usar una **ayuda de apuntado opcional** (`Opciones → Ayuda de apuntado`) que corrige ligeramente el ángulo hacia el rival más cercano a la mira si cae dentro de un cono estrecho y hay línea de visión; los bots no la usan. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
 
 Cada especie tiene un **radio de impacto (hurtbox) propio**. No se deriva del sprite: los frames incluyen colas, alas y huecos que exagerarían el cuerpo. La tabla curada vive en `POKEMON_HIT_RADIUS` (`src/game/roster.ts`) y va de 0.34 u (Voltorb, Celebi) a 0.58 u (Onix, Lugia, Ho-Oh), con 0.42 u como referencia. Los proyectiles y el barrido de dash lo usan por especie; las melee, los haces y las áreas dibujan su telegrafía con el mayor del roster (`MAX_HIT_RADIUS`) y golpean cuando el hurtbox del rival toca su borde. Un hurtbox grande es una desventaja en un juego de skillshots, así que solo lo llevan especies con HP o defensas que lo compensan. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`: entonces todo el roster vuelve al radio único de `CONFIG.player.radius`. Para comprobarlo en partida, activa `CONFIG.debug.showHitboxes` y verás el círculo bajo cada Pokémon. Los bots usan el hurtbox del objetivo para decidir su rango de ataque; la colisión de movimiento, la separación entre cuerpos y la navegación siguen usando el radio global.
 
@@ -766,6 +766,8 @@ src/game/
   typeChart.ts               tabla de tipos completa y STAB
   abilities.ts               builder, catálogo de habilidades y movesets por Pokémon
   abilityExecutors.ts        estrategias de ejecución por forma de habilidad
+  aimAssist.ts               corrección angular opcional de proyectiles y haces
+  aimAssistSettings.ts       ajuste persistido de la ayuda de apuntado
   abilitySounds.ts           mapa habilidad → MP3 y sonidos de impacto
   audio.ts                   SoundManager de PlayCanvas, volumen y precarga
   audioSettings.ts           ajustes de volumen persistidos (sin PlayCanvas)
@@ -789,7 +791,7 @@ src/session/
   useSession.ts              hook de acceso al estado compartido
 src/screens/
   HomeScreen.tsx             menú principal con Jugar, Editor y Opciones
-  OptionsScreen.tsx          controles y créditos a pantalla completa
+  OptionsScreen.tsx          controles, ajustes de partida y créditos a pantalla completa
   EditorRoute.tsx            entrada a `/editor`
   LobbyRoute.tsx             entrada a `/lobby`, entrada de mandos y equipos
   RosterRoute.tsx            entrada a `/roster`, selección de Pokémon

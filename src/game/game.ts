@@ -22,6 +22,8 @@ import {
   type AbilityExecutorDeps
 } from './abilityExecutors';
 import { aoeAreaFrom, aoeContains, aoeDistance } from './aoeGeometry';
+import { assistAimDirection, type AimAssistTarget } from './aimAssist';
+import { isAimAssistEnabled } from './aimAssistSettings';
 import {
   defaultAoeEffect,
   type AoeEffectContext,
@@ -3109,8 +3111,23 @@ export class Game {
     const plan = buildCastPlan(def, (name) =>
       resolveAnimationClip(asset, name)
     );
-    const dirX = Math.sin(player.facing);
-    const dirZ = Math.cos(player.facing);
+    let dirX = Math.sin(player.facing);
+    let dirZ = Math.cos(player.facing);
+    // Los haces fijan su carril al empezar la carga, así que la ayuda de
+    // apuntado se resuelve aquí. Los proyectiles la consultan al salir, cuando
+    // la dirección real ya no puede cambiar (ver `executeProjectile`).
+    if (def.shape === 'beam') {
+      const assisted = this.aimAssistDirection(player, def, dirX, dirZ);
+      if (assisted) {
+        dirX = assisted.dirX;
+        dirZ = assisted.dirZ;
+        // En modo táctico el cuerpo sigue a la cámara: la ayuda solo corrige
+        // la trayectoria y no debe girar el sprite contra el control.
+        if (player.movementMode !== 'tactical') {
+          player.facing = Math.atan2(dirX, dirZ);
+        }
+      }
+    }
     // Las habilidades de área no se pueden colocar detrás de un obstáculo:
     // el centro se detiene antes del primer collider. Los haces hacen lo
     // mismo para que el carril y el haz terminen en el mismo punto.
@@ -3352,6 +3369,8 @@ export class Game {
       marker,
       castDirX: dirX,
       castDirZ: dirZ,
+      aimAssist: (source, ability, sourceDirX, sourceDirZ) =>
+        this.aimAssistDirection(source, ability, sourceDirX, sourceDirZ),
       resolveAoeHit: (hit) => this.resolveAoeHit(hit),
       emitAoeEvent: (phase, source, ability, x, z, eventDirX, eventDirZ, elapsed) =>
         this.emitAoeEvent(
@@ -3460,6 +3479,55 @@ export class Game {
       target.team !== attacker.team &&
       target.invulnerableTimer <= 0
     );
+  }
+
+  /**
+   * Aplica la ayuda de apuntado de un proyectil o haz. Solo existe para
+   * jugadores humanos con el ajuste activo: los bots conservan el error de su
+   * dificultad. Se descartan rivales no golpeables, ocultos para el equipo o
+   * tapados por un obstáculo, así que la corrección nunca revela ni atraviesa
+   * paredes.
+   */
+  private aimAssistDirection(
+    player: MatchPlayerState,
+    def: AbilityDef,
+    dirX: number,
+    dirZ: number
+  ): { dirX: number; dirZ: number } | null {
+    if (player.isBot || !isAimAssistEnabled()) return null;
+    if (def.shape !== 'projectile' && def.shape !== 'beam') return null;
+
+    const visible = this.visibleByTeam[player.team];
+    const targets: AimAssistTarget[] = [];
+    for (const target of this.matchPlayers) {
+      if (target.hidden) continue;
+      if (!this.canHit(player, target) || !visible.has(target.slot)) continue;
+      targets.push({
+        x: target.x,
+        z: target.z,
+        hitRadius: target.hitRadius
+      });
+    }
+    if (targets.length === 0) return null;
+
+    const assisted = assistAimDirection({
+      x: player.x,
+      z: player.z,
+      facing: Math.atan2(dirX, dirZ),
+      range: def.range,
+      shotRadius: Math.max(0, def.radius),
+      targets,
+      blocked: (target) =>
+        segmentBlockedByColliders(
+          player.x,
+          player.z,
+          target.x,
+          target.z,
+          this.world.colliders,
+          CONFIG.combat.aimAssist.sightPadding
+        )
+    });
+    return assisted ? { dirX: assisted.dirX, dirZ: assisted.dirZ } : null;
   }
 
   /**

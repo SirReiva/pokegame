@@ -207,6 +207,20 @@ export const CONFIG = {
     /** Rango del factor aleatorio oficial de daño. */
     randomMin: 0.85,
     randomMax: 1,
+    /**
+     * Ayuda de apuntado de proyectiles y haces para jugadores humanos. Se puede
+     * activar o desactivar en Opciones. Solo corrige el ángulo cuando el rival
+     * ya está cerca de la mira; no cambia el alcance ni busca objetivos fuera
+     * de la dirección a la que apunta el cuerpo.
+     */
+    aimAssist: {
+      /** Semiángulo del cono de adquisición, en grados. */
+      maxAngle: 7,
+      /** Fracción del error angular que se corrige (0,7 = 70 %). */
+      strength: 0.7,
+      /** Margen de los obstáculos al comprobar la línea de visión. */
+      sightPadding: 0.12,
+    },
   },
   telegraphs: {
     /**

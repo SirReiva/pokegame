@@ -333,6 +333,12 @@ con `CONFIG.player.perPokemonHitbox = false`.
   `range`.
 - **beam**: instantáneo o con startup; se corta en el primer collider y
   atraviesa a todos los rivales en línea.
+
+La **ayuda de apuntado** (`src/game/aimAssist.ts`) es opcional para jugadores
+humanos (`Opciones → Ayuda de apuntado`) y solo actúa sobre proyectiles y haces:
+si un rival visible cae dentro de un cono estrecho alrededor de `facing` y hay
+línea de visión, corrige parte del error angular. No alarga el alcance, no
+atraviesa obstáculos y los bots conservan su error de apuntado por dificultad.
 - **aoe**: área centrada a `range` del lanzador. `aoeShape: 'circle'` usa
   `radius` alrededor del centro; `aoeShape: 'cone'` nace en ese mismo centro y
   avanza `radius` hacia delante con `halfAngle` de semiángulo. `instant` o

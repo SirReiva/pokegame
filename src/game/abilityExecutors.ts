@@ -104,6 +104,18 @@ export interface AbilityExecutorDeps {
   readonly castDirX?: number;
   readonly castDirZ?: number;
   /**
+   * Ayuda de apuntado opcional. El motor la ofrece solo a jugadores humanos y
+   * devuelve `null` cuando el ajuste está desactivado o no hay un rival dentro
+   * del cono. Los proyectiles la consultan al salir, no al iniciar la carga:
+   * si el lanzador gira durante el startup, el disparo sale donde apunta.
+   */
+  readonly aimAssist?: (
+    player: MatchPlayerState,
+    def: AbilityDef,
+    dirX: number,
+    dirZ: number
+  ) => { dirX: number; dirZ: number } | null;
+  /**
    * Resuelve el golpe de un área: reúne a todos los Pokémon dentro del radio y
    * delega en el `aoeEffect` de la habilidad (o en el efecto por defecto).
    */
@@ -194,8 +206,21 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeProjectile: AbilityExecutor = (player, def, deps) => {
-  const dirX = Math.sin(player.facing);
-  const dirZ = Math.cos(player.facing);
+  let dirX = Math.sin(player.facing);
+  let dirZ = Math.cos(player.facing);
+  // Ayuda de apuntado suave: se aplica al salir el proyectil y también gira el
+  // cuerpo, para que el disparo y el sprite coincidan. Sin ajuste activo, o si
+  // el rival no está cerca de la mira, la dirección no cambia.
+  const assisted = deps.aimAssist?.(player, def, dirX, dirZ);
+  if (assisted) {
+    dirX = assisted.dirX;
+    dirZ = assisted.dirZ;
+    // El modo táctico fija la mirada a la cámara; allí solo se corrige la
+    // trayectoria, no el sprite. En el modo normal el cuerpo acompaña al tiro.
+    if (player.movementMode !== 'tactical') {
+      player.facing = Math.atan2(dirX, dirZ);
+    }
+  }
   const originX = player.x + dirX * 0.4;
   const originZ = player.z + dirZ * 0.4;
   const speed = def.projectileSpeed > 0 ? def.projectileSpeed : 12;

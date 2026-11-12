@@ -15,6 +15,11 @@ import {
   detectGraphicsAvailability,
   type GraphicsAvailability
 } from '../game/graphicsAvailability';
+import {
+  getAimAssistSettings,
+  setAimAssistSettings,
+  subscribeAimAssistSettings
+} from '../game/aimAssistSettings';
 import { useSession } from '../session/useSession';
 import { Brand } from '../ui/Brand';
 import { btnClass } from '../ui/buttonStyles';
@@ -140,6 +145,7 @@ export function OptionsScreen() {
   const goBack = useBack();
   const [audio, setAudio] = useState(getAudioSettings);
   const [graphics, setGraphics] = useState(getGraphicsSettings);
+  const [aimAssist, setAimAssist] = useState(getAimAssistSettings);
   const [activeBackend, setActiveBackend] = useState(getActiveGraphicsBackend);
   const [availability, setAvailability] = useState<GraphicsAvailability | null>(null);
 
@@ -164,6 +170,11 @@ export function OptionsScreen() {
         setGraphics(getGraphicsSettings());
         setActiveBackend(getActiveGraphicsBackend());
       }),
+    []
+  );
+
+  useEffect(
+    () => subscribeAimAssistSettings(() => setAimAssist(getAimAssistSettings())),
     []
   );
 
@@ -195,11 +206,11 @@ export function OptionsScreen() {
 
         <div>
           <span className={eyebrow}>Menú · Opciones</span>
-          <h2 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)]">Controles, audio, gráficos y créditos</h2>
+          <h2 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)]">Controles, audio, gráficos y partida</h2>
           <p className="mt-2 max-w-[62ch] text-14.4 leading-[1.55] text-muted">
-            Consulta los controles de mando y teclado, ajusta el volumen, elige el backend de render
-            y revisa la atribución de los sprites y los efectos. Los ajustes de partida (mapa,
-            equipos y Pokémon) se eligen antes de jugar.
+            Consulta los controles de mando y teclado, ajusta el volumen, elige el backend de render,
+            activa o desactiva la ayuda de apuntado y revisa la atribución de los sprites y los
+            efectos. Los ajustes de partida (mapa, equipos y Pokémon) se eligen antes de jugar.
           </p>
         </div>
 
@@ -276,6 +287,42 @@ export function OptionsScreen() {
                 ? ' No está disponible en este navegador: elige Automático o WebGL2.'
                 : ''}{' '}
               El cambio se aplica al iniciar la siguiente partida.
+            </p>
+          </section>
+
+          <section className={`${panel} xl:col-span-2`}>
+            <header className="mb-4 flex items-center justify-between gap-3 border-b border-line pb-3">
+              <div>
+                <span className={eyebrow}>Jugabilidad</span>
+                <h3 className="mt-0.5 text-19.2">Ayuda de apuntado</h3>
+              </div>
+              <span className="rounded-full border border-line px-2 py-1 font-mono text-9.6 uppercase text-steel-650">
+                {aimAssist.enabled ? 'Activada' : 'Desactivada'}
+              </span>
+            </header>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-pressed={aimAssist.enabled}
+                className={btnClass(aimAssist.enabled ? 'primary' : 'ghost', 'small')}
+                onClick={() => setAimAssistSettings({ enabled: true })}
+              >
+                Activada
+              </button>
+              <button
+                type="button"
+                aria-pressed={!aimAssist.enabled}
+                className={btnClass(!aimAssist.enabled ? 'primary' : 'ghost', 'small')}
+                onClick={() => setAimAssistSettings({ enabled: false })}
+              >
+                Desactivada
+              </button>
+            </div>
+            <p className="mt-4 text-12.8/normal text-muted">
+              Corrige ligeramente el ángulo de los proyectiles y los haces hacia el rival
+              más cercano a la mira, solo si está dentro de un cono estrecho y hay línea de
+              visión. No alarga el alcance ni atraviesa obstáculos, y los bots no la usan.
+              El ajuste se guarda en este dispositivo.
             </p>
           </section>
 
