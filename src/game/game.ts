@@ -287,8 +287,22 @@ const OBJECTIVE_NEUTRAL_COLOR: readonly [number, number, number] = [150, 158, 17
  * una vez por render con su `dt` real.
  */
 const FIXED_STEP = 1 / 60;
-/** Tope de pasos por render para no entrar en una espiral de recuperación. */
-const MAX_FIXED_STEPS = 4;
+/**
+ * Tope de pasos por render. Recuperar todo el tiempo perdido en un solo render
+ * encadenaba simulaciones y el siguiente render llegaba aún más tarde: con 4 el
+ * acumulador entraba en espiral. Dos pasos cubren caídas hasta 30 fps; por
+ * debajo se pierde tiempo de simulación a cambio de no bloquear el frame.
+ */
+const MAX_FIXED_STEPS = 2;
+
+/**
+ * Presupuesto por render para crear números de daño. Componer un número cuesta
+ * poco, pero varios impactos en el mismo frame se notaban en el p99. Los que no
+ * caben salen en el render siguiente, no se pierden.
+ */
+const POPUP_RENDER_BUDGET_MS = 2;
+/** Cola máxima de números pendientes; si se desborda se descarta el más viejo. */
+const MAX_PENDING_POPUPS = 24;
 
 /** Entradas de flanco acumuladas entre pasos de simulación. */
 interface BufferedInput {
@@ -335,6 +349,20 @@ function heldOnlyInput(snapshot: DeviceInputSnapshot): DeviceInputSnapshot {
     navX: 0,
     navY: 0
   };
+}
+
+/**
+ * Número de daño que espera a que el render tenga hueco. La vista donde se ve
+ * al objetivo se resuelve al dibujarlo, no cuando se produce el impacto.
+ */
+interface PendingPopup {
+  target: MatchPlayerState;
+  amount: number;
+  critical: boolean;
+  effectiveness: number;
+  heal: boolean;
+  lethal: boolean;
+  immune: boolean;
 }
 
 /**
@@ -459,6 +487,8 @@ export class Game {
    * cuatro ni renderiza el mundo cuatro veces.
    */
   private views: MatchPlayerState[] = [];
+  /** Números de daño que aún no se han dibujado (ver `flushPendingPopups`). */
+  private pendingPopups: PendingPopup[] = [];
   private bots = new Map<number, BotController>();
   /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
   private botNav: BotNavGrid | null = null;
@@ -1437,6 +1467,7 @@ export class Game {
     this.pendingInstantHits = [];
     this.combatFx.clear();
     this.damageNumbers.clear();
+    this.pendingPopups.length = 0;
     this.objectiveMarker?.destroy();
     this.objectiveMarker = null;
     this.objectiveMarkerTeam = undefined;
@@ -1694,6 +1725,7 @@ export class Game {
       this.world.update(frameDt);
       this.fxVisibilityCache.clear();
       this.combatFx.update(frameDt);
+      this.flushPendingPopups();
       this.damageNumbers.update(frameDt);
       return;
     }
@@ -1895,6 +1927,7 @@ export class Game {
       this.views.map((view) => view.camera.position)
     );
     this.combatFx.update(dt);
+    this.flushPendingPopups();
     this.damageNumbers.update(dt);
 
     if (simulated > 0) {
@@ -3960,6 +3993,11 @@ export class Game {
     });
   }
 
+  /**
+   * Encola el número de daño. Componer un número cuesta poco, pero varios
+   * impactos en el mismo render se acumulaban en el p99: el render los dibuja
+   * con presupuesto y los que sobran salen en el siguiente.
+   */
   private spawnNumberPopup(
     target: MatchPlayerState,
     options: {
@@ -3971,6 +4009,32 @@ export class Game {
       immune?: boolean;
     }
   ): void {
+    if (this.pendingPopups.length >= MAX_PENDING_POPUPS) this.pendingPopups.shift();
+    this.pendingPopups.push({
+      target,
+      amount: options.amount,
+      critical: options.critical,
+      effectiveness: options.effectiveness,
+      heal: options.heal,
+      lethal: options.lethal,
+      immune: options.immune ?? false
+    });
+  }
+
+  /** Dibuja números pendientes hasta agotar el presupuesto de este render. */
+  private flushPendingPopups(): void {
+    if (this.pendingPopups.length === 0) return;
+    const start = performance.now();
+    while (this.pendingPopups.length > 0) {
+      const popup = this.pendingPopups.shift();
+      if (!popup) break;
+      this.drawNumberPopup(popup);
+      if (performance.now() - start >= POPUP_RENDER_BUDGET_MS) break;
+    }
+  }
+
+  private drawNumberPopup(popup: PendingPopup): void {
+    const target = popup.target;
     const asset = this.assetFor(target.pokemonId, target.skinId);
     if (!asset) return;
 
@@ -3995,12 +4059,12 @@ export class Game {
       x: target.x,
       y: worldY,
       z: target.z,
-      amount: options.amount,
-      critical: options.critical,
-      effectiveness: options.effectiveness,
-      heal: options.heal,
-      lethal: options.lethal,
-      immune: options.immune ?? false,
+      amount: popup.amount,
+      critical: popup.critical,
+      effectiveness: popup.effectiveness,
+      heal: popup.heal,
+      lethal: popup.lethal,
+      immune: popup.immune,
       views
     });
   }

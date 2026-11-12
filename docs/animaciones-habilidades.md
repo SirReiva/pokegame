@@ -225,9 +225,15 @@ había sido interrumpida.
 La simulación autoritativa corre a **60 Hz** con un acumulador:
 
 - `FIXED_STEP = 1/60`; cada render acumula su `dt` real y ejecuta los pasos que
-  quepan (máximo 4 para no entrar en espiral).
+  quepan (máximo 2). Recuperar todo el tiempo perdido en un solo render
+  encadenaba simulaciones y el siguiente render llegaba aún más tarde: la
+  presentación se mantiene al día, no persigue el tiempo perdido. Por debajo de
+  30 fps se pierde tiempo de simulación a cambio de no bloquear el frame.
 - El render y la presentación (billboards, FX, daño flotante, mundo y objetos)
   se actualizan **una vez por render** con su `dt` real.
+- El daño flotante se crea con presupuesto por render
+  (`POPUP_RENDER_BUDGET_MS`): los números que no caben salen en el render
+  siguiente, no se pierden.
 - Efectos, cooldowns, proyectiles, áreas, bots y regeneración avanzan en pasos
   fijos. El error del instante del efecto queda en **≤ 1/60 s**,
   independientemente del framerate.
