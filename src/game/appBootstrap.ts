@@ -37,6 +37,9 @@ export async function createGameApp(
     antialias: true,
     alpha: false,
     // En portátiles híbridos fuerza la GPU dedicada en vez de la integrada.
+    // Chrome en Windows ignora esta opción al pedir el adaptador WebGPU y lo
+    // avisa por consola (crbug.com/369219127); se mantiene porque sí se aplica
+    // al contexto WebGL2 de respaldo y es el valor por defecto de PlayCanvas.
     powerPreference: 'high-performance'
   });
 

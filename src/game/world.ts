@@ -543,8 +543,8 @@ export function buildWorld(app: pc.AppBase): World {
     entity.render!.castShadows = false;
     entity.render!.receiveShadows = false;
     const instance = new pc.MeshInstance(mesh, material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
+    instance.castShadows = false;
+    instance.receiveShadows = false;
     instance.drawOrder = drawOrder;
     entity.render!.meshInstances = [instance];
     app.root.addChild(entity);
@@ -1096,8 +1096,8 @@ export function buildWorld(app: pc.AppBase): World {
           wallSegmentMeshes[i % wallSegmentMeshes.length],
           wallMaterial
         );
-        instance.castShadow = true;
-        instance.receiveShadow = true;
+        instance.castShadows = true;
+        instance.receiveShadows = true;
         wall.render!.meshInstances = [instance];
         barrierMeshInstances.push(instance);
         app.root.addChild(wall);
@@ -1129,8 +1129,8 @@ export function buildWorld(app: pc.AppBase): World {
         mountainPeakMeshes[i % mountainPeakMeshes.length],
         mountainMaterial
       );
-      instance.castShadow = true;
-      instance.receiveShadow = true;
+      instance.castShadows = true;
+      instance.receiveShadows = true;
       peak.render!.meshInstances = [instance];
       barrierMeshInstances.push(instance);
       app.root.addChild(peak);
@@ -1262,8 +1262,8 @@ export function buildWorld(app: pc.AppBase): World {
         usage: pc.BUFFER_STATIC
       });
       const instance = new pc.MeshInstance(cactusMesh, cactusMaterial);
-      instance.castShadow = false;
-      instance.receiveShadow = false;
+      instance.castShadows = false;
+      instance.receiveShadows = false;
       instance.setInstancing(buffer, true);
       instancedFoliageBuffers.push(buffer);
 
@@ -1701,8 +1701,8 @@ export function buildWorld(app: pc.AppBase): World {
         usage: pc.BUFFER_STATIC
       });
       const instance = new pc.MeshInstance(iceClusterMeshes[variant], iceMaterial);
-      instance.castShadow = false;
-      instance.receiveShadow = false;
+      instance.castShadows = false;
+      instance.receiveShadows = false;
       instance.setInstancing(buffer, true);
       instancedFoliageBuffers.push(buffer);
 
@@ -2057,8 +2057,8 @@ export function buildWorld(app: pc.AppBase): World {
         usage: pc.BUFFER_STATIC
       });
       const instance = new pc.MeshInstance(basaltMeshes[variant], basaltMaterial);
-      instance.castShadow = true;
-      instance.receiveShadow = true;
+      instance.castShadows = true;
+      instance.receiveShadows = true;
       instance.setInstancing(buffer, true);
       instancedFoliageBuffers.push(buffer);
 
@@ -2445,8 +2445,8 @@ export function buildWorld(app: pc.AppBase): World {
           { data, usage: pc.BUFFER_STATIC }
         );
         const instance = new pc.MeshInstance(meshes[variant], material);
-        instance.castShadow = false;
-        instance.receiveShadow = false;
+        instance.castShadows = false;
+        instance.receiveShadows = false;
         instance.setInstancing(vertexBuffer, true);
         instancedFoliageBuffers.push(vertexBuffer);
 
@@ -2876,18 +2876,18 @@ export function buildWorld(app: pc.AppBase): World {
     entity.render!.receiveShadows = false;
 
     const bodyInstance = new pc.MeshInstance(butterflyBodyMesh, butterflyBodyMaterial);
-    bodyInstance.castShadow = false;
-    bodyInstance.receiveShadow = false;
+    bodyInstance.castShadows = false;
+    bodyInstance.receiveShadows = false;
     bodyInstance.setInstancing(bodyBuffer, true);
 
     const rightInstance = new pc.MeshInstance(butterflyWingRight, butterflyWingMaterial);
-    rightInstance.castShadow = false;
-    rightInstance.receiveShadow = false;
+    rightInstance.castShadows = false;
+    rightInstance.receiveShadows = false;
     rightInstance.setInstancing(rightBuffer, true);
 
     const leftInstance = new pc.MeshInstance(butterflyWingLeft, butterflyWingMaterial);
-    leftInstance.castShadow = false;
-    leftInstance.receiveShadow = false;
+    leftInstance.castShadows = false;
+    leftInstance.receiveShadows = false;
     leftInstance.setInstancing(leftBuffer, true);
 
     entity.render!.meshInstances = [bodyInstance, rightInstance, leftInstance];
@@ -3870,8 +3870,8 @@ export function buildWorld(app: pc.AppBase): World {
         ghostTreeMeshes[(i + zoneIndex) % ghostTreeMeshes.length],
         ghostMaterial
       );
-      instance.castShadow = true;
-      instance.receiveShadow = true;
+      instance.castShadows = true;
+      instance.receiveShadows = true;
       tree.render!.meshInstances = [instance];
       tree.setLocalScale(scale, scale, scale);
       app.root.addChild(tree);

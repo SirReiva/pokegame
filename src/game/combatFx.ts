@@ -1434,18 +1434,22 @@ export class CombatFx {
     this.layerId = layerId;
     this.resolveLayers = resolveLayers;
     this.device = app.graphicsDevice;
-    this.sphereMesh = pc.createSphere(this.device, { radius: 0.5 });
-    this.boxMesh = pc.createBox(this.device, {
-      halfExtents: new pc.Vec3(0.5, 0.5, 0.5)
-    });
-    this.torusMesh = pc.createTorus(this.device, {
-      ringRadius: 0.5,
-      tubeRadius: 0.05
-    });
-    this.psychicRingMesh = pc.createTorus(this.device, {
-      ringRadius: 0.5,
-      tubeRadius: 0.022
-    });
+    this.sphereMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.SphereGeometry({ radius: 0.5 })
+    );
+    this.boxMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.BoxGeometry({ halfExtents: new pc.Vec3(0.5, 0.5, 0.5) })
+    );
+    this.torusMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.TorusGeometry({ ringRadius: 0.5, tubeRadius: 0.05 })
+    );
+    this.psychicRingMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.TorusGeometry({ ringRadius: 0.5, tubeRadius: 0.022 })
+    );
     this.waterJetMeshes = [0, 1, 2, 3].map((variant) =>
       createWaterJetMesh(this.device, variant * 1.7)
     );
@@ -1502,18 +1506,24 @@ export class CombatFx {
     this.discMesh = createDiscMesh(this.device);
     this.dashRingMesh = createDashRingMesh(this.device);
     this.iceCrystalMesh = createIceCrystalMesh(this.device);
-    this.rockSpikeMesh = pc.createCone(this.device, {
-      baseRadius: 0.5,
-      peakRadius: 0.04,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 5
-    });
-    this.rockChunkMesh = pc.createSphere(this.device, {
-      radius: 0.5,
-      latitudeBands: 3,
-      longitudeBands: 4
-    });
+    this.rockSpikeMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.ConeGeometry({
+        baseRadius: 0.5,
+        peakRadius: 0.04,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 5
+      })
+    );
+    this.rockChunkMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.SphereGeometry({
+        radius: 0.5,
+        latitudeBands: 3,
+        longitudeBands: 4
+      })
+    );
     this.dustTexture = textureFromCanvas(this.device, createDustCanvas(64), {
       name: 'combat-dust',
       mipmaps: true,
@@ -4474,12 +4484,15 @@ export class CombatFx {
     const bodyWidth = Math.max(0.08, width * 1.25);
     const coreWidth = Math.max(0.04, width * 0.45);
 
-    const beamMesh = pc.createCylinder(this.device, {
-      radius: 0.5,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 14
-    });
+    const beamMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 14
+      })
+    );
     const sheath = this.createEntity(beamMesh, [mistMaterial], root);
     const body = this.createEntity(beamMesh, [bodyMaterial], root);
     const core = this.createEntity(beamMesh, [coreMaterial], root);
@@ -4621,12 +4634,15 @@ export class CombatFx {
     const bodyWidth = Math.max(0.08, width * 1.25);
     const coreWidth = Math.max(0.04, width * 0.45);
 
-    const beamMesh = pc.createCylinder(this.device, {
-      radius: 0.5,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 14
-    });
+    const beamMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 14
+      })
+    );
     const sheath = this.createEntity(beamMesh, [mistMaterial], root);
     const body = this.createEntity(beamMesh, [bodyMaterial], root);
     const core = this.createEntity(beamMesh, [coreMaterial], root);
@@ -11030,12 +11046,15 @@ export class CombatFx {
       featherMaterial
     ];
 
-    const beamMesh = pc.createCylinder(this.device, {
-      radius: 0.5,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 14
-    });
+    const beamMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 14
+      })
+    );
     const body = this.createEntity(beamMesh, [bodyMaterial], root);
     const core = this.createEntity(beamMesh, [coreMaterial], root);
     body.setLocalEulerAngles(90, 0, 0);
@@ -11203,12 +11222,15 @@ export class CombatFx {
       hotLeafMaterial
     ];
 
-    const beamMesh = pc.createCylinder(this.device, {
-      radius: 0.5,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 14
-    });
+    const beamMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 14
+      })
+    );
     const body = this.createEntity(beamMesh, [bodyMaterial], root);
     const core = this.createEntity(beamMesh, [coreMaterial], root);
     body.setLocalEulerAngles(90, 0, 0);
@@ -11668,12 +11690,15 @@ export class CombatFx {
       mistMaterial
     ];
 
-    const beamMesh = pc.createCylinder(this.device, {
-      radius: 0.5,
-      height: 1,
-      heightSegments: 1,
-      capSegments: 14
-    });
+    const beamMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.CylinderGeometry({
+        radius: 0.5,
+        height: 1,
+        heightSegments: 1,
+        capSegments: 14
+      })
+    );
     const body = this.createEntity(beamMesh, [bodyMaterial], root);
     const core = this.createEntity(beamMesh, [coreMaterial], root);
     body.setLocalEulerAngles(90, 0, 0);
@@ -12259,6 +12284,7 @@ export class CombatFx {
         darkMaterial.opacity = 0.94;
         lightMaterial.opacity = 0.92;
         spikeMaterial.opacity = 0.8 + Math.sin(time * 15) * 0.1;
+        for (const material of materials) material.update();
       }
     };
     visual.update(0);

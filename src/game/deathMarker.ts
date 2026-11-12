@@ -99,8 +99,8 @@ export class DeathMarker {
     render.castShadows = false;
     render.receiveShadows = false;
     const instance = new pc.MeshInstance(this.mesh, this.material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
+    instance.castShadows = false;
+    instance.receiveShadows = false;
     instance.drawOrder = MARKER_DRAW_ORDER;
     render.meshInstances = [instance];
     this.root.setPosition(x, y, z);

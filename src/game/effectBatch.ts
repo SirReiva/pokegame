@@ -554,8 +554,8 @@ export class EffectBatch {
     material.update();
 
     const instance = new pc.MeshInstance(mesh, material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
+    instance.castShadows = false;
+    instance.receiveShadows = false;
     instance.setInstancing(this.buffer, false);
 
     const entity = new pc.Entity('gpu-effect-batch');

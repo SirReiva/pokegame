@@ -849,8 +849,8 @@ export class SpriteBillboard {
         outlineColor
       );
       outline = new pc.MeshInstance(outlineMesh, outlineMaterial);
-      outline.castShadow = false;
-      outline.receiveShadow = false;
+      outline.castShadows = false;
+      outline.receiveShadows = false;
       outline.drawOrder = OUTLINE_DRAW_ORDER;
       if (this.device.supportsStencil) {
         outline.stencilFront = FOG_EXCLUDED_STENCIL;
@@ -866,8 +866,8 @@ export class SpriteBillboard {
     render.receiveShadows = false;
     const instance = new pc.MeshInstance(mesh, material);
     const silhouette = new pc.MeshInstance(mesh, silhouetteMaterial);
-    silhouette.castShadow = false;
-    silhouette.receiveShadow = false;
+    silhouette.castShadows = false;
+    silhouette.receiveShadows = false;
     silhouette.drawOrder = SILHOUETTE_DRAW_ORDER;
     // Excluye el sprite de la niebla de guerra: si no, la mitad superior de un
     // Pokémon alto se oscurece con la sombra del suelo que queda detrás de su

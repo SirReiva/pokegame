@@ -224,8 +224,8 @@ export class PickupView {
     render.castShadows = false;
     render.receiveShadows = false;
     this.instance = new pc.MeshInstance(this.mesh, this.unusedMaterial);
-    this.instance.castShadow = false;
-    this.instance.receiveShadow = false;
+    this.instance.castShadows = false;
+    this.instance.receiveShadows = false;
     // El billboard también queda fuera de la niebla: su mitad superior no debe
     // heredar la sombra del suelo que hay detrás.
     if (device.supportsStencil) {

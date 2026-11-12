@@ -113,12 +113,12 @@ export class PlayerMarker {
     render.castShadows = false;
     render.receiveShadows = false;
     const normal = new pc.MeshInstance(this.mesh, this.material);
-    normal.castShadow = false;
-    normal.receiveShadow = false;
+    normal.castShadows = false;
+    normal.receiveShadows = false;
     normal.drawOrder = 3;
     const occlusion = new pc.MeshInstance(this.mesh, this.occlusionMaterial);
-    occlusion.castShadow = false;
-    occlusion.receiveShadow = false;
+    occlusion.castShadows = false;
+    occlusion.receiveShadows = false;
     occlusion.drawOrder = 4;
     render.meshInstances = [normal, occlusion];
     this.root.setLocalPosition(0, height, 0);

@@ -313,8 +313,8 @@ export class FogView {
     this.material.update();
 
     const instance = new pc.MeshInstance(mesh, this.material);
-    instance.castShadow = false;
-    instance.receiveShadow = false;
+    instance.castShadows = false;
+    instance.receiveShadows = false;
     instance.drawOrder = 1000;
     // Los separadores y los Pokémon escriben esténcil 1: la niebla no los
     // tiñe, así que su cara visible no hereda la sombra del suelo que queda

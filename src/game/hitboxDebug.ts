@@ -123,12 +123,12 @@ export class HitboxDebug {
     render.receiveShadows = false;
 
     const fill = new pc.MeshInstance(this.fillMesh, this.fillMaterial);
-    fill.castShadow = false;
-    fill.receiveShadow = false;
+    fill.castShadows = false;
+    fill.receiveShadows = false;
     fill.drawOrder = 4;
     const ring = new pc.MeshInstance(this.ringMesh, this.ringMaterial);
-    ring.castShadow = false;
-    ring.receiveShadow = false;
+    ring.castShadows = false;
+    ring.receiveShadows = false;
     ring.drawOrder = 5;
     render.meshInstances = [fill, ring];
 
@@ -180,8 +180,8 @@ export function attachProjectileHitbox(
   render.castShadows = false;
   render.receiveShadows = false;
   const instance = new pc.MeshInstance(mesh, material);
-  instance.castShadow = false;
-  instance.receiveShadow = false;
+  instance.castShadows = false;
+  instance.receiveShadows = false;
   instance.drawOrder = 5;
   render.meshInstances = [instance];
   // La raíz del proyectil vuela a ~0,7 u; el anillo debe quedar en el suelo.
