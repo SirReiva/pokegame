@@ -2565,6 +2565,193 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Kyogre                                                                    */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('rafagaMarina', 'Ráfaga Marina', 'Water', 'special', 'projectile')
+    .power(46)
+    .cooldown(0.85)
+    .range(8.5)
+    .radius(0.24)
+    .projectile('waterJet', 15)
+    .impact('water')
+    .recovery(0.3)
+    .animation('shoot')
+    .color(72, 152, 235)
+    .description(
+      'Dispara una ráfaga de agua comprimida a 8,5 u. 46 de potencia y cadencia alta. Ataque básico de Kyogre.'
+    )
+);
+
+registerAbility(
+  ability('remolinoMarino', 'Remolino Marino', 'Water', 'special', 'aoe')
+    .power(34)
+    .cooldown(8)
+    .range(5)
+    .radius(3)
+    .startup(0.3, { animation: 'charge', move: true })
+    .armor(25)
+    .recovery(0.5)
+    .animation('shoot')
+    .area('cyclone', 'overTime', 2.5, 0.5)
+    .slow(0.7, 1.5)
+    .impact('water')
+    .color(80, 170, 255)
+    .description(
+      'Abre un remolino de 3 u a 5 u de distancia que gira durante 2,5 s: 34 de daño por segundo (85 en total) y ralentiza un 30 % durante 1,5 s a quien siga dentro. Su herramienta para cortar pasillos.'
+    )
+);
+
+registerAbility(
+  ability('aguasCurativas', 'Aguas Curativas', 'Water', 'status', 'aoe')
+    .power(0)
+    .cooldown(12)
+    .range(0)
+    .radius(3.4)
+    .startup(0.7, { animation: 'charge' })
+    .armor(40)
+    .recovery(0.6)
+    .animation(null)
+    .heal(0.25)
+    .area('recovery', 'instant', 0.75)
+    .aoeEffect(({ targets, applyHeal }) => {
+      // Kyogre se cura con `healSelf`; la marea reparte el 15 % restante
+      // entre los aliados que estén dentro del radio.
+      for (const target of targets) {
+        if (!target.isAlly || target.isSelf) continue;
+        applyHeal(target, 0.15);
+      }
+    })
+    .color(96, 186, 255)
+    .description(
+      'Se concentra 0,7 s y bendice las aguas: recupera el 25 % de su vida máxima y el 15 % de la de sus aliados en 3,4 u. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
+    )
+);
+
+registerAbility(
+  ability('origenMar', 'Origen del Mar', 'Water', 'special', 'aoe')
+    .power(125)
+    .cooldown(16)
+    .range(5)
+    .radius(3.6)
+    .startup(0.85, { animation: 'charge' })
+    .armor(50)
+    .recovery(0.7)
+    .animation(null)
+    .area('water', 'instant', 0.9)
+    .radial(0.4)
+    .knockback(0.6)
+    .slow(0.6, 2.5)
+    .impact('water')
+    .color(64, 150, 240)
+    .description(
+      'Definitiva: invoca una marea primigenia de 3,6 u a 5 u de distancia tras 0,85 s de carga. 125 de potencia, el 100 % en el centro y el 40 % en el borde, empuja 0,6 u y ralentiza un 40 % durante 2,5 s. La carga tiene 50 de armadura.'
+    )
+);
+
+/* ------------------------------------------------------------------------- */
+/* Rayquaza                                                                  */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  ability('garraDraco', 'Garra Dragón', 'Dragon', 'physical', 'melee')
+    .power(50)
+    .cooldown(0.7)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(2.4)
+    .radius(0.9)
+    .halfAngle(60)
+    .knockback(0.4)
+    .active(0.2).recovery(0)
+    .animation('attack')
+    .impact('slash')
+    .color(96, 200, 120)
+    .description(
+      'Zarpazo amplio cargado de energía dracónica. Golpe básico de Rayquaza; alcanza a varios rivales en cono.'
+    )
+);
+
+registerAbility(
+  ability('vueloDraco', 'Vuelo Dragón', 'Flying', 'physical', 'dash')
+    .power(70)
+    .cooldown(6)
+    .range(0)
+    .radius(0.95)
+    .dash(5.5)
+    .knockback(0.9)
+    .startup(0.25, { animation: 'charge' })
+    .active(0.3).recovery(0.25)
+    .animation('attack')
+    .impact('air')
+    .color(96, 200, 120)
+    .description(
+      'Se enrosca y se lanza 5,5 u en línea recta, arrollando a quien encuentre con 70 de potencia y 0,9 u de empuje. Su herramienta para entrar o escapar.'
+    )
+);
+
+registerAbility(
+  ability('furiaDraco', 'Furia Dragón', 'Dragon', 'special', 'beam')
+    .power(85)
+    .cooldown(9)
+    .range(9.5)
+    .radius(0.5)
+    .startup(0.55, { animation: 'charge' })
+    .armor(35)
+    .recovery(0.55)
+    .animation('shoot')
+    .beam('psychic')
+    .impact('psychic')
+    .slow(0.7, 1.5)
+    .color(128, 96, 230)
+    .description(
+      'Carga 0,55 s y exhala un haz dracónico de 9,5 u que atraviesa a todos los rivales en línea. 85 de potencia y 30 % de ralentización durante 1,5 s.'
+    )
+);
+
+registerAbility(
+  ability('ascensoDraco', 'Ascenso Draco', 'Flying', 'physical', 'aoe')
+    .power(130)
+    .cooldown(16)
+    .range(0)
+    .radius(3.2)
+    // La marca sigue a Rayquaza mientras se eleva: la onda nace donde cae.
+    .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    // Sin armadura: `onStart` ya lo hace invulnerable durante toda la subida.
+    .startup(1, { animation: 'charge', move: true })
+    .recovery(0.55)
+    .animation('attack')
+    .area('air', 'instant', 0.9)
+    .radial(0.35)
+    .knockback(1.1)
+    .slow(0.65, 2)
+    .onStart(
+      ({
+        targets,
+        applyBuff,
+        setCasterHidden,
+        setCasterInvulnerable
+      }) => {
+        setCasterHidden(true);
+        setCasterInvulnerable(true);
+        const self = targets.find((target) => target.isSelf);
+        if (self) {
+          applyBuff(self, { stat: 'speed', multiplier: 1.4, duration: 1 });
+        }
+      }
+    )
+    .onCast(({ setCasterHidden, setCasterInvulnerable }) => {
+      setCasterHidden(false);
+      setCasterInvulnerable(false);
+    })
+    .impact('air')
+    .color(96, 200, 120)
+    .description(
+      'Definitiva: se eleva durante 1 s invulnerable y un 40 % más rápido, y cae en picado sobre su posición con una onda de 3,2 u. 130 de potencia, el 100 % en el centro y el 35 % en el borde, empuja 1,1 u y ralentiza un 35 % durante 2 s.'
+    )
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2621,6 +2808,8 @@ MOVESETS['0250'] = [
 ];
 MOVESETS['0130'] = ['acuaCola', 'cascada', 'triturarGyarados', 'dragoaliento'];
 MOVESETS['0245'] = ['golpeCuerpo', 'chorroAgua', 'rayoHielo', 'frioPolar'];
+MOVESETS['0382'] = ['rafagaMarina', 'remolinoMarino', 'aguasCurativas', 'origenMar'];
+MOVESETS['0384'] = ['garraDraco', 'vueloDraco', 'furiaDraco', 'ascensoDraco'];
 
 export function abilityForSlot(
   pokemonId: string,

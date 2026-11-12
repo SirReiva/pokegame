@@ -35,7 +35,9 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0249': 7.5, // Lugia: guardián de los mares, se impulsa con poder psíquico
   '0250': 6.9, // Ho-Oh: envergadura inmensa, arranque pausado
   '0251': 7.1, // Celebi: viaja en el tiempo con un vuelo juguetón
-  '0383': 5.6 // Groudon: coloso de tierra, avanza con peso sísmico
+  '0382': 5.9, // Kyogre: coloso marino, flota con impulso lento y constante
+  '0383': 5.6, // Groudon: coloso de tierra, avanza con peso sísmico
+  '0384': 7.6 // Rayquaza: serpiente del cielo, se desliza veloz por el aire
 };
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */
@@ -81,7 +83,9 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0249': 0.58, // Lugia: planeador enorme
   '0250': 0.58, // Ho-Oh: alas y cola largas; círculo sobre el torso
   '0251': 0.34, // Celebi: pequeño y flotante
-  '0383': 0.56 // Groudon: coloso bajo y ancho
+  '0382': 0.60, // Kyogre: cuerpo enorme, aunque la aleta caudal no cuenta
+  '0383': 0.56, // Groudon: coloso bajo y ancho
+  '0384': 0.58 // Rayquaza: serpiente alada; el círculo cubre el torso
 };
 
 /** Radio de respaldo si una especie no tiene entrada en la tabla. */

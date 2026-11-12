@@ -38,6 +38,8 @@
 - [Ho-Oh](#ho-oh)
 - [Gyarados](#gyarados)
 - [Suicune](#suicune)
+- [Kyogre](#kyogre)
+- [Rayquaza](#rayquaza)
 
 ## Pikachu
 
@@ -68,7 +70,9 @@ Tipos: **Electric** · HP 110 · Atk 75 · Def 60 · SpA 70 · SpD 70 · Vel 110
 | Lugia | 49,2 | 3,3 | 40,9 | 8,7 |
 | Ho-Oh | 65,3 | 4,6 | 40,9 | 8,7 |
 | Celebi | 61,3 | 4,1 | 13,6 | 3,1 |
+| Kyogre | 65,3 | 4,6 | 43,2 | 9,2 |
 | Groudon | 48,8 | 3,1 | 0 | 0 |
+| Rayquaza | 65,3 | 4,6 | 31,8 | 6,6 |
 | **Mediana de DPS** | 65,3 | 4,6 | 38 | 7,8 |
 
 ## Voltorb
@@ -100,7 +104,9 @@ Tipos: **Electric** · HP 115 · Atk 50 · Def 70 · SpA 75 · SpD 75 · Vel 120
 | Lugia | 61 | 2,4 | Estado | 6,1 |
 | Ho-Oh | 81,7 | 3,4 | Estado | 6,1 |
 | Celebi | 17,1 | 3,1 | Estado | 2,2 |
+| Kyogre | 81,7 | 3,4 | Estado | 6,6 |
 | Groudon | 0 | 2,2 | Estado | 0 |
+| Rayquaza | 40,8 | 3,4 | Estado | 4,8 |
 | **Mediana de DPS** | 51,9 | 3,4 | — | 5,7 |
 
 ## Gengar
@@ -132,8 +138,10 @@ Tipos: **Ghost / Poison** · HP 135 · Atk 85 · Def 80 · SpA 150 · SpD 95 · 
 | Lugia | 46,7 | 11,6 | 2 | 8 |
 | Ho-Oh | 30,7 | 5,8 | 2 | 4 |
 | Celebi | 55,6 | 16,7 | 7,5 | 11,7 |
+| Kyogre | 30,7 | 6,1 | 2,6 | 4,5 |
 | Groudon | 21,8 | 9,2 | 2 | 6,4 |
-| **Mediana de DPS** | 32,1 | 10 | 4,3 | 7 |
+| Rayquaza | 30,7 | 9,2 | 4,3 | 6,4 |
+| **Mediana de DPS** | 31,4 | 9,5 | 4,3 | 6,7 |
 
 ## Bulbasaur
 
@@ -164,7 +172,9 @@ Tipos: **Grass / Poison** · HP 120 · Atk 69 · Def 69 · SpA 85 · SpD 85 · V
 | Lugia | 48,8 | Estado | 3,1 | 1,8 |
 | Ho-Oh | 61,3 | Estado | 1,4 | 0,9 |
 | Celebi | 53,2 | Estado | 4,5 | 2,6 |
+| Kyogre | 61,3 | Estado | 13,9 | 7,9 |
 | Groudon | 44,8 | Estado | 20 | 11,1 |
+| Rayquaza | 61,3 | Estado | 2,5 | 1,4 |
 | **Mediana de DPS** | 61,3 | — | 9,2 | 5,1 |
 
 ## Charmander
@@ -196,8 +206,10 @@ Tipos: **Fire** · HP 114 · Atk 72 · Def 63 · SpA 80 · SpD 70 · Vel 85
 | Lugia | 40,7 | 3,6 | 4,7 | 2,7 |
 | Ho-Oh | 51,1 | 1,4 | 2,4 | 1,3 |
 | Celebi | 47,8 | 9,3 | 13,2 | 8 |
+| Kyogre | 51,1 | 1,4 | 2,5 | 1,5 |
 | Groudon | 37,4 | 6,6 | 7,2 | 4,2 |
-| **Mediana de DPS** | 51,1 | 6 | 6,9 | 4,1 |
+| Rayquaza | 51,1 | 3,2 | 3,6 | 2,1 |
+| **Mediana de DPS** | 51,1 | 5 | 6,6 | 4 |
 
 ## Squirtle
 
@@ -228,8 +240,10 @@ Tipos: **Water** · HP 119 · Atk 68 · Def 85 · SpA 70 · SpD 84 · Vel 63
 | Lugia | 44,8 | 3,7 | 7,2 | 4,1 |
 | Ho-Oh | 57,3 | 10,2 | 14,3 | 8,2 |
 | Celebi | 53,2 | 2,5 | 5,1 | 2,8 |
+| Kyogre | 57,3 | 2,5 | 3,8 | 2 |
 | Groudon | 44,8 | 7,4 | 22,4 | 12,5 |
-| **Mediana de DPS** | 57,3 | 6,2 | 12,3 | 7,1 |
+| Rayquaza | 57,3 | 2,5 | 5,4 | 3,1 |
+| **Mediana de DPS** | 57,3 | 5,9 | 11,7 | 6,6 |
 
 ## Lucario
 
@@ -260,8 +274,10 @@ Tipos: **Fighting / Steel** · HP 145 · Atk 130 · Def 90 · SpA 135 · SpD 90 
 | Lugia | 51 | 3,4 | 1,4 | 1,3 |
 | Ho-Oh | 34,7 | 4,6 | 3,1 | 3,5 |
 | Celebi | 63,3 | 4,3 | 4,3 | 3,3 |
+| Kyogre | 34,7 | 4,6 | 6,7 | 7,2 |
 | Groudon | 49 | 3,2 | 9,4 | 4,9 |
-| **Mediana de DPS** | 55,2 | 4,7 | 7,5 | 5,7 |
+| Rayquaza | 69,4 | 4,6 | 4,7 | 3,5 |
+| **Mediana de DPS** | 55,2 | 4,6 | 7 | 5,7 |
 
 ## Greninja
 
@@ -292,8 +308,10 @@ Tipos: **Water / Dark** · HP 147 · Atk 115 · Def 87 · SpA 123 · SpD 91 · V
 | Lugia | 29,9 | 45,2 | 7 | 7,6 |
 | Ho-Oh | 59,9 | 30,6 | 5 | 3,8 |
 | Celebi | 20,4 | 56,8 | 9 | 11,2 |
+| Kyogre | 15,8 | 30,6 | 5 | 4,1 |
 | Groudon | 94,2 | 21,9 | 3,2 | 5,9 |
-| **Mediana de DPS** | 52,6 | 35,4 | 5,3 | 7,3 |
+| Rayquaza | 23,5 | 30,6 | 5 | 5,9 |
+| **Mediana de DPS** | 49,5 | 34,3 | 5,3 | 6,9 |
 
 ## Articuno
 
@@ -324,7 +342,9 @@ Tipos: **Ice / Flying** · HP 165 · Atk 105 · Def 120 · SpA 115 · SpD 145 ·
 | Lugia | 44,5 | 10,8 | 5,6 | 5,7 |
 | Ho-Oh | 63,1 | 5,4 | 2,8 | 2,9 |
 | Celebi | 115 | 15,7 | 8,7 | 8,2 |
+| Kyogre | 63,1 | 2,9 | 1,5 | 1,5 |
 | Groudon | 40,9 | 16,9 | 9,2 | 9 |
+| Rayquaza | 63,1 | 33,9 | 18,4 | 18 |
 | **Mediana de DPS** | 63,1 | 8,7 | 4,7 | 4,6 |
 
 ## Zapdos
@@ -356,7 +376,9 @@ Tipos: **Electric / Flying** · HP 165 · Atk 110 · Def 105 · SpA 145 · SpD 1
 | Lugia | 47,6 | Estado | 9,9 | 10,2 |
 | Ho-Oh | 63,1 | Estado | 9,9 | 10,2 |
 | Celebi | 122,5 | Estado | 3,5 | 3,7 |
+| Kyogre | 63,1 | Estado | 10,7 | 11 |
 | Groudon | 45,9 | Estado | 0 | 0 |
+| Rayquaza | 63,1 | Estado | 7,8 | 8 |
 | **Mediana de DPS** | 63,1 | — | 9,4 | 9,5 |
 
 ## Moltres
@@ -388,8 +410,10 @@ Tipos: **Fire / Flying** · HP 165 · Atk 120 · Def 110 · SpA 145 · SpD 105 �
 | Lugia | 52 | 9,9 | 4,2 | 3,9 |
 | Ho-Oh | 68,8 | 9,9 | 2 | 5,3 |
 | Celebi | 133,6 | 28,6 | 11,5 | 9,8 |
+| Kyogre | 68,8 | 10,5 | 2,2 | 5,3 |
 | Groudon | 50,1 | 15,7 | 6,3 | 3,7 |
-| **Mediana de DPS** | 68,8 | 15 | 6 | 5,3 |
+| Rayquaza | 68,8 | 15,7 | 3,1 | 5,3 |
+| **Mediana de DPS** | 68,8 | 15 | 5,7 | 5,3 |
 
 ## Mewtwo
 
@@ -420,8 +444,10 @@ Tipos: **Psychic** · HP 181 · Atk 130 · Def 110 · SpA 174 · SpD 110 · Vel 
 | Lugia | 23,8 | Estado | 3,6 | 2,1 |
 | Ho-Oh | 47,6 | Estado | 7,4 | 4,3 |
 | Celebi | 34 | Estado | 5,3 | 3,1 |
+| Kyogre | 52,7 | Estado | 8 | 4,6 |
 | Groudon | 76,5 | Estado | 11,4 | 6,6 |
-| **Mediana de DPS** | 77,4 | — | 11,7 | 6,8 |
+| Rayquaza | 76,5 | Estado | 11,4 | 6,6 |
+| **Mediana de DPS** | 76,5 | — | 11,4 | 6,6 |
 
 ## Mew
 
@@ -452,8 +478,10 @@ Tipos: **Psychic** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120 · Vel 
 | Lugia | 30,8 | Estado | 1,8 | Estado |
 | Ho-Oh | 64,9 | Estado | 3,7 | Estado |
 | Celebi | 47,6 | Estado | 2,8 | Estado |
+| Kyogre | 71,7 | Estado | 4,1 | Estado |
 | Groudon | 105,4 | Estado | 5,8 | Estado |
-| **Mediana de DPS** | 108,8 | — | 6 | — |
+| Rayquaza | 105,4 | Estado | 5,8 | Estado |
+| **Mediana de DPS** | 105,4 | — | 5,8 | — |
 
 ## Scyther
 
@@ -484,7 +512,9 @@ Tipos: **Bug / Flying** · HP 145 · Atk 130 · Def 100 · SpA 75 · SpD 100 · 
 | Lugia | 63,8 | 5,2 | Estado | 5,1 |
 | Ho-Oh | 20,4 | 7,1 | Estado | 1,7 |
 | Celebi | 316,3 | 12,6 | Estado | 25,4 |
+| Kyogre | 86,8 | 7,1 | Estado | 6,9 |
 | Groudon | 61,3 | 4,9 | Estado | 4,8 |
+| Rayquaza | 43,3 | 7,1 | Estado | 3,4 |
 | **Mediana de DPS** | 71,5 | 7,1 | — | 5,9 |
 
 ## Tyranitar
@@ -516,8 +546,10 @@ Tipos: **Rock / Dark** · HP 175 · Atk 154 · Def 130 · SpA 115 · SpD 120 · 
 | Lugia | 79,2 | 14,7 | 0 | 9,7 |
 | Ho-Oh | 51,7 | 39,2 | 0 | 26,5 |
 | Celebi | 96,2 | 9,2 | 1,2 | 6,1 |
+| Kyogre | 51,7 | 9,8 | 2,5 | 6,6 |
 | Groudon | 37,2 | 3,5 | 1,4 | 2,3 |
-| **Mediana de DPS** | 60 | 13,6 | 2,6 | 9,1 |
+| Rayquaza | 51,7 | 19,6 | 0 | 13,3 |
+| **Mediana de DPS** | 58,2 | 13,6 | 2,5 | 9,1 |
 
 ## Onix
 
@@ -548,8 +580,10 @@ Tipos: **Rock / Ground** · HP 110 · Atk 65 · Def 180 · SpA 50 · SpD 65 · V
 | Lugia | 52,6 | 10,9 | 0 | 0 |
 | Ho-Oh | 140 | 29,9 | 0 | 0 |
 | Celebi | 32,1 | 6,8 | 2,5 | 1,9 |
+| Kyogre | 35 | 7,5 | 5,6 | 4,2 |
 | Groudon | 13 | 2,5 | 3,8 | 2,8 |
-| **Mediana de DPS** | 48,9 | 10 | 6,1 | 4,7 |
+| Rayquaza | 70 | 15 | 0 | 0 |
+| **Mediana de DPS** | 48,9 | 10 | 5,6 | 4,2 |
 
 ## Groudon
 
@@ -581,7 +615,9 @@ Tipos: **Ground** · HP 175 · Atk 170 · Def 160 · SpA 120 · SpD 110 · Vel 1
 | Lugia | 37,4 | 0 | 10,6 | 0 |
 | Ho-Oh | 49,4 | 0 | 29,4 | 0 |
 | Celebi | 46 | 1,8 | 6,7 | 3 |
-| **Mediana de DPS** | 51,1 | 4,9 | 10 | 8 |
+| Kyogre | 49,4 | 4,3 | 7,3 | 6,5 |
+| Rayquaza | 49,4 | 0 | 14,7 | 0 |
+| **Mediana de DPS** | 49,4 | 4,3 | 10 | 7,2 |
 
 ## Celebi
 
@@ -612,7 +648,9 @@ Tipos: **Psychic / Grass** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120
 | Suicune | 63,8 | 12,3 | Estado | 4 |
 | Lugia | 11,6 | 2,3 | Estado | 1,5 |
 | Ho-Oh | 5,2 | 1,1 | Estado | 3,1 |
+| Kyogre | 53,8 | 10,2 | Estado | 3,3 |
 | Groudon | 79,1 | 14,6 | Estado | 4,9 |
+| Rayquaza | 9 | 1,8 | Estado | 4,9 |
 | **Mediana de DPS** | 35,7 | 6,9 | — | 4,9 |
 
 ## Lugia
@@ -644,8 +682,10 @@ Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 17
 | Suicune | 31,9 | 1,2 | 13,6 | 3,9 |
 | Ho-Oh | 24,3 | 3,9 | 9,8 | 3,1 |
 | Celebi | 19,1 | 1,3 | 32,1 | 8,8 |
+| Kyogre | 28,1 | 0,7 | 9,8 | 3,3 |
 | Groudon | 42,1 | 6,1 | 16,1 | 4,7 |
-| **Mediana de DPS** | 42,7 | 3,6 | 16,1 | 4,7 |
+| Rayquaza | 42,1 | 1,3 | 16,1 | 4,7 |
+| **Mediana de DPS** | 42,1 | 3,4 | 16,1 | 4,7 |
 
 ## Ho-Oh
 
@@ -676,8 +716,10 @@ Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 �
 | Suicune | 68,8 | 11,7 | Estado | 8,5 |
 | Lugia | 66,8 | 10,7 | Estado | 16,3 |
 | Celebi | 159,8 | 26,5 | Estado | 37,4 |
+| Kyogre | 89,1 | 14,5 | Estado | 9,9 |
 | Groudon | 61,2 | 9,9 | Estado | 14,3 |
-| **Mediana de DPS** | 89,1 | 14,5 | — | 19,6 |
+| Rayquaza | 89,1 | 14,5 | Estado | 9,9 |
+| **Mediana de DPS** | 89,1 | 14,5 | — | 18,5 |
 
 ## Gyarados
 
@@ -708,8 +750,10 @@ Tipos: **Water / Flying** · HP 170 · Atk 145 · Def 99 · SpA 80 · SpD 120 ·
 | Lugia | 49,6 | 7,8 | 11,9 | 4,1 |
 | Ho-Oh | 131,2 | 21,2 | 8 | 5,6 |
 | Celebi | 30,6 | 5 | 14,6 | 5 |
+| Kyogre | 32,1 | 5,2 | 8 | 5,6 |
 | Groudon | 90,4 | 14,5 | 5,4 | 3,8 |
-| **Mediana de DPS** | 78 | 12,7 | 8,9 | 5,7 |
+| Rayquaza | 32,1 | 5,2 | 8 | 11,2 |
+| **Mediana de DPS** | 75,1 | 12,1 | 8,5 | 5,7 |
 
 ## Suicune
 
@@ -740,8 +784,78 @@ Tipos: **Water** · HP 175 · Atk 95 · Def 135 · SpA 110 · SpD 135 · Vel 105
 | Lugia | 28,1 | 18,4 | 7 | 9,4 |
 | Ho-Oh | 37 | 36,7 | 3,5 | 4,7 |
 | Celebi | 33,2 | 12,9 | 10,2 | 13,5 |
+| Kyogre | 37 | 10,2 | 1,9 | 2,6 |
 | Groudon | 25,5 | 57,2 | 10,8 | 14,8 |
-| **Mediana de DPS** | 37,7 | 32,3 | 5,5 | 7,6 |
+| Rayquaza | 37 | 14,3 | 21,6 | 29,6 |
+| **Mediana de DPS** | 37 | 30 | 5,5 | 7,6 |
+
+## Kyogre
+
+Tipos: **Water** · HP 175 · Atk 120 · Def 110 · SpA 170 · SpD 160 · Vel 110
+
+| Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 · CD 0,85 s | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s · CD 8 s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — · CD 12 s | Definitiva: Origen del Mar<br>Water · Esp · Pot 125 · CD 16 s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 33,7 | 5,9 | Estado | 4,9 |
+| Charmander | 168,1 | 31,4 | Estado | 23,7 |
+| Squirtle | 33,7 | 6 | Estado | 5 |
+| Pikachu | 84,1 | 15,7 | Estado | 11,9 |
+| Gengar | 62,5 | 11,6 | Estado | 8,8 |
+| Voltorb | 76,9 | 13,8 | Estado | 11,1 |
+| Eevee | 68,5 | 11,9 | Estado | 9,8 |
+| Lucario | 66 | 11,9 | Estado | 9,3 |
+| Greninja | 32,4 | 5,7 | Estado | 4,6 |
+| Mewtwo | 54 | 9,9 | Estado | 7,7 |
+| Mew | 48,1 | 8,7 | Estado | 7 |
+| Onix | 351 | 65,3 | Estado | 51,3 |
+| Scyther | 58,8 | 10,5 | Estado | 8,3 |
+| Gyarados | 24 | 4,1 | Estado | 3,4 |
+| Tyranitar | 96,2 | 17,3 | Estado | 13,9 |
+| Articuno | 40,8 | 6,8 | Estado | 5,8 |
+| Zapdos | 54 | 9,9 | Estado | 7,7 |
+| Moltres | 110,6 | 20,9 | Estado | 16,1 |
+| Raikou | 48,1 | 8,7 | Estado | 7 |
+| Entei | 124,9 | 23,2 | Estado | 17,6 |
+| Suicune | 21,6 | 4 | Estado | 3,1 |
+| Lugia | 33,6 | 6,1 | Estado | 4,8 |
+| Ho-Oh | 67,3 | 12,2 | Estado | 9,6 |
+| Celebi | 24 | 4,1 | Estado | 3,4 |
+| Groudon | 108 | 19,8 | Estado | 15,3 |
+| Rayquaza | 26,4 | 4,7 | Estado | 3,8 |
+| **Mediana de DPS** | 56,4 | 10,2 | — | 8 |
+
+## Rayquaza
+
+Tipos: **Dragon / Flying** · HP 180 · Atk 170 · Def 110 · SpA 170 · SpD 110 · Vel 115
+
+| Rival | Básica: Garra Dragón<br>Dragon · Fís · Pot 50 · CD 0,7 s | Habilidad 1: Vuelo Dragón<br>Flying · Fís · Pot 70 · CD 6 s | Habilidad 2: Furia Dragón<br>Dragon · Esp · Pot 85 · CD 9 s | Definitiva: Ascenso Draco<br>Flying · Fís · Pot 130 · CD 16 s |
+| --- | ---: | ---: | ---: | ---: |
+| Bulbasaur | 110,9 | 36,1 | 11,9 | 25 |
+| Charmander | 122,5 | 19,9 | 14,4 | 13,8 |
+| Squirtle | 91,8 | 14,8 | 12 | 10,2 |
+| Pikachu | 128,3 | 10,4 | 14,4 | 7,2 |
+| Gengar | 96,3 | 15,5 | 10,6 | 10,8 |
+| Voltorb | 109,3 | 8,8 | 13,4 | 6,1 |
+| Eevee | 109,3 | 17,9 | 11,9 | 12,3 |
+| Lucario | 42,3 | 14 | 5,6 | 9,6 |
+| Greninja | 87,6 | 14,5 | 11 | 10 |
+| Mewtwo | 71,4 | 11,4 | 9,2 | 7,9 |
+| Mew | 65,6 | 10,4 | 8,3 | 7,3 |
+| Onix | 43,8 | 3,6 | 15,4 | 2,4 |
+| Scyther | 78,6 | 24,9 | 10,2 | 17,4 |
+| Gyarados | 78,6 | 12,4 | 8,3 | 8,8 |
+| Tyranitar | 58,4 | 4,8 | 8,3 | 3,3 |
+| Articuno | 65,6 | 10,4 | 6,9 | 7,3 |
+| Zapdos | 74,3 | 6 | 9,2 | 4,1 |
+| Moltres | 71,4 | 11,4 | 9,6 | 7,9 |
+| Raikou | 80,3 | 6,6 | 8,3 | 4,6 |
+| Entei | 74,3 | 11,9 | 10,6 | 8,2 |
+| Suicune | 56,8 | 9,4 | 7,6 | 6,5 |
+| Lugia | 52,5 | 8,3 | 5,9 | 5,8 |
+| Ho-Oh | 71,4 | 11,4 | 5,9 | 7,9 |
+| Celebi | 65,6 | 20,8 | 8,3 | 14,5 |
+| Kyogre | 71,4 | 11,4 | 6,2 | 7,9 |
+| Groudon | 49,6 | 7,8 | 9,2 | 5,4 |
+| **Mediana de DPS** | 72,9 | 11,4 | 9,2 | 7,9 |
 
 ## DPS por habilidad contra un objetivo neutro
 
@@ -771,7 +885,9 @@ Objetivo sin tipos y con 100 en todas las estadísticas: sirve para comparar la 
 | Ho-Oh | Golpe Ala 96,5 | Pájaro Osado 15,8 | Recuperación — | Fuego Sagrado 22,5 | 134,8 |
 | Gyarados | Acua Cola 74,3 | Cascada 11,7 | Triturar 8,7 | Dragoaliento 6,1 | 100,7 |
 | Suicune | Golpe Cuerpo 40,8 | Chorro de Agua 31,3 | Rayo Hielo 6 | Frío Polar 8 | 86,2 |
+| Kyogre | Ráfaga Marina 58,8 | Remolino Marino 10,5 | Aguas Curativas — | Origen del Mar 8,3 | 77,6 |
+| Rayquaza | Garra Dragón 78,6 | Vuelo Dragón 12,4 | Furia Dragón 10,2 | Ascenso Draco 8,7 | 109,9 |
 
 **DPS sostenido** es la suma del DPS de las cuatro habilidades contra el objetivo neutro. Supone que se pueden encadenar sin solaparse; el bloqueo global de casteo hace que el valor real sea algo menor.
 
-Atacantes con moveset asignado: **22** de 25 especies del roster.
+Atacantes con moveset asignado: **24** de 27 especies del roster.

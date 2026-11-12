@@ -59,7 +59,9 @@ export const POKEDEX_STATS: Record<string, BaseStats> = {
   '0249': { hp: 106, attack: 90, defense: 130, spAttack: 90, spDefense: 154, speed: 110 }, // Lugia
   '0250': { hp: 106, attack: 130, defense: 90, spAttack: 110, spDefense: 154, speed: 90 }, // Ho-Oh
   '0251': { hp: 100, attack: 100, defense: 100, spAttack: 100, spDefense: 100, speed: 100 }, // Celebi
-  '0383': { hp: 100, attack: 150, defense: 140, spAttack: 100, spDefense: 90, speed: 90 } // Groudon
+  '0382': { hp: 100, attack: 100, defense: 90, spAttack: 150, spDefense: 140, speed: 90 }, // Kyogre
+  '0383': { hp: 100, attack: 150, defense: 140, spAttack: 100, spDefense: 90, speed: 90 }, // Groudon
+  '0384': { hp: 105, attack: 150, defense: 90, spAttack: 150, spDefense: 90, speed: 95 } // Rayquaza
 };
 
 /** Valores neutros para una especie desconocida (no debería ocurrir). */

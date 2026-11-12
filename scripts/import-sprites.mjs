@@ -58,7 +58,9 @@ const ROSTER = [
   { id: '0249', name: 'Lugia', types: ['Psychic', 'Flying'], accent: '#8aa9e8' },
   { id: '0250', name: 'Ho-Oh', types: ['Fire', 'Flying'], accent: '#d9a441' },
   { id: '0251', name: 'Celebi', types: ['Psychic', 'Grass'], accent: '#8fd05a' },
-  { id: '0383', name: 'Groudon', types: ['Ground'], accent: '#e2bf65', actions: ['Hop'] }
+  { id: '0382', name: 'Kyogre', types: ['Water'], accent: '#2f6fbf', actions: ['Hop'] },
+  { id: '0383', name: 'Groudon', types: ['Ground'], accent: '#e2bf65', actions: ['Hop'] },
+  { id: '0384', name: 'Rayquaza', types: ['Dragon', 'Flying'], accent: '#3fa56a', actions: ['Hop'] }
 ];
 
 // Faint, QuickStrike, Shock, Shoot, Charge, Strike, Twirl, Shake y Punch son
@@ -421,7 +423,9 @@ const RECOLOR_PATHS = {
   '0243': '0002',
   '0244': '0002',
   '0245': '0002',
-  '0383': '0003'
+  '0382': '0002',
+  '0383': '0003',
+  '0384': '0002'
 };
 
 /** Aspectos alternativos que se intentan importar para cada especie. */

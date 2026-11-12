@@ -185,6 +185,17 @@
 > (0,85 s de carga + 0,45 s de recuperación) y su cono visual dura 0,5 s. El
 > enfriamiento de Frío Polar queda por debajo de la banda 12-18 s que usa el
 > resto de definitivas.
+>
+> **Actualización 2026-11-12 (2)**: Kyogre (0382) y Rayquaza (0384) entran en el
+> roster con sprites, stats, velocidad, hurtbox, visión y moveset completo, así
+> que el manifiesto pasa a 27 especies y `MOVESETS` a 24. Siguen sin moveset las
+> mismas tres (Eevee, Raikou y Entei). Kit de Kyogre: Ráfaga Marina 46 pot /
+> 0,85 s, Remolino Marino 34 pot/s / 8 s, Aguas Curativas (estado) y Origen del
+> Mar 125 pot / 16 s. Kit de Rayquaza: Garra Dragón 50 pot / 0,7 s, Vuelo Dragón
+> 70 pot / 6 s, Furia Dragón 85 pot / 9 s y Ascenso Draco 130 pot / 16 s. Las
+> tablas regenerables `tabla-danos-por-ataque.md` y `dps-por-habilidad.md`
+> incluyen ya a ambos; las matrices de §4.x no se han regenerado. Kyogre trae el
+> hurtbox más grande del roster (0,60 u) y Rayquaza la visión más larga (12,6 u).
 
 ## Resumen ejecutivo
 
@@ -195,10 +206,10 @@ especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
 
 Los cinco hallazgos más importantes:
 
-1. **3 de las 25 especies del roster siguen sin ninguna habilidad.** Eevee,
-   Raikou y Entei no tienen moveset; el carrusel ya las filtra. Las otras 22,
-   incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh, Zapdos, Gyarados y
-   Suicune, sí tienen moveset.
+1. **3 de las 27 especies del roster siguen sin ninguna habilidad.** Eevee,
+   Raikou y Entei no tienen moveset; el carrusel ya las filtra. Las otras 24,
+   incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh, Zapdos, Gyarados,
+   Suicune, Kyogre y Rayquaza, sí tienen moveset.
 2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
    jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
    nunca.
@@ -382,7 +393,7 @@ cobertura de tipos.
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 3 de 25 especies siguen sin habilidades (Eevee, Raikou y Entei). |
+| 3.1 Cobertura de movesets | **pendiente** | 3 de 27 especies siguen sin habilidades (Eevee, Raikou y Entei). |
 | 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas y golpes de dash pendientes. Los casts instantáneos y buffs `self` ya se cancelan al morir. |
 | 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
 | 3.5 Explosión gratis a 1 PV | **pendiente** | El autodaño nunca quita la última vida; también afecta a Pájaro Osado. |
@@ -399,7 +410,7 @@ lista.
 
 ### 3.1. Cobertura: 3 especies sin moveset (crítico)
 
-`MOVESETS` define 22 ids (`src/game/abilities.ts`). El roster muestra las 25
+`MOVESETS` define 24 ids (`src/game/abilities.ts`). El roster muestra las 27
 especies de `public/sprites/manifest.json`, pero el carrusel ya filtra con
 `hasAssignedAbilities` (`src/session/SessionProvider.tsx:63`,
 `src/ui/RosterScreen.tsx:600`) y no deja elegir las 3 que no pueden combatir.
@@ -644,7 +655,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 - Los combos son una **cota superior** y una medida relativa, no una promesa de
   daño real: en la práctica hay rangos, startups, dashes y esquivas.
 - **Cobertura de esta simulación**: la matriz histórica de §4.3 usa 15 de las 18
-  especies con moveset de aquel momento. El roster actual tiene 25 especies y 20
+  especies con moveset de aquel momento. El roster actual tiene 27 especies y 24
   con moveset; §4.3.1 añade una foto actual de los 20 atacantes contra los otros
   19, pero §4.3-§4.5 siguen siendo la foto antigua. Los instintos comunes no
   están simulados: Protección reduce daño y Regeneración cura, pero no añaden
@@ -655,7 +666,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   que las incluyen; su recogida automática se describe en §1.
 - **Hurtbox**: la matriz mide daño suponiendo que todas las habilidades conectan;
   no mide facilidad de impacto. Desde `3bae0e9` cada especie tiene un
-  `hitRadius` de 0,34-0,58 u, así que las especies grandes son más
+  `hitRadius` de 0,34-0,60 u, así que las especies grandes son más
   fáciles de golpear y las pequeñas más difíciles. Las tablas de §4.3-§4.5 son
   una cota de daño, no un ranking efectivo de combate.
 
@@ -688,14 +699,16 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | sí |
 | Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | sí |
 | Celebi | 175 | 120 | 120 | 120 | 120 | 120 | 0,34 | sí |
+| Kyogre | 175 | 120 | 110 | 170 | 160 | 110 | 0,60 | sí |
+| Rayquaza | 180 | 170 | 110 | 170 | 110 | 115 | 0,58 | sí |
 
-**Hurtbox (`3bae0e9`)**: el radio va de 0,34 u (Voltorb, Celebi) a 0,58 u
-(Onix, Lugia, Ho-Oh). Gyarados entra con 0,56 u. Se usa en todas las formas de
-golpe, así que un cuerpo grande recibe antes y uno pequeño puede esquivar por el
-borde. Esta columna no interviene en las tablas de daño de §4.3-§4.5: son una
-cota de daño suponiendo que todas las habilidades conectan, no un ranking de
-facilidad de impacto (véase §4.1). El roster tiene 25 especies; 22 tienen moveset
-y 3 no (Eevee, Raikou y Entei).
+**Hurtbox (`3bae0e9`)**: el radio va de 0,34 u (Voltorb, Celebi) a 0,60 u
+(Kyogre). Gyarados entra con 0,56 u, Groudon con 0,56 u y Rayquaza con 0,58 u. Se
+usa en todas las formas de golpe, así que un cuerpo grande recibe antes y uno
+pequeño puede esquivar por el borde. Esta columna no interviene en las tablas de
+daño de §4.3-§4.5: son una cota de daño suponiendo que todas las habilidades
+conectan, no un ranking de facilidad de impacto (véase §4.1). El roster tiene 27
+especies; 24 tienen moveset y 3 no (Eevee, Raikou y Entei).
 
 ### 4.3. Poder por Pokémon (matriz histórica)
 
@@ -1020,6 +1033,8 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 | Charmander | 5,8 | 9,5 | no | 9,5 u haz |
 | Tyranitar | 4,5 | 9,6 | no | 9 u haz / 8,5 u proyectil |
 | Groudon | 5,6 | 10,6 | no | 8,5 u proyectil / 7,7 u área |
+| Kyogre | 5,9 | 12,2 | no | 8,5 u proyectil / 8,6 u área |
+| Rayquaza | 7,6 | 12,6 | Vuelo Dragón 5,5 u | 9,5 u haz / 3,2 u área |
 
 > La tabla es una muestra de los personajes citados en el análisis, no el roster
 > completo. Onix (4,6 / 8,8), Zapdos (7,6 / 11,8), Lugia (7,5 / 12,4), Ho-Oh
@@ -1027,8 +1042,8 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 > están en `roster.ts`, `vision.ts` y `abilities.ts`.
 
 - El alcance de la tabla es el nominal de la habilidad. Contra un objetivo real
-  se suma su `hitRadius` (0,34-0,58 u): un melee de 2,2 u alcanza a 2,54-2,78 u
-  de centro a centro, y un Groudon (0,56) recibe antes que un Voltorb (0,34). La
+  se suma su `hitRadius` (0,34-0,60 u): un melee de 2,2 u alcanza a 2,54-2,80 u
+  de centro a centro, y un Kyogre (0,60) recibe antes que un Voltorb (0,34). La
   facilidad de impacto es la contrapartida del daño de la matriz de §4.5.
 - Los personajes con más alcance también tienen más visión; la mayoría combina
   además buena velocidad, con Tyranitar y Groudon como excepción lenta. La
@@ -1037,6 +1052,10 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 - **Tyranitar** es ahora el más lento (4,5), seguido de Onix y Bulbasaur
   (4,6). Bulbasaur sigue teniendo la visión más baja del grupo, no tiene dash y
   su definitiva tarda 0,75 s; es el caso más desfavorecido.
+- **Kyogre** y **Rayquaza** coronan la visión (12,2 y 12,6 u), pero Kyogre paga
+  el hurtbox más grande del roster (0,60 u) y la velocidad de un coloso (5,9).
+  Rayquaza combina 7,6 de velocidad, 12,6 de visión y un dash de 5,5 u: es el
+  legendario con más iniciativa, compensado por 180 PV y 110 de Defensa.
 - Charmander tampoco tiene dash y es frágil (114 PV, 63 Def).
 - No hay ningún terreno Psíquico en `TERRAINS` (`src/game/terrain.ts:35-51`), así
   que Mewtwo y Mew nunca reciben el bonus «home» de 1,18× de velocidad; es una
@@ -1157,7 +1176,7 @@ No hay tests en el proyecto. El sistema de combate es casi todo funciones puras,
 así que se pueden añadir tests baratos:
 
 - **Cobertura**: `MOVESETS` tiene entrada para todas las especies del manifiesto
-  (o el roster filtra las que no la tienen); hoy son 25 especies y 22 movesets.
+  (o el roster filtra las que no la tienen); hoy son 27 especies y 24 movesets.
 - **Stats**: `combatStatsFor` devuelve 110 PV para Pikachu y 181 para Mewtwo.
 - **Fórmula**: un caso conocido de `computeDamage` con random fijo y sin
   crítico; otro con STAB; otro con inmunidad (0); otro con efectividad 0,25.
@@ -1305,8 +1324,8 @@ así que se pueden añadir tests baratos:
   `dash`/`aoeMovement` de Ciclón y Fuego Sagrado coinciden con sus textos.
 - **Visión de un KO**: un humano o bot KO no debe revelar actores ni objetos al
   equipo; al reaparecer vuelve a aportar su círculo.
-- **Balance**: la tabla de §4.2 debe incluir las 25 especies y su `hitRadius`, y
-  la matriz de §4.3 debe seguir generándose con las 22 que tienen moveset,
+- **Balance**: la tabla de §4.2 debe incluir las 27 especies y su `hitRadius`, y
+  la matriz de §4.3 debe seguir generándose con las 24 que tienen moveset,
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
   menos imprimir el hurtbox junto al daño.
 

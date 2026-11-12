@@ -398,6 +398,25 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/0000/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/0000/0001/Normal.png
 
+## Kyogre (#0382)
+
+- CHUNSOFT · Walk, Attack, Stomp, Shoot, Swell, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/credits.txt
+
+### Kyogre · Shiny
+
+- <@!232091727094218752> — PMDCollab_1 · Walk, Attack, Stomp, Shoot, Swell, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/0000/0001/Normal.png
+
+### Kyogre · Recolor
+
+- <@!861005464682889266> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Stomp, Swell, Swing, Double, Rotate, Hop
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/0002
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/0002/Normal.png (no disponible; se usa el retrato de la forma normal)
+
 ## Groudon (#0383)
 
 - CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
@@ -410,4 +429,23 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - <@!232091727094218752> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/0000/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/0000/0001/Normal.png
+
+## Rayquaza (#0384)
+
+- CHUNSOFT · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/credits.txt
+
+### Rayquaza · Shiny
+
+- <@!232091727094218752> — PMDCollab_1 · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/0000/0001/Normal.png
+
+### Rayquaza · Recolor
+
+- <@!350050109741858829> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, SpAttack, RearUp, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/0002
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/0002/Normal.png
 
