@@ -205,11 +205,15 @@ function LobbyContent() {
       teams={session.teams}
       mapNotice={session.mapNotice}
       botDifficulty={session.botDifficulty}
-      koTarget={session.koTarget}
+      modeId={session.modeId}
+      modeSettings={session.modeSettings}
+      timeLimitSeconds={session.timeLimitSeconds}
       atmosphereEnabled={session.atmosphereEnabled}
       onChangeMap={session.setMapId}
       onChangeBotDifficulty={session.setBotDifficulty}
-      onChangeKoTarget={session.setKoTarget}
+      onChangeModeId={session.setModeId}
+      onChangeModeSetting={session.setModeSetting}
+      onChangeTimeLimitSeconds={session.setTimeLimitSeconds}
       onChangeAtmosphereEnabled={session.setAtmosphereEnabled}
       onAddBot={session.addBot}
       onFillBots={session.fillBots}

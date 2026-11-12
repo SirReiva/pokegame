@@ -72,7 +72,6 @@ import {
   type AtmosphereState
 } from './atmosphere';
 import {
-  KO_TARGET,
   closestPointOnCollider,
   closestPointOnSegment,
   computeDamage,
@@ -112,6 +111,19 @@ import type {
   QueuedCast,
   SlowEffect
 } from './matchState';
+import {
+  createGameMode,
+  DEFAULT_TIME_LIMIT_SECONDS,
+  KOTH_DEFAULT_RADIUS,
+  normalizeModeSettings,
+  type GameModeId,
+  type GameModeRuntime,
+  type MatchOutcome,
+  type ModeContext,
+  type ModeSettings,
+  type ModeXpAward,
+  type ObjectiveZone
+} from './modes';
 import {
   PickupField,
   disposeItemTextures,
@@ -211,8 +223,14 @@ export interface GameOptions {
    * distintas y cada combinación se descarga una sola vez.
    */
   pokemonSkins?: readonly PokemonSkinSelection[];
-  /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
+  /** KOs de equipo para el deathmatch; se conserva como atajo compatible. */
   koTarget?: number;
+  /** Modo de juego activo; por defecto, deathmatch por equipos. */
+  modeId?: GameModeId;
+  /** Ajustes específicos del modo elegido en el lobby. */
+  modeSettings?: Readonly<ModeSettings>;
+  /** Tiempo máximo de partida en segundos; `0` desactiva el límite. */
+  timeLimitSeconds?: number;
   /**
    * Si es `true`, cada partida sortea un clima; si es `false` o falta, todas
    * las partidas se juegan en despejado.
@@ -260,6 +278,8 @@ const MATCH_COUNTDOWN_GO_SECONDS = 0.8;
 const DEATH_MARKER_GROUND_Y = 0.06;
 /** Separación de la marca sobre la superficie cuando el KO ocurre en el agua. */
 const DEATH_MARKER_WATER_LIFT = 0.02;
+/** Color neutro de la zona de control cuando no la domina ningún equipo. */
+const OBJECTIVE_NEUTRAL_COLOR: readonly [number, number, number] = [150, 158, 170];
 
 /**
  * Paso fijo de la simulación autoritativa: 60 Hz, el mismo tick que los
@@ -457,10 +477,22 @@ export class Game {
   private queuedCasts: QueuedCast[] = [];
   /** Golpes de dash detectados al moverse, resueltos con el resto del frame. */
   private pendingInstantHits: PendingInstantHit[] = [];
-  /** Marcador de la partida; gana el primero que llegue a `koTarget`. */
+  /** Marcador de la partida; gana el primero que lleve al objetivo del modo. */
   private teamScores: Record<Team, number> = createTeamRecord(() => 0);
-  /** Límite de KOs de esta partida, fijado al crearla. */
-  private readonly koTarget: number;
+  /** Modo elegido en el lobby. */
+  private readonly gameModeId: GameModeId;
+  /** Ajustes validados del modo. */
+  private readonly modeSettings: ModeSettings;
+  /** Tiempo máximo de partida; `0` desactiva el cierre por tiempo. */
+  private readonly timeLimitSeconds: number;
+  /** Runtime del modo activo: decide victoria, HUD y objetivo de bots. */
+  private gameMode: GameModeRuntime | null = null;
+  /** Zona que disputan los modos de control, resuelta al empezar la partida. */
+  private objectiveZone: ObjectiveZone | null = null;
+  /** Aro de la zona de control; solo existe durante una partida de KOTH. */
+  private objectiveMarker: TelegraphHandle | null = null;
+  /** Último equipo dueño del aro, para recolorearlo solo cuando cambia. */
+  private objectiveMarkerTeam: Team | null | undefined = undefined;
   /** El lobby decide si cada partida sortea clima o se juega en despejado. */
   private readonly atmosphereEnabled: boolean;
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
@@ -550,7 +582,15 @@ export class Game {
   ) {
     this.callbacks = callbacks;
     this.options = options;
-    this.koTarget = Math.max(1, Math.floor(options.koTarget ?? KO_TARGET));
+    this.gameModeId = options.modeId ?? 'tdm';
+    const inputSettings =
+      options.modeSettings ??
+      (options.koTarget !== undefined ? { koTarget: options.koTarget } : {});
+    this.modeSettings = normalizeModeSettings(this.gameModeId, inputSettings);
+    this.timeLimitSeconds = Math.max(
+      0,
+      Math.floor(options.timeLimitSeconds ?? DEFAULT_TIME_LIMIT_SECONDS)
+    );
     this.atmosphereEnabled = options.atmosphereEnabled === true;
 
     this.app = app;
@@ -1121,6 +1161,18 @@ export class Game {
 
     this.mode = 'match';
     this.paused = false;
+    const objectives = this.resolveObjectiveZones();
+    this.objectiveZone = objectives[0] ?? {
+      x: 0,
+      z: 0,
+      radius: KOTH_DEFAULT_RADIUS
+    };
+    this.gameMode = createGameMode({
+      modeId: this.gameModeId,
+      settings: this.modeSettings,
+      objective: this.objectiveZone,
+      objectives
+    });
     // El clima se sortea una vez por partida y se mantiene hasta el final.
     // Si el lobby desactiva los cambios atmosféricos, siempre se juega en
     // despejado y no se aplica ningún efecto de combate.
@@ -1354,6 +1406,7 @@ export class Game {
     // rehornean al empezar para cubrir las bases de ambos equipos.
     this.refreshSunShadows();
 
+    this.spawnObjectiveMarker();
     this.callbacks.onMatchStats([]);
     return true;
   }
@@ -1384,6 +1437,11 @@ export class Game {
     this.pendingInstantHits = [];
     this.combatFx.clear();
     this.damageNumbers.clear();
+    this.objectiveMarker?.destroy();
+    this.objectiveMarker = null;
+    this.objectiveMarkerTeam = undefined;
+    this.gameMode = null;
+    this.objectiveZone = null;
     this.teamScores = createTeamRecord(() => 0);
     this.killFeed = [];
     this.killFeedSeq = 0;
@@ -1427,6 +1485,120 @@ export class Game {
     this.bots.clear();
     this.botNav = null;
     this.viewLayers = [];
+  }
+
+  /** Zonas declaradas por el mapa, para los modos de control. */
+  private resolveObjectiveZones(): ObjectiveZone[] {
+    return getActiveMap().objectives
+      .filter((objective) => objective.kind === 'zone')
+      .map((objective) => ({
+        id: objective.id,
+        x: objective.x,
+        z: objective.z,
+        radius: objective.radius
+      }));
+  }
+
+  /** Aro permanente de la zona de control para que el objetivo sea legible. */
+  private spawnObjectiveMarker(): void {
+    if (this.gameModeId !== 'koth' || !this.objectiveZone) return;
+    const zone = this.gameMode?.getBotObjective() ?? this.objectiveZone;
+    const duration = this.timeLimitSeconds > 0 ? this.timeLimitSeconds : 3600;
+    this.objectiveMarker = this.combatFx.spawnAoeTelegraph(
+      zone.x,
+      zone.z,
+      zone.radius,
+      OBJECTIVE_NEUTRAL_COLOR,
+      0.1,
+      duration
+    );
+    this.objectiveMarkerTeam = null;
+  }
+
+  /** Mantiene el aro encima de la colina y con el color de su dueño. */
+  private syncObjectiveMarker(): void {
+    if (!this.objectiveMarker) return;
+    const objective = this.gameMode?.getHud(this.modeContext()).objective;
+    if (!objective) return;
+    this.objectiveMarker.setCenter?.(objective.x, objective.z);
+    if (this.objectiveMarkerTeam !== objective.owner) {
+      this.objectiveMarker.setColor?.(
+        objective.owner
+          ? TEAM_INFO[objective.owner].accent
+          : OBJECTIVE_NEUTRAL_COLOR
+      );
+      this.objectiveMarkerTeam = objective.owner;
+    }
+  }
+
+  /** Contexto compacto que comparten todos los modos. */
+  private modeContext(): ModeContext {
+    return {
+      elapsed: this.matchElapsed,
+      timeLimitSeconds: this.timeLimitSeconds,
+      scores: this.teamScores,
+      players: this.matchPlayers,
+      objective: this.objectiveZone
+    };
+  }
+
+  /**
+   * Reparte el evento de tick al modo, actualiza el marcador de objetivo y
+   * cierra la partida si se alcanza la meta o se agota el tiempo máximo.
+   */
+  private advanceGameMode(dt: number): void {
+    if (!this.gameMode || this.matchOver) return;
+    const ctx = this.modeContext();
+    const result = this.gameMode.onEvent(ctx, { type: 'tick', dt });
+    this.applyModeXp(result.xp);
+    this.syncObjectiveMarker();
+    if (result.outcome) {
+      this.finishMatch(result.outcome);
+      return;
+    }
+    if (this.timeLimitSeconds <= 0) return;
+    if (this.matchElapsed < this.timeLimitSeconds) return;
+    // El modo decide cómo se resuelve el empate a tiempo: por marcador, por
+    // daño o declarando empate técnico.
+    this.finishMatch(this.gameMode.resolveTimeout(ctx));
+  }
+
+  /** Aplica la XP extra que el modo concede al procesar un evento. */
+  private applyModeXp(awards: readonly ModeXpAward[]): void {
+    for (const award of awards) {
+      if (!Number.isFinite(award.amount) || award.amount <= 0) continue;
+      const player = this.matchPlayers.find(
+        (candidate) => candidate.slot === award.slot
+      );
+      if (!player) continue;
+      this.awardXp(player, award.source, award.amount);
+    }
+  }
+
+  /**
+   * Cierre único de partida. Todos los modos pasan por aquí, así la XP de
+   * resultado, la música y el evento a React se aplican una sola vez.
+   */
+  private finishMatch(outcome: MatchOutcome): void {
+    if (this.matchOver) return;
+    this.matchOver = true;
+    this.winner = outcome.winner;
+    this.objectiveMarker?.destroy();
+    this.objectiveMarker = null;
+    this.objectiveMarkerTeam = undefined;
+    this.awardMatchResult(outcome.winner);
+    stopMatchMusic();
+    const hud = this.gameMode?.getHud(this.modeContext());
+    const result: MatchEndResult = {
+      winner: outcome.winner,
+      scores: { ...this.teamScores },
+      modeId: this.gameModeId,
+      scoreUnit: hud?.scoreUnit ?? 'KO',
+      reason: outcome.reason,
+      detail: outcome.detail
+    };
+    this.callbacks.onMatchEnd(result);
+    this.emitMatchStats();
   }
 
   /**
@@ -1799,6 +1971,10 @@ export class Game {
     // La caché de visibilidad de FX es válida solo con las posiciones actuales.
     this.fxVisibilityCache.clear();
     this.matchElapsed += stepDt;
+    // El modo consume el tick antes de mover a nadie: si se agota el tiempo,
+    // la partida se cierra en el mismo instante y no se simula un frame extra.
+    this.advanceGameMode(stepDt);
+    if (this.matchOver) return;
     // El presupuesto de A* se reparte por paso de simulación.
     this.botNav?.beginFrame();
     // Vista compacta de lo que ya está en el aire. Se construye por paso y
@@ -1809,19 +1985,23 @@ export class Game {
     const botViews: Record<Team, BotWorldView> = {
       red: {
         visibleSlots: this.visibleByTeam.red,
-        atmosphere: this.atmosphere
+        atmosphere: this.atmosphere,
+        objective: this.gameMode?.getBotObjective() ?? undefined
       },
       blue: {
         visibleSlots: this.visibleByTeam.blue,
-        atmosphere: this.atmosphere
+        atmosphere: this.atmosphere,
+        objective: this.gameMode?.getBotObjective() ?? undefined
       },
       yellow: {
         visibleSlots: this.visibleByTeam.yellow,
-        atmosphere: this.atmosphere
+        atmosphere: this.atmosphere,
+        objective: this.gameMode?.getBotObjective() ?? undefined
       },
       green: {
         visibleSlots: this.visibleByTeam.green,
-        atmosphere: this.atmosphere
+        atmosphere: this.atmosphere,
+        objective: this.gameMode?.getBotObjective() ?? undefined
       }
     };
 
@@ -3830,9 +4010,8 @@ export class Game {
     killer: MatchPlayerState,
     abilityName: string
   ): void {
-    // El fin de partida es idempotente: el primer KO que alcanza `koTarget`
-    // decide el ganador y los KO posteriores del mismo frame ni suman ni
-    // vuelven a llamar a `onMatchEnd`.
+    // El fin de partida es idempotente: el primer evento de modo que cierra la
+    // partida decide el ganador y los KO posteriores del mismo frame no suman.
     if (this.matchOver) return;
     if (!target.alive) return;
     const animations = this.assetFor(
@@ -3875,19 +4054,18 @@ export class Game {
     if (killer.team !== target.team) {
       killer.kills += 1;
       this.awardKillXp(killer, target);
-      this.teamScores[killer.team] += 1;
-      if (this.teamScores[killer.team] >= this.koTarget) {
-        this.matchOver = true;
-        this.winner = killer.team;
-        this.awardMatchResult(killer.team);
-        // La partida termina aquí: el tema de combate no debe seguir bajo el
-        // modal de resultados.
-        stopMatchMusic();
-        const result: MatchEndResult = {
-          winner: killer.team,
-          scores: { ...this.teamScores }
-        };
-        this.callbacks.onMatchEnd(result);
+      // El modo decide si el KO suma marcador, si concede XP de objetivo y si
+      // cierra la partida. `finishMatch` centraliza el resultado para todos.
+      const result = this.gameMode?.onEvent(this.modeContext(), {
+        type: 'knockout',
+        killerSlot: killer.slot,
+        victimSlot: target.slot,
+        killerTeam: killer.team,
+        victimTeam: target.team
+      });
+      if (result) {
+        this.applyModeXp(result.xp);
+        if (result.outcome) this.finishMatch(result.outcome);
       }
     }
 
@@ -4074,12 +4252,14 @@ export class Game {
   }
 
   /** Reparte la XP de victoria y derrota cuando termina la partida. */
-  private awardMatchResult(winner: Team): void {
+  private awardMatchResult(winner: Team | null): void {
     for (const player of this.matchPlayers) {
       this.awardXp(
         player,
         'result',
-        player.team === winner ? XP_REWARDS.win : XP_REWARDS.loss
+        winner !== null && player.team === winner
+          ? XP_REWARDS.win
+          : XP_REWARDS.loss
       );
     }
   }
@@ -4652,6 +4832,7 @@ export class Game {
 
   private emitMatchStats(): void {
     this.pruneKillFeed();
+    const mode = this.gameMode?.getHud(this.modeContext()) ?? null;
     // Se emiten todos los combatientes, no solo las vistas humanas: la pantalla
     // final y cualquier marcador necesitan también las estadísticas de los bots.
     const stats: PlayerMatchStats[] = this.matchPlayers.map((player) => {
@@ -4765,6 +4946,7 @@ export class Game {
           : null,
         feed: this.killFeed,
         scores: { ...this.teamScores },
+        mode,
         winner: this.winner
       };
     });

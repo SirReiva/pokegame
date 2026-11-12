@@ -3,6 +3,7 @@ import { Redirect, useLocation } from 'wouter';
 import { Game, type PokemonSkinSelection } from '../game/game';
 import { commonAbilityOption } from '../game/abilities';
 import type { AtmosphereState } from '../game/atmosphere';
+import { modeScoreTarget, type GameModeId, type ModeSettings } from '../game/modes';
 import { DEFAULT_SKIN_ID, skinFor } from '../game/skins';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import {
@@ -43,6 +44,11 @@ function formatDamage(value: number): string {
   return Math.round(value).toLocaleString('es-ES');
 }
 
+/** Marcador del modo: los puntos de zona se muestran sin decimales. */
+function formatScore(value: number): string {
+  return Math.floor(value).toLocaleString('es-ES');
+}
+
 interface PlayHandlers {
   onReady: () => void;
   onProgress: (progress: LoadingProgress) => void;
@@ -62,7 +68,9 @@ interface PlayScreenProps {
   configs: MatchPlayerConfig[];
   players: LobbyPlayer[];
   teams: Team[];
-  koTarget: number;
+  modeId: GameModeId;
+  modeSettings: ModeSettings;
+  timeLimitSeconds: number;
   /** Si es `false`, la partida se juega siempre en despejado. */
   atmosphereEnabled: boolean;
   /** Oculta la carga interna cuando una intro muestra el progreso encima. */
@@ -86,7 +94,9 @@ function PlayScreen({
   configs,
   players,
   teams,
-  koTarget,
+  modeId,
+  modeSettings,
+  timeLimitSeconds,
   atmosphereEnabled,
   hideLoadingOverlay = false,
   start = true,
@@ -228,7 +238,7 @@ function PlayScreen({
           if (!disposed) handlersRef.current?.onAtmosphere(state);
         }
       },
-      { mapId, manifest, koTarget, atmosphereEnabled, pokemonIds, pokemonSkins }
+      { mapId, manifest, modeId, modeSettings, timeLimitSeconds, atmosphereEnabled, pokemonIds, pokemonSkins }
     )
       .then((created) => {
         // El efecto se desmontó mientras se creaba el dispositivo.
@@ -254,7 +264,7 @@ function PlayScreen({
       gameRef.current = null;
       game?.dispose();
     };
-  }, [mapId, manifest, koTarget, atmosphereEnabled]);
+  }, [mapId, manifest, modeId, modeSettings, timeLimitSeconds, atmosphereEnabled]);
 
   useEffect(() => {
     gameRef.current?.setPaused(paused || modal !== null);
@@ -316,6 +326,7 @@ function PlayScreen({
 
   const selectedEntryFor = (pokemonId: string) =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
+  const scoreTarget = modeScoreTarget(modeId, modeSettings);
   const fps = stats[0]?.fps ?? 0;
   const fpsTone =
     fps === 0
@@ -358,7 +369,9 @@ function PlayScreen({
               players={players.filter((player) => !player.isBot)}
               stats={stats}
               teams={teams}
-              koTarget={koTarget}
+              modeId={modeId}
+              scoreTarget={scoreTarget}
+              timeLimitSeconds={timeLimitSeconds}
               atmosphere={atmosphere}
               onPause={() => setPaused(true)}
             />
@@ -511,15 +524,25 @@ function PlayScreen({
               <span className={eyebrow}>Fin de la partida</span>
               <h2
                 className="mt-1 text-[clamp(2rem,5vw,3rem)]"
-                style={{ color: TEAM_INFO[matchResult.winner].color }}
+                style={{
+                  color:
+                    matchResult.winner !== null
+                      ? TEAM_INFO[matchResult.winner].color
+                      : 'var(--color-ink)'
+                }}
               >
-                Gana el {TEAM_INFO[matchResult.winner].label.toLowerCase()}
+                {matchResult.winner !== null
+                  ? `Gana el ${TEAM_INFO[matchResult.winner].label.toLowerCase()}`
+                  : 'Empate'}
               </h2>
+              <p className="mt-2 font-mono text-11.2 text-steel-400">
+                {matchResult.detail}
+              </p>
               <p className="mt-2 font-mono text-12.8 text-steel-400">
                 {teams
                   .map(
                     (team) =>
-                      `${matchResult.scores[team]} KO ${TEAM_INFO[team].short.toLowerCase()}`
+                      `${formatScore(matchResult.scores[team])} ${matchResult.scoreUnit} ${TEAM_INFO[team].short.toLowerCase()}`
                   )
                   .join(' · ')}
               </p>
@@ -583,7 +606,7 @@ function MatchScoreboard({
   const entriesById = new Map(
     manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])
   );
-  const scoreFor = (team: Team) => result.scores[team] ?? 0;
+  const scoreFor = (team: Team) => Math.floor(result.scores[team] ?? 0);
   // Al terminar la partida los stats llegan en el mismo frame que el
   // resultado. Si por cualquier motivo aún no están, se muestra la plantilla
   // con cero KOs para no dejar el marcador vacío.
@@ -679,7 +702,10 @@ function MatchScoreboard({
                 {info.label}
               </span>
               <span className="font-display text-16.8 font-extrabold tabular-nums text-(--team)">
-                {scoreFor(team)}
+                {scoreFor(team)}{' '}
+                <span className="font-mono text-9.6 text-steel-450">
+                  {result.scoreUnit}
+                </span>
               </span>
             </header>
 
@@ -891,7 +917,9 @@ function PlayGuard(props: PlayRouteProps) {
     matchConfigs,
     players,
     teams,
-    koTarget,
+    modeId,
+    modeSettings,
+    timeLimitSeconds,
     atmosphereEnabled
   } = useSession();
 
@@ -906,7 +934,9 @@ function PlayGuard(props: PlayRouteProps) {
       configs={matchConfigs}
       players={players}
       teams={teams}
-      koTarget={koTarget}
+      modeId={modeId}
+      modeSettings={modeSettings}
+      timeLimitSeconds={timeLimitSeconds}
       atmosphereEnabled={atmosphereEnabled}
     />
   );

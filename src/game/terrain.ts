@@ -124,6 +124,15 @@ export interface MountainRange {
   points: Array<[number, number]>;
 }
 
+/** Objetivo opcional declarado en el mapa (zona de control, checkpoint...). */
+export interface MapObjective {
+  kind: 'zone';
+  id?: string;
+  x: number;
+  z: number;
+  radius: number;
+}
+
 /**
  * Mapa ya normalizado. `tiles[0][0]` es la esquina noroeste: las filas avanzan
  * de norte a sur (eje Z) y las columnas de oeste a este (eje X).
@@ -139,6 +148,8 @@ export interface GameMap {
   tiles: TerrainId[][];
   respawns: RespawnPoint[];
   mountains: MountainRange[];
+  /** Objetivos de modos con control de zona. */
+  objectives: MapObjective[];
   /** Objetos recogibles repartidos por el mapa. */
   pickups: PickupSpawn[];
   /** Punto al que mira la cámara del menú. */

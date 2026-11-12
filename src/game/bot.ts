@@ -585,6 +585,8 @@ export interface BotWorldView {
   readonly visibleSlots: ReadonlySet<number>;
   /** Clima activo, para estimar daño, velocidad y visión. */
   readonly atmosphere: AtmosphereId;
+  /** Zona que el modo obliga a disputar (Rey de la colina). */
+  readonly objective?: { x: number; z: number; radius: number };
 }
 
 const EMPTY_BOT_WORLD_VIEW: BotWorldView = {
@@ -767,6 +769,8 @@ export class BotController {
   private regenGoalTimer = 0;
   private regenCheckTimer = 0;
   private goal: Vec2 = { x: 0, z: 0 };
+  /** Zona de control del modo actual, si existe. */
+  private objective: { x: number; z: number; radius: number } | null = null;
   /**
    * Objeto que ocupa el destino actual, o `null` si el destino es una patrulla,
    * una posición recordada o la base. Sirve para dar el último tramo en línea
@@ -855,6 +859,7 @@ export class BotController {
   ): DeviceInputSnapshot {
     this.clock += dt;
     this.atmosphere = view.atmosphere;
+    this.objective = view.objective ?? null;
     this.pickupKnowledge = knownPickups;
     this.rememberPickups(self, knownPickups);
     if (!self.alive) {
@@ -2427,6 +2432,7 @@ export class BotController {
     if (targetIsVisible && targetOffense === 0) {
       // Todos sus ataques son inmunes al objetivo: mejor buscar otra pelea.
       this.lastSeen = null;
+      if (this.seekObjective(self)) return;
       this.updatePatrol(self);
       return;
     }
@@ -2462,12 +2468,39 @@ export class BotController {
         ? this.lastSeen
         : null;
     const memory = ownMemory ?? this.squadLastSeen(self);
+    if (memory && !this.objective) {
+      this.setGoal({ x: memory.x, z: memory.z });
+      return;
+    }
+
+    // En los modos de objetivo la zona conocida pesa más que una posición
+    // recordada: los bots deben volver a la colina aunque hayan perdido de
+    // vista al rival.
+    if (this.seekObjective(self)) return;
+
     if (memory) {
       this.setGoal({ x: memory.x, z: memory.z });
       return;
     }
 
     this.updatePatrol(self);
+  }
+
+  /**
+   * Lleva al bot a un punto dentro de la zona de control. Cada plaza usa un
+   * ángulo distinto para no apilarse en el centro exacto; una vez dentro,
+   * `moveTowards` lo mantiene en posición.
+   */
+  private seekObjective(self: MatchPlayerState): boolean {
+    const objective = this.objective;
+    if (!objective) return false;
+    const angle = self.slot * 2.399963229728653;
+    const holdRadius = objective.radius * 0.45;
+    this.setGoal({
+      x: objective.x + Math.cos(angle) * holdRadius,
+      z: objective.z + Math.sin(angle) * holdRadius
+    });
+    return true;
   }
 
   /**

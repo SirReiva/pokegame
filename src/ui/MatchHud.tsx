@@ -10,6 +10,7 @@ import {
   type PlayerMatchStats
 } from '../game/multiplayer';
 import { skinFor } from '../game/skins';
+import { GAME_MODE_INFO, type GameModeId } from '../game/modes';
 import type { SpriteManifest } from '../game/types';
 import type { Team } from '../game/terrain';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
@@ -23,7 +24,9 @@ interface MatchHudProps {
   players: LobbyPlayer[];
   stats: PlayerMatchStats[];
   teams: Team[];
-  koTarget: number;
+  modeId: GameModeId;
+  scoreTarget: number | null;
+  timeLimitSeconds: number;
   /** Clima sorteado para esta partida, si ya ha empezado. */
   atmosphere: AtmosphereState | null;
   onPause: () => void;
@@ -51,6 +54,13 @@ function hpColorFor(pct: number): string {
 /** Formatea contadores grandes con separador de miles. */
 function formatCount(value: number): string {
   return Math.round(value).toLocaleString('es-ES');
+}
+
+/** Reloj de partida en formato m:ss. */
+function formatClock(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '∞';
+  const total = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
 /** Tooltip del nivel: rango, progreso y desglose de XP por fuente. */
@@ -171,7 +181,9 @@ export function MatchHud({
   players,
   stats,
   teams,
-  koTarget,
+  modeId,
+  scoreTarget: fallbackScoreTarget,
+  timeLimitSeconds,
   atmosphere,
   onPause
 }: MatchHudProps) {
@@ -181,10 +193,40 @@ export function MatchHud({
     manifest.pokemon.map((pokemon) => [pokemon.id, pokemon.name])
   );
   const scores = stats[0]?.scores;
+  const mode = stats[0]?.mode ?? null;
+  const effectiveModeName = mode?.name ?? GAME_MODE_INFO[modeId].name;
+  const effectiveUnit = mode?.scoreUnit ?? GAME_MODE_INFO[modeId].scoreUnit;
+  const scoreTarget = mode?.scoreTarget ?? fallbackScoreTarget;
+  const effectiveTimeLimit = mode?.timeLimitSeconds ?? timeLimitSeconds;
+  const timeRemaining = mode?.timeRemaining ?? effectiveTimeLimit;
+  const leader = teams.reduce<Team | null>((best, team) => {
+    if (!scores) return best;
+    if (best === null) return team;
+    return (scores[team] ?? 0) > (scores[best] ?? 0) ? team : best;
+  }, null);
+  const objective = mode?.objective ?? null;
+  const objectiveLabel = objective
+    ? objective.contested
+      ? 'EN DISPUTA'
+      : objective.owner
+        ? TEAM_INFO[objective.owner].short.toUpperCase()
+        : 'NEUTRAL'
+    : null;
+  const objectiveColor = objective?.contested
+    ? '#ff5f63'
+    : objective?.owner
+      ? TEAM_INFO[objective.owner].color
+      : '#8b9aad';
 
   return (
     <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
       <div className="fixed top-2.5 left-1/2 z-8 flex max-w-[92vw] -translate-x-1/2 flex-wrap items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-night-850/85 px-4 py-1.5 shadow-[0_10px_30px_rgb(0_0_0/0.35)] backdrop-blur-sm">
+        <span
+          className="font-mono text-8.8 tracking-[0.12em] text-steel-650 uppercase"
+          title={effectiveModeName}
+        >
+          {modeId === 'koth' ? 'Colina' : 'KOs'}
+        </span>
         {teams.map((team, index) => (
           <span key={team} className="flex items-center gap-2.5">
             {index > 0 && (
@@ -195,15 +237,46 @@ export function MatchHud({
             <span
               className="font-display text-14.72 font-extrabold tabular-nums"
               style={{ color: TEAM_INFO[team].color }}
-              title={`${TEAM_INFO[team].label} · ${scores?.[team] ?? 0} KO`}
+              title={`${TEAM_INFO[team].label} · ${scores?.[team] ?? 0} ${effectiveUnit}`}
             >
-              {scores?.[team] ?? 0}
+              {Math.floor(scores?.[team] ?? 0)}
             </span>
           </span>
         ))}
-        <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
-          a {koTarget}
-        </span>
+        {scoreTarget !== null && (
+          <span className="font-mono text-9.28 tracking-[0.12em] text-steel-650 uppercase">
+            a {scoreTarget} {effectiveUnit}
+          </span>
+        )}
+        {effectiveTimeLimit > 0 && (
+          <span
+            className={`border-l border-line-strong pl-2.5 font-mono text-11.2 font-bold tabular-nums ${
+              timeRemaining <= 30 ? 'text-danger-100' : 'text-steel-150'
+            }`}
+            title="Tiempo restante"
+          >
+            {formatClock(timeRemaining)}
+          </span>
+        )}
+        {objective && (
+          <span
+            className="flex items-center gap-2 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"
+            style={{ color: objectiveColor }}
+            title={`Zona de control · ${objective.contested ? 'varios equipos dentro' : objective.owner ? `${TEAM_INFO[objective.owner].label} controla` : 'sin control'}`}
+          >
+            <span>{objectiveLabel}</span>
+            <span className="h-1.5 w-20 overflow-hidden rounded-full bg-black/55">
+              <span
+                className="block h-full rounded-full transition-[width] duration-200"
+                style={{
+                  width: `${objective.progress * 100}%`,
+                  backgroundColor:
+                    leader !== null ? TEAM_INFO[leader].color : '#8b9aad'
+                }}
+              />
+            </span>
+          </span>
+        )}
         {atmosphere && (
           <span
             className="flex items-center gap-1.5 border-l border-line-strong pl-2.5 font-mono text-9.28 tracking-[0.08em] uppercase"

@@ -61,6 +61,22 @@
         "additionalProperties": false
       }
     },
+    "objectives": {
+      "type": "array",
+      "description": "Objetivos opcionales para modos con control de zona. Si el mapa no declara ninguno, Rey de la colina usa el centro del mapa.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "x", "z", "radius"],
+        "properties": {
+          "kind": { "enum": ["zone"] },
+          "id": { "type": "string" },
+          "x": { "type": "number" },
+          "z": { "type": "number" },
+          "radius": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
     "tiles": {
       "type": "array",
       "minItems": 1,

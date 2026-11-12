@@ -3,9 +3,16 @@ import type { InputDeviceInfo } from "../game/input";
 import type { MapIndexEntry } from "../game/map";
 import { publicUrl } from "../game/publicUrl";
 import {
+  GAME_MODE_IDS,
+  GAME_MODE_INFO,
+  TIME_LIMIT_OPTIONS,
+  type GameModeId,
+  type ModeSettingValue,
+  type ModeSettings,
+} from "../game/modes";
+import {
   BOT_DIFFICULTIES,
   BOT_DIFFICULTY_LABEL,
-  KO_TARGET_OPTIONS,
   MOVEMENT_MODES,
   MOVEMENT_MODE_LABEL,
   PLAYER_NAME_MAX_LENGTH,
@@ -35,11 +42,15 @@ interface LobbyScreenProps {
   teams: Team[];
   mapNotice: string | null;
   botDifficulty: BotDifficulty;
-  koTarget: number;
+  modeId: GameModeId;
+  modeSettings: ModeSettings;
+  timeLimitSeconds: number;
   atmosphereEnabled: boolean;
   onChangeMap: (mapId: string) => void;
   onChangeBotDifficulty: (difficulty: BotDifficulty) => void;
-  onChangeKoTarget: (value: number) => void;
+  onChangeModeId: (id: GameModeId) => void;
+  onChangeModeSetting: (id: string, value: ModeSettingValue) => void;
+  onChangeTimeLimitSeconds: (value: number) => void;
   onChangeAtmosphereEnabled: (enabled: boolean) => void;
   onAddBot: (team: Team) => void;
   onFillBots: () => void;
@@ -258,11 +269,15 @@ export function LobbyScreen({
   teams,
   mapNotice,
   botDifficulty,
-  koTarget,
+  modeId,
+  modeSettings,
+  timeLimitSeconds,
   atmosphereEnabled,
   onChangeMap,
   onChangeBotDifficulty,
-  onChangeKoTarget,
+  onChangeModeId,
+  onChangeModeSetting,
+  onChangeTimeLimitSeconds,
   onChangeAtmosphereEnabled,
   onAddBot,
   onFillBots,
@@ -294,6 +309,7 @@ export function LobbyScreen({
     maps.findIndex((map) => map.id === mapId),
   );
   const activeMap = maps[mapIndex];
+  const activeMode = GAME_MODE_INFO[modeId];
 
   const stepMap = (direction: number) => {
     if (maps.length < 2) return;
@@ -495,29 +511,104 @@ export function LobbyScreen({
                 className={`${card} min-[1900px]:col-start-1 min-[1900px]:row-start-2`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className={eyebrow}>Puntuación</span>
+                  <span className={eyebrow}>Modo de juego</span>
                   <span className="font-mono text-9.6 text-steel-500">
-                    {koTarget} KO
+                    {activeMode.short}
                   </span>
                 </div>
-                <h3 className="mt-0.5 text-19.2">Límite de KOs</h3>
+                <h3 className="mt-0.5 text-19.2">Reglas de la partida</h3>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {KO_TARGET_OPTIONS.map((value) => (
+                  {GAME_MODE_IDS.map((id) => (
                     <button
-                      key={value}
+                      key={id}
                       type="button"
-                      className={btnClass(
-                        value === koTarget ? "accent" : "ghost",
-                        "tiny",
-                      )}
-                      disabled={value === koTarget}
-                      onClick={() => onChangeKoTarget(value)}
+                      className={btnClass(id === modeId ? "accent" : "ghost", "tiny")}
+                      disabled={id === modeId}
+                      onClick={() => onChangeModeId(id)}
                     >
-                      {value}
+                      {GAME_MODE_INFO[id].short}
                     </button>
                   ))}
                 </div>
-                <p className={note}>Gana el primer equipo que alcance el límite.</p>
+                <p className={note}>{activeMode.description}</p>
+
+                <div className="mt-2.5 border-t border-line/70 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={eyebrow}>Tiempo máximo</span>
+                    <span className="font-mono text-9.6 text-steel-500">
+                      {timeLimitSeconds > 0
+                        ? `${timeLimitSeconds / 60} min`
+                        : "Sin límite"}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {TIME_LIMIT_OPTIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={btnClass(
+                          value === timeLimitSeconds ? "accent" : "ghost",
+                          "tiny",
+                        )}
+                        disabled={value === timeLimitSeconds}
+                        onClick={() => onChangeTimeLimitSeconds(value)}
+                      >
+                        {value / 60} min
+                      </button>
+                    ))}
+                  </div>
+                  <p className={note}>
+                    Al agotarse, cada modo decide la victoria con su marcador.
+                  </p>
+                </div>
+
+                <div className="mt-2.5 border-t border-line/70 pt-2.5">
+                  {activeMode.settings.map((setting, settingIndex) => {
+                    const value =
+                      modeSettings[setting.id] ?? setting.defaultValue;
+                    const selected =
+                      setting.options.find((option) => option.value === value) ??
+                      setting.options[0];
+                    return (
+                      <div
+                        key={setting.id}
+                        className={
+                          settingIndex === 0
+                            ? ""
+                            : "mt-2.5 border-t border-line/70 pt-2.5"
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={eyebrow}>{setting.label}</span>
+                          <span className="font-mono text-9.6 text-steel-500">
+                            {selected?.label ?? "—"}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {setting.options.map((option, optionIndex) => (
+                            <button
+                              key={`${setting.id}-${optionIndex}`}
+                              type="button"
+                              className={btnClass(
+                                option.value === value ? "accent" : "ghost",
+                                "tiny",
+                              )}
+                              disabled={option.value === value}
+                              onClick={() =>
+                                onChangeModeSetting(setting.id, option.value)
+                              }
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                        {setting.description && (
+                          <p className={note}>{setting.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
 
               <section

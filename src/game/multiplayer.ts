@@ -8,6 +8,11 @@
 
 import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
 import type { InputDeviceInfo } from './input';
+import type {
+  GameModeId,
+  MatchEndReason,
+  ModeHudSnapshot
+} from './modes';
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, DirectionName } from './types';
@@ -80,9 +85,6 @@ export const BOT_DIFFICULTY_LABEL: Record<BotDifficulty, string> = {
   hard: 'Difícil',
   expert: 'Experto'
 };
-
-/** Límites de KOs que se pueden elegir en el lobby. */
-export const KO_TARGET_OPTIONS: readonly number[] = [15, 30, 50];
 
 export interface TeamInfo {
   label: string;
@@ -461,6 +463,8 @@ export interface PlayerMatchStats {
   feed: KillFeedEntry[];
   /** Marcador por equipo, repetido en cada entrada para pintar el HUD. */
   scores: Record<Team, number>;
+  /** Estado del modo para el HUD (reloj, objetivo y unidad del marcador). */
+  mode: ModeHudSnapshot | null;
   winner: Team | null;
 }
 
@@ -484,8 +488,15 @@ export interface KillFeedEntry {
 
 /** Resultado final que React usa para mostrar la pantalla de victoria. */
 export interface MatchEndResult {
-  winner: Team;
+  /** `null` cuando la partida acaba en empate. */
+  winner: Team | null;
   scores: Record<Team, number>;
+  modeId: GameModeId;
+  /** Unidad del marcador (`KO`, `PTS`...). */
+  scoreUnit: string;
+  reason: MatchEndReason;
+  /** Texto que explica cómo terminó la partida. */
+  detail: string;
 }
 
 export function countTeams(players: ReadonlyArray<Pick<LobbyPlayer, 'team'>>): Record<Team, number> {

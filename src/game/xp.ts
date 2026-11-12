@@ -44,6 +44,9 @@ export type XpSource =
   | 'pickup'
   | 'shutdown'
   | 'multikill'
+  | 'zoneCapture'
+  | 'zoneKill'
+  | 'zoneKillFrom'
   | 'result'
   | 'participation';
 
@@ -60,6 +63,9 @@ export const XP_SOURCE_LABELS: Record<XpSource, string> = {
   pickup: 'Objetos',
   shutdown: 'Cortar rachas',
   multikill: 'Multibajas',
+  zoneCapture: 'Capturar zona',
+  zoneKill: 'Bajas en zona',
+  zoneKillFrom: 'Bajas desde zona',
   result: 'Resultado',
   participation: 'Participación'
 };
@@ -90,6 +96,10 @@ export const XP_REWARDS = {
   multikill2: 10,
   multikill3: 15,
   multikill4: 25,
+  /** XP de eventos de objetivo (modos de control de zona). */
+  zoneCapture: 20,
+  zoneKill: 10,
+  zoneKillFrom: 10,
   /** Resultado de la partida. */
   win: 100,
   loss: 40,
@@ -188,6 +198,9 @@ export function emptyXpBreakdown(): XpBreakdown {
     pickup: 0,
     shutdown: 0,
     multikill: 0,
+    zoneCapture: 0,
+    zoneKill: 0,
+    zoneKillFrom: 0,
     result: 0,
     participation: 0
   };

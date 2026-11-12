@@ -2,6 +2,7 @@ import { createContext } from 'react';
 import type { CommonAbilityId } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import type { MapIndexEntry } from '../game/map';
+import type { GameModeId, ModeSettingValue, ModeSettings } from '../game/modes';
 import type {
   BotDifficulty,
   LobbyPlayer,
@@ -25,9 +26,15 @@ export interface SessionValue {
   /** Aviso al intentar cambiar a un mapa que no admite los jugadores actuales. */
   mapNotice: string | null;
   setMapId: (id: string) => void;
-  /** KOs de equipo necesarios para ganar; por defecto, `CONFIG.combat.koTarget`. */
-  koTarget: number;
-  setKoTarget: (value: number) => void;
+  /** Modo de juego elegido en el lobby. */
+  modeId: GameModeId;
+  setModeId: (id: GameModeId) => void;
+  /** Ajustes específicos del modo, validados contra su definición. */
+  modeSettings: ModeSettings;
+  setModeSetting: (id: string, value: ModeSettingValue) => void;
+  /** Tiempo máximo de partida en segundos. */
+  timeLimitSeconds: number;
+  setTimeLimitSeconds: (value: number) => void;
   /** Si está desactivado, todas las partidas se juegan en despejado. */
   atmosphereEnabled: boolean;
   setAtmosphereEnabled: (enabled: boolean) => void;

@@ -250,6 +250,8 @@ export interface TelegraphHandle {
    * marcas de área; los carriles de haz no se desplazan.
    */
   setCenter?(x: number, z: number): void;
+  /** Recolorea el aro sin recrear la malla ni sus materiales. */
+  setColor?(color: readonly [number, number, number]): void;
 }
 
 interface GroundTelegraph {
@@ -1720,6 +1722,19 @@ export class CombatFx {
     material.cull = pc.CULLFACE_NONE;
     material.update();
     return material;
+  }
+
+  /** Cambia el color emisivo de un material ya creado, sin tocar su opacidad. */
+  private setMaterialColor(
+    material: pc.StandardMaterial,
+    color: readonly [number, number, number]
+  ): void {
+    material.emissive = new pc.Color(
+      color[0] / 255,
+      color[1] / 255,
+      color[2] / 255
+    );
+    material.update();
   }
 
   /**
@@ -7184,6 +7199,18 @@ export class CombatFx {
           nextZ
         );
         record.anchors = areaAnchors(nextX, nextZ, radius);
+      },
+      setColor: (nextColor) => {
+        const nextHot: [number, number, number] = [
+          Math.round(nextColor[0] + (255 - nextColor[0]) * 0.62),
+          Math.round(nextColor[1] + (255 - nextColor[1]) * 0.62),
+          Math.round(nextColor[2] + (255 - nextColor[2]) * 0.62)
+        ];
+        this.setMaterialColor(ringMaterial, nextColor);
+        this.setMaterialColor(dashMaterial, nextHot);
+        this.setMaterialColor(fillMaterial, nextColor);
+        this.setMaterialColor(sweepMaterial, nextHot);
+        this.setMaterialColor(wallMaterial, nextColor);
       }
     };
   }

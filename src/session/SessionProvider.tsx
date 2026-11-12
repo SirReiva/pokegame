@@ -12,9 +12,17 @@ import {
   hasAssignedAbilities,
   type CommonAbilityId
 } from '../game/abilities';
-import { CONFIG } from '../game/config';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
+import {
+  DEFAULT_TIME_LIMIT_SECONDS,
+  GAME_MODE_IDS,
+  defaultModeSettings,
+  normalizeModeSettings,
+  type GameModeId,
+  type ModeSettingValue,
+  type ModeSettings
+} from '../game/modes';
 import {
   BOT_DIFFICULTY_LABEL,
   DEFAULT_MOVEMENT_MODE,
@@ -217,7 +225,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [manifest, setManifest] = useState<SpriteManifest | null>(null);
   const [maps, setMaps] = useState<MapIndexEntry[]>([]);
   const [mapId, setMapIdState] = useState('');
-  const [koTarget, setKoTargetState] = useState<number>(CONFIG.combat.koTarget);
+  const [modeId, setModeIdState] = useState<GameModeId>('tdm');
+  const [modeSettings, setModeSettingsState] = useState<ModeSettings>(() =>
+    defaultModeSettings('tdm')
+  );
+  const [timeLimitSeconds, setTimeLimitState] = useState<number>(
+    DEFAULT_TIME_LIMIT_SECONDS
+  );
   const [atmosphereEnabled, setAtmosphereEnabledState] = useState(false);
   const [mapNotice, setMapNotice] = useState<string | null>(null);
   const [players, setPlayers] = useState<LobbyPlayer[]>([]);
@@ -337,9 +351,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [commitPlayers]
   );
 
-  const setKoTarget = useCallback((next: number) => {
-    if (!Number.isFinite(next) || next <= 0) return;
-    setKoTargetState(Math.floor(next));
+  const setModeId = useCallback((next: GameModeId) => {
+    if (!GAME_MODE_IDS.includes(next)) return;
+    setModeIdState(next);
+    // Los ajustes son propios de cada modo: al cambiar se parte de sus valores
+    // por defecto para no arrastrar opciones que ya no existen.
+    setModeSettingsState(defaultModeSettings(next));
+  }, []);
+
+  const setModeSetting = useCallback(
+    (id: string, value: ModeSettingValue) => {
+      setModeSettingsState((current) =>
+        normalizeModeSettings(modeId, { ...current, [id]: value })
+      );
+    },
+    [modeId]
+  );
+
+  const setTimeLimitSeconds = useCallback((next: number) => {
+    if (!Number.isFinite(next) || next < 0) return;
+    setTimeLimitState(Math.floor(next));
   }, []);
 
   const setAtmosphereEnabled = useCallback((enabled: boolean) => {
@@ -833,8 +864,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       teams,
       mapNotice,
       setMapId,
-      koTarget,
-      setKoTarget,
+      modeId,
+      setModeId,
+      modeSettings,
+      setModeSetting,
+      timeLimitSeconds,
+      setTimeLimitSeconds,
       atmosphereEnabled,
       setAtmosphereEnabled,
       players,
@@ -873,8 +908,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       teams,
       mapNotice,
       setMapId,
-      koTarget,
-      setKoTarget,
+      modeId,
+      setModeId,
+      modeSettings,
+      setModeSetting,
+      timeLimitSeconds,
+      setTimeLimitSeconds,
       atmosphereEnabled,
       setAtmosphereEnabled,
       players,

@@ -2,6 +2,19 @@
 
 Documento de diseño para ampliar NewPoke más allá del **team deathmatch con límite de KOs** actual. No describe una implementación cerrada: ordena ideas, explica por qué encajan con lo que ya existe y marca un orden razonable de trabajo.
 
+## Estado de implementación
+
+La primera base de la arquitectura ya está en el juego:
+
+- **Registro de modos** en `src/game/modes.ts` con `tdm` y `koth`. Cada modo declara sus `settings`, recibe eventos (`tick`, `knockout`) y expone `resolveTimeout`, `getHud` y `getBotObjective`.
+- **Ajustes por modo** declarados como datos: el lobby los pinta de forma genérica sin conocer si son KOs, puntos, radio o variante. Al cambiar de modo se cargan sus valores por defecto y el motor los valida otra vez.
+- **XP de objetivo por eventos**: cada modo puede devolver `ModeXpAward[]` junto al resultado del evento. Rey de la colina premia capturar la zona, matar a un enemigo dentro y matar desde dentro; el desglose aparece en el HUD con sus propias fuentes.
+- **Victoria centralizada** en `Game.finishMatch`: los modos devuelven un `MatchOutcome` y el motor aplica la XP, detiene la música y emite el resultado. Ya no hay comprobaciones de `koTarget` sueltas en `knockOut()`.
+- **Tiempo máximo de partida** configurable en el lobby. Al agotarse, el modo activo decide la victoria con su propio marcador (y desempata por daño).
+- **Rey de la colina**: la zona puntúa 1 punto por segundo al único equipo presente; con dos o más equipos queda en disputa. Se gana al alcanzar los puntos configurados o por marcador al llegar al tiempo máximo. Ajustes: puntos objetivo, radio y colina fija/móvil. Si el mapa no declara `objectives`, se usa el centro del mapa; la variante móvil recorre varias zonas o genera un circuito alrededor del centro.
+- **HUD y resultados** muestran reloj, unidad del marcador (`KO` o `PTS`), estado de la zona y empates.
+- **Bots**: el modo expone una zona de interés y la IA la disputa cuando no tiene una pelea o un objeto más urgente.
+
 ## Punto de partida
 
 Lo que el motor ya resuelve y conviene reutilizar:

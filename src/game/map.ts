@@ -12,6 +12,7 @@ import {
   isTeamId,
   isTerrainId,
   type GameMap,
+  type MapObjective,
   type MountainRange,
   type RespawnPoint,
   type Team,
@@ -168,6 +169,35 @@ function parsePickups(raw: unknown): PickupSpawn[] {
   });
 }
 
+function parseObjectives(raw: unknown): MapObjective[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error('"objectives" debe ser un array');
+
+  return raw.map((entry, index) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error(`El objetivo ${index + 1} no es un objeto`);
+    }
+    const value = entry as Record<string, unknown>;
+    if (value.kind !== 'zone') {
+      throw new Error(
+        `El objetivo ${index + 1} tiene un "kind" desconocido: "${String(value.kind)}". ` +
+          'Disponible: zone'
+      );
+    }
+    const radius = number(value.radius, `objectives[${index}].radius`);
+    if (radius <= 0) {
+      throw new Error(`El objetivo ${index + 1} necesita un radio mayor que cero`);
+    }
+    return {
+      kind: 'zone',
+      id: typeof value.id === 'string' ? value.id : undefined,
+      x: number(value.x, `objectives[${index}].x`),
+      z: number(value.z, `objectives[${index}].z`),
+      radius
+    };
+  });
+}
+
 function parseMountains(raw: unknown): MountainRange[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw new Error('"mountains" debe ser un array');
@@ -248,6 +278,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
   const tiles = parseTiles(value.tiles ?? value.terrain);
   const respawns = parseRespawns(value.respawns ?? value.spawns);
   const mountains = parseMountains(value.mountains);
+  const objectives = parseObjectives(value.objectives);
   const pickups = parsePickups(value.pickups);
 
   const teams = TEAM_IDS.filter((team) =>
@@ -296,6 +327,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
     tiles,
     respawns,
     mountains,
+    objectives,
     pickups,
     spawn,
     waterHeight:
