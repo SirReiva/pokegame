@@ -398,6 +398,26 @@ const SANCTUARY_REGEN_BONUS = 5;
  */
 const SANCTUARY_TARGET_PENALTY = 6;
 
+/**
+ * En Rey de la colina la zona es el objetivo real. Un rival que se aleja más
+ * que este margen del borde deja de disputarla: perseguirlo solo regala el
+ * punto al equipo rival. Los bots vuelven a la colina en vez de seguirlo.
+ */
+const KOTH_CHASE_LEASH = 4;
+/**
+ * Margen sobre el alcance útil para seguir considerando peligroso a un rival
+ * alejado de la zona. Si está a tiro, se le puede golpear sin abandonarla.
+ */
+const KOTH_HOLD_ATTACK_MARGIN = 2;
+/** Bono de puntuación al elegir un rival que está dentro de la zona. */
+const KOTH_ZONE_TARGET_BONUS = 7;
+/** Peso del alejamiento de la zona al puntuar rivales fuera de ella. */
+const KOTH_OFFZONE_TARGET_WEIGHT = 0.45;
+/** Tope de la penalización por perseguir a un rival fuera del objetivo. */
+const KOTH_OFFZONE_TARGET_MAX = 18;
+/** Fracción del radio de la zona en la que se reparten los defensores. */
+const KOTH_HOLD_RADIUS_FACTOR = 0.45;
+
 /** Umbrales dinámicos de retirada según el intercambio y el número de vivos. */
 const RETREAT_EXCHANGE_LOSS = 0.8;
 const RETREAT_EXCHANGE_EDGE = 1.2;
@@ -772,6 +792,12 @@ export class BotController {
   /** Zona de control del modo actual, si existe. */
   private objective: { x: number; z: number; radius: number } | null = null;
   /**
+   * `true` cuando el combate se interrumpe para volver a la colina. Evita que
+   * un instinto como Impulso empuje al bot hacia un rival que ya no disputa el
+   * objetivo.
+   */
+  private holdingObjective = false;
+  /**
    * Objeto que ocupa el destino actual, o `null` si el destino es una patrulla,
    * una posición recordada o la base. Sirve para dar el último tramo en línea
    * recta: la rejilla infla los colliders con el radio del cuerpo y puede marcar
@@ -860,6 +886,7 @@ export class BotController {
     this.clock += dt;
     this.atmosphere = view.atmosphere;
     this.objective = view.objective ?? null;
+    this.holdingObjective = false;
     this.pickupKnowledge = knownPickups;
     this.rememberPickups(self, knownPickups);
     if (!self.alive) {
@@ -977,6 +1004,7 @@ export class BotController {
     this.regenGoal = null;
     this.regenGoalTimer = 0;
     this.regenCheckTimer = 0;
+    this.holdingObjective = false;
     this.path = [];
     this.stuckTimer = 0;
     this.detourTimer = 0;
@@ -1350,6 +1378,25 @@ export class BotController {
       if (sheltered) {
         const reach = this.maxUsefulRange(this.selectedDef(self), enemy);
         if (distance > reach + 0.5) score += SANCTUARY_TARGET_PENALTY;
+      }
+      // En Rey de la colina el rival que disputa la zona vale más que uno que
+      // huye lejos de ella. El bono por estar dentro inclina el foco hacia la
+      // pelea que da puntos; la penalización exterior evita que un rival
+      // corriendo al otro lado del mapa arrastre al bot fuera de la colina.
+      if (this.objective) {
+        const offObjective =
+          Math.hypot(
+            enemy.x - this.objective.x,
+            enemy.z - this.objective.z
+          ) - this.objective.radius;
+        if (offObjective <= 0) {
+          score -= KOTH_ZONE_TARGET_BONUS;
+        } else {
+          score += Math.min(
+            KOTH_OFFZONE_TARGET_MAX,
+            offObjective * KOTH_OFFZONE_TARGET_WEIGHT
+          );
+        }
       }
       if (this.target === enemy) score -= 1.5;
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
@@ -2492,15 +2539,25 @@ export class BotController {
    * `moveTowards` lo mantiene en posición.
    */
   private seekObjective(self: MatchPlayerState): boolean {
+    if (!this.objective) return false;
+    this.setGoal(this.objectiveHoldPoint(self.slot));
+    return true;
+  }
+
+  /**
+   * Punto de espera dentro de la zona. El ángulo depende de la plaza y el
+   * radio de un porcentaje del objetivo, así varios defensores se reparten el
+   * círculo sin quedar todos en el centro ni en el borde.
+   */
+  private objectiveHoldPoint(slot: number): Vec2 {
     const objective = this.objective;
-    if (!objective) return false;
-    const angle = self.slot * 2.399963229728653;
-    const holdRadius = objective.radius * 0.45;
-    this.setGoal({
+    if (!objective) return { x: 0, z: 0 };
+    const angle = slot * 2.399963229728653;
+    const holdRadius = objective.radius * KOTH_HOLD_RADIUS_FACTOR;
+    return {
       x: objective.x + Math.cos(angle) * holdRadius,
       z: objective.z + Math.sin(angle) * holdRadius
-    });
-    return true;
+    };
   }
 
   /**
@@ -3567,9 +3624,14 @@ export class BotController {
         desired = directionTo(self, aim);
       } else {
         desired = this.combatMove(self, target, distance, def, facingError, dt);
+        // Al defender la colina, orbitar alrededor de un rival pegado al borde
+        // no debe sacar al bot de la zona y regalar el punto. Solo se corrige
+        // cuando el rival también está dentro: perseguir a uno que asoma por
+        // fuera exige poder encararlo y dispararle.
+        desired = this.keepInsideObjective(self, target, desired, dt);
       }
 
-      if (!channeling && this.useCommon) {
+      if (!channeling && this.useCommon && !this.holdingObjective) {
         const commonId = self.commonAbilityId;
         if (commonId === 'proteccion') {
           this.pulseCommon(snapshot, self, false);
@@ -5025,6 +5087,13 @@ export class BotController {
     facingError: number,
     dt: number
   ): Vec2 {
+    // En Rey de la colina el objetivo manda sobre la persecución: si el rival
+    // se aleja de la zona y ya no está a tiro, el bot vuelve a la colina en vez
+    // de abandonarla. La comprobación va antes que el resto para que también
+    // mande sobre el giro de apuntado cuando el rival ya no es alcanzable.
+    const objectiveHold = this.objectiveHoldDirection(self, target, def, dt);
+    if (objectiveHold) return objectiveHold;
+
     // Un rival refugiado en su santuario no se puede perseguir: el bot se
     // acerca al borde exterior y, si no llega con su alcance, orbita desde
     // fuera en vez de empujar contra la barrera. Así sigue amenazando sin
@@ -5097,6 +5166,81 @@ export class BotController {
       return canKite ? directionTo(target, self) : this.orbit(target, self);
     }
     return this.orbit(target, self);
+  }
+
+  /**
+   * Decide si el bot debe dejar de perseguir para volver a la colina. Devuelve
+   * la dirección hacia el punto de espera, o `null` si el combate sigue
+   * disputando el objetivo o el rival está a tiro.
+   */
+  private objectiveHoldDirection(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    def: AbilityDef | null,
+    dt: number
+  ): Vec2 | null {
+    const objective = this.objective;
+    if (!objective) return null;
+    const offObjective =
+      Math.hypot(target.x - objective.x, target.z - objective.z) -
+      objective.radius;
+    if (offObjective <= KOTH_CHASE_LEASH) return null;
+
+    // A tiro aunque esté fuera de la zona: se le puede seguir golpeando sin
+    // abandonar la colina, así que no compensa renunciar al daño.
+    const distance = Math.hypot(target.x - self.x, target.z - self.z);
+    if (distance <= this.maxUsefulRange(def, target) + KOTH_HOLD_ATTACK_MARGIN) {
+      return null;
+    }
+
+    this.holdingObjective = true;
+    return this.moveTowards(self, this.objectiveHoldPoint(self.slot), dt);
+  }
+
+  /**
+   * Corrige un movimiento de combate que sacaría al bot de la zona cuando ya
+   * la está defendiendo. Solo elimina el componente radial hacia fuera: el
+   * avance lateral se conserva para seguir orbitando y apuntando. Si el rival
+   * está fuera del círculo, no se limita el movimiento: el bot necesita poder
+   * encararlo y dispararle aunque asome por el borde.
+   */
+  private keepInsideObjective(
+    self: MatchPlayerState,
+    target: MatchPlayerState,
+    direction: Vec2,
+    dt: number
+  ): Vec2 {
+    const objective = this.objective;
+    if (!objective) return direction;
+    if (
+      Math.hypot(target.x - objective.x, target.z - objective.z) >
+      objective.radius
+    ) {
+      return direction;
+    }
+    const length = Math.hypot(direction.x, direction.z);
+    if (length < 0.001) return direction;
+    const offsetX = self.x - objective.x;
+    const offsetZ = self.z - objective.z;
+    const offset = Math.hypot(offsetX, offsetZ);
+    if (offset < 0.001 || offset >= objective.radius) return direction;
+
+    const step = Math.max(0.2, this.effectiveSpeed(self) * dt);
+    const nextX = self.x + direction.x * step;
+    const nextZ = self.z + direction.z * step;
+    if (Math.hypot(nextX - objective.x, nextZ - objective.z) <= objective.radius) {
+      return direction;
+    }
+
+    const outwardX = offsetX / offset;
+    const outwardZ = offsetZ / offset;
+    const outward = direction.x * outwardX + direction.z * outwardZ;
+    if (outward <= 0) return direction;
+    // Se anula la salida y se añade un pequeño empuje hacia el centro para que
+    // el bot se aparte del borde en el siguiente frame.
+    const correctedX = direction.x - outwardX * outward - outwardX * 0.2;
+    const correctedZ = direction.z - outwardZ * outward - outwardZ * 0.2;
+    return { x: correctedX, z: correctedZ };
   }
 
   /** Alcance máximo útil de la habilidad seleccionada contra este rival. */

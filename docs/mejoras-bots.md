@@ -37,6 +37,7 @@ decisión; la mayoría ya están implementadas.
 | 7 | 7 | Movimiento táctico y uso del terreno | ✅ Hecho | Medio | Medio |
 | 8 | 8 | Dificultad, personalidad y composición de bots | 🟡 Parcial | Medio | Bajo |
 | 9 | 9 | Tests, simulación, debug y rendimiento | 🟡 Parcial | Alto a largo plazo | Medio |
+| 10 | 14 | Bots de Rey de la colina | ✅ Hecho | Medio | Bajo |
 
 La columna «Sección» enlaza cada mejora con su apartado; la prioridad conserva
 el orden original de impacto y esfuerzo.
@@ -1073,6 +1074,33 @@ coinciden.
 6. **Actualizar la sección 11**: varios criterios ya se cumplen parcialmente;
    otros, como “no se quedan empujando paredes” o “no gastan la definitiva en
    invulnerables”, siguen dependiendo de los casos anteriores.
+
+---
+
+## 14. Bots de Rey de la colina — ✅ Hecho
+
+El modo expone la zona con `getBotObjective()` en `BotWorldView.objective`. La
+IA ya la usaba como destino cuando no había una pelea mejor, pero durante el
+combate la ignoraba: podía perseguir a un rival por medio mapa y dejar la
+colina libre. Ahora la zona también pesa en las decisiones de combate:
+
+- **Selección de objetivo**: un rival dentro de la zona recibe un bono y uno
+  que se aleja de ella acumula una penalización (con tope). El foco compartido
+  sigue funcionando, pero prioriza las peleas que disputan puntos.
+- **No abandonar la colina**: si el rival seleccionado está lejos del borde y
+  fuera del alcance útil, `combatMove` devuelve al bot a su punto de espera en
+  vez de perseguirlo. Si sigue a tiro, mantiene el combate sin renunciar al
+  daño.
+- **Defensa del borde**: mientras combate dentro de la zona, un corrector
+  elimina el componente de movimiento que lo sacaría del círculo. El avance
+  lateral se conserva para seguir orbitando y apuntando.
+- **Reparto dentro de la zona**: los puntos de espera se calculan con el ángulo
+  de la plaza y un radio proporcional al objetivo
+  (`KOTH_HOLD_RADIUS_FACTOR`), para que varios defensores no se apilen en el
+  centro.
+
+Estas reglas solo se activan cuando `BotWorldView.objective` existe, así que
+los demás modos conservan el comportamiento anterior.
 
 ---
 
