@@ -1167,6 +1167,10 @@ function* buildWorldSteps(
         const unitX = dx / length;
         const unitZ = dz / length;
 
+        // Los muros se dejan como piezas sueltas: son pocos por cordillera y el
+        // descarte por cámara de cada tramo ya evita dibujar los que quedan
+        // fuera. Un lote instanciado por malla obligaría a dibujar la variante
+        // entera en cuanto un solo tramo asoma, que en `perf-256` sale peor.
         const wall = new pc.Entity(`wall-${rangeIndex}-${i}`);
         wall.setLocalPosition(
           (a[0] + b[0]) / 2 + unitX * centerShift,
@@ -1312,113 +1316,76 @@ function* buildWorldSteps(
   const DESERT_DUST_MIN_PARTICLES = 8;
   const desertZones = terrainZones.filter((zone) => zone.terrain === 'desert');
 
+  // Todos los cactus del mapa se acumulan en una única malla instanciada: un
+  // draw call por vista en lugar de cinco por cactus. Antes los calveros
+  // pequeños creaban un cactus con cinco primitivas y en `caldera` eso eran
+  // 240 draw calls (más de la mitad del mundo) para unos pocos arbustos.
+  const cactusTransforms: number[] = [];
+  const addCactus = (x: number, z: number, scale: number, yaw: number): void => {
+    const yawRadians = (yaw * Math.PI) / 180;
+    const cos = Math.cos(yawRadians) * scale;
+    const sin = Math.sin(yawRadians) * scale;
+    // Matriz de mundo en columnas: giro en Y, escala uniforme y traslación.
+    cactusTransforms.push(
+      cos, 0, -sin, 0,
+      0, scale, 0, 0,
+      sin, 0, cos, 0,
+      x, 0, z, 1
+    );
+  };
+
   desertZones.forEach((zone, zoneIndex) => {
     const area = zoneArea(zone);
     const rand = random(0x3c7d + zoneIndex * 4211);
 
     // Un desierto enorme con cuatro cactus solo se ve vacío. En zonas grandes
-    // se reparten por área y se dibujan instanciados: una malla y un draw call.
+    // se reparten por área.
     if (area > DESERT_LARGE_AREA) {
       const count = Math.max(1, Math.min(400, Math.round(area * 0.004)));
-      const data = new Float32Array(count * 16);
-
       for (let i = 0; i < count; i++) {
         const [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
-        const scale = 0.8 + rand() * 0.35;
-        const yawRadians = (rand() * 360 * Math.PI) / 180;
-        const cos = Math.cos(yawRadians) * scale;
-        const sin = Math.sin(yawRadians) * scale;
-        const offset = i * 16;
-        data[offset] = cos;
-        data[offset + 1] = 0;
-        data[offset + 2] = -sin;
-        data[offset + 3] = 0;
-        data[offset + 4] = 0;
-        data[offset + 5] = scale;
-        data[offset + 6] = 0;
-        data[offset + 7] = 0;
-        data[offset + 8] = sin;
-        data[offset + 9] = 0;
-        data[offset + 10] = cos;
-        data[offset + 11] = 0;
-        data[offset + 12] = x;
-        data[offset + 13] = 0;
-        data[offset + 14] = z;
-        data[offset + 15] = 1;
+        addCactus(x, z, 0.8 + rand() * 0.35, rand() * 360);
       }
-
-      const buffer = new pc.VertexBuffer(device, cactusInstanceFormat, count, {
-        data,
-        usage: pc.BUFFER_STATIC
-      });
-      const instance = new pc.MeshInstance(cactusMesh, cactusMaterial);
-      instance.castShadows = false;
-      instance.receiveShadows = false;
-      instance.setInstancing(buffer, true);
-      instancedFoliageBuffers.push(buffer);
-
-      const bounds = zoneBounds(zone);
-      const entity = new pc.Entity(`desert-cactus-${zoneIndex}`);
-      entity.addComponent('render');
-      entity.render!.castShadows = false;
-      entity.render!.receiveShadows = false;
-      entity.render!.meshInstances = [instance];
-      entity.render!.customAabb = new pc.BoundingBox(
-        new pc.Vec3(bounds.cx, 1, bounds.cz),
-        new pc.Vec3(bounds.width / 2 + 1, 1.2, bounds.depth / 2 + 1)
-      );
-      worldRoot.addChild(entity);
-      created.push(entity);
       return;
     }
 
-    // Zonas pequeñas: se mantiene un único cactus como mínimo.
-    const count = 1;
-    const spots: Array<[number, number]> = [];
-    for (let i = 0; i < count; i++) {
-      let [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const [nx, nz] = randomPointInZone(zone, rand, 1.0, 0.7);
-        if (spots.every(([sx, sz]) => Math.hypot(nx - sx, nz - sz) > 1.1)) {
-          x = nx;
-          z = nz;
-          break;
-        }
-      }
-      spots.push([x, z]);
-
-      const scale = 0.8 + rand() * 0.35;
-      const cactus = new pc.Entity(`desert-cactus-${zoneIndex}-${i}`);
-      cactus.setPosition(x, 0, z);
-      cactus.setLocalScale(scale, scale, scale);
-      cactus.setLocalEulerAngles(0, rand() * 360, 0);
-      worldRoot.addChild(cactus);
-      created.push(cactus);
-
-      part(cactus, 'cylinder', cactusMaterial, {
-        position: [0, 0.8, 0],
-        scale: [0.18, 1.6, 0.18]
-      });
-      part(cactus, 'cylinder', cactusMaterial, {
-        position: [-0.18, 0.85, 0],
-        scale: [0.1, 0.38, 0.1],
-        rotation: [0, 0, 68]
-      });
-      part(cactus, 'cylinder', cactusMaterial, {
-        position: [-0.34, 1.1, 0],
-        scale: [0.09, 0.5, 0.09]
-      });
-      part(cactus, 'cylinder', cactusMaterial, {
-        position: [0.18, 1.08, 0],
-        scale: [0.1, 0.32, 0.1],
-        rotation: [0, 0, -68]
-      });
-      part(cactus, 'cylinder', cactusMaterial, {
-        position: [0.32, 1.3, 0],
-        scale: [0.085, 0.44, 0.085]
-      });
-    }
+    // Claro pequeño: un único cactus. El sorteo original pedía un segundo
+    // punto para separarlo de los demás, pero al no haber ninguno siempre
+    // aceptaba el primero; se conserva el mismo consumo de azar para que la
+    // posición sea idéntica a la de antes.
+    randomPointInZone(zone, rand, 1.0, 0.7);
+    const [x, z] = randomPointInZone(zone, rand, 1.0, 0.7);
+    addCactus(x, z, 0.8 + rand() * 0.35, rand() * 360);
   });
+
+  if (cactusTransforms.length > 0) {
+    const buffer = new pc.VertexBuffer(
+      device,
+      cactusInstanceFormat,
+      cactusTransforms.length / 16,
+      { data: new Float32Array(cactusTransforms), usage: pc.BUFFER_STATIC }
+    );
+    const instance = new pc.MeshInstance(cactusMesh, cactusMaterial);
+    instance.castShadows = false;
+    instance.receiveShadows = false;
+    instance.setInstancing(buffer, true);
+    instancedFoliageBuffers.push(buffer);
+
+    const entity = new pc.Entity('desert-cactus');
+    entity.addComponent('render');
+    entity.render!.castShadows = false;
+    entity.render!.receiveShadows = false;
+    entity.render!.meshInstances = [instance];
+    // La caja abarca el mapa entero: así el lote nunca se descarta por error
+    // cuando una cámara mira justo al borde de un desierto.
+    entity.render!.customAabb = new pc.BoundingBox(
+      new pc.Vec3(0, 1, 0),
+      new pc.Vec3(HALF_X + 1, 1.5, HALF_Z + 1)
+    );
+    worldRoot.addChild(entity);
+    created.push(entity);
+  }
+
 
   yield 1;
   // --- Polvo del desierto --------------------------------------------------
