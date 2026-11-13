@@ -91,9 +91,14 @@ const OPTIONAL_ANIMATIONS: ReadonlyArray<{
   { name: 'hop', requiresMoveset: true, logLabel: 'Hop' }
 ];
 
-const OPTIONAL_LAYER_NAMES: AnimationName[] = OPTIONAL_ANIMATIONS.map(
-  (animation) => animation.name
-);
+/**
+ * Orden en el que se crean las capas de un billboard. Las básicas primero para
+ * que el cuerpo aparezca cuanto antes al arrancar una partida.
+ */
+export const BILLBOARD_ANIMATION_ORDER: AnimationName[] = [
+  ...ANIMATIONS,
+  ...OPTIONAL_ANIMATIONS.map((animation) => animation.name)
+];
 
 /**
  * Devuelve el clip que realmente se dibuja para `name` en este aspecto. Es la
@@ -587,6 +592,90 @@ export async function loadSpriteAsset(
 
 export function disposeSpriteAsset(asset: SpriteAsset): void {
   for (const texture of Object.values(asset.textures)) texture?.destroy();
+  const geometry = billboardGeometryByAsset.get(asset);
+  if (geometry) {
+    for (const entry of geometry.values()) {
+      entry.mesh.destroy();
+      entry.outlineMesh.destroy();
+    }
+    geometry.clear();
+    billboardGeometryByAsset.delete(asset);
+  }
+}
+
+/** Geometría de un billboard para una animación; se comparte entre copias. */
+interface BillboardGeometry {
+  readonly mesh: pc.Mesh;
+  readonly outlineMesh: pc.Mesh;
+}
+
+/**
+ * Las mallas de un billboard solo dependen del sprite y de la animación, no de
+ * la cámara ni del viewport. Antes cada copia del splitscreen creaba su propia
+ * malla por animación; ahora todas las copias comparten la misma.
+ */
+const billboardGeometryByAsset = new WeakMap<
+  SpriteAsset,
+  Map<AnimationName, BillboardGeometry>
+>();
+
+function billboardGeometry(
+  device: pc.GraphicsDevice,
+  asset: SpriteAsset,
+  name: AnimationName,
+  animation: SpriteAnimation,
+  options: BillboardOptions
+): BillboardGeometry {
+  let byAnimation = billboardGeometryByAsset.get(asset);
+  if (!byAnimation) {
+    byAnimation = new Map();
+    billboardGeometryByAsset.set(asset, byAnimation);
+  }
+  const cached = byAnimation.get(name);
+  if (cached) return cached;
+
+  const sx = options.pixelScale;
+  const sy = options.pixelScale * options.verticalStretch;
+  const refAnchorY = animation.anchors[0]?.y ?? animation.frameHeight * 0.75;
+  const content = animation.content;
+  // Si el manifiesto trae el recorte de contenido, el plano se ajusta al
+  // arte real alrededor del ancla. Si no, se usa el frame completo.
+  const left = (content?.left ?? animation.frameWidth / 2) * sx;
+  const right = (content?.right ?? animation.frameWidth / 2) * sx;
+  const top = (content?.top ?? refAnchorY) * sy;
+  const bottom = -(content?.bottom ?? (animation.frameHeight - refAnchorY)) * sy;
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions([
+    -left, bottom, 0,
+    right, bottom, 0,
+    right, top, 0,
+    -left, top, 0
+  ]);
+  mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
+  mesh.setIndices([0, 1, 2, 0, 2, 3]);
+  mesh.update();
+  // La caché conserva una referencia: al destruir las copias de una partida,
+  // PlayCanvas no debe liberar la malla compartida.
+  mesh.incRefCount();
+
+  const growX = Math.max(OUTLINE_MIN_GROW, (left + right) * OUTLINE_SCALE);
+  const growY = Math.max(OUTLINE_MIN_GROW, (top - bottom) * OUTLINE_SCALE);
+  const outlineMesh = new pc.Mesh(device);
+  outlineMesh.setPositions([
+    -(left + growX), bottom - growY, -OUTLINE_DEPTH,
+    right + growX, bottom - growY, -OUTLINE_DEPTH,
+    right + growX, top + growY, -OUTLINE_DEPTH,
+    -(left + growX), top + growY, -OUTLINE_DEPTH
+  ]);
+  outlineMesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
+  outlineMesh.setIndices([0, 1, 2, 0, 2, 3]);
+  outlineMesh.update();
+  outlineMesh.incRefCount();
+
+  const created: BillboardGeometry = { mesh, outlineMesh };
+  byAnimation.set(name, created);
+  return created;
 }
 
 interface BillboardOptions {
@@ -602,6 +691,12 @@ interface BillboardOptions {
    * Pokémon que no controla el jugador de ese viewport; `null` lo desactiva.
    */
   outlineColor?: readonly [number, number, number] | null;
+  /**
+   * No crea la capa de `idle` al construir el actor; `Game` las calienta por
+   * tandas durante la cuenta atrás. Evita congelar la pantalla al empezar una
+   * partida de 8 jugadores.
+   */
+  deferLayers?: boolean;
 }
 
 function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.StandardMaterial {
@@ -722,6 +817,7 @@ export class SpriteBillboard {
 
   private readonly pivot: pc.Entity;
   private readonly device: pc.GraphicsDevice;
+  private readonly asset: SpriteAsset;
   private readonly layers = new Map<AnimationName, FrameLayer>();
   private readonly options: BillboardOptions;
 
@@ -739,6 +835,8 @@ export class SpriteBillboard {
    */
   private manual = false;
   private facingYaw = 0;
+  /** Capa de render del viewport; se aplica también a las capas creadas después. */
+  private layerId: number | null = null;
   private lastAppliedFrame = -1;
   private lastAppliedRow = -1;
   private lastAppliedAnimation: AnimationName | null = null;
@@ -756,39 +854,54 @@ export class SpriteBillboard {
   constructor(app: pc.AppBase, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
     this.device = app.graphicsDevice;
+    this.asset = asset;
     this.root = new pc.Entity(`actor-${asset.entry.id}`);
     this.pivot = new pc.Entity('sprite-billboard');
     this.root.addChild(this.pivot);
     app.root.addChild(this.root);
 
-    for (const name of ANIMATIONS) {
-      this.layers.set(
-        name,
-        this.createLayer(
-          name,
-          asset.skin.animations[name],
-          asset.textures[name],
-          asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
-        )
-      );
-    }
-    for (const name of OPTIONAL_LAYER_NAMES) {
-      const animation = asset.skin.animations[name];
-      const texture = asset.textures[name];
-      if (!animation || !texture) continue;
-      this.layers.set(
-        name,
-        this.createLayer(
-          name,
-          animation,
-          texture,
-          asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
-        )
-      );
-    }
-
+    // Las capas se crean al primer uso. Un actor recién nacido solo necesita
+    // `idle`: montar todas las animaciones (y sus materiales) por cada copia
+    // del splitscreen era el grueso del coste de arrancar una partida.
     this.row = this.computeRow(new pc.Vec3(0, 0, 10));
-    this.play('idle', true);
+    if (!options.deferLayers) this.play('idle', true);
+  }
+
+  /**
+   * Crea una capa concreta si falta y devuelve `true`. `Game` la llama por
+   * tandas para repartir el coste de las animaciones entre frames.
+   */
+  prewarmStep(name: AnimationName): boolean {
+    if (!this.hasAnimation(name) || this.layers.has(name)) return false;
+    this.ensureLayer(name);
+    return true;
+  }
+
+  /** `true` si el aspecto trae hoja y metadatos para esa animación. */
+  private hasAnimation(name: AnimationName): boolean {
+    return !!this.asset.skin.animations[name] && !!this.asset.textures[name];
+  }
+
+  /** Crea la capa de una animación la primera vez que se necesita. */
+  private ensureLayer(name: AnimationName): FrameLayer | null {
+    const existing = this.layers.get(name);
+    if (existing) return existing;
+    const animation = this.asset.skin.animations[name];
+    const texture = this.asset.textures[name];
+    if (!animation || !texture) return null;
+    const layer = this.createLayer(
+      name,
+      animation,
+      texture,
+      this.asset.textureScales[name] ?? SPRITE_TEXTURE_SCALE
+    );
+    this.layers.set(name, layer);
+    layer.entity.enabled = name === this.animation;
+    if (this.layerId !== null) {
+      const render = layer.entity.render;
+      if (render) render.layers = [this.layerId];
+    }
+    return layer;
   }
 
   private createLayer(
@@ -797,27 +910,17 @@ export class SpriteBillboard {
     texture: pc.Texture,
     textureScale: number
   ): FrameLayer {
-    const sx = this.options.pixelScale;
-    const sy = this.options.pixelScale * this.options.verticalStretch;
     const refAnchorY = animation.anchors[0]?.y ?? animation.frameHeight * 0.75;
-    const content = animation.content;
-    // Si el manifiesto trae el recorte de contenido, el plano se ajusta al
-    // arte real alrededor del ancla. Si no, se usa el frame completo.
-    const left = (content?.left ?? animation.frameWidth / 2) * sx;
-    const right = (content?.right ?? animation.frameWidth / 2) * sx;
-    const top = (content?.top ?? refAnchorY) * sy;
-    const bottom = -(content?.bottom ?? (animation.frameHeight - refAnchorY)) * sy;
 
-    const mesh = new pc.Mesh(this.device);
-    mesh.setPositions([
-      -left, bottom, 0,
-      right, bottom, 0,
-      right, top, 0,
-      -left, top, 0
-    ]);
-    mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
-    mesh.setIndices([0, 1, 2, 0, 2, 3]);
-    mesh.update();
+    // Malla compartida por todas las copias de este sprite y animación.
+    const geometry = billboardGeometry(
+      this.device,
+      this.asset,
+      name,
+      animation,
+      this.options
+    );
+    const mesh = geometry.mesh;
 
     const material = createSpriteMaterial(texture, this.options.alphaTest);
     const silhouetteMaterial = createSilhouetteMaterial(
@@ -834,18 +937,7 @@ export class SpriteBillboard {
     let outlineMaterial: pc.StandardMaterial | null = null;
     let outline: pc.MeshInstance | null = null;
     if (outlineColor) {
-      const growX = Math.max(OUTLINE_MIN_GROW, (left + right) * OUTLINE_SCALE);
-      const growY = Math.max(OUTLINE_MIN_GROW, (top - bottom) * OUTLINE_SCALE);
-      outlineMesh = new pc.Mesh(this.device);
-      outlineMesh.setPositions([
-        -(left + growX), bottom - growY, -OUTLINE_DEPTH,
-        right + growX, bottom - growY, -OUTLINE_DEPTH,
-        right + growX, top + growY, -OUTLINE_DEPTH,
-        -(left + growX), top + growY, -OUTLINE_DEPTH
-      ]);
-      outlineMesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
-      outlineMesh.setIndices([0, 1, 2, 0, 2, 3]);
-      outlineMesh.update();
+      outlineMesh = geometry.outlineMesh;
       outlineMaterial = createOutlineMaterial(
         texture,
         this.options.alphaTest,
@@ -919,6 +1011,7 @@ export class SpriteBillboard {
 
   /** Mueve todas las capas del billboard a una capa de render de viewport. */
   setLayer(layerId: number): void {
+    this.layerId = layerId;
     for (const layer of this.layers.values()) {
       const render = layer.entity.render;
       if (render) render.layers = [layerId];
@@ -943,7 +1036,7 @@ export class SpriteBillboard {
    */
   setManualFrame(name: AnimationName, frame: number): void {
     const resolved = this.resolveAnimation(name);
-    const layer = this.layers.get(resolved);
+    const layer = this.ensureLayer(resolved);
     if (!layer) return;
     if (this.animation !== resolved) {
       this.animation = resolved;
@@ -979,7 +1072,7 @@ export class SpriteBillboard {
    */
   private resolveAnimation(name: AnimationName): AnimationName {
     const resolved = resolveAnimationName(name, (candidate) =>
-      this.layers.has(candidate)
+      this.hasAnimation(candidate)
     );
     if (
       name === 'quickstrike' &&
@@ -1007,6 +1100,7 @@ export class SpriteBillboard {
     this.loop = true;
     this.lastAppliedFrame = -1;
     this.lastAppliedRow = -1;
+    this.ensureLayer(resolved);
     for (const [key, layer] of this.layers) {
       layer.entity.enabled = key === resolved;
     }
@@ -1189,10 +1283,11 @@ export class SpriteBillboard {
   destroy(): void {
     this.root.destroy();
     for (const layer of this.layers.values()) {
-      layer.mesh.destroy();
+      // La malla y el contorno son compartidos por todas las copias del sprite
+      // y los libera `disposeSpriteAsset`; aquí solo se destruyen los
+      // materiales, que sí son exclusivos de esta copia.
       layer.material.destroy();
       layer.silhouetteMaterial.destroy();
-      layer.outlineMesh?.destroy();
       layer.outlineMaterial?.destroy();
     }
     this.layers.clear();

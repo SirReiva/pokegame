@@ -245,6 +245,73 @@ Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
 - **Basura por frame**: se reutilizan los `Vec2`/`Quat`, los conjuntos de
   visibilidad y los mapas de conocimiento de objetos descritos en el README.
 
+## Splitscreen: coste por vista
+
+El splitscreen no renderiza una escena distinta por jugador, pero sí **redibuja
+el mundo entero con cada cámara** y duplica cada actor visible en cada viewport.
+Con 8 jugadores eso convierte cualquier coste unitario en el peor caso.
+
+Medición con el juego real en `perf-256`, 8 jugadores y Chrome headless con
+WebGL por software (los milisegundos absolutos no son representativos de una
+GPU real; los draw calls y las proporciones sí):
+
+| Vistas | Copias | Draw calls antes | Draw calls ahora | Arranque antes | Arranque ahora |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 50 | **32** | ~1,3 s | ~0,4-1,0 s |
+| 2 | 16 | 103 | **67** | ~0,9 s | ~0,1-0,4 s |
+| 4 | 32 | 210 | **138** | ~3,8 s | ~0,6-1,0 s |
+| 8 | 64 | 413 | **269** | ~4,6 s | **~0,45 s** |
+
+El frame de 8 vistas baja un **35 %** y el arranque síncrono un **90 %**. El
+desglose de draw calls con 8 vistas queda así: **157** del mundo (redibujado por
+cada cámara) + **64** cuerpos + **32** sombras + **16** anillos (dos pasadas de
+los 8 dueños) = **269**. Antes eran 157 + 64 + 32 + 64 anillos + 96 barras = 413;
+las barras ya no aportan draw calls porque se pintan en 2D. Lo aplicado:
+
+- **Anillo de rumbo solo en la copia del dueño** (`game.ts`): antes cada copia
+  creaba textura, dos materiales y un draw call de anillo. Ahorra 56 draw calls
+  y 56 texturas en 8 vistas. Es un cambio visual deliberado: los demás Pokémon
+  ya no muestran su flecha de rumbo; conservan el contorno de equipo y la
+  silueta.
+- **Barras de vida en una capa 2D** (`healthBar.ts`, `healthBarOverlay.ts`):
+  antes cada copia tenía tres quads 3D con su textura, material y canvas. Ahora
+  hay **un canvas por jugador** y un overlay 2D que lo proyecta en cada viewport
+  con `camera.worldToScreen`. Se eliminan ~96 draw calls, 192 materiales y 192
+  texturas en 8 vistas. El dibujo (vida, XP, nivel, armadura) es el mismo código
+  de canvas que antes, así que el aspecto no cambia.
+- **Recursos de anillo compartidos por color de equipo** (`marker.ts`): malla,
+  textura y materiales se cachean por aplicación y color. La caché mantiene una
+  referencia a la malla para que PlayCanvas no la libere al destruir los anillos
+  de una partida.
+- **Geometría de billboard compartida** (`sprite.ts`): las mallas de cada
+  animación solo dependen del sprite, no de la cámara. Antes cada copia creaba
+  una malla por animación; ahora se comparten por aspecto y animación y se
+  liberan con `disposeSpriteAsset`.
+- **Capas de animación perezosas y calentadas por tandas** (`sprite.ts`,
+  `game.ts`): un actor nace solo con la capa que necesita y `prewarmBillboards`
+  crea el resto con un presupuesto de 3 ms por frame, empezando por el `idle` de
+  todas las copias. Así los cuerpos aparecen durante la cuenta atrás y el primer
+  ataque no paga la creación de materiales de golpe.
+
+### Descartado tras medir
+
+- **Billboards instanciados (punto 5)**: solo reduce draw calls si varias copias
+  comparten textura. Cada especie tiene su propia hoja y cada vista puede usar
+  una fila de dirección distinta, así que haría falta un atlas por partida y un
+  shader con UV por instancia. La ganancia máxima serían ~56 draw calls de 269;
+  el coste y el riesgo no compensan frente a compartir geometría y materiales,
+  que ya está hecho.
+- **Render target por vista (punto 6)**: con N vistas el total de píxeles sigue
+  siendo el de la pantalla completa. Renderizar cada vista a una textura no
+  reduce relleno salvo que se baje la resolución de unas vistas y no de otras, y
+  eso ya lo cubre `dynamicResolution` a nivel global. El cuello medido es de draw
+  calls y CPU, no de fill rate.
+- **Multijugador en red (punto 8)**: elimina el problema de raíz, pero no es una
+  optimización: requiere autoridad de simulación, transporte, sincronización y
+  un servidor. Es un proyecto aparte; el trabajo de esta ronda es compatible con
+  él (el mundo ya se construye con un mapa explícito y el render está separado
+  de la simulación por pasos fijos).
+
 ## Prioridad recomendada
 
 1. ~~Reescribir `paintTerrainZone` con relleno/trazo de Canvas (solución 1).~~
@@ -256,3 +323,8 @@ Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
    preventiva.~~ Hecho.
 5. ~~Bajar el presupuesto de textura solo si hace falta más margen.~~ Hecho:
    `CONFIG.performance.groundTexturePixels` (4 M por defecto).
+6. ~~Reducir el coste del splitscreen: anillo solo del dueño, barras en 2D,
+   geometría compartida y capas perezosas.~~ Hecho: 413 → 269 draw calls y
+   arranque de ~4,6 s → ~0,45 s con 8 vistas.
+7. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
+   importante: es la única forma de dejar de multiplicar la escena por vista.

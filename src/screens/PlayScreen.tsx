@@ -147,6 +147,8 @@ function PlayScreen({
   const { resetPlayers, resetRosterReady } = useSession();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** Barras de vida 2D, encima del canvas WebGL y debajo del HUD. */
+  const barCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const gameRef = useRef<Game | null>(null);
   const handlersRef = useRef<PlayHandlers | null>(null);
   const configsRef = useRef(configs);
@@ -285,7 +287,17 @@ function PlayScreen({
           if (!disposed) handlersRef.current?.onAtmosphere(state);
         }
       },
-      { mapId, manifest, modeId, modeSettings, timeLimitSeconds, atmosphereEnabled, pokemonIds, pokemonSkins }
+      {
+        mapId,
+        manifest,
+        modeId,
+        modeSettings,
+        timeLimitSeconds,
+        atmosphereEnabled,
+        pokemonIds,
+        pokemonSkins,
+        overlayCanvas: barCanvasRef.current
+      }
     )
       .then((created) => {
         // El efecto se desmontó mientras se creaba el dispositivo.
@@ -380,6 +392,12 @@ function PlayScreen({
       <canvas
         ref={canvasRef}
         className="fixed inset-0 block size-full cursor-grab touch-none outline-none active:cursor-grabbing"
+      />
+      {/* Barras de vida: capa 2D propia, sin tocar el canvas de WebGL. */}
+      <canvas
+        ref={barCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 block size-full"
       />
 
       {!hideLoadingOverlay && !error && !playing && (

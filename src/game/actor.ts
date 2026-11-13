@@ -1,6 +1,5 @@
 import * as pc from 'playcanvas';
 import { CONFIG } from './config';
-import { HealthBar } from './healthBar';
 import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
 import { SpriteBillboard, type SpriteAsset } from './sprite';
@@ -23,12 +22,26 @@ const MARKER_FLOAT_SINK = 0.12;
  * Un Pokémon del mundo: billboard + sombra de contacto.
  * El movimiento lo decide quien lo posee (jugador o NPC).
  */
+/**
+ * Altura del sprite en unidades de mundo. La comparte `Game` para calcular la
+ * barra de vida, que ya no vive dentro del actor.
+ */
+export function actorSpriteHeight(asset: SpriteAsset): number {
+  const idle = asset.skin.animations.idle;
+  const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
+  return (
+    anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch
+  );
+}
+
 export class Actor {
   readonly billboard: SpriteBillboard;
   private readonly app: pc.AppBase;
   private readonly shadow: pc.Entity;
-  /** Barra de vida flotante sobre el sprite. */
-  private readonly healthBar: HealthBar;
+  /** Altura local sobre la raíz del billboard donde apoya la barra de vida. */
+  readonly barAnchorOffset: number;
+  /** Altura de mundo cacheada; evita pedir la posición al nodo cada frame. */
+  private barAnchorYValue = 0;
   /** Anillo de rumbo; solo lo lleva el jugador. */
   private readonly marker: PlayerMarker | null;
   /** Círculo de depuración del hurtbox; solo con `CONFIG.debug.showHitboxes`. */
@@ -59,7 +72,8 @@ export class Actor {
     silhouette = false,
     accent: readonly [number, number, number] = [255, 224, 102],
     withOutline = false,
-    hitRadius = 0
+    hitRadius = 0,
+    deferLayers = false
   ) {
     this.app = app;
     this.asset = asset;
@@ -69,10 +83,11 @@ export class Actor {
     this.homeFacing = facing;
 
     const idle = asset.skin.animations.idle;
-    const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
-    const spriteHeight =
-      anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
+    const spriteHeight = actorSpriteHeight(asset);
     this.visibleHeight = BILLBOARD_BASE_Y + spriteHeight;
+    // La barra de vida se dibuja en el overlay 2D a esta altura; el actor solo
+    // publica el punto de anclaje para que la capa lo proyecte.
+    this.barAnchorOffset = spriteHeight + 0.18;
 
     this.billboard = new SpriteBillboard(app, asset, {
       pixelScale: CONFIG.sprite.pixelScale,
@@ -83,19 +98,10 @@ export class Actor {
       // que el anillo de rumbo.
       silhouetteColor: accent,
       // El resto de Pokémon de la vista llevan un borde de su color de equipo.
-      outlineColor: withOutline ? accent : null
+      outlineColor: withOutline ? accent : null,
+      deferLayers
     });
     this.billboard.setFacing(facing);
-
-    // La barra se apoya sobre la cabeza del sprite y conserva la proporción
-    // entre Pokémon altos y bajos.
-    const barWidth = pc.math.clamp(spriteHeight * 0.4, 0.6, 1.55);
-    this.healthBar = new HealthBar(app, this.billboard.root, {
-      width: barWidth,
-      height: Math.max(0.09, barWidth * 0.11),
-      y: spriteHeight + 0.18,
-      accent
-    });
 
     const diameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
     this.shadow = new pc.Entity(`shadow-${asset.entry.id}`);
@@ -173,6 +179,7 @@ export class Actor {
     );
     this.shadow.setPosition(this.position.x, SHADOW_BASE_Y - this.sink, this.position.z);
     this.shadow.enabled = this.visible && this.sink <= 0.001;
+    this.barAnchorYValue = BILLBOARD_BASE_Y - this.sink + this.barAnchorOffset;
 
     if (this.marker) {
       // Transición suave para que el anillo no salte al entrar o salir del agua.
@@ -213,36 +220,20 @@ export class Actor {
     return this.billboard.currentFrame;
   }
 
-  /** Actualiza la vida mostrada sobre el sprite (0 = KO, barra oculta). */
-  setHealth(fraction: number): void {
-    this.healthBar.setFraction(fraction);
-  }
-
-  /** Nivel de partida que se pinta delante de la barra de vida. */
-  setLevel(level: number): void {
-    this.healthBar.setLevel(level);
-  }
-
-  /** Progreso 0-1 hacia el siguiente nivel, bajo la barra de vida. */
-  setXpProgress(fraction: number): void {
-    this.healthBar.setXpFraction(fraction);
-  }
-
-  /**
-   * Armadura de casteo restante como fracción de la vida máxima: la franja
-   * metálica de la barra mide cuánto daño puede absorber aún antes de romperse.
-   */
-  setArmorFraction(fraction: number): void {
-    this.healthBar.setArmorFraction(fraction);
-  }
-
   setLoop(loop: boolean): void {
     this.billboard.setLoop(loop);
   }
 
+  /**
+   * Crea una capa de animación concreta si falta. Devuelve `true` si ha tenido
+   * que crearla.
+   */
+  prewarmStep(animation: AnimationName): boolean {
+    return this.billboard.prewarmStep(animation);
+  }
+
   update(dt: number, cameraPosition: pc.Vec3): void {
     this.billboard.update(dt, cameraPosition);
-    this.healthBar.update(cameraPosition);
   }
 
   setVisible(visible: boolean): void {
@@ -277,6 +268,11 @@ export class Actor {
     return this.visible;
   }
 
+  /** Altura de mundo donde apoya la barra de vida de esta copia. */
+  get barAnchorY(): number {
+    return this.barAnchorYValue;
+  }
+
   /** Capa de render exclusiva del viewport que debe ver esta copia. */
   setLayer(layerId: number): void {
     this.layerId = layerId;
@@ -285,11 +281,9 @@ export class Actor {
     if (shadowRender) shadowRender.layers = [layerId];
     this.marker?.setLayer(layerId);
     this.hitboxDebug?.setLayer(layerId);
-    this.healthBar.setLayer(layerId);
   }
 
   destroy(): void {
-    this.healthBar.destroy();
     this.billboard.destroy();
     this.shadow.destroy();
     this.marker?.destroy();

@@ -10,6 +10,7 @@ import type { Actor } from './actor';
 import type { CameraRig } from './camera';
 import type { CastPlan } from './castPlan';
 import type { EffectHandle, FxHandle, TelegraphHandle } from './combatFx';
+import type { HealthBarArt } from './healthBar';
 import type { MatchPlayerConfig, SplitRect } from './multiplayer';
 import type { CombatStats } from './pokedex';
 import type { TerrainId } from './terrain';
@@ -307,6 +308,11 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   camera: CameraRig;
   /** Una copia del actor por viewport, indexada por jugador/vista. */
   copies: Actor[];
+  /**
+   * Barra de vida compartida por todas las copias. Se dibuja una sola vez por
+   * jugador y el overlay la proyecta en cada vista.
+   */
+  bar: HealthBarArt;
   /** Rectángulo normalizado de esta vista, para proyectar la niebla. */
   viewport: SplitRect;
 

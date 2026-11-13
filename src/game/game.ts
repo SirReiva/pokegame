@@ -33,7 +33,7 @@ import {
   type AoeHitOptions,
   type AoeTarget
 } from './aoeEffect';
-import { Actor } from './actor';
+import { Actor, actorSpriteHeight } from './actor';
 import { createGameApp } from './appBootstrap';
 import { CastDebugOverlay } from './castDebug';
 import { buildCastPlan, frameForSegment, segmentAt } from './castPlan';
@@ -89,6 +89,8 @@ import { DamageNumbers, type DamageNumberView } from './damageNumbers';
 import { DeathMarker } from './deathMarker';
 import { applyHealFraction, applyHealSelf, CAST_EFFECTS } from './effects';
 import { FogMask, FogView, createFogMesh, type SightOccluder, type VisionCircle } from './fog';
+import { HealthBarArt, healthBarLayoutFor } from './healthBar';
+import { HealthBarOverlay } from './healthBarOverlay';
 import {
   IDLE_INPUT,
   Input,
@@ -148,6 +150,7 @@ import { baseStatsFor, combatStatsFor } from './pokedex';
 import { hitRadiusForPokemon, maxHitRadius, speedForPokemon } from './roster';
 import { rumbleOnDamage } from './rumble';
 import {
+  BILLBOARD_ANIMATION_ORDER,
   disposeSpriteAsset,
   loadSpriteAsset,
   resolveAnimationClip,
@@ -181,7 +184,7 @@ import {
 import { terrainSpeedEffect } from './terrainSpeed';
 import { typeEffectiveness } from './typeChart';
 import { DEFAULT_SKIN_ID, skinFor } from './skins';
-import type { LoadingProgress, SpriteManifest } from './types';
+import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import {
   effectiveVisionRange,
   lineOfSightBlocked,
@@ -241,6 +244,11 @@ export interface GameOptions {
    * las partidas se juegan en despejado.
    */
   atmosphereEnabled?: boolean;
+  /**
+   * Canvas 2D para las barras de vida. Lo aporta la pantalla de juego para
+   * quedar encima del canvas WebGL y debajo del HUD.
+   */
+  overlayCanvas?: HTMLCanvasElement | null;
 }
 
 /** Clave del caché de sprites: la especie y el aspecto son independientes. */
@@ -502,12 +510,20 @@ export class Game {
    * cuatro ni renderiza el mundo cuatro veces.
    */
   private views: MatchPlayerState[] = [];
+  /**
+   * Tareas de calentamiento de los billboards, ordenadas por animación para que
+   * todos los cuerpos aparezcan antes de crear los clips secundarios.
+   */
+  private prewarmTasks: Array<{ actor: Actor; animation: AnimationName }> = [];
+  private prewarmIndex = 0;
   /** Números de daño que aún no se han dibujado (ver `flushPendingPopups`). */
   private pendingPopups: PendingPopup[] = [];
   private bots = new Map<number, BotController>();
   /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
   private botNav: BotNavGrid | null = null;
   private viewLayers: pc.Layer[] = [];
+  /** Barras de vida en una capa 2D, compartidas por todos los viewports. */
+  private readonly healthBars: HealthBarOverlay;
   /** Cielo propio de cada vista, pegado a su cámara para el recorte lejano. */
   private readonly viewSkyLayers: pc.Layer[] = [];
   private readonly viewSkies = new Map<CameraRig, pc.Entity>();
@@ -676,6 +692,7 @@ export class Game {
     this.setResolutionBaseline(Math.min(window.devicePixelRatio || 1, 1.75));
 
     this.input = new Input(canvas);
+    this.healthBars = new HealthBarOverlay(options.overlayCanvas ?? null);
 
     this.baseCameraLayers = ['World', 'Depth', 'Skybox', 'UI', 'Immediate']
       .map((name) => this.app.scene.layers.getLayerByName(name)?.id)
@@ -1522,6 +1539,13 @@ export class Game {
       camera.distance =
         CONFIG.camera.distance * (humanConfigs.length > 2 ? 1.12 : 1);
 
+      // Una sola barra por jugador: el estado es idéntico en todas las vistas,
+      // así que no se duplican canvas, texturas ni redibujados por copia.
+      const bar = new HealthBarArt(
+        healthBarLayoutFor(actorSpriteHeight(asset)),
+        TEAM_INFO[config.team].accent
+      );
+
       const player: MatchPlayerState = {
         ...config,
         commonAbilityId,
@@ -1547,6 +1571,7 @@ export class Game {
         enemiesSeeing: 0,
         camera,
         copies: [],
+        bar,
         viewport: layer ? layout[currentView] : { x: 0, y: 0, w: 1, h: 1 },
         spawn,
         combat,
@@ -1644,12 +1669,17 @@ export class Game {
           this.world.shadowMaterial,
           { x: player.x, z: player.z },
           player.facing,
-          true,
+          // Solo la copia del dueño lleva anillo de rumbo. Antes lo llevaban
+          // todas (también los rivales), lo que añadía un draw call y una
+          // textura por copia sin aportar información nueva.
+          viewer.slot === player.slot,
           viewer.slot === player.slot,
           TEAM_INFO[player.team].accent,
           // Solo el Pokémon que controla este viewport va sin contorno.
           viewer.slot !== player.slot,
-          player.hitRadius
+          player.hitRadius,
+          // Las capas de animación se crean por tandas durante la cuenta atrás.
+          true
         );
         const layer = this.viewLayers[viewIndex];
         if (layer) copy.setLayer(layer.id);
@@ -1657,6 +1687,19 @@ export class Game {
         player.copies.push(copy);
       });
     });
+
+    // Calienta primero el idle de todas las copias y después los clips
+    // secundarios: así los cuerpos aparecen durante la cuenta atrás y los
+    // materiales de ataque no provocan un tirón en el primer casteo.
+    this.prewarmTasks = [];
+    for (const animation of BILLBOARD_ANIMATION_ORDER) {
+      for (const player of this.matchPlayers) {
+        for (const copy of player.copies) {
+          this.prewarmTasks.push({ actor: copy, animation });
+        }
+      }
+    }
+    this.prewarmIndex = 0;
 
     // Cada vista humana ya ha creado la máscara de niebla de su equipo en el
     // bucle anterior. La visibilidad de actores y objetos no usa la máscara, así
@@ -1756,6 +1799,7 @@ export class Game {
     for (const player of this.matchPlayers) {
       for (const copy of player.copies) copy.destroy();
       player.copies = [];
+      player.bar.dispose();
       player.camera.dispose();
     }
     for (const layer of this.viewLayers) this.app.scene.layers.remove(layer);
@@ -1765,6 +1809,9 @@ export class Game {
     this.bots.clear();
     this.botNav = null;
     this.viewLayers = [];
+    this.prewarmTasks = [];
+    this.prewarmIndex = 0;
+    this.healthBars.clear();
   }
 
   /** Zonas declaradas por el mapa, para los modos de control. */
@@ -2158,6 +2205,10 @@ export class Game {
   }
 
   private updateMatch(dt: number, frame: InputFrame, frozen = false): void {
+    // Reparte la creación de capas pendientes antes de simular. La cuenta
+    // atrás da margen suficiente para que todos los actores estén completos al
+    // empezar a jugarse.
+    this.prewarmBillboards();
     // La visibilidad de los FX se consulta muchas veces por frame con las
     // mismas anclas; la memoización solo es válida dentro de este frame.
     this.fxVisibilityCache.clear();
@@ -2237,13 +2288,6 @@ export class Game {
           copy.setPlayback(player.playback);
           copy.setLoop(true);
         }
-        copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
-        const xp = xpStatus(player.xp);
-        copy.setLevel(xp.level);
-        copy.setXpProgress(xp.progress);
-        copy.setArmorFraction(
-          this.activeCastArmor(player) / Math.max(1, player.maxHp)
-        );
         copy.setHitboxDebug(CONFIG.debug.showHitboxes);
         copy.update(dt, cameraPosition);
       });
@@ -2258,6 +2302,19 @@ export class Game {
         if (target) marker.setRespawnCountdown(target.respawnTimer);
       });
     });
+
+    // La barra es única por jugador: se actualiza una vez por frame, no una vez
+    // por copia, y el overlay la proyecta después en cada viewport.
+    for (const player of this.matchPlayers) {
+      const xp = xpStatus(player.xp);
+      player.bar.setFraction(player.alive ? player.hp / player.maxHp : 0);
+      player.bar.setLevel(xp.level);
+      player.bar.setXpFraction(xp.progress);
+      player.bar.setArmorFraction(
+        this.activeCastArmor(player) / Math.max(1, player.maxHp)
+      );
+    }
+    this.healthBars.render(this.views, this.matchPlayers);
 
     if (!frozen && simulated > 0) {
       this.updateRegeneration(simulated);
@@ -2281,6 +2338,22 @@ export class Game {
         this.statsTimer = 0;
         this.emitMatchStats();
       }
+    }
+  }
+
+  /**
+   * Crea por tandas las capas de animación que faltan en las copias. El
+   * presupuesto es de 3 ms por frame: el resto del tiempo sigue disponible para
+   * la simulación y la cuenta atrás se dibuja con normalidad.
+   */
+  private prewarmBillboards(): void {
+    if (this.prewarmIndex >= this.prewarmTasks.length) return;
+    const deadline = performance.now() + 3;
+    while (this.prewarmIndex < this.prewarmTasks.length) {
+      const task = this.prewarmTasks[this.prewarmIndex];
+      task.actor.prewarmStep(task.animation);
+      this.prewarmIndex++;
+      if (performance.now() >= deadline) break;
     }
   }
 

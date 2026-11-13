@@ -2,18 +2,13 @@
  * Barra de vida flotante sobre un Pokémon, con el nivel delante y una barra
  * fina de experiencia debajo.
  *
- * Se dibuja dentro de PlayCanvas, igual que los números de daño: varios quads
- * que miran a la cámara del viewport. La barra mantiene su tamaño y proporción
- * originales; el nivel va en un distintivo aparte, más grande que la barra,
- * para que el número se lea a distancia.
+ * El dibujo se hace en canvas 2D y se guarda por **jugador**, no por viewport:
+ * el estado (vida, nivel, XP, armadura) es el mismo en todas las copias del
+ * splitscreen. `HealthBarOverlay` proyecta esos canvas a la pantalla una vez
+ * por frame, así que las barras ya no son quads 3D ni crean materiales y
+ * texturas por copia.
  */
 
-import * as pc from 'playcanvas';
-import { DEG } from './config';
-import { FOG_EXCLUDED_STENCIL } from './fogStencil';
-import { setTextureSource } from './textures';
-
-/** Resolución de la barra de vida; mantiene la proporción (≈ 9:1). */
 const BAR_TEXTURE_WIDTH = 256;
 const BAR_TEXTURE_HEIGHT = 28;
 
@@ -23,8 +18,8 @@ const XP_TEXTURE_HEIGHT = 12;
 
 /**
  * Resolución del distintivo de nivel (cuadrado). Se dibuja con margen de sobra
- * y se reduce con mipmaps: el badge ocupa ~20-50 px en pantalla, así que una
- * textura de 128 px evita que el número salga dentado al minificarse.
+ * y se reduce al pintarlo: el badge ocupa ~20-50 px en pantalla, así que una
+ * textura de 128 px evita que el número salga dentado.
  */
 const BADGE_TEXTURE_SIZE = 128;
 
@@ -44,93 +39,43 @@ const COLORS = {
   highlight: 'rgba(255, 255, 255, 0.22)'
 } as const;
 
-/** Orden de dibujo: por debajo de los números de daño (10). */
-const DRAW_ORDER = 9;
-
-export interface HealthBarOptions {
+/**
+ * Medidas de la barra en unidades de mundo. Se calculan a partir de la altura
+ * del sprite para que Pokémon altos y bajos mantengan la proporción; el overlay
+ * las convierte a píxeles con la proyección de cada viewport.
+ */
+export interface HealthBarLayout {
+  /** Ancho de la barra de vida. */
   width: number;
   height: number;
-  /** Altura local sobre el suelo donde apoya la barra. */
+  badgeSize: number;
+  badgeGap: number;
+  xpWidth: number;
+  xpHeight: number;
+  xpGap: number;
+  /** Altura sobre la raíz del billboard donde apoya la barra. */
   y: number;
-  /** Color del equipo para el distintivo de nivel. */
-  accent?: readonly [number, number, number];
 }
 
-/** Quad unitario apoyado en Y=0. */
-function createQuadMesh(device: pc.GraphicsDevice): pc.Mesh {
-  const mesh = new pc.Mesh(device);
-  mesh.setPositions([
-    -0.5, 0, 0,
-    0.5, 0, 0,
-    0.5, 1, 0,
-    -0.5, 1, 0
-  ]);
-  mesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
-  mesh.setNormals([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]);
-  mesh.setIndices([0, 1, 2, 0, 2, 3]);
-  mesh.update();
-  return mesh;
-}
-
-/**
- * Marca el quad para que la niebla de guerra no lo tiña. El Pokémon ya escribe
- * esténcil 1 (ver `sprite.ts`), pero la barra es una entidad aparte: sin esto
- * se oscurece con la sombra del suelo que queda detrás, aunque el Pokémon y la
- * propia barra estén a la vista.
- */
-function excludeFromFog(instance: pc.MeshInstance, device: pc.GraphicsDevice): void {
-  if (!device.supportsStencil) return;
-  instance.stencilFront = FOG_EXCLUDED_STENCIL;
-  instance.stencilBack = FOG_EXCLUDED_STENCIL;
-}
-
-function createTexture(
-  device: pc.GraphicsDevice,
-  name: string,
-  width: number,
-  height: number
-): pc.Texture {
-  return new pc.Texture(device, {
-    name,
+export function healthBarLayoutFor(spriteHeight: number): HealthBarLayout {
+  const width = clamp(spriteHeight * 0.4, 0.6, 1.55);
+  const height = Math.max(0.09, width * 0.11);
+  const badgeSize = clamp(width * 0.58, 0.36, 0.5);
+  const xpHeight = Math.max(0.03, height * 0.3);
+  return {
     width,
     height,
-    format: pc.PIXELFORMAT_RGBA8,
-    srgb: true,
-    // Los textos y las barras se ven más pequeños que su textura: sin mipmaps
-    // el muestreo lineal aliasea los bordes (el nivel salía dentado).
-    mipmaps: true,
-    minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
-    magFilter: pc.FILTER_LINEAR,
-    addressU: pc.ADDRESS_CLAMP_TO_EDGE,
-    addressV: pc.ADDRESS_CLAMP_TO_EDGE,
-    // El canvas se sube igual que las hojas de sprite: la fila superior queda
-    // en V=1, que es el borde superior del quad.
-    flipY: true
-  });
+    badgeSize,
+    badgeGap: badgeSize * 0.15,
+    xpWidth: width * 0.86,
+    xpHeight,
+    xpGap: Math.max(0.012, height * 0.2),
+    y: spriteHeight + 0.18
+  };
 }
 
-function createMaterial(texture: pc.Texture): pc.StandardMaterial {
-  const material = new pc.StandardMaterial();
-  material.useLighting = false;
-  material.useSkybox = false;
-  material.useFog = false;
-  material.diffuse = new pc.Color(0, 0, 0);
-  material.emissive = new pc.Color(1, 1, 1);
-  material.emissiveMap = texture;
-  material.opacityMap = texture;
-  material.opacityMapChannel = 'a';
-  material.opacity = 1;
-  // Recorta los píxeles transparentes del canvas: con `alphaTest` en 0 el quad
-  // entero escribiría esténcil —incluidas las esquinas redondeadas del
-  // distintivo— y la niebla dejaría un hueco rectangular a su alrededor.
-  material.alphaTest = 0.05;
-  material.blendType = pc.BLEND_NORMAL;
-  material.depthWrite = false;
-  // Debe leerse aunque el Pokémon esté pegado a un árbol o al agua.
-  material.depthTest = false;
-  material.cull = pc.CULLFACE_NONE;
-  material.update();
-  return material;
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function colorFor(fraction: number): string {
@@ -158,27 +103,32 @@ function roundedRect(
   context.closePath();
 }
 
-export class HealthBar {
-  private readonly root: pc.Entity;
-  private readonly mesh: pc.Mesh;
+function createCanvas(
+  width: number,
+  height: number,
+  error: string
+): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error(error);
+  return { canvas, context };
+}
 
-  private readonly barCanvas: HTMLCanvasElement;
+/**
+ * Canvas de vida, experiencia y nivel de un jugador. Compartido por todas las
+ * copias del splitscreen: solo se redibuja cuando cambia su estado.
+ */
+export class HealthBarArt {
+  readonly layout: HealthBarLayout;
+  readonly barCanvas: HTMLCanvasElement;
+  readonly xpCanvas: HTMLCanvasElement;
+  readonly badgeCanvas: HTMLCanvasElement;
+
   private readonly barContext: CanvasRenderingContext2D;
-  private readonly barTexture: pc.Texture;
-  private readonly barMaterial: pc.StandardMaterial;
-  private readonly barRender: pc.RenderComponent;
-
-  private readonly xpCanvas: HTMLCanvasElement;
   private readonly xpContext: CanvasRenderingContext2D;
-  private readonly xpTexture: pc.Texture;
-  private readonly xpMaterial: pc.StandardMaterial;
-  private readonly xpRender: pc.RenderComponent;
-
-  private readonly badgeRoot: pc.Entity;
-  private readonly badgeCanvas: HTMLCanvasElement;
   private readonly badgeContext: CanvasRenderingContext2D;
-  private readonly badgeTexture: pc.Texture;
-  private readonly badgeMaterial: pc.StandardMaterial;
   private readonly accent: string;
   private readonly badgeTextColor: string;
 
@@ -187,39 +137,33 @@ export class HealthBar {
   /** Armadura de casteo restante respecto a la vida máxima (0-1). */
   private armorFraction = 0;
   private level = 1;
-  /** Quaterniones reutilizados por `update()` para no asignar cada frame. */
-  private readonly rotation = new pc.Quat();
-  private readonly tilt = new pc.Quat();
 
-  constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
-    const device = app.graphicsDevice;
-    this.mesh = createQuadMesh(app.graphicsDevice);
+  constructor(layout: HealthBarLayout, accent: readonly [number, number, number]) {
+    this.layout = layout;
+    const bar = createCanvas(
+      BAR_TEXTURE_WIDTH,
+      BAR_TEXTURE_HEIGHT,
+      'No se pudo dibujar la barra de vida'
+    );
+    this.barCanvas = bar.canvas;
+    this.barContext = bar.context;
 
-    const barCanvas = document.createElement('canvas');
-    barCanvas.width = BAR_TEXTURE_WIDTH;
-    barCanvas.height = BAR_TEXTURE_HEIGHT;
-    const barContext = barCanvas.getContext('2d');
-    if (!barContext) throw new Error('No se pudo dibujar la barra de vida');
-    this.barCanvas = barCanvas;
-    this.barContext = barContext;
+    const xp = createCanvas(
+      XP_TEXTURE_WIDTH,
+      XP_TEXTURE_HEIGHT,
+      'No se pudo dibujar la experiencia'
+    );
+    this.xpCanvas = xp.canvas;
+    this.xpContext = xp.context;
 
-    const badgeCanvas = document.createElement('canvas');
-    badgeCanvas.width = BADGE_TEXTURE_SIZE;
-    badgeCanvas.height = BADGE_TEXTURE_SIZE;
-    const badgeContext = badgeCanvas.getContext('2d');
-    if (!badgeContext) throw new Error('No se pudo dibujar el nivel');
-    this.badgeCanvas = badgeCanvas;
-    this.badgeContext = badgeContext;
+    const badge = createCanvas(
+      BADGE_TEXTURE_SIZE,
+      BADGE_TEXTURE_SIZE,
+      'No se pudo dibujar el nivel'
+    );
+    this.badgeCanvas = badge.canvas;
+    this.badgeContext = badge.context;
 
-    const xpCanvas = document.createElement('canvas');
-    xpCanvas.width = XP_TEXTURE_WIDTH;
-    xpCanvas.height = XP_TEXTURE_HEIGHT;
-    const xpContext = xpCanvas.getContext('2d');
-    if (!xpContext) throw new Error('No se pudo dibujar la experiencia');
-    this.xpCanvas = xpCanvas;
-    this.xpContext = xpContext;
-
-    const accent = options.accent ?? [255, 224, 102];
     this.accent = `rgb(${accent[0]}, ${accent[1]}, ${accent[2]})`;
     // Texto oscuro sobre acentos claros y blanco sobre los oscuros: así el
     // nivel se lee también en equipos morados, azules o verdes.
@@ -227,104 +171,17 @@ export class HealthBar {
       (accent[0] * 299 + accent[1] * 587 + accent[2] * 114) / 1000;
     this.badgeTextColor = luminance >= 150 ? COLORS.outline : '#ffffff';
 
-    this.barTexture = createTexture(
-      app.graphicsDevice,
-      'health-bar',
-      BAR_TEXTURE_WIDTH,
-      BAR_TEXTURE_HEIGHT
-    );
-    this.barMaterial = createMaterial(this.barTexture);
-
-    this.badgeTexture = createTexture(
-      app.graphicsDevice,
-      'level-badge',
-      BADGE_TEXTURE_SIZE,
-      BADGE_TEXTURE_SIZE
-    );
-    this.badgeMaterial = createMaterial(this.badgeTexture);
-
-    this.xpTexture = createTexture(
-      app.graphicsDevice,
-      'xp-bar',
-      XP_TEXTURE_WIDTH,
-      XP_TEXTURE_HEIGHT
-    );
-    this.xpMaterial = createMaterial(this.xpTexture);
-
-    this.root = new pc.Entity('health-bar');
-    parent.addChild(this.root);
-    this.root.setLocalPosition(0, options.y, 0);
-
-    const barRoot = new pc.Entity('health-bar-fill');
-    barRoot.addComponent('render');
-    const barRender = barRoot.render!;
-    barRender.castShadows = false;
-    barRender.receiveShadows = false;
-    const barInstance = new pc.MeshInstance(this.mesh, this.barMaterial);
-    barInstance.drawOrder = DRAW_ORDER;
-    excludeFromFog(barInstance, device);
-    barRender.meshInstances = [barInstance];
-    barRoot.setLocalScale(options.width, options.height, 1);
-    this.root.addChild(barRoot);
-    this.barRender = barRender;
-
-    // El distintivo es un cuadrado aparte para que no herede la altura tan
-    // pequeña de la barra. Se centra verticalmente con ella y queda a su
-    // izquierda, que es lo que se ve como "delante" desde la cámara.
-    const badgeSize = pc.math.clamp(options.width * 0.58, 0.36, 0.5);
-    const gap = badgeSize * 0.15;
-    this.badgeRoot = new pc.Entity('level-badge');
-    this.badgeRoot.addComponent('render');
-    const badgeRender = this.badgeRoot.render!;
-    badgeRender.castShadows = false;
-    badgeRender.receiveShadows = false;
-    const badgeInstance = new pc.MeshInstance(this.mesh, this.badgeMaterial);
-    badgeInstance.drawOrder = DRAW_ORDER;
-    excludeFromFog(badgeInstance, device);
-    badgeRender.meshInstances = [badgeInstance];
-    this.badgeRoot.setLocalScale(badgeSize, badgeSize, 1);
-    this.badgeRoot.setLocalPosition(
-      -options.width / 2 - gap - badgeSize / 2,
-      options.height / 2 - badgeSize / 2,
-      0
-    );
-    this.root.addChild(this.badgeRoot);
-
-    // La barra de experiencia se ancla justo debajo de la de vida, un poco más
-    // estrecha para que se lea como un subrayado del propio Pokémon.
-    const xpWidth = options.width * 0.86;
-    const xpHeight = Math.max(0.03, options.height * 0.3);
-    const xpGap = Math.max(0.012, options.height * 0.2);
-    const xpRoot = new pc.Entity('xp-bar');
-    xpRoot.addComponent('render');
-    const xpRender = xpRoot.render!;
-    xpRender.castShadows = false;
-    xpRender.receiveShadows = false;
-    const xpInstance = new pc.MeshInstance(this.mesh, this.xpMaterial);
-    xpInstance.drawOrder = DRAW_ORDER;
-    excludeFromFog(xpInstance, device);
-    xpRender.meshInstances = [xpInstance];
-    xpRoot.setLocalScale(xpWidth, xpHeight, 1);
-    xpRoot.setLocalPosition(0, -xpGap - xpHeight, 0);
-    this.root.addChild(xpRoot);
-    this.xpRender = xpRender;
-
     this.drawBar();
     this.drawBadge();
     this.drawXpBar();
-    setTextureSource(this.barTexture, this.barCanvas);
-    setTextureSource(this.badgeTexture, this.badgeCanvas);
-    setTextureSource(this.xpTexture, this.xpCanvas);
   }
 
-  /** `fraction` va de 0 (KO) a 1 (vida completa); a 0 todo se oculta. */
+  /** `fraction` va de 0 (KO) a 1 (vida completa); a 0 no se pinta la barra. */
   setFraction(fraction: number): void {
-    const next = pc.math.clamp(fraction, 0, 1);
+    const next = clamp(fraction, 0, 1);
     if (next === this.fraction) return;
     this.fraction = next;
-    this.root.enabled = next > 0;
     this.drawBar();
-    setTextureSource(this.barTexture, this.barCanvas);
   }
 
   /** Nivel 1-10 que se muestra delante de la barra. */
@@ -333,16 +190,14 @@ export class HealthBar {
     if (next === this.level) return;
     this.level = next;
     this.drawBadge();
-    setTextureSource(this.badgeTexture, this.badgeCanvas);
   }
 
   /** `fraction` va de 0 (recién subido de nivel) a 1 (siguiente nivel). */
   setXpFraction(fraction: number): void {
-    const next = pc.math.clamp(fraction, 0, 1);
+    const next = clamp(fraction, 0, 1);
     if (next === this.xpFraction) return;
     this.xpFraction = next;
     this.drawXpBar();
-    setTextureSource(this.xpTexture, this.xpCanvas);
   }
 
   /**
@@ -351,11 +206,25 @@ export class HealthBar {
    * lanzamiento; 0 la oculta.
    */
   setArmorFraction(fraction: number): void {
-    const next = pc.math.clamp(fraction, 0, 1);
+    const next = clamp(fraction, 0, 1);
     if (next === this.armorFraction) return;
     this.armorFraction = next;
     this.drawBar();
-    setTextureSource(this.barTexture, this.barCanvas);
+  }
+
+  /** `true` mientras quede vida; a 0 la barra no debe pintarse. */
+  get isVisible(): boolean {
+    return this.fraction > 0;
+  }
+
+  /** Libera el lienzo; el overlay deja de dibujar este jugador al destruirse. */
+  dispose(): void {
+    this.barCanvas.width = 0;
+    this.barCanvas.height = 0;
+    this.xpCanvas.width = 0;
+    this.xpCanvas.height = 0;
+    this.badgeCanvas.width = 0;
+    this.badgeCanvas.height = 0;
   }
 
   /** Redibuja el contorno, la pista y la porción de vida. */
@@ -398,8 +267,8 @@ export class HealthBar {
   /**
    * Franja metálica de la armadura de casteo sobre la propia barra de vida.
    * Se alinea a la derecha con el tramo verde de la vida actual y comparte su
-   * altura; su ancho es la armadura restante respecto a la vida máxima. Si la
-   * armadura supera la vida actual, se recorta contra el borde izquierdo del
+   * altura; su ancho es la armadura restante respecto a la vida máxima. Si
+   * la armadura supera la vida actual, se recorta contra el borde izquierdo del
    * tramo para no salirse de la barra.
    */
   private drawArmorBand(
@@ -531,39 +400,5 @@ export class HealthBar {
     }
     context.fillStyle = this.badgeTextColor;
     context.fillText(label, centerX, centerY);
-  }
-
-  /** Orienta la barra para que su cara mire a la cámara de su viewport. */
-  update(cameraPosition: pc.Vec3): void {
-    if (!this.root.enabled) return;
-    const position = this.root.getPosition();
-    const dx = cameraPosition.x - position.x;
-    const dy = cameraPosition.y - position.y;
-    const dz = cameraPosition.z - position.z;
-    const yaw = Math.atan2(dx, dz) / DEG;
-    const pitch = Math.atan2(dy, Math.hypot(dx, dz)) / DEG;
-    const rotation = this.rotation.setFromEulerAngles(0, yaw, 0);
-    const tilt = this.tilt.setFromEulerAngles(-pitch, 0, 0);
-    rotation.mul(tilt);
-    this.root.setLocalRotation(rotation);
-  }
-
-  /** Capa de render exclusiva del viewport que debe ver esta copia. */
-  setLayer(layerId: number): void {
-    this.barRender.layers = [layerId];
-    this.xpRender.layers = [layerId];
-    const badgeRender = this.badgeRoot.render;
-    if (badgeRender) badgeRender.layers = [layerId];
-  }
-
-  destroy(): void {
-    this.root.destroy();
-    this.barMaterial.destroy();
-    this.barTexture.destroy();
-    this.xpMaterial.destroy();
-    this.xpTexture.destroy();
-    this.badgeMaterial.destroy();
-    this.badgeTexture.destroy();
-    this.mesh.destroy();
   }
 }
