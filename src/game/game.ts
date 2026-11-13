@@ -516,7 +516,7 @@ export class Game {
    */
   private prewarmTasks: Array<{ actor: Actor; animation: AnimationName }> = [];
   private prewarmIndex = 0;
-  /** Reutilizada cada frame para las consultas por cámara (objetos, partículas). */
+  /** Reutilizada cada frame para las consultas por cámara de los objetos. */
   private readonly viewCameraPositions: pc.Vec3[] = [];
   /** Diagnóstico (Ctrl+Alt+…): oculta capas para localizar artefactos. */
   private debugHideActors = false;
@@ -2183,6 +2183,7 @@ export class Game {
     // no se simulan jugadores ni habilidades.
     if (this.matchOver) {
       this.world.update(frameDt);
+      this.world.updateAmbient(frameDt);
       this.fxVisibilityCache.clear();
       this.combatFx.update(frameDt);
       this.flushPendingPopups();
@@ -2192,6 +2193,9 @@ export class Game {
 
     if (this.paused) {
       this.world.update(frameDt);
+      // La ambientación sigue respirando con la pausa, como hacían los
+      // ParticleSystem de PlayCanvas, que se actualizaban por su cuenta.
+      this.world.updateAmbient(frameDt);
       return;
     }
 
@@ -2199,6 +2203,7 @@ export class Game {
     // cancelar y volvería a pausar. Saltamos un frame de simulación.
     if (wasPaused) {
       this.world.update(frameDt);
+      this.world.updateAmbient(frameDt);
       return;
     }
 
@@ -2236,11 +2241,10 @@ export class Game {
     // anterior y la cámara no debe saltar a las coordenadas del que viene.
     this.menuCamera.update(dt, this.menuFocus, 0, 0);
     this.world.update(dt);
-    // En el menú la cámara de atracción hace de observador para el presupuesto
-    // de partículas ambientales y para los objetos.
+    // En el menú la cámara de atracción sirve de observador para los objetos.
     this.viewCameraPositions.length = 0;
     this.viewCameraPositions.push(this.menuCamera.position);
-    this.world.updateAmbient(this.viewCameraPositions, dt);
+    this.world.updateAmbient(dt);
     this.pickups?.update(dt, this.viewCameraPositions);
   }
 
@@ -2416,13 +2420,12 @@ export class Game {
     }
 
     this.world.update(dt);
-    // Una sola lista de posiciones de cámara por frame: la usan los objetos y
-    // el presupuesto de partículas ambientales.
+    // Una sola lista de posiciones de cámara por frame: la usan los objetos.
     this.viewCameraPositions.length = 0;
     for (const view of this.views) {
       this.viewCameraPositions.push(view.camera.position);
     }
-    this.world.updateAmbient(this.viewCameraPositions, dt);
+    this.world.updateAmbient(dt);
     this.pickups?.update(
       // En partida los cooldowns de objetos siguen a la simulación; durante la
       // cuenta atrás se usa el reloj del render para no congelar las animaciones.

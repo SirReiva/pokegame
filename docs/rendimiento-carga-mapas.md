@@ -244,8 +244,15 @@ Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
   `matchPlayers` por marca y por vista.
 - **Basura por frame**: se reutilizan los `Vec2`/`Quat`, los conjuntos de
   visibilidad y los mapas de conocimiento de objetos descritos en el README.
+- **Filtrado anisotrópico** (`CONFIG.performance.anisotropy`, 8 por defecto) en
+  el suelo, la tierra y el agua. Sin él, las líneas finas del terreno (grietas,
+  losetas, guijarros) se ven como un peine vertical en los planos vistos en
+  ángulo y **centellean** al caminar, porque cada frame muestrea un texel
+  distinto. El coste medido es indistinguible (render p50 2,5 → 2,2 ms en una
+  GTX 1060 a 1920×1080). El anillo del jugador pasó a filtrado lineal con
+  mipmaps: con `NEAREST` sus bordes eran un punteado que también parpadeaba.
 
-## Partículas ambientales: 82 pasadas de GPU por frame — aplicada
+## Partículas ambientales: 82 emisores → 6 draw calls por vista — aplicada
 
 Una grabación de perfil del navegador durante una partida real mostró que el
 mayor coste de CPU no era el juego, sino los **emisores de partículas del mapa**
@@ -258,33 +265,48 @@ jugadores, 32 s):
   tardaba **14,8 ms de media** (p95 26 ms).
 - De ese tiempo, **16,5 s (94 %)** estaban dentro del tick de PlayCanvas y
   **~1,2 s (3,7 %)** en código del juego: `game.ts`, `bot.ts`, `botNav.ts`…
-- El mapa tenía **82 emisores ambientales**, y cada uno cuesta **una pasada de
-  render de GPU por frame** solo para simular sus partículas, aunque esté fuera
-  de pantalla. En el perfil dominaban `startRenderPass`, `beginRenderPass`,
-  `popErrorScope` y `createBindGroup`.
+- El mapa tenía **82 emisores ambientales**. Cada `ParticleSystem` de PlayCanvas
+  cuesta una **pasada `ParticleUpdate`** por paso de simulación (ping-pong de
+  texturas en GPU), un **draw call por vista** y el mantenimiento de su emisor en
+  CPU (`addTime`/`finishFrame`), aunque esté fuera de pantalla.
 
-La solución (`src/game/ambientParticles.ts`) reparte la frecuencia de simulación
-según la distancia a la cámara más cercana:
+Primero se aplicó un presupuesto por distancia (60/20/8 Hz) que recortó la
+simulación, pero **no los draw calls**: seguía habiendo uno por emisor y vista.
+La solución final (`src/game/batchedParticles.ts`) agrupa las motas **por
+tipo**: una malla y un material por tipo (9 posibles en total; 6 en `caldera`).
+La deriva, el vaivén, el tamaño, el color y el alfa se calculan en el vertex
+shader a partir de un único `uTime`; no hay simulación por emisor ni una pasada
+de GPU por foco. El shader descarta las motas que quedan más allá del final de
+la niebla, así que tampoco se paga su relleno.
 
-| Distancia | Simulación | Efecto |
-| --- | --- | --- |
-| < 20 u | 60 Hz | sin cambios |
-| 20–45 u | 20 Hz | inapreciable: son partículas que se mueven despacio |
-| > 45 u | 8 Hz | inapreciable a esa distancia |
-| > final de la niebla | oculto | es invisible: la niebla lo tapa |
+Medido con la cámara fija en el spawn de `caldera` (Chrome, 1280×720, build de
+desarrollo; los draw calls no dependen de la instrumentación del motor):
 
-Los emisores de una misma banda se desfasan entre sí para que sus pasadas no
-caigan todas en el mismo frame. Medido con el juego real (Chrome + GTX 1060,
-1920×1080, 1 vista, 8 jugadores, WebGPU):
-
-| Escenario | Update antes | Update ahora | Script antes | Script ahora |
+| Vistas | Draw calls con partículas | Sin partículas | Partículas antes | Partículas ahora |
 | --- | --- | --- | --- | --- |
-| `caldera` (82 emisores), build de producción | 3,1 ms | **2,1 ms** | 2,0 ms | **0,8 ms** |
-| `caldera`, servidor de desarrollo | 5,4 ms | **3,0 ms** | 4,4 ms | **1,8 ms** |
-| `perf-256` (33 emisores lejanos), desarrollo | 3,3 ms | **1,6 ms** | 2,1 ms | **0,2 ms** |
+| 1 | 49 | 43 | 72 | **6** |
+| 4 | 250 | 226 | ~253 | **24** |
 
-En `perf-256` casi todos los emisores quedan más allá de la niebla, así que se
-ocultan y dejan de costar: el mapa se ve igual porque ya eran invisibles.
+El `renderTime` de desarrollo con 4 vistas baja a **5,9 ms** con partículas
+encendidas (4,7 ms con los lotes ocultos); antes, apagar los 82 emisores ahorraba
+253 draw calls y bajaba el `render` de 9,4 a 5,1 ms. El `update` de CPU ya no
+recorre emisores: solo avanza un contador y actualiza la niebla de los materiales.
+
+Decisiones de la implementación:
+
+- La caja de emisión usa el mismo tamaño completo que `emitterExtents` de
+  PlayCanvas, y las posiciones se sortean con un generador determinista sembrado
+  por zona, así que el mapa se ve igual en cada carga.
+- El vaivén sustituye a la turbulencia que aportaban las velocidades aleatorias
+  de PlayCanvas; la vida se reparte con una fase aleatoria por mota (equivalente
+  al `preWarm`).
+- Los tipos aditivos (brasas, polen, chispas, fuegos fatuos) premultiplican el
+  color por el alfa y usan `BLEND_ADDITIVE`, como el shader de partículas del
+  motor; los normales usan alfa recto. La salida se codifica a sRGB igual que
+  los materiales estándar.
+- Un `MeshInstance.drawOrder` por tipo conserva el orden que tenían el humo y
+  la niebla respecto a brasas y chispas.
+
 
 ### El servidor de desarrollo no sirve para medir FPS
 
@@ -373,6 +395,39 @@ las barras ya no aportan draw calls porque se pintan en 2D. Lo aplicado:
   él (el mundo ya se construye con un mapa explícito y el render está separado
   de la simulación por pasos fijos).
 
+## Cactus instanciados: 240 draw calls del mundo — aplicada
+
+La decoración repetida también se puede dibujar con una sola llamada. Los
+cactus del desierto ya usaban instancing en los desiertos grandes, pero los
+calveros pequeños seguían creando un cactus con **cinco primitivas** cada uno.
+En `caldera` hay 48 de esos calveros, así que solo los cactus suponían **240
+draw calls** del mundo: más de la mitad del total de la escena.
+
+Ahora todos los cactus del mapa se acumulan en una única malla instanciada (una
+matriz de mundo por cactus, mismo consumo de azar para que las posiciones no
+cambien). Medido con la cámara fija en el centro del mapa y los bots detenidos
+(Chrome, 1280×720, build de desarrollo; los draw calls no dependen de la
+instrumentación del motor):
+
+| Vistas | Draw calls antes | Draw calls ahora | Forward antes | Forward ahora |
+| --- | --- | --- | --- | --- |
+| 1 | 312 | **202** (−35 %) | 255 | **143** (−44 %) |
+| 4 | 1193 | **650** (−46 %) | 1112 | **566** (−49 %) |
+
+La medición con cámara fija importa: el mapa reparte los respawns al azar y cada
+posición descarta una parte distinta del mundo, así que dos ejecuciones sin
+anclar la cámara pueden diferir en decenas de draw calls.
+
+### Descartado tras medir
+
+- **Instanciar picos y muros**: se probó con lotes por cordillera y por variante
+  de malla. En `caldera` no cambiaba el total y en `perf-256` **empeoraba**
+  (116 picos y 26 muros): el descarte por cámara de cada pieza ya era muy
+  efectivo y un lote con la caja de toda la cordillera se dibuja en cuanto un
+  solo pico asoma. Se mantienen como piezas sueltas. Los cactus, en cambio, se
+  reparten por todo el mapa y casi siempre hay varios en pantalla, así que el
+  lote único sí compensa.
+
 ## Prioridad recomendada
 
 1. ~~Reescribir `paintTerrainZone` con relleno/trazo de Canvas (solución 1).~~
@@ -387,10 +442,15 @@ las barras ya no aportan draw calls porque se pintan en 2D. Lo aplicado:
 6. ~~Reducir el coste del splitscreen: anillo solo del dueño, barras en 2D,
    geometría compartida y capas perezosas.~~ Hecho: 413 → 269 draw calls y
    arranque de ~4,6 s → ~0,45 s con 8 vistas.
-7. ~~Repartir la simulación de las partículas ambientales por distancia.~~ Hecho:
-   `CONFIG.performance.ambientParticles`; hasta 2,4 ms por frame menos con 82
-   emisores y todas las pasadas de GPU ocultas más allá de la niebla.
-8. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
+7. ~~Repartir la simulación de las partículas ambientales por distancia.~~
+   Hecho primero con un presupuesto por distancia y después **sustituido por
+   lotes por tipo** (`batchedParticles.ts`): en `caldera`, las partículas pasan
+   de 72 a 6 draw calls por vista y desaparece la simulación por emisor.
+8. ~~Instanciar la decoración repetida que no se descarta bien por cámara.~~
+   Hecho para los cactus del desierto: en `caldera`, 312 → 202 draw calls con
+   una vista y 1193 → 650 con cuatro. Picos y muros se dejaron sueltos porque el
+   instancing medido empeoraba `perf-256`.
+9. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
    importante: es la única forma de dejar de multiplicar la escena por vista.
-9. **Medir siempre sobre la build de producción**: el servidor de desarrollo
-   añade la instrumentación de PlayCanvas y duplica el coste del tick.
+10. **Medir siempre sobre la build de producción**: el servidor de desarrollo
+    añade la instrumentación de PlayCanvas y duplica el coste del tick.

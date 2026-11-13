@@ -1,5 +1,5 @@
 import * as pc from 'playcanvas';
-import { AmbientParticleBudget } from './ambientParticles';
+import { BatchedParticles } from './batchedParticles';
 import { type AtmosphereId } from './atmosphere';
 import { createAtmosphereVisuals } from './atmosphereVisuals';
 import { CONFIG } from './config';
@@ -70,10 +70,10 @@ export interface World {
   /** Aplica el clima indicado al cielo, las luces y las partículas. */
   setAtmosphere(id: AtmosphereId): void;
   /**
-   * Reparte la simulación de los emisores ambientales según las cámaras
-   * activas. Ver `AmbientParticleBudget`.
+   * Avanza las partículas ambientales por lotes. El movimiento se calcula en
+   * el vertex shader, así que aquí solo se actualiza el tiempo y la niebla.
    */
-  updateAmbient(cameras: readonly pc.Vec3[], dt: number): void;
+  updateAmbient(dt: number): void;
   update(dt: number): void;
   dispose(): void;
 }
@@ -415,6 +415,161 @@ function* buildWorldSteps(
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
+
+  // --- Partículas ambientales por lotes ------------------------------------
+  // Antes cada foco era un `ParticleSystem` propio: una pasada de simulación y
+  // un draw call por vista. Aquí todas las motas de un tipo comparten malla y
+  // material, y el movimiento se resuelve en el vertex shader. Los colores,
+  // tamaños y tiempos reproducen las curvas que tenía cada emisor.
+  const particles = new BatchedParticles();
+  particles.define('dust', {
+    texture: dustTexture,
+    colorStart: [1, 0.96, 0.84],
+    colorEnd: [1, 0.84, 0.7],
+    opacity: 0.4,
+    sizeStart: 0.26,
+    sizeMid: 0.7,
+    sizeEnd: 0.95,
+    lifetime: 5.5,
+    fadeIn: 0.2,
+    fadeOut: 0.65,
+    drift: [0.11, 0.06, 0.055],
+    sway: 0.12,
+    swaySpeed: 0.35
+  });
+  particles.define('snow', {
+    texture: frostTexture,
+    colorStart: [0.86, 0.94, 1],
+    colorEnd: [1, 1, 1],
+    opacity: 0.7,
+    sizeStart: 0.06,
+    sizeMid: 0.1,
+    sizeEnd: 0.08,
+    lifetime: 5.2,
+    fadeIn: 0.12,
+    fadeOut: 0.72,
+    drift: [0.05, -0.39, 0.03],
+    sway: 0.05,
+    swaySpeed: 0.6
+  });
+  particles.define('embers', {
+    texture: emberTexture,
+    additive: true,
+    colorStart: [1, 0.86, 0.38],
+    colorEnd: [0.85, 0.42, 0.1],
+    opacity: 0.9,
+    sizeStart: 0.05,
+    sizeMid: 0.1,
+    sizeEnd: 0.04,
+    lifetime: 3.4,
+    fadeIn: 0.08,
+    fadeOut: 0.62,
+    drift: [0.07, 0.37, 0.045],
+    sway: 0.06,
+    swaySpeed: 1.4,
+    drawOrder: 2
+  });
+  particles.define('fireSmoke', {
+    texture: smokeTexture,
+    colorStart: [0.62, 0.5, 0.44],
+    colorEnd: [0.5, 0.44, 0.4],
+    opacity: 0.42,
+    sizeStart: 0.22,
+    sizeMid: 0.48,
+    sizeEnd: 1.05,
+    lifetime: 5.2,
+    fadeIn: 0.1,
+    fadeOut: 0.7,
+    drift: [0.05, 0.5, 0.035],
+    sway: 0.04,
+    swaySpeed: 0.4,
+    drawOrder: 1
+  });
+  particles.define('pollen', {
+    texture: pollenTexture,
+    additive: true,
+    colorStart: [1, 0.92, 0.66],
+    colorEnd: [0.96, 0.78, 0.44],
+    opacity: 0.8,
+    sizeStart: 0.03,
+    sizeMid: 0.06,
+    sizeEnd: 0.02,
+    lifetime: 6.2,
+    fadeIn: 0.14,
+    fadeOut: 0.55,
+    drift: [0.08, 0.065, 0.085],
+    sway: 0.1,
+    swaySpeed: 1,
+    drawOrder: 2
+  });
+  particles.define('sparks', {
+    texture: sparkTexture,
+    additive: true,
+    colorStart: [0.78, 0.96, 1],
+    colorEnd: [0.44, 0.8, 1],
+    opacity: 0.9,
+    sizeStart: 0.018,
+    sizeMid: 0.045,
+    sizeEnd: 0.008,
+    lifetime: 2.4,
+    fadeIn: 0.18,
+    fadeOut: 0.55,
+    drift: [0.09, 0.145, 0.09],
+    sway: 0.04,
+    swaySpeed: 1.8,
+    drawOrder: 2
+  });
+  particles.define('swampSmoke', {
+    texture: smokeTexture,
+    colorStart: [0.72, 0.78, 0.68],
+    colorEnd: [0.55, 0.62, 0.5],
+    opacity: 0.46,
+    sizeStart: 0.38,
+    sizeMid: 0.76,
+    sizeEnd: 1.28,
+    lifetime: 7,
+    fadeIn: 0.2,
+    fadeOut: 0.7,
+    drift: [0.06, 0.14, 0.03],
+    sway: 0.05,
+    swaySpeed: 0.3,
+    drawOrder: 2
+  });
+  particles.define('wisps', {
+    texture: wispTexture,
+    additive: true,
+    colorStart: [0.74, 0.96, 1],
+    colorEnd: [0.4, 0.27, 0.86],
+    opacity: 0.9,
+    sizeStart: 0.04,
+    sizeMid: 0.11,
+    sizeEnd: 0.02,
+    lifetime: 6.4,
+    fadeIn: 0.16,
+    fadeOut: 0.68,
+    drift: [0.1, 0.075, 0.1],
+    sway: 0.15,
+    swaySpeed: 0.8,
+    drawOrder: 2
+  });
+  particles.define('mist', {
+    texture: smokeTexture,
+    colorStart: [0.66, 0.6, 0.7],
+    colorEnd: [0.8, 0.7, 0.86],
+    opacity: 0.52,
+    sizeStart: 0.38,
+    sizeMid: 0.95,
+    sizeEnd: 1.28,
+    lifetime: 10.5,
+    fadeIn: 0.2,
+    fadeOut: 0.7,
+    drift: [0.045, 0.02, 0.04],
+    sway: 0.08,
+    swaySpeed: 0.2,
+    drawOrder: 1
+  });
+
   yield 1;
   const skyTexture = textureFromCanvas(device, createSkyCanvas(), {
     name: 'sky',
@@ -1416,10 +1571,8 @@ function* buildWorldSteps(
   }
 
   // Partículas suaves en suspensión sobre toda la zona: nacen repartidas en una
-  // caja baja, derivan despacio con el viento y crecen y se desvanecen. Usan
-  // una textura de manchas difusas y blending normal, así que se leen como
-  // polvo y no como chispas. La densidad y el tamaño son altos para que la
-  // bruma se note desde la cámara a 45º.
+  // caja baja, derivan despacio con el viento y crecen y se desvanecen. Se
+  // acumulan en el lote `dust` y se dibujan con un solo draw call.
   desertZones.forEach((zone, zoneIndex) => {
     const area = zoneArea(zone);
     if (area > DESERT_LARGE_AREA) return;
@@ -1435,49 +1588,13 @@ function* buildWorldSteps(
     );
 
     const [dustX, dustZ] = zoneCenter(zone);
-    const dust = new pc.Entity(`desert-dust-${zoneIndex}`);
-    dust.setPosition(dustX, 0.8, dustZ);
-    dust.addComponent('particlesystem', {
+    particles.emit(
+      'dust',
+      [dustX, 0.8, dustZ],
+      zoneEmitterExtents(zone, 2.0, 1.5),
       numParticles,
-      lifetime: 5.5,
-      rate: 0.045,
-      rate2: 0.075,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 2.0, 1.5),
-      colorMap: dustTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 1, 1],
-          [0, 0.96, 1, 0.9],
-          [0, 0.84, 1, 0.7]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.2, 0.4, 0.65, 0.29, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.26, 0.4, 0.52, 0.75, 0.8, 1, 0.95]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.07, 1, 0.16],
-          [0, 0.02, 1, 0.1],
-          [0, 0.03, 1, 0.08]
-        ]
-      },
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(dust);
-    created.push(dust);
+      0x3c7d + zoneIndex * 4211
+    );
   });
 
   yield 1;
@@ -1786,49 +1903,13 @@ function* buildWorldSteps(
   // alturas y el efecto se lee desde la cámara a 45º sin tapar el suelo.
   iceZones.forEach((zone, zoneIndex) => {
     const [snowX, snowZ] = zoneCenter(zone);
-    const snow = new pc.Entity(`ice-snow-${zoneIndex}`);
-    snow.setPosition(snowX, 1.5, snowZ);
-    snow.addComponent('particlesystem', {
-      numParticles: 70,
-      lifetime: 5.2,
-      rate: 0.07,
-      rate2: 0.11,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.9, 1.6),
-      colorMap: frostTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.86, 1, 1],
-          [0, 0.94, 1, 1],
-          [0, 1, 1, 1]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.12, 0.7, 0.72, 0.55, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.06, 0.35, 0.1, 0.7, 0.14, 1, 0.08]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.05, 1, 0.11],
-          [0, -0.3, 1, -0.48],
-          [0, 0.015, 1, 0.05]
-        ]
-      },
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(snow);
-    created.push(snow);
+    particles.emit(
+      'snow',
+      [snowX, 1.5, snowZ],
+      zoneEmitterExtents(zone, 1.9, 1.6),
+      70,
+      0x5e21 + zoneIndex * 977
+    );
   });
 
   yield 1;
@@ -2156,50 +2237,13 @@ function* buildWorldSteps(
   fireZones.forEach((zone, zoneIndex) => {
     const [fireX, fireZ] = zoneCenter(zone);
     // Brasas que suben de la costra: pequeñas, aditivas y con deriva corta.
-    const embers = new pc.Entity(`fire-embers-${zoneIndex}`);
-    embers.setPosition(fireX, 0.22, fireZ);
-    embers.addComponent('particlesystem', {
-      numParticles: 44,
-      lifetime: 3.4,
-      rate: 0.055,
-      rate2: 0.09,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.55, 0.35),
-      colorMap: emberTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 1, 0.85],
-          [0, 0.86, 1, 0.42],
-          [0, 0.38, 1, 0.1]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.08, 0.9, 0.62, 0.5, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.05, 0.3, 0.1, 0.75, 0.13, 1, 0.04]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.04, 1, 0.1],
-          [0, 0.24, 1, 0.5],
-          [0, 0.02, 1, 0.07]
-        ]
-      },
-      blendType: pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(embers);
-    if (embers.particlesystem) embers.particlesystem.drawOrder = 2;
-    created.push(embers);
+    particles.emit(
+      'embers',
+      [fireX, 0.22, fireZ],
+      zoneEmitterExtents(zone, 1.55, 0.35),
+      44,
+      0x71a3 + zoneIndex * 6131
+    );
 
     // Luz corta de lava: tiñe de naranja las placas y parpadea despacio.
     const glow = new pc.Entity(`fire-glow-${zoneIndex}`);
@@ -2221,50 +2265,13 @@ function* buildWorldSteps(
   // en vez de quedarse como una bruma repartida por toda la zona.
   basaltVents.forEach((vents, zoneIndex) => {
     vents.forEach(([x, z], i) => {
-      const smoke = new pc.Entity(`fire-smoke-${zoneIndex}-${i}`);
-      smoke.setPosition(x, 0.16, z);
-      smoke.addComponent('particlesystem', {
-        numParticles: 24,
-        lifetime: 5.2,
-        rate: 0.16,
-        rate2: 0.22,
-        loop: true,
-        preWarm: true,
-        autoPlay: true,
-        emitterShape: pc.EMITTERSHAPE_BOX,
-        emitterExtents: new pc.Vec3(0.24, 0.12, 0.24),
-        colorMap: smokeTexture,
-        colorGraph: {
-          type: pc.CURVE_LINEAR,
-          keys: [
-            [0, 0.62, 1, 0.5],
-            [0, 0.5, 1, 0.44],
-            [0, 0.44, 1, 0.4]
-          ]
-        },
-        alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.1, 0.42, 0.7, 0.24, 1, 0] },
-        scaleGraph: {
-          type: pc.CURVE_LINEAR,
-          keys: [0, 0.22, 0.35, 0.48, 0.75, 0.84, 1, 1.05]
-        },
-        velocityGraph: {
-          type: pc.CURVE_LINEAR,
-          keys: [
-            [0, 0.02, 1, 0.09],
-            [0, 0.38, 1, 0.62],
-            [0, 0.01, 1, 0.06]
-          ]
-        },
-        blendType: pc.BLEND_NORMAL,
-        depthWrite: false,
-        useFog: true,
-        lighting: false,
-        intensity: 1,
-        orientation: pc.PARTICLEORIENTATION_SCREEN
-      });
-      worldRoot.addChild(smoke);
-      if (smoke.particlesystem) smoke.particlesystem.drawOrder = 1;
-      created.push(smoke);
+      particles.emit(
+        'fireSmoke',
+        [x, 0.16, z],
+        new pc.Vec3(0.24, 0.12, 0.24),
+        24,
+        0x2b17 + zoneIndex * 3313 + i * 97
+      );
     });
   });
 
@@ -2757,50 +2764,13 @@ function* buildWorldSteps(
   // como polen mágico y no como chispas ni como polvo.
   fairyZones.forEach((zone, zoneIndex) => {
     const [pollenX, pollenZ] = zoneCenter(zone);
-    const pollen = new pc.Entity(`fairy-pollen-${zoneIndex}`);
-    pollen.setPosition(pollenX, 0.65, pollenZ);
-    pollen.addComponent('particlesystem', {
-      numParticles: 64,
-      lifetime: 6.2,
-      rate: 0.09,
-      rate2: 0.15,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.7, 1.1),
-      colorMap: pollenTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 0.92, 0.66],
-          [0, 1, 0.85, 0.55],
-          [0, 0.96, 0.78, 0.44]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.14, 0.8, 0.55, 0.42, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.03, 0.3, 0.06, 0.7, 0.045, 1, 0.02]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.05, 1, 0.12],
-          [0, 0.04, 1, 0.09],
-          [0, 0.05, 1, 0.12]
-        ]
-      },
-      blendType: pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(pollen);
-    if (pollen.particlesystem) pollen.particlesystem.drawOrder = 2;
-    created.push(pollen);
+    particles.emit(
+      'pollen',
+      [pollenX, 0.65, pollenZ],
+      zoneEmitterExtents(zone, 1.7, 1.1),
+      64,
+      0x4f1e + zoneIndex * 2749
+    );
   });
 
   yield 1;
@@ -3530,50 +3500,13 @@ function* buildWorldSteps(
     // Chispas ambientales: motas azuladas que asoman entre la hierba seca y
     // suben muy poco antes de apagarse. La densidad es baja para que no compitan
     // con los rayos ni con el polen del claro feérico.
-    const sparks = new pc.Entity(`paramo-sparks-${zoneIndex}`);
-    sparks.setPosition(zoneX, 0.45, zoneZ);
-    sparks.addComponent('particlesystem', {
-      numParticles: 34,
-      lifetime: 2.4,
-      rate: 0.05,
-      rate2: 0.1,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.5, 0.7),
-      colorMap: sparkTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.78, 0.96, 1],
-          [0, 0.58, 0.88, 1],
-          [0, 0.44, 0.8, 1]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.18, 0.9, 0.55, 0.45, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.018, 0.3, 0.045, 0.75, 0.03, 1, 0.008]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.04, 1, 0.15],
-          [0, 0.07, 1, 0.22],
-          [0, 0.04, 1, 0.15]
-        ]
-      },
-      blendType: pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(sparks);
-    if (sparks.particlesystem) sparks.particlesystem.drawOrder = 2;
-    created.push(sparks);
+    particles.emit(
+      'sparks',
+      [zoneX, 0.45, zoneZ],
+      zoneEmitterExtents(zone, 1.5, 0.7),
+      34,
+      0x3b41 + zoneIndex * 1597
+    );
 
     lightningZones.push({
       zone,
@@ -3627,47 +3560,13 @@ function* buildWorldSteps(
     if (bounds.width > SWAMP_MIST_TILE || bounds.depth > SWAMP_MIST_TILE) return;
 
     const [smokeX, smokeZ] = zoneCenter(zone);
-    const smoke = new pc.Entity(`swamp-smoke-${zoneIndex}`);
-    smoke.setPosition(smokeX, 0.3, smokeZ);
-    smoke.addComponent('particlesystem', {
-      numParticles: 65,
-      lifetime: 7,
-      rate: 0.09,
-      rate2: 0.14,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.75, 0.5),
-      colorMap: smokeTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.72, 1, 0.55],
-          [0, 0.78, 1, 0.62],
-          [0, 0.68, 1, 0.5]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.2, 0.46, 0.7, 0.28, 1, 0] },
-      scaleGraph: { type: pc.CURVE_LINEAR, keys: [0, 0.38, 0.45, 0.76, 1, 1.28] },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.03, 1, 0.09],
-          [0, 0.08, 1, 0.2],
-          [0, 0.015, 1, 0.05]
-        ]
-      },
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(smoke);
-    if (smoke.particlesystem) smoke.particlesystem.drawOrder = 2;
-    created.push(smoke);
+    particles.emit(
+      'swampSmoke',
+      [smokeX, 0.3, smokeZ],
+      zoneEmitterExtents(zone, 1.75, 0.5),
+      65,
+      0x6a11 + zoneIndex * 2371
+    );
   });
 
   yield 1;
@@ -3987,98 +3886,27 @@ function* buildWorldSteps(
     );
     const [ghostX, ghostZ] = zoneCenter(zone);
     // Fuegos fatuos: orbes aditivos que flotan entre 0,4 y 1,3 m, derivan muy
-    // despacio y parpadean. El violeta lo pone el colorGraph sobre una textura
-    // neutra, así que no arrastran el naranja de las brasas.
-    const wisps = new pc.Entity(`ghost-wisps-${zoneIndex}`);
-    wisps.setPosition(ghostX, 0.85, ghostZ);
-    wisps.addComponent('particlesystem', {
-      numParticles: wispCount,
-      lifetime: 6.4,
-      rate: 0.26,
-      rate2: 0.4,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.5, 0.9),
-      colorMap: wispTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.74, 0.96, 1],
-          [0, 0.63, 0.5, 1],
-          [0, 0.4, 0.27, 0.86]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.16, 0.9, 0.68, 0.48, 1, 0] },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0.04, 0.32, 0.11, 0.74, 0.085, 1, 0.02]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.07, 1, 0.13],
-          [0, 0.05, 1, 0.1],
-          [0, 0.07, 1, 0.13]
-        ]
-      },
-      blendType: pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(wisps);
-    if (wisps.particlesystem) wisps.particlesystem.drawOrder = 2;
-    created.push(wisps);
+    // despacio y parpadean. El violeta lo pone la curva de color sobre una
+    // textura neutra.
+    particles.emit(
+      'wisps',
+      [ghostX, 0.85, ghostZ],
+      zoneEmitterExtents(zone, 1.5, 0.9),
+      wispCount,
+      0x1d47 + zoneIndex * 4409
+    );
 
     // Niebla rastrera: caja ancha y baja, casi sin impulso vertical, para que
     // se arrastre entre los troncos en vez de subir como el humo de la ciénaga.
-    // La densidad la marca `numParticles`: con hasta 130 bocanadas y una vida
-    // larga el calvero queda cubierto por una capa continua, no por jirones.
-    const mist = new pc.Entity(`ghost-mist-${zoneIndex}`);
-    mist.setPosition(ghostX, 0.45, ghostZ);
-    mist.addComponent('particlesystem', {
-      numParticles: mistCount,
-      lifetime: 10.5,
-      rate: 0.05,
-      rate2: 0.08,
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: zoneEmitterExtents(zone, 1.9, 0.6),
-      colorMap: smokeTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.66, 1, 0.8],
-          [0, 0.6, 1, 0.7],
-          [0, 0.7, 1, 0.86]
-        ]
-      },
-      alphaGraph: { type: pc.CURVE_LINEAR, keys: [0, 0, 0.2, 0.52, 0.7, 0.32, 1, 0] },
-      scaleGraph: { type: pc.CURVE_LINEAR, keys: [0, 0.38, 0.5, 0.95, 1, 1.28] },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 0.06, 1, 0.03],
-          [0, 0.012, 1, 0.03],
-          [0, 0.06, 1, 0.025]
-        ]
-      },
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN
-    });
-    worldRoot.addChild(mist);
-    if (mist.particlesystem) mist.particlesystem.drawOrder = 1;
-    created.push(mist);
+    // La densidad la marca el número de motas: con hasta 130 bocanadas y una
+    // vida larga el calvero queda cubierto por una capa continua.
+    particles.emit(
+      'mist',
+      [ghostX, 0.45, ghostZ],
+      zoneEmitterExtents(zone, 1.9, 0.6),
+      mistCount,
+      0x7c31 + zoneIndex * 8117
+    );
 
     // Luz violeta corta: tiñe los troncos y el suelo sin lavar el calvero.
     const glow = new pc.Entity(`ghost-glow-${zoneIndex}`);
@@ -4227,13 +4055,12 @@ function* buildWorldSteps(
     }
   }
 
+  // Las partículas se crean antes de enganchar la raíz: así el primer frame ya
+  // las dibuja y no hay un salto visible al cambiar de mapa.
+  particles.build(device, worldRoot, { x: HALF_X, z: HALF_Z });
+
   // El mundo está completo: a partir de aquí es visible y reemplaza al anterior.
   app.root.addChild(worldRoot);
-
-  // Los emisores ambientales (polvo, brasas, niebla, polen…) cuestan una pasada
-  // de simulación de GPU por frame cada uno. El presupuesto los reparte por
-  // distancia; ver `AmbientParticleBudget`.
-  const ambientParticles = new AmbientParticleBudget(worldRoot);
 
   let time = 0;
 
@@ -4247,10 +4074,8 @@ function* buildWorldSteps(
     setAtmosphere(id: AtmosphereId) {
       atmosphere.set(id);
     },
-    updateAmbient(cameras: readonly pc.Vec3[], dt: number) {
-      // La niebla de la escena la fija el clima: más allá de su final no se ve
-      // nada, así que esos emisores se ocultan.
-      ambientParticles.update(cameras, app.scene.fog.end, dt);
+    updateAmbient(dt: number) {
+      particles.update(dt, app.scene.fog);
     },
     update(dt: number) {
       time += dt;
@@ -4472,6 +4297,7 @@ function* buildWorldSteps(
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
       for (const mesh of lightningMeshes) mesh.destroy();
+      particles.destroy();
       // La raíz se destruye al final: si el mundo se canceló antes de
       // engancharse, sus entidades seguían colgando de ella.
       worldRoot.destroy();
