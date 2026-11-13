@@ -199,7 +199,7 @@ let activeCols = 0;
 let activeTileSize = 1;
 let activeHalfX = 0;
 let activeHalfZ = 0;
-let flatTerrain = new Uint8Array(0);
+let flatTerrain: Uint8Array = new Uint8Array(0);
 
 /** Bases del mapa activo, derivadas de sus respawns. */
 export const BASES: BaseZone[] = [];
@@ -212,20 +212,102 @@ export const TERRAIN_ZONES: TerrainZone[] = [];
 /** Regiones de agua (someras + profundas) unidas por cuerpo de agua. */
 export const WATER_ZONES: TerrainZone[] = [];
 
-export function setActiveMap(map: GameMap): void {
-  activeMap = map;
-  activeRows = map.tiles.length;
-  activeCols = map.tiles[0]?.length ?? 0;
-  activeTileSize = map.tileSize;
-  activeHalfX = (activeCols * activeTileSize) / 2;
-  activeHalfZ = (activeRows * activeTileSize) / 2;
+/**
+ * Rejilla plana de un mapa. Las regiones se calculan a partir de aquí y no del
+ * estado global, para poder preparar un mapa nuevo mientras el anterior sigue
+ * en pantalla.
+ */
+interface TerrainGrid {
+  rows: number;
+  cols: number;
+  tileSize: number;
+  halfX: number;
+  halfZ: number;
+  flat: Uint8Array;
+}
 
-  flatTerrain = new Uint8Array(activeRows * activeCols);
-  for (let row = 0; row < activeRows; row++) {
-    for (let col = 0; col < activeCols; col++) {
-      flatTerrain[row * activeCols + col] = TERRAIN_INDEX.get(map.tiles[row][col]) ?? 0;
+function buildTerrainGrid(map: GameMap): TerrainGrid {
+  const rows = map.tiles.length;
+  const cols = map.tiles[0]?.length ?? 0;
+  const flat = new Uint8Array(rows * cols);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      flat[row * cols + col] = TERRAIN_INDEX.get(map.tiles[row][col]) ?? 0;
     }
   }
+  return {
+    rows,
+    cols,
+    tileSize: map.tileSize,
+    halfX: (cols * map.tileSize) / 2,
+    halfZ: (rows * map.tileSize) / 2,
+    flat
+  };
+}
+
+interface MapRegionSet {
+  grid: TerrainGrid;
+  terrain: TerrainZone[];
+  water: TerrainZone[];
+}
+
+/**
+ * Las regiones de un mapa son caras de calcular en mapas grandes, así que se
+ * memorizan por objeto de mapa. Es un `WeakMap`: al descargar el mapa, sus
+ * regiones se liberan solas.
+ */
+const regionCache = new WeakMap<GameMap, MapRegionSet>();
+
+function computeMapRegions(map: GameMap): MapRegionSet {
+  const cached = regionCache.get(map);
+  if (cached) return cached;
+
+  const grid = buildTerrainGrid(map);
+  const terrain: TerrainZone[] = [];
+  for (const terrainId of DECORATIVE_TERRAINS) {
+    for (const points of regionsForTerrain(terrainId, grid)) {
+      terrain.push({ terrain: terrainId, points });
+    }
+  }
+
+  const water: TerrainZone[] = [];
+  for (const points of regionsForMask(
+    grid,
+    (index) => {
+      const terrainId = TERRAIN_IDS[index];
+      return terrainId === 'waterLow' || terrainId === 'waterHigh';
+    }
+  )) {
+    water.push({ terrain: 'waterLow', points });
+  }
+
+  const regions: MapRegionSet = { grid, terrain, water };
+  regionCache.set(map, regions);
+  return regions;
+}
+
+/**
+ * Regiones decorativas y de agua de un mapa concreto, sin tocar el mapa activo.
+ * Permite pintar el suelo de un mapa que todavía no está cargado, o hacerlo de
+ * forma asíncrona sin que el mundo visible cambie de terreno a medias.
+ */
+export function mapRegions(map: GameMap): {
+  terrain: TerrainZone[];
+  water: TerrainZone[];
+} {
+  const regions = computeMapRegions(map);
+  return { terrain: regions.terrain, water: regions.water };
+}
+
+export function setActiveMap(map: GameMap): void {
+  const { grid, terrain, water } = computeMapRegions(map);
+  activeMap = map;
+  activeRows = grid.rows;
+  activeCols = grid.cols;
+  activeTileSize = grid.tileSize;
+  activeHalfX = grid.halfX;
+  activeHalfZ = grid.halfZ;
+  flatTerrain = grid.flat;
 
   BASES.length = 0;
   for (const respawn of map.respawns) {
@@ -249,19 +331,10 @@ export function setActiveMap(map: GameMap): void {
   MOUNTAINS.push(...map.mountains);
 
   TERRAIN_ZONES.length = 0;
-  for (const terrain of DECORATIVE_TERRAINS) {
-    for (const points of regionsForTerrain(terrain)) {
-      TERRAIN_ZONES.push({ terrain, points });
-    }
-  }
+  TERRAIN_ZONES.push(...terrain);
 
   WATER_ZONES.length = 0;
-  for (const points of regionsForMask((index) => {
-    const terrain = TERRAIN_IDS[index];
-    return terrain === 'waterLow' || terrain === 'waterHigh';
-  })) {
-    WATER_ZONES.push({ terrain: 'waterLow', points });
-  }
+  WATER_ZONES.push(...water);
 }
 
 export function getActiveMap(): GameMap {
@@ -322,6 +395,25 @@ export function terrainAt(x: number, z: number): TerrainId {
   return TERRAIN_IDS[flatTerrain[row * activeCols + col]] ?? 'jungle';
 }
 
+/**
+ * Terreno en un mapa concreto, sin depender del mapa activo. Se usa al pintar
+ * un suelo que todavía no se ha activado.
+ */
+export function terrainAtInMap(
+  map: GameMap,
+  x: number,
+  z: number
+): TerrainId {
+  const rows = map.tiles.length;
+  const cols = map.tiles[0]?.length ?? 0;
+  if (rows === 0 || cols === 0) return 'jungle';
+  const halfX = (cols * map.tileSize) / 2;
+  const halfZ = (rows * map.tileSize) / 2;
+  const col = clampCell(Math.floor((x + halfX) / map.tileSize), cols);
+  const row = clampCell(Math.floor((z + halfZ) / map.tileSize), rows);
+  return map.tiles[row]?.[col] ?? 'jungle';
+}
+
 /** Índice de la celda que contiene la posición, o null fuera del mapa. */
 export function cellAt(x: number, z: number): { row: number; col: number } | null {
   if (!activeMap) return null;
@@ -346,6 +438,11 @@ export function mountainRangeContains(
 /** Verdadero si la posición cae dentro de un separador intransitable. */
 export function onMountain(x: number, z: number): boolean {
   return MOUNTAINS.some((range) => mountainRangeContains(range, x, z));
+}
+
+/** Igual que `onMountain`, pero para un mapa que aún no está activo. */
+export function mountainAtInMap(map: GameMap, x: number, z: number): boolean {
+  return map.mountains.some((range) => mountainRangeContains(range, x, z));
 }
 
 /**
@@ -469,8 +566,8 @@ interface BoundaryEdge {
   index: number;
 }
 
-function regionsForTerrain(terrain: TerrainId): Point2[][] {
-  return regionsForMask((index) => TERRAIN_IDS[index] === terrain);
+function regionsForTerrain(terrain: TerrainId, grid: TerrainGrid): Point2[][] {
+  return regionsForMask(grid, (index) => TERRAIN_IDS[index] === terrain);
 }
 
 /**
@@ -479,12 +576,16 @@ function regionsForTerrain(terrain: TerrainId): Point2[][] {
  * contorno exterior; las regiones decorativas no los usan y el agua ya se
  * agrupa como un único cuerpo.
  */
-function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
+function regionsForMask(
+  grid: TerrainGrid,
+  predicate: (index: number) => boolean
+): Point2[][] {
+  const { rows: activeRows, cols: activeCols } = grid;
   if (activeRows === 0 || activeCols === 0) return [];
   const mask = new Uint8Array(activeRows * activeCols);
   for (let row = 0; row < activeRows; row++) {
     for (let col = 0; col < activeCols; col++) {
-      const index = flatTerrain[row * activeCols + col];
+      const index = grid.flat[row * activeCols + col];
       if (predicate(index)) mask[row * activeCols + col] = 1;
     }
   }
@@ -644,8 +745,8 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
     if (best.length >= 3) {
       polygons.push(
         best.map(([cx, cz]) => [
-          cx * activeTileSize - activeHalfX,
-          cz * activeTileSize - activeHalfZ
+          cx * grid.tileSize - grid.halfX,
+          cz * grid.tileSize - grid.halfZ
         ])
       );
     }

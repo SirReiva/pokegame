@@ -146,8 +146,7 @@ export class BotNavGrid {
     this.heapPosition = new Int32Array(total);
     this.heapScore = new Float32Array(total);
 
-    this.markDeepWater();
-    this.markTeamTerritories();
+    this.markTerrain();
     for (const collider of colliders) this.markCollider(collider);
   }
 
@@ -608,27 +607,25 @@ export class BotNavGrid {
     return result;
   }
 
-  private markDeepWater(): void {
-    for (let row = 0; row < this.rows; row++) {
-      for (let col = 0; col < this.cols; col++) {
-        if (terrainAtCell(row, col) === 'waterHigh') {
-          this.blocked[this.index(row, col)] = 1;
-        }
-      }
-    }
-  }
-
   /**
-   * Guarda el equipo propietario de cada santuario. No los marca como
-   * bloqueados porque la rejilla es compartida por todos los bots: el filtro se
-   * aplica al consultar con el equipo de cada uno.
+   * Recorre la rejilla una sola vez para marcar el agua profunda y el equipo
+   * propietario de cada santuario. Antes eran dos barridos completos y cada
+   * celda consultaba el terreno dos veces; en mapas grandes eso se nota al
+   * empezar la partida. Los santuarios no se bloquean porque la rejilla es
+   * compartida: el filtro se aplica al consultar con el equipo de cada bot.
    */
-  private markTeamTerritories(): void {
+  private markTerrain(): void {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
-        const team = terrainTeam(terrainAtCell(row, col));
-        if (team === null) continue;
-        this.teamOwners[this.index(row, col)] = TEAM_IDS.indexOf(team) + 1;
+        const terrain = terrainAtCell(row, col);
+        const index = this.index(row, col);
+        if (terrain === 'waterHigh') {
+          this.blocked[index] = 1;
+        }
+        const team = terrainTeam(terrain);
+        if (team !== null) {
+          this.teamOwners[index] = TEAM_IDS.indexOf(team) + 1;
+        }
       }
     }
   }

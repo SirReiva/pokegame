@@ -154,7 +154,11 @@ import {
   type SpriteAsset
 } from './sprite';
 import { detectSpriteBudget } from './spriteBudget';
-import { clearGroundCanvasCache } from './textures';
+import {
+  cachedGroundCanvasAsync,
+  clearGroundCanvasCache,
+  groundTextureSize
+} from './textures';
 import {
   XP_REWARDS,
   XP_RULES,
@@ -166,6 +170,7 @@ import {
   ACTIVE_TEAMS,
   TERRAINS,
   getActiveMap,
+  mapRegions,
   resolveDeepWater,
   resolveTeamTerrain,
   setActiveMap,
@@ -183,7 +188,7 @@ import {
   terrainConcealment,
   visionForPokemon
 } from './vision';
-import { buildWorld, type Collider, type World } from './world';
+import { buildWorldAsync, type Collider, type World } from './world';
 
 export interface GameCallbacks {
   onReady(manifest: SpriteManifest, maps: MapIndexEntry[], activeMapId: string): void;
@@ -418,8 +423,18 @@ export class Game {
    */
   private world!: World;
   private menuCamera!: CameraRig;
+  /** Punto al que orbita la cámara de menú (el `spawn` del mundo visible). */
+  private menuFocus = { x: 0, z: 0 };
   private mapIndex: MapIndexEntry[] = [];
   private activeMapId = '';
+  /**
+   * Identificador de la carga de mapa en curso. Si el jugador cambia de mapa
+   * mientras se pinta el anterior, el resultado viejo se descarta.
+   */
+  private mapLoadToken = 0;
+  /** Último porcentaje de carga emitido, en una escala única de 0 a 100. */
+  private loadPercent = 0;
+  private loadLabel = '';
   /** Clima de la partida; se sortea en `startMatch`. */
   private atmosphere: AtmosphereId = 'clear';
   /** Factor de visión del clima, cacheado para no recalcularlo por observador. */
@@ -498,6 +513,11 @@ export class Game {
   private readonly viewSkies = new Map<CameraRig, pc.Entity>();
   /** Marca de KO en el suelo, una copia por vista. Solo la ve su equipo. */
   private deathMarkers = new Map<number, Array<DeathMarker | null>>();
+  /**
+   * Jugadores por slot. El bucle de marcas de KO y otras consultas puntuales lo
+   * usan para no recorrer `matchPlayers` con un `find` por marca y por vista.
+   */
+  private readonly playerBySlot = new Map<number, MatchPlayerState>();
   /** Proyectiles activos de todas las vistas. */
   private projectiles: Projectile[] = [];
   /** Áreas persistentes con daño periódico. */
@@ -687,18 +707,24 @@ export class Game {
 
   async init(): Promise<void> {
     try {
-      this.callbacks.onProgress({ loaded: 0, total: 17, label: 'Cargando mapas' });
+      this.emitLoad(0, 'Cargando mapas');
       this.mapIndex = await loadMapIndex();
       const entry =
         this.mapIndex.find((candidate) => candidate.id === this.options.mapId) ??
         this.mapIndex[0];
       const map = await loadMap(entry);
 
-      this.callbacks.onProgress({ loaded: 0, total: 17, label: 'Cargando objetos' });
+      this.emitLoad(2, 'Cargando objetos');
       const itemTextures = await loadItemTextures(this.app);
       for (const [id, textures] of itemTextures) this.itemTextures.set(id, textures);
 
-      this.applyMap(map);
+      // El suelo se pinta troceado: la pantalla de carga sigue animándose y
+      // muestra el progreso en vez de congelarse durante la generación. La
+      // generación ocupa del 5 % al 60 % de la barra.
+      const applied = await this.applyMap(map, (fraction, label) =>
+        this.emitLoad(5 + fraction * 55, label)
+      );
+      if (!applied) return;
 
       // El mundo ya configuró la niebla y la iluminación de la escena, así que
       // los shaders se compilan con las mismas variantes que usará la partida.
@@ -709,11 +735,7 @@ export class Game {
 
       let manifest = this.options.manifest ?? null;
       if (!manifest) {
-        this.callbacks.onProgress({
-          loaded: 0,
-          total: 12,
-          label: 'Leyendo el manifiesto de sprites'
-        });
+        this.emitLoad(76, 'Leyendo el manifiesto de sprites');
         const response = await fetch(
           `${import.meta.env.BASE_URL}sprites/manifest.json?v=${Date.now()}`
         );
@@ -762,7 +784,7 @@ export class Game {
 
       const total = selections.length * 4;
       let loaded = 0;
-      this.callbacks.onProgress({ loaded, total, label: 'Cargando sprites' });
+      this.emitLoad(76, 'Cargando sprites');
 
       await Promise.all(
         selections.map(async (selection) => {
@@ -779,19 +801,18 @@ export class Game {
           );
           this.assets.set(assetKey(entry.id, selection.skinId), asset);
           loaded += 4;
-          this.callbacks.onProgress({
-            loaded,
-            total,
-            label:
-              skin.id === DEFAULT_SKIN_ID
-                ? `${entry.name} listo`
-                : `${entry.name} · ${skin.name} listo`
-          });
+          this.emitLoad(
+            76 + (loaded / Math.max(1, total)) * 24,
+            skin.id === DEFAULT_SKIN_ID
+              ? `${entry.name} listo`
+              : `${entry.name} · ${skin.name} listo`
+          );
         })
       );
 
       if (this.disposed) return;
 
+      this.emitLoad(100, 'Preparando el combate');
       this.ready = true;
       this.mode = 'menu';
       this.menuCamera.setEnabled(true);
@@ -856,11 +877,10 @@ export class Game {
         // compilación/uso del shader quede resuelto antes de limpiar.
         await this.waitFrames(2);
         this.combatFx.clear();
-        this.callbacks.onProgress({
-          loaded: batch + 1,
-          total: batches,
-          label: 'Precompilando efectos'
-        });
+        this.emitLoad(
+          60 + ((batch + 1) / Math.max(1, batches)) * 15,
+          'Precompilando efectos'
+        );
         if (this.disposed) break;
       }
     } catch (error) {
@@ -1055,35 +1075,96 @@ export class Game {
     });
   }
 
-  /** Cambia el mapa activo. Solo se permite desde el menú. */
-  async selectMap(id: string): Promise<boolean> {
-    if (!this.ready || this.mode !== 'menu' || id === this.activeMapId) return false;
-    const entry = this.mapIndex.find((candidate) => candidate.id === id);
-    if (!entry) throw new Error(`No existe el mapa "${id}"`);
-    const map = await loadMap(entry);
-    this.applyMap(map);
-    this.menuCamera.setEnabled(true);
-    return true;
+  /**
+   * Emite progreso de carga en una escala única de 0 a 100.
+   *
+   * La pantalla de versus dibuja `loaded / total`. Antes cada fase usaba su
+   * propio total (17 objetos, N sprites, M lotes de shaders) y la barra
+   * retrocedía al empezar la siguiente. Ahora todas comparten total y el
+   * porcentaje nunca baja; si el porcentaje no cambia, solo se actualiza la
+   * etiqueta cuando cambia de verdad, para no re-renderizar React de más.
+   */
+  private emitLoad(percent: number, label: string): void {
+    const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+    if (rounded < this.loadPercent) return;
+    if (rounded === this.loadPercent && label === this.loadLabel) return;
+    this.loadPercent = rounded;
+    this.loadLabel = label;
+    this.callbacks.onProgress({ loaded: rounded, total: 100, label });
   }
 
   /**
-   * Reemplaza el mundo actual por el mapa indicado. Se usa al arrancar y al
-   * cambiar de mapa; destruye la partida anterior para no dejar entidades ni
-   * materiales del mapa anterior.
+   * Reemplaza el mundo actual por el mapa indicado. Se usa al arrancar y
+   * destruye la partida anterior para no dejar entidades ni materiales del mapa
+   * anterior.
+   *
+   * El suelo se pinta antes de tocar el mundo actual y de forma troceada, así
+   * que la pestaña responde durante la generación. El mundo se construye con su
+   * mapa explícito, sin depender del estado global, así que la misma ruta sirve
+   * para cambiar de mapa sin recrear el motor.
+   *
+   * `onProgress` recibe fracciones de 0 a 1 de la generación completa (suelo y
+   * mundo). El llamador decide en qué tramo de la barra cae cada fase.
    */
-  private applyMap(map: GameMap): void {
+  private async applyMap(
+    map: GameMap,
+    onProgress?: (fraction: number, label: string) => void
+  ): Promise<boolean> {
+    const token = ++this.mapLoadToken;
+    const device = this.app.graphicsDevice;
+    // `mapRegions` cachea por objeto de mapa: `setActiveMap` lo reutiliza abajo
+    // en vez de volver a recorrer la rejilla.
+    const zones = mapRegions(map).terrain;
+    const isCancelled = () => this.disposed || token !== this.mapLoadToken;
+
+    const groundCanvas = await cachedGroundCanvasAsync(
+      groundTextureSize(map, {
+        maxTexels: CONFIG.performance.groundTexturePixels,
+        maxSize: Math.min(device.maxTextureSize, 8192)
+      }),
+      { map, zones },
+      {
+        onProgress: (fraction) =>
+          onProgress?.(fraction * 0.8, 'Generando el suelo'),
+        isCancelled
+      }
+    );
+    // Otro cambio de mapa tomó el relevo (o se destruyó el juego).
+    if (!groundCanvas || isCancelled()) return false;
+
+    // El mundo nuevo se construye por secciones, con su mapa explícito y en una
+    // raíz aparte: el mapa anterior sigue visible y respondiendo mientras tanto,
+    // y el estado global del terreno todavía describe el mapa viejo.
+    const world = await buildWorldAsync(
+      this.app,
+      { map, groundCanvas },
+      {
+        onProgress: (fraction) =>
+          onProgress?.(0.8 + fraction * 0.2, 'Construyendo el escenario'),
+        isCancelled
+      }
+    );
+    if (!world || this.disposed || token !== this.mapLoadToken) {
+      world?.dispose();
+      return false;
+    }
+
     this.clearMatch();
     this.pickups?.dispose();
     this.pickups = null;
     this.menuCamera?.dispose();
     this.world?.dispose();
 
+    // Solo ahora, con el mundo nuevo ya construido, se activa el mapa. Así
+    // ningún frame intermedio ve el terreno del mapa nuevo bajo la geometría
+    // del anterior. `setActiveMap` reutiliza las regiones ya cacheadas.
     setActiveMap(map);
     syncTeamsWithMap();
+
     this.atmosphere = 'clear';
     this.atmosphereVision = 1;
     this.atmosphereTick = 0;
-    this.world = buildWorld(this.app);
+    this.world = world;
     // Los objetos se validan contra el mundo ya construido: un centro fuera de
     // los límites, en agua profunda o dentro de un collider (muro, roca, árbol,
     // base...) no se crea y tampoco se ofrece a los bots.
@@ -1101,8 +1182,17 @@ export class Game {
     this.pickups.setMap(this.pickupSpawns);
     this.activeMapId = map.id;
     this.rebuildSightOccluders();
+    this.menuFocus = { x: map.spawn.x, z: map.spawn.z };
     this.menuCamera = new CameraRig(this.app, map.spawn);
     this.refreshSunShadows();
+    // Primer render del mundo mientras la pantalla de carga sigue visible. El
+    // primer frame de un mundo nuevo compila los shaders de sus materiales y
+    // sube sus texturas a la GPU; en software se ha medido ~300 ms, y si la
+    // carga termina después de la intro, ese tirón caía al empezar la partida.
+    // Hacerlo aquí lo deja detrás del overlay y deja el primer frame jugable
+    // limpio. Es un render extra, no un cambio de lógica.
+    if (!this.disposed) this.app.render();
+    return true;
   }
 
   /** Aplica un clima a la escena y avisa al HUD. */
@@ -1505,6 +1595,7 @@ export class Game {
         abilityIds: [...moveset, commonAbilityId]
       };
       this.matchPlayers.push(player);
+      this.playerBySlot.set(player.slot, player);
 
       if (isBot) {
         if (botNav && botSquad) {
@@ -1669,6 +1760,7 @@ export class Game {
     }
     for (const layer of this.viewLayers) this.app.scene.layers.remove(layer);
     this.matchPlayers = [];
+    this.playerBySlot.clear();
     this.views = [];
     this.bots.clear();
     this.botNav = null;
@@ -2012,7 +2104,10 @@ export class Game {
 
   private updateMenu(dt: number): void {
     this.menuCamera.yaw += CONFIG.camera.attractSpeed * dt;
-    this.menuCamera.update(dt, getActiveMap().spawn, 0, 0);
+    // Se usa el foco guardado y no `getActiveMap().spawn`: mientras un mapa
+    // nuevo se construye en segundo plano, el mundo visible sigue siendo el
+    // anterior y la cámara no debe saltar a las coordenadas del que viene.
+    this.menuCamera.update(dt, this.menuFocus, 0, 0);
     this.world.update(dt);
     this.pickups?.update(dt, [this.menuCamera.position]);
   }
@@ -2109,6 +2204,13 @@ export class Game {
       if (this.simAccumulator < 0) this.simAccumulator = 0;
     }
 
+    // La niebla se resuelve antes de sincronizar las copias: además de pintar
+    // los círculos de visión, decide qué copia se ve en cada vista. Así el
+    // bucle siguiente puede saltarse las ocultas, que no se dibujan pero sí
+    // costaban posición, animación, vida y billboard cada frame.
+    this.castDebug?.update(this.matchPlayers);
+    this.updateVision(dt);
+
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
     // la cámara del viewport que la va a dibujar.
     this.views.forEach((cameraOwner, viewIndex) => {
@@ -2116,7 +2218,9 @@ export class Game {
       this.viewSkies.get(cameraOwner.camera)?.setPosition(cameraPosition);
       this.matchPlayers.forEach((player) => {
         const copy = player.copies[viewIndex];
-        if (!copy) return;
+        // Una copia oculta no se renderiza; su estado se sincroniza en cuanto
+        // `updateVision` vuelve a mostrarla.
+        if (!copy || !copy.isVisible) return;
         copy.setPositionAndSubmerge(
           player.x,
           player.z,
@@ -2150,16 +2254,11 @@ export class Game {
         const marker = markers[viewIndex];
         if (!marker) return;
         marker.faceCamera(cameraPosition);
-        const target = this.matchPlayers.find((player) => player.slot === slot);
+        const target = this.playerBySlot.get(slot);
         if (target) marker.setRespawnCountdown(target.respawnTimer);
       });
     });
 
-    // La niebla se resuelve después de mover a todos: cada copia se oculta en
-    // las vistas que no la ven y cada cámara recibe la unión de círculos del
-    // equipo.
-    this.castDebug?.update(this.matchPlayers);
-    this.updateVision(dt);
     if (!frozen && simulated > 0) {
       this.updateRegeneration(simulated);
       this.updateParticipation(simulated);

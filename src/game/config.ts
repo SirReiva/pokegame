@@ -44,6 +44,17 @@ export const CONFIG = {
      */
     warmUpBatchSize: 2,
     /**
+     * Presupuesto de téxeles de la textura del suelo (ancho × alto). El mapa de
+     * estrés `perf-256` pedía 8 M de píxeles (2828 px de lado); con 4 M baja a
+     * 2000 px, así que el pintado y, sobre todo, la subida inicial a la GPU se
+     * reducen a la mitad. Los mapas pequeños no cambian porque ya van topados
+     * por `maxPixelsPerUnit` o por su propio tamaño.
+     *
+     * Si hiciera falta más margen en equipos muy modestos, se puede bajar a
+     * 2 M (1414 px en `perf-256`) a costa de perder detalle fino en el suelo.
+     */
+    groundTexturePixels: 4_000_000,
+    /**
      * Resolución dinámica. Si la partida baja de `lowerFps` durante
      * `lowerDelay` segundos, se reduce `device.maxPixelRatio` un escalón; si
      * vuelve a ir por encima de `raiseFps` durante `raiseDelay`, se recupera.

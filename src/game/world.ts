@@ -3,32 +3,29 @@ import { type AtmosphereId } from './atmosphere';
 import { createAtmosphereVisuals } from './atmosphereVisuals';
 import { CONFIG } from './config';
 import { FOG_EXCLUDED_STENCIL } from './fogStencil';
+import { yieldToBrowser } from './frameYield';
 import { TEAM_INFO } from './multiplayer';
 import {
-  BASES,
   BASE_COLLIDER_RADIUS,
-  MOUNTAINS,
-  TERRAIN_ZONES,
-  WATER_ZONES,
   getActiveMap,
-  mapHalfDepth,
-  mapHalfWidth,
-  onMountain,
+  mapRegions,
+  mountainAtInMap,
   randomPointInZone,
-  terrainAt,
+  terrainAtInMap,
   triangulatePolygon,
   zoneArea,
   zoneBounds,
   zoneCenter,
   zoneContainsInset,
+  type GameMap,
   type TerrainZone
 } from './terrain';
 import {
-  cachedGroundCanvas,
   createBarkCanvas,
   createDustCanvas,
   createEmberCanvas,
   createFrostCanvas,
+  createGroundCanvas,
   createLeafCanvas,
   createMistCanvas,
   createMountainRockCanvas,
@@ -248,11 +245,43 @@ function part(
   return entity;
 }
 
-export function buildWorld(app: pc.AppBase): World {
+export interface BuildWorldOptions {
+  /**
+   * Mapa que se va a construir. Si falta, se usa el activo.
+   *
+   * Pasarlo explícitamente permite construir el mundo nuevo sin tocar el estado
+   * global (`setActiveMap`), así que el mundo que sigue en pantalla no cambia de
+   * terreno mientras el siguiente se genera.
+   */
+  map?: GameMap;
+  /**
+   * Suelo ya pintado. `Game` lo genera de forma asíncrona antes de construir el
+   * mundo para que la pestaña no se congele; si falta, se pinta aquí mismo.
+   */
+  groundCanvas?: HTMLCanvasElement;
+}
+
+/**
+ * Construye el mundo por fases. La versión síncrona (`buildWorld`) y la
+ * troceada (`buildWorldAsync`) comparten estos pasos; separarlos en secciones
+ * permite que la pestaña respire al cambiar de mapa.
+ */
+function* buildWorldSteps(
+  app: pc.AppBase,
+  options: BuildWorldOptions
+): Generator<number, World, void> {
   const device = app.graphicsDevice;
-  const map = getActiveMap();
-  const HALF_X = mapHalfWidth();
-  const HALF_Z = mapHalfDepth();
+  const map = options.map ?? getActiveMap();
+  // Datos del mapa que se está construyendo, tomados de su propio objeto y no
+  // del estado global: el mapa anterior puede seguir visible.
+  const regions = mapRegions(map);
+  const terrainZones = regions.terrain;
+  const waterZones = regions.water;
+  const mountains = map.mountains;
+  const bases = map.respawns;
+  const mapCols = map.tiles[0]?.length ?? 0;
+  const HALF_X = (mapCols * map.tileSize) / 2;
+  const HALF_Z = (map.tiles.length * map.tileSize) / 2;
   const colliders: Collider[] = [];
   const created: pc.Entity[] = [];
   const materials: pc.StandardMaterial[] = [];
@@ -261,6 +290,10 @@ export function buildWorld(app: pc.AppBase): World {
   const surfaceMeshes: pc.Mesh[] = [];
   /** Mallas de separadores: escriben esténcil 1 para que la niebla no las tiña. */
   const barrierMeshInstances: pc.MeshInstance[] = [];
+  // Raíz propia: el mundo nuevo se construye fuera de la escena y solo se
+  // engancha cuando está completo. Así el mapa anterior sigue visible durante
+  // la construcción asíncrona y no se mezclan las dos geometrías.
+  const worldRoot = new pc.Entity('world');
 
   // Orden transparente manual: primero las láminas de agua, después las
   // sombras de contacto y al final el anillo del jugador. Así el anillo nunca
@@ -268,30 +301,38 @@ export function buildWorld(app: pc.AppBase): World {
   const worldLayer = app.scene.layers.getLayerById(pc.LAYERID_WORLD);
   if (worldLayer) worldLayer.transparentSortMode = pc.SORTMODE_MANUAL;
 
+  yield 1;
   // --- Texturas procedurales -------------------------------------------------
   const groundTexture = textureFromCanvas(
     device,
-    cachedGroundCanvas(
-      groundTextureSize(map, { maxSize: Math.min(device.maxTextureSize, 8192) }),
-      {
-        map,
-        zones: TERRAIN_ZONES
-      }
-    ),
+    options.groundCanvas ??
+      createGroundCanvas(
+        groundTextureSize(map, {
+          maxTexels: CONFIG.performance.groundTexturePixels,
+          maxSize: Math.min(device.maxTextureSize, 8192)
+        }),
+        {
+          map,
+          zones: terrainZones
+        }
+      ),
     { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST }
   );
+  yield 1;
   const soilTexture = textureFromCanvas(device, createSoilCanvas(), {
     name: 'soil',
     repeat: true,
     mipmaps: true,
     magFilter: pc.FILTER_NEAREST
   });
+  yield 1;
   const shadowTexture = textureFromCanvas(device, createShadowCanvas(), {
     name: 'blob-shadow',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const waterTexture = textureFromCanvas(device, createWaterCanvas(), {
     name: 'water-surface',
     repeat: true,
@@ -299,6 +340,7 @@ export function buildWorld(app: pc.AppBase): World {
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const waterGlintTexture = textureFromCanvas(device, createWaterCanvas(96, 1), {
     name: 'water-glint',
     repeat: true,
@@ -306,18 +348,21 @@ export function buildWorld(app: pc.AppBase): World {
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const dustTexture = textureFromCanvas(device, createDustCanvas(), {
     name: 'desert-dust',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const frostTexture = textureFromCanvas(device, createFrostCanvas(), {
     name: 'frost-flake',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const smokeTexture = textureFromCanvas(device, createSmokeCanvas(), {
     name: 'swamp-smoke',
     repeat: true,
@@ -325,6 +370,7 @@ export function buildWorld(app: pc.AppBase): World {
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const mistTexture = textureFromCanvas(device, createMistCanvas(), {
     name: 'swamp-mist',
     repeat: true,
@@ -332,36 +378,42 @@ export function buildWorld(app: pc.AppBase): World {
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const emberTexture = textureFromCanvas(device, createEmberCanvas(), {
     name: 'lava-ember',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const wispTexture = textureFromCanvas(device, createWispCanvas(), {
     name: 'ghost-wisp',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const pollenTexture = textureFromCanvas(device, createPollenCanvas(), {
     name: 'fairy-pollen',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const sparkTexture = textureFromCanvas(device, createSparkCanvas(), {
     name: 'paramo-spark',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const skyTexture = textureFromCanvas(device, createSkyCanvas(), {
     name: 'sky',
     mipmaps: false,
     minFilter: pc.FILTER_LINEAR,
     magFilter: pc.FILTER_LINEAR
   });
+  yield 1;
   const rainTexture = textureFromCanvas(device, createRainCanvas(), {
     name: 'rain-drop',
     mipmaps: false,
@@ -377,10 +429,12 @@ export function buildWorld(app: pc.AppBase): World {
     minFilter: pc.FILTER_NEAREST_MIPMAP_NEAREST,
     magFilter: pc.FILTER_NEAREST
   } as const;
+  yield 1;
   const barkTexture = textureFromCanvas(device, createBarkCanvas(), {
     ...pixelOptions,
     name: 'bark-pixel'
   });
+  yield 1;
   const leafTextures = [0, 1, 2].map((variant) =>
     textureFromCanvas(device, createLeafCanvas(variant), {
       ...pixelOptions,
@@ -390,6 +444,7 @@ export function buildWorld(app: pc.AppBase): World {
 
   // Piedra marrón de las cordilleras: tile repetible con facetas pixel art y
   // nieve en la cima. Se muestrea sin suavizado para conservar los píxeles.
+  yield 1;
   const mountainRockTexture = textureFromCanvas(device, createMountainRockCanvas(), {
     ...pixelOptions,
     name: 'mountain-rock',
@@ -398,12 +453,14 @@ export function buildWorld(app: pc.AppBase): World {
   });
 
   // Sillería gris de los muros: misma técnica de tile repetible.
+  yield 1;
   const wallStoneTexture = textureFromCanvas(device, createWallStoneCanvas(), {
     name: 'wall-stone',
     repeat: true,
     mipmaps: true
   });
 
+  yield 1;
   // --- Ajustes de escena -----------------------------------------------------
   app.scene.ambientLight = new pc.Color(0.46, 0.5, 0.55);
   const fog = app.scene.fog;
@@ -412,6 +469,7 @@ export function buildWorld(app: pc.AppBase): World {
   fog.start = CONFIG.fog.near;
   fog.end = CONFIG.fog.far;
 
+  yield 1;
   // --- Luces ---------------------------------------------------------------
   const sun = new pc.Entity('sun');
   sun.addComponent('light', {
@@ -425,7 +483,7 @@ export function buildWorld(app: pc.AppBase): World {
     shadowBias: CONFIG.sun.shadowBias
   });
   sun.setLocalEulerAngles(52, -34, 0);
-  app.root.addChild(sun);
+  worldRoot.addChild(sun);
   created.push(sun);
 
   const fill = new pc.Entity('fill');
@@ -436,9 +494,10 @@ export function buildWorld(app: pc.AppBase): World {
     castShadows: false
   });
   fill.setLocalEulerAngles(30, 150, 0);
-  app.root.addChild(fill);
+  worldRoot.addChild(fill);
   created.push(fill);
 
+  yield 1;
   // --- Suelo ---------------------------------------------------------------
   const grassMaterial = standard({
     diffuseMap: groundTexture,
@@ -454,14 +513,14 @@ export function buildWorld(app: pc.AppBase): World {
   });
   materials.push(grassMaterial, soilMaterial);
 
-  const slab = part(app.root, 'box', soilMaterial, {
+  const slab = part(worldRoot, 'box', soilMaterial, {
     position: [0, -0.55, 0],
     scale: [HALF_X * 2, 1.1, HALF_Z * 2]
   });
   slab.render!.castShadows = false;
   created.push(slab);
 
-  const ground = part(app.root, 'plane', grassMaterial, {
+  const ground = part(worldRoot, 'plane', grassMaterial, {
     position: [0, 0.001, 0],
     scale: [HALF_X * 2, 1, HALF_Z * 2]
   });
@@ -478,7 +537,7 @@ export function buildWorld(app: pc.AppBase): World {
     gloss: 0.02
   });
   materials.push(outerGroundMaterial);
-  const outerGround = part(app.root, 'plane', outerGroundMaterial, {
+  const outerGround = part(worldRoot, 'plane', outerGroundMaterial, {
     position: [0, -0.04, 0],
     scale: [HALF_X * 2 + 140, 1, HALF_Z * 2 + 140]
   });
@@ -486,6 +545,7 @@ export function buildWorld(app: pc.AppBase): World {
   outerGround.render!.receiveShadows = false;
   created.push(outerGround);
 
+  yield 1;
   // --- Agua ----------------------------------------------------------------
   // Cada cuerpo de agua se construye con una malla plana triangulada a partir
   // de las celdas waterLow/waterHigh. Encima van dos capas translúcidas con
@@ -564,11 +624,11 @@ export function buildWorld(app: pc.AppBase): World {
     instance.receiveShadows = false;
     instance.drawOrder = drawOrder;
     entity.render!.meshInstances = [instance];
-    app.root.addChild(entity);
+    worldRoot.addChild(entity);
     created.push(entity);
   };
 
-  for (const zone of WATER_ZONES) {
+  for (const zone of waterZones) {
     if (!('points' in zone)) continue;
     const base = buildSurfaceMesh(zone.points, waterHeight, 3.4);
     if (!base) continue;
@@ -577,9 +637,10 @@ export function buildWorld(app: pc.AppBase): World {
     if (glint) addSurface(glint, waterGlintMaterial, 1, 'water-glint');
   }
 
+  yield 1;
   // --- Ciénaga -------------------------------------------------------------
   // La ciénaga comparte la superficie plana, pero es mate y se mueve despacio.
-  const swampZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'poison');
+  const swampZones = terrainZones.filter((zone) => zone.terrain === 'poison');
   /** Lado máximo de cada foco de niebla antes de dividir la ciénaga. */
   const SWAMP_MIST_TILE = 40;
   const swampSurfaceMaterial = standard({
@@ -632,6 +693,7 @@ export function buildWorld(app: pc.AppBase): World {
   // El agua profunda no es un collider fijo: depende del tipo del jugador y se
   // resuelve en `Game.resolvePosition` consultando las celdas de la rejilla.
 
+  yield 1;
   // --- Vegetación ----------------------------------------------------------
   const trunkMaterial = standard({
     diffuseMap: barkTexture,
@@ -663,10 +725,10 @@ export function buildWorld(app: pc.AppBase): World {
     for (let attempt = 0; attempt < count * 24 && spots.length < count; attempt++) {
       const x = (rand() * 2 - 1) * (HALF_X - 1.4);
       const z = (rand() * 2 - 1) * (HALF_Z - 1.4);
-      if (terrainAt(x, z) !== 'jungle') continue;
-      if (onMountain(x, z)) continue;
+      if (terrainAtInMap(map, x, z) !== 'jungle') continue;
+      if (mountainAtInMap(map, x, z)) continue;
       if (
-        TERRAIN_ZONES.some((zone) => zoneContainsInset(zone, x, z, -1.1))
+        terrainZones.some((zone) => zoneContainsInset(zone, x, z, -1.1))
       ) {
         continue;
       }
@@ -688,7 +750,7 @@ export function buildWorld(app: pc.AppBase): World {
     tree.setPosition(x, 0, z);
     tree.setLocalScale(scale, scale, scale);
     tree.setLocalEulerAngles(0, (index * 47) % 360, 0);
-    app.root.addChild(tree);
+    worldRoot.addChild(tree);
     created.push(tree);
 
     part(tree, 'cylinder', trunkMaterial, {
@@ -714,6 +776,7 @@ export function buildWorld(app: pc.AppBase): World {
     colliders.push({ type: 'circle', x, z, radius: 0.55 * scale, sightRadius: 1.25 * scale });
   });
 
+  yield 1;
   // --- Separadores: cordilleras ---------------------------------------------
   // Picos de piedra que se alzan a lo largo de cada cresta. Cada pico es una
   // malla facetada con color por vértice: gris rocoso en la base y nieve en la
@@ -902,6 +965,7 @@ export function buildWorld(app: pc.AppBase): World {
     buildMountainPeak(0x3a91 + variant * 4133)
   );
 
+  yield 1;
   // --- Muros ----------------------------------------------------------------
   // La sillería comparte collider y visión con la cordillera; solo cambia la
   // malla. Cada tramo es un prisma alineado con el trazado, con almenas en los
@@ -1053,7 +1117,7 @@ export function buildWorld(app: pc.AppBase): World {
     return out;
   };
 
-  MOUNTAINS.forEach((range, rangeIndex) => {
+  mountains.forEach((range, rangeIndex) => {
     const rand = random(0x7d31 + rangeIndex * 7919);
     const samples = sampleRange(range.points, 0.8);
 
@@ -1117,7 +1181,7 @@ export function buildWorld(app: pc.AppBase): World {
         instance.receiveShadows = true;
         wall.render!.meshInstances = [instance];
         barrierMeshInstances.push(instance);
-        app.root.addChild(wall);
+        worldRoot.addChild(wall);
         created.push(wall);
       }
       return;
@@ -1150,7 +1214,7 @@ export function buildWorld(app: pc.AppBase): World {
       instance.receiveShadows = true;
       peak.render!.meshInstances = [instance];
       barrierMeshInstances.push(instance);
-      app.root.addChild(peak);
+      worldRoot.addChild(peak);
       created.push(peak);
     });
   });
@@ -1237,7 +1301,7 @@ export function buildWorld(app: pc.AppBase): World {
   // cantidad se reduce con el área y nunca baja del mínimo.
   const DESERT_DUST_MAX_PARTICLES = 90;
   const DESERT_DUST_MIN_PARTICLES = 8;
-  const desertZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'desert');
+  const desertZones = terrainZones.filter((zone) => zone.terrain === 'desert');
 
   desertZones.forEach((zone, zoneIndex) => {
     const area = zoneArea(zone);
@@ -1294,7 +1358,7 @@ export function buildWorld(app: pc.AppBase): World {
         new pc.Vec3(bounds.cx, 1, bounds.cz),
         new pc.Vec3(bounds.width / 2 + 1, 1.2, bounds.depth / 2 + 1)
       );
-      app.root.addChild(entity);
+      worldRoot.addChild(entity);
       created.push(entity);
       return;
     }
@@ -1319,7 +1383,7 @@ export function buildWorld(app: pc.AppBase): World {
       cactus.setPosition(x, 0, z);
       cactus.setLocalScale(scale, scale, scale);
       cactus.setLocalEulerAngles(0, rand() * 360, 0);
-      app.root.addChild(cactus);
+      worldRoot.addChild(cactus);
       created.push(cactus);
 
       part(cactus, 'cylinder', cactusMaterial, {
@@ -1347,6 +1411,7 @@ export function buildWorld(app: pc.AppBase): World {
     }
   });
 
+  yield 1;
   // --- Polvo del desierto --------------------------------------------------
   // Bruma continua para desiertos grandes: misma técnica que la niebla de la
   // ciénaga, teñida de arena. Un único emisor de partículas sobre un mapa
@@ -1435,10 +1500,11 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(dust);
+    worldRoot.addChild(dust);
     created.push(dust);
   });
 
+  yield 1;
   // --- Escarcha: cristales de hielo 3D --------------------------------------
   // El calvero helado se llena de racimos de esquirlas: prismas facetados que
   // nacen del suelo, se estrechan y se inclinan hacia fuera. El color va por
@@ -1660,15 +1726,16 @@ export function buildWorld(app: pc.AppBase): World {
     buildIceCluster(0x1ce7 + variant * 2753, 5 + (variant % 3))
   );
 
-  const iceZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'ice');
+  const iceZones = terrainZones.filter((zone) => zone.terrain === 'ice');
   const iceInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
-  iceZones.forEach((zone, zoneIndex) => {
+  for (let zoneIndex = 0; zoneIndex < iceZones.length; zoneIndex++) {
+    const zone = iceZones[zoneIndex];
     const rand = random(0x71f3 + zoneIndex * 6701);
     const count = Math.min(
       MAX_ICE_CLUSTERS_PER_ZONE,
       Math.round(zoneArea(zone) * 1.5)
     );
-    if (count <= 0) return;
+    if (count <= 0) continue;
 
     const variants = iceClusterMeshes.length;
     const counts = new Array<number>(variants).fill(0);
@@ -1704,6 +1771,7 @@ export function buildWorld(app: pc.AppBase): World {
       data[offset + 13] = 0.002;
       data[offset + 14] = z;
       data[offset + 15] = 1;
+      if ((i & 63) === 63) yield 1;
     }
 
     const bounds = zoneBounds(zone);
@@ -1732,10 +1800,10 @@ export function buildWorld(app: pc.AppBase): World {
       entity.render!.receiveShadows = false;
       entity.render!.meshInstances = [instance];
       entity.render!.customAabb = aabb;
-      app.root.addChild(entity);
+      worldRoot.addChild(entity);
       created.push(entity);
     }
-  });
+  }
 
   // Nieve fina sobre la escarcha: copos pequeños que caen despacio y derivan
   // con el viento. La caja de emisión es alta, así que hay copos a distintas
@@ -1783,15 +1851,16 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(snow);
+    worldRoot.addChild(snow);
     created.push(snow);
   });
 
+  yield 1;
   // --- Colada volcánica: basalto 3D y brasas --------------------------------
   // Placas rotas de basalto que sobresalen del suelo y chispas de lava que
   // suben desde las grietas. Las rocas son bajas y no colisionan: se leen como
   // costra levantada, no como obstáculos.
-  const fireZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'fire');
+  const fireZones = terrainZones.filter((zone) => zone.terrain === 'fire');
 
   const basaltMaterial = standard({
     diffuse: '#ffffff',
@@ -2088,7 +2157,7 @@ export function buildWorld(app: pc.AppBase): World {
       entity.render!.receiveShadows = true;
       entity.render!.meshInstances = [instance];
       entity.render!.customAabb = aabb;
-      app.root.addChild(entity);
+      worldRoot.addChild(entity);
       created.push(entity);
     }
 
@@ -2152,7 +2221,7 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(embers);
+    worldRoot.addChild(embers);
     if (embers.particlesystem) embers.particlesystem.drawOrder = 2;
     created.push(embers);
 
@@ -2166,7 +2235,7 @@ export function buildWorld(app: pc.AppBase): World {
       castShadows: false
     });
     glow.setPosition(fireX, 0.75, fireZ);
-    app.root.addChild(glow);
+    worldRoot.addChild(glow);
     created.push(glow);
     emberLights.push({ entity: glow, phase: zoneIndex * 2.1 + fireX * 0.3 });
   });
@@ -2217,12 +2286,13 @@ export function buildWorld(app: pc.AppBase): World {
         intensity: 1,
         orientation: pc.PARTICLEORIENTATION_SCREEN
       });
-      app.root.addChild(smoke);
+      worldRoot.addChild(smoke);
       if (smoke.particlesystem) smoke.particlesystem.drawOrder = 1;
       created.push(smoke);
     });
   });
 
+  yield 1;
   // --- Hierba alta ----------------------------------------------------------
   // Matas 3D de verdad: cada mata es una malla con varias briznas geométricas
   // (dos tramos y punta) y color por vértice de la base a la punta. Sin
@@ -2380,7 +2450,9 @@ export function buildWorld(app: pc.AppBase): World {
    * van en la matriz de instancia; la fase y la fuerza del viento, en
    * `instance_wind`.
    */
-  const buildInstancedFoliage = (options: InstancedFoliageOptions): void => {
+  const buildInstancedFoliage = function* (
+    options: InstancedFoliageOptions
+  ): Generator<number, void, void> {
     const {
       label,
       zones,
@@ -2398,10 +2470,11 @@ export function buildWorld(app: pc.AppBase): World {
     } = options;
     const variants = meshes.length;
 
-    zones.forEach((zone, zoneIndex) => {
+    for (let zoneIndex = 0; zoneIndex < zones.length; zoneIndex++) {
+      const zone = zones[zoneIndex];
       const rand = random(seed + zoneIndex * 7919);
       const count = Math.round(zoneArea(zone) * density);
-      if (count <= 0) return;
+      if (count <= 0) continue;
 
       // Reparte las matas entre variantes con el mismo criterio cíclico de
       // siempre, pero reservando un único Float32Array por variante.
@@ -2444,6 +2517,10 @@ export function buildWorld(app: pc.AppBase): World {
         data[offset + 17] = strengthMin + rand() * (strengthMax - strengthMin);
         data[offset + 18] = 0;
         data[offset + 19] = 0;
+        // Cada mata puede costar bastante si la región es un polígono grande
+        // (`randomPointInZone` recorre sus vértices): se cede cada 64 para que
+        // una tanda no se convierta en tarea larga.
+        if ((i & 63) === 63) yield 1;
       }
 
       // Caja que envuelve la región completa: permite descartar el lote entero
@@ -2478,15 +2555,15 @@ export function buildWorld(app: pc.AppBase): World {
         // El componente aplica su propio AABB al asignar las instancias, así
         // que se fija después para conservar la caja de toda la región.
         batch.render!.customAabb = aabb;
-        app.root.addChild(batch);
+        worldRoot.addChild(batch);
         created.push(batch);
       }
-    });
+    }
   };
 
-  buildInstancedFoliage({
+  yield* buildInstancedFoliage({
     label: 'tall-grass',
-    zones: TERRAIN_ZONES.filter((zone) => zone.terrain === 'tallGrass'),
+    zones: terrainZones.filter((zone) => zone.terrain === 'tallGrass'),
     meshes: grassClusterMeshes,
     material: tallGrassMaterial,
     density: 3.6,
@@ -2500,6 +2577,7 @@ export function buildWorld(app: pc.AppBase): World {
     phaseJitter: 1.4
   });
 
+  yield 1;
   // --- Claro feérico: flores 3D ---------------------------------------------
   // Misma técnica que la hierba alta, pero con flores: cada mata es una malla
   // de tallos, hojas y corolas de 5-6 pétalos con el corazón amarillo. Todo va
@@ -2681,8 +2759,8 @@ export function buildWorld(app: pc.AppBase): World {
     buildFlowerCluster(0x2f7a + variant * 4129, 7)
   );
 
-  const fairyZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'fairy');
-  buildInstancedFoliage({
+  const fairyZones = terrainZones.filter((zone) => zone.terrain === 'fairy');
+  yield* buildInstancedFoliage({
     label: 'fairy-flowers',
     zones: fairyZones,
     meshes: flowerClusterMeshes,
@@ -2744,11 +2822,12 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(pollen);
+    worldRoot.addChild(pollen);
     if (pollen.particlesystem) pollen.particlesystem.drawOrder = 2;
     created.push(pollen);
   });
 
+  yield 1;
   // --- Mariposas del claro feérico ------------------------------------------
   // Pequeñas mariposas 3D: un cuerpo fino y dos alas horizontales con color por
   // vértice (más oscuras junto al cuerpo, casi blancas en la punta). Cada una
@@ -2862,7 +2941,8 @@ export function buildWorld(app: pc.AppBase): World {
   const butterflies: Butterfly[] = [];
   const butterflyBatches: ButterflyBatch[] = [];
 
-  fairyZones.forEach((zone, zoneIndex) => {
+  for (let zoneIndex = 0; zoneIndex < fairyZones.length; zoneIndex++) {
+    const zone = fairyZones[zoneIndex];
     const rand = random(0x7e3a + zoneIndex * 3559);
     // Antes eran 8 fijas por zona: en un claro pequeño bastaba, pero en un
     // mapa entero de claro feérico se perdían. Ahora la densidad se escala con
@@ -2916,7 +2996,7 @@ export function buildWorld(app: pc.AppBase): World {
       new pc.Vec3(bounds.cx, 1.0, bounds.cz),
       new pc.Vec3(bounds.width / 2 + 1, 1.25, bounds.depth / 2 + 1)
     );
-    app.root.addChild(entity);
+    worldRoot.addChild(entity);
     created.push(entity);
 
     for (let i = 0; i < count; i++) {
@@ -2948,9 +3028,11 @@ export function buildWorld(app: pc.AppBase): World {
       writeButterflyBody(body, offset, butterfly, yawRadians);
       writeButterflyWing(right, offset, butterfly, yawRadians, flapRadians);
       writeButterflyWing(left, offset, butterfly, yawRadians, -flapRadians);
+      if ((i & 63) === 63) yield 1;
     }
-  });
+  }
 
+  yield 1;
   // --- Páramo: frailejones y hierba seca 3D --------------------------------
   // Misma idea que la hierba y las flores, pero con la silueta del frailejón
   // (tronco leñoso corto y roseta de hojas lanceoladas plateadas) y matas de
@@ -3254,8 +3336,8 @@ export function buildWorld(app: pc.AppBase): World {
     buildShrubCluster(0x63c1 + variant * 3301, 1 + (variant % 2))
   );
 
-  const paramoZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'electric');
-  buildInstancedFoliage({
+  const paramoZones = terrainZones.filter((zone) => zone.terrain === 'electric');
+  yield* buildInstancedFoliage({
     label: 'paramo-frailejon',
     zones: paramoZones,
     meshes: shrubClusterMeshes,
@@ -3279,7 +3361,7 @@ export function buildWorld(app: pc.AppBase): World {
   );
   const dryGrassMaterial = createWindMaterial('#1c1408', 0.1, 0.95, 6);
 
-  buildInstancedFoliage({
+  yield* buildInstancedFoliage({
     label: 'paramo-dry-grass',
     zones: paramoZones,
     meshes: dryGrassMeshes,
@@ -3295,6 +3377,7 @@ export function buildWorld(app: pc.AppBase): World {
     phaseJitter: 1.6
   });
 
+  yield 1;
   // --- Páramo: rayos y chispas ----------------------------------------------
   // El calvero eléctrico descarga rayos a intervalos irregulares. Cada descarga
   // cae sobre un punto distinto del calvero e ilumina los frailejones con una
@@ -3429,7 +3512,8 @@ export function buildWorld(app: pc.AppBase): World {
     seed: number;
   }> = [];
 
-  paramoZones.forEach((zone, zoneIndex) => {
+  for (let zoneIndex = 0; zoneIndex < paramoZones.length; zoneIndex++) {
+    const zone = paramoZones[zoneIndex];
     const rand = random(0x5e91 + zoneIndex * 8353);
     const [zoneX, zoneZ] = zoneCenter(zone);
 
@@ -3452,7 +3536,7 @@ export function buildWorld(app: pc.AppBase): World {
     bolt.render!.receiveShadows = false;
     bolt.render!.meshInstances = [new pc.MeshInstance(lightningMeshes[0], material)];
     bolt.enabled = false;
-    app.root.addChild(bolt);
+    worldRoot.addChild(bolt);
     created.push(bolt);
 
     const light = new pc.Entity(`paramo-lightning-light-${zoneIndex}`);
@@ -3464,7 +3548,7 @@ export function buildWorld(app: pc.AppBase): World {
       castShadows: false
     });
     light.setPosition(zoneX, 1.7, zoneZ);
-    app.root.addChild(light);
+    worldRoot.addChild(light);
     created.push(light);
 
     // Chispas ambientales: motas azuladas que asoman entre la hierba seca y
@@ -3511,7 +3595,7 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(sparks);
+    worldRoot.addChild(sparks);
     if (sparks.particlesystem) sparks.particlesystem.drawOrder = 2;
     created.push(sparks);
 
@@ -3526,7 +3610,8 @@ export function buildWorld(app: pc.AppBase): World {
       flashDuration: 0.55,
       seed: rand() * Math.PI * 2
     });
-  });
+    yield 1;
+  }
 
   // Hierba oscura de la ciénaga: briznas casi negras que sobresalen del agua
   // turbia. Usa la misma malla que la hierba alta con una paleta apagada,
@@ -3537,7 +3622,7 @@ export function buildWorld(app: pc.AppBase): World {
   );
   const darkGrassMaterial = createWindMaterial('#1c1408', 0.1, 0.75, 4.5);
 
-  buildInstancedFoliage({
+  yield* buildInstancedFoliage({
     label: 'swamp-grass',
     zones: swampZones,
     meshes: darkGrassMeshes,
@@ -3604,17 +3689,18 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(smoke);
+    worldRoot.addChild(smoke);
     if (smoke.particlesystem) smoke.particlesystem.drawOrder = 2;
     created.push(smoke);
   });
 
+  yield 1;
   // --- Bosque umbrío: árboles secos, fuegos fatuos y niebla ------------------
   // El calvero fantasmal no se queda en el suelo pintado: levanta cinco árboles
   // retorcidos sin hojas, enciende luces flotantes y arrastra una niebla baja.
   // La madera va con color por vértice, del casi negro de la base al gris
   // violeta de las puntas, así que tiene volumen desde la cámara a 45º.
-  const ghostZones = TERRAIN_ZONES.filter((zone) => zone.terrain === 'ghost');
+  const ghostZones = terrainZones.filter((zone) => zone.terrain === 'ghost');
   // La densidad llena (130 bocanadas y 18 fuegos) está pensada para un claro
   // mediano. En zonas de un solo tile se amontonarían, así que la cantidad
   // escala con el área por debajo de GHOST_FULL_PARTICLE_AREA.
@@ -3894,7 +3980,7 @@ export function buildWorld(app: pc.AppBase): World {
       instance.receiveShadows = true;
       tree.render!.meshInstances = [instance];
       tree.setLocalScale(scale, scale, scale);
-      app.root.addChild(tree);
+      worldRoot.addChild(tree);
       created.push(tree);
 
       colliders.push({ type: 'circle', x, z, radius: 0.22 * scale, sightRadius: 0.7 * scale });
@@ -3968,7 +4054,7 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(wisps);
+    worldRoot.addChild(wisps);
     if (wisps.particlesystem) wisps.particlesystem.drawOrder = 2;
     created.push(wisps);
 
@@ -4014,7 +4100,7 @@ export function buildWorld(app: pc.AppBase): World {
       intensity: 1,
       orientation: pc.PARTICLEORIENTATION_SCREEN
     });
-    app.root.addChild(mist);
+    worldRoot.addChild(mist);
     if (mist.particlesystem) mist.particlesystem.drawOrder = 1;
     created.push(mist);
 
@@ -4028,17 +4114,18 @@ export function buildWorld(app: pc.AppBase): World {
       castShadows: false
     });
     glow.setPosition(ghostX, 1.15, ghostZ);
-    app.root.addChild(glow);
+    worldRoot.addChild(glow);
     created.push(glow);
     ghostLights.push({ entity: glow, phase: zoneIndex * 1.9 + ghostZ * 0.27 });
   });
 
+  yield 1;
   // --- Nexos de las bases ---------------------------------------------------
   // Pedestal de piedra con un cristal emisivo del color del equipo y una luz
   // corta que tiñe la plataforma. Marcan el centro de cada base.
   const stoneMaterial = standard({ diffuse: '#8b8375', specular: '#1a1a1a', gloss: 0.14 });
   materials.push(stoneMaterial);
-  for (const base of BASES) {
+  for (const base of bases) {
     const color = TEAM_INFO[base.team].color;
     const crystalMaterial = standard({
       diffuse: '#22303f',
@@ -4050,7 +4137,7 @@ export function buildWorld(app: pc.AppBase): World {
 
     const nexus = new pc.Entity(`nexus-${base.team}`);
     nexus.setPosition(base.x, 0, base.z);
-    app.root.addChild(nexus);
+    worldRoot.addChild(nexus);
     created.push(nexus);
 
     part(nexus, 'cylinder', stoneMaterial, {
@@ -4076,7 +4163,7 @@ export function buildWorld(app: pc.AppBase): World {
       castShadows: false
     });
     glow.setPosition(base.x, 1.7, base.z);
-    app.root.addChild(glow);
+    worldRoot.addChild(glow);
     created.push(glow);
 
     colliders.push({
@@ -4087,6 +4174,7 @@ export function buildWorld(app: pc.AppBase): World {
     });
   }
 
+  yield 1;
   // --- Cielo ---------------------------------------------------------------
   const skyMaterial = new pc.StandardMaterial();
   skyMaterial.useLighting = false;
@@ -4110,10 +4198,11 @@ export function buildWorld(app: pc.AppBase): World {
   // dejar un agujero en el cielo.
   sky.render!.layers = [pc.LAYERID_SKYBOX];
   sky.setLocalScale(460, 460, 460);
-  app.root.addChild(sky);
+  worldRoot.addChild(sky);
   created.push(sky);
   const skyMesh = sky.render!.meshInstances[0].mesh!;
 
+  yield 1;
   // --- Clima ---------------------------------------------------------------
   // El mundo se construye siempre despejado; la partida sortea su clima al
   // arrancar y llama a `setAtmosphere`. La capa visual reutiliza la textura de
@@ -4134,6 +4223,7 @@ export function buildWorld(app: pc.AppBase): World {
     }
   });
 
+  yield 1;
   // --- Sombra de contacto --------------------------------------------------
   const shadowMaterial = new pc.StandardMaterial();
   shadowMaterial.useLighting = false;
@@ -4160,6 +4250,9 @@ export function buildWorld(app: pc.AppBase): World {
       instance.stencilBack = FOG_EXCLUDED_STENCIL;
     }
   }
+
+  // El mundo está completo: a partir de aquí es visible y reemplaza al anterior.
+  app.root.addChild(worldRoot);
 
   let time = 0;
 
@@ -4393,6 +4486,77 @@ export function buildWorld(app: pc.AppBase): World {
       butterflyWingRight.destroy();
       butterflyWingLeft.destroy();
       for (const mesh of lightningMeshes) mesh.destroy();
+      // La raíz se destruye al final: si el mundo se canceló antes de
+      // engancharse, sus entidades seguían colgando de ella.
+      worldRoot.destroy();
     }
   };
 }
+
+/** Construye el mundo de una vez. Para tests y como respaldo. */
+export function buildWorld(
+  app: pc.AppBase,
+  options: BuildWorldOptions = {}
+): World {
+  const steps = buildWorldSteps(app, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+export interface BuildWorldHooks {
+  /** Progreso de 0 a 1. */
+  onProgress?: (fraction: number) => void;
+  /** Si devuelve `true`, se abandona la construcción. */
+  isCancelled?: () => boolean;
+}
+
+/**
+ * Construye el mundo por secciones, cediendo el hilo entre ellas. En un mapa de
+ * estrés como `perf-256` el mundo tarda más que el propio suelo, así que sin
+ * esto el cambio de mapa seguía congelando la pestaña.
+ */
+export async function buildWorldAsync(
+  app: pc.AppBase,
+  options: BuildWorldOptions = {},
+  hooks: BuildWorldHooks = {}
+): Promise<World | null> {
+  const steps = buildWorldSteps(app, options);
+  // Progreso estimado por tiempo: el generador cede muchísimas veces dentro de
+  // las secciones pesadas, así que contar cesiones haría que la barra llegara al
+  // 99 % en el primer instante.
+  const startedAt = performance.now();
+  let frameStart = startedAt;
+  let step = steps.next();
+
+  while (!step.done) {
+    const now = performance.now();
+    if (now - frameStart >= BUILD_WORLD_BUDGET_MS) {
+      hooks.onProgress?.(
+        Math.min(0.99, (now - startedAt) / BUILD_WORLD_ESTIMATE_MS)
+      );
+      await yieldToBrowser();
+      frameStart = performance.now();
+    }
+    step = steps.next();
+  }
+
+  hooks.onProgress?.(1);
+  const world = step.value;
+  if (hooks.isCancelled?.()) {
+    // No se abandona a media construcción: quedarían entidades y texturas
+    // sueltas. Se termina y se descarta el mundo completo.
+    world.dispose();
+    return null;
+  }
+  return world;
+}
+
+/**
+ * Tiempo de construcción antes de ceder el hilo. Cada sección del mundo puede
+ * ser más corta o más larga; este presupuesto deja que el navegador pinte entre
+ * secciones sin alargar demasiado la carga.
+ */
+const BUILD_WORLD_BUDGET_MS = 8;
+/** Duración aproximada de la construcción en `perf-256`, solo para la barra. */
+const BUILD_WORLD_ESTIMATE_MS = 1400;

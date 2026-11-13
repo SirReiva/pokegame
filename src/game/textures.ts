@@ -1,8 +1,9 @@
 import * as pc from "playcanvas";
+import { yieldToBrowser } from "./frameYield";
 import { TEAM_INFO } from "./multiplayer";
 import {
-  onMountain,
-  terrainAt,
+  mountainAtInMap,
+  terrainAtInMap,
   zoneBounds,
   zoneCenter,
   zoneContainsInset,
@@ -304,13 +305,13 @@ const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
  * Pinta un calvero temático con bloques de 4 px, borde irregular y detalles
  * propios de su tipo Pokémon. La silueta y el ruido son deterministas.
  */
-function paintTerrainZone(
+function* paintTerrainZoneSteps(
   ctx: CanvasRenderingContext2D,
   zone: TerrainZone,
   toPxX: (world: number) => number,
   toPxY: (world: number) => number,
   scale: number,
-): void {
+): Generator<number, void, void> {
   const palette = TERRAIN_PALETTES[zone.terrain];
   if (!palette) return;
 
@@ -374,7 +375,7 @@ function paintTerrainZone(
     ctx.stroke();
   };
 
-  const paintFirePlates = () => {
+  const paintFirePlates = function* (): Generator<number, void, void> {
     // Basalto volcánico: placas oscuras separadas por una red de grietas.
     // El naranja y el amarillo no van en el suelo; viven en las coronas de
     // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
@@ -390,7 +391,12 @@ function paintTerrainZone(
       });
     }
 
+    // El barrido por celdas de 4 px es lo más caro de una zona de fuego
+    // grande: se cede el hilo cada 16 filas para que nunca sea una tarea
+    // larga por sí sola.
+    let plateRow = 0;
     for (let oy = -radius; oy <= radius; oy += step) {
+      if ((plateRow++ & 15) === 0) yield 1;
       for (let ox = -radius; ox <= radius; ox += step) {
         let nearest = 0;
         let d1 = Infinity;
@@ -434,7 +440,7 @@ function paintTerrainZone(
     }
   };
 
-  const paintParkPanels = () => {
+  const paintParkPanels = function* (): Generator<number, void, void> {
     // Caucho rojo de parque: losas grandes separadas por juntas finas y un
     // grano de virutas. Las juntas se alinean con el mundo para que dos zonas
     // de parque contiguas compartan la misma retícula de paneles.
@@ -460,6 +466,7 @@ function paintTerrainZone(
       }
     }
     ctx.globalAlpha = 1;
+    yield 1;
 
     // Juntas: una línea oscura fina y otra clara al lado que simula el bisel.
     const seamWidth = Math.max(1, 0.04 * scale);
@@ -494,6 +501,7 @@ function paintTerrainZone(
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    yield 1;
 
     // Virutas de caucho: motas oscuras y claras repartidas por la losa.
     const grains = Math.min(
@@ -513,6 +521,7 @@ function paintTerrainZone(
         light ? palette.accent2 : palette.dark,
       );
     }
+    yield 1;
   };
 
   const mark = (
@@ -537,9 +546,10 @@ function paintTerrainZone(
 
   // La base de la zona ya la pinta `paintGridTiles` celda a celda. Aquí solo
   // se añade el borde y la decoración propia del terreno.
-  if (zone.terrain === "fire") paintFirePlates();
-  if (zone.terrain === "park") paintParkPanels();
+  if (zone.terrain === "fire") yield* paintFirePlates();
+  if (zone.terrain === "park") yield* paintParkPanels();
   strokeBorder();
+  yield 1;
 
   switch (zone.terrain) {
     case "fire":
@@ -744,22 +754,34 @@ function paintTerrainZone(
     default:
       break;
   }
+  yield 1;
 
   ctx.restore();
 }
 
 /**
- * Pinta la rejilla base del mapa, celda a celda.
- *
- * Es también la base de los calveros decorativos: cada celda usa la paleta de
- * su terreno, así que `paintTerrainZone()` no necesita volver a rellenar la
- * zona entera y puede limitarse al borde y a la decoración propia.
+ * Parámetros de la rejilla derivados de la resolución del canvas. Se calculan
+ * una vez y se reutilizan en cada fila.
  */
-function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
+interface GridStyle {
+  cols: number;
+  cellPxX: number;
+  cellPxY: number;
+  pixelsPerUnit: number;
+  step: number;
+  grainStrength: number;
+  detailSize: number;
+  tuftWidth: number;
+  tuftHeight: number;
+  streakWidth: number;
+  streakHeight: number;
+}
+
+function gridStyle(ctx: CanvasRenderingContext2D, map: GameMap): GridStyle {
   const rows = map.tiles.length;
   const cols = map.tiles[0]?.length ?? 0;
-  const cellPxX = ctx.canvas.width / cols;
-  const cellPxY = ctx.canvas.height / rows;
+  const cellPxX = ctx.canvas.width / Math.max(1, cols);
+  const cellPxY = ctx.canvas.height / Math.max(1, rows);
   // El grano representa una franja de mundo parecida en todos los mapas: con
   // muchas celdas por téxel se reduce el bloque para que no se lea como una
   // trama enorme encima de cada celda.
@@ -778,142 +800,180 @@ function paintGridTiles(ctx: CanvasRenderingContext2D, map: GameMap): void {
   const tuftHeight = Math.max(1, Math.round(pixelsPerUnit * 0.112));
   const streakWidth = Math.max(1, Math.round(pixelsPerUnit * 0.15));
   const streakHeight = Math.max(1, Math.round(pixelsPerUnit * 0.075));
+  return {
+    cols,
+    cellPxX,
+    cellPxY,
+    pixelsPerUnit,
+    step,
+    grainStrength,
+    detailSize,
+    tuftWidth,
+    tuftHeight,
+    streakWidth,
+    streakHeight,
+  };
+}
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const terrain = map.tiles[row][col];
-      const palette = TERRAIN_PALETTES[terrain];
-      const x0 = Math.round(col * cellPxX);
-      const y0 = Math.round(row * cellPxY);
-      const x1 = Math.round((col + 1) * cellPxX);
-      const y1 = Math.round((row + 1) * cellPxY);
-      const random = mulberry32(
-        (row * 73856093) ^ (col * 19349663) ^ 0x5eed,
-      );
+/**
+ * Pinta una fila de la rejilla base, celda a celda.
+ *
+ * Es también la base de los calveros decorativos: cada celda usa la paleta de
+ * su terreno, así que `paintTerrainZone()` no necesita volver a rellenar la
+ * zona entera y puede limitarse al borde y a la decoración propia.
+ */
+function paintGridTileRow(
+  ctx: CanvasRenderingContext2D,
+  map: GameMap,
+  row: number,
+  style: GridStyle,
+): void {
+  const {
+    cols,
+    cellPxX,
+    cellPxY,
+    pixelsPerUnit,
+    step,
+    grainStrength,
+    detailSize,
+    tuftWidth,
+    tuftHeight,
+    streakWidth,
+    streakHeight,
+  } = style;
+  for (let col = 0; col < cols; col++) {
+    const terrain = map.tiles[row][col];
+    const palette = TERRAIN_PALETTES[terrain];
+    const x0 = Math.round(col * cellPxX);
+    const y0 = Math.round(row * cellPxY);
+    const x1 = Math.round((col + 1) * cellPxX);
+    const y1 = Math.round((row + 1) * cellPxY);
+    const random = mulberry32(
+      (row * 73856093) ^ (col * 19349663) ^ 0x5eed,
+    );
 
-      ctx.fillStyle = palette.base;
-      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = palette.base;
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
-      // Grano con semilla por bloque de pantalla, no por celda: así dos celdas
-      // vecinas del mismo terreno comparten el ruido y no aparece una costura
-      // de tablero en cada borde.
-      for (let py = y0; py < y1; py += step) {
-        for (let px = x0; px < x1; px += step) {
-          const gx = Math.floor(px / step) + 1;
-          const gy = Math.floor(py / step) + 1;
-          if (blockNoise(gx, gy) < 0.62) continue;
-          const tone = blockNoise(gx + 1013, gy - 811);
-          ctx.fillStyle =
-            tone < 0.45
-              ? palette.light
-              : tone < 0.5
-                ? palette.dark
-                : palette.accent2;
-          ctx.globalAlpha =
-            (0.14 + blockNoise(gx - 733, gy + 457) * 0.22) * grainStrength;
-          ctx.fillRect(px, py, Math.min(step, x1 - px), Math.min(step, y1 - py));
-        }
+    // Grano con semilla por bloque de pantalla, no por celda: así dos celdas
+    // vecinas del mismo terreno comparten el ruido y no aparece una costura
+    // de tablero en cada borde.
+    for (let py = y0; py < y1; py += step) {
+      for (let px = x0; px < x1; px += step) {
+        const gx = Math.floor(px / step) + 1;
+        const gy = Math.floor(py / step) + 1;
+        if (blockNoise(gx, gy) < 0.62) continue;
+        const tone = blockNoise(gx + 1013, gy - 811);
+        ctx.fillStyle =
+          tone < 0.45
+            ? palette.light
+            : tone < 0.5
+              ? palette.dark
+              : palette.accent2;
+        ctx.globalAlpha =
+          (0.14 + blockNoise(gx - 733, gy + 457) * 0.22) * grainStrength;
+        ctx.fillRect(px, py, Math.min(step, x1 - px), Math.min(step, y1 - py));
       }
-      ctx.globalAlpha = 1;
+    }
+    ctx.globalAlpha = 1;
 
-      switch (terrain) {
-        case "waterLow":
-        case "waterHigh": {
-          const streaks = 2 + Math.floor(random() * 2);
-          ctx.fillStyle =
-            terrain === "waterHigh" ? palette.accent : "#c4f0fb";
-          ctx.globalAlpha = 0.55;
-          for (let i = 0; i < streaks; i++) {
-            const sx = x0 + random() * Math.max(1, x1 - x0 - streakWidth);
-            const sy = y0 + random() * Math.max(1, y1 - y0 - streakHeight);
-            ctx.fillRect(
-              Math.round(sx),
-              Math.round(sy),
-              streakWidth,
-              streakHeight,
-            );
-          }
-          ctx.globalAlpha = 1;
-          break;
+    switch (terrain) {
+      case "waterLow":
+      case "waterHigh": {
+        const streaks = 2 + Math.floor(random() * 2);
+        ctx.fillStyle =
+          terrain === "waterHigh" ? palette.accent : "#c4f0fb";
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < streaks; i++) {
+          const sx = x0 + random() * Math.max(1, x1 - x0 - streakWidth);
+          const sy = y0 + random() * Math.max(1, y1 - y0 - streakHeight);
+          ctx.fillRect(
+            Math.round(sx),
+            Math.round(sy),
+            streakWidth,
+            streakHeight,
+          );
         }
-        case "road": {
-          ctx.fillStyle = palette.accent2;
-          ctx.globalAlpha = 0.6;
-          for (let i = 0; i < 5; i++) {
-            ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
-              detailSize,
-              detailSize,
-            );
-          }
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case "lane":
-        case "sand": {
-          ctx.fillStyle = palette.accent;
-          ctx.globalAlpha = 0.55;
-          for (let i = 0; i < 4; i++) {
-            ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
-              detailSize,
-              detailSize,
-            );
-          }
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case "park": {
-          // Grano de caucho: motas finas que rompen el rojo plano de la losa.
-          for (let i = 0; i < 8; i++) {
-            ctx.fillStyle = random() < 0.5 ? palette.accent2 : palette.dark;
-            ctx.globalAlpha = 0.2 + random() * 0.15;
-            ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0)),
-              1,
-              1,
-            );
-          }
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case "jungle": {
-          ctx.fillStyle = palette.accent;
-          ctx.globalAlpha = 0.5;
-          for (let i = 0; i < 3; i++) {
-            ctx.fillRect(
-              x0 + Math.floor(random() * Math.max(1, x1 - x0 - tuftWidth)),
-              y0 + Math.floor(random() * Math.max(1, y1 - y0 - tuftHeight)),
-              tuftWidth,
-              tuftHeight,
-            );
-          }
-          ctx.globalAlpha = 1;
-          break;
-        }
-        case "teamRed":
-        case "teamBlue":
-        case "teamYellow":
-        case "teamGreen": {
-          // Santuario de equipo: franjas verticales claras sobre el color del
-          // equipo. Se alinean con el mundo para que celdas contiguas formen
-          // una sola trama y el territorio se lea como una zona protegida.
-          ctx.fillStyle = palette.accent;
-          ctx.globalAlpha = 0.3;
-          const stripe = Math.max(1, Math.round(pixelsPerUnit * 0.07));
-          const gap = Math.max(3, stripe * 4);
-          for (let px = Math.ceil(x0 / gap) * gap; px < x1; px += gap) {
-            ctx.fillRect(px, y0, Math.min(stripe, x1 - px), y1 - y0);
-          }
-          ctx.globalAlpha = 1;
-          break;
-        }
-        default:
-          break;
+        ctx.globalAlpha = 1;
+        break;
       }
+      case "road": {
+        ctx.fillStyle = palette.accent2;
+        ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect(
+            x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
+            y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
+            detailSize,
+            detailSize,
+          );
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "lane":
+      case "sand": {
+        ctx.fillStyle = palette.accent;
+        ctx.globalAlpha = 0.55;
+        for (let i = 0; i < 4; i++) {
+          ctx.fillRect(
+            x0 + Math.floor(random() * Math.max(1, x1 - x0 - detailSize)),
+            y0 + Math.floor(random() * Math.max(1, y1 - y0 - detailSize)),
+            detailSize,
+            detailSize,
+          );
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "park": {
+        // Grano de caucho: motas finas que rompen el rojo plano de la losa.
+        for (let i = 0; i < 8; i++) {
+          ctx.fillStyle = random() < 0.5 ? palette.accent2 : palette.dark;
+          ctx.globalAlpha = 0.2 + random() * 0.15;
+          ctx.fillRect(
+            x0 + Math.floor(random() * Math.max(1, x1 - x0)),
+            y0 + Math.floor(random() * Math.max(1, y1 - y0)),
+            1,
+            1,
+          );
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "jungle": {
+        ctx.fillStyle = palette.accent;
+        ctx.globalAlpha = 0.5;
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(
+            x0 + Math.floor(random() * Math.max(1, x1 - x0 - tuftWidth)),
+            y0 + Math.floor(random() * Math.max(1, y1 - y0 - tuftHeight)),
+            tuftWidth,
+            tuftHeight,
+          );
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "teamRed":
+      case "teamBlue":
+      case "teamYellow":
+      case "teamGreen": {
+        // Santuario de equipo: franjas verticales claras sobre el color del
+        // equipo. Se alinean con el mundo para que celdas contiguas formen
+        // una sola trama y el territorio se lea como una zona protegida.
+        ctx.fillStyle = palette.accent;
+        ctx.globalAlpha = 0.3;
+        const stripe = Math.max(1, Math.round(pixelsPerUnit * 0.07));
+        const gap = Math.max(3, stripe * 4);
+        for (let px = Math.ceil(x0 / gap) * gap; px < x1; px += gap) {
+          ctx.fillRect(px, y0, Math.min(stripe, x1 - px), y1 - y0);
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      default:
+        break;
     }
   }
 }
@@ -1003,16 +1063,43 @@ export function groundTextureSize(
   );
 }
 
+/** Ramilletes de flores de la jungla. Se reparten en tandas al pintar. */
+const GROUND_FLOWER_CLUSTERS = 220;
+const GROUND_FLOWER_CHUNK = 20;
 /**
- * Suelo del mapa: cada celda pinta su terreno y encima se añaden los detalles
- * de los calveros, las plataformas de las bases y las flores de la jungla.
- * `size` es el lado mayor de la textura; el otro se deriva del aspecto del
- * mapa para que un mapa rectangular no se deforme.
+ * Tiempo de pintado antes de devolver el control al navegador. Una fila de la
+ * rejilla tarda muy poco; una zona decorativa puede acercarse a este
+ * presupuesto, que es el peor caso de bloqueo por tarea.
  */
-export function createGroundCanvas(
+const GROUND_PAINT_BUDGET_MS = 8;
+
+export interface GroundPaintHooks {
+  /** Progreso de 0 a 1, para la barra de carga. */
+  onProgress?: (fraction: number) => void;
+  /** Si devuelve `true`, se abandona el pintado (el mapa ya no es el objetivo). */
+  isCancelled?: () => boolean;
+}
+
+function groundPaintStepCount(options: GroundPaintOptions): number {
+  // Estimación para la barra de carga: cada zona cede varias veces (fuego y
+  // parque, sobre todo). No hace falta exactitud; el progreso se limita a 0.99
+  // hasta que el pintado termina de verdad.
+  return (
+    options.map.tiles.length +
+    options.zones.length * 8 +
+    1 +
+    Math.ceil(GROUND_FLOWER_CLUSTERS / GROUND_FLOWER_CHUNK)
+  );
+}
+
+/**
+ * Pinta el suelo paso a paso. Es la base de la versión síncrona y de la
+ * troceada: la secuencia de dibujo es idéntica en ambas.
+ */
+function* groundCanvasSteps(
   size: number,
   options: GroundPaintOptions,
-): HTMLCanvasElement {
+): Generator<number, HTMLCanvasElement, void> {
   const { map, zones } = options;
   const rows = map.tiles.length;
   const cols = map.tiles[0]?.length ?? 0;
@@ -1035,14 +1122,19 @@ export function createGroundCanvas(
   ctx.fillStyle = TERRAIN_PALETTES.jungle.base;
   ctx.fillRect(0, 0, width, height);
 
-  paintGridTiles(ctx, map);
+  const style = gridStyle(ctx, map);
+  for (let row = 0; row < rows; row++) {
+    paintGridTileRow(ctx, map, row, style);
+    yield 1;
+  }
 
   // Detalle procedural de los calveros temáticos.
   for (const zone of zones) {
-    paintTerrainZone(ctx, zone, toPxX, toPxY, scale);
+    yield* paintTerrainZoneSteps(ctx, zone, toPxX, toPxY, scale);
   }
 
   paintBases(ctx, map, toPxX, toPxY, scale);
+  yield 1;
 
   // Flores: ramilletes solo en la jungla, lejos de cordilleras. El tamaño se
   // deriva de la escala para que un mapa enorme no convierta cada flor en un
@@ -1050,26 +1142,82 @@ export function createGroundCanvas(
   const petals = ["#f5f0df", "#f7d75c", "#ef7fa1", "#f2a65a", "#c9a0dc"];
   const petalSize = Math.max(1, Math.round(scale * 0.11));
   const petalSpread = Math.max(1, Math.round(scale * 0.11));
-  for (let i = 0; i < 220; i++) {
-    const x = (random() * 2 - 1) * (halfX - 1.5);
-    const z = (random() * 2 - 1) * (halfZ - 1.5);
-    if (terrainAt(x, z) !== "jungle") continue;
-    if (onMountain(x, z)) continue;
-    const color = petals[Math.floor(random() * petals.length)];
-    for (let j = 0; j < 4; j++) {
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 0.9;
-      ctx.fillRect(
-        toPxX(x) + (random() * 2 - 1) * petalSpread,
-        toPxY(z) + (random() * 2 - 1) * petalSpread,
-        petalSize,
-        petalSize,
-      );
+  for (let start = 0; start < GROUND_FLOWER_CLUSTERS; start += GROUND_FLOWER_CHUNK) {
+    const end = Math.min(start + GROUND_FLOWER_CHUNK, GROUND_FLOWER_CLUSTERS);
+    for (let i = start; i < end; i++) {
+      const x = (random() * 2 - 1) * (halfX - 1.5);
+      const z = (random() * 2 - 1) * (halfZ - 1.5);
+      // Consultas al mapa recibido, no al mapa activo: así se puede pintar el
+      // suelo nuevo mientras el mundo anterior sigue en pantalla.
+      if (terrainAtInMap(map, x, z) !== "jungle") continue;
+      if (mountainAtInMap(map, x, z)) continue;
+      const color = petals[Math.floor(random() * petals.length)];
+      for (let j = 0; j < 4; j++) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(
+          toPxX(x) + (random() * 2 - 1) * petalSpread,
+          toPxY(z) + (random() * 2 - 1) * petalSpread,
+          petalSize,
+          petalSize,
+        );
+      }
     }
+    yield 1;
   }
   ctx.globalAlpha = 1;
 
   return ctx.canvas;
+}
+
+/**
+ * Suelo del mapa: cada celda pinta su terreno y encima se añaden los detalles
+ * de los calveros, las plataformas de las bases y las flores de la jungla.
+ * `size` es el lado mayor de la textura; el otro se deriva del aspecto del
+ * mapa para que un mapa rectangular no se deforme.
+ *
+ * Versión síncrona, para tests y como respaldo. La carga real usa
+ * `createGroundCanvasAsync()` para no bloquear el hilo principal.
+ */
+export function createGroundCanvas(
+  size: number,
+  options: GroundPaintOptions,
+): HTMLCanvasElement {
+  const steps = groundCanvasSteps(size, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/**
+ * Igual que `createGroundCanvas()` pero troceado con `requestAnimationFrame`:
+ * la pestaña sigue respondiendo y la barra de carga puede avanzar. Devuelve
+ * `null` si `isCancelled` pide abandonar.
+ */
+export async function createGroundCanvasAsync(
+  size: number,
+  options: GroundPaintOptions,
+  hooks: GroundPaintHooks = {},
+): Promise<HTMLCanvasElement | null> {
+  const steps = groundCanvasSteps(size, options);
+  const total = Math.max(1, groundPaintStepCount(options));
+  let completed = 0;
+  let frameStart = performance.now();
+  let step = steps.next();
+
+  while (!step.done) {
+    completed += 1;
+    if (performance.now() - frameStart >= GROUND_PAINT_BUDGET_MS) {
+      hooks.onProgress?.(Math.min(0.99, completed / total));
+      await yieldToBrowser();
+      if (hooks.isCancelled?.()) return null;
+      frameStart = performance.now();
+    }
+    step = steps.next();
+  }
+
+  hooks.onProgress?.(1);
+  return step.value;
 }
 
 /**
@@ -1087,25 +1235,16 @@ const GROUND_CANVAS_CACHE_PIXELS = 16_000_000;
  */
 const groundCanvasCache = new Map<string, HTMLCanvasElement>();
 
-/**
- * Devuelve el canvas del suelo del mapa, reutilizando el de una carga anterior
- * si sigue en el caché. La clave incluye el tamaño porque la resolución depende
- * del presupuesto de textura del dispositivo.
- */
-export function cachedGroundCanvas(
-  size: number,
-  options: GroundPaintOptions,
-): HTMLCanvasElement {
-  const key = `${options.map.id}:${size}`;
+function takeGroundCanvas(key: string): HTMLCanvasElement | undefined {
   const cached = groundCanvasCache.get(key);
-  if (cached) {
-    // Reinsertar al final mantiene el orden LRU.
-    groundCanvasCache.delete(key);
-    groundCanvasCache.set(key, cached);
-    return cached;
-  }
+  if (!cached) return undefined;
+  // Reinsertar al final mantiene el orden LRU.
+  groundCanvasCache.delete(key);
+  groundCanvasCache.set(key, cached);
+  return cached;
+}
 
-  const canvas = createGroundCanvas(size, options);
+function storeGroundCanvas(key: string, canvas: HTMLCanvasElement): void {
   groundCanvasCache.set(key, canvas);
 
   let pixels = 0;
@@ -1120,7 +1259,28 @@ export function cachedGroundCanvas(
     pixels -= oldest.width * oldest.height;
     groundCanvasCache.delete(oldestKey);
   }
+}
 
+/**
+ * Devuelve el canvas del suelo del mapa, reutilizando el de una carga anterior
+ * si sigue en el caché. La clave incluye el tamaño porque la resolución depende
+ * del presupuesto de textura del dispositivo.
+ */
+export async function cachedGroundCanvasAsync(
+  size: number,
+  options: GroundPaintOptions,
+  hooks: GroundPaintHooks = {},
+): Promise<HTMLCanvasElement | null> {
+  const key = `${options.map.id}:${size}`;
+  const cached = takeGroundCanvas(key);
+  if (cached) {
+    hooks.onProgress?.(1);
+    return cached;
+  }
+
+  const canvas = await createGroundCanvasAsync(size, options, hooks);
+  if (!canvas) return null;
+  storeGroundCanvas(key, canvas);
   return canvas;
 }
 

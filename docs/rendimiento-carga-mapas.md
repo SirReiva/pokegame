@@ -100,23 +100,50 @@ Como efecto secundario positivo, los huecos interiores de una zona (por
 ejemplo, un lago dentro de una región de escarcha) muestran ahora el terreno
 real de la rejilla en lugar de quedar tapados por el relleno de la zona.
 
-### 3. Limitar resolución y trabajo
+### 3. Limitar resolución y trabajo — aplicada
 
-- Bajar `maxTexels` de 8M a ~2M y/o `maxSize` de 8192 a 2048 en
-  `groundTextureSize()` (`src/game/textures.ts:777-812`).
-- Escalar el `step` de 4 px con el tamaño de la textura.
+- El presupuesto de téxeles es ahora `CONFIG.performance.groundTexturePixels`
+  (`src/game/config.ts`), aplicado en `groundTextureSize()`
+  (`src/game/textures.ts`). Por defecto 4 M: en `perf-256` la textura pasa de
+  2828 a 2000 px (8 M → 4 M píxeles), mientras que los mapas pequeños no cambian
+  porque ya van topados por su tamaño o por `maxPixelsPerUnit`.
+- Efecto medido: el pintado baja ~20 % (515 → ~460 ms) y la memoria de la
+  textura y su subida a la GPU se reducen a la mitad. No elimina el coste de las
+  zonas, que depende de sus detalles más que de los píxeles.
+- `maxSize` sigue limitado a `min(device.maxTextureSize, 8192)`. Si hiciera
+  falta más margen, bajar `groundTexturePixels` a 2 M deja `perf-256` en
+  1414 px.
 
-Útil como mitigación, pero insuficiente por sí sola: a 1414 px sigue tardando
-~5 s en `perf-256`.
+### 4. Mover la generación fuera del hilo principal — aplicada (troceada)
 
-### 4. Mover la generación fuera del hilo principal
+La generación se hace con generadores que ceden el control cada
+`GROUND_PAINT_BUDGET_MS` / `BUILD_WORLD_BUDGET_MS` (8 ms) mediante
+`yieldToBrowser()` (`src/game/frameYield.ts`). Se trocea:
 
-- Generar el canvas en un `Web Worker` con `OffscreenCanvas` y transferir un
-  `ImageBitmap`.
-- O dividir la generación en trozos con `await`/`requestAnimationFrame` entre
-  zonas para que la UI pueda mostrar progreso.
+- el suelo por filas de la rejilla, zonas decorativas (incluido el barrido del
+  fuego) y tandas de flores (`createGroundCanvasAsync`);
+- la construcción del mundo por secciones, y dentro de las secciones pesadas
+  (follaje instanciado, cristales de hielo, mariposas) cada 64 elementos
+  (`buildWorldAsync`).
 
-Lo ideal es combinarlo con la solución 1.
+`yieldToBrowser()` usa `scheduler.yield()` cuando existe (Chrome) y cae a
+`requestAnimationFrame` en el resto. La tarea más larga pasa de más de un
+segundo a menos de 50 ms y la barra de carga puede mostrar progreso real. Las
+versiones síncrona y asíncrona comparten los mismos pasos (`groundCanvasSteps`,
+`buildWorldSteps`), así que el resultado es idéntico.
+
+El mapa anterior sigue visible hasta que el nuevo está listo: `applyMap()`
+genera el suelo y construye el mundo en una raíz aparte, y solo después destruye
+el mundo anterior y engancha el nuevo. El mundo se construye con su mapa
+explícito (`BuildWorldOptions.map`), sin tocar el estado global: `setActiveMap()`
+se llama al final, cuando ya no queda ningún frame intermedio, así que el terreno
+del mapa nuevo nunca se mezcla con la geometría del anterior. La cámara de menú
+orbita el foco guardado (`menuFocus`) hasta el intercambio.
+
+El mapa nuevo se construye con su mapa explícito aunque haya otro activo, así
+que la base ya está preparada si algún día se quiere cambiar de mapa sin recrear
+el motor. Comprobado en headless: mismos 140 colliders, mismos límites y misma
+altura de agua que usando el estado global.
 
 ### 5. Cachear el suelo por mapa — aplicada
 
@@ -133,11 +160,13 @@ La textura de GPU se recrea porque pertenece al `World` de cada mapa.
 - El hielo tiene un tope de instancias por zona
   (`MAX_ICE_CLUSTERS_PER_ZONE`, `src/game/world.ts`) como el resto de
   decoraciones.
-- `BotNavGrid` recorre toda la rejilla al empezar la partida
-  (`src/game/botNav.ts:110-121`). No es el bloqueo actual, pero añade tiempo en
-  mapas grandes.
-- `warmUpShaders()` y la construcción del mundo también son síncronos; si se
-  quiere una carga totalmente fluida, conviene partirlos en fases.
+- `BotNavGrid` marca el agua profunda y los santuarios en un único barrido de la
+  rejilla (`src/game/botNav.ts`); antes eran dos pasadas y dos consultas de
+  terreno por celda.
+- `warmUpShaders()` ya cede entre lotes de efectos. La construcción de
+  entidades también está troceada con `buildWorldAsync()`; lo que queda síncrono
+  son las operaciones cortas de escena (fog, luz ambiental) y la subida inicial
+  de la textura del suelo a la GPU.
 
 ## Resultado tras la optimización
 
@@ -153,26 +182,77 @@ Medición con el mismo benchmark y el mismo Chrome headless:
 suelo se conserva: relleno por celda, grano, borde oscuro y patrones por tipo de
 terreno.
 
+Con el pintado troceado (Chrome headless, `perf-256`, textura de 2828 px):
+
+| Medición | Suelo | Mundo |
+| --- | --- | --- |
+| Versión síncrona | ~515 ms en una tarea | ~1142 ms en una tarea |
+| Versión troceada | ~620 ms en tandas | ~1332 ms en tandas |
+| Tarea más larga | **< 50 ms** | **< 50 ms** (sin `longtask`) |
+| Píxeles distintos | **0** | — |
+
+El coste total sube entre un 17 % y un 20 % por ceder el hilo, pero desaparecen
+los bloqueos de medio segundo a casi dos segundos. La derivación de regiones
+(`mapRegions`) tarda ~44 ms la primera vez y queda cacheada por mapa: el segundo
+cambio al mismo mapa no la recalcula.
+
+Con el presupuesto por defecto (4 M téxeles, 2000 px en `perf-256`) el pintado
+baja a ~460-550 ms y la textura ocupa la mitad. Los mapas pequeños conservan su
+resolución.
+
+### Primer frame del mando nuevo — aplicada
+
+El primer render de un mundo nuevo compila los shaders de todos sus materiales y
+sube sus texturas. Medido en Chrome headless con WebGL por software: **~312 ms**
+el primer render de un mundo pequeño y ~14 ms los siguientes; la textura del
+suelo de 8 M px aporta unos 14 ms de esa primera subida.
+
+Por eso `applyMap()` termina con `app.render()`: el coste se paga mientras la
+pantalla de carga sigue visible, no en el primer frame de la partida si la intro
+ya ha terminado. La subida en sí es una operación de GPU no troceable; baja a la
+mitad con el presupuesto de 4 M.
+
 ## Cómo reproducir la medición
 
 El benchmark se hizo con una página temporal que:
 
 1. carga el JSON del mapa;
-2. llama a `setActiveMap(map)`;
-3. calcula el tamaño con `groundTextureSize(map, { maxSize: 8192 })`;
-4. mide `createGroundCanvas(size, { map, zones: TERRAIN_ZONES })`.
+2. calcula las regiones con `mapRegions(map)` (sin activar el mapa);
+3. calcula el tamaño con `groundTextureSize(map, { maxTexels, maxSize: 8192 })`;
+4. mide `createGroundCanvas(size, { map, zones })` (síncrono) y
+   `createGroundCanvasAsync(size, { map, zones })` (troceado).
+5. crea una app de PlayCanvas con WebGL por software y mide `buildWorld` frente
+   a `buildWorldAsync` con la misma textura de suelo, incluyendo el primer
+   `app.render()` para cuantificar la compilación de shaders y la subida.
 
 Se ejecutó en Chrome headless con CDP para obtener tiempos reales (sin
 `--virtual-time-budget`, que falsea `performance.now`). Para aislar el coste de
-las zonas se repitió la medición con `zones: []`.
+las zonas se repitió la medición con `zones: []`. La tarea más larga se midió con
+`PerformanceObserver` (`entryTypes: ['longtask']`).
+
+## Coste por frame
+
+Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
+
+- **Resolución dinámica**: `dynamicResolution` ajusta `device.maxPixelRatio`
+  con histéresis según el FPS. Solo se activa durante una partida jugable y no
+  toca la simulación.
+- **Copias ocultas**: `updateVision()` se resuelve antes de sincronizar las
+  copias del splitscreen, así que las copias que la niebla oculta se saltan
+  posición, animación, vida, XP y billboard. Antes se actualizaban todas.
+- **Marcas de KO**: se busca al jugador con `playerBySlot` en vez de recorrer
+  `matchPlayers` por marca y por vista.
+- **Basura por frame**: se reutilizan los `Vec2`/`Quat`, los conjuntos de
+  visibilidad y los mapas de conocimiento de objetos descritos en el README.
 
 ## Prioridad recomendada
 
 1. ~~Reescribir `paintTerrainZone` con relleno/trazo de Canvas (solución 1).~~
    Hecho.
 2. ~~Usar la rejilla como base de las zonas decorativas (solución 2).~~ Hecho.
-3. Si se quiere evitar cualquier bloqueo residual en equipos lentos, mover la
-   generación a un worker o trocearla con `await` entre zonas.
+3. ~~Trocear la generación con `await`/`requestAnimationFrame` entre tandas.~~
+   Hecho.
 4. ~~Arreglar `regionsForMask` y capar las instancias de hielo como limpieza
    preventiva.~~ Hecho.
-5. Bajar el presupuesto de textura solo si hace falta más margen.
+5. ~~Bajar el presupuesto de textura solo si hace falta más margen.~~ Hecho:
+   `CONFIG.performance.groundTexturePixels` (4 M por defecto).
