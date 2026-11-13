@@ -112,7 +112,8 @@ export class HealthBarOverlay {
           bar,
           screenPoint.x,
           screenPoint.y,
-          pixelsPerWorld
+          pixelsPerWorld,
+          this.dpr
         );
         if (!bounds) continue;
         // Solo se registra la parte que cae dentro del viewport: el resto del
@@ -140,10 +141,17 @@ export class HealthBarOverlay {
     this.nextDirty = previousDirty;
   }
 
-  /** Borra únicamente las zonas que se pintaron en el frame anterior. */
+  /**
+   * Borra únicamente las zonas que se pintaron en el frame anterior. El
+   * rectángulo se redondea hacia fuera porque `drawImage` pinta bordes
+   * suavizados de hasta un píxel por fuera de las coordenadas fraccionarias:
+   * sin ese margen, las barras en movimiento dejan estelas de 1 px.
+   */
   private clearDirty(context: CanvasRenderingContext2D): void {
     for (const rect of this.dirty) {
-      context.clearRect(rect.x, rect.y, rect.w, rect.h);
+      const x = Math.floor(rect.x) - 2;
+      const y = Math.floor(rect.y) - 2;
+      context.clearRect(x, y, Math.ceil(rect.w) + 4, Math.ceil(rect.h) + 4);
     }
   }
 
@@ -182,29 +190,40 @@ export class HealthBarOverlay {
  * Dibuja una barra completa. `bottom` es el punto proyectado donde apoya la
  * barra de vida, así que el resto se coloca hacia arriba y hacia los lados en
  * píxeles, igual que hacían los quads 3D.
+ *
+ * Todas las medidas se alinean al píxel **físico** del canvas: con coordenadas
+ * fraccionarias, `drawImage` remuestrea la barra en cada frame y sus bordes
+ * vibran mientras el Pokémon se mueve (se ve como ruido dentro del contorno).
  */
 function drawBar(
   context: CanvasRenderingContext2D,
   bar: HealthBarArt,
   centerX: number,
   bottom: number,
-  pixelsPerWorld: number
+  pixelsPerWorld: number,
+  dpr: number
 ): { x: number; y: number; w: number; h: number } | null {
   const layout = bar.layout;
-  const barWidth = layout.width * pixelsPerWorld;
-  const barHeight = layout.height * pixelsPerWorld;
+  // Redondeo a píxel de dispositivo: la barra queda nítida y estable.
+  const snap = (value: number) => Math.round(value * dpr) / dpr;
+  const snapSize = (value: number) =>
+    Math.max(1 / dpr, Math.round(value * dpr) / dpr);
+
+  const barWidth = snapSize(layout.width * pixelsPerWorld);
+  const barHeight = snapSize(layout.height * pixelsPerWorld);
   if (barWidth < 3 || barHeight < 1) return null;
 
-  const left = centerX - barWidth / 2;
+  const anchor = snap(bottom);
+  const left = snap(centerX - barWidth / 2);
 
   // La barra de XP va debajo del punto de apoyo.
-  const xpWidth = layout.xpWidth * pixelsPerWorld;
-  const xpHeight = Math.max(1, layout.xpHeight * pixelsPerWorld);
-  const xpGap = layout.xpGap * pixelsPerWorld;
+  const xpWidth = snapSize(layout.xpWidth * pixelsPerWorld);
+  const xpHeight = snapSize(layout.xpHeight * pixelsPerWorld);
+  const xpGap = snap(layout.xpGap * pixelsPerWorld);
   context.drawImage(
     bar.xpCanvas,
-    centerX - xpWidth / 2,
-    bottom + xpGap,
+    snap(centerX - xpWidth / 2),
+    anchor + xpGap,
     xpWidth,
     xpHeight
   );
@@ -213,17 +232,17 @@ function drawBar(
   context.drawImage(
     bar.barCanvas,
     left,
-    bottom - barHeight,
+    anchor - barHeight,
     barWidth,
     barHeight
   );
 
   // Distintivo de nivel, centrado verticalmente con la barra y a su izquierda.
-  const badge = layout.badgeSize * pixelsPerWorld;
-  const gap = layout.badgeGap * pixelsPerWorld;
+  const badge = snapSize(layout.badgeSize * pixelsPerWorld);
+  const gap = snap(layout.badgeGap * pixelsPerWorld);
   const hasBadge = badge >= 2;
-  const badgeLeft = left - gap - badge;
-  const badgeTop = bottom - barHeight / 2 - badge / 2;
+  const badgeLeft = snap(left - gap - badge);
+  const badgeTop = snap(anchor - barHeight / 2 - badge / 2);
   if (hasBadge) {
     context.drawImage(
       bar.badgeCanvas,
@@ -237,11 +256,12 @@ function drawBar(
   // Caja que ocupa todo lo pintado, para limpiar solo esa zona el próximo
   // frame. El distintivo puede sobresalir por arriba y por la izquierda.
   const minX = hasBadge ? badgeLeft : left;
-  const minY = hasBadge ? Math.min(bottom - barHeight, badgeTop) : bottom - barHeight;
+  const minY = hasBadge
+    ? Math.min(anchor - barHeight, badgeTop)
+    : anchor - barHeight;
   const maxX = left + barWidth;
-  const maxY =
-    hasBadge
-      ? Math.max(bottom + xpGap + xpHeight, badgeTop + badge)
-      : bottom + xpGap + xpHeight;
+  const maxY = hasBadge
+    ? Math.max(anchor + xpGap + xpHeight, badgeTop + badge)
+    : anchor + xpGap + xpHeight;
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }

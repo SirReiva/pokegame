@@ -1,4 +1,5 @@
 import * as pc from 'playcanvas';
+import { AmbientParticleBudget } from './ambientParticles';
 import { type AtmosphereId } from './atmosphere';
 import { createAtmosphereVisuals } from './atmosphereVisuals';
 import { CONFIG } from './config';
@@ -68,6 +69,11 @@ export interface World {
 
   /** Aplica el clima indicado al cielo, las luces y las partículas. */
   setAtmosphere(id: AtmosphereId): void;
+  /**
+   * Reparte la simulación de los emisores ambientales según las cámaras
+   * activas. Ver `AmbientParticleBudget`.
+   */
+  updateAmbient(cameras: readonly pc.Vec3[], dt: number): void;
   update(dt: number): void;
   dispose(): void;
 }
@@ -316,14 +322,15 @@ function* buildWorldSteps(
           zones: terrainZones
         }
       ),
-    { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST }
+    { name: 'ground', mipmaps: true, magFilter: pc.FILTER_NEAREST, anisotropy: CONFIG.performance.anisotropy }
   );
   yield 1;
   const soilTexture = textureFromCanvas(device, createSoilCanvas(), {
     name: 'soil',
     repeat: true,
     mipmaps: true,
-    magFilter: pc.FILTER_NEAREST
+    magFilter: pc.FILTER_NEAREST,
+    anisotropy: CONFIG.performance.anisotropy
   });
   yield 1;
   const shadowTexture = textureFromCanvas(device, createShadowCanvas(), {
@@ -338,7 +345,8 @@ function* buildWorldSteps(
     repeat: true,
     mipmaps: true,
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
-    magFilter: pc.FILTER_LINEAR
+    magFilter: pc.FILTER_LINEAR,
+    anisotropy: CONFIG.performance.anisotropy
   });
   yield 1;
   const waterGlintTexture = textureFromCanvas(device, createWaterCanvas(96, 1), {
@@ -346,7 +354,8 @@ function* buildWorldSteps(
     repeat: true,
     mipmaps: true,
     minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
-    magFilter: pc.FILTER_LINEAR
+    magFilter: pc.FILTER_LINEAR,
+    anisotropy: CONFIG.performance.anisotropy
   });
   yield 1;
   const dustTexture = textureFromCanvas(device, createDustCanvas(), {
@@ -4254,6 +4263,11 @@ function* buildWorldSteps(
   // El mundo está completo: a partir de aquí es visible y reemplaza al anterior.
   app.root.addChild(worldRoot);
 
+  // Los emisores ambientales (polvo, brasas, niebla, polen…) cuestan una pasada
+  // de simulación de GPU por frame cada uno. El presupuesto los reparte por
+  // distancia; ver `AmbientParticleBudget`.
+  const ambientParticles = new AmbientParticleBudget(worldRoot);
+
   let time = 0;
 
   return {
@@ -4265,6 +4279,11 @@ function* buildWorldSteps(
     skyMaterial,
     setAtmosphere(id: AtmosphereId) {
       atmosphere.set(id);
+    },
+    updateAmbient(cameras: readonly pc.Vec3[], dt: number) {
+      // La niebla de la escena la fija el clima: más allá de su final no se ve
+      // nada, así que esos emisores se ocultan.
+      ambientParticles.update(cameras, app.scene.fog.end, dt);
     },
     update(dt: number) {
       time += dt;

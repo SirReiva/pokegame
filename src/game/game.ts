@@ -516,6 +516,11 @@ export class Game {
    */
   private prewarmTasks: Array<{ actor: Actor; animation: AnimationName }> = [];
   private prewarmIndex = 0;
+  /** Reutilizada cada frame para las consultas por cámara (objetos, partículas). */
+  private readonly viewCameraPositions: pc.Vec3[] = [];
+  /** Diagnóstico (Ctrl+Alt+…): oculta capas para localizar artefactos. */
+  private debugHideActors = false;
+  private debugHideBars = false;
   /** Números de daño que aún no se han dibujado (ver `flushPendingPopups`). */
   private pendingPopups: PendingPopup[] = [];
   private bots = new Map<number, BotController>();
@@ -719,7 +724,82 @@ export class Game {
     }
 
     this.app.on('update', this.onUpdate);
+    if (import.meta.env.DEV) this.installDebugToggles();
     this.app.start();
+  }
+
+  /**
+   * Atajos de diagnóstico, **solo en desarrollo**: Ctrl+Alt+1..5 ocultan una
+   * capa cada vez para localizar un artefacto visual. Cada pulsación escribe en
+   * la consola qué se ha ocultado.
+   */
+  private installDebugToggles(): void {
+    const toggleEntity = (entity: pc.Entity, on: boolean) => {
+      entity.enabled = on;
+    };
+    let vegetation: pc.Entity[] | null = null;
+    const layers: Array<{ label: string; set: (on: boolean) => boolean }> = [
+      {
+        label: 'actores (sprites, sombras y anillos)',
+        set: (on) => {
+          this.debugHideActors = !on;
+          return on;
+        }
+      },
+      {
+        label: 'niebla de guerra',
+        set: (on) => {
+          for (const view of this.fogViews) {
+            if (view.entity.enabled !== on) toggleEntity(view.entity, on);
+          }
+          return on;
+        }
+      },
+      {
+        label: 'partículas',
+        set: (on) => {
+          for (const component of this.app.root.findComponents('particlesystem')) {
+            component.enabled = on;
+          }
+          return on;
+        }
+      },
+      {
+        label: 'barras de vida 2D',
+        set: (on) => {
+          this.debugHideBars = !on;
+          if (!on) this.healthBars.clear();
+          return on;
+        }
+      },
+      {
+        label: 'vegetación instanciada',
+        set: (on) => {
+          vegetation ??= this.app.root
+            .findComponents('render')
+            .map((component) => component.entity)
+            .filter((entity) =>
+              /^(tall-grass|fairy-flowers|paramo-frailejon|paramo-dry-grass|swamp-grass)-/.test(
+                entity.name
+              )
+            );
+          for (const entity of vegetation) entity.enabled = on;
+          return on;
+        }
+      }
+    ];
+
+    const state = layers.map(() => true);
+    window.addEventListener('keydown', (event) => {
+      if (!event.ctrlKey || !event.altKey) return;
+      const index = Number(event.key) - 1;
+      const layer = layers[index];
+      if (!layer) return;
+      event.preventDefault();
+      state[index] = !state[index];
+      const on = layer.set(state[index]);
+      console.info(`[debug] ${layer.label}: ${on ? 'visibles' : 'ocultos'}`);
+    });
   }
 
   async init(): Promise<void> {
@@ -2156,7 +2236,12 @@ export class Game {
     // anterior y la cámara no debe saltar a las coordenadas del que viene.
     this.menuCamera.update(dt, this.menuFocus, 0, 0);
     this.world.update(dt);
-    this.pickups?.update(dt, [this.menuCamera.position]);
+    // En el menú la cámara de atracción hace de observador para el presupuesto
+    // de partículas ambientales y para los objetos.
+    this.viewCameraPositions.length = 0;
+    this.viewCameraPositions.push(this.menuCamera.position);
+    this.world.updateAmbient(this.viewCameraPositions, dt);
+    this.pickups?.update(dt, this.viewCameraPositions);
   }
 
   /**
@@ -2262,6 +2347,14 @@ export class Game {
     this.castDebug?.update(this.matchPlayers);
     this.updateVision(dt);
 
+    // Diagnóstico: con los actores ocultos se aísla si el artefacto viene de
+    // los sprites o del mundo.
+    if (this.debugHideActors) {
+      for (const player of this.matchPlayers) {
+        for (const copy of player.copies) copy.setVisible(false);
+      }
+    }
+
     // Primero las cámaras ya están actualizadas; cada copia se orienta hacia
     // la cámara del viewport que la va a dibujar.
     this.views.forEach((cameraOwner, viewIndex) => {
@@ -2314,19 +2407,27 @@ export class Game {
         this.activeCastArmor(player) / Math.max(1, player.maxHp)
       );
     }
-    this.healthBars.render(this.views, this.matchPlayers);
-
+    if (!this.debugHideBars) {
+      this.healthBars.render(this.views, this.matchPlayers);
+    }
     if (!frozen && simulated > 0) {
       this.updateRegeneration(simulated);
       this.updateParticipation(simulated);
     }
 
     this.world.update(dt);
+    // Una sola lista de posiciones de cámara por frame: la usan los objetos y
+    // el presupuesto de partículas ambientales.
+    this.viewCameraPositions.length = 0;
+    for (const view of this.views) {
+      this.viewCameraPositions.push(view.camera.position);
+    }
+    this.world.updateAmbient(this.viewCameraPositions, dt);
     this.pickups?.update(
       // En partida los cooldowns de objetos siguen a la simulación; durante la
       // cuenta atrás se usa el reloj del render para no congelar las animaciones.
       frozen ? dt : simulated,
-      this.views.map((view) => view.camera.position)
+      this.viewCameraPositions
     );
     this.combatFx.update(dt);
     this.flushPendingPopups();

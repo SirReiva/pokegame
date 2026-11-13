@@ -62,6 +62,12 @@ export interface TextureOptions {
   /** Filtro de minificación. Por defecto, lineal con mipmaps si hay mipmaps. */
   minFilter?: number;
   magFilter?: number;
+  /**
+   * Filtrado anisotrópico. Sin él, el suelo y las láminas de agua vistos en
+   * ángulo pierden detalle y **centellean** al moverse (las líneas finas se
+   * convierten en peines verticales). Se recorta al máximo del dispositivo.
+   */
+  anisotropy?: number;
   flipY?: boolean;
   name?: string;
 }
@@ -77,6 +83,7 @@ export function textureFromCanvas(
     mipmaps = true,
     magFilter = pc.FILTER_NEAREST,
     minFilter = mipmaps ? pc.FILTER_LINEAR_MIPMAP_LINEAR : pc.FILTER_NEAREST,
+    anisotropy = 1,
     flipY = false,
     name = "procedural",
   } = options;
@@ -90,6 +97,7 @@ export function textureFromCanvas(
     mipmaps,
     minFilter,
     magFilter,
+    anisotropy: Math.max(1, Math.min(anisotropy, device.maxAnisotropy)),
     addressU: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
     addressV: repeat ? pc.ADDRESS_REPEAT : pc.ADDRESS_CLAMP_TO_EDGE,
     flipY,

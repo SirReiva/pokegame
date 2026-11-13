@@ -78,6 +78,35 @@ export const CONFIG = {
       /** Tamaño de cada escalón. */
       step: 0.1,
     },
+    /**
+     * Presupuesto de los emisores ambientales del mapa (polvo, brasas, niebla,
+     * polen…). Cada emisor es una pasada de simulación de GPU **por frame**:
+     * con 82 emisores, la simulación costaba ~5 ms de CPU en WebGPU, más que
+     * todo el resto del juego.
+     *
+     * La simulación no necesita 60 Hz cuando el emisor está lejos: estas
+     * partículas son humo y motas que se mueven despacio, así que a 20 Hz o
+     * 8 Hz se ven exactamente igual. Además, más allá del final de la niebla no
+     * se ven y se ocultan del todo.
+     */
+    ambientParticles: {
+      /** Distancia (u) a la cámara por debajo de la cual simula a `nearHz`. */
+      nearDistance: 20,
+      /** Distancia (u) por debajo de la cual simula a `midHz`; más lejos, `farHz`. */
+      midDistance: 45,
+      nearHz: 60,
+      midHz: 20,
+      farHz: 8,
+      /** Cada cuántos segundos se revisan las distancias a las cámaras. */
+      refreshSeconds: 0.2,
+    },
+    /**
+     * Filtrado anisotrópico de las texturas del suelo y del agua. Sin él, las
+     * líneas finas del terreno (grietas, losetas, guijarros) se ven como peines
+     * verticales y **centellean** al caminar. Se recorta al máximo del
+     * dispositivo; `1` lo desactiva.
+     */
+    anisotropy: 8,
   },
   sprite: {
     pixelScale: PIXEL_SCALE,

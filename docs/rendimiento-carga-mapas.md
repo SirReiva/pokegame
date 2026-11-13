@@ -245,6 +245,67 @@ Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
 - **Basura por frame**: se reutilizan los `Vec2`/`Quat`, los conjuntos de
   visibilidad y los mapas de conocimiento de objetos descritos en el README.
 
+## Partículas ambientales: 82 pasadas de GPU por frame — aplicada
+
+Una grabación de perfil del navegador durante una partida real mostró que el
+mayor coste de CPU no era el juego, sino los **emisores de partículas del mapa**
+(polvo del desierto, brasas, humo, niebla, polen, chispas…).
+
+Datos de la grabación (Chrome DevTools, servidor de desarrollo, 1 vista y 8
+jugadores, 32 s):
+
+- 1290 frames en 32 s → **~40 fps**; el callback de `requestAnimationFrame`
+  tardaba **14,8 ms de media** (p95 26 ms).
+- De ese tiempo, **16,5 s (94 %)** estaban dentro del tick de PlayCanvas y
+  **~1,2 s (3,7 %)** en código del juego: `game.ts`, `bot.ts`, `botNav.ts`…
+- El mapa tenía **82 emisores ambientales**, y cada uno cuesta **una pasada de
+  render de GPU por frame** solo para simular sus partículas, aunque esté fuera
+  de pantalla. En el perfil dominaban `startRenderPass`, `beginRenderPass`,
+  `popErrorScope` y `createBindGroup`.
+
+La solución (`src/game/ambientParticles.ts`) reparte la frecuencia de simulación
+según la distancia a la cámara más cercana:
+
+| Distancia | Simulación | Efecto |
+| --- | --- | --- |
+| < 20 u | 60 Hz | sin cambios |
+| 20–45 u | 20 Hz | inapreciable: son partículas que se mueven despacio |
+| > 45 u | 8 Hz | inapreciable a esa distancia |
+| > final de la niebla | oculto | es invisible: la niebla lo tapa |
+
+Los emisores de una misma banda se desfasan entre sí para que sus pasadas no
+caigan todas en el mismo frame. Medido con el juego real (Chrome + GTX 1060,
+1920×1080, 1 vista, 8 jugadores, WebGPU):
+
+| Escenario | Update antes | Update ahora | Script antes | Script ahora |
+| --- | --- | --- | --- | --- |
+| `caldera` (82 emisores), build de producción | 3,1 ms | **2,1 ms** | 2,0 ms | **0,8 ms** |
+| `caldera`, servidor de desarrollo | 5,4 ms | **3,0 ms** | 4,4 ms | **1,8 ms** |
+| `perf-256` (33 emisores lejanos), desarrollo | 3,3 ms | **1,6 ms** | 2,1 ms | **0,2 ms** |
+
+En `perf-256` casi todos los emisores quedan más allá de la niebla, así que se
+ocultan y dejan de costar: el mapa se ve igual porque ya eran invisibles.
+
+### El servidor de desarrollo no sirve para medir FPS
+
+La misma grabación exageraba el coste del motor porque `pnpm dev` carga la build
+**de desarrollo** de PlayCanvas (`exports.development` del paquete), que añade
+`Debug.call`, marcadores de GPU y los *scopes* de validación de WebGPU
+(`pushErrorScope`/`popErrorScope`) **por cada pasada de render**. La build de
+producción los elimina por completo (se puede comprobar con
+`grep pushErrorScope dist/assets/*.js`).
+
+Medido con la misma escena y resolución:
+
+| | Tick de PlayCanvas (update + render) |
+| --- | --- |
+| Servidor de desarrollo (`pnpm dev`) | ~9,5 ms |
+| Build de producción (`pnpm build`) | ~4,6 ms |
+
+Por eso, para valorar los FPS hay que usar `pnpm build` + `pnpm preview` o la
+app empaquetada; grabar el perfil sobre el servidor de desarrollo mide, en
+buena parte, instrumentación que ningún jugador tiene.
+
 ## Splitscreen: coste por vista
 
 El splitscreen no renderiza una escena distinta por jugador, pero sí **redibuja
@@ -326,5 +387,10 @@ las barras ya no aportan draw calls porque se pintan en 2D. Lo aplicado:
 6. ~~Reducir el coste del splitscreen: anillo solo del dueño, barras en 2D,
    geometría compartida y capas perezosas.~~ Hecho: 413 → 269 draw calls y
    arranque de ~4,6 s → ~0,45 s con 8 vistas.
-7. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
+7. ~~Repartir la simulación de las partículas ambientales por distancia.~~ Hecho:
+   `CONFIG.performance.ambientParticles`; hasta 2,4 ms por frame menos con 82
+   emisores y todas las pasadas de GPU ocultas más allá de la niebla.
+8. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
    importante: es la única forma de dejar de multiplicar la escena por vista.
+9. **Medir siempre sobre la build de producción**: el servidor de desarrollo
+   añade la instrumentación de PlayCanvas y duplica el coste del tick.

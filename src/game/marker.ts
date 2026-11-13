@@ -1,5 +1,5 @@
 import * as pc from 'playcanvas';
-import { RAD } from './config';
+import { CONFIG, RAD } from './config';
 import {
   createMarkerCanvas,
   MARKER_RING_CENTER_Y,
@@ -46,11 +46,15 @@ function createAssets(
   accent: readonly [number, number, number]
 ): MarkerAssets {
   const device = app.graphicsDevice;
+  // El anillo es un gráfico suave, no pixel art: con `NEAREST` y sin mipmaps
+  // sus bordes se vuelven un punteado que centellea al caminar. Lineal con
+  // mipmaps y anisotropía lo mantiene limpio en cualquier ángulo.
   const texture = textureFromCanvas(device, createMarkerCanvas(accent), {
     name: 'player-marker',
-    mipmaps: false,
-    minFilter: pc.FILTER_NEAREST,
-    magFilter: pc.FILTER_NEAREST,
+    mipmaps: true,
+    minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR,
+    magFilter: pc.FILTER_LINEAR,
+    anisotropy: CONFIG.performance.anisotropy,
     flipY: true
   });
 
