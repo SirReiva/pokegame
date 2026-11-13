@@ -465,6 +465,8 @@ interface BoundaryEdge {
   ay: number;
   bx: number;
   by: number;
+  /** Posición en `edges`; evita el `indexOf` O(E²) al encadenar bucles. */
+  index: number;
 }
 
 function regionsForTerrain(terrain: TerrainId): Point2[][] {
@@ -504,18 +506,35 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
       cells.push(cell);
       const row = Math.floor(cell / activeCols);
       const col = cell - row * activeCols;
-      const neighbours: Array<[number, number]> = [
-        [row - 1, col],
-        [row + 1, col],
-        [row, col - 1],
-        [row, col + 1]
-      ];
-      for (const [nr, nc] of neighbours) {
-        if (nr < 0 || nr >= activeRows || nc < 0 || nc >= activeCols) continue;
-        const next = nr * activeCols + nc;
-        if (mask[next] === 0 || visited[next] === 1) continue;
-        visited[next] = 1;
-        stack.push(next);
+      // Vecinos directos: crear un array de pares por celda generaba miles de
+      // allocations en mapas grandes (perf-256 tiene 65 536 celdas).
+      if (row > 0) {
+        const next = cell - activeCols;
+        if (mask[next] === 1 && visited[next] === 0) {
+          visited[next] = 1;
+          stack.push(next);
+        }
+      }
+      if (row + 1 < activeRows) {
+        const next = cell + activeCols;
+        if (mask[next] === 1 && visited[next] === 0) {
+          visited[next] = 1;
+          stack.push(next);
+        }
+      }
+      if (col > 0) {
+        const next = cell - 1;
+        if (mask[next] === 1 && visited[next] === 0) {
+          visited[next] = 1;
+          stack.push(next);
+        }
+      }
+      if (col + 1 < activeCols) {
+        const next = cell + 1;
+        if (mask[next] === 1 && visited[next] === 0) {
+          visited[next] = 1;
+          stack.push(next);
+        }
       }
     }
 
@@ -531,7 +550,7 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
     const outgoing = new Map<number, BoundaryEdge[]>();
     const vertexKey = (ax: number, ay: number) => ay * (activeCols + 1) + ax;
     const addEdge = (ax: number, ay: number, bx: number, by: number) => {
-      const edge = { ax, ay, bx, by };
+      const edge = { ax, ay, bx, by, index: edges.length };
       edges.push(edge);
       const key = vertexKey(ax, ay);
       const list = outgoing.get(key);
@@ -574,8 +593,7 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
         let next: BoundaryEdge | null = null;
         let bestScore = -Infinity;
         for (const candidate of candidates) {
-          const index = edges.indexOf(candidate);
-          if (index < 0 || used[index] === 1) continue;
+          if (used[candidate.index] === 1) continue;
           const cdx = candidate.bx - candidate.ax;
           const cdz = candidate.by - candidate.ay;
           const cross = dirX * cdz - dirZ * cdx;
@@ -587,7 +605,7 @@ function regionsForMask(predicate: (index: number) => boolean): Point2[][] {
           }
         }
         if (!next) break;
-        used[edges.indexOf(next)] = 1;
+        used[next.index] = 1;
         dirX = next.bx - next.ax;
         dirZ = next.by - next.ay;
         endX = next.bx;

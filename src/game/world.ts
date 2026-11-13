@@ -24,11 +24,11 @@ import {
   type TerrainZone
 } from './terrain';
 import {
+  cachedGroundCanvas,
   createBarkCanvas,
   createDustCanvas,
   createEmberCanvas,
   createFrostCanvas,
-  createGroundCanvas,
   createLeafCanvas,
   createMistCanvas,
   createMountainRockCanvas,
@@ -97,6 +97,13 @@ function particleCountForArea(
     Math.min(maxCount, Math.round((area / fullArea) * maxCount))
   );
 }
+
+/**
+ * Tope de cristales por región de escarcha. Sin él, una zona grande generaba
+ * miles de instancias sin aportar más detalle visible; el resto de decoraciones
+ * ya tienen un límite equivalente.
+ */
+const MAX_ICE_CLUSTERS_PER_ZONE = 900;
 
 /**
  * Interruptor temporal de árboles: con `false` no se genera ninguno (ni los de
@@ -264,7 +271,7 @@ export function buildWorld(app: pc.AppBase): World {
   // --- Texturas procedurales -------------------------------------------------
   const groundTexture = textureFromCanvas(
     device,
-    createGroundCanvas(
+    cachedGroundCanvas(
       groundTextureSize(map, { maxSize: Math.min(device.maxTextureSize, 8192) }),
       {
         map,
@@ -507,6 +514,13 @@ export function buildWorld(app: pc.AppBase): World {
 
   const waterSurfaceMaterial = makeWaterMaterial(waterTexture, 0.42);
   const waterGlintMaterial = makeWaterMaterial(waterGlintTexture, 0.3);
+  // Offsets reutilizados: `update()` se llama cada frame y asignar un Vec2
+  // nuevo por material generaba basura constante en el hilo principal.
+  const waterSurfaceOffset = new pc.Vec2();
+  const waterGlintOffset = new pc.Vec2();
+  const swampSurfaceOffset = new pc.Vec2();
+  const swampMistOffset = new pc.Vec2();
+  const desertHazeOffset = new pc.Vec2();
   const waterHeight = map.waterHeight;
 
   const buildSurfaceMesh = (
@@ -1650,7 +1664,10 @@ export function buildWorld(app: pc.AppBase): World {
   const iceInstanceFormat = pc.VertexFormat.getDefaultInstancingFormat(device);
   iceZones.forEach((zone, zoneIndex) => {
     const rand = random(0x71f3 + zoneIndex * 6701);
-    const count = Math.round(zoneArea(zone) * 1.5);
+    const count = Math.min(
+      MAX_ICE_CLUSTERS_PER_ZONE,
+      Math.round(zoneArea(zone) * 1.5)
+    );
     if (count <= 0) return;
 
     const variants = iceClusterMeshes.length;
@@ -4190,10 +4207,13 @@ export function buildWorld(app: pc.AppBase): World {
       // Las velocidades están en unidades de UV y las UVs de cada cuerpo de
       // agua se escalan por su tamaño en el mundo, así que la corriente se lee
       // igual en lagos grandes y pequeños.
-      waterSurfaceMaterial.diffuseMapOffset = new pc.Vec2(time * 0.15, time * 0.22);
+      waterSurfaceMaterial.diffuseMapOffset = waterSurfaceOffset.set(
+        time * 0.15,
+        time * 0.22
+      );
       waterSurfaceMaterial.update();
 
-      waterGlintMaterial.diffuseMapOffset = new pc.Vec2(
+      waterGlintMaterial.diffuseMapOffset = waterGlintOffset.set(
         -time * 0.26 + Math.sin(time * 0.6) * 0.05,
         time * 0.11 + Math.cos(time * 0.45) * 0.03
       );
@@ -4204,17 +4224,26 @@ export function buildWorld(app: pc.AppBase): World {
 
       // La ciénaga se mueve aún más despacio: el agua estancada no corre y su
       // superficie es mate, así que solo cambia el dibujo de las ondas.
-      swampSurfaceMaterial.diffuseMapOffset = new pc.Vec2(-time * 0.07, time * 0.11);
+      swampSurfaceMaterial.diffuseMapOffset = swampSurfaceOffset.set(
+        -time * 0.07,
+        time * 0.11
+      );
       swampSurfaceMaterial.update();
 
       // Las láminas de niebla/polvo de regiones grandes están desactivadas
       // por ahora; si se reactivan, solo hay que avanzar sus UVs.
       if (swampMistMaterial) {
-        swampMistMaterial.diffuseMapOffset = new pc.Vec2(time * 0.008, time * 0.005);
+        swampMistMaterial.diffuseMapOffset = swampMistOffset.set(
+          time * 0.008,
+          time * 0.005
+        );
         swampMistMaterial.update();
       }
       if (desertHazeMaterial) {
-        desertHazeMaterial.diffuseMapOffset = new pc.Vec2(time * 0.014, time * 0.006);
+        desertHazeMaterial.diffuseMapOffset = desertHazeOffset.set(
+          time * 0.014,
+          time * 0.006
+        );
         desertHazeMaterial.update();
       }
 

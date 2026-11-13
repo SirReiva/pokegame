@@ -749,6 +749,9 @@ export class SpriteBillboard {
    * vertical no se entierre bajo el terreno.
    */
   private motionOffset = 0;
+  /** UVs reutilizadas al cambiar de frame; asignar Vec2 nuevos generaba GC. */
+  private readonly uvTiling = new pc.Vec2();
+  private readonly uvOffset = new pc.Vec2();
 
   constructor(app: pc.AppBase, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
@@ -1110,21 +1113,23 @@ export class SpriteBillboard {
       dv = (frameHeight - 1) / sheetHeight;
     }
 
-    layer.material.emissiveMapTiling = new pc.Vec2(du, dv);
-    layer.material.emissiveMapOffset = new pc.Vec2(u0, v0);
-    layer.material.opacityMapTiling = new pc.Vec2(du, dv);
-    layer.material.opacityMapOffset = new pc.Vec2(u0, v0);
+    const uvTiling = this.uvTiling.set(du, dv);
+    const uvOffset = this.uvOffset.set(u0, v0);
+    layer.material.emissiveMapTiling = uvTiling;
+    layer.material.emissiveMapOffset = uvOffset;
+    layer.material.opacityMapTiling = uvTiling;
+    layer.material.opacityMapOffset = uvOffset;
 
     // La silueta reutiliza la misma celda de la hoja para que su recorte
     // coincida píxel a píxel con el sprite visible.
-    layer.silhouetteMaterial.opacityMapTiling = new pc.Vec2(du, dv);
-    layer.silhouetteMaterial.opacityMapOffset = new pc.Vec2(u0, v0);
+    layer.silhouetteMaterial.opacityMapTiling = uvTiling;
+    layer.silhouetteMaterial.opacityMapOffset = uvOffset;
 
     // El contorno usa la misma celda: si no, el borde se quedaría con la pose
     // del primer frame.
     if (layer.outlineMaterial) {
-      layer.outlineMaterial.opacityMapTiling = new pc.Vec2(du, dv);
-      layer.outlineMaterial.opacityMapOffset = new pc.Vec2(u0, v0);
+      layer.outlineMaterial.opacityMapTiling = uvTiling;
+      layer.outlineMaterial.opacityMapOffset = uvOffset;
     }
 
     // PlayCanvas solo recalcula uniforms y variantes de shader al llamar a

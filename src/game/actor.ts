@@ -146,6 +146,25 @@ export class Actor {
     this.applyPosition();
   }
 
+  /**
+   * Mueve y sumerge al actor en una sola pasada. Las copias del splitscreen se
+   * actualizan cada frame; separar posición y hundimiento llamaba dos veces a
+   * `applyPosition()` y duplicaba los `setPosition` de billboard, sombra, anillo
+   * y hurtbox.
+   */
+  setPositionAndSubmerge(
+    x: number,
+    z: number,
+    fraction: number,
+    surfaceHeight: number
+  ): void {
+    this.position.x = x;
+    this.position.z = z;
+    this.surfaceHeight = surfaceHeight;
+    this.sink = Math.max(0, fraction * this.visibleHeight - surfaceHeight);
+    this.applyPosition();
+  }
+
   private applyPosition(): void {
     this.billboard.root.setPosition(
       this.position.x,

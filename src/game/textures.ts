@@ -1073,6 +1073,63 @@ export function createGroundCanvas(
 }
 
 /**
+ * Presupuesto de píxeles del caché de suelos. Un mapa de estrés como
+ * `perf-256` ocupa unos 8 M de píxeles (32 MB); el tope deja sitio para él y
+ * otro mapa mediano (por ejemplo `laberinto`, ~4 M) sin disparar la memoria.
+ */
+const GROUND_CANVAS_CACHE_PIXELS = 16_000_000;
+
+/**
+ * Caché LRU de suelos ya pintados por mapa y tamaño. Cambiar de mapa en el
+ * lobby reconstruye el mundo, pero el repintado procedural del suelo es lo más
+ * caro de esa operación; conservar el canvas evita repetirlo. La textura de GPU
+ * se sigue creando por mapa porque pertenece a su `World`.
+ */
+const groundCanvasCache = new Map<string, HTMLCanvasElement>();
+
+/**
+ * Devuelve el canvas del suelo del mapa, reutilizando el de una carga anterior
+ * si sigue en el caché. La clave incluye el tamaño porque la resolución depende
+ * del presupuesto de textura del dispositivo.
+ */
+export function cachedGroundCanvas(
+  size: number,
+  options: GroundPaintOptions,
+): HTMLCanvasElement {
+  const key = `${options.map.id}:${size}`;
+  const cached = groundCanvasCache.get(key);
+  if (cached) {
+    // Reinsertar al final mantiene el orden LRU.
+    groundCanvasCache.delete(key);
+    groundCanvasCache.set(key, cached);
+    return cached;
+  }
+
+  const canvas = createGroundCanvas(size, options);
+  groundCanvasCache.set(key, canvas);
+
+  let pixels = 0;
+  for (const entry of groundCanvasCache.values()) {
+    pixels += entry.width * entry.height;
+  }
+  while (groundCanvasCache.size > 1 && pixels > GROUND_CANVAS_CACHE_PIXELS) {
+    const oldestKey = groundCanvasCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    const oldest = groundCanvasCache.get(oldestKey);
+    if (!oldest) break;
+    pixels -= oldest.width * oldest.height;
+    groundCanvasCache.delete(oldestKey);
+  }
+
+  return canvas;
+}
+
+/** Libera el caché de suelos al destruir la aplicación. */
+export function clearGroundCanvasCache(): void {
+  groundCanvasCache.clear();
+}
+
+/**
  * Tile de ondas para la lámina de agua. `variant` cambia la semilla y la paleta
  * para poder superponer dos capas que se mueven en direcciones distintas. Las
  * ondas se dibujan repetidas en los bordes para que el tile sea continuo al

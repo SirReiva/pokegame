@@ -43,6 +43,30 @@ export const CONFIG = {
      * menos bloqueo del hilo principal; el catálogo completo se calienta igual.
      */
     warmUpBatchSize: 2,
+    /**
+     * Resolución dinámica. Si la partida baja de `lowerFps` durante
+     * `lowerDelay` segundos, se reduce `device.maxPixelRatio` un escalón; si
+     * vuelve a ir por encima de `raiseFps` durante `raiseDelay`, se recupera.
+     * Solo cambia la resolución interna: la jugabilidad y el aspecto de los
+     * efectos se mantienen.
+     */
+    dynamicResolution: {
+      enabled: true as boolean,
+      /** Ventana de muestreo, en segundos. */
+      sampleSeconds: 1,
+      /** Por debajo de estos FPS se reduce la resolución. */
+      lowerFps: 48,
+      /** Por encima de estos FPS se intenta recuperar. */
+      raiseFps: 58,
+      /** Tiempo que debe mantenerse la caída antes de bajar un escalón. */
+      lowerDelay: 2,
+      /** Tiempo que debe mantenerse la mejora antes de subir un escalón. */
+      raiseDelay: 6,
+      /** Fracción mínima del presupuesto de píxeles inicial. */
+      minScale: 0.6,
+      /** Tamaño de cada escalón. */
+      step: 0.1,
+    },
   },
   sprite: {
     pixelScale: PIXEL_SCALE,

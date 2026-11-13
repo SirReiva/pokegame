@@ -118,20 +118,21 @@ real de la rejilla en lugar de quedar tapados por el relleno de la zona.
 
 Lo ideal es combinarlo con la solución 1.
 
-### 5. Cachear el suelo por mapa
+### 5. Cachear el suelo por mapa — aplicada
 
-Guardar el `ImageBitmap` o Blob generado por `map.id` en memoria o IndexedDB.
-La primera carga seguiría costando, pero las siguientes serían instantáneas.
+`cachedGroundCanvas()` guarda el canvas pintado por `map.id` y tamaño en un
+caché LRU con presupuesto de píxeles (`src/game/textures.ts`). La primera carga
+sigue costando, pero volver a un mapa ya visitado evita el repintado procedural.
+La textura de GPU se recrea porque pertenece al `World` de cada mapa.
 
-### 6. Arreglos secundarios
+### 6. Arreglos secundarios — aplicados
 
-- `regionsForMask()` usa `edges.indexOf()` dentro de bucles, lo que lo hace
-  O(E²) (`src/game/terrain.ts:474-493`). Hoy son ~40 ms en `perf-256`, pero es
-  la siguiente pared al seguir creciendo los mapas. Se arregla guardando el
-  índice en la arista o usando un `Map`.
-- El hielo no tiene tope de instancias: `Math.round(zoneArea(zone) * 1.5)`
-  (`src/game/world.ts:1686`). Conviene caparlo como ya se hace con cactus,
-  fuego o mariposas.
+- `regionsForMask()` ya no usa `edges.indexOf()` dentro del encadenado de
+  aristas: cada arista guarda su índice y el encadenado es O(E). Tampoco crea un
+  array de vecinos por celda (`src/game/terrain.ts`).
+- El hielo tiene un tope de instancias por zona
+  (`MAX_ICE_CLUSTERS_PER_ZONE`, `src/game/world.ts`) como el resto de
+  decoraciones.
 - `BotNavGrid` recorre toda la rejilla al empezar la partida
   (`src/game/botNav.ts:110-121`). No es el bloqueo actual, pero añade tiempo en
   mapas grandes.
@@ -172,6 +173,6 @@ las zonas se repitió la medición con `zones: []`.
 2. ~~Usar la rejilla como base de las zonas decorativas (solución 2).~~ Hecho.
 3. Si se quiere evitar cualquier bloqueo residual en equipos lentos, mover la
    generación a un worker o trocearla con `await` entre zonas.
-4. Arreglar `regionsForMask` y capar las instancias de hielo como limpieza
-   preventiva.
+4. ~~Arreglar `regionsForMask` y capar las instancias de hielo como limpieza
+   preventiva.~~ Hecho.
 5. Bajar el presupuesto de textura solo si hace falta más margen.

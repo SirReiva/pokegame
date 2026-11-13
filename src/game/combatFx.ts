@@ -13906,8 +13906,10 @@ export class CombatFx {
     const refreshVisibility = this.visibilityTimer >= 0.1;
     if (refreshVisibility) this.visibilityTimer = 0;
 
-    // Marcas de área: se animan y se autodestruyen al llenarse.
-    for (const telegraph of [...this.telegraphs]) {
+    // Marcas de área: se animan y se autodestruyen al llenarse. Recorrer el
+    // `Set` directamente evita copiarlo cada frame; borrar el elemento actual
+    // durante la iteración es seguro.
+    for (const telegraph of this.telegraphs) {
       telegraph.elapsed += dt;
       const progress = Math.min(1, telegraph.elapsed / telegraph.duration);
       telegraph.update(progress, telegraph.elapsed);

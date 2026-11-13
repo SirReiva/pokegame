@@ -154,6 +154,7 @@ import {
   type SpriteAsset
 } from './sprite';
 import { detectSpriteBudget } from './spriteBudget';
+import { clearGroundCanvasCache } from './textures';
 import {
   XP_REWARDS,
   XP_RULES,
@@ -550,6 +551,13 @@ export class Game {
   private readonly fogMasks = new Map<Team, FogMask>();
   /** Buffers de círculos por vista, para poner el observador local primero. */
   private readonly viewCircles: VisionCircle[][] = [];
+  /**
+   * Contenedores reutilizados por `updateVision()`: crear mapas, arrays y
+   * objetos de círculo cada frame generaba basura constante con 8 vistas.
+   */
+  private readonly visionCirclePool = new Map<number, VisionCircle>();
+  private readonly visionCirclesByTeam = new Map<Team, VisionCircle[]>();
+  private readonly localVisionBySlot = new Map<number, VisionCircle>();
   /** Tramos de cordillera y árboles que proyectan sombra dentro de la niebla. */
   private sightOccluders: SightOccluder[] = [];
   /**
@@ -557,6 +565,10 @@ export class Game {
    * compartida, así que la histéresis también se guarda por equipo.
    */
   private visibleByTeam: Record<Team, Set<number>> = createTeamRecord(
+    () => new Set<number>()
+  );
+  /** Segundo juego de conjuntos para alternar sin asignar cada frame. */
+  private visibleByTeamScratch: Record<Team, Set<number>> = createTeamRecord(
     () => new Set<number>()
   );
   /**
@@ -572,6 +584,10 @@ export class Game {
   private pickupKnowledge: Record<Team, Map<string, boolean>> = createTeamRecord(
     () => new Map<string, boolean>()
   );
+  /** Mapas reutilizados para no reconstruir el conocimiento de objetos. */
+  private pickupKnowledgeScratch: Record<Team, Map<string, boolean>> =
+    createTeamRecord(() => new Map<string, boolean>());
+  private readonly pickupSeenScratch = new Map<string, boolean>();
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -586,6 +602,15 @@ export class Game {
 
   private statsTimer = 0;
   private fps = 0;
+  /**
+   * Presupuesto de píxeles del modo actual. La resolución dinámica lo escala
+   * con `resolutionScale` sin tocar la lógica del juego.
+   */
+  private resolutionBaseline = 1.75;
+  private resolutionScale = 1;
+  private resolutionTimer = 0;
+  private resolutionLowTime = 0;
+  private resolutionHighTime = 0;
   /** Resto de tiempo real pendiente de simular (acumulador de paso fijo). */
   private simAccumulator = 0;
   /** Entradas de flanco acumuladas hasta el próximo paso de simulación. */
@@ -626,9 +651,9 @@ export class Game {
     this.atmosphereEnabled = options.atmosphereEnabled === true;
 
     this.app = app;
-    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     this.app.setCanvasFillMode(pc.FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
+    this.setResolutionBaseline(Math.min(window.devicePixelRatio || 1, 1.75));
 
     this.input = new Input(canvas);
 
@@ -1320,9 +1345,8 @@ export class Game {
     this.countdownShown = MATCH_COUNTDOWN_SECONDS;
     this.callbacks.onCountdown(MATCH_COUNTDOWN_SECONDS);
     this.menuCamera.setEnabled(false);
-    this.app.graphicsDevice.maxPixelRatio = Math.min(
-      window.devicePixelRatio || 1,
-      humanConfigs.length > 4 ? 1.2 : 1.5
+    this.setResolutionBaseline(
+      Math.min(window.devicePixelRatio || 1, humanConfigs.length > 4 ? 1.2 : 1.5)
     );
 
     const layout = computeSplitLayout(humanConfigs.length);
@@ -1569,7 +1593,7 @@ export class Game {
     this.mode = 'menu';
     this.paused = false;
     this.statsTimer = 0;
-    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    this.setResolutionBaseline(Math.min(window.devicePixelRatio || 1, 1.75));
     this.menuCamera.setEnabled(true);
     this.refreshSunShadows();
     this.clearAtmosphere();
@@ -1617,8 +1641,16 @@ export class Game {
     for (const mask of this.fogMasks.values()) mask.destroy();
     this.fogMasks.clear();
     this.viewCircles.length = 0;
+    this.visionCirclePool.clear();
+    for (const circles of this.visionCirclesByTeam.values()) circles.length = 0;
+    this.localVisionBySlot.clear();
     this.visibleByTeam = createTeamRecord(() => new Set<number>());
+    this.visibleByTeamScratch = createTeamRecord(() => new Set<number>());
     this.pickupKnowledge = createTeamRecord(() => new Map<string, boolean>());
+    this.pickupKnowledgeScratch = createTeamRecord(
+      () => new Map<string, boolean>()
+    );
+    this.pickupSeenScratch.clear();
 
     for (const markers of this.deathMarkers.values()) {
       for (const marker of markers) marker?.destroy();
@@ -1814,6 +1846,79 @@ export class Game {
     }
   }
 
+  /**
+   * Fija el presupuesto de píxeles del modo actual y reinicia la escala
+   * dinámica. El menú usa más resolución que una partida de 5-8 vistas.
+   */
+  private setResolutionBaseline(baseline: number): void {
+    this.resolutionBaseline = baseline;
+    this.resolutionScale = 1;
+    this.resolutionTimer = 0;
+    this.resolutionLowTime = 0;
+    this.resolutionHighTime = 0;
+    this.applyResolution();
+  }
+
+  /**
+   * Aplica la escala actual. `maxPixelRatio` solo se usa en el próximo
+   * `resizeCanvas`, así que hay que forzar el recálculo del canvas.
+   */
+  private applyResolution(): void {
+    const device = this.app.graphicsDevice;
+    const ratio = this.resolutionBaseline * this.resolutionScale;
+    if (Math.abs(device.maxPixelRatio - ratio) < 0.001) return;
+    device.maxPixelRatio = ratio;
+    this.app.updateCanvasSize();
+  }
+
+  /**
+   * Ajusta la resolución interna según el FPS con histéresis. No cambia nada
+   * de la simulación ni de los efectos: solo el número de píxeles que dibuja
+   * la GPU. Las subidas son más lentas que las bajadas para no oscilar.
+   */
+  private updateDynamicResolution(dt: number): void {
+    const settings = CONFIG.performance.dynamicResolution;
+    if (!settings.enabled) return;
+
+    this.resolutionTimer += dt;
+    if (this.resolutionTimer < settings.sampleSeconds) return;
+    this.resolutionTimer = 0;
+
+    if (this.fps < settings.lowerFps) {
+      this.resolutionHighTime = 0;
+      this.resolutionLowTime += settings.sampleSeconds;
+      if (
+        this.resolutionLowTime >= settings.lowerDelay &&
+        this.resolutionScale > settings.minScale + 0.001
+      ) {
+        this.resolutionScale = Math.max(
+          settings.minScale,
+          this.resolutionScale - settings.step
+        );
+        this.applyResolution();
+        this.resolutionLowTime = 0;
+      }
+      return;
+    }
+
+    if (this.fps > settings.raiseFps) {
+      this.resolutionLowTime = 0;
+      this.resolutionHighTime += settings.sampleSeconds;
+      if (
+        this.resolutionHighTime >= settings.raiseDelay &&
+        this.resolutionScale < 1 - 0.001
+      ) {
+        this.resolutionScale = Math.min(1, this.resolutionScale + settings.step);
+        this.applyResolution();
+        this.resolutionHighTime = 0;
+      }
+      return;
+    }
+
+    this.resolutionLowTime = 0;
+    this.resolutionHighTime = 0;
+  }
+
   private onUpdate = (dt: number): void => {
     if (this.disposed || !this.world) return;
     const frameDt = Math.min(dt, 0.05);
@@ -1829,6 +1934,17 @@ export class Game {
     if (!this.ready) {
       this.world.update(frameDt);
       return;
+    }
+
+    // Solo se adapta durante una partida jugable: en menús y pausa el coste no
+    // representa el rendimiento real y no queremos que la resolución oscile.
+    if (
+      this.mode === 'match' &&
+      !this.paused &&
+      !this.matchOver &&
+      this.countdown === 0
+    ) {
+      this.updateDynamicResolution(frameDt);
     }
 
     const wasPaused = this.paused;
@@ -2001,7 +2117,12 @@ export class Game {
       this.matchPlayers.forEach((player) => {
         const copy = player.copies[viewIndex];
         if (!copy) return;
-        copy.setPosition(player.x, player.z);
+        copy.setPositionAndSubmerge(
+          player.x,
+          player.z,
+          player.submerge,
+          this.world.waterHeight
+        );
         copy.setFacing(player.facing);
         if (player.animationFrame !== null) {
           // El plan de casteo fija el frame; todas las vistas dibujan el mismo.
@@ -2012,7 +2133,6 @@ export class Game {
           copy.setPlayback(player.playback);
           copy.setLoop(true);
         }
-        copy.setSubmerge(player.submerge, this.world.waterHeight);
         copy.setHealth(player.alive ? player.hp / player.maxHp : 0);
         const xp = xpStatus(player.xp);
         copy.setLevel(xp.level);
@@ -2212,12 +2332,20 @@ export class Game {
       player.cooldowns[index] = Math.max(0, player.cooldowns[index] - dt);
     }
     for (const buff of player.buffs) buff.duration -= dt;
-    player.buffs = player.buffs.filter((buff) => buff.duration > 0);
+    // Compactar en sitio: filtrar creaba un array nuevo por jugador y paso
+    // (60 Hz × 8 jugadores) aunque no hubiera nada que expirar.
+    let buffCount = 0;
+    for (const buff of player.buffs) {
+      if (buff.duration > 0) player.buffs[buffCount++] = buff;
+    }
+    player.buffs.length = buffCount;
     if (player.slowEffects.length > 0) {
       for (const effect of player.slowEffects) effect.remaining -= dt;
-      player.slowEffects = player.slowEffects.filter(
-        (effect) => effect.remaining > 0
-      );
+      let slowCount = 0;
+      for (const effect of player.slowEffects) {
+        if (effect.remaining > 0) player.slowEffects[slowCount++] = effect;
+      }
+      player.slowEffects.length = slowCount;
       this.refreshSlowMultiplier(player);
     }
     if (player.invulnerableTimer > 0) {
@@ -5408,25 +5536,31 @@ export class Game {
 
     // Círculos de visión por equipo: se calculan una vez por frame y se
     // reutilizan en todas sus vistas. Solo los Pokémon vivos, humanos o bots,
-    // aportan visión; un KO no hace de vigía hasta reaparecer.
-    const circlesByTeam = new Map<Team, VisionCircle[]>();
-    const localCircleBySlot = new Map<number, VisionCircle>();
+    // aportan visión; un KO no hace de vigía hasta reaparecer. Los arrays,
+    // mapas y objetos se conservan entre frames para no asignar memoria.
+    for (const circles of this.visionCirclesByTeam.values()) circles.length = 0;
+    this.localVisionBySlot.clear();
     for (const player of this.matchPlayers) {
       if (!player.alive) continue;
-      const circle: VisionCircle = {
-        x: player.x,
-        z: player.z,
-        visionRange:
-          player.visionRange * player.visionFactor * this.atmosphereVision
-      };
-      localCircleBySlot.set(player.slot, circle);
-      let circles = circlesByTeam.get(player.team);
+      let circle = this.visionCirclePool.get(player.slot);
+      if (!circle) {
+        circle = { x: 0, z: 0, visionRange: 0 };
+        this.visionCirclePool.set(player.slot, circle);
+      }
+      circle.x = player.x;
+      circle.z = player.z;
+      circle.visionRange =
+        player.visionRange * player.visionFactor * this.atmosphereVision;
+      this.localVisionBySlot.set(player.slot, circle);
+      let circles = this.visionCirclesByTeam.get(player.team);
       if (!circles) {
         circles = [];
-        circlesByTeam.set(player.team, circles);
+        this.visionCirclesByTeam.set(player.team, circles);
       }
       circles.push(circle);
     }
+    const circlesByTeam = this.visionCirclesByTeam;
+    const localCircleBySlot = this.localVisionBySlot;
 
     // La máscara world-space se compone una sola vez por equipo, aunque haya
     // varias vistas suyas en pantalla. Alimenta el quad de niebla: la
@@ -5440,9 +5574,8 @@ export class Game {
     // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
     // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
     const previous = this.visibleByTeam;
-    const current: Record<Team, Set<number>> = createTeamRecord(
-      () => new Set<number>()
-    );
+    const current = this.visibleByTeamScratch;
+    for (const team of ACTIVE_TEAMS) current[team].clear();
 
     for (const observer of this.matchPlayers) {
       // Un KO no revela actores al equipo, sea humano o bot.
@@ -5483,6 +5616,7 @@ export class Game {
       }
     }
     this.visibleByTeam = current;
+    this.visibleByTeamScratch = previous;
 
     this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
@@ -5540,10 +5674,11 @@ export class Game {
   private updatePickupKnowledge(colliders: readonly Collider[]): void {
     const pickups = this.pickups;
     if (!pickups) return;
-    const knowledge: Record<Team, Map<string, boolean>> = createTeamRecord(
-      () => new Map<string, boolean>()
-    );
-    const seenCache = new Map<string, boolean>();
+    const previousKnowledge = this.pickupKnowledge;
+    const knowledge = this.pickupKnowledgeScratch;
+    for (const team of ACTIVE_TEAMS) knowledge[team].clear();
+    const seenCache = this.pickupSeenScratch;
+    seenCache.clear();
 
     const sees = (team: Team, spawn: { x: number; z: number }): boolean => {
       const pointKey = `${spawn.x}:${spawn.z}`;
@@ -5566,6 +5701,7 @@ export class Game {
     });
 
     this.pickupKnowledge = knowledge;
+    this.pickupKnowledgeScratch = previousKnowledge;
     pickups.updateVisibility((spawn, viewIndex) => {
       const observer = this.views[viewIndex];
       return observer ? sees(observer.team, spawn) : false;
@@ -5743,6 +5879,7 @@ export class Game {
     for (const asset of this.assets.values()) disposeSpriteAsset(asset);
     this.assets.clear();
     this.world?.dispose();
+    clearGroundCanvasCache();
     // El manager pertenece a la aplicación: se sueltan las referencias antes
     // de destruirla para que ningún sonido tardío toque un contexto cerrado.
     disposeAudio(this.app);

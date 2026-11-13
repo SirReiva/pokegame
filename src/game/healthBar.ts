@@ -187,6 +187,9 @@ export class HealthBar {
   /** Armadura de casteo restante respecto a la vida máxima (0-1). */
   private armorFraction = 0;
   private level = 1;
+  /** Quaterniones reutilizados por `update()` para no asignar cada frame. */
+  private readonly rotation = new pc.Quat();
+  private readonly tilt = new pc.Quat();
 
   constructor(app: pc.AppBase, parent: pc.Entity, options: HealthBarOptions) {
     const device = app.graphicsDevice;
@@ -539,8 +542,8 @@ export class HealthBar {
     const dz = cameraPosition.z - position.z;
     const yaw = Math.atan2(dx, dz) / DEG;
     const pitch = Math.atan2(dy, Math.hypot(dx, dz)) / DEG;
-    const rotation = new pc.Quat().setFromEulerAngles(0, yaw, 0);
-    const tilt = new pc.Quat().setFromEulerAngles(-pitch, 0, 0);
+    const rotation = this.rotation.setFromEulerAngles(0, yaw, 0);
+    const tilt = this.tilt.setFromEulerAngles(-pitch, 0, 0);
     rotation.mul(tilt);
     this.root.setLocalRotation(rotation);
   }
