@@ -962,6 +962,13 @@ export class Game {
 
     this.combatFx.setWarmupLayer(layer.id);
 
+    // La marca de KO no pasa por `combatFx`: tiene su propio material (sin
+    // niebla, con `emissiveMap`/`opacityMap` y `alphaTest`), una variante que
+    // ningún efecto de combate usa. Se crea en la capa de precarga para que se
+    // dibuje junto al resto y su shader quede compilado antes del primer KO.
+    const deathMarker = new DeathMarker(this.app, 0, 0, 0, null);
+    deathMarker.setLayer(layer.id);
+
     const calls = this.buildWarmupCalls(this.collectWarmupAbilities());
     const batchSize = Math.max(1, CONFIG.performance.warmUpBatchSize);
     const batches = Math.ceil(calls.length / batchSize);
@@ -991,6 +998,7 @@ export class Game {
     } catch (error) {
       console.warn('[shaders] No se pudieron precargar todos los efectos', error);
     } finally {
+      deathMarker.destroy();
       this.combatFx.clear();
       this.combatFx.setWarmupLayer(null);
       camera.destroy();
@@ -1147,6 +1155,17 @@ export class Game {
       this.combatFx.spawnProtectionShield({ x, z }, white, 1, 1, 0.5)
     );
     push('heal', () => this.combatFx.spawnHeal(x, z, white, 1));
+
+    // Feedback de la armadura de casteo. No depende de una habilidad concreta
+    // (usa el `accent` del Pokémon que la lleva), así que no entra en el bucle
+    // de `abilities`. El color es un uniform, no una variante de shader, así
+    // que basta con calentar las mallas y los materiales una vez: sin esto, el
+    // primer golpe absorbido compilaba a mitad de combate.
+    push('armor-aura', () =>
+      this.combatFx.spawnArmorAura({ x, z }, white, 1, 0.3)
+    );
+    push('armor-pulse', () => this.combatFx.spawnArmorPulse(x, z, white, 1));
+    push('armor-break', () => this.combatFx.spawnArmorBreak(x, z, white, 1));
 
     return calls;
   }

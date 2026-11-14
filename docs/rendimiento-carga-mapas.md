@@ -212,6 +212,13 @@ pantalla de carga sigue visible, no en el primer frame de la partida si la intro
 ya ha terminado. La subida en sí es una operación de GPU no troceable; baja a la
 mitad con el presupuesto de 4 M.
 
+`warmUpShaders()` cubre también los efectos que no salen de una habilidad:
+calienta el aura, el pulso y la fractura de la armadura de casteo
+(`buildWarmupCalls`) y crea una marca de KO vacía en la capa de precarga, porque
+su material (sin niebla, con `emissiveMap`/`opacityMap` y `alphaTest`) es una
+variante que ningún efecto de combate compila. La recogida de objetos, el
+respawn y el revivir reutilizan `spawnBuff`, que ya estaba en el warmup.
+
 ## Cómo reproducir la medición
 
 El benchmark se hizo con una página temporal que:
