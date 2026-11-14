@@ -214,10 +214,12 @@ mitad con el presupuesto de 4 M.
 
 `warmUpShaders()` cubre también los efectos que no salen de una habilidad:
 calienta el aura, el pulso y la fractura de la armadura de casteo
-(`buildWarmupCalls`) y crea una marca de KO vacía en la capa de precarga, porque
+(`buildWarmupCalls`), crea una marca de KO vacía en la capa de precarga, porque
 su material (sin niebla, con `emissiveMap`/`opacityMap` y `alphaTest`) es una
-variante que ningún efecto de combate compila. La recogida de objetos, el
-respawn y el revivir reutilizan `spawnBuff`, que ya estaba en el warmup.
+variante que ningún efecto de combate compila, y dibuja un número de daño de
+muestra para estrenar el material del atlas (`useFog = false`, texturado y con
+`depthTest = false`). La recogida de objetos, el respawn y el revivir reutilizan
+`spawnBuff`, que ya estaba en el warmup.
 
 ## Cómo reproducir la medición
 

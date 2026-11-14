@@ -969,6 +969,10 @@ export class Game {
     const deathMarker = new DeathMarker(this.app, 0, 0, 0, null);
     deathMarker.setLayer(layer.id);
 
+    // El atlas de números de daño también estrena material con el primer
+    // impacto: se dibuja un número de muestra en la misma capa de precarga.
+    this.damageNumbers.warmUp(cameraComponent, layer.id);
+
     const calls = this.buildWarmupCalls(this.collectWarmupAbilities());
     const batchSize = Math.max(1, CONFIG.performance.warmUpBatchSize);
     const batches = Math.ceil(calls.length / batchSize);
@@ -999,6 +1003,8 @@ export class Game {
       console.warn('[shaders] No se pudieron precargar todos los efectos', error);
     } finally {
       deathMarker.destroy();
+      // Desactiva el número de muestra; la ranura queda en el pool.
+      this.damageNumbers.clear();
       this.combatFx.clear();
       this.combatFx.setWarmupLayer(null);
       camera.destroy();

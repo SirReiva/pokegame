@@ -543,6 +543,27 @@ export class DamageNumbers {
     }
   }
 
+  /**
+   * Crea un número temporal en la capa de precarga. El material del atlas
+   * (`useFog = false`, `emissiveMap`/`opacityMap` y `depthTest = false`) es una
+   * variante que ningún otro sistema compila, así que sin esto el primer
+   * impacto de la partida paga el enlazado del shader en pleno combate.
+   *
+   * La ranura se queda en el pool: `clear()` la desactiva y el primer número
+   * real la reutiliza sin volver a crear material ni malla.
+   */
+  warmUp(camera: pc.CameraComponent, layerId: number): void {
+    this.spawn({
+      x: 0,
+      y: 1.5,
+      z: 0,
+      amount: 123,
+      critical: false,
+      effectiveness: 1,
+      views: [{ camera, layerId }]
+    });
+  }
+
   update(dt: number): void {
     for (let index = this.entries.length - 1; index >= 0; index--) {
       const entry = this.entries[index];
