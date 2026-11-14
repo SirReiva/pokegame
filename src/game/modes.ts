@@ -205,7 +205,11 @@ export interface ModeContext {
   elapsed: number;
   /** `0` desactiva el cierre por tiempo. */
   timeLimitSeconds: number;
-  /** Marcador compartido; el modo lo modifica al procesar eventos. */
+  /**
+   * Marcador compartido; el modo lo modifica al procesar eventos. Los puntos
+   * visibles son enteros: los modos de objetivo pueden acumular fracciones de
+   * segundo en su propio estado, pero nunca las escriben aquí.
+   */
   scores: Record<Team, number>;
   players: readonly ModePlayerSnapshot[];
   /** Zona de objetivo del mapa, o la zona central por defecto. */
@@ -276,12 +280,22 @@ function emptyScores(): Record<Team, number> {
   return { red: 0, blue: 0, yellow: 0, green: 0 };
 }
 
+/**
+ * Puntos que muestra/compara el marcador. Los modos de objetivo acumulan
+ * internamente fracciones de segundo, pero el marcador y la victoria usan
+ * enteros: así el HUD, el resultado y `scoreLeader` nunca discrepan por una
+ * fracción invisible.
+ */
+function scoreOf(ctx: ModeContext, team: Team): number {
+  return Math.floor(ctx.scores[team] ?? 0);
+}
+
 function scoreLeader(ctx: ModeContext): Team | null {
   let bestScore = -Infinity;
   for (const team of TEAMS) {
-    bestScore = Math.max(bestScore, ctx.scores[team] ?? 0);
+    bestScore = Math.max(bestScore, scoreOf(ctx, team));
   }
-  const leaders = TEAMS.filter((team) => (ctx.scores[team] ?? 0) === bestScore);
+  const leaders = TEAMS.filter((team) => scoreOf(ctx, team) === bestScore);
   if (leaders.length === 1) return leaders[0];
 
   // Desempate: daño real infligido por el equipo.
@@ -404,6 +418,17 @@ function createKothMode(
   let nextMoveAt = KOTH_MOBILE_INTERVAL_SECONDS;
   let owner: Team | null = null;
   let contested = false;
+  /**
+   * Último equipo al que se le pagó la captura. Evita que una disputa
+   * (`owner = null`) y una recaptura del mismo equipo vuelvan a dar XP.
+   */
+  let lastCaptureOwner: Team | null = null;
+  /** Resto de segundo de cada equipo; los puntos se suman enteros. */
+  const scoreProgress: Record<Team, number> = emptyScores();
+
+  const resetScoreProgress = (): void => {
+    for (const team of TEAMS) scoreProgress[team] = 0;
+  };
 
   const playersInside = (ctx: ModeContext): Set<Team> => {
     const inside = new Set<Team>();
@@ -427,6 +452,13 @@ function createKothMode(
       waypoint = (waypoint + 1) % route.length;
       zone = { ...route[waypoint] };
       nextMoveAt += KOTH_MOBILE_INTERVAL_SECONDS;
+      // La colina nueva es un objetivo nuevo: nadie la controla todavía y la
+      // captura vuelve a premiarse. La fracción de segundo del objetivo
+      // anterior no se arrastra.
+      owner = null;
+      contested = false;
+      lastCaptureOwner = null;
+      resetScoreProgress();
     }
 
     const inside = playersInside(ctx);
@@ -434,10 +466,17 @@ function createKothMode(
     contested = inside.size > 1;
     owner = inside.size === 1 ? [...inside][0] : null;
 
+    // Un cambio de dueño (incluido el paso por disputa) reinicia el resto de
+    // segundo: los puntos se ganan por segundos completos de control continuo.
+    if (owner !== previousOwner) resetScoreProgress();
+
     const xp: ModeXpAward[] = [];
     // Captura: el equipo pasa a controlar la zona. Se premia a los miembros
-    // que están dentro en ese momento, no a todo el equipo desde la base.
-    if (owner && owner !== previousOwner) {
+    // que están dentro en ese momento, no a todo el equipo desde la base. Si
+    // el mismo equipo recupera la zona tras una disputa no vuelve a cobrar:
+    // `lastCaptureOwner` recuerda la última captura real.
+    if (owner && owner !== previousOwner && owner !== lastCaptureOwner) {
+      lastCaptureOwner = owner;
       for (const player of ctx.players) {
         if (!player.alive || player.team !== owner) continue;
         if (
@@ -453,11 +492,16 @@ function createKothMode(
     }
 
     if (owner) {
-      ctx.scores[owner] += KOTH_POINTS_PER_SECOND * dt;
+      const accumulated =
+        scoreProgress[owner] + KOTH_POINTS_PER_SECOND * dt;
+      // El epsilon evita que 60 pasos de 1/60 se queden en 0,999999999999.
+      const gained = Math.floor(accumulated + 1e-9);
+      scoreProgress[owner] = Math.max(0, accumulated - gained);
+      if (gained > 0) ctx.scores[owner] += gained;
     }
 
     const leader = scoreLeader(ctx);
-    if (leader && ctx.scores[leader] >= target) {
+    if (leader && scoreOf(ctx, leader) >= target) {
       return {
         xp,
         outcome: {
@@ -508,13 +552,8 @@ function createKothMode(
     },
     resolveTimeout: timeoutOutcome,
     getHud(ctx) {
-      const progress = Math.min(
-        1,
-        Math.max(
-          0,
-          Math.max(...TEAMS.map((team) => ctx.scores[team] ?? 0)) / target
-        )
-      );
+      const bestScore = Math.max(...TEAMS.map((team) => scoreOf(ctx, team)));
+      const progress = Math.min(1, Math.max(0, bestScore / target));
       return {
         id: 'koth',
         name: GAME_MODE_INFO.koth.name,
