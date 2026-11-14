@@ -602,8 +602,8 @@ export class Game {
   /** Tramos de cordillera y árboles que proyectan sombra dentro de la niebla. */
   private sightOccluders: SightOccluder[] = [];
   /**
-   * Slots visibles para cada equipo en el frame anterior. La visión es
-   * compartida, así que la histéresis también se guarda por equipo.
+   * Slots visibles para cada equipo en el paso de simulación anterior. La
+   * visión es compartida, así que la histéresis también se guarda por equipo.
    */
   private visibleByTeam: Record<Team, Set<number>> = createTeamRecord(
     () => new Set<number>()
@@ -612,6 +612,14 @@ export class Game {
   private visibleByTeamScratch: Record<Team, Set<number>> = createTeamRecord(
     () => new Set<number>()
   );
+  /**
+   * Paso de simulación actual. La visibilidad de combate se resuelve una vez
+   * por paso, no una vez por render: así el segundo paso fijo de un render no
+   * reutiliza la visibilidad del render anterior.
+   */
+  private simulationStep = 0;
+  /** Último paso en el que se refrescó `visibleByTeam`; -1 antes del primero. */
+  private visibilityStep = -1;
   /**
    * Memo de capas de FX dentro del frame actual. Varios efectos de una misma
    * habilidad comparten anclas; sin esta caché cada uno repetía la prueba de
@@ -1794,6 +1802,10 @@ export class Game {
     // rehornean al empezar para cubrir las bases de ambos equipos.
     this.refreshSunShadows();
 
+    // Deja una primera foto de visibilidad para la cuenta atrás y para el
+    // primer paso de simulación, antes de que exista ningún render.
+    this.refreshCombatVisibility();
+
     this.spawnObjectiveMarker();
     this.callbacks.onMatchStats([]);
     return true;
@@ -1860,6 +1872,8 @@ export class Game {
     this.localVisionBySlot.clear();
     this.visibleByTeam = createTeamRecord(() => new Set<number>());
     this.visibleByTeamScratch = createTeamRecord(() => new Set<number>());
+    this.simulationStep = 0;
+    this.visibilityStep = -1;
     this.pickupKnowledge = createTeamRecord(() => new Map<string, boolean>());
     this.pickupKnowledgeScratch = createTeamRecord(
       () => new Map<string, boolean>()
@@ -2523,6 +2537,9 @@ export class Game {
     frame: InputFrame,
     firstStep: boolean
   ): void {
+    // Cada paso tiene su propia foto de visibilidad. El render reutiliza la
+    // última; el siguiente paso usa la que dejó el paso anterior.
+    this.simulationStep += 1;
     // La caché de visibilidad de FX es válida solo con las posiciones actuales.
     this.fxVisibilityCache.clear();
     this.matchElapsed += stepDt;
@@ -2536,7 +2553,8 @@ export class Game {
     // todos los bots de ambos equipos la comparten: cada uno filtra por equipo.
     const hazards =
       this.bots.size > 0 ? this.buildBotHazards() : [];
-    // La visión de equipo se resuelve en `updateVision` una vez por render.
+    // La visión de equipo viene de la última foto de `refreshCombatVisibility`
+    // (final del paso anterior); es la que corresponde a estas posiciones.
     const botViews: Record<Team, BotWorldView> = {
       red: {
         visibleSlots: this.visibleByTeam.red,
@@ -2600,6 +2618,10 @@ export class Game {
       if (!this.matchOver) this.updatePendingAoeEnds(stepDt);
       if (!this.matchOver) this.pickups?.collect(this.matchPlayers, this.pickupHandlers);
     }
+
+    // La visibilidad del siguiente paso debe reflejar las posiciones finales
+    // de este, no las del render anterior. El render reutilizará esta foto.
+    this.refreshCombatVisibility();
   }
 
   private stepPlayer(player: MatchPlayerState, input: DeviceInputSnapshot, dt: number): void {
@@ -3888,9 +3910,10 @@ export class Game {
   /**
    * Aplica la ayuda de apuntado de un proyectil o haz. Solo existe para
    * jugadores humanos con el ajuste activo: los bots conservan el error de su
-   * dificultad. Se descartan rivales no golpeables, ocultos para el equipo o
-   * tapados por un obstáculo, así que la corrección nunca revela ni atraviesa
-   * paredes.
+   * dificultad. Se descartan rivales no golpeables, ocultos o sin línea de
+   * visión directa en el instante del disparo; no reutiliza el conjunto de
+   * visibilidad del paso para no asistir a través de una pared que acaba de
+   * aparecer.
    */
   private aimAssistDirection(
     player: MatchPlayerState,
@@ -3901,11 +3924,14 @@ export class Game {
     if (player.isBot || !isAimAssistEnabled()) return null;
     if (def.shape !== 'projectile' && def.shape !== 'beam') return null;
 
-    const visible = this.visibleByTeam[player.team];
+    const colliders = this.world.colliders;
     const targets: AimAssistTarget[] = [];
     for (const target of this.matchPlayers) {
       if (target.hidden) continue;
-      if (!this.canHit(player, target) || !visible.has(target.slot)) continue;
+      if (!this.canHit(player, target)) continue;
+      // `alreadyVisible = false`: la ayuda exige visibilidad real en este
+      // instante, sin la histéresis de render.
+      if (!this.observerSeesActor(player, target, false, colliders)) continue;
       targets.push({
         x: target.x,
         z: target.z,
@@ -3927,7 +3953,7 @@ export class Game {
           player.z,
           target.x,
           target.z,
-          this.world.colliders,
+          colliders,
           CONFIG.combat.aimAssist.sightPadding
         )
     });
@@ -5800,15 +5826,77 @@ export class Game {
   }
 
   /**
+   * Resuelve la visibilidad compartida por equipo para el paso de simulación
+   * actual y actualiza `enemiesSeeing` (HUD y Regeneración). No toca niebla,
+   * cámaras ni copias: eso se hace una vez por render en `updateVision`.
+   *
+   * Se llama al terminar cada paso fijo. Así el siguiente paso y el render
+   * reutilizan una foto tomada con las posiciones finales del paso anterior,
+   * en vez de la del render anterior. La histéresis se conserva porque los
+   * conjuntos se alternan entre `visibleByTeam` y `visibleByTeamScratch`.
+   */
+  private refreshCombatVisibility(): void {
+    const colliders = this.world.colliders;
+    for (const player of this.matchPlayers) player.enemiesSeeing = 0;
+
+    const previous = this.visibleByTeam;
+    const current = this.visibleByTeamScratch;
+    for (const team of ACTIVE_TEAMS) current[team].clear();
+
+    for (const observer of this.matchPlayers) {
+      // Un KO no revela actores al equipo, sea humano o bot.
+      if (!observer.alive) continue;
+      if (!observer.hidden) {
+        current[observer.team].add(observer.slot);
+      }
+      for (const target of this.matchPlayers) {
+        if (target === observer) continue;
+        // Una habilidad puede ocultar al lanzador (Excavar): ni los rivales ni
+        // los aliados lo ven mientras dura la preparación.
+        if (target.hidden) continue;
+        // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
+        // que comprobar rivales y aliados que acaban de caer.
+        if (target.alive && target.team === observer.team) continue;
+        // Un KO deja ver la animación de daño un instante; el cuerpo sigue
+        // siendo visible para el equipo que lo vio caer.
+        if (!target.alive && target.deathFade <= 0) continue;
+        const alreadyVisible = previous[observer.team].has(target.slot);
+        // Geometría exacta en cada paso: radio efectivo según la ocultación
+        // del terreno del objetivo y línea de visión contra los oclusores.
+        const visible = this.observerSeesActor(
+          observer,
+          target,
+          alreadyVisible,
+          colliders
+        );
+        // El HUD "Descubierto" y la regeneración cuentan la línea de visión
+        // directa de cada rival vivo, no la visión compartida del equipo.
+        if (target.alive && observer.team !== target.team && visible) {
+          target.enemiesSeeing += 1;
+        }
+        if (!visible) continue;
+        current[observer.team].add(target.slot);
+      }
+    }
+    this.visibleByTeam = current;
+    this.visibleByTeamScratch = previous;
+    this.visibilityStep = this.simulationStep;
+  }
+
+  /**
    * Resuelve la niebla de cada vista: oculta las copias que no se ven y coloca
-   * el degradado fuera de la unión de círculos del equipo. La visión es
-   * compartida: cada vista revela lo que ven todos sus Pokémon vivos, humanos
-   * y bots. La ocultación del objetivo se calcula con el terreno que pisa, no
+   * el degradado fuera de la unión de círculos del equipo. La visibilidad de
+   * actores ya viene resuelta por paso; aquí solo se pinta y se sincronizan las
+   * copias. La ocultación del objetivo se calcula con el terreno que pisa, no
    * con el del observador.
    */
   private updateVision(dt: number): void {
     const colliders = this.world.colliders;
-    for (const player of this.matchPlayers) player.enemiesSeeing = 0;
+    // Fallback para la cuenta atrás, renders sin paso de simulación y pasos
+    // que terminaron antes de refrescar (por ejemplo, al cerrar la partida).
+    if (this.visibilityStep !== this.simulationStep) {
+      this.refreshCombatVisibility();
+    }
 
     // Círculos de visión por equipo: se calculan una vez por frame y se
     // reutilizan en todas sus vistas. Solo los Pokémon vivos, humanos o bots,
@@ -5839,60 +5927,12 @@ export class Game {
     const localCircleBySlot = this.localVisionBySlot;
 
     // La máscara world-space se compone una sola vez por equipo, aunque haya
-    // varias vistas suyas en pantalla. Alimenta el quad de niebla: la
-    // visibilidad de actores y objetos se calcula con geometría exacta cada
-    // frame para que el límite de 15 Hz no la retrase.
+    // varias vistas suyas en pantalla. Alimenta el quad de niebla; la
+    // visibilidad de actores ya se resolvió una vez por paso de simulación.
     const noCircles: readonly VisionCircle[] = [];
     for (const [team, mask] of this.fogMasks) {
       mask.update(circlesByTeam.get(team) ?? noCircles, dt);
     }
-
-    // Visibilidad compartida por equipo. Se resuelve una vez por frame y se
-    // reutiliza en todas las vistas y en la histéresis, que ahora es de equipo.
-    const previous = this.visibleByTeam;
-    const current = this.visibleByTeamScratch;
-    for (const team of ACTIVE_TEAMS) current[team].clear();
-
-    for (const observer of this.matchPlayers) {
-      // Un KO no revela actores al equipo, sea humano o bot.
-      if (!observer.alive) continue;
-      if (!observer.hidden) {
-        current[observer.team].add(observer.slot);
-      }
-      for (const target of this.matchPlayers) {
-        if (target === observer) continue;
-        // Una habilidad puede ocultar al lanzador (Excavar): ni los rivales ni
-        // los aliados lo ven mientras dura la preparación.
-        if (target.hidden) continue;
-        // Un aliado vivo ya está en el conjunto por su propio slot; solo hay
-        // que comprobar rivales y aliados que acaban de caer.
-        if (target.alive && target.team === observer.team) continue;
-        // Un KO deja ver la animación de daño un instante; el cuerpo sigue
-        // siendo visible para el equipo que lo vio caer.
-        if (!target.alive && target.deathFade <= 0) continue;
-        const alreadyVisible = previous[observer.team].has(target.slot);
-        // La visibilidad de actores se resuelve con geometría exacta en cada
-        // frame. La máscara de niebla solo alimenta el sombreado: su recompuesto
-        // a 15 Hz no puede retrasar la aparición o desaparición de un rival.
-        const visible = this.observerSeesActor(
-          observer,
-          target,
-          alreadyVisible,
-          colliders
-        );
-        // El HUD "Descubierto" y la regeneración cuentan la línea de visión
-        // directa de cada rival vivo, no la visión compartida del equipo.
-        // `visible` ya es una comprobación geométrica por observador, así que se
-        // reutiliza en vez de repetir el barrido de oclusores.
-        if (target.alive && observer.team !== target.team && visible) {
-          target.enemiesSeeing += 1;
-        }
-        if (!visible) continue;
-        current[observer.team].add(target.slot);
-      }
-    }
-    this.visibleByTeam = current;
-    this.visibleByTeamScratch = previous;
 
     this.views.forEach((observer, viewIndex) => {
       const fog = this.fogViews[viewIndex];
@@ -5911,7 +5951,7 @@ export class Game {
         );
       }
 
-      const visibleSlots = current[observer.team];
+      const visibleSlots = this.visibleByTeam[observer.team];
       for (const target of this.matchPlayers) {
         const copy = target.copies[viewIndex];
         if (!copy) continue;

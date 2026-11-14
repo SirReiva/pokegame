@@ -197,38 +197,100 @@
 > tablas regenerables `tabla-danos-por-ataque.md` y `dps-por-habilidad.md`
 > incluyen ya a ambos; las matrices de §4.x no se han regenerado. Kyogre trae el
 > hurtbox más grande del roster (0,60 u) y Rayquaza la visión más larga (12,6 u).
+>
+> **Actualización 2026-11-14**: revisado contra `d1f06fa` (v0.27.7). Desde
+> `6ab67d9` (v0.22.0) entran los modos de juego y el límite de tiempo
+> (`9f19d64`), el clima (`371bd41`), la XP (`xp.ts`), la rampa de repetición
+> (`4702c80`), la armadura de casteo (`283076e`), la ayuda de apuntado
+> (`0e417b4`), la barra de vida 2D (`b58f9c1`) y la colina móvil de KOTH
+> (`440883c`). Se revalidan 3.1-3.10, 3.17 y 3.18. **3.6 pasa a parcial**:
+> ya hay límite de tiempo y `resolveTimeout`, así que una 1v0 termina en empate
+> técnico, pero sigue sin validarse que haya dos equipos ni los topes de
+> equipo/slots. Se añaden **3.20** (el daño residual del clima se salta
+> Protección y el corte de Regeneración), **3.21** (curaciones de área a través
+> de muros), **3.22** (zonas de KOTH sin validar), **3.23** (marcador
+> fraccionario de KOTH y XP de captura repetible, corregido en la entrada
+> siguiente) y **3.24** (visibilidad de
+> equipo congelada entre pasos fijos, corregido en la entrada (3)). Se corrige la
+> fila de Gyarados en §4.2 y
+> §4.7; §4.3.1 sigue siendo la foto de 20 especies aunque hoy hay 24 movesets.
+>
+> **Actualización 2026-11-14 (2)**: arreglado 3.23. El marcador de Rey de la
+> colina sigue acumulando el tiempo de control en un resto por equipo, pero
+> `scores` solo recibe puntos enteros: el HUD, `scoreLeader`, la victoria por
+> objetivo y el resultado comparan el mismo valor. El resto se reinicia cuando
+> cambia el dueño o la colina móvil cambia de zona, así que no se puede guardar
+> fracciones entre disputas. La XP de `zoneCapture` recuerda el último equipo
+> premiado (`lastCaptureOwner`) y no vuelve a pagar al mismo equipo tras una
+> disputa; un equipo distinto que toma la zona sí cobra. Verificado con una
+> simulación de 100 s de control (100 puntos exactos y un solo `scoreTarget`) y
+> con una secuencia rojo → disputa → rojo → azul (1, 0, 1 capturas).
+>
+> **Actualización 2026-11-14 (3)**: arreglado 3.24. `updateVision` se dividió en
+> `refreshCombatVisibility`, que resuelve `visibleByTeam` y `enemiesSeeing` una
+> vez por paso de simulación, y la parte de render (círculos, niebla, copias y
+> objetos), que se sigue ejecutando una vez por frame. La foto se refresca al
+> final de cada `simulateStep` y `updateVision` reutiliza la última; si no ha
+> corrido ningún paso (cuenta atrás o cierre de partida), hay un fallback para
+> no dejar los conjuntos vacíos. La ayuda de apuntado dejó de leer el conjunto
+> del paso y comprueba la LOS directa del lanzador en el instante del disparo.
+> La histéresis de 0,2 s se conserva entre pasos.
 
 ## Resumen ejecutivo
 
 El motor de combate está bien separado y la fórmula de daño, la tabla de tipos y
 el cálculo de stats son correctos. Los problemas graves siguen estando en **la
 cobertura de movesets, la validación de equipos y el reparto de poder entre
-especies**; además quedan cabos sueltos en el daño de los jugadores muertos.
+especies**; además quedan cabos sueltos en el daño de los jugadores muertos y en
+los sistemas nuevos (clima, KOTH y curaciones de área), que no siempre pasan por
+las mismas comprobaciones que el resto del combate.
 
 Los cinco hallazgos más importantes:
 
 1. **3 de las 27 especies del roster siguen sin ninguna habilidad.** Eevee,
-   Raikou y Entei no tienen moveset; el carrusel ya las filtra. Las otras 24,
-   incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh, Zapdos, Gyarados,
-   Suicune, Kyogre y Rayquaza, sí tienen moveset.
-2. **No se valida que haya dos equipos.** Una partida 1v0 (o con todos los
-   jugadores en el mismo equipo) no puede conseguir ningún KO y no termina
-   nunca.
+   Raikou y Entei no tienen moveset; el carrusel ya las filtra, pero
+   `startMatch` sigue aceptando una configuración con el kit vacío (§3.1). Las
+   otras 24, incluidos Onix, Celebi, Lugia, Tyranitar, Groudon, Ho-Oh, Zapdos,
+   Gyarados, Suicune, Kyogre y Rayquaza, sí tienen moveset.
+2. **No se valida que haya dos equipos.** Ya existe límite de tiempo (180/300/
+   480 s) y `resolveTimeout`, así que una partida 1v0 (o con todos los
+   jugadores en el mismo equipo) termina en empate técnico en vez de no
+   terminar nunca; pero sigue sin poder conseguirse ningún KO y el inicio no
+   se bloquea (§3.6).
 3. **Los proyectiles, las áreas y los golpes diferidos de un jugador muerto
-   siguen dañando y puntuando.** `canHit` no mira `attacker.alive`: un caster
-   muerto puede cerrar un KO y sumar la baja a su marcador. Desde `29565b7` ese
-   daño también se suma a `damageDealt`/`damageTaken` del marcador final. Los
-   casteos instantáneos encolados y los buffs `self` ya se cancelan al morir;
-   los proyectiles, las áreas persistentes y los golpes de dash pendientes no.
+   siguen dañando, curando y puntuando.** `canHit` no mira `attacker.alive`: un
+   caster muerto puede cerrar un KO y sumar la baja a su marcador. Desde
+   `29565b7` ese daño también se suma a `damageDealt`/`damageTaken` del marcador
+   final. Los casteos instantáneos encolados y los buffs `self` ya se cancelan al
+   morir; los proyectiles, las áreas persistentes (también las que curan o
+   reviven) y los golpes de dash pendientes no (§3.3).
 4. **La foto de §4.3 está obsoleta**: con `abilities.ts` actual, la diferencia
    entre el mejor y el peor combo medio baja a ~3,2× (Tyranitar 231 % frente a
    Mew 73 % en la simulación de 20 atacantes). Groudon (217 %), Articuno y
    Lugia (191 %) y Moltres/Zapdos (185 %) siguen por encima del 180 %; Pikachu
    (90 %) y Mew (73 %) no llegan al 100 %. Onix es el caso más extremo como
    víctima: recibe 610-784 % de Squirtle/Bulbasaur y 665 % de Celebi por su
-   doble debilidad a Agua/Planta.
+   doble debilidad a Agua/Planta. La foto de §4.3.1 también se queda corta: hoy
+   hay 24 movesets (Gyarados, Suicune, Kyogre y Rayquaza ya están dentro) y no
+   se ha regenerado la matriz de 24 × 23.
 5. **La visión no interviene en el combate**: se puede atacar y matar a un
-   rival que no se ve, y no hay revelado al recibir daño.
+   rival que no se ve, y no hay revelado al recibir daño. La ayuda de apuntado
+   es la única excepción: comprueba la línea de visión directa del lanzador,
+   pero solo corrige el ángulo de proyectiles/haces humanos (§3.4).
+
+En esta revisión aparecen tres cabos nuevos en sistemas recientes:
+
+- **Clima fuera del pipeline**: el daño residual de arena/granizo resta HP
+  directamente y no aplica Protección ni corta Regeneración (§3.20).
+- **Curación a través de muros**: las áreas de curación reparten vida a aliados
+  con `lineOfSight = false`; el daño sí respeta la pared (§3.21).
+- **KOTH sin validar**: las zonas del mapa y la ruta de la colina móvil pueden
+  caer fuera de los límites, en agua profunda o dentro de un collider (§3.22).
+
+El marcador fraccionario de KOTH ya está corregido (3.23): los puntos se suman
+en enteros y la XP de captura no se repite tras una disputa. La visibilidad de
+combate también se corrigió (3.24): se refresca una vez por paso de simulación
+y el render reutiliza la última foto.
 
 Desde v0.7.0 hay además un sistema de objetos recogibles (pociones de 50/120 PV)
 que no entra en la simulación de §4. Su recogida automática ya comprueba
@@ -357,12 +419,13 @@ una ralentización.
 
 **Protección**: reduce un 60 % el daño durante 2 s. Se aplica sobre la fórmula
 con mínimo de 1 PV, así que un golpe de 1 PV sigue quitando 1 y uno de 2 también
-1 (50 % efectivo en ese caso).
+1 (50 % efectivo en ese caso). El daño residual del clima todavía se salta este
+paso (§3.20).
 
 **Reaparición**: 5 s, 2 s de invulnerabilidad y vida al máximo. Los cooldowns
 del kit **siguen corriendo durante la muerte**; el del instinto activo se
 reinicia al reaparecer. Atacar retira la invulnerabilidad
-(`src/game/game.ts:2605-2610`).
+(`src/game/game.ts:3497-3502`).
 
 **Objetos**: los mapas pueden colocar pociones (50 PV, 20 s de cooldown) y
 pociones grandes (120 PV, 45 s). La recogida es automática y el estado es
@@ -370,8 +433,11 @@ global: un solo objeto compartido por todos los jugadores. La niebla oculta su
 billboard y la recogida comprueba colliders, línea de visión y visibilidad del
 equipo; el alcance usa el hurtbox de la especie.
 
-**KO**: 15 por equipo por defecto (`CONFIG.combat.koTarget`); el lobby permite
-15, 30 o 50. No hay límite de tiempo ni otra condición de victoria.
+**KO**: en `tdm`, 15 por equipo por defecto (`CONFIG.combat.koTarget`); el lobby
+permite 15, 30 o 50. Desde v0.27.0 el lobby añade un límite de tiempo de 180,
+300 o 480 s y un modo `koth` (50/100/150 puntos, zona fija o móvil). Al agotarse
+el tiempo, el modo resuelve por marcador y desempata por daño. Sigue sin
+validarse que existan dos equipos (§3.6).
 
 ---
 
@@ -396,93 +462,116 @@ cobertura de tipos.
 
 ## 3. Fallos de implementación abiertos
 
-### 3.0. Estado de los fallos abiertos (revisión 2026-11-10 (2))
+### 3.0. Estado de los fallos abiertos (revisión 2026-11-14)
 
 | Apartado | Estado | Nota |
 | --- | --- | --- |
-| 3.1 Cobertura de movesets | **pendiente** | 3 de 27 especies siguen sin habilidades (Eevee, Raikou y Entei). |
-| 3.3 Daño de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas y golpes de dash pendientes. Los casts instantáneos y buffs `self` ya se cancelan al morir. |
-| 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; decidir si los proyectiles deben ignorar la ocultación por terreno. |
+| 3.1 Cobertura de movesets | **pendiente** | 3 de 27 especies siguen sin habilidades (Eevee, Raikou y Entei). El carrusel filtra, pero `startMatch` no valida el kit. |
+| 3.3 Daño/curación de jugadores muertos | **pendiente** | `canHit` no comprueba `attacker.alive`; afecta a proyectiles, áreas (también curación/revive), golpes de dash pendientes y estadísticas/XP. Los casts instantáneos y buffs `self` ya se cancelan al morir. |
+| 3.4 Visión en combate | **pendiente** | La niebla no interviene en `canHit`; solo la ayuda de apuntado filtra por visibilidad. |
 | 3.5 Explosión gratis a 1 PV | **pendiente** | El autodaño nunca quita la última vida; también afecta a Pájaro Osado. |
-| 3.6 Validación de dos equipos | **pendiente** | Una partida 1v0 no puede terminar; tampoco se validan topes ni slots. |
+| 3.6 Validación de dos equipos | **parcial** | Ya hay límite de tiempo y timeout (1v0 acaba en empate técnico), pero no se valida que haya dos equipos, topes por equipo, slots/device únicos ni que el equipo exista en el mapa. |
 | 3.7 Desconexión de mando | **pendiente** | El jugador queda inmóvil y se le puede farmear. |
-| 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs. |
-| 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante y `dashEnemyLimit` no comprueba LOS. |
-| 3.17 Ciclón | **pendiente** | El centro del área atraviesa muros, rocas y árboles. |
-| 3.18 Avisos de `validate:anims` | **pendiente** | Cuatro avisos de anticipación/carga (Pájaro Osado, Hidrobomba, Rayo Hielo y Fuego Sagrado). |
+| 3.8 Stat Speed / dash | **pendiente** | Speed es decorativo y el dash ignora slow/terreno/buffs/clima/escudo. |
+| 3.10 Colisión de dash | **pendiente** | Todos los dashes se detienen en cualquier jugador; `dashBlocksOnEnemies` es redundante y `dashEnemyLimit` no comprueba LOS ni usa el hurtbox. |
+| 3.17 Ciclón | **pendiente** | El centro del área atraviesa muros, rocas y árboles y no se recorta a los límites del mapa. |
+| 3.18 Avisos de `validate:anims` | **pendiente** | Seis avisos: Pájaro Osado, Hidrobomba, Rayo Hielo, Fuego Sagrado, Cascada y Vuelo Dragón. |
+| 3.20 Clima y Protección/Regeneración | **pendiente** | El tick de arena/granizo resta HP sin `damageReduction` y sin `breakRegen`. |
+| 3.21 Curación a través de muros | **pendiente** | Las áreas de curación ignoran `target.lineOfSight`; el daño sí lo respeta. |
+| 3.22 Zonas de KOTH sin validar | **pendiente** | `objectives` y la ruta móvil no se comprueban contra límites, agua o colliders. |
 
 Los números conservan el identificador histórico: los huecos (3.2, 3.9,
-3.11-3.16 y 3.19) corresponden a apartados ya corregidos y retirados de la
-lista.
+3.11-3.16, 3.19, 3.23 y 3.24) corresponden a apartados ya corregidos y retirados
+de la lista.
 
 ### 3.1. Cobertura: 3 especies sin moveset (crítico)
 
-`MOVESETS` define 24 ids (`src/game/abilities.ts`). El roster muestra las 27
-especies de `public/sprites/manifest.json`, pero el carrusel ya filtra con
-`hasAssignedAbilities` (`src/session/SessionProvider.tsx:63`,
-`src/ui/RosterScreen.tsx:600`) y no deja elegir las 3 que no pueden combatir.
+`MOVESETS` define 24 ids (`src/game/abilities.ts:2803-2856`). El roster muestra
+las 27 especies de `public/sprites/manifest.json`, pero el carrusel ya filtra
+con `hasAssignedAbilities` (`src/game/abilities.ts:2872`,
+`src/session/SessionProvider.tsx:63`, `src/ui/RosterScreen.tsx:606`) y no deja
+elegir las 3 que no pueden combatir.
 
-`src/game/game.ts:1084` hace:
+`src/game/game.ts:1569` hace:
 
 ```ts
 const moveset = MOVESETS[config.pokemonId] ?? [null, null, null, null];
 ```
 
-y `game.ts:1189` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
+y `game.ts:1700` guarda `abilityIds: [...moveset, commonAbilityId]`. El HUD
 muestra cuatro veces «Sin asignar». Esas especies no pueden atacar, defenderse
 ni usar ninguna habilidad; solo caminan.
 
 **Especies afectadas**: Eevee (0133), Raikou (0243) y Entei (0244).
 
 **Impacto**: partidas perdidas por elección, frustración y una parte importante
-del roster inutilizable.
+del roster inutilizable. El filtro del carrusel es solo de interfaz:
+`startMatch` no llama a `hasAssignedAbilities`, así que una sesión antigua, un
+`matchConfigs` manipulado o una llamada directa al motor todavía pueden
+arrancar una partida con el kit vacío.
 
-**Arreglo mínimo**: filtrar el roster a las especies con moveset (o marcarlas
-como «no disponible») hasta que tengan habilidades.
+**Arreglo mínimo**: filtrar el roster a las especies con moveset (ya hecho en la
+UI) **y** rechazar en `startMatch` cualquier config sin al menos una habilidad
+asignada (o sustituirla por una especie jugable).
 **Arreglo completo**: añadir movesets. Todas ellas ya tienen animaciones
 `attack`, `hurt`, `shoot` y `charge` en el manifiesto, así que no hace falta
 volver a importar sprites para empezar.
 
-### 3.3. Proyectiles, áreas y golpes diferidos de jugadores muertos siguen dañando y puntuando (medio)
+### 3.3. Proyectiles, áreas y golpes diferidos de jugadores muertos siguen dañando, curando y puntuando (medio)
 
-`canHit` no comprueba `attacker.alive` (`game.ts:2945-2952`).
-`updateProjectiles` (`game.ts:3811-4030`) y `updateActiveAoes`
-(`game.ts:4038-4098`) tampoco, y `executeAbility` no valida que el lanzador siga
-vivo (`game.ts:2797-2866`). Un proyectil o un área lanzados antes de morir
+`canHit` no comprueba `attacker.alive` (`game.ts:3879-3886`).
+`updateProjectiles` (`game.ts:4990-5210`) y `updateActiveAoes`
+(`game.ts:5217-5277`) tampoco, y `executeAbility` no valida que el lanzador siga
+vivo (`game.ts:3729-3800`). Un proyectil o un área lanzados antes de morir
 pueden matar después y sumar el KO al jugador muerto. Un área persistente puede
 seguir presionando una zona durante 2,5 s.
 
 La regla es además inconsistente: la melee sí revalida `attacker.alive`
-(`meleeHitValid`, `game.ts:4203-4228`) y las demás formas no. Desde `29565b7`
+(`meleeHitValid`, `game.ts:5385-5410`) y las demás formas no. Desde `29565b7`
 el daño de un lanzador muerto también se contabiliza en `damageDealt` y el
-recibido en `damageTaken`, así que el marcador final refleja KOs y daño de
-jugadores que ya estaban fuera. El mismo `canHit` permite que un proyectil o un
-área de un muerto apliquen también slow, control y empuje, no solo daño.
+recibido en `damageTaken` (`game.ts:4521-4525`), así que el marcador final
+refleja KOs y daño de jugadores que ya estaban fuera. El mismo `canHit` permite
+que un proyectil o un área de un muerto apliquen también slow, control y empuje,
+no solo daño. `knockOut` (`game.ts:4696-4767`) incrementa `killer.kills`, el
+`killFeed`, la racha, el multikill y la XP de un lanzador que ya está en el
+suelo, y el modo puede cerrar la partida con ese KO.
 
-Hay dos matices respecto a la revisión anterior:
+Hay tres matices respecto a la revisión anterior:
 
 - **Los casteos instantáneos encolados ya se descartan**: `knockOut` llama a
-  `cancelCast` (`game.ts:3550`), que marca `activeCast.canceled`; la fase
-  `resolveQueuedCasts` (`game.ts:2769-2790`) salta los casteos cancelados. Un
+  `cancelCast` (`game.ts:3406-3423`), que marca `activeCast.canceled`; la fase
+  `resolveQueuedCasts` (`game.ts:3700-3722`) salta los casteos cancelados. Un
   buff o una curación `self` encolados tampoco se aplican sobre el cadáver por
   esa misma vía.
 - **Los golpes de dash pendientes sí sobreviven**: si dos jugadores hacen dash
   en el mismo frame y el primero mata al segundo en `resolveInstantHits`
-  (`game.ts:4155-4190`), el golpe pendiente del segundo sigue pasando
+  (`game.ts:5337-5372`), el golpe pendiente del segundo sigue pasando
   `canHit`, porque solo se comprueba el objetivo. El muerto puede devolver el
   golpe desde el suelo y, si es letal, cerrar el intercambio.
+- **Las áreas de soporte también siguen actuando**: `Pulso Primigenio`
+  (`abilities.ts:2661-2695`) es `overTime` y no es una canalización. Si Kyogre
+  muere después de lanzarlo, el segundo pulso sigue curando aliados y dando XP
+  de curación al caster muerto (`applyAoeHeal`, `game.ts:4337-4357`). Lo mismo
+  vale para cualquier `onEnd`/tick de un área persistente que cure, reviva o
+  aplique buffs: `updateActiveAoes` no comprueba al dueño.
 
 **Decisión pendiente**: si los proyectiles en vuelo deben sobrevivir al lanzador,
 hay que documentarlo y limitarlo a esas formas; si no, añadir `attacker.alive` a
 `canHit` (o comprobarlo en `updateProjectiles`, `updateActiveAoes`,
-`resolveInstantHits` y `applyAbilityDamage`) y descartar los golpes diferidos
-del muerto.
+`resolveInstantHits`, `applyAoeHeal`/`reviveAoeAlly` y `applyAbilityDamage`) y
+descartar los golpes diferidos del muerto. La misma comprobación debe impedir
+que ese daño o curación sume a `damageDealt`/`damageTaken`, `kills`, `killFeed`
+y XP.
 
 ### 3.4. La visión no interviene en el combate (alto, diseño)
 
-`canHit` no consulta `isTargetVisible` ni la ocultación (`game.ts:2945-2952`).
+`canHit` no consulta `isTargetVisible` ni la ocultación (`game.ts:3879-3886`).
 Las habilidades se lanzan por `facing` y pueden impactar a objetivos que el
-atacante no ve, y viceversa. La niebla es solo de render.
+atacante no ve, y viceversa. La niebla es solo de render. La única excepción es
+la **ayuda de apuntado** (`aimAssistDirection`, `game.ts:3918-3961`), que
+comprueba la línea de visión directa del lanzador en el instante del disparo,
+pero solo corrige el ángulo de
+proyectiles/haces de jugadores humanos y no impide disparar a ciegas.
 
 Esto crea ventajas difíciles de leer:
 
@@ -493,14 +582,14 @@ Esto crea ventajas difíciles de leer:
 - No hay «me han visto al atacar» ni indicador de dirección del daño. El
   atacante puede matar desde fuera de la pantalla del rival.
 - El estado `hidden` de `Excavar` solo afecta a la visibilidad de actores
-  (`game.ts:4651-4653`); `canHit` no lo consulta. Hoy no hay un golpe atravesando
-  la invulnerabilidad porque `Excavar` también activa
-  `invulnerableTimer`, pero la regla de combate no protege por sí misma al
-  lanzador oculto.
+  (`game.ts:5866-5869`); `canHit` no lo consulta. Hoy no hay un golpe
+  atravesando la invulnerabilidad porque `Excavar` también activa
+  `invulnerableTimer` (`abilities.ts:2107-2145`), pero la regla de combate no
+  protege por sí misma al lanzador oculto.
 
 **Decisión pendiente sobre los proyectiles**: desde `a8f2345`, los proyectiles
 ignoran la ocultación por terreno al calcular sus capas
-(`combatFx.ts:1631-1640`, `game.ts:4440-4510`). Esto evita que desaparezcan al
+(`combatFx.ts:2648-2662`, `game.ts:5658-5720`). Esto evita que desaparezcan al
 cruzar hierba alta, pero un
 disparo originado en una zona oculta se ve a través de la vegetación y puede
 delatar la dirección del tirador. Hay que decidir si es el comportamiento
@@ -513,7 +602,7 @@ visión efectivo.
 ### 3.5. La Explosión de Voltorb es gratis a 1 PV (bajo)
 
 `applySelfDamage` calcula `amount = min(raw, max(0, hp - 1))` y no resta nada si
-estás a 1 PV (`game.ts:2897-2911`). Como el autodaño nunca mata, un Voltorb a
+estás a 1 PV (`game.ts:3831-3845`). Como el autodaño nunca mata, un Voltorb a
 1 PV puede usar Explosión sin coste; a 2 PV solo paga 1. No es un exploit enorme,
 pero sí una inconsistencia: el coste desaparece justo cuando más debería
 importar. Lo mismo afecta a `Pájaro Osado` de Ho-Oh, que también usa
@@ -522,38 +611,48 @@ importar. Lo mismo afecta a `Pájaro Osado` de Ho-Oh, que también usa
 **Arreglo**: añadir un autodaño mínimo (p. ej., 5 PV), un autostun de 0,5 s tras
 Explosión, o aceptar que el 1 PV es una excepción documentada.
 
-### 3.6. No se valida que haya dos equipos (alto)
+### 3.6. No se valida que haya dos equipos (alto; parcialmente mitigado por el límite de tiempo)
 
 `LobbyScreen` y `RosterScreen` solo comprueban que todos estén listos
 (`allReady`), no que haya al menos un jugador en cada equipo
-(`LobbyScreen.tsx:278`, `RosterScreen.tsx:100`). `continueToRoster` tampoco lo
-comprueba (`SessionProvider.tsx:425-451`), `matchConfigs` solo exige un humano y
-que todos estén listos (`SessionProvider.tsx:624-650`) y `startMatch` solo valida
-que haya un humano y que los assets existan (`game.ts:996-1037`).
+(`LobbyScreen.tsx:301`, `RosterScreen.tsx:100`). `continueToRoster` tampoco lo
+comprueba (`SessionProvider.tsx:601-626`), `matchConfigs` solo exige un humano y
+que todos estén listos (`SessionProvider.tsx:828-854`) y `startMatch` solo valida
+que haya un humano y que los assets existan (`game.ts:1466-1507`).
 
-Un jugador solo puede empezar una partida 1v0: no hay rivales, no se puede
-conseguir ningún KO y la partida no termina nunca (no hay límite de tiempo ni
-condición de victoria alternativa). Lo mismo ocurre si todos los jugadores
-eligen el mismo equipo o si una desconexión vacía un equipo. `setPlayerTeam` y
-`leavePlayer` tampoco impiden dejar un equipo vacío
-(`SessionProvider.tsx:311-315, 418-423`).
+Desde v0.27.0 **sí hay límite de tiempo** (`DEFAULT_TIME_LIMIT_SECONDS = 300`;
+el lobby ofrece 180/300/480 s) y `advanceGameMode` llama a `resolveTimeout`
+(`game.ts:1956-1971`, `modes.ts:303-320`). Por eso una partida 1v0 ya no es
+infinita: al agotarse el tiempo termina en empate técnico (o gana el equipo con
+más marcador/daño). Pero sigue siendo una partida sin KOs posibles, y el resto
+de validaciones no existe:
 
-**Arreglo**: bloquear el inicio si algún equipo está vacío (o añadir un modo
-práctica explícito); añadir un límite de tiempo/condición de fin; validar
-también `MAX_TEAM_SIZE` y los slots duplicados en `startMatch`. `startMatch`
-tampoco comprueba que `config.team` pertenezca a los equipos activos del mapa,
-que los `deviceId`/slots sean únicos ni que la suma por equipo no supere
-`maxTeamSizeFor`; `configs.slice(0, MAX_PLAYERS)` solo recorta el total.
+- No se exige al menos un jugador en cada uno de los dos equipos activos.
+- `setPlayerTeam` y `leavePlayer` permiten vaciar un equipo
+  (`SessionProvider.tsx:449-482, 594-598`).
+- `startMatch` no comprueba `config.team` contra los equipos activos del mapa,
+  ni `MAX_TEAM_SIZE`, ni que los `slot`/`deviceId` sean únicos, ni que la suma
+  por equipo no supere `maxTeamSizeFor`; `configs.slice(0, MAX_PLAYERS)` solo
+  recorta el total (`game.ts:1498`).
+- Tampoco rechaza una especie sin moveset (§3.1) ni un `matchConfigs` con un
+  solo equipo.
+
+**Arreglo**: bloquear el inicio si no hay al menos un jugador en dos equipos
+distintos (o añadir un modo práctica explícito); validar en `startMatch` el
+equipo activo, el tamaño por equipo, los slots/device únicos y el kit; y no
+permitir que `leavePlayer`/una desconexión deje un equipo vacío sin cerrar o
+pausar la partida. El límite de tiempo ya evita el bloqueo infinito, pero no
+convierte una 1v0 en una partida válida.
 
 ### 3.7. La desconexión de un mando deja un jugador inmóvil en la partida (medio)
 
 `SessionProvider.syncDevices` elimina al jugador de la sesión cuando su mando
-desaparece (`src/session/SessionProvider.tsx:609-622`), pero `PlayScreen` registra
-`onDevicesChanged: () => {}` (`src/screens/PlayScreen.tsx:137`), así que durante
+desaparece (`src/session/SessionProvider.tsx:813-826`), pero `PlayScreen` registra
+`onDevicesChanged: () => {}` (`src/screens/PlayScreen.tsx:202`), así que durante
 la partida ni siquiera se llama a `syncDevices`; `Game` tampoco elimina ni
-congela al jugador de `matchPlayers`. El jugador sigue vivo, con su cámara y su
-vista, pero recibe `IDLE_INPUT` y se queda quieto; los rivales pueden matarlo
-repetidamente y farmear KOs.
+congela al jugador de `matchPlayers` (`game.ts:2641-2648`). El jugador sigue
+vivo, con su cámara y su vista, pero recibe `IDLE_INPUT` y se queda quieto; los
+rivales pueden matarlo repetidamente y farmear KOs.
 
 **Arreglo**: al detectar la desconexión, pausar la partida, eliminar al jugador
 (o sustituirlo por una IA/auto-return), o al menos conceder invulnerabilidad
@@ -563,13 +662,16 @@ hasta que vuelva a conectarse. No dejarlo como objetivo estático.
 
 `CombatStats.speed` se calcula (`pokedex.ts:76-90`) pero no se lee en ninguna
 parte del combate; la velocidad de movimiento sale de `POKEMON_SPEEDS`
-(`roster.ts:13-39`). El stat de Speed de la Pokédex es, por tanto, decorativo.
+(`roster.ts:13-41`). El stat de Speed de la Pokédex es, por tanto, decorativo.
 
 Además, `stepDash` usa `dash.speed` calculado en `executeDash` sin aplicar
-`slowMultiplier`, `terrainMultiplier` ni `buffMultiplier('speed')`
-(`abilityExecutors.ts:469-517`, `game.ts:2217-2351`): un Pokémon ralentizado o en
-terreno hostil hace el dash a la misma velocidad. Es una decisión de diseño,
-pero conviene documentarla o aplicar los modificadores al dash.
+`slowMultiplier`, `terrainMultiplier`, `buffMultiplier('speed')`, el
+multiplicador de clima (`atmosphereSpeedMultiplier`) ni el del escudo
+(`shieldSpeedMultiplier`) (`abilityExecutors.ts:498-546`,
+`game.ts:3074-3208`): un Pokémon ralentizado, en terreno hostil, bajo turbulencias
+o con Protección hace el dash a la misma velocidad. La velocidad normal sí los
+aplica (`game.ts:2699-2705`). Es una decisión de diseño, pero conviene
+documentarla o aplicar los modificadores al dash.
 
 También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 `Dragon`, `Flying`), así que Mewtwo, Mew, Lucario, Lugia, Ho-Oh y Celebi nunca
@@ -577,13 +679,13 @@ reciben el bonus `home` de 1,18× de velocidad/ocultación (`terrain.ts`).
 
 ### 3.10. Todos los dashes se detienen en cualquier jugador (medio, diseño)
 
-`dashPosition` resuelve cada paso con `resolvePosition` (`game.ts:4875-4918`), y
+`dashPosition` resuelve cada paso con `resolvePosition` (`game.ts:6095-6138`), y
 `resolvePosition` incluye a todos los jugadores vivos, sin filtrar equipo
-(`game.ts:4839-4855`). Además, el dash se corta cuando el paso avanza menos del
-35 % (`game.ts:4909-4914`). Por eso cualquier dash de kit se detiene al chocar
+(`game.ts:6059-6075`). Además, el dash se corta cuando el paso avanza menos del
+35 % (`game.ts:6130-6134`). Por eso cualquier dash de kit se detiene al chocar
 con un rival o un aliado, aunque `dashBlocksOnEnemies` esté desactivado. El flag
 solo precalcula `dashEnemyLimit` en `executeDash`
-(`abilityExecutors.ts:447-478`), que acorta la distancia antes de empezar; en un
+(`abilityExecutors.ts:476-496`), que acorta la distancia antes de empezar; en un
 choque frontal el resultado práctico es el mismo que la colisión. Impulso no es
 especial en esto:
 la descripción de que «se detiene en enemigos» vale para todos los dashes.
@@ -600,43 +702,128 @@ o documentar `dashBlocksOnEnemies` y unificar la distancia.
 
 ### 3.17. Ciclón: el área atraviesa obstáculos (medio)
 
-`Ciclón` (`abilities.ts:2173-2199`) declara `range 2`, `radius 2` y un
+`Ciclón` (`abilities.ts:2291-2318`) declara `range 2`, `radius 2` y un
 `aoeMovement` que avanza `progress * 10` durante 2,5 s. El centro nace 2 u por
 delante del lanzador y, en el último tick (t ≈ 2,02 s), está a ~10,1 u; con el
-radio de 2 u, el mayor hurtbox del roster (0,58 u) y el del objetivo (hasta
+radio de 2 u, el mayor hurtbox del roster (0,60 u) y el del objetivo (hasta
 0,58 u), el daño alcanza ~**13,2 u**. El aro visual llega a ~14,6 u al final,
 aunque ya no hace tick.
 
 Sigue abierto el movimiento: `executeAoe` recorta el centro inicial con
-`raycastColliderDistance` (`abilityExecutors.ts:319-330`), pero
+`raycastColliderDistance` (`abilityExecutors.ts:337-357`), pero
 `updateActiveAoes` aplica `aoe.movement` en cada frame sin volver a comprobar
-colliders ni límites del mapa (`game.ts:4055-4069`). La única línea de visión
-que se valida es la del centro actual del área al objetivo
-(`buildAoeContext`, `game.ts:3099-3105`), así que un ciclón que ya ha cruzado un
-muro puede golpear al otro lado.
+colliders ni límites del mapa (`game.ts:5217-5277`, movimiento en 5234-5248).
+La única línea de visión que se valida es la del centro actual del área al
+objetivo (`buildAoeContext`, `game.ts:4168-4175`), así que un ciclón que ya ha
+cruzado un muro puede golpear al otro lado. Tampoco se recorta contra
+`world.bounds`: en un mapa pequeño el centro puede salir del mapa y seguir
+haciendo ticks.
 
 **Impacto**: con 4 s de cooldown, 2 u de radio y ~112,5 de daño nominal, Lugia
-queda en ~191 % de vida media y 16/19 KOs en la foto actual de §4.3.1. Además,
-el alcance de daño (~13,2 u) supera la visión de Lugia (12,4 u), así que puede
+queda en ~191 % de vida media y 16/19 KOs en la foto de §4.3.1. Además, el
+alcance de daño (~13,2 u) supera la visión de Lugia (12,4 u), así que puede
 golpear desde fuera de la vista.
 
 **Arreglo**: recortar el centro contra colliders y límites en cada frame, o
-hacer que el área se detenga al chocar.
+hacer que el área se detenga al chocar. Lo mismo debe aplicarse a cualquier
+`aoeMovement` futuro, no solo a Ciclón.
 
 ### 3.18. Avisos de presentación de `validate:anims` (bajo)
 
-El validador termina en OK, pero deja cuatro avisos. `Pájaro Osado` (0250) no
-tiene anticipación visible porque su `startup` (0,40 s) es menor que el
-`HitFrame` del clip (0,25 s); `Hidrobomba` (0007), `Rayo Hielo` (0144) y
-`Fuego Sagrado` (0250) omiten la animación de carga porque no hay hueco antes
-del `HitFrame`.
+El validador termina en OK, pero deja **seis** avisos. `Pájaro Osado` (0250) y
+`Vuelo Dragón` (0384) no tienen anticipación visible porque su `startup`
+(0,40 s y 0,25 s) es menor que el `HitFrame` del clip (0,25 s y 0,12 s);
+`Cascada` (0130) tiene el mismo problema con 0,20 s frente a 0,18 s.
+`Hidrobomba` (0007), `Rayo Hielo` (0144) y `Fuego Sagrado` (0250) omiten la
+animación de carga porque no hay hueco antes del `HitFrame`.
 
 **Impacto**: el aviso de las habilidades cargadas no siempre coincide con la
 ventana real. Es un fallo de legibilidad, no de fórmula.
 
-**Arreglo**: ajustar el `startup` de Pájaro Osado o su clip para que la
-anticipación se vea, y dejar hueco de carga (o quitar la animación `charge`) en
-las otras tres.
+**Arreglo**: ajustar el `startup` de Pájaro Osado, Cascada y Vuelo Dragón o su
+clip para que la anticipación se vea, y dejar hueco de carga (o quitar la
+animación `charge`) en las otras tres.
+
+### 3.20. El daño residual del clima se salta Protección y no corta Regeneración (medio)
+
+`updateAtmosphere` resta el tick de arena/granizo directamente a `player.hp`
+(`game.ts:1360-1384`): no aplica `player.damageReduction`/`damageReductionTimer`
+(el mismo multiplicador que sí usa `applyAbilityDamage` en
+`game.ts:4475-4488`) ni llama a `breakRegen` (`game.ts:3348-3353`). Tampoco pasa
+por `applyHitControl`, así que no cancela dash/casteo.
+
+Consecuencias:
+
+- **Protección no reduce el clima.** `docs/common-abilities.md` dice que reduce
+  un 60 % **todo** el daño recibido, incluidos DoT y áreas; un tick de 2 % de la
+  vida máxima debería quedar en 0,8 %. Hoy entra completo.
+- **Regeneración no se corta.** El mismo documento dice que cualquier pérdida
+  de HP (incluido cada tick de DoT) corta la regeneración. Como `updateAtmosphere`
+  no llama a `breakRegen`, un Pokémon oculto puede seguir curando 5 PV/s
+  mientras recibe arena/granizo; en muchos tanques la curación supera el 2 %
+  cada 3 s. Además `hiddenTimer` no se reinicia, así que el siguiente tick de
+  regeneración puede empezar de inmediato.
+- **No hay hitstun/knockback/cancelación.** Es una decisión de diseño válida
+  (el clima no es un golpe), pero conviene documentarla junto al resto de la
+  regla.
+
+**Arreglo**: centralizar el daño ambiental en un helper que aplique
+`damageReduction` (sin autodaño), llame a `breakRegen` y actualice
+`damageTaken`/estadísticas; o, como mínimo, aplicar la reducción y cortar la
+regeneración en `updateAtmosphere`. Añadir un test que compare un tick de
+arena con y sin Protección y que compruebe que Regeneración se detiene.
+
+### 3.21. Las áreas de curación atraviesan muros (medio)
+
+`buildAoeContext` calcula `lineOfSight` para cada objetivo
+(`game.ts:4168-4175`) y `AoeTarget` lo expone (`aoeEffect.ts:124-130`). El
+`defaultAoeEffect` lo respeta para el daño (`aoeEffect.ts:257-260`) y
+`reviveAoeAlly` lo comprueba para `Deseo` (`game.ts:3285-3295`), pero los
+callbacks de curación no lo miran:
+
+- `Recuperación` de Mew (`abilities.ts:1637-1643`, 25 % a aliados).
+- `Recuperación` de Ho-Oh (`abilities.ts:2392-2398`, 15 % a aliados).
+- `Aguas Curativas` de Kyogre (`abilities.ts:2629-2635`, 15 % a aliados).
+- `Pulso Primigenio` (`abilities.ts:2677-2683`, 10 % a aliados en el segundo
+  pulso).
+
+`applyAoeHeal` (`game.ts:4337-4357`) no consulta `lineOfSight`; la única
+comprobación es la de `player.alive` dentro de `applyHealFraction`. Por eso un
+aliado detrás de un muro, una roca o una cordillera recibe la curación, aunque
+el daño de la misma área esté bloqueado. En `Pulso Primigenio` el contraste es
+directo: el pulso no daña a través de la pared, pero sí cura.
+
+**Arreglo**: añadir `if (!target.lineOfSight) continue;` a los callbacks de
+curación (o filtrar los aliados sin LOS en el motor antes de entregar
+`targets`); mantener el autohechizo del centro. Repetir la prueba de `Deseo`
+para cada área de curación.
+
+### 3.22. KOTH: las zonas de objetivo no se validan contra el mapa (medio)
+
+`parseObjectives` (`map.ts:172-199`) solo comprueba que `radius > 0` y que
+`x`/`z` sean números. `resolveObjectiveZones` (`game.ts:1898-1907`) las pasa
+tal cual a `createKothMode`, y `buildKothRoute` (`modes.ts:366-382`) genera
+cuatro puntos a `max(radius * 2, 6)` del centro **sin comprobar límites, agua,
+colliders ni terreno de equipo**. `spawnObjectiveMarker`
+(`game.ts:1910-1922`) dibuja el aro en la posición resultante.
+
+Consecuencias:
+
+- Una zona declarada dentro de un muro, una roca o agua profunda no se puede
+  pisar; si además no hay zona alternativa, la partida queda bloqueada hasta
+  el timeout (o se gana por daño).
+- La variante móvil puede teletransportar la colina a un punto fuera de
+  `world.bounds` o dentro de un collider; los bots intentan navegar a un punto
+  inalcanzable y se atascan.
+- Si el mapa no declara `objectives`, se usa el centro `(0,0)`, que también
+  puede ser inválido.
+- El aro de objetivo se dibuja fuera del mapa o encima de una pared.
+
+Es el equivalente de §3.12 para las zonas de control. **Arreglo**: validar las
+zonas al cargar el mundo (límites, `waterHigh`, `pointBlockedByColliders`,
+terreno de equipo) y descartarlas o sustituirlas por el centro válido más
+cercano; generar la ruta móvil con la misma validación y no permitir puntos
+fuera de `world.bounds`. El editor debería avisar de objetivos inválidos.
 
 ## 4. Estudio cuantitativo del balance
 
@@ -661,10 +848,11 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   radial reduce el daño según la distancia, así que el combo es una cota.
 - Los combos son una **cota superior** y una medida relativa, no una promesa de
   daño real: en la práctica hay rangos, startups, dashes y esquivas.
-- **Cobertura de esta simulación**: la matriz histórica de §4.3 usa 15 de las 18
-  especies con moveset de aquel momento. El roster actual tiene 27 especies y 24
-  con moveset; §4.3.1 añade una foto actual de los 20 atacantes contra los otros
-  19, pero §4.3-§4.5 siguen siendo la foto antigua. Los instintos comunes no
+- **Cobertura de esta simulación**: la matriz histórica de §4.3 usa 15 de las
+  18 especies con moveset de aquel momento. El roster actual tiene 27 especies y
+  24 con moveset; §4.3.1 añade una foto de los 20 atacantes de v0.22.0 contra
+  los otros 19, pero §4.3-§4.5 siguen siendo la foto antigua y §4.3.1 tampoco
+  incluye a Gyarados, Suicune, Kyogre ni Rayquaza. Los instintos comunes no
   están simulados: Protección reduce daño y Regeneración cura, pero no añaden
   potencia directa. Las tablas de §4.3-§4.6 se regeneraron el 2026-11-03 con
   este modelo y no incluyen el rebalanceo de v0.20-v0.22.
@@ -689,7 +877,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Voltorb | 115 | 50 | 70 | 75 | 75 | 120 | 0,34 | sí |
 | Lucario | 145 | 130 | 90 | 135 | 90 | 110 | 0,42 | sí |
 | Greninja | 147 | 115 | 87 | 123 | 91 | 142 | 0,42 | sí |
-| Gyarados | 170 | 145 | 99 | 80 | 120 | 101 | 0,56 | **NO** |
+| Gyarados | 170 | 145 | 99 | 80 | 120 | 101 | 0,56 | sí |
 | Tyranitar | 175 | 154 | 130 | 115 | 120 | 81 | 0,52 | sí |
 | Groudon | 175 | 170 | 160 | 120 | 110 | 110 | 0,56 | sí |
 | Mewtwo | 181 | 130 | 110 | 174 | 110 | 150 | 0,44 | sí |
@@ -760,7 +948,7 @@ el daño radial es menor.
 **Lectura**:
 
 - En la matriz histórica, la diferencia entre el mejor combo medio (Groudon
-  366 %) y el peor (Pikachu 69 %) es de **5,3×**. La foto actual (§4.3.1) baja
+  366 %) y el peor (Pikachu 69 %) es de **5,3×**. La foto de v0.22.0 (§4.3.1) baja
   a ~3,2×.
 - Groudon puede **matar de 100-0 a los 14 rivales** con una rotación; Tyranitar,
   Gengar y Moltres lo hacen contra 13 de 14.
@@ -775,13 +963,14 @@ el daño radial es menor.
   (Agilidad y Recuperación), pero su básica es la de mayor DPS y tiene 175 PV +
   curación. Es un duelista de sostén, no un burst.
 
-### 4.3.1. Foto actual del poder (2026-11-10)
+### 4.3.1. Foto del poder de v0.22.0 (20 especies)
 
 La tabla anterior es histórica. Esta es la simulación con `abilities.ts` de
 v0.22.0: 20 atacantes con moveset, 19 rivales por fila (todos los demás
 atacantes), áreas con el rival en el centro, DoT nominal y sin objetos ni
-instintos. Sirve para comparar el estado actual, no para mezclarla con la tabla
-de §4.3.
+instintos. Sirve para comparar el estado de entonces, no para mezclarla con la
+tabla de §4.3. **Hoy hay 24 movesets** (entran Gyarados, Suicune, Kyogre y
+Rayquaza), así que esta foto también se ha quedado corta.
 
 > **Nota (2026-11-10)**: la foto se generó antes del arreglo de 3.2. Las filas
 > con DoT incluyen el `+2` por tick y sobreestiman un poco el combo; las tablas
@@ -811,7 +1000,7 @@ de §4.3.
 | Pikachu | 74 | 121 | 128 | 90 % | 5/19 | 0 |
 | Mew | 116 | 122 | 99 | 73 % | 6/19 | 2 |
 
-**Lectura actual**:
+**Lectura de la foto de v0.22.0**:
 
 - La diferencia entre Tyranitar (231 %) y Mew (73 %) es de **~3,2×**, menor que
   el 5,3× histórico, pero sigue siendo un reparto muy desigual. Siete especies
@@ -832,7 +1021,7 @@ de §4.3.
 > La matriz completa 20×19 no se duplica aquí: se puede regenerar con el mismo
 > modelo de §4.1. Las tablas `tabla-danos-por-ataque.md` y
 > `dps-por-habilidad.md` ya se regeneran con `scripts/generate-damage-matrix.mjs`
-> e incluyen a los 20 atacantes actuales.
+> e incluyen a los 24 atacantes actuales.
 
 ### 4.4. Comparación de habilidades contra un objetivo neutro
 
@@ -844,7 +1033,7 @@ de §4.3.
 
 Daño esperado contra el defensor neutro (100 en todo, sin tipos; STAB incluido):
 
-> La tabla completa, con cada ataque contra cada uno de los 24 rivales y su
+> La tabla completa, con cada ataque contra todos los rivales del roster y su
 > efectividad, está en [`tabla-danos-por-ataque.md`](tabla-danos-por-ataque.md).
 > Se regenera con `node scripts/generate-damage-matrix.mjs`.
 
@@ -880,8 +1069,8 @@ Dos observaciones:
 ### 4.5. Matriz de combos (% de la vida del objetivo)
 
 > **Matriz histórica (2026-11-03, 15 especies).** No incluye a Onix, Celebi,
-> Lugia, Zapdos, Ho-Oh, Gyarados ni el rebalanceo posterior. La foto actual
-> resumida está en §4.3.1.
+> Lugia, Zapdos, Ho-Oh, Gyarados ni el rebalanceo posterior. La foto resumida de
+> v0.22.0 (20 especies) está en §4.3.1; hoy hay 24 movesets.
 
 Cada celda es el daño de las 4 habilidades del atacante (fila) contra el rival
 (columna), como porcentaje de la vida máxima del rival. `—` es el mirror.
@@ -1032,7 +1221,7 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 | Articuno | 6,8 | 11,6 | no | 9,5 u haz |
 | Moltres | 7,0 | 11,5 | no | 9,1 u área |
 | Gengar | 7,6 | 10,8 | no | 8,5 u proyectil / 8 u haz |
-| Gyarados | 6,2 | 10,2 | no | sin moveset |
+| Gyarados | 6,2 | 10,2 | Cascada 4,6 u | 10 u haz |
 | Scyther | 7,2 | 10,8 | Corte Aéreo 5 u | 2,7 u melee |
 | Pikachu | 6,9 | 11,0 | Ataque Rápido 4,5 u | 11 u haz |
 | Bulbasaur | 4,6 | 8,8 | no | 7,4 u área |
@@ -1089,19 +1278,22 @@ autodaño la convierte en una mala elección en 1v1.
 ### P0 — rompe la partida
 
 1. **Cobertura de movesets**: quedan 3 movesets por añadir (Eevee, Raikou y
-   Entei). El roster ya filtra las especies sin habilidades, así que no se
-   pueden seleccionar.
-2. **Validar dos equipos**: bloquear el inicio si un equipo está vacío (o añadir
-   un modo práctica explícito) y añadir un límite de tiempo/condición de fin.
-   Sin esto, una partida 1v0 no termina nunca.
+   Entei). El roster ya filtra las especies sin habilidades, pero `startMatch`
+   debe rechazar también una config con el kit vacío (§3.1).
+2. **Validar dos equipos**: bloquear el inicio si no hay al menos un jugador en
+   dos equipos distintos (o añadir un modo práctica explícito) y validar topes
+   por equipo, slots/device únicos y equipos activos del mapa. El límite de
+   tiempo ya evita la partida infinita, pero una 1v0 sigue siendo inválida
+   (§3.6).
 
 ### P1 — exploits y justicia
 
 3. **Daño de jugadores muertos**: añadir `attacker.alive` a `canHit` o
-   comprobarlo en `updateProjectiles`, `updateActiveAoes` y
-   `resolveInstantHits`; que ese daño no sume a `damageDealt`/`damageTaken` y
-   documentar si algún proyectil debe sobrevivir. Los casts instantáneos y los
-   buffs `self` ya se cancelan al morir.
+   comprobarlo en `updateProjectiles`, `updateActiveAoes`,
+   `resolveInstantHits` y `applyAbilityDamage`; que ese daño o curación no sume
+   a `damageDealt`/`damageTaken`, `kills`, `killFeed` ni XP; documentar si algún
+   proyectil debe sobrevivir. Los casts instantáneos y los buffs `self` ya se
+   cancelan al morir (§3.3).
 4. ~~**DoT**: aplicar el +2 de la fórmula una vez por área; o compensar la
    potencia por tick.~~ **Arreglado (2026-11-10)**: el `+2` se cobra una sola
    vez por objetivo y lanzamiento.
@@ -1111,66 +1303,88 @@ autodaño la convierte en una mala elección en 1v1.
 6. **Cobertura de tipos**: dar al menos un movimiento de cobertura a cada
     Pokémon, o suavizar las inmunidades en PvP. Sin cobertura, Mewtwo/Mew vs
     Greninja o Tyranitar es un 0 % literal.
+7. **Clima y Protección/Regeneración**: `updateAtmosphere` debe aplicar
+   `damageReduction` y llamar a `breakRegen` (§3.20). Es un exploit directo de
+   los dos instintos defensivos.
+8. **Curación de área**: las áreas de curación deben respetar
+   `target.lineOfSight` como ya hace `Deseo` con el revive (§3.21).
 
 ### P2 — ajuste de balance
 
-> Los puntos 8-20 son la propuesta histórica de 2026-11-03; varias potencias ya
+> Los puntos 9-28 son la propuesta histórica de 2026-11-03; varias potencias ya
 > cambiaron en v0.20-v0.22. Antes de aplicarlos, contrastarlos con §4.3.1 y con
-> `abilities.ts` actual; la lista se conserva como referencia de método.
+> `abilities.ts` actual; la lista se conserva como referencia de método. Los
+> puntos 29 y 32 son los cabos nuevos de la revisión 2026-11-14.
 
-7. **Presupuesto común de daño**: fijar objetivos, por ejemplo:
+9. **Presupuesto común de daño**: fijar objetivos, por ejemplo:
     - Básica: 40-75 DPS contra objetivo neutro, con las de rango/velocidad en la
       parte baja y las melee lentas en la alta.
-    - Combo completo: 90-140 % de la vida media (la foto actual de §4.3.1 va de
+    - Combo completo: 90-140 % de la vida media (la foto de v0.22.0 en §4.3.1 va de
       73 % a 231 %).
     - Definitiva: 60-110 de daño neutro, 12-18 s de cooldown, con el daño extra
       compensado por utilidad/alcance/autodaño.
-8. **Básicas de los starters**: dar STAB a Pikachu/Bulbasaur/Squirtle/Charmander
+10. **Básicas de los starters**: dar STAB a Pikachu/Bulbasaur/Squirtle/Charmander
     (por ejemplo, cambiar Placaje/Arañazo por un golpe elemental) o subir su
     potencia a 55-60. Hoy son 12-13 de daño neutro frente a 35-61 de los
     personajes con STAB.
-9. **Mewtwo**: bajar Telequinesis de 55 a 45 de potencia, cooldown de 0,6 a
+11. **Mewtwo**: bajar Telequinesis de 55 a 45 de potencia, cooldown de 0,6 a
     0,8 s, knockback de 1,4 a 0,6-0,7 u y alcance de 2,5 a 2,2 u; Psíquico de 95
     a 85; Psicoataque de 125 a 110; velocidad de 7,8 a 7,2 y visión de 12 a 10,5.
-10. **Gengar**: Bola Sombra 70 → 60; Come Sueños 90 → 80, curación 15 % → 10 %,
+12. **Gengar**: Bola Sombra 70 → 60; Come Sueños 90 → 80, curación 15 % → 10 %,
     cooldown 11 → 12; Bomba Lodo 25 → 20/s o cooldown 9 → 10.
-11. **Greninja**: Shuriken 45 → 40, cooldown 0,65 → 0,75; Tajo Umbrío 70 → 60;
+13. **Greninja**: Shuriken 45 → 40, cooldown 0,65 → 0,75; Tajo Umbrío 70 → 60;
     Pulso Umbrío 95 → 85, cooldown 10 → 11.
-12. **Moltres/Articuno**: Ataque Celeste 130 → 115; Ventisca 110 → 100; Onda
+14. **Moltres/Articuno**: Ataque Celeste 130 → 115; Ventisca 110 → 100; Onda
     Ígnea 65 → 55; Viento Gélido 55 → 50; cooldowns de las definitivas 15 → 16.
-13. **Scyther**: Golpe Furia 45 → 38 o cooldown 0,4 → 0,5; Tijera X 130 → 115;
+15. **Scyther**: Golpe Furia 45 → 38 o cooldown 0,4 → 0,5; Tijera X 130 → 115;
     Danza Espada 1,35 → 1,30.
-14. **Lucario**: Combate Cercano 125 → 115; Esfera Aura 60 → 55.
-15. **Pikachu**: Rayo 90 → 100 y cooldown 8 → 7; Impactrueno 40 → 50 y cooldown
+16. **Lucario**: Combate Cercano 125 → 115; Esfera Aura 60 → 55.
+17. **Pikachu**: Rayo 90 → 100 y cooldown 8 → 7; Impactrueno 40 → 50 y cooldown
     0,9 → 0,8; básica elemental de ~45 de potencia.
-16. **Bulbasaur**: Hoja Afilada 60 → 70 y cooldown 5 → 4,5; Lluevehojas 120 →
+18. **Bulbasaur**: Hoja Afilada 60 → 70 y cooldown 5 → 4,5; Lluevehojas 120 →
     130; Paralizador 10 → 8; valorar velocidad 4,2 → 4,6 o darle un dash corto.
-17. **Squirtle**: Hidrobomba 115 → 125; Rayo Burbuja 65 → 70;
+19. **Squirtle**: Hidrobomba 115 → 125; Rayo Burbuja 65 → 70;
     Acua Jet 45 → 55; valorar velocidad 4,8 → 5,1.
-18. **Charmander**: Arañazo elemental de ~48 o subir la básica a 50; Anillo Ígneo
+20. **Charmander**: Arañazo elemental de ~48 o subir la básica a 50; Anillo Ígneo
     110 → 120; Giro Fuego 35 → 40; valorar un dash corto o más velocidad.
-19. **Voltorb**: Explosión 175 → 220, autodaño 0,35 → 0,25, cooldown 18 → 16;
+21. **Voltorb**: Explosión 175 → 220, autodaño 0,35 → 0,25, cooldown 18 → 16;
     Chispa 65 → 70; añadir un autostun corto tras Explosión para que no sea un
     escape gratis.
-20. **Groudon y Tyranitar**: siguen en cabeza con 217 % y 231 % de vida media
+22. **Groudon y Tyranitar**: siguen en cabeza con 217 % y 231 % de vida media
     y 14-16 KOs de 19 en §4.3.1. Recortar Filo del Abismo/Terremoto y Roca
     Afilada/Triturar, o alargar sus cooldowns; con 175 PV y 130-160 de Def, un
     combo neutro de 227-231 sigue por encima del resto.
-21. **Burst global (opcional)**: si se quiere alargar el TTK, aplicar un
+23. **Burst global (opcional)**: si se quiere alargar el TTK, aplicar un
     multiplicador global de daño de 0,85-0,90 en PvP o subir la vida un 10-15 %.
     Con los combos actuales, una rotación completa puede matar en ~1 s.
-22. **Desconexión**: pausar/eliminar/auto-return al jugador cuyo mando
+24. **Desconexión**: pausar/eliminar/auto-return al jugador cuyo mando
     desaparece; hoy queda inmóvil y se le puede farmear.
-23. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
+25. **Stat Speed**: usarlo o documentar que la velocidad de movimiento es solo
     `roster.ts`; valorar aplicar slow/terreno al dash.
-24. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
+26. **Colisión de los dashes**: decidir si los dashes de kit atraviesan jugadores
     o no; hacer que `dashBlocksOnEnemies` y `dashEnemyLimit` (con LOS) controlen
     la regla, en vez de que `resolvePosition` detenga todas las dashes.
-25. **Ciclón**: recortar el centro contra colliders y límites en cada frame (o
+27. **Ciclón**: recortar el centro contra colliders y límites en cada frame (o
     detener el área al chocar). Con el alcance de daño (~13,2 u) sigue
     golpeando a través de muros y desde fuera de la visión de Lugia.
-26. **Avisos de animación**: corregir los avisos de `validate:anims` de Pájaro
-    Osado, Hidrobomba, Rayo Hielo y Fuego Sagrado.
+28. **Avisos de animación**: corregir los seis avisos de `validate:anims`
+    (Pájaro Osado, Cascada, Vuelo Dragón, Hidrobomba, Rayo Hielo y Fuego
+    Sagrado).
+29. **Zonas de KOTH**: validar `objectives` y la ruta móvil contra límites,
+    `waterHigh` y colliders; descartar o recolocar las inválidas (§3.22). Es el
+    equivalente de la validación de objetos de §3.12.
+30. ~~**Marcador de KOTH**: llevar los puntos como enteros (o redondear de forma
+    consistente para HUD, victoria y resultado) y no repetir la XP de captura
+    tras cada disputa.~~ **Arreglado (2026-11-14)**: `scores` recibe puntos
+    enteros, el resto por equipo se reinicia al cambiar de dueño y
+    `lastCaptureOwner` evita repetir la XP de captura.
+31. ~~**Visibilidad entre pasos fijos**: resolver `visibleByTeam` por paso de
+    simulación o documentar la tolerancia de 2 pasos para bots y aim assist.~~
+    **Arreglado (2026-11-14)**: `refreshCombatVisibility` resuelve la foto por
+    paso, `updateVision` la reutiliza y el aim assist comprueba la LOS directa.
+32. **Modos nuevos**: añadir tests de `resolveTimeout` (TDM/KOTH), del reparto
+    de XP por objetivo y de la validación de `modeSettings`; hoy son sistemas
+    nuevos sin cobertura.
 
 > Los números son un punto de partida para una primera pasada, no una verdad
 > absoluta. Conviene cambiarlos de pocos en pocos y volver a ejecutar la matriz.
@@ -1229,8 +1443,9 @@ así que se pueden añadir tests baratos:
 - **Jugador muerto**: matar al lanzador y comprobar que su proyectil, área o
   golpe de dash pendiente no sigue dañando ni suma KO (o documentar la excepción
   si los proyectiles en vuelo deben sobrevivir). Comprobar también que un cast
-  instantáneo encolado y un buff `self` se descartan, y que ese daño no
-  incrementa `damageDealt`/`damageTaken` del marcador.
+  instantáneo encolado y un buff `self` se descartan, que una curación/revive
+  diferida (`Pulso Primigenio`) no sigue actuando, y que ese daño no incrementa
+  `damageDealt`/`damageTaken`, `kills`, `killFeed` ni XP del marcador.
 - **Proyectiles al borde**: a 20 u/s con `dt` 0,05 y con `dt` 1/60, un objetivo
   en el borde nominal (`range + 0,4` desde el lanzador) debe recibir el golpe, y
   un roce lateral a 0,55 u del recorrido también. El último tramo se recorta al
@@ -1246,22 +1461,37 @@ así que se pueden añadir tests baratos:
   empieza a los 2 s oculto, cura 5 PV/s,
   se corta con daño/visibilidad/ataque/habilidad/muerte y no filtra el indicador
   al rival. Al morir con escudo, la esfera debe desaparecer.
+- **Clima y Protección/Regeneración**: un tick de arena o granizo debe quedar
+  reducido un 60 % con Protección y debe cortar Regeneración (incluido
+  `hiddenTimer`/`regenAccumulator`), igual que un golpe. Un slow o empuje sin
+  daño sigue sin cortarla, como documenta `common-abilities.md` (§3.20).
 - **HUD de Regeneración**: no debe mostrar la cuenta atrás cuando el jugador está
   siendo visto, ha muerto o está a vida máxima.
 - **Equipos**: `startMatch` debe rechazar una partida con un equipo vacío; si se
   cae un asset, debe devolver `false`, avisar por `onError` y no iniciar la
   partida (ningún jugador debe desaparecer sin aviso ni desalinear el HUD).
+  Añadir casos para `config.team` fuera de los equipos activos, `slot`/`deviceId`
+  duplicados, exceso de `maxTeamSizeFor` y una especie sin moveset (§3.1/§3.6).
 - **Visión/combate**: si se implementa el revelado, un atacante que hace daño
   desde fuera de la vista debe aparecer o indicarse durante N segundos.
 - **Visión y regeneración**: un rival con un árbol o una cordillera entre medias
   no debe sumar a `enemiesSeeing` aunque otro aliado suyo vea la zona; un rival
   con LOS directa debe hacerlo aunque la máscara de niebla vaya un frame atrás.
+- **Visibilidad entre pasos fijos**: con dos pasos de simulación en un render,
+  un rival que cruza tras un árbol en el primer paso no debe seguir siendo
+  objetivo visible de bots/aim assist en el segundo. Comprobar también que el
+  render sin paso reutiliza la última foto y que la cuenta atrás arranca con
+  una foto válida. Es la regresión de 3.24, ya corregida.
 - **Máscara de niebla**: con `updateHz = 15` (valor actual), un actor que se
   esconde tras un árbol no debe seguir dibujándose más de ~67 ms; un objeto en
   una zona que acaba de quedar a oscuras no debe poder recogerse con la
   visibilidad anterior.
 - **Revivir de área**: un aliado caído detrás de un muro no debe revivir con
   `Deseo` salvo que se documente explícitamente lo contrario.
+- **Curación de área y LOS**: un aliado detrás de un muro, roca o cordillera no
+  debe recibir `Recuperación`, `Aguas Curativas` ni el pulso de sanación de
+  `Pulso Primigenio`; el lanzador sí debe curarse a sí mismo. Comprobar que el
+  daño de la misma área sigue bloqueado y que la curación no (§3.21).
 - **Proyectiles/niebla**: un disparo desde hierba alta debe verse al cruzar la
   vegetación; comprobar si el VFX revela la dirección del tirador y si eso es
   intencionado.
@@ -1326,7 +1556,19 @@ así que se pueden añadir tests baratos:
   la simulación usa pasos de 1/60; el primer tick debe caer en el instante
   esperado (±1 paso), no un frame de render tarde, y el `+2` no debe repetirse
   al aumentar el número de ticks.
-- **Ciclón**: el centro no debe cruzar muros, rocas ni árboles.
+- **Ciclón**: el centro no debe cruzar muros, rocas ni árboles y debe recortarse
+  a `world.bounds`.
+- **KOTH: zonas**: un mapa con un `objective` fuera de los límites, en agua
+  profunda o dentro de un collider debe rechazarlo o recolocarlo; la ruta móvil
+  debe generar puntos válidos y no teletransportar la colina dentro de una pared
+  (§3.22).
+- **KOTH: marcador**: dos equipos con el mismo tiempo de control deben mostrar
+  el mismo entero y, si el HUD los pinta empatados, `scoreLeader` no debe elegir
+  uno por una fracción invisible; la XP de captura no debe repetirse solo por
+  una disputa. Es la regresión de 3.23, ya corregida.
+- **KOTH: timeout**: `resolveTimeout` debe elegir al líder por marcador, luego
+  por daño, y declarar empate si persiste; el resultado debe coincidir con el
+  marcador mostrado.
 - **Descripciones**: un test de datos debe comprobar que `aoeDuration` y el
   `dash`/`aoeMovement` de Ciclón y Fuego Sagrado coinciden con sus textos.
 - **Visión de un KO**: un humano o bot KO no debe revelar actores ni objetos al
@@ -1364,6 +1606,14 @@ Un script de balance como el usado para este informe se puede añadir a
   todas las formas de golpe; en los bots cubre melee, dash, área y también
   `projectile`. La colisión de movimiento y la navegación de los bots
   quedan separadas y se pueden revertir con un flag.
+- Los modos de juego (`tdm`/`koth`) están desacoplados del motor: declaran sus
+  ajustes, reciben eventos y devuelven resultado/XP. El límite de tiempo y
+  `finishMatch` centralizan el cierre, y la colina móvil reutiliza la navegación
+  de los bots sin meter reglas de modo en `Game`.
+- La XP (`xp.ts`) es decorativa y está separada del combate: no toca vida,
+  stats, daño ni cooldowns. El desglose, el nivel y el marcador consumen el mismo
+  estado, y la armadura de casteo reutiliza `applyHitControl` en lugar de crear
+  un sistema paralelo.
 - Las estadísticas de daño distinguen daño real (sin sobrepasar la vida restante)
   de autodaño y se emiten con el resto de `PlayerMatchStats`; el marcador final
   y el HUD las consumen sin lógica duplicada.
