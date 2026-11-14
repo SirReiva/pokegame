@@ -53,10 +53,32 @@ function concealmentClassFor(stats: PlayerMatchStats | undefined): string {
   return '';
 }
 
-/** Barra de vida de verde (100%) a amarillo y rojo (0%). */
-function hpColorFor(pct: number): string {
+/**
+ * Tramo de vida que separa cada muesca de la barra, en PV. Las barras se
+ * dividen en escalones como la de LoL para leer de un vistazo cuántos tramos
+ * quedan.
+ */
+const HP_STEP = 25;
+
+/** Degradado vertical de la barra de vida: verde (100%) a amarillo y rojo (0%). */
+function hpGradientFor(pct: number): string {
   const clamped = Math.max(0, Math.min(100, pct));
-  return `hsl(${(clamped * 1.2).toFixed(1)} 78% 52%)`;
+  const hue = (clamped * 1.2).toFixed(1);
+  return (
+    `linear-gradient(90deg, rgb(255 255 255 / 0.10) 0%, transparent 9%, ` +
+    `transparent 91%, rgb(0 0 0 / 0.20) 100%), ` +
+    `linear-gradient(180deg, hsl(${hue} 90% 64%) 0%, hsl(${hue} 82% 50%) 45%, ` +
+    `hsl(${hue} 72% 35%) 100%)`
+  );
+}
+
+/** Líneas de escalón cada `HP_STEP` PV sobre el ancho total de la barra. */
+function hpTicksFor(maxHp: number): string {
+  const stepPct = Math.max(6, Math.min(50, (HP_STEP / Math.max(1, maxHp)) * 100));
+  return (
+    `repeating-linear-gradient(to right, transparent 0 calc(${stepPct}% - 1.5px), ` +
+    `rgb(0 0 0 / 0.5) calc(${stepPct}% - 1.5px), rgb(0 0 0 / 0.5) ${stepPct}%)`
+  );
 }
 
 const COUNT_FORMAT = new Intl.NumberFormat('es-ES');
@@ -592,11 +614,22 @@ const PlayerHud = memo(function PlayerHud({
                 title={hpTitle}
               >
                 <div
-                  className="h-full rounded-full transition-[width,background-color] duration-150"
+                  className="h-full rounded-full transition-[width] duration-150"
                   style={{
                     width: `${hpPct}%`,
-                    backgroundColor: isDead ? '#5b6675' : hpColorFor(hpPct)
+                    backgroundImage: isDead
+                      ? 'linear-gradient(180deg, #7b8492 0%, #5b6675 45%, #3d4651 100%)'
+                      : hpGradientFor(hpPct),
+                    boxShadow:
+                      'inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -1px 0 rgb(0 0 0 / 0.35)'
                   }}
+                />
+                {/* Líneas de escalón: tramos de HP_STEP PV fijos sobre el ancho
+                    máximo, como en la barra de LoL. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ backgroundImage: hpTicksFor(playerStats.maxHp) }}
+                  aria-hidden="true"
                 />
                 {/* Franja metálica de la armadura de casteo: alineada a
                     la derecha con el tramo verde de la vida actual,
