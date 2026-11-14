@@ -4,6 +4,9 @@
 > bucle de juego**. No es una reescritura ni una migración a ECS: es una
 > extracción gradual de responsabilidades sobre lo que ya funciona.
 
+> Diagramas de todas las capas, con descripciones:
+> [arquitectura-diagrama.md](./arquitectura-diagrama.md).
+
 ## 1. Diagnóstico
 
 ### Lo que ya está bien
