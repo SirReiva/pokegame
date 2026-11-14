@@ -25,10 +25,15 @@ import { typeEffectiveness } from './typeChart';
  * está en casa, el que es débil a ese tipo lo pasa mal y el que lo resiste está
  * cómodo.
  */
-export type TerrainRelationReason = 'home' | 'hostile' | 'comfortable' | 'neutral';
+import type {
+  TerrainRelationReason,
+  TerrainSpeedReason
+} from './core/terrainSpeed';
 
-/** Alias histórico: la velocidad fue la primera en usar esta relación. */
-export type TerrainSpeedReason = TerrainRelationReason;
+export type {
+  TerrainRelationReason,
+  TerrainSpeedReason
+} from './core/terrainSpeed';
 
 export const TERRAIN_SPEED_FACTOR: Record<TerrainRelationReason, number> = {
   home: 1.18,

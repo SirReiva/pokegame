@@ -10,7 +10,6 @@
  * objetos con efectos distintos a la curación.
  */
 
-import type { MatchPlayerState } from './matchState';
 import type { PokemonEntry } from './types';
 
 export const ITEM_IDS = ['potion', 'superPotion'] as const;
@@ -23,9 +22,21 @@ export interface PickupSpawn {
   z: number;
 }
 
+/**
+ * Lo mínimo que un objeto necesita saber de un jugador.
+ *
+ * Es estructural a propósito: `MatchPlayerState` lo cumple sin que el catálogo
+ * de objetos tenga que importar el estado completo de la partida.
+ */
+export interface ItemPlayer {
+  alive: boolean;
+  hp: number;
+  maxHp: number;
+}
+
 /** Datos que recibe `canPickup`. */
 export interface ItemPickupContext {
-  player: MatchPlayerState;
+  player: ItemPlayer;
   pokemon: PokemonEntry;
 }
 

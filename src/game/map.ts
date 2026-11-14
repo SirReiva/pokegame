@@ -35,7 +35,9 @@ interface MapIndexFile {
   maps?: unknown;
 }
 
-const BASE_URL = import.meta.env.BASE_URL;
+// `import.meta.env` no existe cuando el módulo se importa desde Node (tests);
+// en Vite siempre está definido, así que el fallback solo afecta a herramientas.
+const BASE_URL = import.meta.env?.BASE_URL ?? '/';
 
 function mapsUrl(file: string): string {
   return `${BASE_URL}maps/${file.replace(/^\/+/, '')}`;

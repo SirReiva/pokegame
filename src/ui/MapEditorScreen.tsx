@@ -9,188 +9,84 @@ import {
 } from 'react';
 import type { MapIndexEntry } from '../game/map';
 import {
-  EDITOR_DEFAULT_SIZE,
-  EDITOR_DEFAULT_TILE_SIZE,
-  EDITOR_DEFAULT_WATER_HEIGHT,
-  EDITOR_HISTORY_LIMIT,
   EDITOR_MAX_SIZE,
   EDITOR_MIN_SIZE,
-  TERRAIN_SWATCHES,
-  applySnapshot,
   cellCenter,
   cloneBases,
   cloneMountains,
-  clonePickups,
-  cloneTiles,
   createEditorMap,
-  editorMapFromJson,
-  editorMapToJson,
   floodFillInPlace,
   paintCellInPlace,
   paintLineInPlace,
   paintRectInPlace,
-  readEditorDraft,
   resizeEditorMap,
   setBaseInPlace,
-  snapshotOf,
-  validateEditorMap,
-  type EditorBase,
   type EditorMap,
-  type EditorMapJson,
   type EditorMeta,
-  type EditorPickup,
-  type EditorSnapshot
+  type EditorPickup
 } from '../game/mapEditor';
-import {
-  ITEM_DEFINITIONS,
-  ITEM_IDS,
-  type ItemId
-} from '../game/items';
+import { ITEM_DEFINITIONS, type ItemId } from '../game/items';
 import {
   TEAM_IDS,
-  TERRAIN_IDS,
   TERRAINS,
+  TERRAIN_IDS,
   type BarrierKind,
   type MountainRange,
   type Team,
   type TerrainId
 } from '../game/terrain';
-import { TEAM_INFO } from '../game/multiplayer';
-import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
+import { drawEditorCanvas } from './editor/editorCanvas';
+import {
+  cellFromPointer as cellFromPointerAt,
+  findMountainLine as findMountainLineAt,
+  findMountainPoint as findMountainPointAt,
+  findMountainSegment as findMountainSegmentAt,
+  pointerCellFloat as pointerCellFloatAt
+} from './editor/editorGeometry';
+import {
+  buildJson as buildEditorJson,
+  copyJson as copyEditorJson,
+  exportJson as downloadEditorJson,
+  importRaw as importEditorMap,
+  loadExisting as fetchEditorMap,
+  onFileChange as readFileChange
+} from './editor/editorIo';
+import {
+  DEFAULT_MOUNTAIN_WIDTH,
+  SIZE_PRESETS,
+  TOOLS,
+  applyMapEdit,
+  barrierLabel,
+  loadDraft,
+  mapIssues,
+  mapWithBases,
+  mapWithMountains,
+  mapWithPickups,
+  mapWithTiles,
+  redoEdit,
+  saveDraft,
+  setupFormFrom,
+  teamLabel,
+  toolForKey,
+  undoEdit,
+  type Cell,
+  type EditorRect,
+  type EditorState,
+  type SetupForm,
+  type Tool
+} from './editor/editorModel';
+import { EditorPropertiesPanel, EditorToolsPanel } from './editor/EditorSidebar';
+import { EditorToolbar } from './editor/EditorToolbar';
+import { fieldClass, inputClass } from './editor/editorStyles';
 import { KeyPill } from './KeyPill';
 import { eyebrow } from './styles';
-import { TypeBadge } from './TypeBadge';
 
 interface MapEditorScreenProps {
   maps: MapIndexEntry[];
   onExit: () => void;
 }
 
-type Tool =
-  | 'pencil'
-  | 'fill'
-  | 'rect'
-  | 'eraser'
-  | 'mountain'
-  | 'pickup'
-  | 'base-blue'
-  | 'base-red'
-  | 'base-yellow'
-  | 'base-green';
-
-interface EditorState {
-  map: EditorMap | null;
-  undo: EditorSnapshot[];
-  redo: EditorSnapshot[];
-}
-
-interface SetupForm {
-  id: string;
-  name: string;
-  cols: string;
-  rows: string;
-  tileSize: string;
-  waterHeight: string;
-  fill: TerrainId;
-}
-
-interface Cell {
-  row: number;
-  col: number;
-}
-
-const DRAFT_KEY = 'newpoke.map-editor.draft.v1';
-const SIZE_PRESETS = [16, 24, 32, 48, 64, 76, 128];
-const DEFAULT_MOUNTAIN_WIDTH = 2.2;
-const MOUNTAIN_COLOR = 'rgba(216, 199, 170, 0.9)';
-const WALL_COLOR = 'rgba(184, 196, 210, 0.92)';
-const MOUNTAIN_SELECTED_COLOR = '#7ac74c';
-
-/** Etiqueta visible de un tipo de separador. */
-function barrierLabel(kind: BarrierKind | undefined): string {
-  return kind === 'wall' ? 'Muro' : 'Cordillera';
-}
-
-const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
-  { id: 'pencil', label: 'Lápiz', key: 'B', title: 'Pinta celdas al arrastrar' },
-  { id: 'fill', label: 'Relleno', key: 'G', title: 'Rellena la región conectada del mismo terreno' },
-  { id: 'rect', label: 'Rectángulo', key: 'R', title: 'Arrastra para pintar un rectángulo' },
-  { id: 'eraser', label: 'Borrador', key: 'E', title: 'Pinta con el terreno de fondo' },
-  {
-    id: 'mountain',
-    label: 'Separador',
-    key: 'M',
-    title: 'Cordilleras y muros: haz clic para añadir puntos; doble clic o Enter para cerrar'
-  },
-  {
-    id: 'pickup',
-    label: 'Objeto',
-    key: 'P',
-    title: 'Coloca pociones en la rejilla; clic derecho elimina el objeto de la celda'
-  },
-  { id: 'base-blue', label: 'Base azul', key: '1', title: 'Coloca o mueve la base del equipo azul' },
-  { id: 'base-red', label: 'Base roja', key: '2', title: 'Coloca o mueve la base del equipo rojo' },
-  { id: 'base-yellow', label: 'Base amarilla', key: '3', title: 'Coloca o mueve la base del equipo amarillo' },
-  { id: 'base-green', label: 'Base verde', key: '4', title: 'Coloca o mueve la base del equipo verde' }
-];
-
-const sectionTitle =
-  'mb-2 font-mono text-10.08 tracking-[0.16em] uppercase text-muted';
-const inputClass =
-  'w-full rounded-[9px] border border-line bg-night-830/80 px-2.5 py-1.5 font-mono text-12.16 text-ink outline-none transition-colors focus:border-accent/60';
-const fieldClass = 'flex flex-col gap-1 text-11.2 text-muted';
-
-function loadDraft(): EditorState {
-  try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const draft = readEditorDraft(parsed);
-      if (draft) {
-        return {
-          map: { ...draft, mountains: draft.mountains ?? [], pickups: draft.pickups ?? [] },
-          undo: [],
-          redo: []
-        };
-      }
-    }
-  } catch {
-    // Borrador corrupto o localStorage no disponible: se empieza de cero.
-  }
-  return { map: null, undo: [], redo: [] };
-}
-
-function setupFormFrom(map: EditorMap | null): SetupForm {
-  if (map) {
-    return {
-      id: map.meta.id,
-      name: map.meta.name,
-      cols: String(map.cols),
-      rows: String(map.rows),
-      tileSize: String(map.meta.tileSize),
-      waterHeight: String(map.meta.waterHeight),
-      fill: map.background
-    };
-  }
-  return {
-    id: 'mi-mapa',
-    name: 'Mi mapa',
-    cols: String(EDITOR_DEFAULT_SIZE),
-    rows: String(EDITOR_DEFAULT_SIZE),
-    tileSize: String(EDITOR_DEFAULT_TILE_SIZE),
-    waterHeight: String(EDITOR_DEFAULT_WATER_HEIGHT),
-    fill: 'jungle'
-  };
-}
-
-function teamColor(team: Team): string {
-  return TEAM_INFO[team].color;
-}
-
-function teamLabel(team: Team): string {
-  return TEAM_INFO[team].short;
-}
 
 export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const initial = useMemo(() => loadDraft(), []);
@@ -202,9 +98,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const [pickupType, setPickupType] = useState<ItemId>('potion');
   const [zoom, setZoom] = useState(1);
   const [hover, setHover] = useState<Cell | null>(null);
-  const [rect, setRect] = useState<{ rowA: number; colA: number; rowB: number; colB: number } | null>(
-    null
-  );
+  const [rect, setRect] = useState<EditorRect | null>(null);
   const [setupOpen, setSetupOpen] = useState(initial.map === null);
   const [form, setForm] = useState<SetupForm>(() => setupFormFrom(initial.map));
   const [formError, setFormError] = useState<string | null>(null);
@@ -234,8 +128,6 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   } | null>(null);
 
   const map = state.map;
-  const mapCols = map?.cols;
-  const mapRows = map?.rows;
 
   const commit = (next: EditorState) => {
     stateRef.current = next;
@@ -248,18 +140,10 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     setTool(next);
   };
 
-  const saveDraft = () => {
-    try {
-      const current = stateRef.current.map;
-      if (current) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(current));
-      else window.localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      // Sin espacio o en modo privado: el editor sigue funcionando en memoria.
-    }
-  };
+  const saveDraftNow = () => saveDraft(stateRef.current.map);
 
   const exitEditor = () => {
-    saveDraft();
+    saveDraftNow();
     onExit();
   };
 
@@ -269,38 +153,18 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const updateMap = (nextMap: EditorMap, pushHistory = true) => {
-    const current = stateRef.current;
-    if (!current.map) return;
-    const next: EditorState = pushHistory
-      ? {
-          map: nextMap,
-          undo: [...current.undo, snapshotOf(current.map)].slice(-EDITOR_HISTORY_LIMIT),
-          redo: []
-        }
-      : { map: nextMap, undo: current.undo, redo: current.redo };
-    commit(next);
+    if (!stateRef.current.map) return;
+    commit(applyMapEdit(stateRef.current, nextMap, pushHistory));
   };
 
   const undo = () => {
-    const current = stateRef.current;
-    if (!current.map || current.undo.length === 0) return;
-    const previous = current.undo[current.undo.length - 1];
-    commit({
-      map: applySnapshot(current.map, previous),
-      undo: current.undo.slice(0, -1),
-      redo: [...current.redo, snapshotOf(current.map)].slice(-EDITOR_HISTORY_LIMIT)
-    });
+    const next = undoEdit(stateRef.current);
+    if (next) commit(next);
   };
 
   const redo = () => {
-    const current = stateRef.current;
-    if (!current.map || current.redo.length === 0) return;
-    const next = current.redo[current.redo.length - 1];
-    commit({
-      map: applySnapshot(current.map, next),
-      undo: [...current.undo, snapshotOf(current.map)].slice(-EDITOR_HISTORY_LIMIT),
-      redo: current.redo.slice(0, -1)
-    });
+    const next = redoEdit(stateRef.current);
+    if (next) commit(next);
   };
 
   const mutateTiles = (
@@ -309,17 +173,15 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   ) => {
     const current = stateRef.current.map;
     if (!current) return;
-    const tiles = cloneTiles(current.tiles);
-    if (!mutate(tiles)) return;
-    updateMap({ ...current, tiles }, pushHistory);
+    const next = mapWithTiles(current, mutate);
+    if (next) updateMap(next, pushHistory);
   };
 
   const mutateBases = (mutate: (bases: EditorMap['bases']) => boolean, pushHistory = true) => {
     const current = stateRef.current.map;
     if (!current) return;
-    const bases = cloneBases(current.bases);
-    if (!mutate(bases)) return;
-    updateMap({ ...current, bases }, pushHistory);
+    const next = mapWithBases(current, mutate);
+    if (next) updateMap(next, pushHistory);
   };
 
   const mutateMountains = (
@@ -328,9 +190,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   ): boolean => {
     const current = stateRef.current.map;
     if (!current) return false;
-    const mountains = cloneMountains(current.mountains);
-    if (!mutate(mountains)) return false;
-    updateMap({ ...current, mountains }, pushHistory);
+    const next = mapWithMountains(current, mutate);
+    if (!next) return false;
+    updateMap(next, pushHistory);
     return true;
   };
 
@@ -340,9 +202,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   ): boolean => {
     const current = stateRef.current.map;
     if (!current) return false;
-    const pickups = clonePickups(current.pickups);
-    if (!mutate(pickups)) return false;
-    updateMap({ ...current, pickups }, pushHistory);
+    const next = mapWithPickups(current, mutate);
+    if (!next) return false;
+    updateMap(next, pushHistory);
     return true;
   };
 
@@ -466,15 +328,17 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     command(row, col, current, pushHistory);
   };
 
-  const cellFromPointer = (event: ReactPointerEvent<HTMLCanvasElement>): Cell | null => {
+  const cellFromPointer = (
+    event: ReactPointerEvent<HTMLCanvasElement>
+  ): Cell | null => {
     const current = stateRef.current.map;
     if (!current) return null;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return null;
-    const col = Math.floor(((event.clientX - bounds.left) / bounds.width) * current.cols);
-    const row = Math.floor(((event.clientY - bounds.top) / bounds.height) * current.rows);
-    if (row < 0 || col < 0 || row >= current.rows || col >= current.cols) return null;
-    return { row, col };
+    return cellFromPointerAt(
+      current,
+      event.currentTarget.getBoundingClientRect(),
+      event.clientX,
+      event.clientY
+    );
   };
 
   /** Posición del puntero en coordenadas fraccionarias de celda. */
@@ -483,131 +347,31 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   ) => {
     const current = stateRef.current.map;
     if (!current) return null;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return null;
-    return {
-      map: current,
-      col: ((event.clientX - bounds.left) / bounds.width) * current.cols,
-      row: ((event.clientY - bounds.top) / bounds.height) * current.rows,
-      threshold: Math.min(1.5, Math.max(0.35, (10 / bounds.width) * current.cols))
-    };
-  };
-
-  /** Punto de mundo a coordenadas fraccionarias de celda. */
-  const worldToCellFloat = (current: EditorMap, x: number, z: number) => {
-    const halfX = (current.cols * current.meta.tileSize) / 2;
-    const halfZ = (current.rows * current.meta.tileSize) / 2;
-    return {
-      col: (x + halfX) / current.meta.tileSize,
-      row: (z + halfZ) / current.meta.tileSize
-    };
+    return pointerCellFloatAt(
+      current,
+      event.currentTarget.getBoundingClientRect(),
+      event.clientX,
+      event.clientY
+    );
   };
 
   const findMountainPoint = (
     event: ReactPointerEvent<HTMLCanvasElement> | ReactMouseEvent<HTMLCanvasElement>
-  ): { rangeIndex: number; pointIndex: number } | null => {
+  ) => {
     const pointer = pointerCellFloat(event);
-    if (!pointer) return null;
-    let best: { rangeIndex: number; pointIndex: number } | null = null;
-    let bestDistance = pointer.threshold;
-    pointer.map.mountains.forEach((range, rangeIndex) => {
-      range.points.forEach(([x, z], pointIndex) => {
-        const point = worldToCellFloat(pointer.map, x, z);
-        const distance = Math.hypot(point.col - pointer.col, point.row - pointer.row);
-        if (distance <= bestDistance) {
-          bestDistance = distance;
-          best = { rangeIndex, pointIndex };
-        }
-      });
-    });
-    return best;
+    return pointer ? findMountainPointAt(pointer) : null;
   };
 
-  const distanceToSegment = (
-    px: number,
-    py: number,
-    ax: number,
-    ay: number,
-    bx: number,
-    by: number
-  ): number => {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const lengthSquared = dx * dx + dy * dy;
-    const t =
-      lengthSquared === 0
-        ? 0
-        : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared));
-    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-  };
-
-  const findMountainLine = (event: ReactPointerEvent<HTMLCanvasElement>): number | null => {
+  const findMountainLine = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const pointer = pointerCellFloat(event);
-    if (!pointer) return null;
-    let best: number | null = null;
-    let bestDistance = Infinity;
-    pointer.map.mountains.forEach((range, rangeIndex) => {
-      if (range.points.length < 2) return;
-      const limit =
-        Math.max(0.5, range.width / pointer.map.meta.tileSize / 2) + 0.25;
-      for (let index = 1; index < range.points.length; index++) {
-        const a = worldToCellFloat(pointer.map, ...range.points[index - 1]);
-        const b = worldToCellFloat(pointer.map, ...range.points[index]);
-        const distance = distanceToSegment(pointer.col, pointer.row, a.col, a.row, b.col, b.row);
-        if (distance <= limit && distance < bestDistance) {
-          bestDistance = distance;
-          best = rangeIndex;
-        }
-      }
-    });
-    return best;
+    return pointer ? findMountainLineAt(pointer) : null;
   };
 
-  /** Tramo más cercano y punto de inserción para añadir un vértice. */
   const findMountainSegment = (
     event: ReactPointerEvent<HTMLCanvasElement> | ReactMouseEvent<HTMLCanvasElement>
-  ): { rangeIndex: number; insertIndex: number; point: [number, number] } | null => {
+  ) => {
     const pointer = pointerCellFloat(event);
-    if (!pointer) return null;
-    let best: { rangeIndex: number; insertIndex: number; point: [number, number] } | null = null;
-    let bestDistance = Infinity;
-    const halfX = (pointer.map.cols * pointer.map.meta.tileSize) / 2;
-    const halfZ = (pointer.map.rows * pointer.map.meta.tileSize) / 2;
-
-    pointer.map.mountains.forEach((range, rangeIndex) => {
-      if (range.points.length < 2) return;
-      const limit =
-        Math.max(0.5, range.width / pointer.map.meta.tileSize / 2) + 0.25;
-      for (let index = 1; index < range.points.length; index++) {
-        const a = worldToCellFloat(pointer.map, ...range.points[index - 1]);
-        const b = worldToCellFloat(pointer.map, ...range.points[index]);
-        const dx = b.col - a.col;
-        const dy = b.row - a.row;
-        const lengthSquared = dx * dx + dy * dy;
-        const t =
-          lengthSquared === 0
-            ? 0
-            : Math.max(
-                0,
-                Math.min(1, ((pointer.col - a.col) * dx + (pointer.row - a.row) * dy) / lengthSquared)
-              );
-        const closestCol = a.col + t * dx;
-        const closestRow = a.row + t * dy;
-        const distance = Math.hypot(pointer.col - closestCol, pointer.row - closestRow);
-        if (distance <= limit && distance < bestDistance) {
-          bestDistance = distance;
-          best = {
-            rangeIndex,
-            insertIndex: index,
-            point: [
-              closestCol * pointer.map.meta.tileSize - halfX,
-              closestRow * pointer.map.meta.tileSize - halfZ
-            ]
-          };
-        }
-      }
-    });
-    return best;
+    return pointer ? findMountainSegmentAt(pointer) : null;
   };
 
   const selectMountain = (index: number) => {
@@ -906,46 +670,28 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     }
   };
 
-  const buildJson = (): EditorMapJson | null => {
-    const current = stateRef.current.map;
-    if (!current) return null;
-    const issues = validateEditorMap(current);
-    if (issues.length > 0) {
-      setToast(issues[0]);
-      return null;
-    }
-    return editorMapToJson(current);
+  const buildJson = () => {
+    const result = buildEditorJson(stateRef.current.map);
+    if (result.error) setToast(result.error);
+    return result.json;
   };
 
   const exportJson = () => {
     const json = buildJson();
     if (!json) return;
-    const text = `${JSON.stringify(json, null, 2)}\n`;
-    const blob = new Blob([text], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${json.id}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadEditorJson(json);
     setToast(`Mapa "${json.name}" exportado.`);
   };
 
   const copyJson = async () => {
     const json = buildJson();
     if (!json) return;
-    try {
-      await navigator.clipboard.writeText(`${JSON.stringify(json, null, 2)}\n`);
-      setToast('JSON copiado al portapapeles.');
-    } catch {
-      setToast('No se pudo copiar. Usa Exportar JSON.');
-    }
+    if (await copyEditorJson(json)) setToast('JSON copiado al portapapeles.');
+    else setToast('No se pudo copiar. Usa Exportar JSON.');
   };
 
   const importRaw = (raw: unknown) => {
-    const imported = editorMapFromJson(raw);
+    const imported = importEditorMap(raw);
     commit({ map: imported, undo: [], redo: [] });
     setTerrain(imported.background);
     setZoom(1);
@@ -960,28 +706,15 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      const raw: unknown = JSON.parse(await file.text());
-      importRaw(raw);
-    } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : 'El archivo no es un JSON válido.';
-      if (setupOpen) setFormError(message);
-      else setToast(message);
-    }
+    const errorMessage = await readFileChange(event, importRaw);
+    if (errorMessage === null) return;
+    if (setupOpen) setFormError(errorMessage);
+    else setToast(errorMessage);
   };
 
   const loadExisting = async (entry: MapIndexEntry) => {
     try {
-      const file = entry.file.replace(/^\/+/, '');
-      const response = await fetch(`${import.meta.env.BASE_URL}maps/${file}`, {
-        cache: 'no-store'
-      });
-      if (!response.ok) throw new Error(`No se pudo cargar el mapa (HTTP ${response.status}).`);
-      importRaw(await response.json());
+      importRaw(await fetchEditorMap(entry));
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : 'No se pudo cargar el mapa.');
     }
@@ -1091,28 +824,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       }
       if (modifier) return;
 
-      const nextTool: Tool | null =
-        key === 'b'
-          ? 'pencil'
-          : key === 'g'
-            ? 'fill'
-            : key === 'r'
-              ? 'rect'
-              : key === 'e'
-                ? 'eraser'
-                : key === 'm'
-                  ? 'mountain'
-                  : key === 'p'
-                    ? 'pickup'
-                    : key === '1'
-                      ? 'base-blue'
-                      : key === '2'
-                        ? 'base-red'
-                        : key === '3'
-                          ? 'base-yellow'
-                          : key === '4'
-                            ? 'base-green'
-                            : null;
+      const nextTool = toolForKey(key);
       if (nextTool) {
         if (nextTool !== 'mountain') setDraftPoints([]);
         setTool(nextTool);
@@ -1176,12 +888,12 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   // --- Autoguardado y medidas ------------------------------------------------
 
   useEffect(() => {
-    const timer = window.setTimeout(saveDraft, 350);
+    const timer = window.setTimeout(saveDraftNow, 350);
     return () => window.clearTimeout(timer);
   }, [state.map]);
 
   // Al salir del editor se guarda el último cambio sin esperar al debounce.
-  useEffect(() => () => saveDraft(), []);
+  useEffect(() => () => saveDraftNow(), []);
 
   useEffect(() => {
     const element = gridAreaRef.current;
@@ -1225,7 +937,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     return result;
   }, [map]);
 
-  const issues = useMemo(() => (map ? validateEditorMap(map) : []), [map]);
+  const issues = useMemo(() => mapIssues(map), [map]);
 
   const hoverTerrain = hover && map ? map.tiles[hover.row][hover.col] : null;
 
@@ -1234,256 +946,19 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !map) return;
-
-    const cssWidth = cellSize * map.cols;
-    const cssHeight = cellSize * map.rows;
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const pixelWidth = Math.max(1, Math.round(cssWidth * ratio));
-    const pixelHeight = Math.max(1, Math.round(cssHeight * ratio));
-    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
-    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-    canvas.style.width = `${cssWidth}px`;
-    canvas.style.height = `${cssHeight}px`;
-
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, cssWidth, cssHeight);
-
-    for (let row = 0; row < map.rows; row++) {
-      const tiles = map.tiles[row];
-      for (let col = 0; col < map.cols; col++) {
-        context.fillStyle = TERRAIN_SWATCHES[tiles[col]];
-        context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-      }
-    }
-
-    if (cellSize >= 7) {
-      context.strokeStyle = 'rgba(0, 0, 0, 0.22)';
-      context.lineWidth = 1;
-      context.beginPath();
-      for (let col = 1; col < map.cols; col++) {
-        const offset = col * cellSize + 0.5;
-        context.moveTo(offset, 0);
-        context.lineTo(offset, cssHeight);
-      }
-      for (let row = 1; row < map.rows; row++) {
-        const offset = row * cellSize + 0.5;
-        context.moveTo(0, offset);
-        context.lineTo(cssWidth, offset);
-      }
-      context.stroke();
-    }
-
-    // --- Separadores ---------------------------------------------------------
-    const halfX = (map.cols * map.meta.tileSize) / 2;
-    const halfZ = (map.rows * map.meta.tileSize) / 2;
-    const toCanvas = (x: number, z: number) => ({
-      x: ((x + halfX) / map.meta.tileSize) * cellSize,
-      y: ((z + halfZ) / map.meta.tileSize) * cellSize
+    drawEditorCanvas({
+      canvas,
+      map,
+      cellSize,
+      hover,
+      rect,
+      terrain,
+      tool,
+      selectedMountain,
+      draftPoints,
+      mountainWidth,
+      barrierKind
     });
-
-    const tracePoints = (points: Array<[number, number]>) => {
-      if (points.length === 0) return;
-      const first = toCanvas(points[0][0], points[0][1]);
-      context.beginPath();
-      context.moveTo(first.x, first.y);
-      for (let index = 1; index < points.length; index++) {
-        const point = toCanvas(points[index][0], points[index][1]);
-        context.lineTo(point.x, point.y);
-      }
-    };
-
-    const showMountainHandles = tool === 'mountain';
-    map.mountains.forEach((range, index) => {
-      if (range.points.length === 0) return;
-      const selected = showMountainHandles && selectedMountain === index;
-      const isWall = range.kind === 'wall';
-      const bandWidth = Math.max(3, (range.width / map.meta.tileSize) * cellSize);
-      context.save();
-      context.lineCap = 'round';
-      context.lineJoin = 'round';
-      tracePoints(range.points);
-      context.strokeStyle = selected
-        ? 'rgba(122, 199, 76, 0.4)'
-        : isWall
-          ? 'rgba(142, 158, 176, 0.38)'
-          : 'rgba(196, 180, 158, 0.36)';
-      context.lineWidth = bandWidth;
-      context.stroke();
-      context.strokeStyle = selected
-        ? MOUNTAIN_SELECTED_COLOR
-        : isWall
-          ? WALL_COLOR
-          : MOUNTAIN_COLOR;
-      context.lineWidth = Math.max(1, Math.min(2, cellSize * 0.14));
-      context.stroke();
-      context.restore();
-    });
-
-    const drawBase = (base: EditorBase) => {
-      const centerX = (base.col + 0.5) * cellSize;
-      const centerY = (base.row + 0.5) * cellSize;
-      const radius = Math.max(3, cellSize * 1.1);
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.fillStyle = teamColor(base.team);
-      context.globalAlpha = 0.88;
-      context.fill();
-      context.globalAlpha = 1;
-      context.lineWidth = Math.max(1, cellSize * 0.16);
-      context.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-      context.stroke();
-      if (cellSize >= 14) {
-        context.fillStyle = '#08101a';
-        context.font = `700 ${Math.round(cellSize * 0.82)}px ui-monospace, monospace`;
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(
-          base.team === 'blue'
-            ? 'A'
-            : base.team === 'red'
-              ? 'R'
-              : base.team === 'yellow'
-                ? 'M'
-                : 'V',
-          centerX,
-          centerY + 0.5
-        );
-      }
-    };
-
-    for (const team of TEAM_IDS) {
-      const base = map.bases[team];
-      if (base) drawBase(base);
-    }
-
-    // --- Objetos recogibles --------------------------------------------------
-    map.pickups.forEach((pickup) => {
-      const definition = ITEM_DEFINITIONS[pickup.type];
-      const centerX = (pickup.col + 0.5) * cellSize;
-      const centerY = (pickup.row + 0.5) * cellSize;
-      const radius = Math.max(2.5, Math.min(cellSize * 0.7, 9));
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.fillStyle = definition.color;
-      context.globalAlpha = 0.92;
-      context.fill();
-      context.globalAlpha = 1;
-      context.lineWidth = Math.max(1, radius * 0.3);
-      context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
-      context.stroke();
-      if (cellSize >= 13) {
-        context.fillStyle = '#fff7ea';
-        context.font = `700 ${Math.max(7, Math.round(radius * 1.05))}px ui-monospace, monospace`;
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText(definition.shortLabel, centerX, centerY + 0.5);
-      }
-    });
-
-    if (showMountainHandles) {
-      map.mountains.forEach((range, index) => {
-        const selected = selectedMountain === index;
-        const radius = selected
-          ? Math.max(3.5, Math.min(8, cellSize * 0.42))
-          : Math.max(2, Math.min(5, cellSize * 0.3));
-        range.points.forEach(([x, z]) => {
-          const point = toCanvas(x, z);
-          context.beginPath();
-          context.arc(point.x, point.y, radius, 0, Math.PI * 2);
-          context.fillStyle = selected
-            ? MOUNTAIN_SELECTED_COLOR
-            : range.kind === 'wall'
-              ? 'rgba(214, 223, 234, 0.9)'
-              : 'rgba(235, 226, 209, 0.88)';
-          context.fill();
-          context.lineWidth = Math.max(1, radius * 0.35);
-          context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
-          context.stroke();
-        });
-      });
-    }
-
-    if (showMountainHandles && draftPoints.length > 0) {
-      const preview = hover
-        ? toCanvas(
-            (hover.col + 0.5) * map.meta.tileSize - halfX,
-            (hover.row + 0.5) * map.meta.tileSize - halfZ
-          )
-        : null;
-      const first = toCanvas(draftPoints[0][0], draftPoints[0][1]);
-
-      context.save();
-      context.lineCap = 'round';
-      context.lineJoin = 'round';
-      if (draftPoints.length >= 2 && mountainWidth > 0) {
-        tracePoints(draftPoints);
-        context.strokeStyle =
-          barrierKind === 'wall' ? 'rgba(142, 158, 176, 0.28)' : 'rgba(122, 199, 76, 0.24)';
-        context.lineWidth = Math.max(3, (mountainWidth / map.meta.tileSize) * cellSize);
-        context.stroke();
-      }
-      context.setLineDash([Math.max(4, cellSize * 0.4), Math.max(3, cellSize * 0.28)]);
-      context.strokeStyle = MOUNTAIN_SELECTED_COLOR;
-      context.lineWidth = Math.max(1.5, Math.min(2.5, cellSize * 0.16));
-      context.beginPath();
-      context.moveTo(first.x, first.y);
-      for (let index = 1; index < draftPoints.length; index++) {
-        const point = toCanvas(draftPoints[index][0], draftPoints[index][1]);
-        context.lineTo(point.x, point.y);
-      }
-      if (preview) context.lineTo(preview.x, preview.y);
-      context.stroke();
-      context.setLineDash([]);
-      draftPoints.forEach(([x, z]) => {
-        const point = toCanvas(x, z);
-        context.beginPath();
-        context.arc(point.x, point.y, Math.max(3, Math.min(7, cellSize * 0.36)), 0, Math.PI * 2);
-        context.fillStyle = MOUNTAIN_SELECTED_COLOR;
-        context.fill();
-        context.lineWidth = Math.max(1, cellSize * 0.08);
-        context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
-        context.stroke();
-      });
-      context.restore();
-    }
-
-    if (rect) {
-      const rowA = Math.min(rect.rowA, rect.rowB);
-      const rowB = Math.max(rect.rowA, rect.rowB);
-      const colA = Math.min(rect.colA, rect.colB);
-      const colB = Math.max(rect.colA, rect.colB);
-      context.globalAlpha = 0.62;
-      context.fillStyle = TERRAIN_SWATCHES[terrain];
-      context.fillRect(
-        colA * cellSize,
-        rowA * cellSize,
-        (colB - colA + 1) * cellSize,
-        (rowB - rowA + 1) * cellSize
-      );
-      context.globalAlpha = 1;
-      context.strokeStyle = 'rgba(255, 255, 255, 0.88)';
-      context.lineWidth = 2;
-      context.strokeRect(
-        colA * cellSize + 1,
-        rowA * cellSize + 1,
-        (colB - colA + 1) * cellSize - 2,
-        (rowB - rowA + 1) * cellSize - 2
-      );
-    }
-
-    if (hover && cellSize >= 3) {
-      context.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      context.lineWidth = Math.max(1, Math.min(3, cellSize * 0.15));
-      context.strokeRect(
-        hover.col * cellSize + 0.5,
-        hover.row * cellSize + 0.5,
-        cellSize - 1,
-        cellSize - 1
-      );
-    }
   }, [
     map,
     cellSize,
@@ -1498,141 +973,33 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   ]);
 
   const activeTool = TOOLS.find((entry) => entry.id === tool);
-  const selectedRange =
-    map && selectedMountain !== null ? map.mountains[selectedMountain] : undefined;
-  const selectedKind = selectedRange ? (selectedRange.kind ?? 'mountain') : barrierKind;
-  const mountainWidthValue = selectedRange?.width ?? mountainWidth;
   const canExport = map !== null && issues.length === 0;
 
   return (
     <div className="fixed inset-0 z-30 flex animate-fade-in flex-col bg-[radial-gradient(circle_at_18%_8%,#122033_0%,#080d15_46%,#05080d_100%)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-panel-strong px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <Brand compact />
-          <span className="hidden h-8 w-px bg-line sm:block" />
-          <div>
-            <span className={eyebrow}>Editor de mapas</span>
-            <h1 className="mt-0.5 text-17.6/tight">
-              {map ? map.meta.name || 'Mapa sin nombre' : 'Sin mapa'}
-            </h1>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button type="button" className={btnClass('ghost', 'small')} onClick={openNewMap}>
-            Nuevo
-          </button>
-          <button
-            type="button"
-            className={btnClass('ghost', 'small')}
-            onClick={() => fileRef.current?.click()}
-          >
-            Importar
-          </button>
-          <button
-            type="button"
-            className={btnClass('ghost', 'small')}
-            onClick={() => void copyJson()}
-            disabled={!canExport}
-          >
-            Copiar JSON
-          </button>
-          <button
-            type="button"
-            className={btnClass('primary', 'small')}
-            onClick={exportJson}
-            disabled={!canExport}
-          >
-            Exportar JSON
-          </button>
-          <button type="button" className={btnClass('ghost', 'small')} onClick={exitEditor}>
-            Salir
-          </button>
-        </div>
-      </header>
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={(event) => void onFileChange(event)}
+      <EditorToolbar
+        map={map}
+        canExport={canExport}
+        fileRef={fileRef}
+        openNewMap={openNewMap}
+        copyJson={copyJson}
+        exportJson={exportJson}
+        exitEditor={exitEditor}
+        onFileChange={onFileChange}
       />
 
       <div className="flex min-h-0 flex-1 max-[980px]:flex-col max-[980px]:overflow-y-auto">
-        <aside className="flex w-66 flex-none flex-col gap-4 overflow-y-auto border-r border-line bg-night-800/80 p-3 max-[980px]:w-full max-[980px]:border-r-0 max-[980px]:border-b">
-          <section>
-            <h2 className={sectionTitle}>Herramientas</h2>
-            <div className="grid grid-cols-2 gap-1.5">
-              {TOOLS.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  title={`${entry.title} (${entry.key})`}
-                  className={btnClass(tool === entry.id ? 'primary' : 'ghost', 'small')}
-                  onClick={() => changeTool(entry.id)}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-1.5 flex gap-1.5">
-              <button
-                type="button"
-                className={`${btnClass('ghost', 'small')} flex-1`}
-                onClick={undo}
-                disabled={state.undo.length === 0}
-              >
-                Deshacer
-              </button>
-              <button
-                type="button"
-                className={`${btnClass('ghost', 'small')} flex-1`}
-                onClick={redo}
-                disabled={state.redo.length === 0}
-              >
-                Rehacer
-              </button>
-            </div>
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Terrenos</h2>
-            <div className="flex flex-col gap-1">
-              {TERRAIN_IDS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  title={
-                    TERRAINS[id].type
-                      ? `${TERRAINS[id].name} · ${TERRAINS[id].type}`
-                      : `${TERRAINS[id].name} · sin tipo`
-                  }
-                  className={`flex w-full cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-left transition-colors ${
-                    terrain === id
-                      ? 'border-accent/70 bg-accent/10'
-                      : 'border-transparent hover:border-line hover:bg-white/4'
-                  }`}
-                  onClick={() => selectTerrain(id)}
-                >
-                  <span
-                    className="size-4 flex-none rounded-[3px] border border-black/40 shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]"
-                    style={{ background: TERRAIN_SWATCHES[id] }}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-xs text-steel-200">
-                    {TERRAINS[id].name}
-                  </span>
-                  {TERRAINS[id].type && (
-                    <TypeBadge type={TERRAINS[id].type} />
-                  )}
-                  <span className="w-8 text-right font-mono text-9.28 tabular-nums text-steel-800">
-                    {counts[id]}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </aside>
+        <EditorToolsPanel
+          tool={tool}
+          terrain={terrain}
+          counts={counts}
+          undoCount={state.undo.length}
+          redoCount={state.redo.length}
+          changeTool={changeTool}
+          undo={undo}
+          redo={redo}
+          selectTerrain={selectTerrain}
+        />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2 text-11.2 text-muted">
@@ -1729,439 +1096,32 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
           </footer>
         </main>
 
-        <aside className="flex w-71.5 flex-none flex-col gap-5 overflow-y-auto border-l border-line bg-night-800/80 p-4 max-[980px]:w-full max-[980px]:border-l-0 max-[980px]:border-t">
-          <section>
-            <h2 className={sectionTitle}>Datos del mapa</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <label className={`${fieldClass} col-span-2`}>
-                <span>Nombre</span>
-                <input
-                  className={inputClass}
-                  value={map?.meta.name ?? ''}
-                  onChange={(event) => updateMeta({ name: event.target.value })}
-                  disabled={!map}
-                />
-              </label>
-              <label className={`${fieldClass} col-span-2`}>
-                <span>Id (nombre del archivo)</span>
-                <input
-                  className={inputClass}
-                  value={map?.meta.id ?? ''}
-                  onChange={(event) => updateMeta({ id: event.target.value })}
-                  disabled={!map}
-                />
-              </label>
-              <label className={fieldClass}>
-                <span>Lado de celda</span>
-                <input
-                  className={inputClass}
-                  type="number"
-                  min={0.1}
-                  step={0.1}
-                  value={map?.meta.tileSize ?? ''}
-                  onChange={(event) => updateMeta({ tileSize: Number(event.target.value) })}
-                  disabled={!map}
-                />
-              </label>
-              <label className={fieldClass}>
-                <span>Altura del agua</span>
-                <input
-                  className={inputClass}
-                  type="number"
-                  step={0.1}
-                  value={map?.meta.waterHeight ?? ''}
-                  onChange={(event) => updateMeta({ waterHeight: Number(event.target.value) })}
-                  disabled={!map}
-                />
-              </label>
-              <label className={fieldClass}>
-                <span>Radio de base</span>
-                <input
-                  className={inputClass}
-                  type="number"
-                  min={0.5}
-                  step={0.1}
-                  value={map?.meta.baseRadius ?? ''}
-                  onChange={(event) => updateBaseRadius(Number(event.target.value))}
-                  disabled={!map}
-                />
-              </label>
-              <label className={fieldClass}>
-                <span>Ancho (columnas)</span>
-                <input
-                  key={`cols-${mapCols ?? 'sin-mapa'}`}
-                  ref={colsInputRef}
-                  className={inputClass}
-                  type="number"
-                  min={EDITOR_MIN_SIZE}
-                  max={EDITOR_MAX_SIZE}
-                  defaultValue={map?.cols ?? ''}
-                  disabled={!map}
-                />
-              </label>
-              <label className={fieldClass}>
-                <span>Alto (filas)</span>
-                <input
-                  key={`rows-${mapRows ?? 'sin-mapa'}`}
-                  ref={rowsInputRef}
-                  className={inputClass}
-                  type="number"
-                  min={EDITOR_MIN_SIZE}
-                  max={EDITOR_MAX_SIZE}
-                  defaultValue={map?.rows ?? ''}
-                  disabled={!map}
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              className={`${btnClass('ghost', 'small')} mt-2 w-full`}
-              onClick={applyResize}
-              disabled={!map}
-            >
-              Redimensionar rejilla
-            </button>
-            <p className="mt-2 text-10.88/normal text-muted">
-              Redimensionar conserva la esquina noroeste, rellena lo nuevo con el terreno de fondo y
-              desplaza los separadores con la rejilla.
-            </p>
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Bases</h2>
-            <div className="flex flex-col gap-1.5">
-              {TEAM_IDS.map((team) => {
-                const base = map?.bases[team];
-                return (
-                  <div
-                    key={team}
-                    className="flex items-center gap-2 rounded-[9px] border border-line bg-white/3 px-2 py-1.5"
-                  >
-                    <span
-                      className="size-2.5 flex-none rounded-full"
-                      style={{ background: teamColor(team) }}
-                    />
-                    <span className="text-11.84 text-steel-200">{teamLabel(team)}</span>
-                    <span className="ml-auto font-mono text-9.92 text-steel-450">
-                      {base ? `fila ${base.row} · col ${base.col}` : 'sin colocar'}
-                    </span>
-                    {base && (
-                      <button
-                        type="button"
-                        className="cursor-pointer rounded border border-transparent px-1 font-mono text-9.92 text-steel-500 transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
-                        onClick={() => removeBase(team)}
-                        title={`Quitar la base ${teamLabel(team).toLowerCase()}`}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {TEAM_IDS.map((team) => (
-                <button
-                  key={team}
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  onClick={() => changeTool(`base-${team}` as Tool)}
-                >
-                  {map?.bases[team] ? 'Mover' : 'Añadir'} {teamLabel(team).toLowerCase()}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-10.88/normal text-muted">
-              El mapa puede tener entre 2 y 4 equipos. Los equipos sin base no participan en la
-              partida.
-            </p>
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Objetos</h2>
-            <div className="flex flex-col gap-1">
-              {ITEM_IDS.map((id) => {
-                const definition = ITEM_DEFINITIONS[id];
-                const count = map
-                  ? map.pickups.filter((pickup) => pickup.type === id).length
-                  : 0;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded-[9px] border px-2 py-1.5 text-left transition-colors ${
-                      pickupType === id && tool === 'pickup'
-                        ? 'border-accent/70 bg-accent/10'
-                        : 'border-transparent hover:border-line hover:bg-white/4'
-                    }`}
-                    onClick={() => {
-                      setPickupType(id);
-                      changeTool('pickup');
-                    }}
-                    title={`${definition.description} Cooldown: ${definition.cooldownSeconds} s.`}
-                  >
-                    <span
-                      className="size-4 flex-none rounded-[3px] border border-black/40 shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]"
-                      style={{ background: definition.color }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs text-steel-200">
-                        {definition.name}
-                      </span>
-                      <span className="block font-mono text-9.28 text-steel-500">
-                        {definition.healHp} PV · {definition.cooldownSeconds} s
-                      </span>
-                    </span>
-                    <span className="w-8 text-right font-mono text-9.28 tabular-nums text-steel-800">
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-10.88/normal text-muted">
-              Elige un objeto y haz clic en la rejilla para colocarlo. El clic derecho elimina el
-              objeto de esa celda.
-            </p>
-            {map && map.pickups.length > 0 ? (
-              <div className="mt-2 flex max-h-44 flex-col gap-1 overflow-y-auto">
-                {map.pickups.map((pickup, index) => (
-                  <div
-                    key={`pickup-${pickup.row}-${pickup.col}`}
-                    className="flex items-center gap-1.5 rounded-[9px] border border-line bg-white/3 px-2 py-1.5"
-                  >
-                    <span
-                      className="size-2.5 flex-none rounded-full"
-                      style={{ background: ITEM_DEFINITIONS[pickup.type].color }}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-11.2 text-steel-200">
-                      {ITEM_DEFINITIONS[pickup.type].name}
-                    </span>
-                    <span className="font-mono text-9.28 text-steel-450">
-                      {pickup.row} · {pickup.col}
-                    </span>
-                    <button
-                      type="button"
-                      className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-13.6 text-muted transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
-                      onClick={() =>
-                        mutatePickups((pickups) => {
-                          if (!pickups[index]) return false;
-                          pickups.splice(index, 1);
-                          return true;
-                        })
-                      }
-                      title="Eliminar objeto"
-                      aria-label={`Eliminar ${ITEM_DEFINITIONS[pickup.type].name} de la celda ${pickup.row} · ${pickup.col}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 rounded-[9px] border border-line bg-white/3 px-2.5 py-2 text-10.88/normal text-muted">
-                Sin objetos colocados.
-              </p>
-            )}
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Separadores</h2>
-            <div className="flex flex-col gap-1.5">
-              {map && map.mountains.length > 0 ? (
-                map.mountains.map((range, index) => {
-                  const selected = tool === 'mountain' && selectedMountain === index;
-                  const label = barrierLabel(range.kind);
-                  return (
-                    <div
-                      key={`barrier-${index}`}
-                      className={`flex items-center gap-1.5 rounded-[9px] border px-2 py-1.5 ${
-                        selected
-                          ? 'border-accent/60 bg-accent/10'
-                          : 'border-line bg-white/3'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 cursor-pointer text-left"
-                        onClick={() => selectMountain(index)}
-                        title={`Seleccionar ${label.toLowerCase()} para mover sus puntos`}
-                      >
-                        <span className="block truncate text-11.84 text-steel-200">
-                          {label} {index + 1}
-                        </span>
-                        <span className="block font-mono text-9.6 text-steel-450">
-                          {range.points.length}{' '}
-                          {range.points.length === 1 ? 'punto' : 'puntos'} · ancho{' '}
-                          {Math.round(range.width * 10) / 10}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="flex size-6 flex-none cursor-pointer items-center justify-center rounded-md border border-transparent text-13.6 text-muted transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger-100"
-                        onClick={() => removeMountain(index)}
-                        title={`Eliminar ${label.toLowerCase()}`}
-                        aria-label={`Eliminar ${label.toLowerCase()} ${index + 1}`}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-[9px] border border-line bg-white/3 px-2.5 py-2 text-10.88/normal text-muted">
-                  Sin separadores. Usa «Dibujar separador» y haz clic en la rejilla para trazar uno.
-                </p>
-              )}
-            </div>
-
-            <div className={`${fieldClass} mt-2`}>
-              <span>
-                {selectedMountain !== null
-                  ? 'Tipo del separador seleccionado'
-                  : 'Tipo del nuevo separador'}
-              </span>
-              <div className="flex gap-1.5">
-                {(['mountain', 'wall'] as const).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    className={`${btnClass(selectedKind === kind ? 'primary' : 'ghost', 'tiny')} flex-1`}
-                    onClick={() => changeBarrierKind(kind)}
-                    disabled={!map}
-                    title={
-                      kind === 'wall'
-                        ? 'Muro de piedra con almenas: misma colisión y visión'
-                        : 'Cordillera de picos: misma colisión y visión'
-                    }
-                  >
-                    {kind === 'wall' ? 'Muro' : 'Cordillera'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className={`${fieldClass} mt-2`}>
-              <span>
-                {selectedMountain !== null
-                  ? `Ancho del ${selectedKind === 'wall' ? 'muro' : 'cordillera'} ${
-                      selectedMountain + 1
-                    }`
-                  : 'Ancho del nuevo separador'}
-              </span>
-              <input
-                className={inputClass}
-                type="number"
-                min={0.2}
-                step={0.1}
-                value={mountainWidthValue}
-                onChange={(event) => updateMountainWidth(Number(event.target.value))}
-                disabled={!map}
-              />
-            </label>
-
-            <div className="mt-2 flex gap-1.5">
-              <button
-                type="button"
-                className={`${btnClass('ghost', 'tiny')} flex-1`}
-                onClick={startMountainDraft}
-                disabled={!map}
-              >
-                Dibujar separador
-              </button>
-              {selectedMountain !== null && (
-                <button
-                  type="button"
-                  className={btnClass('ghost', 'tiny')}
-                  onClick={() => removeMountain(selectedMountain)}
-                >
-                  Eliminar
-                </button>
-              )}
-            </div>
-
-            {draftPoints.length > 0 && (
-              <div className="mt-2 rounded-[9px] border border-accent/40 bg-accent/8 px-2.5 py-2 text-10.88/normal text-steel-200">
-                Trazando {barrierKind === 'wall' ? 'muro' : 'cordillera'} · {draftPoints.length}{' '}
-                {draftPoints.length === 1 ? 'punto' : 'puntos'}
-                <div className="mt-1.5 flex gap-1.5">
-                  <button
-                    type="button"
-                    className={`${btnClass('primary', 'tiny')} flex-1`}
-                    onClick={finishDraft}
-                    disabled={draftPoints.length < 2}
-                  >
-                    Terminar
-                  </button>
-                  <button
-                    type="button"
-                    className={`${btnClass('ghost', 'tiny')} flex-1`}
-                    onClick={() => setDraftPoints([])}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <p className="mt-2 text-10.88/normal text-muted">
-              Elige arriba si el trazado es cordillera o muro. Haz clic para añadir puntos y doble
-              clic o <KeyPill>Enter</KeyPill> para cerrar. Arrastra un punto para moverlo; doble
-              clic sobre la línea añade uno y el clic derecho sobre un punto lo quita.
-            </p>
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Validación</h2>
-            {issues.length === 0 ? (
-              <p className="rounded-[9px] border border-accent/25 bg-accent/8 px-2.5 py-2 text-11.52 text-accent-soft">
-                El mapa está listo para exportar.
-              </p>
-            ) : (
-              <ul className="m-0 flex list-none flex-col gap-1 p-0">
-                {issues.map((issue) => (
-                  <li
-                    key={issue}
-                    className="rounded-[9px] border border-danger/25 bg-danger/8 px-2.5 py-1.5 text-11.2 leading-[1.45] text-danger-100"
-                  >
-                    {issue}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section>
-            <h2 className={sectionTitle}>Atajos</h2>
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-11.2 text-steel-350">
-              <li className="flex items-center gap-2">
-                <KeyPill>B</KeyPill> lápiz · <KeyPill>G</KeyPill> relleno
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>R</KeyPill> rectángulo · <KeyPill>E</KeyPill> borrador
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>1</KeyPill> base azul · <KeyPill>2</KeyPill> base roja
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>P</KeyPill> colocar objeto · clic derecho borra
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>M</KeyPill> separador · <KeyPill>Enter</KeyPill> cerrar trazado
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>Ctrl+Z</KeyPill> deshacer · <KeyPill>Ctrl+Y</KeyPill> rehacer
-              </li>
-              <li className="flex items-center gap-2">
-                <KeyPill>+ / −</KeyPill> zoom · <KeyPill>0</KeyPill> ajustar
-              </li>
-              <li className="text-10.88 leading-[1.45] text-muted">
-                Clic derecho pinta con el terreno de fondo. Con la herramienta Separador, quita
-                el último punto del trazado o el punto bajo el cursor.
-              </li>
-            </ul>
-          </section>
-        </aside>
+        <EditorPropertiesPanel
+          map={map}
+          colsInputRef={colsInputRef}
+          rowsInputRef={rowsInputRef}
+          tool={tool}
+          pickupType={pickupType}
+          selectedMountain={selectedMountain}
+          draftPoints={draftPoints}
+          barrierKind={barrierKind}
+          mountainWidth={mountainWidth}
+          issues={issues}
+          changeTool={changeTool}
+          setPickupType={setPickupType}
+          updateMeta={updateMeta}
+          updateBaseRadius={updateBaseRadius}
+          applyResize={applyResize}
+          removeBase={removeBase}
+          mutatePickups={mutatePickups}
+          selectMountain={selectMountain}
+          removeMountain={removeMountain}
+          changeBarrierKind={changeBarrierKind}
+          updateMountainWidth={updateMountainWidth}
+          startMountainDraft={startMountainDraft}
+          finishDraft={finishDraft}
+          clearDraftPoints={() => setDraftPoints([])}
+        />
       </div>
 
       {setupOpen && (

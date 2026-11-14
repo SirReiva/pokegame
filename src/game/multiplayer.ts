@@ -7,7 +7,17 @@
  */
 
 import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
+import type {
+  BotDifficulty,
+  MovementMode
+} from './core/match/config';
 import type { InputDeviceInfo } from './input';
+
+export type {
+  BotDifficulty,
+  MatchPlayerConfig,
+  MovementMode
+} from './core/match/config';
 import type {
   GameModeId,
   MatchEndReason,
@@ -58,8 +68,6 @@ export function normalizePlayerName(name: string, slot: number): string {
  * a la cámara. `tactical`: mira siempre hacia donde apunta la cámara, el eje Y
  * avanza o retrocede y el eje X desplaza lateralmente sin girar el cuerpo.
  */
-export type MovementMode = 'normal' | 'tactical';
-
 export const MOVEMENT_MODES: readonly MovementMode[] = ['normal', 'tactical'];
 
 export const DEFAULT_MOVEMENT_MODE: MovementMode = 'normal';
@@ -68,9 +76,6 @@ export const MOVEMENT_MODE_LABEL: Record<MovementMode, string> = {
   normal: 'Normal',
   tactical: 'Táctico'
 };
-
-/** Nivel de la IA. Compartido entre el lobby, el motor y el controlador. */
-export type BotDifficulty = 'easy' | 'normal' | 'hard' | 'expert';
 
 export const BOT_DIFFICULTIES: readonly BotDifficulty[] = [
   'easy',
@@ -308,21 +313,7 @@ export interface LobbyPlayer {
   botDifficulty?: BotDifficulty;
 }
 
-export interface MatchPlayerConfig {
-  slot: number;
-  name: string;
-  deviceId: string;
-  deviceKind: InputDeviceInfo['kind'];
-  team: Team;
-  pokemonId: string;
-  /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
-  skinId?: string;
-  commonAbilityId: CommonAbilityId;
-  /** Modo de control elegido por el jugador; los bots usan `normal`. */
-  movementMode: MovementMode;
-  isBot?: boolean;
-  botDifficulty?: BotDifficulty;
-}
+
 
 /** Estado de una habilidad para el HUD de cada vista. */
 export interface AbilityHud {

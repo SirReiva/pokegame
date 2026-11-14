@@ -15,7 +15,7 @@ import {
   sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
-import type { CombatFx, TelegraphHandle } from './combatFx';
+import type { CombatFxPort as CombatFx, TelegraphHandle } from './core/ports/fx';
 import type {
   ActiveAoe,
   ActiveCast,
@@ -119,7 +119,7 @@ export interface AbilityExecutorDeps {
    * Resuelve el golpe de un área: reúne a todos los Pokémon dentro del radio y
    * delega en el `aoeEffect` de la habilidad (o en el efecto por defecto).
    */
-  resolveAoeHit(hit: AoeHitInput): void;
+  resolveAoeHit(hit: AoeHitInput<MatchPlayerState, AbilityDef>): void;
   /**
    * Dispara un evento del ciclo de vida del área. El ejecutor lo usa para
    * avisar de `onCast` justo cuando el área aparece.

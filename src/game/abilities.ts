@@ -23,15 +23,60 @@
  */
 
 import type {
-  AoeEvent,
-  AoePrepareMovement,
   AoeEffect,
-  AoeMovement
-} from './aoeEffect';
-import type { PokemonType } from './typeChart';
+  AoeEvent,
+  AoeMovement,
+  AoePlayer,
+  AoePrepareMovement
+} from './core/abilities/aoe';
+import type {
+  AbilityDef,
+  RepeatCooldownSpec
+} from './core/abilities/def';
+import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
-export type AbilitySlot = 'basic' | 'skill1' | 'skill2' | 'skill3';
+import type {
+  AbilityShape,
+  AbilitySlot,
+  AoeDamageMode,
+  AoeShape,
+  AoeStyle,
+  BeamStyle,
+  BuffStat,
+  DamageCategory,
+  ImpactStyle,
+  ProjectileStyle,
+  StartupAnimationMode
+} from './core/abilities/styles';
+
+export type {
+  AoeEffect,
+  AoeEvent,
+  AoeMovement,
+  AoePlayer,
+  AoePrepareMovement
+} from './core/abilities/aoe';
+export type {
+  AbilityDef,
+  BuffSpec,
+  RepeatCooldownSpec,
+  SlowSpec
+} from './core/abilities/def';
+export type { PokemonType } from './core/typeChart';
+export type {
+  AbilityShape,
+  AbilitySlot,
+  AoeDamageMode,
+  AoeShape,
+  AoeStyle,
+  BeamStyle,
+  BuffStat,
+  DamageCategory,
+  ImpactStyle,
+  ProjectileStyle,
+  StartupAnimationMode
+} from './core/abilities/styles';
 
 export const ABILITY_SLOTS: AbilitySlot[] = ['basic', 'skill1', 'skill2', 'skill3'];
 
@@ -41,348 +86,6 @@ export const ABILITY_SLOT_LABEL: Record<AbilitySlot, string> = {
   skill2: 'Habilidad 2',
   skill3: 'Habilidad 3'
 };
-
-export type AbilityShape = 'melee' | 'projectile' | 'beam' | 'aoe' | 'dash' | 'self';
-
-/**
- * Geometría de las habilidades `aoe`.
- * - `circle`: círculo de `radius` centrado a `range` del lanzador.
- * - `cone`: cono de longitud `radius` que nace en ese mismo centro y se abre
- *   hacia delante con `halfAngle` de semiángulo.
- */
-export type AoeShape = 'circle' | 'cone';
-
-export type DamageCategory = 'physical' | 'special' | 'status';
-
-export type BuffStat = 'speed' | 'attack' | 'defense' | 'spAttack' | 'spDefense';
-
-/** Aspecto visual de un proyectil. */
-export type ProjectileStyle =
-  | 'orb'
-  | 'electric'
-  | 'fire'
-  | 'grass'
-  | 'poison'
-  | 'psychic'
-  | 'water'
-  | 'waterJet'
-  | 'aura'
-  | 'shuriken'
-  | 'shadow'
-  | 'ghost'
-  | 'air'
-  | 'ice'
-  | 'rock';
-
-/** Aspecto visual del impacto de una habilidad. */
-export type ImpactStyle =
-  | 'hit'
-  | 'electric'
-  | 'fire'
-  | 'grass'
-  | 'poison'
-  | 'spore'
-  | 'psychic'
-  | 'slash'
-  | 'arc'
-  | 'water'
-  | 'aura'
-  | 'steel'
-  | 'fighting'
-  | 'dark'
-  | 'jaw'
-  | 'shuriken'
-  | 'ghost'
-  | 'air'
-  | 'ice'
-  | 'rock'
-  | 'ground';
-
-/** Aspecto visual de un haz. */
-export type BeamStyle =
-  | 'electric'
-  | 'fire'
-  | 'grass'
-  | 'psychic'
-  | 'water'
-  | 'dark'
-  | 'ghost'
-  | 'air'
-  | 'ice'
-  | 'rock';
-
-/** Aspecto visual de un área. */
-export type AoeStyle =
-  | 'ring'
-  | 'fire'
-  | 'whirl'
-  | 'grass'
-  | 'poison'
-  | 'psychic'
-  | 'water'
-  | 'explosion'
-  | 'ghost'
-  | 'air'
-  | 'heat'
-  | 'sacredFlame'
-  | 'ice'
-  | 'blizzard'
-  | 'sheerCold'
-  | 'ground'
-  | 'fissure'
-  | 'burrow'
-  | 'recovery'
-  | 'cyclone'
-  /** Doble pulso de agua de Pulso Primigenio: dos ondas y una erupción central. */
-  | 'primordialPulse'
-  /** Rayo que cae del cielo y detona la explosión eléctrica al tocar el suelo. */
-  | 'thunder';
-
-/**
- * Reparto del daño de un área:
- * - `instant`: un único golpe al completar la preparación.
- * - `overTime`: el área permanece `aoeDuration` segundos y golpea cada
- *   `aoeTickInterval` a los enemigos que sigan dentro.
- */
-export type AoeDamageMode = 'instant' | 'overTime';
-
-/**
- * Cómo se reproduce la animación de carga durante el `startup`:
- * - `once`: se reproduce una vez y se ancla su `HitFrame` al efecto.
- * - `loop`: se usa `startupAnimationSpeed` y se repite hasta el efecto.
- */
-export type StartupAnimationMode = 'once' | 'loop';
-
-export interface BuffSpec {
-  stat: BuffStat;
-  /** Multiplicador: 1,25 = +25 %, 0,8 = −20 %. */
-  multiplier: number;
-  /** Duración en segundos. */
-  duration: number;
-}
-
-/** Ralentización aplicada a los enemigos alcanzados. */
-export interface SlowSpec {
-  /** Multiplicador de velocidad: 0,55 = 45 % más lento. */
-  multiplier: number;
-  /** Duración en segundos. */
-  duration: number;
-}
-
-/**
- * Rampa de enfriamiento al repetir la misma habilidad de forma consecutiva.
- * `step` y `max` son fracciones del cooldown base; `resetAfter` son los
- * segundos sin volver a usarla que reinician la racha.
- */
-export interface RepeatCooldownSpec {
-  step: number;
-  max: number;
-  resetAfter: number;
-}
-
-export interface AbilityDef {
-  /** Identificador único; se usa en `MOVESETS`. */
-  id: string;
-  name: string;
-  type: PokemonType;
-  category: DamageCategory;
-  shape: AbilityShape;
-  /** Potencia base de la fórmula de daño. 0 en habilidades de estado. */
-  power: number;
-  /** Enfriamiento en segundos. */
-  cooldown: number;
-  /**
-   * Rampa opcional al repetir la habilidad sin alternar con otra. `null` deja
-   * el cooldown fijo. Las básicas melee la usan para desincentivar el spam.
-   */
-  repeatCooldown: RepeatCooldownSpec | null;
-  /** Alcance en unidades de mundo (melee, proyectil, haz o centro del área). */
-  range: number;
-  /**
-   * Radio del proyectil, del golpe cuerpo a cuerpo o del área circular. En un
-   * área con `aoeShape: 'cone'` es la longitud del cono.
-   */
-  radius: number;
-  /** Semiángulo del cono (melee o `aoeShape: 'cone'`), en grados. */
-  halfAngle: number;
-  /** Velocidad del proyectil en u/s. */
-  projectileSpeed: number;
-  /** Aspecto visual del proyectil. */
-  projectileStyle: ProjectileStyle;
-  /** Aspecto visual del impacto. */
-  impactStyle: ImpactStyle;
-  /** Aspecto visual del haz (solo para `shape: 'beam'`). */
-  beamStyle: BeamStyle;
-  /** Aspecto visual del área (solo para `shape: 'aoe'`). */
-  aoeStyle: AoeStyle;
-  /**
-   * Geometría del área. `circle` usa `radius` alrededor del centro; `cone`
-   * nace en el centro y avanza `radius` hacia delante con `halfAngle`.
-   */
-  aoeShape: AoeShape;
-  /** Daño único o daño periódico mientras se permanece dentro. */
-  aoeDamageMode: AoeDamageMode;
-  /**
-   * Daño radial para habilidades de área. Si está activo, la potencia se
-   * escala linealmente desde el 100 % en el centro hasta `radialMinDamage`
-   * en el borde del radio.
-   */
-  radialDamage: boolean;
-  /**
-   * Multiplicador de potencia en el borde del área: `0` = 0 %, `0.35` = 35 %.
-   * El centro siempre hace el 100 %. Solo se usa si `radialDamage` es `true`.
-   */
-  radialMinDamage: number;
-  /** Duración del área en el suelo y del daño periódico en `overTime`. */
-  aoeDuration: number;
-  /** Intervalo entre golpes en modo `overTime` (segundos). */
-  aoeTickInterval: number;
-  /**
-   * Función opcional que recoloca el centro de un área durante el `startup`.
-   * El motor mueve con ella la marca del suelo; el centro resultante se usa al
-   * disparar el efecto. Sirve para que el aviso siga al lanzador mientras se
-   * mueve antes del impacto.
-   */
-  aoePrepareMovement?: AoePrepareMovement;
-  /**
-   * Función opcional que recoloca el centro de un área `overTime` en cada
-   * frame. Recibe el tiempo transcurrido y el centro original, y devuelve el
-   * centro actual en coordenadas de mundo. El motor mueve con él el daño de
-   * cada tick, el aro del equipo y el efecto visual. Solo se usa en `overTime`.
-   */
-  aoeMovement?: AoeMovement;
-  /**
-   * Callback opcional que decide qué efectos aplica cada golpe o tick del
-   * área. Recibe todos los Pokémon vivos dentro del radio (aliados, enemigos y
-   * el propio lanzador) y los aliados caídos cuyo marcador de KO está dentro,
-   * y elige a quién aplica daño, hitstun, empuje, slow, buffs, curación o
-   * revivir. Si se omite, se usa `defaultAoeEffect`.
-   */
-  aoeEffect?: AoeEffect;
-  /**
-   * Evento que se ejecuta al empezar el lanzamiento del área, antes del
-   * `startup`. Solo se usa con `shape: 'aoe'`.
-   */
-  onStart?: AoeEvent;
-  /**
-   * Evento que se ejecuta al aparecer el área, justo después del `startup` y
-   * antes del primer golpe o tick. Solo se usa con `shape: 'aoe'`.
-   */
-  onCast?: AoeEvent;
-  /**
-   * Evento que se ejecuta al terminar el área: al agotar su `aoeDuration` o,
-   * en las instantáneas, cuando acaba su duración visual. Solo se usa con
-   * `shape: 'aoe'`.
-   */
-  onEnd?: AoeEvent;
-  /** Nº de enemigos extra que puede atravesar un proyectil. */
-  pierce: number;
-  /** Distancia del dash en unidades de mundo. */
-  dashDistance: number;
-  /** Empuje aplicado al objetivo al impactar, en unidades de mundo. */
-  knockback: number;
-  /** Buffs que se aplican al lanzador al usar la habilidad. */
-  buffs: BuffSpec[];
-  /** Ralentización que se aplica a los enemigos golpeados. */
-  slow: SlowSpec | null;
-  /**
-   * Curación al lanzador como fracción de su vida máxima: `0.25` = 25 %.
-   * `0` desactiva la curación. Se aplica al ejecutar la habilidad salvo que
-   * `healOnHit` sea `true`.
-   */
-  healSelf: number;
-  /**
-   * Si es `true`, `healSelf` no se aplica al lanzar: solo cura cuando la
-   * habilidad impacta al menos en un enemigo. Lo usa `Come Sueños`.
-   */
-  healOnHit: boolean;
-  /**
-   * Autodaño al lanzador como fracción de su vida máxima: `0.35` = 35 %.
-   * `0` lo desactiva. Nunca le quita la última vida: si el golpe lo dejaría a
-   * 0, se queda con 1 PV.
-   */
-  selfDamage: number;
-  /** Si es `true`, el lanzador gana un escudo esférico y reducción de daño. */
-  shield: boolean;
-  /** Duración del escudo en segundos. */
-  shieldDuration: number;
-  /** Fracción de daño reducida mientras el escudo está activo (0-1). */
-  damageReduction: number;
-  /** Multiplicador de velocidad normal mientras el escudo está activo. */
-  shieldSpeedMultiplier: number;
-  /** Si es `true`, el dash se detiene al chocar con enemigos. */
-  dashBlocksOnEnemies: boolean;
-  /** Color del efecto, en 0-255. */
-  color: [number, number, number];
-  /**
-   * Tiempo desde el inicio del casteo hasta que ocurre el efecto. La
-   * presentación retima el clip para que su `HitFrame` caiga exactamente aquí.
-   */
-  startup: number;
-  /**
-   * Ventana de daño o desplazamiento que empieza con el efecto. En proyectiles
-   * y áreas instantáneas suele ser 0; en melee es el tiempo de compromiso del
-   * golpe y en dash la duración del desplazamiento.
-   */
-  active: number;
-  /** Tiempo desde el fin del efecto hasta que el lanzador vuelve a estar libre. */
-  recovery: number;
-  /**
-   * Animación de carga durante el `startup`; sin ella se usa `animation`.
-   * Si ambas son `null`, no se reproduce ninguna animación.
-   */
-  startupAnimation: AnimationName | null;
-  /** Cómo se reproduce `startupAnimation`. */
-  startupAnimationMode: StartupAnimationMode;
-  /** Velocidad de `startupAnimation` en modo `loop` (1 = normal). */
-  startupAnimationSpeed: number;
-  /**
-   * Animación de sprite que se reproduce al lanzar la habilidad.
-   * `null` = la habilidad no reproduce ninguna animación.
-   */
-  animation: AnimationName | null;
-  /**
-   * Permite moverse durante el `startup`. El efecto sigue fijado en el centro
-   * calculado al empezar el lanzamiento, así que el Pokémon puede salir de la
-   * zona mientras la marca sigue en el suelo. Sin efecto si `startup` es 0.
-   */
-  moveWhileStartup: boolean;
-  /**
-   * Clava al lanzador durante todo el casteo (`startup + active + recovery`),
-   * no solo durante el `startup`. Tiene prioridad sobre `moveWhileStartup`.
-   * Pensado para áreas canalizadas que deben impedir moverse hasta que termine
-   * la animación de lanzamiento.
-   */
-  blockMovementDuringCast: boolean;
-  /**
-   * PV de armadura del casteo: cada golpe resta su daño a este pozo sin
-   * mitigarlo y, mientras quede, no cancela el casteo ni aplica hitstun o
-   * empuje. Cuando el daño acumulado agota el pozo, el casteo se rompe. `0`
-   * desactiva la armadura. El valor es absoluto y se calibra contra las
-   * básicas rápidas.
-   */
-  armorPool: number;
-  /**
-   * Ventana de la armadura: `'startup'` cubre solo la preparación; `'cast'`
-   * cubre todo el casteo. En canalizaciones se infiere `'cast'`.
-   */
-  armorWindow: 'startup' | 'cast';
-  /**
-   * Clava al lanzador desde el inicio del casteo hasta que termina de
-   * reproducirse la animación de lanzamiento, aunque `moveWhileStartup` sea
-   * `true`. Después, la recuperación restante ya permite moverse. Si no hay
-   * animación, bloquea hasta el final del casteo.
-   */
-  blockMovementUntilEndAnimation: boolean;
-  /**
-   * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
-   * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
-   * frenazo de las habilidades instantáneas que se pueden usar en movimiento.
-   */
-  preserveMomentum: boolean;
-  /** Texto corto para el HUD y la descripción de la habilidad. */
-  description: string;
-}
 
 export type AbilityId = string;
 
@@ -574,25 +277,25 @@ export class AbilityBuilder {
    * Define la aplicación de efectos propia del área. Sin este callback se usa
    * el comportamiento estándar (daño a rivales + `slow` + control instantáneo).
    */
-  aoeEffect(effect: AoeEffect): this {
+  aoeEffect(effect: AoeEffect<AoePlayer, AbilityDef>): this {
     this.draft.aoeEffect = effect;
     return this;
   }
 
   /** Evento al empezar el lanzamiento del área. */
-  onStart(event: AoeEvent): this {
+  onStart(event: AoeEvent<AoePlayer, AbilityDef>): this {
     this.draft.onStart = event;
     return this;
   }
 
   /** Evento al aparecer el área, antes del primer golpe o tick. */
-  onCast(event: AoeEvent): this {
+  onCast(event: AoeEvent<AoePlayer, AbilityDef>): this {
     this.draft.onCast = event;
     return this;
   }
 
   /** Evento al terminar el área. */
-  onEnd(event: AoeEvent): this {
+  onEnd(event: AoeEvent<AoePlayer, AbilityDef>): this {
     this.draft.onEnd = event;
     return this;
   }
@@ -602,7 +305,7 @@ export class AbilityBuilder {
    * Se evalúa cada frame del `startup`; al disparar el efecto manda
    * `aoeMovement`.
    */
-  aoePrepareMovement(movement: AoePrepareMovement): this {
+  aoePrepareMovement(movement: AoePrepareMovement<AoePlayer, AbilityDef>): this {
     this.draft.aoePrepareMovement = movement;
     return this;
   }
@@ -612,7 +315,7 @@ export class AbilityBuilder {
    * Recibe el tiempo transcurrido y devuelve el centro en el mundo; el daño,
    * el aro y el efecto visual siguen ese centro.
    */
-  aoeMovement(movement: AoeMovement): this {
+  aoeMovement(movement: AoeMovement<AoePlayer, AbilityDef>): this {
     this.draft.aoeMovement = movement;
     return this;
   }
@@ -825,7 +528,9 @@ export function registerAbility(builder: AbilityBuilder): AbilityDef {
 /* Instintos comunes                                                         */
 /* ------------------------------------------------------------------------- */
 
-export type CommonAbilityId = 'proteccion' | 'impulso' | 'regeneracion';
+import type { CommonAbilityId } from './core/abilities/common';
+
+export type { CommonAbilityId } from './core/abilities/common';
 
 export const DEFAULT_COMMON_ABILITY: CommonAbilityId = 'proteccion';
 

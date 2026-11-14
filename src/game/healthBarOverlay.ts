@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import { DEG } from './config';
 import type { HealthBarArt } from './healthBar';
 import type { MatchPlayerState } from './matchState';
+import type { PlayerView } from './render/playerView';
 
 const worldPoint = new pc.Vec3();
 const screenPoint = new pc.Vec3();
@@ -45,7 +46,11 @@ export class HealthBarOverlay {
    * Proyecta y dibuja las barras de todos los jugadores en cada viewport.
    * `views` son las cámaras humanas y `players` todos los participantes.
    */
-  render(views: MatchPlayerState[], players: MatchPlayerState[]): void {
+  render(
+    views: MatchPlayerState[],
+    players: MatchPlayerState[],
+    viewsByPlayer: ReadonlyMap<MatchPlayerState, PlayerView>
+  ): void {
     const context = this.context;
     if (!context) return;
     if (!this.resize()) {
@@ -68,10 +73,12 @@ export class HealthBarOverlay {
 
     for (let viewIndex = 0; viewIndex < views.length; viewIndex++) {
       const viewer = views[viewIndex];
-      const camera = viewer.camera.entity.camera;
+      const viewerView = viewsByPlayer.get(viewer);
+      if (!viewerView) continue;
+      const camera = viewerView.camera.entity.camera;
       if (!camera) continue;
 
-      const rect = viewer.viewport;
+      const rect = viewerView.viewport;
       const left = rect.x * width;
       const top = (1 - rect.y - rect.h) * height;
       const right = left + rect.w * width;
@@ -85,14 +92,16 @@ export class HealthBarOverlay {
       context.rect(left + 1, top + 1, right - left - 2, bottom - top - 2);
       context.clip();
 
-      const cameraPosition = viewer.camera.position;
-      const forward = viewer.camera.entity.forward;
+      const cameraPosition = viewerView.camera.position;
+      const forward = viewerView.camera.entity.forward;
       const halfTan = Math.tan((camera.fov * DEG) / 2);
       const viewportHeight = bottom - top;
 
       for (const player of players) {
-        const copy = player.copies[viewIndex];
-        const bar = player.bar;
+        const playerView = viewsByPlayer.get(player);
+        if (!playerView) continue;
+        const copy = playerView.copies[viewIndex];
+        const bar = playerView.bar;
         if (!copy || !copy.isVisible || !bar || !bar.isVisible) continue;
 
         worldPoint.set(player.x, copy.barAnchorY, player.z);

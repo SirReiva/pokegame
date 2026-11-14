@@ -9,9 +9,12 @@
  */
 
 import type { PickupSpawn } from './items';
+import type { Team } from './core/team';
+import type { TerrainId } from './core/terrain';
 
 /** Equipos admitidos. Cada mapa activa entre dos y cuatro de ellos. */
-export type Team = 'red' | 'blue' | 'yellow' | 'green';
+export type { Team } from './core/team';
+export type { TerrainId } from './core/terrain';
 
 /** Todos los equipos posibles, en el orden de presentación de la interfaz. */
 export const TEAM_IDS: readonly Team[] = ['red', 'blue', 'yellow', 'green'];
@@ -19,28 +22,6 @@ export const TEAM_IDS: readonly Team[] = ['red', 'blue', 'yellow', 'green'];
 export function isTeamId(value: unknown): value is Team {
   return typeof value === 'string' && (TEAM_IDS as readonly string[]).includes(value);
 }
-
-export type TerrainId =
-  | 'jungle'
-  | 'lane'
-  | 'road'
-  | 'sand'
-  | 'waterLow'
-  | 'waterHigh'
-  | 'base'
-  | 'tallGrass'
-  | 'fire'
-  | 'electric'
-  | 'ice'
-  | 'poison'
-  | 'ghost'
-  | 'fairy'
-  | 'desert'
-  | 'park'
-  | 'teamRed'
-  | 'teamBlue'
-  | 'teamYellow'
-  | 'teamGreen';
 
 export interface TerrainDefinition {
   /** Nombre visible del terreno. */

@@ -99,16 +99,9 @@ export const CONCEALMENT_TYPE_FACTOR: Record<TerrainRelationReason, number> = {
   neutral: 1
 };
 
-export interface Concealment {
-  /** Ocultación base del terreno (0-1). */
-  base: number;
-  /** Multiplicador aplicado por los tipos del Pokémon. */
-  multiplier: number;
-  /** Ocultación final, ya limitada por `CONFIG.vision.maxConcealment`. */
-  value: number;
-  reason: TerrainRelationReason;
-  terrainType: string;
-}
+import type { Concealment } from './core/vision';
+
+export type { Concealment } from './core/vision';
 
 /** Ocultación que ofrece un terreno a un Pokémon concreto. */
 export function terrainConcealment(

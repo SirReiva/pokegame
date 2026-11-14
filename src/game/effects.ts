@@ -7,7 +7,7 @@
  */
 
 import type { AbilityDef } from './abilities';
-import type { CombatFx } from './combatFx';
+import type { CombatFxPort as CombatFx } from './core/ports/fx';
 import type { MatchPlayerState } from './matchState';
 
 export type Effect<Context> = (context: Context) => void;

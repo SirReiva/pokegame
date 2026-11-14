@@ -13,6 +13,14 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
   },
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        bench: "performance/bench.html",
+      },
+    },
+  },
 });
 
 function normalizeBase(value: string | undefined): string {
