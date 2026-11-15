@@ -136,6 +136,11 @@ mat4 effectEuler(float x, float y, float z) {
   return effectRotY(y) * effectRotX(x) * effectRotZ(z);
 }
 
+/** Composición intrínseca ZYX, la que usa Entity.setLocalEulerAngles. */
+mat4 effectEulerZYX(float x, float y, float z) {
+  return effectRotZ(z) * effectRotY(y) * effectRotX(x);
+}
+
 mat4 effectTRS(vec3 translation, vec3 scale, mat4 rotation) {
   mat4 result = rotation;
   result[0] *= scale.x;
@@ -273,6 +278,11 @@ fn effectRotZ(angle: f32) -> mat4x4f {
 
 fn effectEuler(x: f32, y: f32, z: f32) -> mat4x4f {
   return effectRotY(y) * effectRotX(x) * effectRotZ(z);
+}
+
+/** Composición intrínseca ZYX, la que usa Entity.setLocalEulerAngles. */
+fn effectEulerZYX(x: f32, y: f32, z: f32) -> mat4x4f {
+  return effectRotZ(z) * effectRotY(y) * effectRotX(x);
 }
 
 fn effectTRS(translation: vec3f, scale: vec3f, rotation: mat4x4f) -> mat4x4f {
@@ -431,6 +441,11 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_PROJECTILE_BLADES, wgslMotions.MOTION_PROJECTILE_BLADES_WGSL],
     [MOTION_PROJECTILE_FEATHERS, wgslMotions.MOTION_PROJECTILE_FEATHERS_WGSL],
     [MOTION_PROJECTILE_TRAIL, wgslMotions.MOTION_PROJECTILE_TRAIL_WGSL],
+    [MOTION_PROJECTILE_ORBIT_XZ, wgslMotions.MOTION_PROJECTILE_ORBIT_XZ_WGSL],
+    [MOTION_PROJECTILE_SPIN_RING, wgslMotions.MOTION_PROJECTILE_SPIN_RING_WGSL],
+    [MOTION_PROJECTILE_WISPS, wgslMotions.MOTION_PROJECTILE_WISPS_WGSL],
+    [MOTION_PROJECTILE_EYES, wgslMotions.MOTION_PROJECTILE_EYES_WGSL],
+    [MOTION_PROJECTILE_BUBBLE, wgslMotions.MOTION_PROJECTILE_BUBBLE_WGSL],
     [MOTION_GHOST_WISPS, wgslMotions.MOTION_GHOST_WISPS_WGSL],
     [MOTION_GHOST_EYES, wgslMotions.MOTION_GHOST_EYES_WGSL],
     [MOTION_RING, wgslMotions.MOTION_RING_WGSL],
@@ -2038,7 +2053,7 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
       a0.z * radius
     ),
     vec3(size, size * 2.444, size),
-    effectEuler(
+    effectEulerZYX(
       sin(uEffectTime * 8.0 + a0.w) * 25.0 * EFFECT_DEG,
       (uEffectTime * a1.w + a0.w * 40.0) * EFFECT_DEG,
       cos(uEffectTime * 7.0 + a0.w) * 30.0 * EFFECT_DEG
@@ -2061,11 +2076,154 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
   return effectTRS(
     vec3(0.0, a0.y * radius * 0.45, -radius * 2.2),
     vec3(a1.x, a1.y, a1.z),
-    effectEuler(
+    effectEulerZYX(
       0.0,
       sin(uEffectTime * 10.0 + a0.x) * 14.0 * EFFECT_DEG,
       a0.z * EFFECT_DEG
     )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Motas que orbitan en el plano XZ con un vaivén vertical.
+ * `anim0 = [ángulo base, velocidad angular, factor de órbita, fase vertical]`;
+ * `anim1 = [tamaño, frecuencia vertical, amplitud vertical, 0]`.
+ */
+export const MOTION_PROJECTILE_ORBIT_XZ = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float angle = a0.x + uEffectTime * a0.y;
+  float orbit = uEffectRadius * a0.z;
+  return effectTRS(
+    vec3(
+      cos(angle) * orbit,
+      sin(angle * a1.y + a0.w) * uEffectRadius * a1.z,
+      sin(angle) * orbit
+    ),
+    vec3(max(0.0001, a1.x)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros que giran sobre su centro con una velocidad por eje.
+ * `anim0 = [giro X base, giro Y base, giro Z base, 0]`;
+ * `anim1 = [velocidad X, velocidad Y, velocidad Z, escala]`.
+ */
+export const MOTION_PROJECTILE_SPIN_RING = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  vec3 angles = vec3(
+    a0.x + uEffectTime * a1.x,
+    a0.y + uEffectTime * a1.y,
+    a0.z + uEffectTime * a1.z
+  ) * EFFECT_DEG;
+  return effectTRS(
+    base[3].xyz,
+    vec3(max(0.0001, a1.w)),
+    effectEulerZYX(angles.x, angles.y, angles.z)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Jirones que ondean detrás de un proyectil fantasma. `anim0 = [fase, z en
+ * radios, tamaño en radios, 0]`; el resto se calcula con `uEffectRadius`.
+ */
+export const MOTION_PROJECTILE_WISPS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float wave = sin(uEffectTime * 8.0 + a0.x);
+  float scale = max(
+    0.0001,
+    uEffectRadius * a0.z *
+      (0.85 + sin(uEffectTime * 13.0 + a0.x) * 0.15)
+  );
+  return effectTRS(
+    vec3(
+      wave * uEffectRadius * 0.55,
+      sin(uEffectTime * 5.0 + a0.x) * uEffectRadius * 0.45,
+      a0.y * uEffectRadius
+    ),
+    vec3(scale, scale, scale * 2.4),
+    effectEulerZYX(
+      0.0,
+      wave * 22.0 * EFFECT_DEG,
+      sin(uEffectTime * 7.0 + a0.x) * 18.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Ojos que parpadean. `anim0 = [x, y, z en radios, 0]`;
+ * `anim1 = [ancho, alto, fondo en radios, 0]`.
+ */
+export const MOTION_PROJECTILE_EYES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float blink = sin(uEffectTime * 4.2) > 0.965 ? 0.08 : 1.0;
+  return effectTRS(
+    vec3(
+      a0.x * uEffectRadius,
+      a0.y * uEffectRadius,
+      a0.z * uEffectRadius
+    ),
+    vec3(
+      a1.x * uEffectRadius,
+      a1.y * uEffectRadius * blink,
+      a1.z * uEffectRadius
+    ),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Grupo de burbujas: cada instancia orbita con su grupo y aplica un
+ * desplazamiento local rotado con él.
+ * `anim0 = [fase, velocidad angular, factor de órbita, fase del vaivén]`;
+ * `anim1 = [tamaño, offset X, offset Y, offset Z]`;
+ * `anim2.x` es la amplitud del pulso de escala (0 en los brillos).
+ */
+export const MOTION_PROJECTILE_BUBBLE = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float angle = a0.x + uEffectTime * a0.y;
+  float orbit = uEffectRadius * a0.z;
+  vec3 group = vec3(
+    cos(angle) * orbit,
+    sin(angle) * orbit + sin(uEffectTime * 6.0 + a0.w) * uEffectRadius * 0.12,
+    sin(angle * 2.0 + a0.x) * uEffectRadius * 0.3
+  );
+  mat4 rot = effectEuler(
+    (uEffectTime * 150.0 + a0.x * 40.0) * EFFECT_DEG,
+    (uEffectTime * 210.0 + a0.x * 30.0) * EFFECT_DEG,
+    0.0
+  );
+  vec3 offset = (rot * vec4(a1.yzw, 0.0)).xyz;
+  float pulse = 1.0 + sin(uEffectTime * 14.0 + a0.x) * instance_anim2.x;
+  return effectTRS(
+    group + offset,
+    vec3(max(0.0001, a1.x * pulse)),
+    rot
   );
 }
 

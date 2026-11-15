@@ -4,6 +4,7 @@ import { DEG } from '../../config';
 import type { EffectHandle } from '../../core/ports/fx';
 import {
   EffectBatch,
+  MOTION_PROJECTILE_BUBBLE,
   MOTION_PROJECTILE_ORBIT,
   MOTION_PROJECTILE_RING,
   MOTION_PROJECTILE_WAKE
@@ -31,47 +32,54 @@ const root = new pc.Entity('water-projectile');
     const shineMaterial = ctx.createWaterMaterial([246, 255, 255], 0.92);
     const materials = [bubbleMaterial, shineMaterial];
 
-    const orbit = radius * 1.5;
+    // Las tres burbujas y sus seis brillos se dibujan en dos lotes. El grupo
+    // orbita, rueda y pulsa en el vertex shader; los brillos heredan la
+    // rotación del grupo para seguir patinando por su superficie.
     const sizes = [1, 0.8, 0.9];
-    const bubbles: {
-      entity: pc.Entity;
-      body: pc.Entity;
-      phase: number;
-      size: number;
-      orbit: number;
-      bob: number;
-    }[] = [];
+    const bodyInstances: EffectBatchInstance[] = [];
+    const shineInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const group = new pc.Entity('water-bubble');
-      root.addChild(group);
-
       const size = radius * 1.5 * sizes[index];
-      const body = ctx.createEntity(ctx.sphereMesh, [bubbleMaterial], group);
-      body.setLocalScale(size, size, size);
-
+      const anim0: [number, number, number, number] = [
+        (index / 3) * Math.PI * 2,
+        5.4,
+        1.5 * (0.94 + index * 0.08),
+        Math.random() * Math.PI * 2
+      ];
+      bodyInstances.push({
+        anim0,
+        anim1: [size, 0, 0, 0],
+        anim2: [0.09, 0, 0, 0]
+      });
       // Dos brillos pequeños: uno grande arriba a la izquierda y otro mínimo
-      // abajo a la derecha. Al girar el grupo, recorren la burbuja como reflejos.
-      const highlight = ctx.createEntity(
-        ctx.sphereMesh,
-        [shineMaterial],
-        group
-      );
-      highlight.setLocalPosition(-size * 0.22, size * 0.3, -size * 0.18);
-      highlight.setLocalScale(size * 0.3, size * 0.3, size * 0.3);
-
-      const spark = ctx.createEntity(ctx.sphereMesh, [shineMaterial], group);
-      spark.setLocalPosition(size * 0.2, -size * 0.16, -size * 0.22);
-      spark.setLocalScale(size * 0.14, size * 0.14, size * 0.14);
-
-      bubbles.push({
-        entity: group,
-        body,
-        phase: (index / 3) * Math.PI * 2,
-        size,
-        orbit: orbit * (0.94 + index * 0.08),
-        bob: Math.random() * Math.PI * 2
+      // abajo a la derecha.
+      shineInstances.push({
+        anim0,
+        anim1: [size * 0.3, -size * 0.22, size * 0.3, -size * 0.18]
+      });
+      shineInstances.push({
+        anim0,
+        anim1: [size * 0.14, size * 0.2, -size * 0.16, -size * 0.22]
       });
     }
+    const bubbleBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: bubbleMaterial,
+      instances: bodyInstances,
+      motion: MOTION_PROJECTILE_BUBBLE,
+      radius
+    });
+    const shineBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: shineMaterial,
+      instances: shineInstances,
+      motion: MOTION_PROJECTILE_BUBBLE,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -79,26 +87,8 @@ const root = new pc.Entity('water-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        for (const bubble of bubbles) {
-          // Las tres burbujas se persiguen en círculo en el plano perpendicular
-          // a la dirección de vuelo, así que el grupo rueda mientras avanza.
-          const angle = bubble.phase + time * 5.4;
-          bubble.entity.setLocalPosition(
-            Math.cos(angle) * bubble.orbit,
-            Math.sin(angle) * bubble.orbit +
-              Math.sin(time * 6 + bubble.bob) * radius * 0.12,
-            Math.sin(angle * 2 + bubble.phase) * radius * 0.3
-          );
-          // El grupo gira sobre sí mismo para que los brillos patinen.
-          bubble.entity.setLocalEulerAngles(
-            time * 150 + bubble.phase * 40,
-            time * 210 + bubble.phase * 30,
-            0
-          );
-          const pulse = 1 + Math.sin(time * 14 + bubble.phase) * 0.09;
-          const size = bubble.size * pulse;
-          bubble.body.setLocalScale(size, size, size);
-        }
+        bubbleBatch.setTime(time);
+        shineBatch.setTime(time);
         bubbleMaterial.opacity = 0.44 + Math.sin(time * 16) * 0.07;
         shineMaterial.opacity = 0.86 + Math.sin(time * 24) * 0.1;
         for (const material of materials) material.update();

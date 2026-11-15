@@ -62,7 +62,8 @@ Convenciones WGSL del motor (importante si se añade un shader):
 ### Añadir un movimiento de efecto
 
 1. Añade `MOTION_MI_EFECTO` en `src/game/effectBatch.ts` (GLSL).
-2. Añade `MOTION_MI_EFECTO_WGSL` en `src/game/effectMotionsWGSL.ts` con las
+2. Añade `MOTION_MI_EFECTO_WGSL` en `src/game/effectMotionsWGSL.ts` —o en
+   `src/game/effectMotionsProjectilesWGSL.ts` si es un proyectil— con las
    mismas funciones (`effectModel` y `effectLocalPosition`).
 3. Añade el par a `getMotionWgslSources()` en `effectBatch.ts`.
 4. Si falta el WGSL, la consola avisa y en WebGPU el efecto no se anima.

@@ -2,6 +2,13 @@ import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
 import type { EffectHandle } from '../../core/ports/fx';
+import {
+  EffectBatch,
+  MOTION_PROJECTILE_ORBIT_XZ,
+  MOTION_PROJECTILE_SPIN_RING,
+  MOTION_STATIC
+} from '../../effectBatch';
+import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
 import { createLightningMesh } from './fxGeometry';
 
@@ -451,37 +458,69 @@ const root = new pc.Entity('aura-projectile');
     const halo = ctx.createEntity(ctx.sphereMesh, [haloMaterial], root);
     halo.setLocalScale(radius * 5.2, radius * 5.2, radius * 5.2);
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalEulerAngles(70 + index * 40, index * 90, 0);
-      const scale = radius * (3.6 + index * 0.5);
-      ring.setLocalScale(scale, scale, scale);
-      rings.push(ring);
-    }
+    // Aros, motas y estela se dibujan con lotes instanciados: la rotación, la
+    // órbita y el pulso viven en el vertex shader.
+    const ringInstances: EffectBatchInstance[] = [
+      {
+        anim0: [70, 0, 0, 0],
+        anim1: [0, 210, 120, radius * 3.6]
+      },
+      {
+        anim0: [-60, 90, 0, 0],
+        anim1: [0, 260, 90, radius * 4.1]
+      }
+    ];
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_PROJECTILE_SPIN_RING,
+      radius
+    });
 
-    const motes: { entity: pc.Entity; phase: number; orbit: number; bob: number }[] =
-      [];
+    const moteInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 4; index++) {
-      const mote = ctx.createEntity(ctx.sphereMesh, [moteMaterial], root);
-      const size = radius * (0.28 + (index % 2) * 0.1);
-      mote.setLocalScale(size, size, size);
-      motes.push({
-        entity: mote,
-        phase: (index / 4) * Math.PI * 2,
-        orbit: radius * (2.6 + (index % 3) * 0.35),
-        bob: index * 1.6
+      moteInstances.push({
+        anim0: [
+          (index / 4) * Math.PI * 2,
+          4.6,
+          2.6 + (index % 3) * 0.35,
+          index * 1.6
+        ],
+        anim1: [radius * (0.28 + (index % 2) * 0.1), 1.6, 0.9, 0]
       });
     }
+    const moteBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: moteMaterial,
+      instances: moteInstances,
+      motion: MOTION_PROJECTILE_ORBIT_XZ,
+      radius
+    });
 
-    const trail: pc.Entity[] = [];
+    const trailInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const puff = ctx.createEntity(ctx.sphereMesh, [trailMaterial], root);
-      puff.setLocalPosition(0, 0, -radius * (2.4 + index * 2.1));
       const scale = radius * (1.9 - index * 0.45);
-      puff.setLocalScale(scale, scale, scale);
-      trail.push(puff);
+      trailInstances.push({
+        z: -radius * (2.4 + index * 2.1),
+        sx: scale,
+        sy: scale,
+        sz: scale
+      });
     }
+    new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: trailMaterial,
+      instances: trailInstances,
+      motion: MOTION_STATIC,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -508,17 +547,8 @@ const root = new pc.Entity('aura-projectile');
           radius * 5.2 * haloPulse
         );
 
-        rings[0].setLocalEulerAngles(70, time * 210, time * 120);
-        rings[1].setLocalEulerAngles(-60, 90 + time * 260, time * 90);
-
-        for (const mote of motes) {
-          const angle = mote.phase + time * 4.6;
-          mote.entity.setLocalPosition(
-            Math.cos(angle) * mote.orbit,
-            Math.sin(angle * 1.6 + mote.bob) * radius * 0.9,
-            Math.sin(angle) * mote.orbit
-          );
-        }
+        ringBatch.setTime(time);
+        moteBatch.setTime(time);
 
         coreMaterial.opacity = 0.9 + Math.sin(time * 30) * 0.08;
         bodyMaterial.opacity = 0.48 + Math.sin(time * 14) * 0.08;

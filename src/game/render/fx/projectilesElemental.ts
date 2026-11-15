@@ -5,8 +5,11 @@ import type { EffectHandle } from '../../core/ports/fx';
 import {
   EffectBatch,
   MOTION_PROJECTILE_BLADES,
+  MOTION_PROJECTILE_EYES,
   MOTION_PROJECTILE_FEATHERS,
-  MOTION_PROJECTILE_TRAIL
+  MOTION_PROJECTILE_TRAIL,
+  MOTION_PROJECTILE_WISPS,
+  MOTION_STATIC
 } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
@@ -459,40 +462,57 @@ const root = new pc.Entity('ghost-projectile');
     const body = ctx.createEntity(ctx.sphereMesh, [bodyMaterial], root);
     body.setLocalScale(radius * 3, radius * 3, radius * 3);
 
-    const wisps: {
-      entity: pc.Entity;
-      phase: number;
-      baseZ: number;
-      size: number;
-    }[] = [];
+    // Jirones, ojos y estela en lotes instanciados. El ondeo, el parpadeo y la
+    // posición se calculan en el vertex shader.
+    const wispInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const wisp = ctx.createEntity(ctx.boxMesh, [wispMaterial], root);
-      wisp.setLocalScale(radius * 0.5, radius * 0.5, radius * 1.7);
-      wisps.push({
-        entity: wisp,
-        phase: index * 1.7,
-        baseZ: -radius * (1.7 + index * 1.25),
-        size: radius * (0.55 - index * 0.08)
+      wispInstances.push({
+        anim0: [index * 1.7, -(1.7 + index * 1.25), 0.55 - index * 0.08, 0]
       });
     }
+    const wispBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: wispMaterial,
+      instances: wispInstances,
+      motion: MOTION_PROJECTILE_WISPS,
+      radius
+    });
 
-    const eyes: { entity: pc.Entity; side: number }[] = [];
-    for (let index = 0; index < 2; index++) {
-      const eye = ctx.createEntity(ctx.sphereMesh, [eyeMaterial], root);
-      const side = index === 0 ? -1 : 1;
-      eye.setLocalPosition(side * radius * 0.65, radius * 0.35, radius * 2.1);
-      eye.setLocalScale(radius * 0.5, radius * 0.5, radius * 0.35);
-      eyes.push({ entity: eye, side });
-    }
+    const eyeInstances: EffectBatchInstance[] = [
+      { anim0: [-0.65, 0.35, 2.1, 0], anim1: [0.5, 0.5, 0.35, 0] },
+      { anim0: [0.65, 0.35, 2.1, 0], anim1: [0.5, 0.5, 0.35, 0] }
+    ];
+    const eyeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: eyeMaterial,
+      instances: eyeInstances,
+      motion: MOTION_PROJECTILE_EYES,
+      radius
+    });
 
-    const trail: pc.Entity[] = [];
+    const trailInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const puff = ctx.createEntity(ctx.sphereMesh, [trailMaterial], root);
-      puff.setLocalPosition(0, 0, -radius * (2.8 + index * 1.7));
       const scale = radius * (1.4 - index * 0.35);
-      puff.setLocalScale(scale, scale, scale);
-      trail.push(puff);
+      trailInstances.push({
+        z: -radius * (2.8 + index * 1.7),
+        sx: scale,
+        sy: scale,
+        sz: scale
+      });
     }
+    new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: trailMaterial,
+      instances: trailInstances,
+      motion: MOTION_STATIC,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -513,35 +533,8 @@ const root = new pc.Entity('ghost-projectile');
           radius * 3 * bodyPulse
         );
 
-        for (const wisp of wisps) {
-          const wave = Math.sin(time * 8 + wisp.phase);
-          wisp.entity.setLocalPosition(
-            wave * radius * 0.55,
-            Math.sin(time * 5 + wisp.phase) * radius * 0.45,
-            wisp.baseZ
-          );
-          wisp.entity.setLocalEulerAngles(
-            0,
-            wave * 22,
-            Math.sin(time * 7 + wisp.phase) * 18
-          );
-          const scale = wisp.size * (0.85 + Math.sin(time * 13 + wisp.phase) * 0.15);
-          wisp.entity.setLocalScale(scale, scale, scale * 2.4);
-        }
-
-        const blink = Math.sin(time * 4.2) > 0.965 ? 0.08 : 1;
-        for (const eye of eyes) {
-          eye.entity.setLocalScale(
-            radius * 0.5,
-            radius * 0.5 * blink,
-            radius * 0.35
-          );
-          eye.entity.setLocalPosition(
-            eye.side * radius * 0.65,
-            radius * 0.35,
-            radius * 2.1
-          );
-        }
+        wispBatch.setTime(time);
+        eyeBatch.setTime(time);
 
         coreMaterial.opacity = 0.9 + Math.sin(time * 27) * 0.08;
         bodyMaterial.opacity = 0.52 + Math.sin(time * 14) * 0.08;

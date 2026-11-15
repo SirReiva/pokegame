@@ -45,6 +45,9 @@ habilidad, prueba esta lista.
 | Pikachu | **Rayo** | Rayos unitarios cacheados y escalados | Que el haz siga avanzando desde el lanzador, que los dos rayos giren en sentidos opuestos y que no se vea estirado ni cortado. |
 | Suicune | **Chorro de Agua** / **Ráfaga Marina** | 5 cuentas de cola, 6 gotas orbitando y 2 aros en tres lotes | Que la cola se meeza, las gotas giren alrededor del eje y los dos aros se expandan y avancen sin quedarse quietos. |
 | Moltres | **Tajo Aéreo** | 6 aspas en dos lotes, 3 plumas y 2 jirones instanciados | Que las dos ruedas de aspas giren cruzadas, las plumas ondeen detrás y los jirones escolten la estela. |
+| Lucario | **Esfera Aura** | 2 aros, 4 motas y 3 esferas de estela en tres lotes | Que los aros giren sobre ejes distintos, las motas orbiten con vaivén vertical y la estela quede quieta detrás. |
+| Gengar | **Bola Sombra** | 3 jirones, 2 ojos y 3 esferas de estela en tres lotes | Que los jirones ondeen, los ojos parpadeen y la estela no se mueva. |
+| Squirtle | **Rayo Burbuja** | 3 burbujas y 6 brillos en dos lotes | Que las burbujas orbiten alrededor del eje, rueden con sus brillos pegados a la superficie y pulsen. |
 
 ## Pruebas de estrés
 
@@ -71,8 +74,9 @@ Siguen con entidades por elemento:
 
 - Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air` y `rock`
   (salvo el haz eléctrico cacheado y el haz psíquico, que ya usan lotes).
-- Proyectiles e impactos pequeños, salvo **Chorro de Agua**, **Ráfaga Marina**
-  y **Tajo Aéreo**, que ya dibujan su decoración con lotes instanciados.
+- Proyectiles e impactos pequeños, salvo **Chorro de Agua**, **Ráfaga Marina**,
+  **Tajo Aéreo**, **Esfera Aura**, **Bola Sombra** y **Rayo Burbuja**, que ya
+  dibujan su decoración con lotes instanciados.
 - El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
   comprueba que la erupción coincide con el punto donde emerge el lanzador.
 - Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
