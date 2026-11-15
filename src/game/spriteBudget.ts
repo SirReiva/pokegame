@@ -72,11 +72,19 @@ function readDeviceMemoryGB(): number | null {
 }
 
 /**
+ * Renderer detectado, memorizado. Crear el contexto WebGL temporal cuesta unos
+ * milisegundos y el nombre no cambia durante la sesión; además, el `Game` se
+ * recrea en cada cambio de mapa y no hay motivo para repetirlo.
+ */
+let cachedRenderer: string | null = null;
+
+/**
  * Crea un contexto WebGL temporal solo para leer el renderer y lo libera en el
  * acto. En un entorno sin WebGL2 (WebGPU puro) devuelve cadena vacía y se usa
  * el tier `unknown`.
  */
 function readRendererString(): string {
+  if (cachedRenderer !== null) return cachedRenderer;
   if (typeof document === 'undefined') return '';
   try {
     const canvas = document.createElement('canvas');
@@ -89,6 +97,7 @@ function readRendererString(): string {
       ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) ?? '')
       : '';
     gl.getExtension('WEBGL_lose_context')?.loseContext();
+    cachedRenderer = renderer;
     return renderer;
   } catch {
     return '';

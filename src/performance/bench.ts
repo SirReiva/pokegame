@@ -72,7 +72,10 @@ async function measure(): Promise<void> {
       modeSettings: { koTarget: 9999 },
       timeLimitSeconds: 0,
       atmosphereEnabled: false,
-      pokemonIds
+      pokemonIds,
+      // El bench debe cargar las hojas con la misma densidad que la partida
+      // real: es lo que mide el coste de memoria y de subida a GPU.
+      humanViews: views
     }
   );
 

@@ -52,6 +52,7 @@ import {
   computeSplitLayout,
   createTeamRecord,
   facingToCenter,
+  matchPixelRatio,
   spawnForTeam,
   type KillFeedEntry,
   type MatchPlayerConfig,
@@ -408,7 +409,7 @@ export function startMatch(
   host.callbacks.onCountdown(MATCH_COUNTDOWN_SECONDS);
   host.menuCamera.setEnabled(false);
   host.setResolutionBaseline(
-    Math.min(window.devicePixelRatio || 1, humanConfigs.length > 4 ? 1.2 : 1.5)
+    matchPixelRatio(window.devicePixelRatio || 1, humanConfigs.length)
   );
 
   const layout = computeSplitLayout(humanConfigs.length);
@@ -492,7 +493,8 @@ export function startMatch(
     }
     camera.yaw = cameraYawForTeam(config.team, spawnPoint.x, spawnPoint.z);
     camera.distance =
-      CONFIG.camera.distance * (humanConfigs.length > 2 ? 1.12 : 1);
+      CONFIG.camera.distance *
+      (humanConfigs.length > 2 ? CONFIG.camera.splitDistanceScale : 1);
 
     // Una sola barra por jugador: el estado es idéntico en todas las vistas,
     // así que no se duplican canvas, texturas ni redibujados por copia.

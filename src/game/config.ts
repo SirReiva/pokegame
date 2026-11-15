@@ -85,6 +85,17 @@ export const CONFIG = {
      * dispositivo; `1` lo desactiva.
      */
     anisotropy: 8,
+    /**
+     * Tope de `devicePixelRatio` durante una partida. Con muchas vistas se baja
+     * más para repartir el mismo presupuesto de píxeles entre todos los
+     * viewports. Lo usan `matchSession` (resolución) y la densidad de texturas,
+     * para que ambas cuentas no se desincronicen.
+     */
+    matchPixelRatio: {
+      default: 1.5,
+      manyViews: 1.2,
+      manyViewsThreshold: 4,
+    },
   },
   sprite: {
     pixelScale: PIXEL_SCALE,
@@ -139,6 +150,11 @@ export const CONFIG = {
     fogMargin: 24,
     pitch: PITCH_DEG,
     distance: 17,
+    /**
+     * Con 3 o más vistas la cámara se aleja un poco para que quepa más mundo en
+     * cada viewport. La densidad de texturas usa la misma distancia.
+     */
+    splitDistanceScale: 1.12,
     minDistance: 10,
     maxDistance: 27,
     /** Rad/s con el stick derecho a tope. */

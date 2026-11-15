@@ -189,7 +189,12 @@ function sheetSizeFor(
 
   const width = left + right + 1;
   const height = top + bottom + 1;
-  return width > 0 && height > 0 ? { width, height } : full;
+  if (width <= 0 || height <= 0) return full;
+  // `width`/`height` son de una celda; la hoja tiene una celda por frame.
+  return {
+    width: width * animation.columns,
+    height: height * animation.rows
+  };
 }
 
 /** Bytes que ocuparía una hoja con esta escala. */
@@ -226,7 +231,8 @@ function scalePriority(name: AnimationName): number {
 /**
  * Reparte la escala de todas las hojas de un Pokémon.
  *
- * - Las pequeñas suben a `smoothScale` (4 por defecto).
+ * - Las pequeñas suben hasta `smoothScale` (4 por defecto), o hasta el techo de
+ *   densidad que permita el tamaño real de la vista (`maxScale`).
  * - Ninguna pasa del límite real de la GPU (`device.maxTextureSize`).
  * - Si la suma supera el presupuesto (fijado en `textureBudgetMB` o detectado
  *   automáticamente), se reducen primero las hojas de menor prioridad
@@ -237,13 +243,20 @@ function scalePriority(name: AnimationName): number {
 function planTextureScales(
   device: pc.GraphicsDevice,
   sheets: ReadonlyArray<{ name: AnimationName; animation: SpriteAnimation }>,
-  budgetMB: number
+  budgetMB: number,
+  maxScale: number
 ): Map<AnimationName, number> {
   const maxDimension = device.maxTextureSize;
   const budget = Math.max(1, budgetMB) * 1024 * 1024;
+  // Techo común: ni más del que necesita la vista, ni más del que permite el
+  // modo de filtrado.
+  const ceiling = Math.max(
+    1,
+    Math.min(SPRITE_TEXTURE_SCALE, Math.round(maxScale))
+  );
   const items = sheets.map(({ name, animation }) => {
     const { width, height } = sheetSizeFor(name, animation);
-    let scale = SPRITE_TEXTURE_SCALE;
+    let scale = ceiling;
     while (
       scale > 1 &&
       (width * scale > maxDimension || height * scale > maxDimension)
@@ -327,20 +340,28 @@ function movesetUsesAnimation(
   );
 }
 
+/** Recorte común de todas las filas de una animación, en píxeles del arte. */
+interface TightInsets {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
 /**
- * Genera una hoja recortada por dirección. Cada frame original puede tener
- * mucho espacio vacío (QuickStrike es el caso extremo); aquí se copia solo el
- * arte alrededor del ancla a una celda pequeña y se recoloca el ancla en una
- * posición fija. El renderizador puede seguir usando el frame completo, pero
- * ahora el plano está centrado en el personaje.
+ * Calcula el recorte tight a partir del manifiesto. Devuelve `null` cuando la
+ * animación debe usar el frame completo (filas sin metadatos).
+ *
+ * `left/right/top/bottom` son distancias desde el ancla hasta el píxel más
+ * extremo (inclusive), así que el arte ocupa `left + right + 1` columnas: sin
+ * el +1 se recortaba la última columna/fila visible de cada frame (el hocico
+ * en las direcciones que miran a la derecha).
  */
-function buildTightSheet(
-  image: LoadedImage,
-  animation: SpriteAnimation
-): { canvas: HTMLCanvasElement; animation: SpriteAnimation } | null {
+function tightInsetsFor(animation: SpriteAnimation): TightInsets | null {
   const rows = animation.contentRows;
   if (!rows || rows.length !== animation.rows) return null;
-  if (rows.some((content) => content === null)) return null;
 
   let left = 0;
   let right = 0;
@@ -354,70 +375,163 @@ function buildTightSheet(
     bottom = Math.max(bottom, content.bottom);
   }
 
-  // `left/right/top/bottom` son distancias desde el ancla hasta el píxel más
-  // extremo (inclusive), así que el arte ocupa `left + right + 1` columnas: sin
-  // el +1 se recortaba la última columna/fila visible de cada frame (el hocico
-  // en las direcciones que miran a la derecha).
   const width = left + right + 1;
   const height = top + bottom + 1;
-  if (width <= 0 || height <= 0) return null;
+  return width > 0 && height > 0
+    ? { left, right, top, bottom, width, height }
+    : null;
+}
+
+/**
+ * Permisos simultáneos para componer hojas. Cada hoja reserva su canvas y su
+ * bitmap final, que a ×4 pueden ser decenas de MB; con las 8 especies de una
+ * partida cargando a la vez el pico se disparaba y el GC provocaba tirones
+ * durante la pantalla de carga. La descarga de las imágenes sigue siendo
+ * paralela: el límite solo cubre el trabajo de CPU/GPU.
+ */
+const SHEET_SLOTS = 2;
+let sheetSlotsInUse = 0;
+const sheetSlotWaiters: Array<() => void> = [];
+
+async function withSheetSlot<T>(task: () => Promise<T>): Promise<T> {
+  while (sheetSlotsInUse >= SHEET_SLOTS) {
+    await new Promise<void>((resolve) => sheetSlotWaiters.push(resolve));
+  }
+  sheetSlotsInUse += 1;
+  try {
+    return await task();
+  } finally {
+    sheetSlotsInUse -= 1;
+    sheetSlotWaiters.shift()?.();
+  }
+}
+
+/** Hoja definitiva lista para subir a la GPU. */
+interface PreparedSheet {
+  /** Bitmap final; si `owned`, se cierra automáticamente tras la subida. */
+  source: LoadedImage;
+  /** Metadatos recalculados cuando se aplicó el recorte tight. */
+  animation: SpriteAnimation;
+  /**
+   * Escala realmente horneada en el bitmap. Normalmente coincide con la
+   * planificada; el camino de reserva sin canvas no puede escalar y devuelve 1.
+   */
+  scale: number;
+  /** El bitmap ya viene volteado y la textura no debe repetir el volteo. */
+  flipped: boolean;
+  /** `true` si la fuente es temporal y nadie más la va a usar. */
+  owned: boolean;
+}
+
+/**
+ * Genera la hoja definitiva en **una sola pasada** de `drawImage`: recorte
+ * tight, escalado nearest y volteo vertical (la fila 0 tiene que quedar en
+ * V=1, ver `applyFrame`).
+ *
+ * Antes se encadenaban hasta tres canvas completos por hoja (tight, upscale y
+ * flip); sus picos de memoria se sumaban al cargar varias especies en paralelo.
+ * Ahora solo existe el canvas final y el `ImageBitmap` que lo sube.
+ */
+async function prepareSpriteSheet(
+  image: LoadedImage,
+  name: AnimationName,
+  animation: SpriteAnimation,
+  scale: number
+): Promise<PreparedSheet> {
+  const insets = PRESERVE_FRAME_MOTION.has(name)
+    ? null
+    : tightInsetsFor(animation);
+  // `insets` mide una celda; el canvas contiene todas las columnas y filas.
+  const cellWidth = insets ? insets.width : animation.frameWidth;
+  const cellHeight = insets ? insets.height : animation.frameHeight;
+  const width = Math.max(
+    1,
+    Math.round(cellWidth * animation.columns * scale)
+  );
+  const height = Math.max(
+    1,
+    Math.round(cellHeight * animation.rows * scale)
+  );
 
   const canvas = document.createElement('canvas');
-  canvas.width = width * animation.columns;
-  canvas.height = height * animation.rows;
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext('2d');
-  if (!context) return null;
-  context.imageSmoothingEnabled = false;
+  if (!context) {
+    // Sin canvas no se puede voltear a mano: se devuelve el bitmap original y
+    // `createSpriteTexture` deja que `setTextureSource` haga el volteo.
+    return { source: image, animation, scale: 1, flipped: false, owned: false };
+  }
 
-  for (let row = 0; row < animation.rows; row++) {
-    const content = rows[row];
-    if (!content) return null;
-    for (let column = 0; column < animation.columns; column++) {
-      const index = row * animation.columns + column;
-      const anchor = animation.anchors[index];
-      // Coordenadas absolutas dentro de la hoja original: hay que sumar la
-      // celda de la columna y la fila, no solo el recorte local del frame.
-      const cropX =
-        column * animation.frameWidth + anchor.x - content.left;
-      const cropY =
-        row * animation.frameHeight + anchor.y - content.top;
-      const cropWidth = content.left + content.right + 1;
-      const cropHeight = content.top + content.bottom + 1;
-      const destX = column * width + (left - content.left);
-      const destY = row * height + (top - content.top);
-      context.drawImage(
-        image,
-        cropX,
-        cropY,
-        cropWidth,
-        cropHeight,
-        destX,
-        destY,
-        cropWidth,
-        cropHeight
-      );
+  context.imageSmoothingEnabled = false;
+  // Volteo vertical del lienzo completo: el bitmap final ya sale con la
+  // orientación que espera el motor, sin un canvas intermedio.
+  context.translate(0, height);
+  context.scale(1, -1);
+
+  if (insets) {
+    for (let row = 0; row < animation.rows; row++) {
+      const content = animation.contentRows?.[row];
+      if (!content) continue;
+      for (let column = 0; column < animation.columns; column++) {
+        const index = row * animation.columns + column;
+        const anchor = animation.anchors[index];
+        // Coordenadas absolutas dentro de la hoja original: hay que sumar la
+        // celda de la columna y la fila, no solo el recorte local del frame.
+        const cropX =
+          column * animation.frameWidth + anchor.x - content.left;
+        const cropY =
+          row * animation.frameHeight + anchor.y - content.top;
+        const cropWidth = content.left + content.right + 1;
+        const cropHeight = content.top + content.bottom + 1;
+        context.drawImage(
+          image,
+          cropX,
+          cropY,
+          cropWidth,
+          cropHeight,
+          (column * insets.width + (insets.left - content.left)) * scale,
+          (row * insets.height + (insets.top - content.top)) * scale,
+          cropWidth * scale,
+          cropHeight * scale
+        );
+      }
     }
+  } else {
+    context.drawImage(image, 0, 0, width, height);
+  }
+
+  const bitmap = await createImageBitmap(canvas);
+  // El canvas puede ocupar decenas de MB: se libera en el acto.
+  canvas.width = 0;
+  canvas.height = 0;
+
+  if (!insets) {
+    return { source: bitmap, animation, scale, flipped: true, owned: true };
   }
 
   const anchors = Array.from(
     { length: animation.columns * animation.rows },
-    () => ({ x: left, y: top })
+    () => ({ x: insets.left, y: insets.top })
   );
   const bottoms = animation.bottoms.map((bottom, index) =>
-    bottom < 0 ? -1 : bottom - animation.anchors[index].y + top
+    bottom < 0 ? -1 : bottom - animation.anchors[index].y + insets.top
   );
 
   return {
-    canvas,
+    source: bitmap,
     animation: {
       ...animation,
-      frameWidth: width,
-      frameHeight: height,
+      frameWidth: insets.width,
+      frameHeight: insets.height,
       anchors,
       bottoms,
       content: undefined,
       contentRows: undefined
-    }
+    },
+    scale,
+    flipped: true,
+    owned: true
   };
 }
 
@@ -435,39 +549,27 @@ export async function loadImage(url: string): Promise<LoadedImage> {
 }
 
 /**
- * Amplía la hoja duplicando téxeles (sin interpolar). El LINEAR posterior
- * solo suaviza las fronteras entre téxeles distintos, así que el contorno
- * queda antialiaseado pero el interior conserva los bloques del píxel art.
+ * Sube la hoja ya compuesta (`prepareSpriteSheet`) a una textura.
+ *
+ * La fuente se marca para liberarse después de la subida: PlayCanvas cierra el
+ * `ImageBitmap` en cuanto la GPU tiene su copia. Sin esto, las 8 especies de una
+ * partida de 8 vistas retenían a la vez todas las hojas de CPU además de las de
+ * GPU. Si el dispositivo se pierde, estas texturas no pueden re-subirse desde
+ * CPU; es el precio de no retener ~100 MB durante toda la partida.
  */
-function upscaleSheet(
-  image: LoadedImage | HTMLCanvasElement,
-  factor: number
-): HTMLCanvasElement | LoadedImage {
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(image.width * factor);
-  canvas.height = Math.round(image.height * factor);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return image;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas;
-}
-
 function createSpriteTexture(
   device: pc.GraphicsDevice,
-  image: LoadedImage | HTMLCanvasElement,
-  name: string,
-  scale: number
+  sheet: PreparedSheet,
+  name: string
 ): pc.Texture {
   const mode = CONFIG.sprite.filter;
-  const source = mode === 'smooth' && scale > 1 ? upscaleSheet(image, scale) : image;
   // NEAREST mantiene los bloques del píxel art. 'smooth' y 'linear' interpolan;
   // la diferencia es que 'smooth' lo hace sobre una textura de más resolución.
   const filter = mode === 'nearest' ? pc.FILTER_NEAREST : pc.FILTER_LINEAR;
   const texture = new pc.Texture(device, {
     name,
-    width: source.width,
-    height: source.height,
+    width: sheet.source.width,
+    height: sheet.source.height,
     format: pc.PIXELFORMAT_RGBA8,
     srgb: true,
     mipmaps: false,
@@ -475,10 +577,13 @@ function createSpriteTexture(
     magFilter: filter,
     addressU: pc.ADDRESS_CLAMP_TO_EDGE,
     addressV: pc.ADDRESS_CLAMP_TO_EDGE,
-    // El arte se sube del revés para que la fila 0 de la hoja quede en V=1.
-    flipY: true
+    // `prepareSpriteSheet` ya entrega la hoja volteada para que la fila 0 de la
+    // hoja quede en V=1. Solo el camino de reserva (sin canvas) pide `flipY`
+    // manual en `setTextureSource`.
+    flipY: !sheet.flipped
   });
-  setTextureSource(texture, source);
+  setTextureSource(texture, sheet.source);
+  if (sheet.owned) texture.setReleaseSourceAfterUpload();
   return texture;
 }
 
@@ -488,7 +593,13 @@ export async function loadSpriteAsset(
   skin: PokemonSkin = defaultSkinFor(entry),
   budgetMB: number = CONFIG.sprite.textureBudgetMB > 0
     ? CONFIG.sprite.textureBudgetMB
-    : FALLBACK_SPRITE_BUDGET_MB
+    : FALLBACK_SPRITE_BUDGET_MB,
+  /**
+   * Techo de escala según lo que ocupa el sprite en la vista más pequeña de la
+   * partida. `SPRITE_TEXTURE_SCALE` (el valor por defecto) mantiene el
+   * comportamiento de una sola vista.
+   */
+  maxScale: number = SPRITE_TEXTURE_SCALE
 ): Promise<SpriteAsset> {
   // El recorte tight reemplaza las celdas de cada animación. Se trabaja sobre
   // una copia: el manifiesto lo comparten la partida, las recargas de HMR y
@@ -512,7 +623,7 @@ export async function loadSpriteAsset(
     }
     sheets.push({ name: optional.name, animation });
   }
-  const scales = planTextureScales(device, sheets, budgetMB);
+  const scales = planTextureScales(device, sheets, budgetMB, maxScale);
 
   const [images, portrait] = await Promise.all([
     Promise.all(ANIMATIONS.map((name) => loadImage(animations[name].sheet))),
@@ -529,38 +640,48 @@ export async function loadSpriteAsset(
   const textures = {} as SpriteTextures;
   const textureScales: Partial<Record<AnimationName, number>> = {};
 
-  const createFor = (
+  const createFor = async (
     name: AnimationName,
     image: LoadedImage,
     animation: SpriteAnimation
   ) => {
     // Charge conserva su vibración interna: se usa el frame completo y un
     // ancla fija, porque el recorte tight recentraría cada frame.
-    const tight = PRESERVE_FRAME_MOTION.has(name)
+    const insets = PRESERVE_FRAME_MOTION.has(name)
       ? null
-      : buildTightSheet(image, animation);
-    if (tight) animations[name] = tight.animation;
-    const source = tight?.canvas ?? image;
-    // La escala planificada se recorta solo si la imagen real (por ejemplo,
+      : tightInsetsFor(animation);
+    // La escala planificada se recorta solo si el tamaño real (por ejemplo,
     // tras un fallback a frame completo) no cabe en la GPU.
+    const width =
+      (insets ? insets.width : animation.frameWidth) * animation.columns;
+    const height =
+      (insets ? insets.height : animation.frameHeight) * animation.rows;
     const scale = clampTextureScale(
       device,
-      source.width,
-      source.height,
+      width,
+      height,
       scales.get(name) ?? 1
     );
+    const sheet = await withSheetSlot(() =>
+      prepareSpriteSheet(image, name, animation, scale)
+    );
+    if (sheet.animation !== animation) animations[name] = sheet.animation;
     textures[name] = createSpriteTexture(
       device,
-      source,
-      `${entry.id}-${skin.id}-${name}`,
-      scale
+      sheet,
+      `${entry.id}-${skin.id}-${name}`
     );
-    textureScales[name] = scale;
+    // La escala que leen las UV es la que de verdad se horneó en el bitmap.
+    textureScales[name] = sheet.scale;
+    // El bitmap de origen ya no hace falta: se cierra antes de pedir la
+    // siguiente hoja para no acumular todas las decodificaciones.
+    if (sheet.source !== image) image.close();
   };
 
-  ANIMATIONS.forEach((name, index) =>
-    createFor(name, images[index], animations[name])
-  );
+  for (let index = 0; index < ANIMATIONS.length; index++) {
+    const name = ANIMATIONS[index];
+    await createFor(name, images[index], animations[name]);
+  }
 
   // Faint es opcional para el KO. QuickStrike y Shock solo se cargan si el
   // moveset del Pokémon realmente los usa; así no se suben hojas grandes que
@@ -575,7 +696,7 @@ export async function loadSpriteAsset(
       continue;
     }
     const image = await loadImage(animation.sheet);
-    createFor(optional.name, image, animation);
+    await createFor(optional.name, image, animation);
     if (optional.logLabel) {
       console.info(`[sprite] ${optional.logLabel} cargado para ${entry.id}`);
     }

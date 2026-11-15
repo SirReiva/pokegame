@@ -6,6 +6,7 @@
  * viewports y las cuentas de equipo sin levantar el motor.
  */
 
+import { CONFIG } from './config';
 import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
 import type {
   BotDifficulty,
@@ -273,6 +274,26 @@ export function computeSplitLayout(count: number): SplitRect[] {
     }
   });
   return rects.slice(0, count);
+}
+
+/**
+ * Tope de `devicePixelRatio` con el que se dibuja una partida.
+ *
+ * Con muchas vistas se baja el DPR para repartir el mismo presupuesto de
+ * píxeles entre todos los viewports. Lo comparten la resolución de la partida y
+ * la densidad de texturas de los sprites: si divergieran, las hojas se
+ * cargarían con más detalle del que la cámara puede mostrar.
+ */
+export function matchPixelRatio(
+  devicePixelRatio: number,
+  humanCount: number
+): number {
+  const settings = CONFIG.performance.matchPixelRatio;
+  const cap =
+    humanCount > settings.manyViewsThreshold
+      ? settings.manyViews
+      : settings.default;
+  return Math.min(devicePixelRatio || 1, cap);
 }
 
 /** Estilo CSS de un viewport (origen arriba-izquierda). */

@@ -92,6 +92,11 @@ export function useGameEngine({
         })
       ).values()
     ];
+    // Vistas de la partida: los bots no tienen cámara propia, así que no
+    // cuentan para decidir la densidad de las hojas.
+    const humanViews = configsRef.current.filter(
+      (config) => !config.isBot
+    ).length;
 
     // `createGraphicsDevice` es asíncrono: el motor se construye en una promesa.
     let game: Game | null = null;
@@ -138,6 +143,7 @@ export function useGameEngine({
         atmosphereEnabled,
         pokemonIds,
         pokemonSkins,
+        humanViews,
         overlayCanvas: barCanvasRef.current
       }
     )

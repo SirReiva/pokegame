@@ -163,12 +163,14 @@ import {
 import { maxHitRadius } from './roster';
 import { rumbleOnDamage } from './rumble';
 import {
+  SPRITE_TEXTURE_SCALE,
   disposeSpriteAsset,
   loadSpriteAsset,
   resolveAnimationClip,
   type SpriteAsset
 } from './sprite';
 import { detectSpriteBudget } from './spriteBudget';
+import { spriteDensityScale } from './spriteDensity';
 import { clearGroundCanvasCache } from './textures';
 import {
   XP_REWARDS,
@@ -228,6 +230,12 @@ export interface GameOptions {
    * distintas y cada combinación se descarga una sola vez.
    */
   pokemonSkins?: readonly PokemonSkinSelection[];
+  /**
+   * Jugadores humanos (vistas) de la partida. Cada uno recibe su viewport, así
+   * que con muchos jugadores el sprite ocupa menos píxeles y sus hojas se
+   * cargan con menos densidad. Si falta, se asume una vista.
+   */
+  humanViews?: number;
   /** KOs de equipo para el deathmatch; se conserva como atajo compatible. */
   koTarget?: number;
   /** Modo de juego activo; por defecto, deathmatch por equipos. */
@@ -301,6 +309,13 @@ const MAX_FIXED_STEPS = 2;
 const POPUP_RENDER_BUDGET_MS = 2;
 /** Cola máxima de números pendientes; si se desborda se descarta el más viejo. */
 const MAX_PENDING_POPUPS = 24;
+
+/**
+ * Especies cuyas hojas se decodifican y componen a la vez durante la carga.
+ * Cada una mantiene hasta 4 hojas base en memoria hasta que se componen, así
+ * que el paralelismo total de la partida no debe escalar con el roster.
+ */
+const SPRITE_ASSET_CONCURRENCY = 3;
 
 /**
  * Área instantánea cuyo `onEnd` se retrasa hasta agotar su duración visual.
@@ -1290,28 +1305,46 @@ export class Game {
         selections.length,
         CONFIG.sprite.textureBudgetMB
       );
+      // Densidad real que necesita la vista más pequeña: en una tele de 1080p
+      // y 1 jugador sobra para llegar a ×4; con 8 vistas, la misma hoja ocupa
+      // una cuarta parte del alto y ×2 ya da más de un tétexel por píxel.
+      const maxSpriteScale = spriteDensityScale({
+        humanCount: this.options.humanViews ?? 1,
+        cssHeight: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        maxScale: SPRITE_TEXTURE_SCALE
+      });
       console.info(
         `[sprite] ${spriteBudget.perAssetMB} MB por aspecto` +
           ` (${selections.length} aspectos, ${spriteBudget.tier}` +
-          `${spriteBudget.renderer ? `: ${spriteBudget.renderer}` : ''})`
+          `${spriteBudget.renderer ? `: ${spriteBudget.renderer}` : ''})` +
+          ` · densidad ×${maxSpriteScale}`
       );
 
       const total = selections.length * 4;
       let loaded = 0;
       this.emitLoad(76, 'Cargando sprites');
 
-      await Promise.all(
-        selections.map(async (selection) => {
+      // Cada especie decodifica 4 hojas base a la vez. Con 8 especies en
+      // paralelo se llegaba a 32 bitmaps completos en memoria de CPU antes de
+      // componer ninguno; limitar las especies basta para acotar el pico sin
+      // serializar la carga.
+      const pending = [...selections];
+      const loadNext = async (): Promise<void> => {
+        for (;;) {
+          const selection = pending.shift();
+          if (!selection || this.disposed) return;
           const entry = manifest.pokemon.find(
             (candidate) => candidate.id === selection.pokemonId
           );
-          if (!entry) return;
+          if (!entry) continue;
           const skin = skinFor(entry, selection.skinId);
           const asset = await loadSpriteAsset(
             this.app.graphicsDevice,
             entry,
             skin,
-            spriteBudget.perAssetMB
+            spriteBudget.perAssetMB,
+            maxSpriteScale
           );
           this.assets.set(assetKey(entry.id, selection.skinId), asset);
           loaded += 4;
@@ -1321,7 +1354,13 @@ export class Game {
               ? `${entry.name} listo`
               : `${entry.name} · ${skin.name} listo`
           );
-        })
+        }
+      };
+      await Promise.all(
+        Array.from(
+          { length: Math.min(SPRITE_ASSET_CONCURRENCY, selections.length) },
+          () => loadNext()
+        )
       );
 
       if (this.disposed) return;
