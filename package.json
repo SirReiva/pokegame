@@ -1,7 +1,7 @@
 {
   "name": "newpoke",
   "private": true,
-  "version": "0.27.7",
+  "version": "0.27.8",
   "homepage": "https://sirreiva.github.io/pokegame/",
   "type": "module",
   "packageManager": "pnpm@12.16.1",
