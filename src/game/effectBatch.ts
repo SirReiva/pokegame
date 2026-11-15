@@ -450,6 +450,18 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_BEAM_WISPS, wgslMotions.MOTION_BEAM_WISPS_WGSL],
     [MOTION_BEAM_RINGS, wgslMotions.MOTION_BEAM_RINGS_WGSL],
     [MOTION_BEAM_EYES, wgslMotions.MOTION_BEAM_EYES_WGSL],
+    [MOTION_MELEE_LEAVES, wgslMotions.MOTION_MELEE_LEAVES_WGSL],
+    [MOTION_MELEE_PUFFS, wgslMotions.MOTION_MELEE_PUFFS_WGSL],
+    [MOTION_PROJECTILE_LEAF_RING, wgslMotions.MOTION_PROJECTILE_LEAF_RING_WGSL],
+    [MOTION_PROJECTILE_ARCS, wgslMotions.MOTION_PROJECTILE_ARCS_WGSL],
+    [MOTION_IMPACT_RADIAL, wgslMotions.MOTION_IMPACT_RADIAL_WGSL],
+    [MOTION_IMPACT_RINGS, wgslMotions.MOTION_IMPACT_RINGS_WGSL],
+    [MOTION_FIGHTING_LINES, wgslMotions.MOTION_FIGHTING_LINES_WGSL],
+    [MOTION_FIGHTING_CORES, wgslMotions.MOTION_FIGHTING_CORES_WGSL],
+    [MOTION_IMPACT_PUFFS, wgslMotions.MOTION_IMPACT_PUFFS_WGSL],
+    [MOTION_FIRE_BURST_FLAMES, wgslMotions.MOTION_FIRE_BURST_FLAMES_WGSL],
+    [MOTION_FIRE_BURST_SPARKS, wgslMotions.MOTION_FIRE_BURST_SPARKS_WGSL],
+    [MOTION_JAW_SHARDS, wgslMotions.MOTION_JAW_SHARDS_WGSL],
     [MOTION_GHOST_WISPS, wgslMotions.MOTION_GHOST_WISPS_WGSL],
     [MOTION_GHOST_EYES, wgslMotions.MOTION_GHOST_EYES_WGSL],
     [MOTION_RING, wgslMotions.MOTION_RING_WGSL],
@@ -2326,6 +2338,288 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
       max(0.0001, uEffectRadius * 0.2 * blink)
     ),
     effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Hojas del golpe melee de Planta: se abren, suben y giran. */
+export const MOTION_MELEE_LEAVES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  return effectTRS(
+    vec3(a0.x * (1.0 + t * 0.35), 0.05 + t * 0.9, a0.y + t * 1.1),
+    vec3(max(0.0001, a1.x), max(0.0001, a1.y), max(0.0001, a1.x)),
+    effectEulerZYX(
+      t * 80.0 * EFFECT_DEG,
+      (a0.z + t * 260.0) * EFFECT_DEG,
+      (a0.w + t * 140.0) * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Nube de puffs del golpe melee de Veneno. */
+export const MOTION_MELEE_PUFFS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float grow = 0.65 + min(1.0, t * 2.2) * 0.55;
+  float size = max(0.0001, a1.x * grow);
+  return effectTRS(
+    vec3(
+      a0.x * (1.0 + t * 0.45),
+      a0.y + t * 0.45,
+      a0.z + t * 0.85
+    ),
+    vec3(size, size * 0.82, size),
+    effectEulerZYX(
+      0.0,
+      (a0.w + t * 40.0) * EFFECT_DEG,
+      sin(t * 12.0 + a0.x) * 12.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Anillo de hojas que gira alrededor de un proyectil de Planta. */
+export const MOTION_PROJECTILE_LEAF_RING = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float ring = uEffectTime * 420.0 * EFFECT_DEG;
+  float angle = a0.x + ring;
+  float radius = uEffectRadius * a0.y;
+  return effectTRS(
+    vec3(cos(angle) * radius, 0.0, sin(angle) * radius),
+    vec3(max(0.0001, a1.x), max(0.0001, a1.y), max(0.0001, a1.x)),
+    effectRotY(ring) *
+      effectRotZ(a0.w * EFFECT_DEG) *
+      effectRotY(a0.z * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Arcos de un proyectil eléctrico: giran con velocidades por eje. */
+export const MOTION_PROJECTILE_ARCS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  return effectTRS(
+    base[3].xyz,
+    vec3(max(0.0001, a1.w)),
+    effectEulerZYX(
+      (a0.x + uEffectTime * a1.x) * EFFECT_DEG,
+      (a0.y + uEffectTime * a1.y) * EFFECT_DEG,
+      (a0.z + uEffectTime * a1.z) * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Motas y jirones que salen del centro de un impacto. */
+export const MOTION_IMPACT_RADIAL = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float local = clamp((t - a1.x) / max(a1.y, 0.001), 0.0, 1.0);
+  float distance = a0.y * local;
+  float angle = a0.x + local * instance_anim2.x;
+  float fade = max(0.0, 1.0 - local);
+  float size = a0.w * fade;
+  return effectTRS(
+    vec3(
+      cos(angle) * distance,
+      a1.z + sin(local * EFFECT_PI) * a0.z,
+      sin(angle) * distance
+    ),
+    vec3(size, size, size * instance_anim2.y),
+    effectEulerZYX(
+      local * a1.w * EFFECT_DEG,
+      angle / EFFECT_DEG,
+      local * instance_anim2.z * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Aros que se expanden desde el centro de un impacto. */
+export const MOTION_IMPACT_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - t, 3.0);
+  float scale = (a1.y + ease * (a1.z + a0.y)) * a1.x;
+  return effectTRS(
+    vec3(0.0, a0.x, 0.0),
+    vec3(max(0.0001, scale), 1.0, max(0.0001, scale)),
+    effectEulerZYX(a0.z * EFFECT_DEG, t * a0.w * EFFECT_DEG, 0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Líneas de impacto de un clúster de Lucha. */
+export const MOTION_FIGHTING_LINES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float local = clamp((t - a1.x) / max(a1.y, 0.001), 0.0, 1.0);
+  float fade = max(0.0, 1.0 - local);
+  float distance = (0.1 + local * 0.45) * a1.z;
+  return effectTRS(
+    vec3(
+      a0.x + sin(a0.w) * distance,
+      a0.y,
+      a0.z + cos(a0.w) * distance
+    ),
+    vec3(0.035 * fade, 0.035 * fade, (0.16 + local * 0.42) * fade),
+    effectRotY(a0.w)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Núcleos de los clústeres de Lucha. */
+export const MOTION_FIGHTING_CORES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float local = clamp((t - a0.w) / 0.32, 0.0, 1.0);
+  float appear = local <= 0.0 ? 0.0 : 1.0;
+  float scale = (0.08 + local * 0.42) * appear * a1.x;
+  return effectTRS(
+    vec3(a0.x, a0.y, a0.z),
+    vec3(max(0.0001, scale)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Puffs que crecen y se dispersan en un impacto. */
+export const MOTION_IMPACT_PUFFS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float local = clamp((t - a1.x) / max(a1.y, 0.001), 0.0, 1.0);
+  float distance = a0.y * local;
+  float grow = 1.0 + local * instance_anim2.x;
+  float fade = max(0.0, 1.0 - local);
+  float size = max(0.0001, a0.w * grow * fade);
+  return effectTRS(
+    vec3(
+      cos(a0.x) * distance,
+      a1.z + sin(local * EFFECT_PI) * a0.z,
+      sin(a0.x) * distance
+    ),
+    vec3(size, size * a1.w, size),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Llamas del impacto de fuego. */
+export const MOTION_FIRE_BURST_FLAMES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float life = min(1.0, t / 0.12) * (1.0 - max(0.0, (t - 0.3) / 0.7));
+  float sway = sin(t * 21.0 + a0.z) * 0.2;
+  float scaleNow = max(0.001, life);
+  return effectTRS(
+    vec3(a0.x * (1.0 + t * 0.4), 0.08 + t * 1.05, a0.y * (1.0 + t * 0.4)),
+    vec3(
+      max(0.0001, a1.x * scaleNow * (1.0 + sway * 0.3)),
+      max(0.0001, a1.y * scaleNow * (1.05 + sway)),
+      max(0.0001, a1.x * scaleNow * (1.0 + sway * 0.3))
+    ),
+    effectEulerZYX(
+      0.0,
+      (a0.w + t * 70.0) * EFFECT_DEG,
+      sin(t * 18.0 + a0.z) * 10.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Chispas del impacto de fuego. */
+export const MOTION_FIRE_BURST_SPARKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float travel = t * 0.42;
+  float y = a0.w * travel - 4.2 * travel * travel;
+  float sparkLife =
+    max(0.0, 1.0 - t) * (0.8 + sin(t * 30.0 + a1.x) * 0.2);
+  float size = max(0.0001, sparkLife * a1.y);
+  return effectTRS(
+    vec3(
+      a0.x * a0.z * travel,
+      max(0.03, 0.35 + y),
+      a0.y * a0.z * travel
+    ),
+    vec3(size),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Esquirlas del impacto de mordida. */
+export const MOTION_JAW_SHARDS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float t = clamp(uEffectTime / max(uEffectLife, 0.001), 0.0, 1.0);
+  float local = clamp((t - a1.x) / 0.7, 0.0, 1.0);
+  float travel = 1.0 - (1.0 - local) * (1.0 - local);
+  float grow = 1.0 - local * 0.6;
+  return effectTRS(
+    vec3(
+      cos(a0.x) * a0.y * travel,
+      0.1 + a0.z * travel,
+      sin(a0.x) * a0.y * travel
+    ),
+    vec3(
+      max(0.0001, 0.09 * a1.z * grow),
+      max(0.0001, a0.w * grow),
+      max(0.0001, 0.09 * a1.z * grow)
+    ),
+    effectEulerZYX(
+      local * 320.0 * EFFECT_DEG,
+      local * a1.y * EFFECT_DEG,
+      local * 180.0 * EFFECT_DEG
+    )
   );
 }
 

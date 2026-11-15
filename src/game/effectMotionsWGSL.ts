@@ -1299,6 +1299,8 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 
 /** Movimientos de proyectiles, separados por tamaño. */
 export * from './effectMotionsProjectilesWGSL';
+/** Movimientos de impactos, separados por tamaño. */
+export * from './effectMotionsImpactWGSL';
 
 /** Púas de roca que emergen del suelo en el haz de Roca. */
 export const MOTION_ROCK_BEAM_SPIKES_WGSL = `
@@ -1390,6 +1392,91 @@ fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
       max(0.0001, uniform.uEffectRadius * 0.2 * blink)
     ),
     effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Hojas del golpe melee de Planta. */
+export const MOTION_MELEE_LEAVES_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let t = clamp(uniform.uEffectTime / max(uniform.uEffectLife, 0.001), 0.0, 1.0);
+  return effectTRS(
+    vec3f(a0.x * (1.0 + t * 0.35), 0.05 + t * 0.9, a0.y + t * 1.1),
+    vec3f(max(0.0001, a1.x), max(0.0001, a1.y), max(0.0001, a1.x)),
+    effectEulerZYX(
+      t * 80.0 * EFFECT_DEG,
+      (a0.z + t * 260.0) * EFFECT_DEG,
+      (a0.w + t * 140.0) * EFFECT_DEG
+    )
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Nube de puffs del golpe melee de Veneno. */
+export const MOTION_MELEE_PUFFS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let t = clamp(uniform.uEffectTime / max(uniform.uEffectLife, 0.001), 0.0, 1.0);
+  let grow = 0.65 + min(1.0, t * 2.2) * 0.55;
+  let size = max(0.0001, a1.x * grow);
+  return effectTRS(
+    vec3f(
+      a0.x * (1.0 + t * 0.45),
+      a0.y + t * 0.45,
+      a0.z + t * 0.85
+    ),
+    vec3f(size, size * 0.82, size),
+    effectEulerZYX(
+      0.0,
+      (a0.w + t * 40.0) * EFFECT_DEG,
+      sin(t * 12.0 + a0.x) * 12.0 * EFFECT_DEG
+    )
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Anillo de hojas que gira alrededor de un proyectil de Planta. */
+export const MOTION_PROJECTILE_LEAF_RING_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let ring = uniform.uEffectTime * 420.0 * EFFECT_DEG;
+  let angle = a0.x + ring;
+  let radius = uniform.uEffectRadius * a0.y;
+  return effectTRS(
+    vec3f(cos(angle) * radius, 0.0, sin(angle) * radius),
+    vec3f(max(0.0001, a1.x), max(0.0001, a1.y), max(0.0001, a1.x)),
+    effectRotY(ring) *
+      effectRotZ(a0.w * EFFECT_DEG) *
+      effectRotY(a0.z * EFFECT_DEG)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Arcos de un proyectil eléctrico. */
+export const MOTION_PROJECTILE_ARCS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  return effectTRS(
+    base[3].xyz,
+    vec3f(max(0.0001, a1.w)),
+    effectEulerZYX(
+      (a0.x + uniform.uEffectTime * a1.x) * EFFECT_DEG,
+      (a0.y + uniform.uEffectTime * a1.y) * EFFECT_DEG,
+      (a0.z + uniform.uEffectTime * a1.z) * EFFECT_DEG
+    )
   );
 }
 

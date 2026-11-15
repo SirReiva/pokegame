@@ -446,9 +446,10 @@ su material, sus texturas float y un draw call por vista.
 
 `EffectParticleBatch` (`src/game/render/fx/effectParticleBatch.ts`) genera una
 malla de billboards y calcula en el vertex shader la posición, la deriva, el
-tamaño y el color con un único `uTime`. Los emisores que se desplazan con un
-proyectil conservan el sistema antiguo mediante `worldSpaceTrail`; los que usan
-`stretch` también, porque el estiramiento por movimiento aún no está portado.
+tamaño y el color con un único `uTime`. `WorldTrailBatch`
+(`worldTrailBatch.ts`) hace lo mismo para las estelas de proyectiles, pero
+emitiendo en la posición mundial del proyectil para que las motas se queden
+atrás. Entre los dos ya no queda ningún `ParticleSystem` de combate.
 
 Detalle importante: el número de partículas vivas no es `numParticles`, sino
 `lifetime / rate` (PlayCanvas escalona los nacimientos cada `rate` segundos).
@@ -467,6 +468,36 @@ Medido con la cámara fija y una vista:
 En las áreas el draw call baja poco (el emisor ya era uno), pero desaparecen la
 simulación por frame y el `preWarm` de cada casteo, que era el pico que se
 notaba al encadenar habilidades.
+
+### Impactos, melee y proyectiles
+
+Los impactos con más elementos también usan lotes para sus aros, motas, gotas y
+jirones. Medido con una vista:
+
+| Efecto | Antes | Ahora |
+| --- | ---: | ---: |
+| Impacto de aura | 11 | **4** |
+| Impacto fantasma | 13 | **6** |
+| Impacto oscuro | 17 | **11** |
+| Impacto de acero | 20 | **12** |
+| Impacto de lucha | 23 | **4** |
+| Impacto de fuego | ~17 | **7** |
+| Impacto eléctrico | 6 | **4** |
+| Impacto shuriken | 13 | **5** |
+| Impacto de mandíbula | 10 | **4** |
+| Melee de Planta | 10 | **2** |
+| Melee de Veneno | 10 | **4** |
+| Mordida de mandíbula | ~22 | **3** |
+| Proyectil eléctrico | 6 | **4** |
+| Proyectil de hojas | 7 | **3** |
+| Proyectil shuriken | 7 | **5** |
+
+El proyectil eléctrico reutiliza una única malla de rayo cacheada y dibuja sus
+tres arcos en un lote, así que tampoco genera geometría nueva por casteo.
+
+Quedan como entidades sueltas las garras y ondas del melee, las marcas de área
+y la decoración de los proyectiles de fuego, roca y veneno. Son efectos de un
+solo golpe, con pocas mallas y menor frecuencia que los ya migrados.
 
 ## Prioridad recomendada
 

@@ -1,6 +1,7 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
-import { DEG } from '../../config';
+import { EffectBatch, MOTION_FIGHTING_CORES, MOTION_FIGHTING_LINES, MOTION_FIRE_BURST_FLAMES, MOTION_FIRE_BURST_SPARKS, MOTION_IMPACT_PUFFS, MOTION_IMPACT_RADIAL, MOTION_IMPACT_RINGS, MOTION_JAW_SHARDS, MOTION_PROJECTILE_ARCS } from '../../effectBatch';
+import type { EffectBatchInstance } from '../../effectBatch';
 import { createLightningMesh } from './fxGeometry';
 
 /** Impacto de un golpe. `effectiveness` tiñe el destello. */
@@ -58,61 +59,54 @@ const root = new pc.Entity('aura-burst');
     body.setLocalPosition(0, 0.65, 0);
     body.setLocalScale(0.2, 0.2, 0.2);
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: [
+        { anim0: [0.08, 0, 90, 180], anim1: [power, 0.25, 2.1, 0] },
+        { anim0: [0.58, 0.45, 90, -140], anim1: [power, 0.25, 2.55, 0] }
+      ],
+      motion: MOTION_IMPACT_RINGS,
+      life: 0.42
+    });
 
-    const motes: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const moteInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
-      const mote = ctx.createEntity(ctx.sphereMesh, [moteMaterial], root);
       const size = 0.07 + (index % 3) * 0.025;
-      mote.setLocalScale(size, size, size);
-      motes.push({
-        entity: mote,
-        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.3,
-        distance: (0.55 + Math.random() * 0.55) * power,
-        rise: 0.25 + Math.random() * 0.55,
-        size
+      moteInstances.push({
+        anim0: [
+          (index / 7) * Math.PI * 2 + Math.random() * 0.3,
+          (0.55 + Math.random() * 0.55) * power,
+          0.25 + Math.random() * 0.55,
+          size
+        ],
+        anim1: [0.04, 0.8, 0.65, 0],
+        anim2: [0, 1, 0, 0]
       });
     }
+    const moteBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: moteMaterial,
+      instances: moteInstances,
+      motion: MOTION_IMPACT_RADIAL,
+      life: 0.42
+    });
 
-    ctx.addEffect(root, materials, 0.42, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.42, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const coreScale = (0.2 + ease * 1.15) * power;
       core.setLocalScale(coreScale, coreScale, coreScale);
       const bodyScale = (0.2 + ease * 1.9) * power;
       body.setLocalScale(bodyScale, bodyScale, bodyScale);
 
-      rings.forEach((ring, index) => {
-        const scale = (0.25 + ease * (2.1 + index * 0.45)) * power;
-        ring.setLocalScale(scale, 1, scale);
-        ring.setLocalEulerAngles(90, t * (index === 0 ? 180 : -140), 0);
-      });
-
-      for (const mote of motes) {
-        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.8));
-        const distance = mote.distance * local;
-        mote.entity.setLocalPosition(
-          Math.cos(mote.angle) * distance,
-          0.65 + Math.sin(local * Math.PI) * mote.rise,
-          Math.sin(mote.angle) * distance
-        );
-        const fade = Math.max(0, 1 - local);
-        mote.entity.setLocalScale(
-          mote.size * fade,
-          mote.size * fade,
-          mote.size * fade
-        );
-      }
+      ringBatch.setTime(time);
+      moteBatch.setTime(time);
 
       coreMaterial.opacity = 0.95 * (1 - t);
       bodyMaterial.opacity = 0.5 * (1 - t);
@@ -153,32 +147,42 @@ const root = new pc.Entity('ghost-burst');
     const body = ctx.createEntity(ctx.sphereMesh, [bodyMaterial], root);
     body.setLocalPosition(0, 0.7, 0);
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: [
+        { anim0: [0.08, 0, 0, 0], anim1: [power, 0.2, 1.7, 0] },
+        { anim0: [0.58, 0, 0, 0], anim1: [power, 0.2, 1.7, 0] }
+      ],
+      motion: MOTION_IMPACT_RINGS,
+      life: 0.45
+    });
 
-    const wisps: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const wispInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
-      const wisp = ctx.createEntity(ctx.boxMesh, [wispMaterial], root);
       const size = 0.12 + Math.random() * 0.12;
-      wisp.setLocalScale(size, size, size * 3);
-      wisps.push({
-        entity: wisp,
-        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.4,
-        distance: (0.4 + Math.random() * 0.55) * power,
-        rise: 0.5 + Math.random() * 0.5,
-        size
+      wispInstances.push({
+        anim0: [
+          (index / 7) * Math.PI * 2 + Math.random() * 0.4,
+          (0.4 + Math.random() * 0.55) * power,
+          0.5 + Math.random() * 0.5,
+          size
+        ],
+        anim1: [0.04, 0.8, 0.35, 70],
+        anim2: [1.4, 3.2, 45, 0]
       });
     }
+    const wispBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: wispMaterial,
+      instances: wispInstances,
+      motion: MOTION_IMPACT_RADIAL,
+      life: 0.45
+    });
 
     const eyes: pc.Entity[] = [];
     for (let index = 0; index < 2; index++) {
@@ -187,39 +191,17 @@ const root = new pc.Entity('ghost-burst');
       eyes.push(eye);
     }
 
-    ctx.addEffect(root, materials, 0.45, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.45, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const coreScale = (0.16 + ease * 0.62) * power;
       core.setLocalScale(coreScale, coreScale, coreScale);
       const bodyScale = (0.2 + ease * 1.15) * power;
       body.setLocalScale(bodyScale, bodyScale, bodyScale);
 
-      for (const ring of rings) {
-        const scale = (0.2 + ease * 1.7) * power;
-        ring.setLocalScale(scale, 1, scale);
-      }
-
-      for (const wisp of wisps) {
-        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.8));
-        const distance = wisp.distance * local;
-        const angle = wisp.angle + local * 1.4;
-        wisp.entity.setLocalPosition(
-          Math.cos(angle) * distance,
-          0.35 + Math.sin(local * Math.PI) * wisp.rise,
-          Math.sin(angle) * distance
-        );
-        const fade = Math.max(0, 1 - local);
-        wisp.entity.setLocalScale(
-          wisp.size * fade,
-          wisp.size * fade,
-          wisp.size * 3.2 * fade
-        );
-        wisp.entity.setLocalEulerAngles(
-          local * 70,
-          angle / DEG,
-          local * 45
-        );
-      }
+      ringBatch.setTime(time);
+      wispBatch.setTime(time);
 
       const eyeFade = Math.max(0, 1 - Math.max(0, (t - 0.18) / 0.28));
       const eyeScale = 0.1 * power * eyeFade;
@@ -282,32 +264,42 @@ const root = new pc.Entity('dark-burst');
       });
     }
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: [
+        { anim0: [0.08, 0, 90, 220], anim1: [power, 0.2, 1.8, 0] },
+        { anim0: [0.58, 0, 90, 220], anim1: [power, 0.2, 1.8, 0] }
+      ],
+      motion: MOTION_IMPACT_RINGS,
+      life: 0.4
+    });
 
-    const wisps: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const wispInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
-      const wisp = ctx.createEntity(ctx.sphereMesh, [wispMaterial], root);
       const size = 0.16 + Math.random() * 0.16;
-      wisp.setLocalScale(size, size * 0.7, size);
-      wisps.push({
-        entity: wisp,
-        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.35,
-        distance: (0.5 + Math.random() * 0.55) * power,
-        rise: 0.35 + Math.random() * 0.5,
-        size
+      wispInstances.push({
+        anim0: [
+          (index / 7) * Math.PI * 2 + Math.random() * 0.35,
+          (0.5 + Math.random() * 0.55) * power,
+          0.35 + Math.random() * 0.5,
+          size
+        ],
+        anim1: [0.04, 0.8, 0.4, 0],
+        anim2: [0, 1, 0, 0]
       });
     }
+    const wispBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: wispMaterial,
+      instances: wispInstances,
+      motion: MOTION_IMPACT_RADIAL,
+      life: 0.4
+    });
 
     const smoke: {
       entity: pc.Entity;
@@ -329,7 +321,9 @@ const root = new pc.Entity('dark-burst');
       });
     }
 
-    ctx.addEffect(root, materials, 0.4, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.4, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const coreScale = (0.16 + ease * 0.62) * power;
       core.setLocalScale(coreScale, coreScale, coreScale);
@@ -351,28 +345,8 @@ const root = new pc.Entity('dark-burst');
         );
       });
 
-      for (const ring of rings) {
-        const scale = (0.2 + ease * 1.8) * power;
-        ring.setLocalScale(scale, 1, scale);
-        ring.setLocalEulerAngles(90, t * 220, 0);
-      }
-
-      for (const wisp of wisps) {
-        const local = Math.min(1, Math.max(0, (t - 0.04) / 0.8));
-        const distance = wisp.distance * local;
-        wisp.entity.setLocalPosition(
-          Math.cos(wisp.angle) * distance,
-          0.4 + Math.sin(local * Math.PI) * wisp.rise,
-          Math.sin(wisp.angle) * distance
-        );
-        const grow = 0.7 + local * 0.8;
-        const fade = Math.max(0, 1 - local);
-        wisp.entity.setLocalScale(
-          wisp.size * grow * fade,
-          wisp.size * 0.7 * grow * fade,
-          wisp.size * grow * fade
-        );
-      }
+      ringBatch.setTime(time);
+      wispBatch.setTime(time);
 
       for (const puff of smoke) {
         const local = Math.min(1, Math.max(0, t / 0.9));
@@ -446,12 +420,18 @@ const root = new pc.Entity('steel-burst');
       });
     }
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.08 + index * 0.5, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: [
+        { anim0: [0.08, 0, 90, 240], anim1: [power, 0.2, 1.7, 0] },
+        { anim0: [0.58, 0, 90, 240], anim1: [power, 0.2, 1.7, 0] }
+      ],
+      motion: MOTION_IMPACT_RINGS,
+      life: 0.34
+    });
 
     const shards: {
       entity: pc.Entity;
@@ -475,27 +455,33 @@ const root = new pc.Entity('steel-burst');
       });
     }
 
-    const sparks: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const sparkInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 8; index++) {
-      const spark = ctx.createEntity(ctx.sphereMesh, [sparkMaterial], root);
       const size = 0.05 + Math.random() * 0.04;
-      spark.setLocalScale(size, size, size);
-      sparks.push({
-        entity: spark,
-        angle: Math.random() * Math.PI * 2,
-        distance: (0.55 + Math.random() * 0.8) * power,
-        rise: 0.25 + Math.random() * 0.55,
-        size
+      sparkInstances.push({
+        anim0: [
+          Math.random() * Math.PI * 2,
+          (0.55 + Math.random() * 0.8) * power,
+          0.25 + Math.random() * 0.55,
+          size
+        ],
+        anim1: [0.02, 0.82, 0.65, 0],
+        anim2: [0, 1, 0, 0]
       });
     }
+    const sparkBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: sparkMaterial,
+      instances: sparkInstances,
+      motion: MOTION_IMPACT_RADIAL,
+      life: 0.34
+    });
 
-    ctx.addEffect(root, materials, 0.34, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.34, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const flashScale = (0.14 + ease * 0.42) * power;
       flash.setLocalScale(flashScale, flashScale, flashScale);
@@ -515,11 +501,8 @@ const root = new pc.Entity('steel-burst');
         );
       });
 
-      for (const ring of rings) {
-        const scale = (0.2 + ease * 1.7) * power;
-        ring.setLocalScale(scale, 1, scale);
-        ring.setLocalEulerAngles(90, t * 240, 0);
-      }
+      ringBatch.setTime(time);
+      sparkBatch.setTime(time);
 
       for (const shard of shards) {
         const local = Math.min(1, Math.max(0, (t - 0.03) / 0.75));
@@ -539,22 +522,6 @@ const root = new pc.Entity('steel-burst');
           shard.yaw + t * 180,
           shard.yaw + t * 240,
           shard.roll
-        );
-      }
-
-      for (const spark of sparks) {
-        const local = Math.min(1, Math.max(0, (t - 0.02) / 0.82));
-        const distance = spark.distance * local;
-        spark.entity.setLocalPosition(
-          Math.cos(spark.angle) * distance,
-          0.65 + Math.sin(local * Math.PI) * spark.rise,
-          Math.sin(spark.angle) * distance
-        );
-        const fade = Math.max(0, 1 - local);
-        spark.entity.setLocalScale(
-          spark.size * fade,
-          spark.size * fade,
-          spark.size * fade
         );
       }
 
@@ -587,105 +554,87 @@ const root = new pc.Entity('fighting-burst');
     const power =
       effectiveness > 1 ? 1.25 : effectiveness < 1 ? 0.85 : 1;
 
-    const clusters: {
-      core: pc.Entity;
-      lines: { entity: pc.Entity; angle: number }[];
-      delay: number;
-    }[] = [];
+    const coreInstances: EffectBatchInstance[] = [];
+    const lineInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
       const angle = (index / 3) * Math.PI * 2 + 0.4;
       const offset = (0.12 + index * 0.06) * power;
-      const cluster = new pc.Entity('fighting-cluster');
-      cluster.setLocalPosition(
-        Math.cos(angle) * offset,
-        0.68 + index * 0.04,
-        Math.sin(angle) * offset
-      );
-      root.addChild(cluster);
-
-      const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], cluster);
-      const lines: { entity: pc.Entity; angle: number }[] = [];
+      const cx = Math.cos(angle) * offset;
+      const cy = 0.68 + index * 0.04;
+      const cz = Math.sin(angle) * offset;
+      coreInstances.push({
+        anim0: [cx, cy, cz, index * 0.05],
+        anim1: [power, 0, 0, 0]
+      });
       for (let lineIndex = 0; lineIndex < 4; lineIndex++) {
-        const line = ctx.createEntity(ctx.boxMesh, [lineMaterial], cluster);
-        lines.push({
-          entity: line,
-          angle: (lineIndex / 4) * Math.PI * 2 + index * 0.5
+        lineInstances.push({
+          anim0: [
+            cx,
+            cy,
+            cz,
+            (lineIndex / 4) * Math.PI * 2 + index * 0.5
+          ],
+          anim1: [index * 0.05, 0.32, power, 0]
         });
       }
-      clusters.push({ core, lines, delay: index * 0.05 });
     }
+    const coreBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: coreMaterial,
+      instances: coreInstances,
+      motion: MOTION_FIGHTING_CORES,
+      life: 0.42
+    });
+    const lineBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: lineMaterial,
+      instances: lineInstances,
+      motion: MOTION_FIGHTING_LINES,
+      life: 0.42
+    });
 
     const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
     ring.setLocalPosition(0, 0.08, 0);
 
-    const puffs: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const puffInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
-      const puff = ctx.createEntity(ctx.sphereMesh, [puffMaterial], root);
       const size = 0.2 + Math.random() * 0.18;
-      puff.setLocalScale(size, size * 0.8, size);
-      puffs.push({
-        entity: puff,
-        angle: (index / 7) * Math.PI * 2 + Math.random() * 0.35,
-        distance: (0.55 + Math.random() * 0.55) * power,
-        rise: 0.25 + Math.random() * 0.45,
-        size
+      puffInstances.push({
+        anim0: [
+          (index / 7) * Math.PI * 2 + Math.random() * 0.35,
+          (0.55 + Math.random() * 0.55) * power,
+          0.25 + Math.random() * 0.45,
+          size
+        ],
+        anim1: [0.03, 0.78, 0.35, 0.8],
+        anim2: [0.6, 0, 0, 0]
       });
     }
+    const puffBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: puffMaterial,
+      instances: puffInstances,
+      motion: MOTION_IMPACT_PUFFS,
+      life: 0.42
+    });
 
-    ctx.addEffect(root, materials, 0.42, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.42, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const ringScale = (0.22 + ease * 2.1) * power;
       ring.setLocalScale(ringScale, 1, ringScale);
       ring.setLocalEulerAngles(90, t * 160, 0);
 
-      for (const cluster of clusters) {
-        const local = Math.min(
-          1,
-          Math.max(0, (t - cluster.delay) / 0.32)
-        );
-        const appear = local <= 0 ? 0 : 1;
-        const fade = Math.max(0, 1 - local);
-        const coreScale = (0.08 + local * 0.42) * appear;
-        cluster.core.setLocalScale(coreScale, coreScale, coreScale);
-
-        for (const line of cluster.lines) {
-          const distance = (0.1 + local * 0.45) * power;
-          line.entity.setLocalPosition(
-            Math.sin(line.angle) * distance,
-            0,
-            Math.cos(line.angle) * distance
-          );
-          line.entity.setLocalScale(
-            0.035 * fade,
-            0.035 * fade,
-            (0.16 + local * 0.42) * fade
-          );
-          line.entity.setLocalEulerAngles(0, line.angle / DEG, 0);
-        }
-      }
-
-      for (const puff of puffs) {
-        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.78));
-        const distance = puff.distance * local;
-        puff.entity.setLocalPosition(
-          Math.cos(puff.angle) * distance,
-          0.35 + Math.sin(local * Math.PI) * puff.rise,
-          Math.sin(puff.angle) * distance
-        );
-        const grow = 0.7 + local * 0.6;
-        const fade = Math.max(0, 1 - local);
-        puff.entity.setLocalScale(
-          puff.size * grow * fade,
-          puff.size * 0.8 * grow * fade,
-          puff.size * grow * fade
-        );
-      }
+      coreBatch.setTime(time);
+      lineBatch.setTime(time);
+      puffBatch.setTime(time);
 
       coreMaterial.opacity = 0.9 * (1 - t);
       lineMaterial.opacity = 0.9 * (1 - t);
@@ -738,34 +687,46 @@ const root = new pc.Entity('shuriken-burst');
     );
     innerStar.setLocalEulerAngles(0, 0, 22);
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.06 + index * 0.45, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: [
+        { anim0: [0.06, 0, 90, 200], anim1: [power, 0.18, 1.7, 0] },
+        { anim0: [0.51, 0, 90, 200], anim1: [power, 0.18, 1.7, 0] }
+      ],
+      motion: MOTION_IMPACT_RINGS,
+      life: 0.34
+    });
 
-    const drops: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-    }[] = [];
+    const dropInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 8; index++) {
-      const drop = ctx.createEntity(ctx.sphereMesh, [dropMaterial], root);
       const size = 0.06 + Math.random() * 0.05;
-      drop.setLocalScale(size, size, size);
-      drops.push({
-        entity: drop,
-        angle: (index / 8) * Math.PI * 2 + Math.random() * 0.4,
-        distance: (0.55 + Math.random() * 0.6) * power,
-        rise: 0.25 + Math.random() * 0.45,
-        size
+      dropInstances.push({
+        anim0: [
+          (index / 8) * Math.PI * 2 + Math.random() * 0.4,
+          (0.55 + Math.random() * 0.6) * power,
+          0.25 + Math.random() * 0.45,
+          size
+        ],
+        anim1: [0.02, 0.8, 0.4, 0],
+        anim2: [0, 1, 0, 0]
       });
     }
+    const dropBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: dropMaterial,
+      instances: dropInstances,
+      motion: MOTION_IMPACT_RADIAL,
+      life: 0.34
+    });
 
-    ctx.addEffect(root, materials, 0.34, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.34, (t, dt) => {
+      time += dt;
       const ease = 1 - Math.pow(1 - t, 3);
       const coreScale = (0.14 + ease * 0.5) * power;
       core.setLocalScale(coreScale, coreScale, coreScale);
@@ -774,27 +735,8 @@ const root = new pc.Entity('shuriken-burst');
       starPivot.setLocalScale(starScale, starScale, starScale);
       starPivot.setLocalEulerAngles(0, t * 300, 0);
 
-      for (const ring of rings) {
-        const scale = (0.18 + ease * 1.7) * power;
-        ring.setLocalScale(scale, 1, scale);
-        ring.setLocalEulerAngles(90, t * 200, 0);
-      }
-
-      for (const drop of drops) {
-        const local = Math.min(1, Math.max(0, (t - 0.02) / 0.8));
-        const distance = drop.distance * local;
-        drop.entity.setLocalPosition(
-          Math.cos(drop.angle) * distance,
-          0.4 + Math.sin(local * Math.PI) * drop.rise,
-          Math.sin(drop.angle) * distance
-        );
-        const fade = Math.max(0, 1 - local);
-        drop.entity.setLocalScale(
-          drop.size * fade,
-          drop.size * fade,
-          drop.size * fade
-        );
-      }
+      ringBatch.setTime(time);
+      dropBatch.setTime(time);
 
       coreMaterial.opacity = 0.95 * (1 - t);
       bladeMaterial.opacity = 0.95 * (1 - t);
@@ -838,36 +780,38 @@ const root = new pc.Entity('jaw-impact');
       });
     }
 
-    const shards: {
-      entity: pc.Entity;
-      angle: number;
-      rise: number;
-      distance: number;
-      length: number;
-      spin: number;
-      delay: number;
-    }[] = [];
+    const shardInstances: EffectBatchInstance[] = [];
     const count = 7;
     for (let index = 0; index < count; index++) {
-      const shard = ctx.createEntity(
-        ctx.rockSpikeMesh,
-        [shardMaterial],
-        root
-      );
       const length = (0.2 + (index % 3) * 0.06) * power;
-      shard.setLocalScale(0.09 * power, length, 0.09 * power);
-      shards.push({
-        entity: shard,
-        angle: (index / count) * Math.PI * 2 + 0.35,
-        rise: 0.5 + (index % 2) * 0.35,
-        distance: 0.55 + (index % 3) * 0.16,
-        length,
-        spin: (index % 2 === 0 ? 1 : -1) * (260 + index * 40),
-        delay: index * 0.02
+      shardInstances.push({
+        anim0: [
+          (index / count) * Math.PI * 2 + 0.35,
+          0.55 + (index % 3) * 0.16,
+          0.5 + (index % 2) * 0.35,
+          length
+        ],
+        anim1: [
+          index * 0.02,
+          (index % 2 === 0 ? 1 : -1) * (260 + index * 40),
+          power,
+          0
+        ]
       });
     }
+    const shardBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.rockSpikeMesh,
+      material: shardMaterial,
+      instances: shardInstances,
+      motion: MOTION_JAW_SHARDS,
+      life: 0.38
+    });
 
-    ctx.addEffect(root, materials, 0.38, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.38, (t, dt) => {
+      time += dt;
       const fade = Math.max(0, 1 - t);
 
       for (const streak of streaks) {
@@ -885,30 +829,7 @@ const root = new pc.Entity('jaw-impact');
         );
       }
       streakMaterial.opacity = 0.62 * fade;
-
-      for (const shard of shards) {
-        const shardT = Math.min(
-          1,
-          Math.max(0, (t - shard.delay) / 0.7)
-        );
-        const travel = 1 - (1 - shardT) * (1 - shardT);
-        shard.entity.setLocalPosition(
-          Math.cos(shard.angle) * shard.distance * travel,
-          0.1 + shard.rise * travel,
-          Math.sin(shard.angle) * shard.distance * travel
-        );
-        shard.entity.setLocalEulerAngles(
-          (shardT * 320) % 360,
-          (shardT * shard.spin) % 360,
-          (shardT * 180) % 360
-        );
-        const grow = 1 - shardT * 0.6;
-        shard.entity.setLocalScale(
-          0.09 * power * grow,
-          shard.length * grow,
-          0.09 * power * grow
-        );
-      }
+      shardBatch.setTime(time);
       shardMaterial.opacity = fade;
     });
 }
@@ -933,25 +854,29 @@ const root = new pc.Entity('electric-burst');
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.65, 0);
 
-    const arcs: pc.Entity[] = [];
-    for (let index = 0; index < 3; index++) {
-      const mesh = createLightningMesh(
-        ctx.device,
-        0.9,
-        0.025,
-        4,
-        2000 + index * 3571
-      );
-      const arc = ctx.createEntity(mesh, [arcMaterial], root);
-      arc.setLocalPosition(0, 0.65, 0);
-      arc.setLocalEulerAngles(index * 70, index * 110, index * 45);
-      arcs.push(arc);
-    }
+    const arcMesh = ctx.cachedMesh(
+      'electric-burst-arc',
+      () => createLightningMesh(ctx.device, 0.9, 0.025, 4, 2000)
+    );
+    const arcBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: arcMesh,
+      material: arcMaterial,
+      instances: [0, 1, 2].map((index) => ({
+        y: 0.65,
+        anim0: [index * 70, index * 110, index * 45, 0],
+        anim1: [220, 300, 180, 1]
+      })),
+      motion: MOTION_PROJECTILE_ARCS
+    });
 
     const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
     ring.setLocalPosition(0, 0.08, 0);
 
-    ctx.addEffect(root, materials, 0.32, (t) => {
+    let time = 0;
+    ctx.addEffect(root, materials, 0.32, (t, dt) => {
+      time += dt;
       const scale = 0.15 + t * (effectiveness > 1 ? 0.95 : 0.7);
       core.setLocalScale(scale, scale, scale);
       const glowScale = 0.4 + t * (effectiveness > 1 ? 1.6 : 1.2);
@@ -962,14 +887,7 @@ const root = new pc.Entity('electric-burst');
       const ringScale = 0.5 + t * 1.1;
       ring.setLocalScale(ringScale, 1, ringScale);
       ringMaterial.opacity = 0.45 * (1 - t);
-
-      for (let index = 0; index < arcs.length; index++) {
-        arcs[index].setLocalEulerAngles(
-          (index * 70 + t * 220) % 360,
-          (index * 110 + t * 300) % 360,
-          (index * 45 + t * 180) % 360
-        );
-      }
+      arcBatch.setTime(time);
     });
 }
 
@@ -1022,71 +940,76 @@ const root = new pc.Entity('fire-burst');
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.62, 0);
 
-    const flames: {
-      entity: pc.Entity;
-      offsetX: number;
-      offsetZ: number;
-      baseWidth: number;
-      baseHeight: number;
-      yaw: number;
-      phase: number;
-    }[] = [];
+    const flameInstances: EffectBatchInstance[] = [];
+    const hotFlameInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 5; index++) {
       const angle = (index / 5) * Math.PI * 2 + 0.4;
       const dist = 0.1 + ((index * 13) % 10) / 10 * 0.16;
-      const baseWidth = 0.28 + ((index * 17) % 10) / 10 * 0.16;
-      const baseHeight = 0.55 + ((index * 29) % 10) / 10 * 0.35;
-      const yaw = (index * 53) % 360;
-      const entity = ctx.createFlame(
-        root,
-        index % 3 === 0 ? hotMaterial : flameMaterial,
-        {
-          x: Math.cos(angle) * dist,
-          y: 0.08,
-          z: Math.sin(angle) * dist,
-          width: baseWidth,
-          height: baseHeight,
-          yaw
-        }
-      );
-      flames.push({
-        entity,
-        offsetX: Math.cos(angle) * dist,
-        offsetZ: Math.sin(angle) * dist,
-        baseWidth,
-        baseHeight,
-        yaw,
-        phase: index * 1.4
-      });
+      const instance: EffectBatchInstance = {
+        anim0: [
+          Math.cos(angle) * dist,
+          Math.sin(angle) * dist,
+          index * 1.4,
+          (index * 53) % 360
+        ],
+        anim1: [
+          0.28 + ((index * 17) % 10) / 10 * 0.16,
+          0.55 + ((index * 29) % 10) / 10 * 0.35,
+          0,
+          0
+        ]
+      };
+      if (index % 3 === 0) hotFlameInstances.push(instance);
+      else flameInstances.push(instance);
     }
+    const flameBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.flameMesh,
+      material: flameMaterial,
+      instances: flameInstances,
+      motion: MOTION_FIRE_BURST_FLAMES,
+      life: 0.45
+    });
+    const hotFlameBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.flameMesh,
+      material: hotMaterial,
+      instances: hotFlameInstances,
+      motion: MOTION_FIRE_BURST_FLAMES,
+      life: 0.45
+    });
 
-    const sparks: {
-      entity: pc.Entity;
-      dirX: number;
-      dirZ: number;
-      speed: number;
-      lift: number;
-      phase: number;
-    }[] = [];
+    const sparkInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
       const angle = (index / 7) * Math.PI * 2 + 0.9;
-      const spark = ctx.createEntity(ctx.sphereMesh, [sparkMaterial], root);
-      const size = 0.05 + ((index * 11) % 10) / 10 * 0.05;
-      spark.setLocalScale(size, size, size);
-      sparks.push({
-        entity: spark,
-        dirX: Math.cos(angle),
-        dirZ: Math.sin(angle),
-        speed: 0.8 + ((index * 7) % 10) / 10 * 1.1,
-        lift: 1.4 + ((index * 3) % 10) / 10 * 1.2,
-        phase: index * 1.9
+      sparkInstances.push({
+        anim0: [
+          Math.cos(angle),
+          Math.sin(angle),
+          0.8 + ((index * 7) % 10) / 10 * 1.1,
+          1.4 + ((index * 3) % 10) / 10 * 1.2
+        ],
+        anim1: [index * 1.9, 0.1, 0, 0]
       });
     }
+    const sparkBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: sparkMaterial,
+      instances: sparkInstances,
+      motion: MOTION_FIRE_BURST_SPARKS,
+      life: 0.45
+    });
 
     const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
     ring.setLocalPosition(0, 0.08, 0);
 
-    const animate = (t: number): void => {
+    let time = 0;
+    const animate = (t: number, dt: number): void => {
+      time += dt;
       const boost = effectiveness > 1 ? 1.35 : 1;
       const scale = (0.18 + t * 0.95) * boost;
       core.setLocalScale(scale, scale, scale);
@@ -1095,44 +1018,10 @@ const root = new pc.Entity('fire-burst');
       coreMaterial.opacity = 0.9 * (1 - t);
       glowMaterial.opacity = 0.4 * (1 - t);
 
-      for (const flame of flames) {
-        const life =
-          Math.min(1, t / 0.12) *
-          (1 - Math.max(0, (t - 0.3) / 0.7));
-        const sway = Math.sin(t * 21 + flame.phase) * 0.2;
-        const scaleNow = Math.max(0.001, life);
-        flame.entity.setLocalScale(
-          flame.baseWidth * scaleNow * (1 + sway * 0.3),
-          flame.baseHeight * scaleNow * (1.05 + sway),
-          flame.baseWidth * scaleNow * (1 + sway * 0.3)
-        );
-        flame.entity.setLocalPosition(
-          flame.offsetX * (1 + t * 0.4),
-          0.08 + t * 1.05,
-          flame.offsetZ * (1 + t * 0.4)
-        );
-        flame.entity.setLocalEulerAngles(
-          0,
-          flame.yaw + t * 70,
-          Math.sin(t * 18 + flame.phase) * 10
-        );
-      }
+      flameBatch.setTime(time);
+      hotFlameBatch.setTime(time);
+      sparkBatch.setTime(time);
 
-      for (const spark of sparks) {
-        const travel = t * 0.42;
-        const y = spark.lift * travel - 4.2 * travel * travel;
-        spark.entity.setLocalPosition(
-          spark.dirX * spark.speed * travel,
-          Math.max(0.03, 0.35 + y),
-          spark.dirZ * spark.speed * travel
-        );
-        const sparkLife = Math.max(0, 1 - t) * (0.8 + Math.sin(t * 30 + spark.phase) * 0.2);
-        spark.entity.setLocalScale(
-          sparkLife * 0.1,
-          sparkLife * 0.1,
-          sparkLife * 0.1
-        );
-      }
       sparkMaterial.opacity = 0.9 * (1 - t);
 
       flameMaterial.opacity = 0.5 * (1 - t) * (0.85 + Math.random() * 0.15);
@@ -1145,5 +1034,5 @@ const root = new pc.Entity('fire-burst');
       ringMaterial.opacity = 0.4 * (1 - t);
     };
     ctx.addEffect(root, materials, 0.45, animate);
-    animate(0);
+    animate(0, 0);
 }

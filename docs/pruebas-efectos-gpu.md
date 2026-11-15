@@ -48,6 +48,11 @@ habilidad, prueba esta lista.
 | Lucario | **Esfera Aura** | 2 aros, 4 motas y 3 esferas de estela en tres lotes | Que los aros giren sobre ejes distintos, las motas orbiten con vaivén vertical y la estela quede quieta detrás. |
 | Gengar | **Bola Sombra** | 3 jirones, 2 ojos y 3 esferas de estela en tres lotes | Que los jirones ondeen, los ojos parpadeen y la estela no se mueva. |
 | Squirtle | **Rayo Burbuja** | 3 burbujas y 6 brillos en dos lotes | Que las burbujas orbiten alrededor del eje, rueden con sus brillos pegados a la superficie y pulsen. |
+| Lucario | **Esfera Aura** (impacto) | 2 aros y 7 motas en dos lotes | Que los aros se expandan y las motas salgan en círculo y se apaguen. |
+| Gengar | **Bola Sombra** (impacto) | 2 aros y 7 jirones en dos lotes | Que los aros se abran y los jirones suban girando. |
+| Greninja | **Shuriken de Agua** (impacto) | 2 aros y 8 gotas en dos lotes | Que los aros se expandan y las gotas salgan despedidas. |
+| Bulbasaur | **Hoja Afilada** | 9 hojas en un lote | Que las hojas se abran, suban y giren dentro del arco. |
+| Gengar | **Lengüetazo** | 7 puffs de veneno en dos lotes | Que la nube avance por el cono y crezca sin entidades sueltas. |
 
 ## Pruebas de estrés
 
@@ -80,19 +85,17 @@ Siguen con entidades por elemento:
 - El cuerpo de los haces `fire`, `grass`, `water`, `ice`, `air` y `rock`
   (tres capas); los jirones, aros y ojos de `dark`/`ghost` y las púas del haz
   de Roca ya usan lotes. El haz eléctrico y el psíquico también están por lotes.
-- Proyectiles e impactos pequeños, salvo **Chorro de Agua**, **Ráfaga Marina**,
-  **Tajo Aéreo**, **Esfera Aura**, **Bola Sombra** y **Rayo Burbuja**, que ya
-  dibujan su decoración con lotes instanciados.
+- La decoración de los proyectiles de fuego, roca y veneno, y las garras y
+  ondas del melee.
 - El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
   comprueba que la erupción coincide con el punto donde emerge el lanzador.
-- Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
-  demás golpes con pocas entidades.
 - La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.
 
-Los emisores de partículas de áreas, impactos, haces y melee usan
-`EffectParticleBatch` (billboards analíticos). Conservan el `ParticleSystem` de
-PlayCanvas las estelas de proyectiles que se desplazan (necesitan dejar las
-partículas atrás en el mundo) y los dos emisores de haz que usan `stretch`.
+Los impactos, las hojas y puffs del melee, las mordidas y la decoración de la
+mayoría de proyectiles usan lotes instanciados. Los emisores de partículas de
+combate usan `EffectParticleBatch` (efectos fijos) o `WorldTrailBatch` (estelas
+en espacio de mundo): no queda ningún `ParticleSystem` de combate ni pasadas de
+`preWarm` en los casteos.
 
 ## Señales de que algo va mal
 

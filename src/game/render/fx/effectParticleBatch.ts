@@ -37,6 +37,8 @@ export interface EffectParticleBatchOptions {
   velocityEnd: readonly [number, number, number];
   radialSpeed?: number;
   radialSpeedEnd?: number;
+  /** 0 = billboard normal; >0 lo estira en la dirección del movimiento. */
+  stretch?: number;
   yaw?: number;
   preWarm?: boolean;
   seed?: number;
@@ -69,6 +71,7 @@ uniform vec3 uVelocity;
 uniform vec3 uVelocityEnd;
 uniform float uRadialSpeed;
 uniform float uRadialSpeedEnd;
+uniform float uStretch;
 uniform float uPreWarm;
 uniform float uFogStart;
 uniform float uFogEnd;
@@ -117,7 +120,20 @@ void main(void) {
     size = mix(uSizeMid, uSizeEnd, (t - uSizeEndAt) / max(1.0 - uSizeEndAt, 0.001));
   }
   size *= aParams.y;
-  viewCenter.xy += aPosition.xy * size;
+
+  vec2 axisX = vec2(1.0, 0.0);
+  vec2 axisY = vec2(0.0, 1.0);
+  if (uStretch > 0.0) {
+    vec2 direction = (matrix_view * vec4(mix(uVelocity, uVelocityEnd, t), 0.0)).xy;
+    float lengthSq = dot(direction, direction);
+    if (lengthSq > 0.0001) {
+      axisY = direction * inversesqrt(lengthSq);
+      axisX = vec2(axisY.y, -axisY.x);
+    }
+  }
+  float stretch = 1.0 + uStretch * 2.0;
+  viewCenter.xy += axisX * aPosition.x * size;
+  viewCenter.xy += axisY * aPosition.y * size * stretch;
   gl_Position = matrix_projection * viewCenter;
 
   float fade = smoothstep(0.0, uFadeIn, t) * (1.0 - smoothstep(uFadeOut, 1.0, t));
@@ -129,7 +145,7 @@ void main(void) {
 }
 `;
 
-const FRAGMENT_GLSL = `
+export const PARTICLE_FRAGMENT_GLSL = `
 uniform sampler2D uMap;
 uniform vec3 uFogColor;
 uniform float uAdditive;
@@ -188,6 +204,7 @@ uniform uVelocity: vec3f;
 uniform uVelocityEnd: vec3f;
 uniform uRadialSpeed: f32;
 uniform uRadialSpeedEnd: f32;
+uniform uStretch: f32;
 uniform uPreWarm: f32;
 uniform uFogStart: f32;
 uniform uFogEnd: f32;
@@ -247,8 +264,21 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
     );
   }
   size *= aParams.y;
-  viewCenter.x += aPosition.x * size;
-  viewCenter.y += aPosition.y * size;
+  var axisX = vec2f(1.0, 0.0);
+  var axisY = vec2f(0.0, 1.0);
+  if (uniform.uStretch > 0.0) {
+    let direction = (
+      uniform.matrix_view * vec4f(mix(uniform.uVelocity, uniform.uVelocityEnd, t), 0.0)
+    ).xy;
+    let lengthSq = dot(direction, direction);
+    if (lengthSq > 0.0001) {
+      axisY = direction * inverseSqrt(lengthSq);
+      axisX = vec2f(axisY.y, -axisY.x);
+    }
+  }
+  let stretch = 1.0 + uniform.uStretch * 2.0;
+  viewCenter.x += axisX.x * aPosition.x * size + axisY.x * aPosition.y * size * stretch;
+  viewCenter.y += axisX.y * aPosition.x * size + axisY.y * aPosition.y * size * stretch;
   output.position = uniform.matrix_projection * viewCenter;
 
   let fade = smoothstep(0.0, uniform.uFadeIn, t) * (1.0 - smoothstep(uniform.uFadeOut, 1.0, t));
@@ -275,7 +305,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
 }
 `;
 
-const FRAGMENT_WGSL = `
+export const PARTICLE_FRAGMENT_WGSL = `
 uniform uFogColor: vec3f;
 uniform uAdditive: f32;
 var uMap: texture_2d<f32>;
@@ -311,7 +341,7 @@ fn fragmentMain(input: FragmentInput) -> FragmentOutput {
 }
 `;
 
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -395,9 +425,9 @@ export class EffectParticleBatch {
     const material = new pc.ShaderMaterial({
       uniqueName: `effect-particles-${nextBatchId++}`,
       vertexGLSL: VERTEX_GLSL,
-      fragmentGLSL: FRAGMENT_GLSL,
+      fragmentGLSL: PARTICLE_FRAGMENT_GLSL,
       vertexWGSL: VERTEX_WGSL,
-      fragmentWGSL: FRAGMENT_WGSL,
+      fragmentWGSL: PARTICLE_FRAGMENT_WGSL,
       attributes: {
         aPosition: pc.SEMANTIC_POSITION,
         aUv0: pc.SEMANTIC_TEXCOORD0,
@@ -428,6 +458,7 @@ export class EffectParticleBatch {
     material.setParameter('uVelocityEnd', new Float32Array(options.velocityEnd));
     material.setParameter('uRadialSpeed', options.radialSpeed ?? 0);
     material.setParameter('uRadialSpeedEnd', options.radialSpeedEnd ?? 0);
+    material.setParameter('uStretch', options.stretch ?? 0);
     material.setParameter('uPreWarm', options.preWarm === false ? 0 : 1);
     const fog = app.scene.fog;
     material.setParameter('uFogStart', fog.start);

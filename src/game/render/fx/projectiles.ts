@@ -4,6 +4,8 @@ import { DEG } from '../../config';
 import type { EffectHandle } from '../../core/ports/fx';
 import {
   EffectBatch,
+  MOTION_PROJECTILE_ARCS,
+  MOTION_PROJECTILE_LEAF_RING,
   MOTION_PROJECTILE_ORBIT_XZ,
   MOTION_PROJECTILE_SPIN_RING,
   MOTION_STATIC
@@ -70,19 +72,29 @@ const root = new pc.Entity('electric-projectile');
     tail.setLocalPosition(0, 0, -radius * 2.8);
     tail.setLocalScale(radius * 1.1, radius * 1.1, radius * 5.5);
 
-    const arcs: pc.Entity[] = [];
-    for (let index = 0; index < 3; index++) {
-      const mesh = createLightningMesh(
-        ctx.device,
-        radius * 5,
-        Math.max(0.012, radius * 0.13),
-        5,
-        1000 + index * 7919
-      );
-      const arc = ctx.createEntity(mesh, [arcMaterial], root);
-      arc.setLocalEulerAngles(index * 60, index * 120, index * 45);
-      arcs.push(arc);
-    }
+    const arcMesh = ctx.cachedMesh(
+      `electric-arc:${radius.toFixed(3)}`,
+      () =>
+        createLightningMesh(
+          ctx.device,
+          radius * 5,
+          Math.max(0.012, radius * 0.13),
+          5,
+          1000
+        )
+    );
+    const arcBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: arcMesh,
+      material: arcMaterial,
+      instances: [0, 1, 2].map((index) => ({
+        anim0: [index * 70, index * 130, index * 110, 0],
+        anim1: [420, 560, 300, 1]
+      })),
+      motion: MOTION_PROJECTILE_ARCS,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -112,14 +124,7 @@ const root = new pc.Entity('electric-projectile');
         glowMaterial.update();
         arcMaterial.update();
         tailMaterial.update();
-
-        for (let index = 0; index < arcs.length; index++) {
-          arcs[index].setLocalEulerAngles(
-            (time * 420 + index * 70) % 360,
-            (time * 560 + index * 130) % 360,
-            (time * 300 + index * 110) % 360
-          );
-        }
+        arcBatch.setTime(time);
       }
     };
     ctx.projectiles.add(visual);
@@ -298,22 +303,28 @@ const root = new pc.Entity('grass-projectile');
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalScale(radius * 4, radius * 4, radius * 4);
 
-    const leafRing = new pc.Entity('leaf-ring');
-    root.addChild(leafRing);
-    const leaves: pc.Entity[] = [];
+    const leafInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 5; index++) {
       const angle = (index / 5) * Math.PI * 2;
-      const leaf = ctx.createLeaf(leafRing, leafMaterial, {
-        x: Math.cos(angle) * radius * 1.7,
-        y: 0,
-        z: Math.sin(angle) * radius * 1.7,
-        width: radius * 1.1,
-        height: radius * 1.8,
-        yaw: 90 - (angle * 180) / Math.PI,
-        roll: 20
+      leafInstances.push({
+        anim0: [
+          angle,
+          1.7,
+          90 - (angle * 180) / Math.PI,
+          20
+        ],
+        anim1: [radius * 1.1, radius * 1.8, 0, 0]
       });
-      leaves.push(leaf);
     }
+    const leafBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.leafMesh,
+      material: leafMaterial,
+      instances: leafInstances,
+      motion: MOTION_PROJECTILE_LEAF_RING,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -332,7 +343,7 @@ const root = new pc.Entity('grass-projectile');
           radius * 4 * (1 + Math.sin(time * 15) * 0.1),
           radius * 4 * (1 + Math.sin(time * 15) * 0.1)
         );
-        leafRing.setLocalEulerAngles(0, time * 420, 0);
+        leafBatch.setTime(time);
         leafMaterial.opacity = 0.75 + Math.random() * 0.25;
         leafMaterial.update();
       }

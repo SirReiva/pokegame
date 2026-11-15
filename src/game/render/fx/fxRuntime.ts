@@ -3,8 +3,9 @@ import type { BeamStyle } from '../../abilities';
 import { createDustCanvas, createFlameCanvas, createFrostCanvas, createLeafParticleCanvas, createPollenCanvas, textureFromCanvas } from '../../textures';
 import type { FxHandle, FxLayerResolver, TelegraphOwner } from '../../core/ports/fx';
 import type { ActiveEffect, FlameParticleOptions, FxAnchors, GroundTelegraph, ProjectileVisual } from './fxGeometry';
-import { MATERIAL_POOL_LIMIT, PARTICLE_POOL_LIMIT, TELEGRAPH_WALL_OPACITY, createArcBandMesh, createCrossQuadMesh, createCycloneArmMesh, createDashRingMesh, createDiscMesh, createIceCrystalMesh, createShurikenMesh, createWaterJetMesh, createWindBladeMesh, sameLayers } from './fxGeometry';
+import { MATERIAL_POOL_LIMIT, TELEGRAPH_WALL_OPACITY, createArcBandMesh, createCrossQuadMesh, createCycloneArmMesh, createDashRingMesh, createDiscMesh, createIceCrystalMesh, createShurikenMesh, createWaterJetMesh, createWindBladeMesh, sameLayers } from './fxGeometry';
 import { EffectParticleBatch } from './effectParticleBatch';
+import { WorldTrailBatch } from './worldTrailBatch';
 
 export class FxRuntime {
 public readonly app: pc.AppBase;
@@ -23,7 +24,7 @@ public readonly app: pc.AppBase;
    * Emisores de partículas analíticos de los efectos estáticos. Se actualizan
    * con un contador compartido, sin una pasada de simulación por emisor.
    */
-  public readonly particleBatches = new Set<EffectParticleBatch>();
+  public readonly particleBatches = new Set<EffectParticleBatch | WorldTrailBatch>();
   public readonly projectiles = new Set<ProjectileVisual>();
   public readonly sphereMesh: pc.Mesh;
   public readonly boxMesh: pc.Mesh;
@@ -67,14 +68,6 @@ public readonly app: pc.AppBase;
   public readonly materialPools = new Map<string, pc.StandardMaterial[]>();
   /** Fábrica de origen de cada material, para devolverlo a su pool. */
   public readonly materialKinds = new WeakMap<pc.StandardMaterial, string>();
-  /**
-   * Emisores de partículas retirados de escena, agrupados por configuración.
-   * Reutilizarlos evita reconstruir buffers y precalentar el emisor en cada
-   * impacto.
-   */
-  public readonly particlePools = new Map<string, pc.Entity[]>();
-  /** Configuración de cada emisor cedido por un pool. */
-  public readonly particleKeys = new Map<pc.Entity, string>();
   /**
    * Duración del efecto visual de cada haz. El carril del suelo se mantiene
    * vivo lo que dura el propio haz para que ambos desaparezcan a la vez.
@@ -584,6 +577,78 @@ constructor(
   }
 
   /**
+   * Paleta de los tres tipos de emisor. Reproduce las curvas de color y alfa
+   * del `ParticleSystem` original.
+   */
+  private particlePalette(
+    kind: 'flame' | 'leaf' | 'spore',
+    options: FlameParticleOptions,
+    tint: readonly [number, number, number]
+  ): {
+    colorStart: readonly [number, number, number];
+    colorMid: readonly [number, number, number];
+    colorEnd: readonly [number, number, number];
+    colorMidAt: number;
+    opacity: number;
+    fadeIn: number;
+    fadeOut: number;
+    additive: boolean;
+    sizeMidAt: number;
+  } {
+    const r = tint[0] / 255;
+    const g = tint[1] / 255;
+    const b = tint[2] / 255;
+    if (kind === 'flame') {
+      return {
+        colorStart: [1, 0.92, 0.55],
+        colorMid: [1, 0.6, 0.24],
+        colorEnd: [1, 0.3, 0.07],
+        colorMidAt: 0.5,
+        opacity: 0.9,
+        fadeIn: 0.1,
+        fadeOut: 0.55,
+        additive: true,
+        sizeMidAt: 0.28
+      };
+    }
+    if (kind === 'leaf') {
+      return {
+        colorStart: [1, 1, 1],
+        colorMid: [r, g, b],
+        colorEnd: [r * 0.55, g * 0.5, b * 0.35],
+        colorMidAt: 0.4,
+        opacity: 1,
+        fadeIn: 0.12,
+        fadeOut: 0.7,
+        additive: false,
+        sizeMidAt: 0.3
+      };
+    }
+    return {
+      colorStart: [1, 1, 1],
+      colorMid: [r, g, b],
+      colorEnd: [r * 0.5, g * 0.45, b * 0.3],
+      colorMidAt: 0.5,
+      opacity: 0.9,
+      fadeIn: 0.15,
+      fadeOut: 0.65,
+      additive: (options.blendType ?? pc.BLEND_ADDITIVE) !== pc.BLEND_NORMAL,
+      sizeMidAt: 0.3
+    };
+  }
+
+  /** Número de motas vivas en régimen: PlayCanvas nace una cada `rate` s. */
+  private aliveParticles(options: FlameParticleOptions): number {
+    return Math.min(
+      options.numParticles,
+      Math.max(
+        1,
+        Math.floor(options.lifetime / Math.max(options.rate, 1e-6)) + 1
+      )
+    );
+  }
+
+  /**
    * Crea un emisor analítico para un efecto que no se mueve. Sustituye al
    * `ParticleSystem` de PlayCanvas: sin pasada de simulación ni `preWarm`.
    */
@@ -594,84 +659,73 @@ constructor(
     tint: readonly [number, number, number],
     texture: pc.Texture
   ): void {
-    const r = tint[0] / 255;
-    const g = tint[1] / 255;
-    const b = tint[2] / 255;
-    let colorStart: readonly [number, number, number];
-    let colorMid: readonly [number, number, number];
-    let colorEnd: readonly [number, number, number];
-    let colorMidAt: number;
-    let opacity: number;
-    let fadeIn: number;
-    let fadeOut: number;
-    let additive: boolean;
-    let sizeMidAt: number;
-
-    if (kind === 'flame') {
-      colorStart = [1, 0.92, 0.55];
-      colorMid = [1, 0.6, 0.24];
-      colorEnd = [1, 0.3, 0.07];
-      colorMidAt = 0.5;
-      opacity = 0.9;
-      fadeIn = 0.1;
-      fadeOut = 0.55;
-      additive = true;
-      sizeMidAt = 0.28;
-    } else if (kind === 'leaf') {
-      colorStart = [1, 1, 1];
-      colorMid = [r, g, b];
-      colorEnd = [r * 0.55, g * 0.5, b * 0.35];
-      colorMidAt = 0.4;
-      opacity = 1;
-      fadeIn = 0.12;
-      fadeOut = 0.7;
-      additive = false;
-      sizeMidAt = 0.3;
-    } else {
-      colorStart = [1, 1, 1];
-      colorMid = [r, g, b];
-      colorEnd = [r * 0.5, g * 0.45, b * 0.3];
-      colorMidAt = 0.5;
-      opacity = 0.9;
-      fadeIn = 0.15;
-      fadeOut = 0.65;
-      additive = (options.blendType ?? pc.BLEND_ADDITIVE) !== pc.BLEND_NORMAL;
-      sizeMidAt = 0.3;
-    }
-
+    const palette = this.particlePalette(kind, options, tint);
     const batch = new EffectParticleBatch(this.app, parent, {
       position: [options.x ?? 0, options.y ?? 0, options.z ?? 0],
       extents: options.extents,
-      // PlayCanvas reparte los nacimientos cada `rate` segundos, así que el
-      // número vivo en régimen es lifetime / rate, no `numParticles` (que es
-      // solo el tope del pool).
-      count: Math.min(
-        options.numParticles,
-        Math.max(
-          1,
-          Math.floor(options.lifetime / Math.max(options.rate, 1e-6)) + 1
-        )
-      ),
+      count: this.aliveParticles(options),
       texture,
-      additive,
-      colorStart,
-      colorMid,
-      colorEnd,
-      colorMidAt,
-      opacity,
+      additive: palette.additive,
+      colorStart: palette.colorStart,
+      colorMid: palette.colorMid,
+      colorEnd: palette.colorEnd,
+      colorMidAt: palette.colorMidAt,
+      opacity: palette.opacity,
       sizeStart: options.sizeStart,
       sizeMid: options.sizeMid,
       sizeEnd: options.sizeEnd,
-      sizeMidAt,
+      sizeMidAt: palette.sizeMidAt,
       sizeEndAt: 0.7,
       lifetime: options.lifetime,
-      fadeIn,
-      fadeOut,
+      fadeIn: palette.fadeIn,
+      fadeOut: palette.fadeOut,
       velocity: options.velocity,
       velocityEnd: options.velocityEnd,
       radialSpeed: options.radialSpeed,
       radialSpeedEnd: options.radialSpeedEnd,
+      stretch: options.stretch,
       yaw: options.yaw,
+      preWarm: options.preWarm ?? true
+    });
+    this.particleBatches.add(batch);
+    batch.entity.on('destroy', () => this.particleBatches.delete(batch));
+  }
+
+  /**
+   * Estela en espacio de mundo para proyectiles: emite en la posición actual
+   * del proyectil y deja las motas quietas, igual que `localSpace: false`.
+   */
+  private spawnWorldTrail(
+    parent: pc.Entity,
+    options: FlameParticleOptions,
+    kind: 'flame' | 'leaf' | 'spore',
+    tint: readonly [number, number, number],
+    texture: pc.Texture
+  ): void {
+    const palette = this.particlePalette(kind, options, tint);
+    const batch = new WorldTrailBatch(this.app, parent, {
+      texture,
+      additive: palette.additive,
+      colorStart: palette.colorStart,
+      colorMid: palette.colorMid,
+      colorEnd: palette.colorEnd,
+      colorMidAt: palette.colorMidAt,
+      opacity: palette.opacity,
+      sizeStart: options.sizeStart,
+      sizeMid: options.sizeMid,
+      sizeEnd: options.sizeEnd,
+      sizeMidAt: palette.sizeMidAt,
+      sizeEndAt: 0.7,
+      lifetime: options.lifetime,
+      fadeIn: palette.fadeIn,
+      fadeOut: palette.fadeOut,
+      velocity: options.velocity,
+      velocityEnd: options.velocityEnd,
+      radialSpeed: options.radialSpeed,
+      radialSpeedEnd: options.radialSpeedEnd,
+      stretch: options.stretch,
+      rate: Math.max(options.rate, 1 / 120),
+      maxParticles: this.aliveParticles(options) + 2,
       preWarm: options.preWarm ?? true
     });
     this.particleBatches.add(batch);
@@ -683,11 +737,23 @@ constructor(
    * partícula hacia la cámara, así que en el splitscreen se ven de frente en
    * todas las vistas y el conjunto se lee como fuego en movimiento.
    */
+  /**
+   * Emisor de llamas. En un efecto fijo usa un lote analítico; en una estela
+   * de proyectil emite en espacio de mundo para no arrastrar las motas.
+   */
   public spawnFlameParticles(
     parent: pc.Entity,
     options: FlameParticleOptions
   ): void {
-    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+    if (options.worldSpaceTrail) {
+      this.spawnWorldTrail(
+        parent,
+        options,
+        'flame',
+        [255, 255, 255],
+        this.flameTexture
+      );
+    } else {
       this.spawnStaticParticles(
         parent,
         options,
@@ -695,80 +761,7 @@ constructor(
         [255, 255, 255],
         this.flameTexture
       );
-      return;
     }
-    const data: Record<string, unknown> = {
-      numParticles: options.numParticles,
-      lifetime: options.lifetime,
-      rate: options.rate,
-      rate2: options.rate,
-      loop: true,
-      preWarm: options.preWarm ?? true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(...options.extents),
-      colorMap: this.flameTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 0.5, 1, 1, 1],
-          [0, 0.92, 0.5, 0.6, 1, 0.3],
-          [0, 0.55, 0.5, 0.24, 1, 0.07]
-        ]
-      },
-      alphaGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0, 0.1, 0.9, 0.55, 0.7, 1, 0]
-      },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          0,
-          options.sizeStart,
-          0.28,
-          options.sizeMid,
-          0.7,
-          options.sizeMid,
-          1,
-          options.sizeEnd
-        ]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, options.velocity[0], 1, options.velocityEnd[0]],
-          [0, options.velocity[1], 1, options.velocityEnd[1]],
-          [0, options.velocity[2], 1, options.velocityEnd[2]]
-        ]
-      },
-      blendType: pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      orientation: pc.PARTICLEORIENTATION_SCREEN,
-      localSpace: options.localSpace ?? false,
-      layers: [this.layerId],
-      stretch: options.stretch ?? 0,
-      alignToMotion: options.alignToMotion ?? false
-    };
-    if (
-      options.radialSpeed !== undefined &&
-      options.radialSpeedEnd !== undefined
-    ) {
-      data.radialSpeedGraph = {
-        type: pc.CURVE_LINEAR,
-        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
-      };
-    }
-    this.attachParticleEntity(
-      parent,
-      'flame',
-      'flame-particles',
-      options,
-      data,
-      [255, 255, 255],
-      this.flameTexture
-    );
   }
 
   /**
@@ -780,85 +773,11 @@ constructor(
     options: FlameParticleOptions,
     tint: readonly [number, number, number]
   ): void {
-    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+    if (options.worldSpaceTrail) {
+      this.spawnWorldTrail(parent, options, 'leaf', tint, this.leafTexture);
+    } else {
       this.spawnStaticParticles(parent, options, 'leaf', tint, this.leafTexture);
-      return;
     }
-    const r = tint[0] / 255;
-    const g = tint[1] / 255;
-    const b = tint[2] / 255;
-    const data: Record<string, unknown> = {
-      numParticles: options.numParticles,
-      lifetime: options.lifetime,
-      rate: options.rate,
-      rate2: options.rate,
-      loop: true,
-      preWarm: options.preWarm ?? true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(...options.extents),
-      colorMap: this.leafTexture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 0.4, r, 1, r * 0.55],
-          [0, 1, 0.4, g, 1, g * 0.5],
-          [0, 1, 0.4, b, 1, b * 0.35]
-        ]
-      },
-      alphaGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0, 0.12, 1, 0.7, 0.9, 1, 0]
-      },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          0,
-          options.sizeStart,
-          0.3,
-          options.sizeMid,
-          0.7,
-          options.sizeMid,
-          1,
-          options.sizeEnd
-        ]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, options.velocity[0], 1, options.velocityEnd[0]],
-          [0, options.velocity[1], 1, options.velocityEnd[1]],
-          [0, options.velocity[2], 1, options.velocityEnd[2]]
-        ]
-      },
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      orientation: pc.PARTICLEORIENTATION_SCREEN,
-      localSpace: options.localSpace ?? false,
-      layers: [this.layerId],
-      stretch: options.stretch ?? 0,
-      alignToMotion: options.alignToMotion ?? false
-    };
-    if (
-      options.radialSpeed !== undefined &&
-      options.radialSpeedEnd !== undefined
-    ) {
-      data.radialSpeedGraph = {
-        type: pc.CURVE_LINEAR,
-        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
-      };
-    }
-    this.attachParticleEntity(
-      parent,
-      'leaf',
-      'leaf-particles',
-      options,
-      data,
-      tint,
-      this.leafTexture
-    );
   }
 
   /**
@@ -871,83 +790,11 @@ constructor(
     tint: readonly [number, number, number],
     texture: pc.Texture = this.sporeTexture
   ): void {
-    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+    if (options.worldSpaceTrail) {
+      this.spawnWorldTrail(parent, options, 'spore', tint, texture);
+    } else {
       this.spawnStaticParticles(parent, options, 'spore', tint, texture);
-      return;
     }
-    const r = tint[0] / 255;
-    const g = tint[1] / 255;
-    const b = tint[2] / 255;
-    const data: Record<string, unknown> = {
-      numParticles: options.numParticles,
-      lifetime: options.lifetime,
-      rate: options.rate,
-      rate2: options.rate,
-      loop: true,
-      preWarm: options.preWarm ?? true,
-      autoPlay: true,
-      emitterShape: pc.EMITTERSHAPE_BOX,
-      emitterExtents: new pc.Vec3(...options.extents),
-      colorMap: texture,
-      colorGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, 1, 0.5, r, 1, r * 0.5],
-          [0, 1, 0.5, g, 1, g * 0.45],
-          [0, 1, 0.5, b, 1, b * 0.3]
-        ]
-      },
-      alphaGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [0, 0, 0.15, 0.9, 0.65, 0.6, 1, 0]
-      },
-      scaleGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          0,
-          options.sizeStart,
-          0.3,
-          options.sizeMid,
-          0.7,
-          options.sizeMid,
-          1,
-          options.sizeEnd
-        ]
-      },
-      velocityGraph: {
-        type: pc.CURVE_LINEAR,
-        keys: [
-          [0, options.velocity[0], 1, options.velocityEnd[0]],
-          [0, options.velocity[1], 1, options.velocityEnd[1]],
-          [0, options.velocity[2], 1, options.velocityEnd[2]]
-        ]
-      },
-      blendType: options.blendType ?? pc.BLEND_ADDITIVE,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      orientation: pc.PARTICLEORIENTATION_SCREEN,
-      localSpace: options.localSpace ?? false,
-      layers: [this.layerId]
-    };
-    if (
-      options.radialSpeed !== undefined &&
-      options.radialSpeedEnd !== undefined
-    ) {
-      data.radialSpeedGraph = {
-        type: pc.CURVE_LINEAR,
-        keys: [0, options.radialSpeed, 1, options.radialSpeedEnd]
-      };
-    }
-    this.attachParticleEntity(
-      parent,
-      'spore',
-      'spore-particles',
-      options,
-      data,
-      tint,
-      texture
-    );
   }
 
   /** Luz omni corta y cálida: tiñe el suelo y los sprites alrededor del fuego. */
@@ -1058,95 +905,10 @@ constructor(
     for (const material of new Set(materials)) this.releaseMaterial(material);
   }
 
-  /**
-   * Clave estructural del emisor. Incluye el tinte y todas las opciones que
-   * definen sus curvas para que un emisor reutilizado se comporte igual que
-   * uno recién creado.
-   */
-  public particleKey(
-    kind: string,
-    options: FlameParticleOptions,
-    tint: readonly [number, number, number],
-    texture: pc.Texture
-  ): string {
-    const textureKey =
-      texture === this.waterTexture
-        ? 'water'
-        : texture === this.leafTexture
-          ? 'leaf'
-          : texture === this.flameTexture
-            ? 'flame'
-            : 'spore';
-    return JSON.stringify({ kind, options, tint, texture: textureKey });
-  }
-
-  /**
-   * Retira el emisor del efecto y lo guarda para el siguiente casteo. Se
-   * deshabilita para que deje de simular mientras espera en el pool.
-   */
-  public releasePooledParticles(root: pc.Entity): void {
-    for (const child of [...root.children] as pc.Entity[]) {
-      const key = this.particleKeys.get(child);
-      if (key) {
-        child.parent?.removeChild(child);
-        child.particlesystem?.stop();
-        child.enabled = false;
-        let pool = this.particlePools.get(key);
-        if (!pool) {
-          pool = [];
-          this.particlePools.set(key, pool);
-        }
-        if (pool.length >= PARTICLE_POOL_LIMIT) {
-          this.particleKeys.delete(child);
-          child.destroy();
-        } else {
-          pool.push(child);
-        }
-        continue;
-      }
-      this.releasePooledParticles(child);
-    }
-  }
-
-  /**
-   * Destruye la raíz de un efecto devolviendo antes sus emisores al pool. Es
-   * obligatorio usarlo en lugar de `entity.destroy()` para no destruir los
-   * emisores compartidos.
-   */
+  /** Destruye la raíz de un efecto y todos sus hijos. */
   public destroyFxRoot(entity: pc.Entity): void {
-    this.releasePooledParticles(entity);
     entity.destroy();
   }
-
-  /** Añade un emisor al padre, reutilizando uno del pool si hay disponible. */
-  public attachParticleEntity(
-    parent: pc.Entity,
-    kind: string,
-    name: string,
-    options: FlameParticleOptions,
-    data: Record<string, unknown>,
-    tint: readonly [number, number, number],
-    texture: pc.Texture
-  ): void {
-    const key = this.particleKey(kind, options, tint, texture);
-    const pooled = this.particlePools.get(key)?.pop();
-    const entity = pooled ?? new pc.Entity(name);
-    if (!pooled) {
-      entity.addComponent('particlesystem', data);
-      this.particleKeys.set(entity, key);
-    } else {
-      entity.enabled = true;
-    }
-    entity.setLocalPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0);
-    if (options.yaw) entity.setLocalEulerAngles(0, options.yaw, 0);
-    parent.addChild(entity);
-    if (pooled) {
-      // `reset()` vuelve a precalentar el emisor y reinicia colores y tiempos.
-      pooled.particlesystem?.reset();
-      pooled.particlesystem?.play();
-    }
-  }
-
 
   public createEntity(
     mesh: pc.Mesh,
@@ -1363,11 +1125,6 @@ constructor(
     this.rockChunkMesh.destroy();
     for (const mesh of this.meshCache.values()) mesh.destroy();
     this.meshCache.clear();
-    for (const pool of this.particlePools.values()) {
-      for (const entity of pool) entity.destroy();
-    }
-    this.particlePools.clear();
-    this.particleKeys.clear();
     for (const pool of this.materialPools.values()) {
       for (const material of pool) material.destroy();
     }

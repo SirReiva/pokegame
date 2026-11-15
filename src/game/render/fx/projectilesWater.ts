@@ -339,14 +339,27 @@ const root = new pc.Entity('shuriken-projectile');
     const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
     core.setLocalScale(radius * 0.9, radius * 0.9, radius * 0.9);
 
-    const trail: pc.Entity[] = [];
+    const trailInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const puff = ctx.createEntity(ctx.sphereMesh, [trailMaterial], root);
-      puff.setLocalPosition(0, 0, -radius * (1.8 + index * 1.35));
-      const scale = radius * (0.75 - index * 0.16);
-      puff.setLocalScale(scale, scale, scale);
-      trail.push(puff);
+      trailInstances.push({
+        anim0: [
+          index,
+          -radius * (1.8 + index * 1.35),
+          radius * (0.75 - index * 0.16),
+          1
+        ],
+        anim1: [0, 0, 18, 0]
+      });
     }
+    const trailBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: trailMaterial,
+      instances: trailInstances,
+      motion: MOTION_PROJECTILE_WAKE,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -373,12 +386,7 @@ const root = new pc.Entity('shuriken-projectile');
         coreMaterial.opacity = 0.9 + Math.sin(time * 24) * 0.08;
         glowMaterial.opacity = 0.18 + Math.sin(time * 12) * 0.05;
         trailMaterial.opacity = 0.18 + Math.sin(time * 16) * 0.05;
-        for (let index = 0; index < trail.length; index++) {
-          const puff = trail[index];
-          const scale =
-            radius * (0.75 - index * 0.16) * (1 + Math.sin(time * 18 + index) * 0.12);
-          puff.setLocalScale(scale, scale, scale);
-        }
+        trailBatch.setTime(time);
         for (const material of materials) material.update();
       }
     };

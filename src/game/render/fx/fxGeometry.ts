@@ -166,10 +166,11 @@ export interface FlameParticleOptions {
   numParticles: number;
   stretch?: number;
   alignToMotion?: boolean;
+  /** @deprecated Los emisores actuales trabajan en el espacio del efecto. */
   localSpace?: boolean;
   /**
-   * Mantiene el `ParticleSystem` de PlayCanvas porque el emisor se mueve y
-   * necesita dejar las partículas en el mundo (estelas de proyectiles).
+   * Emite en espacio de mundo y deja las partículas atrás. Lo usan las estelas
+   * de proyectiles que se desplazan.
    */
   worldSpaceTrail?: boolean;
   /** Si es `false`, el emisor empieza vacío y se llena durante el efecto. */

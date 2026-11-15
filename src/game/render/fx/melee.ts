@@ -2,7 +2,7 @@ import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import type { ImpactStyle } from '../../abilities';
 import { DEG } from '../../config';
-import { EffectBatch, applyVertexEffectShader, MOTION_PSYCHIC_WAVE, MOTION_SPORE_SWARM } from '../../effectBatch';
+import { EffectBatch, applyVertexEffectShader, MOTION_MELEE_LEAVES, MOTION_MELEE_PUFFS, MOTION_PSYCHIC_WAVE, MOTION_SPORE_SWARM, MOTION_STATIC } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import { MELEE_ARC_OPACITY, createArcBandMesh, createArcMesh, createSlashStreakMesh } from './fxGeometry';
 
@@ -55,38 +55,39 @@ export function spawnMelee(ctx: FxRuntime, x: number,
     const materials = [material];
     const halfAngle = Math.max(8, halfAngleDeg) * DEG;
     let effectDuration = 0.28;
-    const leaves: {
-      entity: pc.Entity;
-      x: number;
-      z: number;
-      yaw: number;
-      roll: number;
-    }[] = [];
+    let leafBatch: EffectBatch | null = null;
     if (style === 'grass') {
       // Hojas que salen despedidas dentro del arco para dar cuerpo al latigazo.
       const leafMaterial = ctx.createLeafMaterial(color, 0.95);
       materials.push(leafMaterial);
+      const leafInstances: EffectBatchInstance[] = [];
       for (let index = 0; index < 9; index++) {
         const angle = -halfAngle + (index / 8) * halfAngle * 2;
         const distance = range * (0.45 + ((index * 7) % 10) / 10 * 0.5);
-        const leafYaw = (index * 47) % 360;
-        const leaf = ctx.createLeaf(entity, leafMaterial, {
-          x: Math.sin(angle) * distance,
-          y: 0.05,
-          z: Math.cos(angle) * distance,
-          width: 0.24 + (index % 3) * 0.05,
-          height: 0.42 + (index % 4) * 0.06,
-          yaw: leafYaw,
-          roll: -20 + (index % 5) * 10
-        });
-        leaves.push({
-          entity: leaf,
-          x: leaf.getLocalPosition().x,
-          z: leaf.getLocalPosition().z,
-          yaw: leafYaw,
-          roll: -20 + (index % 5) * 10
+        leafInstances.push({
+          anim0: [
+            Math.sin(angle) * distance,
+            Math.cos(angle) * distance,
+            (index * 47) % 360,
+            -20 + (index % 5) * 10
+          ],
+          anim1: [
+            0.24 + (index % 3) * 0.05,
+            0.42 + (index % 4) * 0.06,
+            0,
+            0
+          ]
         });
       }
+      leafBatch = new EffectBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.leafMesh,
+        material: leafMaterial,
+        instances: leafInstances,
+        motion: MOTION_MELEE_LEAVES,
+        life: effectDuration
+      });
     }
 
     const psychicWaves: {
@@ -281,16 +282,10 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       }
     }
 
-    const puffs: {
-      entity: pc.Entity;
-      baseX: number;
-      baseY: number;
-      baseZ: number;
-      size: number;
-      yaw: number;
-    }[] = [];
     let cloudMaterial: pc.StandardMaterial | null = null;
     let cloudHotMaterial: pc.StandardMaterial | null = null;
+    let cloudBatch: EffectBatch | null = null;
+    let cloudHotBatch: EffectBatch | null = null;
     let sporeBatch: EffectBatch | null = null;
     if (style === 'spore') {
       // Rocío en abanico: cada partícula nace en el vértice del cono y viaja
@@ -362,32 +357,43 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         color
       );
 
+      const cloudInstances: EffectBatchInstance[] = [];
+      const cloudHotInstances: EffectBatchInstance[] = [];
       for (let index = 0; index < 7; index++) {
         const spread = (-1 + (index / 6) * 2) * halfAngle * 0.72;
         const distance = range * (0.32 + ((index * 3) % 10) / 10 * 0.42);
         const size = 0.3 + ((index * 7) % 10) / 10 * 0.28;
-        const puff = ctx.createEntity(
-          ctx.sphereMesh,
-          [index % 3 === 0 ? cloudHotMaterial : cloudMaterial],
-          entity
-        );
-        puff.setLocalPosition(
-          Math.sin(spread) * distance,
-          0.4 + ((index * 5) % 10) / 10 * 0.35,
-          Math.cos(spread) * distance
-        );
-        puff.setLocalScale(size, size * 0.82, size);
         const yaw = Math.random() * 360;
-        puff.setLocalEulerAngles(0, yaw, 0);
-        puffs.push({
-          entity: puff,
-          baseX: puff.getLocalPosition().x,
-          baseY: puff.getLocalPosition().y,
-          baseZ: puff.getLocalPosition().z,
-          size,
-          yaw
-        });
+        const instance: EffectBatchInstance = {
+          anim0: [
+            Math.sin(spread) * distance,
+            0.4 + ((index * 5) % 10) / 10 * 0.35,
+            Math.cos(spread) * distance,
+            yaw
+          ],
+          anim1: [size, 0, 0, 0]
+        };
+        if (index % 3 === 0) cloudHotInstances.push(instance);
+        else cloudInstances.push(instance);
       }
+      cloudBatch = new EffectBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.sphereMesh,
+        material: cloudMaterial,
+        instances: cloudInstances,
+        motion: MOTION_MELEE_PUFFS,
+        life: effectDuration
+      });
+      cloudHotBatch = new EffectBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.sphereMesh,
+        material: cloudHotMaterial,
+        instances: cloudHotInstances,
+        motion: MOTION_MELEE_PUFFS,
+        life: effectDuration
+      });
     }
 
     // La malla del arco es exclusiva de este efecto: al destruir la entidad,
@@ -431,19 +437,7 @@ export function spawnMelee(ctx: FxRuntime, x: number,
           1 - Math.min(1, Math.max(0, (now - 0.2) / (effectDuration - 0.2)));
         claw.material.opacity = claw.peak * appear * Math.max(0, fadeOut);
       }
-      for (const leaf of leaves) {
-        leaf.entity.setLocalPosition(
-          leaf.x * (1 + t * 0.35),
-          0.05 + t * 0.9,
-          leaf.z + t * 1.1
-        );
-        leaf.entity.setLocalEulerAngles(
-          t * 80,
-          leaf.yaw + t * 260,
-          leaf.roll + t * 140
-        );
-      }
-
+      leafBatch?.setTime(time);
       sporeBatch?.setTime(time);
 
       for (const wave of psychicWaves) {
@@ -476,24 +470,8 @@ export function spawnMelee(ctx: FxRuntime, x: number,
 
       if (cloudMaterial) cloudMaterial.opacity = 0.26 * (1 - t);
       if (cloudHotMaterial) cloudHotMaterial.opacity = 0.2 * (1 - t);
-      for (const puff of puffs) {
-        const grow = 0.65 + Math.min(1, t * 2.2) * 0.55;
-        puff.entity.setLocalPosition(
-          puff.baseX * (1 + t * 0.45),
-          puff.baseY + t * 0.45,
-          puff.baseZ + t * 0.85
-        );
-        puff.entity.setLocalScale(
-          puff.size * grow,
-          puff.size * 0.82 * grow,
-          puff.size * grow
-        );
-        puff.entity.setLocalEulerAngles(
-          0,
-          puff.yaw + t * 40,
-          Math.sin(t * 12 + puff.baseX) * 12
-        );
-      }
+      cloudBatch?.setTime(time);
+      cloudHotBatch?.setTime(time);
     }, [
       [x, z],
       [x + Math.sin(yaw) * range, z + Math.cos(yaw) * range]
@@ -547,7 +525,12 @@ const root = new pc.Entity('jaw-bite');
     mouth.addChild(upper);
     mouth.addChild(lower);
 
-    const addToothRow = (row: pc.Entity, facingUp: boolean): void => {
+    const upperInstances: EffectBatchInstance[] = [];
+    const lowerInstances: EffectBatchInstance[] = [];
+    const addToothRow = (
+      facingUp: boolean,
+      target: EffectBatchInstance[]
+    ): void => {
       // La fila inferior va desfasada media pieza para que los colmillos se
       // intercalen al cerrarse, como una cremallera.
       const count = facingUp ? 10 : 11;
@@ -559,24 +542,39 @@ const root = new pc.Entity('jaw-bite');
         const center = 1 - Math.abs(angle) / halfAngle;
         const length = size * (0.25 + center * 0.1 + (index % 2) * 0.02);
         const width = size * (0.095 + center * 0.04);
-        const tooth = ctx.createEntity(
-          ctx.rockSpikeMesh,
-          [toothMaterial],
-          row
-        );
-        tooth.setLocalPosition(
-          Math.sin(angle) * arcRadius,
-          (facingUp ? 1 : -1) * length * 0.5,
-          arcCenterZ + Math.cos(angle) * arcRadius
-        );
-        tooth.setLocalScale(width, length, width);
         // Los colmillos se abren en abanico hacia fuera de la boca.
         const fan = (angle / DEG) * 0.35;
-        tooth.setLocalEulerAngles(facingUp ? 0 : 180, 0, -fan);
+        target.push({
+          x: Math.sin(angle) * arcRadius,
+          y: (facingUp ? 1 : -1) * length * 0.5,
+          z: arcCenterZ + Math.cos(angle) * arcRadius,
+          sx: width,
+          sy: length,
+          sz: width,
+          rx: facingUp ? 0 : 180,
+          rz: -fan
+        });
       }
     };
-    addToothRow(upper, false);
-    addToothRow(lower, true);
+    addToothRow(false, upperInstances);
+    addToothRow(true, lowerInstances);
+
+    new EffectBatch({
+      app: ctx.app,
+      parent: upper,
+      mesh: ctx.rockSpikeMesh,
+      material: toothMaterial,
+      instances: upperInstances,
+      motion: MOTION_STATIC
+    });
+    new EffectBatch({
+      app: ctx.app,
+      parent: lower,
+      mesh: ctx.rockSpikeMesh,
+      material: toothMaterial,
+      instances: lowerInstances,
+      motion: MOTION_STATIC
+    });
 
     ctx.addEffect(root, materials, 0.5, (t) => {
       const grow = Math.min(1, t / 0.14);
