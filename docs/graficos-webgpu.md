@@ -43,6 +43,7 @@ quedarían quietos). Por eso cada shader propio tiene las dos versiones:
 | Niebla de guerra | `src/game/fog.ts` | `ShaderMaterial` con `vertexGLSL`/`fragmentGLSL` y `vertexWGSL`/`fragmentWGSL`. |
 | Viento del follaje | `src/game/windShader.ts` | `applyWindShader()` inyecta `transformCoreVS` en los dos idiomas. |
 | Efectos instanciados | `src/game/effectBatch.ts` + `src/game/effectMotionsWGSL.ts` | `applyInstancedEffectShader()` / `applyVertexEffectShader()` inyectan el chunk GLSL y su gemelo WGSL. |
+| Partículas de combate | `src/game/render/fx/effectParticleBatch.ts` | `ShaderMaterial` con `vertexGLSL`/`fragmentGLSL` y `vertexWGSL`/`fragmentWGSL`. |
 
 Convenciones WGSL del motor (importante si se añade un shader):
 

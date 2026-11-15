@@ -4,6 +4,7 @@ import { createDustCanvas, createFlameCanvas, createFrostCanvas, createLeafParti
 import type { FxHandle, FxLayerResolver, TelegraphOwner } from '../../core/ports/fx';
 import type { ActiveEffect, FlameParticleOptions, FxAnchors, GroundTelegraph, ProjectileVisual } from './fxGeometry';
 import { MATERIAL_POOL_LIMIT, PARTICLE_POOL_LIMIT, TELEGRAPH_WALL_OPACITY, createArcBandMesh, createCrossQuadMesh, createCycloneArmMesh, createDashRingMesh, createDiscMesh, createIceCrystalMesh, createShurikenMesh, createWaterJetMesh, createWindBladeMesh, sameLayers } from './fxGeometry';
+import { EffectParticleBatch } from './effectParticleBatch';
 
 export class FxRuntime {
 public readonly app: pc.AppBase;
@@ -18,6 +19,11 @@ public readonly app: pc.AppBase;
   public visibilityTimer = 0;
   public readonly device: pc.GraphicsDevice;
   public readonly effects: ActiveEffect[] = [];
+  /**
+   * Emisores de partículas analíticos de los efectos estáticos. Se actualizan
+   * con un contador compartido, sin una pasada de simulación por emisor.
+   */
+  public readonly particleBatches = new Set<EffectParticleBatch>();
   public readonly projectiles = new Set<ProjectileVisual>();
   public readonly sphereMesh: pc.Mesh;
   public readonly boxMesh: pc.Mesh;
@@ -578,6 +584,101 @@ constructor(
   }
 
   /**
+   * Crea un emisor analítico para un efecto que no se mueve. Sustituye al
+   * `ParticleSystem` de PlayCanvas: sin pasada de simulación ni `preWarm`.
+   */
+  private spawnStaticParticles(
+    parent: pc.Entity,
+    options: FlameParticleOptions,
+    kind: 'flame' | 'leaf' | 'spore',
+    tint: readonly [number, number, number],
+    texture: pc.Texture
+  ): void {
+    const r = tint[0] / 255;
+    const g = tint[1] / 255;
+    const b = tint[2] / 255;
+    let colorStart: readonly [number, number, number];
+    let colorMid: readonly [number, number, number];
+    let colorEnd: readonly [number, number, number];
+    let colorMidAt: number;
+    let opacity: number;
+    let fadeIn: number;
+    let fadeOut: number;
+    let additive: boolean;
+    let sizeMidAt: number;
+
+    if (kind === 'flame') {
+      colorStart = [1, 0.92, 0.55];
+      colorMid = [1, 0.6, 0.24];
+      colorEnd = [1, 0.3, 0.07];
+      colorMidAt = 0.5;
+      opacity = 0.9;
+      fadeIn = 0.1;
+      fadeOut = 0.55;
+      additive = true;
+      sizeMidAt = 0.28;
+    } else if (kind === 'leaf') {
+      colorStart = [1, 1, 1];
+      colorMid = [r, g, b];
+      colorEnd = [r * 0.55, g * 0.5, b * 0.35];
+      colorMidAt = 0.4;
+      opacity = 1;
+      fadeIn = 0.12;
+      fadeOut = 0.7;
+      additive = false;
+      sizeMidAt = 0.3;
+    } else {
+      colorStart = [1, 1, 1];
+      colorMid = [r, g, b];
+      colorEnd = [r * 0.5, g * 0.45, b * 0.3];
+      colorMidAt = 0.5;
+      opacity = 0.9;
+      fadeIn = 0.15;
+      fadeOut = 0.65;
+      additive = (options.blendType ?? pc.BLEND_ADDITIVE) !== pc.BLEND_NORMAL;
+      sizeMidAt = 0.3;
+    }
+
+    const batch = new EffectParticleBatch(this.app, parent, {
+      position: [options.x ?? 0, options.y ?? 0, options.z ?? 0],
+      extents: options.extents,
+      // PlayCanvas reparte los nacimientos cada `rate` segundos, así que el
+      // número vivo en régimen es lifetime / rate, no `numParticles` (que es
+      // solo el tope del pool).
+      count: Math.min(
+        options.numParticles,
+        Math.max(
+          1,
+          Math.floor(options.lifetime / Math.max(options.rate, 1e-6)) + 1
+        )
+      ),
+      texture,
+      additive,
+      colorStart,
+      colorMid,
+      colorEnd,
+      colorMidAt,
+      opacity,
+      sizeStart: options.sizeStart,
+      sizeMid: options.sizeMid,
+      sizeEnd: options.sizeEnd,
+      sizeMidAt,
+      sizeEndAt: 0.7,
+      lifetime: options.lifetime,
+      fadeIn,
+      fadeOut,
+      velocity: options.velocity,
+      velocityEnd: options.velocityEnd,
+      radialSpeed: options.radialSpeed,
+      radialSpeedEnd: options.radialSpeedEnd,
+      yaw: options.yaw,
+      preWarm: options.preWarm ?? true
+    });
+    this.particleBatches.add(batch);
+    batch.entity.on('destroy', () => this.particleBatches.delete(batch));
+  }
+
+  /**
    * Emisor de partículas con la textura de llama. PlayCanvas orienta cada
    * partícula hacia la cámara, así que en el splitscreen se ven de frente en
    * todas las vistas y el conjunto se lee como fuego en movimiento.
@@ -586,6 +687,16 @@ constructor(
     parent: pc.Entity,
     options: FlameParticleOptions
   ): void {
+    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+      this.spawnStaticParticles(
+        parent,
+        options,
+        'flame',
+        [255, 255, 255],
+        this.flameTexture
+      );
+      return;
+    }
     const data: Record<string, unknown> = {
       numParticles: options.numParticles,
       lifetime: options.lifetime,
@@ -669,6 +780,10 @@ constructor(
     options: FlameParticleOptions,
     tint: readonly [number, number, number]
   ): void {
+    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+      this.spawnStaticParticles(parent, options, 'leaf', tint, this.leafTexture);
+      return;
+    }
     const r = tint[0] / 255;
     const g = tint[1] / 255;
     const b = tint[2] / 255;
@@ -756,6 +871,10 @@ constructor(
     tint: readonly [number, number, number],
     texture: pc.Texture = this.sporeTexture
   ): void {
+    if (!options.worldSpaceTrail && (options.stretch ?? 0) <= 0) {
+      this.spawnStaticParticles(parent, options, 'spore', tint, texture);
+      return;
+    }
     const r = tint[0] / 255;
     const g = tint[1] / 255;
     const b = tint[2] / 255;
@@ -1155,6 +1274,7 @@ constructor(
 
 
   update(dt: number): void {
+    for (const batch of this.particleBatches) batch.update(dt);
     // Recalcular la niebla cuesta una prueba de línea de visión por cada
     // Pokémon vivo del equipo; con 0,1 s de margen basta para que los efectos
     // entren y salgan de la niebla sin repetir el cálculo en cada frame.
@@ -1221,11 +1341,13 @@ constructor(
       this.releaseMaterials(visual.materials);
     }
     this.projectiles.clear();
+    this.particleBatches.clear();
   }
 
 
   destroy(): void {
     this.clear();
+    this.particleBatches.clear();
     this.sphereMesh.destroy();
     this.boxMesh.destroy();
     this.torusMesh.destroy();

@@ -167,6 +167,11 @@ export interface FlameParticleOptions {
   stretch?: number;
   alignToMotion?: boolean;
   localSpace?: boolean;
+  /**
+   * Mantiene el `ParticleSystem` de PlayCanvas porque el emisor se mueve y
+   * necesita dejar las partículas en el mundo (estelas de proyectiles).
+   */
+  worldSpaceTrail?: boolean;
   /** Si es `false`, el emisor empieza vacío y se llena durante el efecto. */
   preWarm?: boolean;
   /** Mezcla de partículas; por defecto, aditiva. */

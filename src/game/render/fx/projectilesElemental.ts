@@ -384,7 +384,8 @@ const root = new pc.Entity('rock-projectile');
         lifetime: 0.45,
         rate: 0.04,
         numParticles: 40,
-        blendType: pc.BLEND_NORMAL
+        blendType: pc.BLEND_NORMAL,
+        worldSpaceTrail: true
       },
       [176, 158, 130],
       ctx.dustTexture

@@ -204,7 +204,8 @@ const root = new pc.Entity('fire-projectile');
       rate: 1.2,
       numParticles: 30,
       stretch: 0.5,
-      localSpace: false
+      localSpace: false,
+      worldSpaceTrail: true
     });
 
     let time = 0;
@@ -383,7 +384,8 @@ const root = new pc.Entity('poison-projectile');
         lifetime: 0.32,
         rate: 0.03,
         numParticles: 36,
-        localSpace: false
+        localSpace: false,
+        worldSpaceTrail: true
       },
       color
     );

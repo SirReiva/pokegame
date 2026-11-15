@@ -63,6 +63,11 @@ habilidad, prueba esta lista.
 6. **Chorro de Agua + Tajo Aéreo** con varios proyectiles en vuelo y 8 vistas:
    comprueba que la cola, las gotas, las aspas y las plumas siguen animándose y
    que el coste no crece con una entidad por elemento.
+7. **Anillo Ígneo + Terremoto + Lluevehojas** a la vez con 8 vistas: comprueba
+   que ya no hay picos de `preWarm` al castear y que el polvo, las llamas y las
+   hojas siguen naciendo con la densidad esperada.
+8. **Haz de Roca + haz fantasma + haz oscuro** seguidos: las púas, los jirones y
+   los aros deben animarse sin entidades por elemento.
 
 ## Efectos que siguen en el camino anterior
 
@@ -72,8 +77,9 @@ Ahora todas las áreas (`ring`, `grass`, `water`, `cyclone`, `heat`, `fire`,
 
 Siguen con entidades por elemento:
 
-- Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air` y `rock`
-  (salvo el haz eléctrico cacheado y el haz psíquico, que ya usan lotes).
+- El cuerpo de los haces `fire`, `grass`, `water`, `ice`, `air` y `rock`
+  (tres capas); los jirones, aros y ojos de `dark`/`ghost` y las púas del haz
+  de Roca ya usan lotes. El haz eléctrico y el psíquico también están por lotes.
 - Proyectiles e impactos pequeños, salvo **Chorro de Agua**, **Ráfaga Marina**,
   **Tajo Aéreo**, **Esfera Aura**, **Bola Sombra** y **Rayo Burbuja**, que ya
   dibujan su decoración con lotes instanciados.
@@ -82,6 +88,11 @@ Siguen con entidades por elemento:
 - Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
   demás golpes con pocas entidades.
 - La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.
+
+Los emisores de partículas de áreas, impactos, haces y melee usan
+`EffectParticleBatch` (billboards analíticos). Conservan el `ParticleSystem` de
+PlayCanvas las estelas de proyectiles que se desplazan (necesitan dejar las
+partículas atrás en el mundo) y los dos emisores de haz que usan `stretch`.
 
 ## Señales de que algo va mal
 

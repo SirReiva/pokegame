@@ -1,7 +1,7 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
-import { EffectBatch, MOTION_PSYCHIC_BEAM_BODY, MOTION_PSYCHIC_BEAM_FLASH, MOTION_PSYCHIC_BEAM_RINGS } from '../../effectBatch';
+import { EffectBatch, MOTION_BEAM_EYES, MOTION_BEAM_RINGS, MOTION_BEAM_WISPS, MOTION_PSYCHIC_BEAM_BODY, MOTION_PSYCHIC_BEAM_FLASH, MOTION_PSYCHIC_BEAM_RINGS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import { createLightningMesh } from './fxGeometry';
 
@@ -255,33 +255,45 @@ const dx = x2 - x1;
     body.setLocalEulerAngles(90, 0, 0);
     core.setLocalEulerAngles(90, 0, 0);
 
-    const wisps: {
-      entity: pc.Entity;
-      phase: number;
-      speed: number;
-      orbit: number;
-      size: number;
-    }[] = [];
+    const wispInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 6; index++) {
-      const wisp = ctx.createEntity(ctx.boxMesh, [wispMaterial], root);
-      const size = bodyWidth * (0.18 + Math.random() * 0.1);
-      wisp.setLocalScale(size, size * 0.4, size * 4.6);
-      wisps.push({
-        entity: wisp,
-        phase: Math.random(),
-        speed: 1.8 + Math.random() * 1.4,
-        orbit: bodyWidth * (0.45 + Math.random() * 0.35),
-        size
+      wispInstances.push({
+        anim0: [
+          Math.random(),
+          1.8 + Math.random() * 1.4,
+          0.45 + Math.random() * 0.35,
+          0.18 + Math.random() * 0.1
+        ],
+        anim1: [4.2, 35, length, 0]
       });
     }
+    const wispBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: wispMaterial,
+      instances: wispInstances,
+      motion: MOTION_BEAM_WISPS,
+      radius: bodyWidth
+    });
 
-    const rings: pc.Entity[] = [];
+    const ringInstances: EffectBatchInstance[] = [];
     const ringCount = 6;
     for (let index = 0; index < ringCount; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
+      ringInstances.push({
+        anim0: [index / ringCount, index * 48, 0, 0],
+        anim1: [length, 1.9, 0.85, 260]
+      });
     }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_BEAM_RINGS,
+      radius: width
+    });
 
     const tip = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
 
@@ -312,30 +324,8 @@ const dx = x2 - x1;
         coreWidth
       );
 
-      for (const wisp of wisps) {
-        const path = (time * wisp.speed + wisp.phase) % 1;
-        const angle = time * 4.2 + wisp.phase * Math.PI * 2;
-        wisp.entity.setLocalPosition(
-          Math.cos(angle) * wisp.orbit,
-          Math.sin(angle) * wisp.orbit,
-          length * reveal * path
-        );
-        wisp.entity.setLocalEulerAngles(
-          0,
-          angle / DEG,
-          Math.sin(angle * 1.5) * 35
-        );
-      }
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 1.9 + index / ringCount) % 1;
-        ring.setLocalPosition(0, 0, length * reveal * (0.1 + path * 0.9));
-        const ringScale =
-          width * 0.85 * (1.3 + pulse * 0.8) * (0.6 + Math.sin(path * Math.PI) * 0.8);
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 260 + index * 48);
-      }
+      wispBatch.setTime(time);
+      ringBatch.setTime(time);
 
       tip.setLocalPosition(0, 0, length * reveal);
       const tipScale = width * (1.4 + Math.sin(time * 34) * 0.25);
@@ -403,39 +393,58 @@ const dx = x2 - x1;
     body.setLocalEulerAngles(90, 0, 0);
     core.setLocalEulerAngles(90, 0, 0);
 
-    const wisps: {
-      entity: pc.Entity;
-      phase: number;
-      speed: number;
-      orbit: number;
-      size: number;
-    }[] = [];
+    const wispInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 7; index++) {
-      const wisp = ctx.createEntity(ctx.boxMesh, [wispMaterial], root);
-      const size = bodyWidth * (0.18 + Math.random() * 0.1);
-      wisp.setLocalScale(size, size * 0.4, size * 4.6);
-      wisps.push({
-        entity: wisp,
-        phase: Math.random(),
-        speed: 1.6 + Math.random() * 1.4,
-        orbit: bodyWidth * (0.45 + Math.random() * 0.35),
-        size
+      wispInstances.push({
+        anim0: [
+          Math.random(),
+          1.6 + Math.random() * 1.4,
+          0.45 + Math.random() * 0.35,
+          0.18 + Math.random() * 0.1
+        ],
+        anim1: [4.6, 38, length, 0]
       });
     }
+    const wispBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: wispMaterial,
+      instances: wispInstances,
+      motion: MOTION_BEAM_WISPS,
+      radius: bodyWidth
+    });
 
-    const rings: pc.Entity[] = [];
+    const ringInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 5; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
+      ringInstances.push({
+        anim0: [index / 5, index * 42, 0, 0],
+        anim1: [length, 2, 0.9, 220]
+      });
     }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_BEAM_RINGS,
+      radius: width
+    });
 
     const tip = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    const eyes: { entity: pc.Entity; side: number }[] = [];
-    for (let index = 0; index < 2; index++) {
-      const eye = ctx.createEntity(ctx.sphereMesh, [eyeMaterial], root);
-      eyes.push({ entity: eye, side: index === 0 ? -1 : 1 });
-    }
+    const eyeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: eyeMaterial,
+      instances: [
+        { anim0: [-1, 0, 0, 0], anim1: [length, 0, 0, 0] },
+        { anim0: [1, 0, 0, 0], anim1: [length, 0, 0, 0] }
+      ],
+      motion: MOTION_BEAM_EYES,
+      radius: width
+    });
 
     let time = 0;
     ctx.addEffect(root, materials, 0.48, (_t, dt) => {
@@ -461,47 +470,13 @@ const dx = x2 - x1;
       core.setLocalPosition(0, 0, sheathLength / 2);
       core.setLocalScale(coreWidth, sheathLength, coreWidth);
 
-      for (const wisp of wisps) {
-        const path = (time * wisp.speed + wisp.phase) % 1;
-        const angle = time * 4.6 + wisp.phase * Math.PI * 2;
-        wisp.entity.setLocalPosition(
-          Math.cos(angle) * wisp.orbit,
-          Math.sin(angle) * wisp.orbit,
-          length * reveal * path
-        );
-        wisp.entity.setLocalEulerAngles(
-          0,
-          angle / DEG,
-          Math.sin(angle * 1.6) * 38
-        );
-      }
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 2 + index / rings.length) % 1;
-        ring.setLocalPosition(0, 0, length * reveal * (0.1 + path * 0.9));
-        const ringScale =
-          width * 0.9 * (1.3 + pulse * 0.8) * (0.55 + Math.sin(path * Math.PI) * 0.85);
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 220 + index * 42);
-      }
+      wispBatch.setTime(time);
+      ringBatch.setTime(time);
+      eyeBatch.setTime(time);
 
       tip.setLocalPosition(0, 0, length * reveal);
       const tipScale = width * (1.6 + Math.sin(time * 30) * 0.25);
       tip.setLocalScale(tipScale, tipScale, tipScale);
-      for (const eye of eyes) {
-        const blink = Math.sin(time * 9 + eye.side) > 0.9 ? 0.15 : 1;
-        eye.entity.setLocalPosition(
-          eye.side * width * 0.45,
-          width * 0.3,
-          length * reveal
-        );
-        eye.entity.setLocalScale(
-          width * 0.3 * blink,
-          width * 0.3 * blink,
-          width * 0.2 * blink
-        );
-      }
 
       mistMaterial.opacity = 0.22 * pulse * fade;
       bodyMaterial.opacity = 0.5 * pulse * fade;

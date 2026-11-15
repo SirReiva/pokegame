@@ -437,6 +437,37 @@ anclar la cámara pueden diferir en decenas de draw calls.
   reparten por todo el mapa y casi siempre hay varios en pantalla, así que el
   lote único sí compensa.
 
+## Emisores de combate: `ParticleSystem` → lotes analíticos — aplicada
+
+Los emisores de las áreas, impactos, haces y melee seguían usando
+`ParticleSystem`. Cada uno costaba una pasada `ParticleUpdate` por frame y hasta
+**32 pasadas de `preWarm`** al crearse o reutilizarse desde el pool, además de
+su material, sus texturas float y un draw call por vista.
+
+`EffectParticleBatch` (`src/game/render/fx/effectParticleBatch.ts`) genera una
+malla de billboards y calcula en el vertex shader la posición, la deriva, el
+tamaño y el color con un único `uTime`. Los emisores que se desplazan con un
+proyectil conservan el sistema antiguo mediante `worldSpaceTrail`; los que usan
+`stretch` también, porque el estiramiento por movimiento aún no está portado.
+
+Detalle importante: el número de partículas vivas no es `numParticles`, sino
+`lifetime / rate` (PlayCanvas escalona los nacimientos cada `rate` segundos).
+Usar `numParticles` hacía que un Anillo Ígneo pasara de ~1 mota a 130 y se viera
+como una bola de fuego.
+
+Medido con la cámara fija y una vista:
+
+| Efecto | Draw calls antes | Ahora | Pasadas de simulación |
+| --- | ---: | ---: | --- |
+| Haz de Roca | 11 | **5** | 1 → 0 |
+| Haz fantasma | 18 | **7** | 1 → 0 |
+| Haz oscuro | 16 | **6** | 1 → 0 |
+| Anillo Ígneo | 8 | **6** | 1 → 0 |
+
+En las áreas el draw call baja poco (el emisor ya era uno), pero desaparecen la
+simulación por frame y el `preWarm` de cada casteo, que era el pico que se
+notaba al encadenar habilidades.
+
 ## Prioridad recomendada
 
 1. ~~Reescribir `paintTerrainZone` con relleno/trazo de Canvas (solución 1).~~

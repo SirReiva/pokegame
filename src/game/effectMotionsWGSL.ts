@@ -1300,6 +1300,104 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 /** Movimientos de proyectiles, separados por tamaño. */
 export * from './effectMotionsProjectilesWGSL';
 
+/** Púas de roca que emergen del suelo en el haz de Roca. */
+export const MOTION_ROCK_BEAM_SPIKES_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let local = clamp((uniform.uEffectTime - a1.x) / 0.16, 0.0, 1.0);
+  let pop = 1.0 - pow(1.0 - local, 3.0);
+  let fade = max(0.0, 1.0 - max(0.0, uniform.uEffectTime - 0.34) / 0.24);
+  let height = a0.z * pop * fade;
+  let width = a0.w * (0.45 + pop * 0.55) * fade;
+  let tilt = a1.y * pop;
+  return effectTRS(
+    vec3f(a0.y, height * (pop - 0.5), a0.x),
+    vec3f(max(0.001, width), max(0.001, height), max(0.001, width)),
+    effectEulerZYX(
+      tilt * EFFECT_DEG,
+      a1.z * EFFECT_DEG,
+      tilt * 0.4 * EFFECT_DEG
+    )
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Jirones que orbitan la línea de un haz oscuro o fantasma. */
+export const MOTION_BEAM_WISPS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = 1.0 - pow(1.0 - min(1.0, uniform.uEffectTime / 0.1), 2.0);
+  let path = fract(uniform.uEffectTime * a0.y + a0.x);
+  let angle = uniform.uEffectTime * a1.x + a0.x * 6.28318530718;
+  let orbit = a0.z * uniform.uEffectRadius;
+  let size = a0.w * uniform.uEffectRadius;
+  return effectTRS(
+    vec3f(
+      cos(angle) * orbit,
+      sin(angle) * orbit,
+      a1.z * reveal * path
+    ),
+    vec3f(max(0.0001, size), max(0.0001, size * 0.4), max(0.0001, size * 4.6)),
+    effectEulerZYX(
+      0.0,
+      angle / EFFECT_DEG,
+      sin(angle * 1.5) * a1.y * EFFECT_DEG
+    )
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Anillos que recorren la línea del haz. */
+export const MOTION_BEAM_RINGS_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = 1.0 - pow(1.0 - min(1.0, uniform.uEffectTime / 0.1), 2.0);
+  let path = fract(uniform.uEffectTime * a1.y + a0.x);
+  let pulse = 0.92 + sin(uniform.uEffectTime * 34.0 + a0.x * 6.28318530718) * 0.08;
+  let scale = uniform.uEffectRadius * a1.z * (1.3 + pulse * 0.8) *
+    (0.6 + sin(path * EFFECT_PI) * 0.8);
+  return effectTRS(
+    vec3f(0.0, 0.0, a1.x * reveal * (0.1 + path * 0.9)),
+    vec3f(max(0.0001, scale)),
+    effectEulerZYX(
+      90.0 * EFFECT_DEG,
+      0.0,
+      (uniform.uEffectTime * a1.w + a0.y) * EFFECT_DEG
+    )
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
+/** Ojos que parpadean en la boca del haz fantasma. */
+export const MOTION_BEAM_EYES_WGSL = `
+fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
+  let reveal = 1.0 - pow(1.0 - min(1.0, uniform.uEffectTime / 0.1), 2.0);
+  let blink = select(1.0, 0.15, sin(uniform.uEffectTime * 9.0 + a0.x) > 0.9);
+  return effectTRS(
+    vec3f(a0.x * uniform.uEffectRadius * 0.45, uniform.uEffectRadius * 0.3, a1.x * reveal),
+    vec3f(
+      max(0.0001, uniform.uEffectRadius * 0.3 * blink),
+      max(0.0001, uniform.uEffectRadius * 0.3 * blink),
+      max(0.0001, uniform.uEffectRadius * 0.2 * blink)
+    ),
+    effectRotY(0.0)
+  );
+}
+
+fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
+  return vertexPosition;
+}
+`;
+
 /** Jirones del área fantasma. */
 export const MOTION_GHOST_WISPS_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {

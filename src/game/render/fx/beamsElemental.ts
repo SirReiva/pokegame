@@ -1,6 +1,8 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
+import { EffectBatch, MOTION_ROCK_BEAM_SPIKES } from '../../effectBatch';
+import type { EffectBatchInstance } from '../../effectBatch';
 import { tintColor } from './fxGeometry';
 
 /**
@@ -1049,35 +1051,43 @@ const dx = x2 - x1;
     glow.setLocalScale(width * 1.4, 0.025, length);
 
     const spikeCount = Math.max(7, Math.round(length * 1.5));
-    const spikes: {
-      entity: pc.Entity;
-      z: number;
-      offset: number;
-      height: number;
-      width: number;
-      delay: number;
-      tilt: number;
-    }[] = [];
+    const lightSpikes: EffectBatchInstance[] = [];
+    const darkSpikes: EffectBatchInstance[] = [];
     for (let index = 0; index < spikeCount; index++) {
       const t = (index + 0.5) / spikeCount;
       const height = width * (1.6 + Math.random() * 1.4);
       const spikeWidth = width * (0.7 + Math.random() * 0.5);
-      const spike = ctx.createEntity(
-        ctx.rockSpikeMesh,
-        [index % 3 === 0 ? darkMaterial : lightMaterial],
-        root
-      );
-      spike.setLocalScale(Math.max(0.001, spikeWidth), 0.001, Math.max(0.001, spikeWidth));
-      spikes.push({
-        entity: spike,
-        z: t * length,
-        offset: (index % 2 === 0 ? 1 : -1) * width * (0.25 + Math.random() * 0.8),
-        height,
-        width: spikeWidth,
-        delay: t * 0.14,
-        tilt: (Math.random() - 0.5) * 18
-      });
+      const delay = t * 0.14;
+      const instance: EffectBatchInstance = {
+        anim0: [
+          t * length,
+          (index % 2 === 0 ? 1 : -1) * width * (0.25 + Math.random() * 0.8),
+          height,
+          spikeWidth
+        ],
+        anim1: [delay, (Math.random() - 0.5) * 18, Math.sin(delay * 20) * 30, 0]
+      };
+      if (index % 3 === 0) darkSpikes.push(instance);
+      else lightSpikes.push(instance);
     }
+    const lightSpikeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.rockSpikeMesh,
+      material: lightMaterial,
+      instances: lightSpikes,
+      motion: MOTION_ROCK_BEAM_SPIKES,
+      radius: width
+    });
+    const darkSpikeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.rockSpikeMesh,
+      material: darkMaterial,
+      instances: darkSpikes,
+      motion: MOTION_ROCK_BEAM_SPIKES,
+      radius: width
+    });
 
     ctx.spawnSporeParticles(
       root,
@@ -1109,27 +1119,8 @@ const dx = x2 - x1;
       ridgeMaterial.opacity = 0.4 * fade;
       crackMaterial.opacity = (0.4 + Math.sin(time * 26) * 0.18) * fade;
 
-      for (const spike of spikes) {
-        const local = Math.max(0, Math.min(1, (time - spike.delay) / 0.16));
-        const pop = 1 - Math.pow(1 - local, 3);
-        const height = spike.height * pop * fade;
-        const spikeWidth = spike.width * (0.45 + pop * 0.55) * fade;
-        spike.entity.setLocalScale(
-          Math.max(0.001, spikeWidth),
-          Math.max(0.001, height),
-          Math.max(0.001, spikeWidth)
-        );
-        spike.entity.setLocalPosition(
-          spike.offset,
-          height * (pop - 0.5),
-          spike.z
-        );
-        spike.entity.setLocalEulerAngles(
-          spike.tilt * pop,
-          Math.sin(spike.delay * 20) * 30,
-          spike.tilt * 0.4 * pop
-        );
-      }
+      lightSpikeBatch.setTime(time);
+      darkSpikeBatch.setTime(time);
 
       lightMaterial.opacity = 0.9 * fade;
       darkMaterial.opacity = 0.76 * fade;
