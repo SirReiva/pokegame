@@ -425,6 +425,12 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_AIR_BLADES, wgslMotions.MOTION_AIR_BLADES_WGSL],
     [MOTION_AIR_FEATHERS, wgslMotions.MOTION_AIR_FEATHERS_WGSL],
     [MOTION_AIR_EMBERS, wgslMotions.MOTION_AIR_EMBERS_WGSL],
+    [MOTION_PROJECTILE_WAKE, wgslMotions.MOTION_PROJECTILE_WAKE_WGSL],
+    [MOTION_PROJECTILE_ORBIT, wgslMotions.MOTION_PROJECTILE_ORBIT_WGSL],
+    [MOTION_PROJECTILE_RING, wgslMotions.MOTION_PROJECTILE_RING_WGSL],
+    [MOTION_PROJECTILE_BLADES, wgslMotions.MOTION_PROJECTILE_BLADES_WGSL],
+    [MOTION_PROJECTILE_FEATHERS, wgslMotions.MOTION_PROJECTILE_FEATHERS_WGSL],
+    [MOTION_PROJECTILE_TRAIL, wgslMotions.MOTION_PROJECTILE_TRAIL_WGSL],
     [MOTION_GHOST_WISPS, wgslMotions.MOTION_GHOST_WISPS_WGSL],
     [MOTION_GHOST_EYES, wgslMotions.MOTION_GHOST_EYES_WGSL],
     [MOTION_RING, wgslMotions.MOTION_RING_WGSL],
@@ -1913,6 +1919,154 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
   );
   float scale = max(0.0001, uEffectRadius * 0.05 * (1.0 - progress * 0.7));
   return effectTRS(pos, vec3(scale), effectRotY(0.0));
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Estela de un proyectil: cuentas alineadas en −Z que se mecen y laten.
+ * `anim0 = [fase, z local, tamaño, alargamiento]`;
+ * `anim1 = [vaivén X, vaivén Y, velocidad de pulso, 0]`.
+ */
+export const MOTION_PROJECTILE_WAKE = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float pulse = 1.0 + sin(uEffectTime * a1.z + a0.x) * 0.12;
+  float size = max(0.0001, a0.z * pulse);
+  vec3 pos = vec3(
+    sin(uEffectTime * 8.0 + a0.x) * a1.x,
+    cos(uEffectTime * 10.0 + a0.x) * a1.y,
+    a0.y
+  );
+  return effectTRS(
+    pos,
+    vec3(size, size, size * a0.w),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Gotas o motas que orbitan alrededor del eje del proyectil. La componente Z
+ * base viaja en la posición de la instancia.
+ * `anim0 = [ángulo base, velocidad angular, factor de órbita, fase]`;
+ * `anim1 = [tamaño, frecuencia vertical, amplitud vertical, vaivén Z]`;
+ * `anim2 = [alargamiento Z, fase vertical, 0, 0]` (1 y 0 si no se indican).
+ */
+export const MOTION_PROJECTILE_ORBIT = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float angle = a0.x + uEffectTime * a0.y;
+  float orbit = uEffectRadius * a0.z;
+  float zStretch = instance_anim2.x > 0.0 ? instance_anim2.x : 1.0;
+  float yPhase = instance_anim2.y;
+  return effectTRS(
+    vec3(
+      cos(angle) * orbit,
+      sin(angle * a1.y + yPhase) * uEffectRadius * a1.z,
+      base[3].z + sin(uEffectTime * 13.0 + a0.w) * uEffectRadius * a1.w
+    ),
+    vec3(max(0.0001, a1.x), max(0.0001, a1.x), max(0.0001, a1.x * zStretch)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aros de presión que se expanden y avanzan por el eje del proyectil.
+ * `anim0.x` es el desfase; `anim1 = [radio base, crecimiento, velocidad, avance]`.
+ * La Z base viaja en la posición de la instancia. Se aplica a un toro en XZ.
+ */
+export const MOTION_PROJECTILE_RING = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float phase = fract(uEffectTime * a1.z + a0.x);
+  float scale = uEffectRadius * (a1.x + phase * a1.y);
+  float z = base[3].z + phase * uEffectRadius * a1.w;
+  return effectTRS(
+    vec3(0.0, 0.0, z),
+    vec3(max(0.0001, scale)),
+    effectRotX(90.0 * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Aspas de viento que giran sobre el eje de vuelo. `anim0 = [ángulo base,
+ * grados por segundo, giro del plano, 0]`; `anim1.x` es la escala.
+ */
+export const MOTION_PROJECTILE_BLADES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float angle = (a0.x + uEffectTime * a0.y) * EFFECT_DEG;
+  float yaw = a0.z * EFFECT_DEG;
+  return effectTRS(
+    vec3(0.0),
+    vec3(max(0.0001, a1.x)),
+    effectEuler(0.0, yaw, angle)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Plumas que flotan detrás de un proyectil. `anim0 = [x, y, z en radios,
+ * fase]`; `anim1 = [vaivén X, vaivén Y, tamaño, giro por segundo]`.
+ */
+export const MOTION_PROJECTILE_FEATHERS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float radius = uEffectRadius;
+  float size = max(0.0001, a1.z);
+  return effectTRS(
+    vec3(
+      a0.x * radius + sin(uEffectTime * 9.0 + a0.w) * a1.x,
+      a0.y * radius + sin(uEffectTime * 7.0 + a0.w) * a1.y,
+      a0.z * radius
+    ),
+    vec3(size, size * 2.444, size),
+    effectEuler(
+      sin(uEffectTime * 8.0 + a0.w) * 25.0 * EFFECT_DEG,
+      (uEffectTime * a1.w + a0.w * 40.0) * EFFECT_DEG,
+      cos(uEffectTime * 7.0 + a0.w) * 30.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/**
+ * Jirones rectangulares de la estela. `anim0 = [fase, lado Y, inclinación, 0]`;
+ * `anim1 = [ancho, alto, largo, 0]`.
+ */
+export const MOTION_PROJECTILE_TRAIL = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float radius = uEffectRadius;
+  return effectTRS(
+    vec3(0.0, a0.y * radius * 0.45, -radius * 2.2),
+    vec3(a1.x, a1.y, a1.z),
+    effectEuler(
+      0.0,
+      sin(uEffectTime * 10.0 + a0.x) * 14.0 * EFFECT_DEG,
+      a0.z * EFFECT_DEG
+    )
+  );
 }
 
 vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {

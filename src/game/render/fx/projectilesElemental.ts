@@ -2,6 +2,13 @@ import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
 import type { EffectHandle } from '../../core/ports/fx';
+import {
+  EffectBatch,
+  MOTION_PROJECTILE_BLADES,
+  MOTION_PROJECTILE_FEATHERS,
+  MOTION_PROJECTILE_TRAIL
+} from '../../effectBatch';
+import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
 import { tintColor } from './fxGeometry';
 
@@ -26,12 +33,16 @@ const root = new pc.Entity('air-projectile');
     const bladeMaterial = ctx.createWaterMaterial(tintColor(color, 0.72), 0.62);
     const hotMaterial = ctx.createMaterial(color, 0.5);
     const featherMaterial = ctx.createLeafMaterial(tintColor(color, 0.52), 0.85);
+    // Material propio para el lote de la estela: el `hotMaterial` queda para
+    // las aspas calientes, que llevan otra animación instanciada.
+    const trailMaterial = ctx.createMaterial(color, 0.5);
     const materials = [
       coreMaterial,
       glowMaterial,
       bladeMaterial,
       hotMaterial,
-      featherMaterial
+      featherMaterial,
+      trailMaterial
     ];
 
     const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
@@ -41,58 +52,88 @@ const root = new pc.Entity('air-projectile');
 
     // Dos ruedas perpendiculares: una sola medialuna se vería de canto desde
     // media cámara; la cruz mantiene el aspa con volumen en el splitscreen.
-    const wheel = new pc.Entity('air-wheel');
-    root.addChild(wheel);
-    const crossWheel = new pc.Entity('air-wheel-cross');
-    crossWheel.setLocalEulerAngles(0, 90, 0);
-    root.addChild(crossWheel);
+    // Las seis aspas comparten una malla y dos lotes (normal y caliente): el
+    // giro y la orientación de cada rueda se resuelven en el vertex shader.
+    const bladeMesh = ctx.cachedWindBlade(radius * 5, 1.08, radius * 1.35, 10);
+    const bladeInstances: EffectBatchInstance[] = [];
+    const hotBladeInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const blade = ctx.createEntity(
-        ctx.cachedWindBlade(radius * 5, 1.08, radius * 1.35, 10),
-        [index === 1 ? hotMaterial : bladeMaterial],
-        wheel
-      );
-      blade.setLocalEulerAngles(0, 0, index * 120);
-      const cross = ctx.createEntity(
-        ctx.cachedWindBlade(radius * 3.9, 0.98, radius * 1.05, 10),
-        [index === 2 ? hotMaterial : bladeMaterial],
-        crossWheel
-      );
-      cross.setLocalEulerAngles(0, 0, index * 120 + 60);
-    }
+      const blade: EffectBatchInstance = {
+        anim0: [index * 120, 720, 0, 0],
+        anim1: [1, 0, 0, 0]
+      };
+      if (index === 1) hotBladeInstances.push(blade);
+      else bladeInstances.push(blade);
 
-    const feathers: {
-      entity: pc.Entity;
-      phase: number;
-      baseY: number;
-      baseZ: number;
-    }[] = [];
+      const cross: EffectBatchInstance = {
+        anim0: [index * 120 + 60, -590.4, 90, 0],
+        anim1: [0.78, 0, 0, 0]
+      };
+      if (index === 2) hotBladeInstances.push(cross);
+      else bladeInstances.push(cross);
+    }
+    const bladeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: bladeMesh,
+      material: bladeMaterial,
+      instances: bladeInstances,
+      motion: MOTION_PROJECTILE_BLADES,
+      radius
+    });
+    const hotBladeBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: bladeMesh,
+      material: hotMaterial,
+      instances: hotBladeInstances,
+      motion: MOTION_PROJECTILE_BLADES,
+      radius
+    });
+
+    // Plumas de la estela: tres instancias en lugar de tres entidades.
+    const featherInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const baseZ = -radius * (2.4 + index * 1.2);
-      const feather = ctx.createLeaf(root, featherMaterial, {
-        x: (index - 1) * radius * 1.1,
-        y: (index % 2 === 0 ? 1 : -1) * radius * 0.35,
-        z: baseZ,
-        width: radius * 0.9,
-        height: radius * 2.2,
-        yaw: index * 55,
-        roll: 25 + index * 20
-      });
-      feathers.push({
-        entity: feather,
-        phase: index * 1.7,
-        baseY: feather.getLocalPosition().y,
-        baseZ
+      featherInstances.push({
+        anim0: [
+          (index - 1) * 1.1,
+          index % 2 === 0 ? 0.35 : -0.35,
+          -(2.4 + index * 1.2),
+          index * 1.7
+        ],
+        anim1: [radius * 0.9, radius * 0.25, radius * 0.9, 120]
       });
     }
+    const featherBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.leafMesh,
+      material: featherMaterial,
+      instances: featherInstances,
+      motion: MOTION_PROJECTILE_FEATHERS,
+      radius
+    });
 
-    const trails: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const trail = ctx.createEntity(ctx.boxMesh, [hotMaterial], root);
-      trail.setLocalPosition(0, (index === 0 ? -1 : 1) * radius * 0.45, -radius * 2.2);
-      trail.setLocalScale(radius * 0.35, radius * 0.16, radius * 4.6);
-      trails.push(trail);
-    }
+    // Dos jirones rectangulares que escoltan la estela.
+    const trailInstances: EffectBatchInstance[] = [
+      {
+        anim0: [0, -1, 18, 0],
+        anim1: [radius * 0.35, radius * 0.16, radius * 4.6, 0]
+      },
+      {
+        anim0: [2, 1, -18, 0],
+        anim1: [radius * 0.35, radius * 0.16, radius * 4.6, 0]
+      }
+    ];
+    const trailBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      material: trailMaterial,
+      instances: trailInstances,
+      motion: MOTION_PROJECTILE_TRAIL,
+      radius
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -100,10 +141,6 @@ const root = new pc.Entity('air-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        const spin = time * 720;
-        wheel.setLocalEulerAngles(0, 0, spin);
-        crossWheel.setLocalEulerAngles(0, 90, -spin * 0.82);
-
         const pulse = 1 + Math.sin(time * 24) * 0.08;
         const coreScale = radius * 1.15 * pulse;
         core.setLocalScale(coreScale, coreScale, coreScale);
@@ -115,27 +152,14 @@ const root = new pc.Entity('air-projectile');
         bladeMaterial.opacity = 0.5 + Math.sin(time * 17) * 0.11;
         hotMaterial.opacity = 0.34 + Math.sin(time * 21 + 1) * 0.09;
         featherMaterial.opacity = 0.62 + Math.sin(time * 12) * 0.14;
-        for (const material of materials) material.update();
+        trailMaterial.opacity = 0.34 + Math.sin(time * 21 + 1) * 0.09;
 
-        for (const feather of feathers) {
-          feather.entity.setLocalPosition(
-            Math.sin(time * 9 + feather.phase) * radius * 0.9,
-            feather.baseY + Math.sin(time * 7 + feather.phase) * radius * 0.25,
-            feather.baseZ
-          );
-          feather.entity.setLocalEulerAngles(
-            Math.sin(time * 8 + feather.phase) * 25,
-            time * 120 + feather.phase * 40,
-            Math.cos(time * 7 + feather.phase) * 30
-          );
-        }
-        for (let index = 0; index < trails.length; index++) {
-          trails[index].setLocalEulerAngles(
-            0,
-            Math.sin(time * 10 + index * 2) * 14,
-            index === 0 ? 18 : -18
-          );
-        }
+        bladeBatch.setTime(time);
+        hotBladeBatch.setTime(time);
+        featherBatch.setTime(time);
+        trailBatch.setTime(time);
+
+        for (const material of materials) material.update();
       }
     };
     visual.update(0);

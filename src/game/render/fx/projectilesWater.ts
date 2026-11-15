@@ -2,6 +2,13 @@ import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
 import type { EffectHandle } from '../../core/ports/fx';
+import {
+  EffectBatch,
+  MOTION_PROJECTILE_ORBIT,
+  MOTION_PROJECTILE_RING,
+  MOTION_PROJECTILE_WAKE
+} from '../../effectBatch';
+import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
 
 /**
@@ -129,14 +136,18 @@ const root = new pc.Entity('water-jet-projectile');
 
     const coreMaterial = ctx.createWaterMaterial([238, 253, 255], 0.95);
     const bodyMaterial = ctx.createWaterMaterial(color, 0.55);
-    const foamMaterial = ctx.createWaterMaterial([210, 244, 255], 0.8);
+    // El lote de gotas inyecta el shader instanciado en su material, así que no
+    // puede compartirlo con la punta: cada malla normal conserva el suyo.
+    const dropletMaterial = ctx.createWaterMaterial([210, 244, 255], 0.8);
+    const noseMaterial = ctx.createWaterMaterial([210, 244, 255], 0.8);
     const mistMaterial = ctx.createWaterMaterial(color, 0.14);
     const trailMaterial = ctx.createWaterMaterial(color, 0.34);
     const ringMaterial = ctx.createWaterMaterial([204, 242, 255], 0.72);
     const materials = [
       coreMaterial,
       bodyMaterial,
-      foamMaterial,
+      dropletMaterial,
+      noseMaterial,
       mistMaterial,
       trailMaterial,
       ringMaterial
@@ -156,59 +167,89 @@ const root = new pc.Entity('water-jet-projectile');
     core.setLocalPosition(0, 0, radius * 1.2);
     core.setLocalScale(radius * 1.2, radius * 1.2, radius * 2.6);
 
-    const nose = ctx.createEntity(ctx.sphereMesh, [foamMaterial], root);
+    const nose = ctx.createEntity(ctx.sphereMesh, [noseMaterial], root);
     nose.setLocalPosition(0, 0, radius * 2.7);
     nose.setLocalScale(radius, radius * 0.92, radius * 2);
 
-    // Cola: gotas cada vez más pequeñas que se separan del cuerpo.
-    const tail: {
-      entity: pc.Entity;
-      z: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    // Cola: cinco cuentas que se mecen y laten. Un solo lote instanciado en
+    // lugar de cinco entidades; el shader las anima con `uEffectTime`.
+    const tailInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 5; index++) {
-      const size = radius * (1.45 - index * 0.22);
-      const bead = ctx.createEntity(ctx.sphereMesh, [trailMaterial], root);
-      const beadZ = -radius * (2.7 + index * 1.05);
-      bead.setLocalPosition(0, 0, beadZ);
-      bead.setLocalScale(size, size, size * 1.7);
-      tail.push({ entity: bead, z: beadZ, size, phase: index * 1.3 });
-    }
-
-    // Gotas satélite: se desprenden del cuerpo y giran alrededor del eje.
-    const droplets: {
-      entity: pc.Entity;
-      angle: number;
-      orbit: number;
-      z: number;
-      phase: number;
-      speed: number;
-    }[] = [];
-    for (let index = 0; index < 6; index++) {
-      const size = radius * (0.2 + Math.random() * 0.16);
-      const drop = ctx.createEntity(ctx.sphereMesh, [foamMaterial], root);
-      drop.setLocalScale(size, size, size * 1.4);
-      droplets.push({
-        entity: drop,
-        angle: (index / 6) * Math.PI * 2,
-        orbit: radius * (1.5 + Math.random() * 0.8),
-        z: -radius * (0.4 + index * 0.55),
-        phase: Math.random() * Math.PI * 2,
-        speed: 2.4 + Math.random() * 1.8
+      tailInstances.push({
+        anim0: [
+          index * 1.3,
+          -radius * (2.7 + index * 1.05),
+          radius * (1.45 - index * 0.22),
+          1.7
+        ],
+        anim1: [radius * 0.22, radius * 0.14, 20, 0]
       });
     }
+    const tailBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: trailMaterial,
+      instances: tailInstances,
+      motion: MOTION_PROJECTILE_WAKE,
+      radius
+    });
 
-    // Anillos de presión: dos aros perpendiculares al vuelo que se expanden.
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      // El toro nace en el plano XZ; girarlo 90° en X lo deja mirando a +Z.
-      ring.setLocalEulerAngles(90, 0, 0);
-      ring.setLocalPosition(0, 0, radius * (0.6 + index * 1.1));
-      ring.setLocalScale(radius * 3, radius * 3, radius * 3);
-      rings.push(ring);
+    // Gotas satélite: orbitan alrededor del eje. Otro lote, en vez de seis
+    // entidades con su transformación por frame.
+    const dropletInstances: EffectBatchInstance[] = [];
+    for (let index = 0; index < 6; index++) {
+      const orbit = 1.5 + Math.random() * 0.8;
+      dropletInstances.push({
+        z: -radius * (0.4 + index * 0.55),
+        anim0: [
+          (index / 6) * Math.PI * 2,
+          2.4 + Math.random() * 1.8,
+          orbit,
+          Math.random() * Math.PI * 2
+        ],
+        anim1: [
+          radius * (0.2 + Math.random() * 0.16),
+          1,
+          orbit * 0.7,
+          0.35
+        ],
+        anim2: [1.4, 0, 0, 0]
+      });
     }
+    const dropletBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      material: dropletMaterial,
+      instances: dropletInstances,
+      motion: MOTION_PROJECTILE_ORBIT,
+      radius
+    });
+
+    // Anillos de presión: dos aros que se expanden y avanzan.
+    const ringInstances: EffectBatchInstance[] = [
+      {
+        z: radius * 0.6,
+        anim0: [0, 0, 0, 0],
+        anim1: [2.6, 1.8, 1.6, 0.9]
+      },
+      {
+        z: radius * 1.7,
+        anim0: [0.5, 0, 0, 0],
+        anim1: [2.6, 1.8, 1.6, 0.9]
+      }
+    ];
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: ringMaterial,
+      instances: ringInstances,
+      motion: MOTION_PROJECTILE_RING,
+      radius
+    });
+
 
     let time = 0;
     const visual: ProjectileVisual = {
@@ -233,42 +274,15 @@ const root = new pc.Entity('water-jet-projectile');
         );
         coreMaterial.opacity = 0.84 + Math.sin(time * 28) * 0.09;
         bodyMaterial.opacity = 0.48 + Math.sin(time * 21) * 0.06;
-        foamMaterial.opacity = 0.72 + Math.sin(time * 24) * 0.08;
+        dropletMaterial.opacity = 0.72 + Math.sin(time * 24) * 0.08;
+        noseMaterial.opacity = 0.72 + Math.sin(time * 24) * 0.08;
         mistMaterial.opacity = 0.12 + Math.sin(time * 14) * 0.03;
         trailMaterial.opacity = 0.28 + Math.sin(time * 17) * 0.05;
         ringMaterial.opacity = 0.6 + Math.sin(time * 23) * 0.1;
 
-        for (const bead of tail) {
-          const sway = Math.sin(time * 8 + bead.phase) * radius * 0.22;
-          const bob = Math.cos(time * 10 + bead.phase) * radius * 0.14;
-          bead.entity.setLocalPosition(sway, bob, bead.z);
-          const pulse = 1 + Math.sin(time * 20 + bead.phase) * 0.12;
-          bead.entity.setLocalScale(
-            bead.size * pulse,
-            bead.size * pulse,
-            bead.size * 1.7 * pulse
-          );
-        }
-
-        for (const drop of droplets) {
-          const angle = drop.angle + time * drop.speed;
-          drop.entity.setLocalPosition(
-            Math.cos(angle) * drop.orbit,
-            Math.sin(angle) * drop.orbit * 0.7,
-            drop.z + Math.sin(time * 13 + drop.phase) * radius * 0.35
-          );
-        }
-
-        rings.forEach((ring, index) => {
-          const phase = (time * 1.6 + index * 0.5) % 1;
-          const scale = radius * (2.6 + phase * 1.8);
-          ring.setLocalScale(scale, scale, scale);
-          ring.setLocalPosition(
-            0,
-            0,
-            radius * (0.6 + index * 1.1 + phase * 0.9)
-          );
-        });
+        tailBatch.setTime(time);
+        dropletBatch.setTime(time);
+        ringBatch.setTime(time);
 
         for (const material of materials) material.update();
       }

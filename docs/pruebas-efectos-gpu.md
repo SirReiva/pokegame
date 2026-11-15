@@ -43,6 +43,8 @@ habilidad, prueba esta lista.
 | Mewtwo | **Telequinesis** | Onda psíquica deformada en vertex shader | Que la cinta del cono ondulo en altura y se retuerza entre borde interior y exterior, sin que la malla se quede plana. |
 | Mew | **Golpe Psíquico** | Onda psíquica deformada en vertex shader | Mismo chequeo, con el color y alcance de Mew. |
 | Pikachu | **Rayo** | Rayos unitarios cacheados y escalados | Que el haz siga avanzando desde el lanzador, que los dos rayos giren en sentidos opuestos y que no se vea estirado ni cortado. |
+| Suicune | **Chorro de Agua** / **Ráfaga Marina** | 5 cuentas de cola, 6 gotas orbitando y 2 aros en tres lotes | Que la cola se meeza, las gotas giren alrededor del eje y los dos aros se expandan y avancen sin quedarse quietos. |
+| Moltres | **Tajo Aéreo** | 6 aspas en dos lotes, 3 plumas y 2 jirones instanciados | Que las dos ruedas de aspas giren cruzadas, las plumas ondeen detrás y los jirones escolten la estela. |
 
 ## Pruebas de estrés
 
@@ -55,6 +57,9 @@ habilidad, prueba esta lista.
    shader de la onda y la caché de rayos.
 5. Repite con **4 vistas** y con **8 vistas**; el número de capas por efecto es
    lo que más multiplica los draw calls.
+6. **Chorro de Agua + Tajo Aéreo** con varios proyectiles en vuelo y 8 vistas:
+   comprueba que la cola, las gotas, las aspas y las plumas siguen animándose y
+   que el coste no crece con una entidad por elemento.
 
 ## Efectos que siguen en el camino anterior
 
@@ -66,7 +71,8 @@ Siguen con entidades por elemento:
 
 - Haces `fire`, `grass`, `water`, `ice`, `dark`, `ghost`, `air` y `rock`
   (salvo el haz eléctrico cacheado y el haz psíquico, que ya usan lotes).
-- Proyectiles e impactos pequeños.
+- Proyectiles e impactos pequeños, salvo **Chorro de Agua**, **Ráfaga Marina**
+  y **Tajo Aéreo**, que ya dibujan su decoración con lotes instanciados.
 - El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
   comprueba que la erupción coincide con el punto donde emerge el lanzador.
 - Hojas del golpe melee de tipo Planta (9 hojas), zarpas, mandíbula, shuriken y
