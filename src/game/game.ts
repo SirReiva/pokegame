@@ -101,6 +101,7 @@ import {
   teamSeesPickupPoint,
   teamSeesPoint
 } from './sim/visibility';
+import { VisibilityCadence } from './sim/visibilityCadence';
 import {
   breakRegen,
   stepParticipation,
@@ -151,6 +152,14 @@ import {
   type ItemTextureMap,
   type PickupHandlers
 } from './pickups';
+import {
+  PICKUP_AVAILABLE,
+  PICKUP_UNKNOWN,
+  PICKUP_USED,
+  createPickupKnowledge,
+  pickupId,
+  type PickupKnowledge
+} from './pickupKnowledge';
 import {
   TEAM_INFO,
   createTeamRecord,
@@ -561,16 +570,50 @@ export class Game {
    */
   private readonly fxVisibilityCache = new Map<string, number[]>();
   /**
-   * Objetos que cada equipo ve y si están disponibles. Solo contiene puntos
-   * visibles: los bots no pueden consultar el estado del resto.
+   * Objetos que cada equipo ve y si están disponibles, indexados por
+   * `PickupSpawn.id`. Solo contiene puntos visibles: los bots no pueden
+   * consultar el estado del resto.
    */
-  private pickupKnowledge: Record<Team, Map<string, boolean>> = createTeamRecord(
-    () => new Map<string, boolean>()
+  private pickupKnowledge: PickupKnowledge = createPickupKnowledge();
+  /** Paso en el que se calculó el conocimiento actual de objetos. */
+  private pickupKnowledgeStep = -1;
+  /** Revisión de `PickupField` con la que se calculó el conocimiento. */
+  private pickupKnowledgeRevision = -1;
+  /** Fuerza el próximo cálculo (nueva partida, mapa nuevo o vistas nuevas). */
+  private pickupKnowledgeForce = true;
+  /** Array de spawns con el que se dimensionó el conocimiento actual. */
+  private pickupSpawnsSource: readonly PickupSpawn[] | null = null;
+  /** Última posición/estado de los observadores del conocimiento de objetos. */
+  private readonly pickupObservers = new Map<
+    number,
+    {
+      x: number;
+      z: number;
+      alive: boolean;
+      team: Team;
+      visionRange: number;
+      visionFactor: number;
+    }
+  >();
+  /** Factor de visión del clima con el que se calculó el conocimiento. */
+  private pickupAtmosphereVision = Number.NaN;
+  /** Callback reutilizado al aplicar qué copia de objeto ve cada viewport. */
+  private readonly pickupVisible = (
+    spawn: PickupSpawn,
+    viewIndex: number
+  ): boolean => {
+    const observer = this.views[viewIndex];
+    if (!observer) return false;
+    const id = pickupId(spawn);
+    if (id < 0) return false;
+    const knowledge = this.pickupKnowledge[observer.team];
+    return id < knowledge.length && knowledge[id] !== PICKUP_UNKNOWN;
+  };
+  /** Cadencia de la visibilidad de actores: 20 Hz y eventos inmediatos. */
+  private readonly visibilityCadence = new VisibilityCadence(
+    CONFIG.vision.actorRefreshSteps,
+    CONFIG.vision.moveEpsilon
   );
-  /** Mapas reutilizados para no reconstruir el conocimiento de objetos. */
-  private pickupKnowledgeScratch: Record<Team, Map<string, boolean>> =
-    createTeamRecord(() => new Map<string, boolean>());
-  private readonly pickupSeenScratch = new Map<string, boolean>();
 
   private ready = false;
   private mode: 'menu' | 'match' = 'menu';
@@ -1061,13 +1104,6 @@ export class Game {
       set pickupKnowledge(value) {
         self.pickupKnowledge = value;
       },
-      get pickupKnowledgeScratch() {
-        return self.pickupKnowledgeScratch;
-      },
-      set pickupKnowledgeScratch(value) {
-        self.pickupKnowledgeScratch = value;
-      },
-      pickupSeenScratch: this.pickupSeenScratch,
       resolveObjectiveZones: () => self.resolveObjectiveZones(),
       resolvePosition: (player, x, z) => self.resolvePosition(player, x, z),
       updateViewFarClip: () => self.updateViewFarClip(),
@@ -3653,28 +3689,50 @@ export class Game {
   
   
   /**
-   * Resuelve la visibilidad compartida por equipo para el paso de simulación
-   * actual y actualiza `enemiesSeeing` (HUD y Regeneración). No toca niebla,
-   * cámaras ni copias: eso se hace una vez por render en `updateVision`.
+   * Resuelve la visibilidad compartida por equipo y actualiza `enemiesSeeing`
+   * (HUD y Regeneración). No toca niebla, cámaras ni copias: eso se hace una
+   * vez por render en `updateVision`.
    *
-   * Se llama al terminar cada paso fijo. Así el siguiente paso y el render
-   * reutilizan una foto tomada con las posiciones finales del paso anterior,
-   * en vez de la del render anterior. La histéresis se conserva porque los
-   * conjuntos se alternan entre `visibleByTeam` y `visibleByTeamScratch`.
+   * Se llama al terminar cada paso fijo. Un cálculo completo es O(n²) y solo
+   * hace falta a 20 Hz mientras los actores se mueven; los cambios de vida,
+   * daño, ocultación, casteo, muerte o equipo lo fuerzan en el mismo paso. La
+   * foto anterior sigue siendo válida entre medias y la histéresis la tolera.
    */
   private refreshCombatVisibility(): void {
-    const previous = this.visibleByTeam;
-    const current = this.visibleByTeamScratch;
-    refreshVisibility(
-      this.matchPlayers,
-      previous,
-      current,
-      this.world.colliders,
-      this.atmosphereVision
-    );
-    this.visibleByTeam = current;
-    this.visibleByTeamScratch = previous;
-    this.visionView.markRefreshed(this.simulationStep);
+    const step = this.simulationStep;
+    if (
+      this.visibilityCadence.shouldRefresh(
+        this.matchPlayers,
+        step,
+        this.atmosphereVision
+      )
+    ) {
+      const started = performance.now();
+      const previous = this.visibleByTeam;
+      const current = this.visibleByTeamScratch;
+      const checks = refreshVisibility(
+        this.matchPlayers,
+        previous,
+        current,
+        this.world.colliders,
+        this.atmosphereVision
+      );
+      this.visibleByTeam = current;
+      this.visibleByTeamScratch = previous;
+      this.visibilityCadence.markComputed(
+        this.matchPlayers,
+        step,
+        this.atmosphereVision
+      );
+      this.publishStat('losChecks', checks);
+      this.publishStat('visibilityMs', performance.now() - started);
+    }
+    // El render reutiliza la última foto aunque este paso no haya recalculado.
+    this.visionView.markRefreshed(step);
+  }
+
+  private publishStat(name: string, value: number): void {
+    this.app.stats?.user.set(name, value);
   }
 
   /**
@@ -3689,57 +3747,143 @@ export class Game {
   }
 
   /**
-   * Calcula qué objetos ve cada equipo y cuáles están disponibles. La
-   * visibilidad se resuelve con la misma geometría que los actores (círculos de
-   * visión y línea de visión, sin la ocultación del terreno). El estado de
-   * disponibilidad solo se guarda para los puntos visibles: los bots no pueden
-   * consultar el resto.
+   * Calcula qué objetos ve cada equipo y cuáles están disponibles.
    *
-   * Se calcula para los dos equipos, aunque uno no tenga ninguna vista humana
-   * (por ejemplo, un equipo formado solo por bots).
+   * Los objetos del mapa no se mueven, así que recalcular su línea de visión
+   * cada frame era trabajo repetido. Ahora se hace a 7,5 Hz (o al instante si
+   * cambia la disponibilidad de un objeto o el clima, o si la partida/mapa se
+   * reinicia) y la visibilidad de cada copia se aplica cada frame desde el
+   * conocimiento cacheado. El conocimiento es un array por equipo indexado por
+   * `PickupSpawn.id`: los bots no pueden consultar lo que su equipo no ve y no
+   * se crean strings por frame.
    */
   private updatePickupKnowledge(colliders: readonly Collider[]): void {
     const pickups = this.pickups;
     if (!pickups) return;
-    const previousKnowledge = this.pickupKnowledge;
-    const knowledge = this.pickupKnowledgeScratch;
-    for (const team of ACTIVE_TEAMS) knowledge[team].clear();
-    const seenCache = this.pickupSeenScratch;
-    seenCache.clear();
+    this.ensurePickupKnowledge();
 
-    const sees = (team: Team, spawn: { x: number; z: number }): boolean => {
-      const pointKey = `${spawn.x}:${spawn.z}`;
-      const teamKey = `${team}:${pointKey}`;
-      let visible = seenCache.get(teamKey);
-      if (visible === undefined) {
+    const step = this.simulationStep;
+    const due =
+      this.pickupKnowledgeForce ||
+      step < this.pickupKnowledgeStep ||
+      pickups.revision !== this.pickupKnowledgeRevision ||
+      this.atmosphereVision !== this.pickupAtmosphereVision ||
+      (step - this.pickupKnowledgeStep >= CONFIG.vision.pickupRefreshSteps &&
+        this.pickupObserversChanged());
+
+    if (due) {
+      const started = performance.now();
+      this.refreshPickupKnowledge(colliders);
+      this.pickupKnowledgeStep = step;
+      this.pickupKnowledgeRevision = pickups.revision;
+      this.pickupAtmosphereVision = this.atmosphereVision;
+      this.pickupKnowledgeForce = false;
+      this.rememberPickupObservers();
+      this.publishStat(
+        'pickupKnowledgeMs',
+        performance.now() - started
+      );
+    }
+
+    // Cada copia de viewport se muestra si su equipo ve el punto. Es un
+    // recorrido barato y no repite línea de visión.
+    pickups.updateVisibility(this.pickupVisible);
+  }
+
+  /** Ajusta el tamaño de los arrays de conocimiento al mapa actual. */
+  private ensurePickupKnowledge(): void {
+    if (this.pickupSpawnsSource !== this.pickupSpawns) {
+      this.pickupSpawnsSource = this.pickupSpawns;
+      this.pickupKnowledgeForce = true;
+    }
+    const size = this.pickupSpawns.length;
+    for (const team of ACTIVE_TEAMS) {
+      if (this.pickupKnowledge[team].length === size) continue;
+      this.pickupKnowledge[team] = new Int8Array(size);
+      this.pickupKnowledgeForce = true;
+    }
+  }
+
+  /** Recalcula la visibilidad y disponibilidad de cada objeto por equipo. */
+  private refreshPickupKnowledge(colliders: readonly Collider[]): void {
+    const pickups = this.pickups;
+    if (!pickups) return;
+    for (const team of ACTIVE_TEAMS) {
+      this.pickupKnowledge[team].fill(PICKUP_UNKNOWN);
+    }
+
+    let checks = 0;
+    pickups.forEachSpawn((spawn, available) => {
+      const id = pickupId(spawn);
+      if (id < 0) return;
+      const state = available ? PICKUP_AVAILABLE : PICKUP_USED;
+      for (const team of ACTIVE_TEAMS) {
+        checks += 1;
         // Misma regla geométrica que los actores: círculo de visión y línea de
         // visión. Los objetos no aplican la ocultación del terreno.
-        visible = teamSeesPickupPoint(
-          this.matchPlayers,
-          team,
-          spawn.x,
-          spawn.z,
-          colliders,
-          this.atmosphereVision
-        );
-        seenCache.set(teamKey, visible);
-        if (visible) {
-          knowledge[team].set(pointKey, pickups.isAvailableAt(spawn.x, spawn.z));
+        if (
+          teamSeesPickupPoint(
+            this.matchPlayers,
+            team,
+            spawn.x,
+            spawn.z,
+            colliders,
+            this.atmosphereVision
+          )
+        ) {
+          const knowledge = this.pickupKnowledge[team];
+          if (id < knowledge.length) knowledge[id] = state;
         }
       }
-      return visible;
-    };
-
-    pickups.forEachSpawn((spawn) => {
-      for (const team of ACTIVE_TEAMS) sees(team, spawn);
     });
+    this.publishStat('pickupLosChecks', checks);
+  }
 
-    this.pickupKnowledge = knowledge;
-    this.pickupKnowledgeScratch = previousKnowledge;
-    pickups.updateVisibility((spawn, viewIndex) => {
-      const observer = this.views[viewIndex];
-      return observer ? sees(observer.team, spawn) : false;
-    });
+  /** ¿Se movió o cambió el estado de algún observador desde la última foto? */
+  private pickupObserversChanged(): boolean {
+    const players = this.matchPlayers;
+    if (this.pickupObservers.size !== players.length) return true;
+    const epsilonSq = CONFIG.vision.moveEpsilon * CONFIG.vision.moveEpsilon;
+    for (const player of players) {
+      const previous = this.pickupObservers.get(player.slot);
+      if (!previous) return true;
+      if (
+        previous.alive !== player.alive ||
+        previous.team !== player.team ||
+        previous.visionRange !== player.visionRange ||
+        previous.visionFactor !== player.visionFactor
+      ) {
+        return true;
+      }
+      const dx = player.x - previous.x;
+      const dz = player.z - previous.z;
+      if (dx * dx + dz * dz > epsilonSq) return true;
+    }
+    return false;
+  }
+
+  /** Guarda la posición de los observadores tras un cálculo de objetos. */
+  private rememberPickupObservers(): void {
+    for (const player of this.matchPlayers) {
+      const previous = this.pickupObservers.get(player.slot);
+      if (previous) {
+        previous.x = player.x;
+        previous.z = player.z;
+        previous.alive = player.alive;
+        previous.team = player.team;
+        previous.visionRange = player.visionRange;
+        previous.visionFactor = player.visionFactor;
+      } else {
+        this.pickupObservers.set(player.slot, {
+          x: player.x,
+          z: player.z,
+          alive: player.alive,
+          team: player.team,
+          visionRange: player.visionRange,
+          visionFactor: player.visionFactor
+        });
+      }
+    }
   }
 
   

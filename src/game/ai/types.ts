@@ -68,7 +68,7 @@ export interface TeamBlackboard {
   lastSeen: Map<number, { x: number; z: number; at: number }>;
   aliveAllies: number;
   aliveEnemies: number;
-  pickupClaims: Map<string, BotPickupClaim>;
+  pickupClaims: Map<number, BotPickupClaim>;
   reviveClaims: Map<number, BotReviveClaim>;
   patrolClaims: Map<number, BotPatrolClaim>;
   engageCall: BotEngageCall;

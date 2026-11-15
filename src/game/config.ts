@@ -313,6 +313,17 @@ export const CONFIG = {
     /** Tope de ocultación: nunca se vuelve imposible ver a alguien pegado. */
     maxConcealment: 0.85,
     /**
+     * Cadencia de la visibilidad de actores. Cada cuántos pasos fijos (60 Hz)
+     * se recalcula mientras alguien se mueve. 3 = 20 Hz. El daño recibido, la
+     * ocultación, el casteo, la muerte/respawn o un cambio de equipo fuerzan
+     * el cálculo en el mismo paso.
+     */
+    actorRefreshSteps: 3,
+    /** Cada cuántos pasos fijos se recalcula qué objetos ve cada equipo. 8 = 7,5 Hz. */
+    pickupRefreshSteps: 8,
+    /** Movimiento mínimo (u) para considerar que un observador se movió. */
+    moveEpsilon: 0.12,
+    /**
      * Opacidad del sombreado fuera de la visión, por vista. Se aplica como
      * uniforme del material de niebla.
      */

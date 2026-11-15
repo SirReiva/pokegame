@@ -302,6 +302,8 @@ export class PickupView {
 /** Gestiona todos los objetos del mapa activo y sus cooldowns. */
 export class PickupField {
   private items: PickupInstance[] = [];
+  /** Sube cada vez que cambia la disponibilidad de algún objeto. */
+  private revisionValue = 0;
   private readonly app: pc.AppBase;
   private readonly shadowMaterial: pc.StandardMaterial;
   private readonly textures: ItemTextureMap;
@@ -314,6 +316,11 @@ export class PickupField {
     this.app = app;
     this.shadowMaterial = shadowMaterial;
     this.textures = textures;
+  }
+
+  /** Cambia cuando algún objeto pasa a usado o vuelve a estar disponible. */
+  get revision(): number {
+    return this.revisionValue;
   }
 
   /** Crea una vista más del objeto (copia o vista del menú). */
@@ -332,11 +339,13 @@ export class PickupField {
   private setItemUsed(item: PickupInstance, used: boolean): void {
     item.menuView.setUsed(used);
     for (const view of item.views) view.setUsed(used);
+    this.revisionValue += 1;
   }
 
   /** Reconstruye los objetos del mapa indicado. */
   setMap(spawns: readonly PickupSpawn[]): void {
     this.dispose();
+    this.revisionValue += 1;
     spawns.forEach((spawn, index) => {
       const definition = ITEM_DEFINITIONS[spawn.type];
       const textures = this.textures.get(spawn.type);
@@ -439,9 +448,15 @@ export class PickupField {
     }
   }
 
-  /** Recorre los objetos existentes (posición y tipo), sin revelar su estado. */
-  forEachSpawn(visit: (spawn: PickupSpawn) => void): void {
-    for (const item of this.items) visit(item.spawn);
+  /**
+   * Recorre los objetos existentes (posición, tipo y disponibilidad), sin
+   * revelar su estado a quien no los vea: el llamador decide qué equipos
+   * reciben cada entrada.
+   */
+  forEachSpawn(
+    visit: (spawn: PickupSpawn, available: boolean) => void
+  ): void {
+    for (const item of this.items) visit(item.spawn, item.available);
   }
 
   /**

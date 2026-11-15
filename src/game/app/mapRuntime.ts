@@ -136,21 +136,25 @@ export async function applyMap(
   host.world = world;
   // Los objetos se validan contra el mundo ya construido: un centro fuera de
   // los límites, en agua profunda o dentro de un collider (muro, roca, árbol,
-  // base...) no se crea y tampoco se ofrece a los bots.
-  host.pickupSpawns = map.pickups.filter((spawn) => {
-    const issue = pickupPlacementIssue(
-      map,
-      spawn,
-      host.world?.colliders ?? []
-    );
-    if (issue) {
-      console.warn(
-        `[items] Se descarta ${spawn.type} en (${spawn.x}, ${spawn.z}): ${issue}.`
+  // base...) no se crea y tampoco se ofrece a los bots. Se copian con un `id`
+  // estable (el índice del array) para que visibilidad y bots usen claves
+  // numéricas sin mutar la definición del mapa.
+  host.pickupSpawns = map.pickups
+    .filter((spawn) => {
+      const issue = pickupPlacementIssue(
+        map,
+        spawn,
+        host.world?.colliders ?? []
       );
-      return false;
-    }
-    return true;
-  });
+      if (issue) {
+        console.warn(
+          `[items] Se descarta ${spawn.type} en (${spawn.x}, ${spawn.z}): ${issue}.`
+        );
+        return false;
+      }
+      return true;
+    })
+    .map((spawn, id) => ({ ...spawn, id }));
   host.pickups = new PickupField(
     host.app,
     host.world.shadowMaterial,

@@ -29,6 +29,7 @@ import { HealthBarArt, healthBarLayoutFor } from '../healthBar';
 import type { HealthBarOverlay } from '../healthBarOverlay';
 import type { HumanInputBuffer } from '../inputBuffer';
 import type { PickupSpawn } from '../items';
+import { createPickupKnowledge, type PickupKnowledge } from '../pickupKnowledge';
 import type {
   ActiveAoe,
   MatchPlayerState,
@@ -189,9 +190,7 @@ export interface MatchSessionHost {
   visibleByTeam: Record<Team, Set<number>>;
   visibleByTeamScratch: Record<Team, Set<number>>;
   simulationStep: number;
-  pickupKnowledge: Record<Team, Map<string, boolean>>;
-  pickupKnowledgeScratch: Record<Team, Map<string, boolean>>;
-  readonly pickupSeenScratch: Map<string, boolean>;
+  pickupKnowledge: PickupKnowledge;
 
   // --- Acciones de `Game` ---
   /** Zonas declaradas por el mapa, para los modos de control. */
@@ -295,11 +294,7 @@ export function clearMatch(host: MatchSessionHost): void {
   host.visibleByTeam = createTeamRecord(() => new Set<number>());
   host.visibleByTeamScratch = createTeamRecord(() => new Set<number>());
   host.simulationStep = 0;
-  host.pickupKnowledge = createTeamRecord(() => new Map<string, boolean>());
-  host.pickupKnowledgeScratch = createTeamRecord(
-    () => new Map<string, boolean>()
-  );
-  host.pickupSeenScratch.clear();
+  host.pickupKnowledge = createPickupKnowledge();
 
   for (const markers of host.deathMarkers.values()) {
     for (const marker of markers) marker?.destroy();

@@ -92,6 +92,8 @@ export function teamSeesPickupPoint(
 /**
  * Rellena `current` con los slots visibles de cada equipo y actualiza
  * `enemiesSeeing`. `previous` conserva la foto anterior para la histéresis.
+ * Devuelve cuántos pares observador-objetivo se comprobaron, para las stats de
+ * rendimiento (`app.stats.user`).
  */
 export function refreshCombatVisibility(
   players: readonly MatchPlayerState[],
@@ -99,7 +101,8 @@ export function refreshCombatVisibility(
   current: Record<Team, Set<number>>,
   colliders: readonly Collider[],
   atmosphereVision: number
-): void {
+): number {
+  let checks = 0;
   for (const player of players) player.enemiesSeeing = 0;
   for (const team of ACTIVE_TEAMS) current[team].clear();
 
@@ -119,6 +122,7 @@ export function refreshCombatVisibility(
       if (target.alive && target.team === observer.team) continue;
       // Un KO deja ver la animación de daño un instante.
       if (!target.alive && target.deathFade <= 0) continue;
+      checks += 1;
       const alreadyVisible = previous[observer.team].has(target.slot);
       const visible = observerSeesActor(
         observer,
@@ -136,4 +140,5 @@ export function refreshCombatVisibility(
       current[observer.team].add(target.slot);
     }
   }
+  return checks;
 }

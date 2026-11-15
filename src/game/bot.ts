@@ -47,6 +47,7 @@ import {
 import { CONFIG, DEG } from './config';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
+import { PICKUP_AVAILABLE, PICKUP_UNKNOWN } from './pickupKnowledge';
 import type { MatchPlayerState } from './matchState';
 import { otherTeams, type BotDifficulty } from './multiplayer';
 import { maxHitRadius } from './roster';
@@ -282,7 +283,7 @@ const PICKUP_MEMORY_SECONDS = 10;
 /** Tiempo que se descarta un objeto tras quedarse atascado yendo hacia él. */
 const PICKUP_AVOID_SECONDS = 12;
 /** Sin información de visión, ningún objeto tiene estado conocido. */
-const NO_PICKUP_KNOWLEDGE: ReadonlyMap<string, boolean> = new Map();
+const NO_PICKUP_KNOWLEDGE = new Int8Array(0);
 
 /** Tiempo mínimo que se mantiene un foco de equipo antes de cambiarlo. */
 const FOCUS_HOLD_SECONDS = 3.5;
@@ -405,17 +406,22 @@ export class BotController {
   /** Posiciones de objetos conocidas de antemano; nunca su estado. */
   private readonly pickups: readonly PickupSpawn[];
   /**
-   * Estado de los objetos que el equipo ve en este frame (`true` disponible,
-   * `false` usado). Los objetos fuera de visión no aparecen en el mapa.
+   * Estado de los objetos que el equipo ve en este frame (`PICKUP_AVAILABLE`,
+   * `PICKUP_USED` o `PICKUP_UNKNOWN`), indexado por `PickupSpawn.id`.
    */
-  private pickupKnowledge: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE;
+  private pickupKnowledge: Int8Array = NO_PICKUP_KNOWLEDGE;
   /**
    * Último estado visto de cada objeto, con el reloj en que se comprobó. Evita
    * olvidar que un objeto está usado en cuanto sale de visión.
    */
-  private readonly pickupMemory = new Map<string, { available: boolean; at: number }>();
+  private readonly pickupMemory = new Map<
+    number,
+    { available: boolean; at: number }
+  >();
   /** Objetos descartados temporalmente tras un atasco camino de ellos. */
-  private readonly pickupAvoidUntil = new Map<string, number>();
+  private readonly pickupAvoidUntil = new Map<number, number>();
+  /** Índice de respaldo para spawns sin `id` (tests o mapas antiguos). */
+  private readonly pickupIndices = new Map<PickupSpawn, number>();
   /** Puntuación del objeto elegido en la última llamada a `pickupTarget`. */
   private pickupCandidatePriority = 0;
 
@@ -499,6 +505,9 @@ export class BotController {
     this.nav = nav;
     this.squad = squad;
     this.pickups = pickups;
+    pickups.forEach((pickup, index) => {
+      if (pickup.id === undefined) this.pickupIndices.set(pickup, index);
+    });
     this.movement = new BotMovement({
       nav,
       tuning: this.tuning,
@@ -787,7 +796,7 @@ export class BotController {
     self: MatchPlayerState,
     players: readonly MatchPlayerState[],
     colliders: readonly Collider[],
-    knownPickups: ReadonlyMap<string, boolean> = NO_PICKUP_KNOWLEDGE,
+    knownPickups: Int8Array = NO_PICKUP_KNOWLEDGE,
     hazards: readonly BotHazard[] = NO_HAZARDS,
     view: BotWorldView = EMPTY_BOT_WORLD_VIEW
   ): DeviceInputSnapshot {
@@ -796,7 +805,7 @@ export class BotController {
     this.objective = view.objective ?? null;
     this.holdingObjective = false;
     this.pickupKnowledge = knownPickups;
-    this.rememberPickups(self, knownPickups);
+    this.rememberPickups(self);
     if (!self.alive) {
       const team = this.squad[self.team];
       if (team.help?.slot === self.slot) team.help = null;
@@ -845,20 +854,37 @@ export class BotController {
     return this.drive(dt, self, players, colliders);
   }
 
+  /**
+   * Índice estable del objeto. `mapRuntime` asigna `id` al cargar el mapa; el
+   * respaldo cubre spawns de tests o mapas antiguos sin id.
+   */
+  private pickupId(pickup: PickupSpawn): number {
+    return pickup.id ?? this.pickupIndices.get(pickup) ?? -1;
+  }
+
+  /** Estado conocido del objeto, o `undefined` si el equipo no lo ve. */
+  private knownPickupState(pickup: PickupSpawn): boolean | undefined {
+    const id = this.pickupId(pickup);
+    if (id < 0 || id >= this.pickupKnowledge.length) return undefined;
+    const state = this.pickupKnowledge[id];
+    if (state === PICKUP_UNKNOWN) return undefined;
+    return state === PICKUP_AVAILABLE;
+  }
+
   /** Guarda el estado visible de los objetos y descarta recuerdos caducados. */
-  private rememberPickups(
-    self: MatchPlayerState,
-    knownPickups: ReadonlyMap<string, boolean>
-  ): void {
+  private rememberPickups(self: MatchPlayerState): void {
     const team = this.squad[self.team];
-    for (const [key, available] of knownPickups) {
-      this.pickupMemory.set(key, { available, at: this.clock });
+    for (const pickup of this.pickups) {
+      const available = this.knownPickupState(pickup);
+      if (available === undefined) continue;
+      const id = this.pickupId(pickup);
+      this.pickupMemory.set(id, { available, at: this.clock });
       // Si el equipo ve que ya se usó, la reclamación deja de tener sentido.
-      if (!available) team.pickupClaims.delete(key);
+      if (!available) team.pickupClaims.delete(id);
     }
-    for (const [key, entry] of this.pickupMemory) {
+    for (const [id, entry] of this.pickupMemory) {
       if (this.clock - entry.at > PICKUP_MEMORY_SECONDS) {
-        this.pickupMemory.delete(key);
+        this.pickupMemory.delete(id);
       }
     }
   }
@@ -875,7 +901,7 @@ export class BotController {
         continue;
       }
       this.pickupAvoidUntil.set(
-        `${pickup.x}:${pickup.z}`,
+        this.pickupId(pickup),
         this.clock + PICKUP_AVOID_SECONDS
       );
     }
@@ -2837,14 +2863,15 @@ export class BotController {
     let bestScore = -Infinity;
 
     for (const pickup of this.pickups) {
-      const key = `${pickup.x}:${pickup.z}`;
-      const avoidUntil = this.pickupAvoidUntil.get(key);
+      const id = this.pickupId(pickup);
+      if (id < 0) continue;
+      const avoidUntil = this.pickupAvoidUntil.get(id);
       if (avoidUntil !== undefined) {
         if (this.clock < avoidUntil) continue;
-        this.pickupAvoidUntil.delete(key);
+        this.pickupAvoidUntil.delete(id);
       }
-      const knownAvailable = this.pickupKnowledge.get(key);
-      const remembered = this.pickupMemory.get(key);
+      const knownAvailable = this.knownPickupState(pickup);
+      const remembered = this.pickupMemory.get(id);
       const rememberedAvailable =
         remembered && this.clock - remembered.at <= PICKUP_MEMORY_SECONDS
           ? remembered.available
@@ -2910,7 +2937,7 @@ export class BotController {
       // Otra bot ya puede estar yendo a por esta poción. Solo se le discute si
       // esta elección puntúa mejor (más vida que recuperar, menos distancia o
       // menos peligro); si no, se busca otra.
-      const claim = team.pickupClaims.get(key);
+      const claim = team.pickupClaims.get(id);
       if (
         claim &&
         claim.until > this.clock &&
@@ -2932,12 +2959,13 @@ export class BotController {
 
   /** Reclama ante el equipo la poción que este bot va a perseguir. */
   private claimPickup(self: MatchPlayerState, pickup: PickupSpawn): void {
-    const key = `${pickup.x}:${pickup.z}`;
+    const id = this.pickupId(pickup);
+    if (id < 0) return;
     const team = this.squad[self.team];
-    for (const [otherKey, claim] of team.pickupClaims) {
-      if (claim.slot === self.slot) team.pickupClaims.delete(otherKey);
+    for (const [otherId, claim] of team.pickupClaims) {
+      if (claim.slot === self.slot) team.pickupClaims.delete(otherId);
     }
-    team.pickupClaims.set(key, {
+    team.pickupClaims.set(id, {
       slot: self.slot,
       until: this.clock + PICKUP_CLAIM_SECONDS,
       priority: this.pickupCandidatePriority

@@ -338,50 +338,81 @@ DevTools Performance durante la carga: "JS heap", "GC" y tareas largas.
 
 ## 2.1 Amortizar visibilidad de actores y conocimiento de objetos
 
-### Qué pasa hoy
+> **Estado (noviembre de 2026): implementado.** `VisibilityCadence`
+> (`src/game/sim/visibilityCadence.ts`) recalcula la visibilidad de actores a
+> 20 Hz mientras alguien se mueve y la fuerza en el mismo paso ante daño
+> recibido, ocultación, casteo, muerte/respawn o cambio de equipo/atmósfera. El
+> conocimiento de objetos pasa a 7,5 Hz, se indexa por `PickupSpawn.id` y usa un
+> `Int8Array` por equipo. Quedan contadores en `app.stats.user` y un benchmark
+> sintético en `bench-core`.
 
-- `refreshCombatVisibility()` se ejecuta al final de **cada paso fijo de 60 Hz**
-  (`src/game/game.ts:2289`). Es O(n²): recorre observadores × objetivos y hace una
-  comprobación de línea de visión (`src/game/sim/visibility.ts:96-138`). Con 8
-  actores son 56 comprobaciones por paso, ~3 360/s.
-- `updatePickupKnowledge()` se ejecuta en **cada frame de render**
-  (`src/game/render/visionView.ts:127`). Itera objetos × equipos, crea strings
-  `"team:x:z"` y closures (`src/game/game.ts:3670-3702`), y hace LOS por cada
-  objeto visible.
+### Qué pasaba antes
 
-### Por qué cuesta
+- `refreshCombatVisibility()` se ejecutaba al final de **cada paso fijo de 60 Hz**
+  (`src/game/game.ts`). Es O(n²): recorría observadores × objetivos y hacía una
+  comprobación de línea de visión (`src/game/sim/visibility.ts`). Con 8 actores
+  eran 56 comprobaciones por paso, ~3 360/s.
+- `updatePickupKnowledge()` se ejecutaba en **cada frame de render**
+  (`src/game/render/visionView.ts`). Iteraba objetos × equipos, creaba strings
+  `"team:x:z"` y closures (`src/game/game.ts`) y hacía LOS por cada objeto
+  visible. La visibilidad de cada copia de viewport repetía además la misma LOS
+  que el equipo ya había resuelto.
+
+### Por qué costaba
 
 La línea de visión usa una rejilla espacial (`SightIndex`), pero sigue recorriendo
 celdas y colliders. Los objetos del mapa no se mueven: recalcular su visibilidad
 60 veces por segundo es trabajo repetido. Además, las claves string y los
-closures generan basura constante.
+closures generaban basura constante.
 
-### Qué haría
+### Qué se cambió
 
-1. Ejecutar la visibilidad de actores a 20 Hz (cada 3 pasos) y mantener la última
-   foto entre medias. La histéresis de `CONFIG.vision.hysteresis` ya tolera ese
-   retardo. Forzar un refresco inmediato en eventos: daño recibido, casteo,
-   `hidden`, muerte/respawn o cambio de equipo.
-2. Alternativa más fina: repartir los pares observador-objetivo entre pasos (la
-   mitad en cada paso), de modo que cada objetivo se reevalúe a 30 Hz sin picos.
-3. Saltar el cálculo si ningún actor se movió más de un épsilon (`moveEpsilon` ya
-   existe para la máscara de niebla) o si no cambió el conjunto de vivos.
-4. Bajar `updatePickupKnowledge` a 5–10 Hz o dispararlo solo cuando cambie el
-   estado de un pickup (`collect`) o la posición de un observador. Cambiar las
-   claves string por un índice numérico del spawn y arrays por equipo en vez de un
-   `Map<string, boolean>`.
+1. `VisibilityCadence` compara cada paso una foto de posiciones y estado
+   (vida, daño recibido, `hidden`, casteo, equipo, visión, ocultación y cadáver).
+   Si algo crítico cambió, recalcula en ese mismo paso; si solo hubo movimiento,
+   espera a que pasen 3 pasos (`CONFIG.vision.actorRefreshSteps`). Si nadie se
+   movió más de `CONFIG.vision.moveEpsilon`, no gasta ningún cálculo. La foto
+   anterior se reutiliza entre medias y la histéresis la tolera.
+2. El render sigue recibiendo una foto válida para cada paso: `refreshCombatVisibility()`
+   marca el paso actual incluso cuando reutiliza la anterior, así que
+   `VisionView` no entra en el camino de respaldo en cada frame.
+3. `updatePickupKnowledge()` se calcula a 7,5 Hz
+   (`CONFIG.vision.pickupRefreshSteps = 8`), o al instante si cambia la
+   disponibilidad de un objeto (`PickupField.revision`), si aparece una vista
+   nueva o si la partida/mapa se reinicia. La rejilla de observadores evita
+   recalcular cuando nadie se ha movido.
+4. El conocimiento de objetos es `Int8Array` por equipo, indexado por el `id`
+   estable que asigna `mapRuntime` a cada spawn. Ya no hay `Map<string, boolean>`,
+   strings ni closures por frame, y los bots guardan memoria/reclamaciones por
+   índice numérico (`pickupClaims: Map<number, …>`).
+5. La visibilidad de cada copia de objeto se deriva del conocimiento cacheado,
+   así que una sola LOS por equipo y objeto sirve para todas sus vistas.
+6. Se publican `losChecks`, `pickupLosChecks`, `visibilityMs` y
+   `pickupKnowledgeMs` en `app.stats.user`, y `bench-core.mjs` incluye
+   `refreshCombatVisibility (8)`.
 
 ### Impacto
 
-Reduce ~2/3 el coste de LOS en simulación y elimina la mayor parte de las
-allocations por frame. No cambia el gameplay porque `enemiesSeeing` solo alimenta
-el HUD y la regeneración (que exige 2 s sin ser visto).
+El coste O(n²) pasa de 60 a 20 cálculos por segundo (3× menos) y desaparece
+cuando la partida está quieta; el conocimiento de objetos baja de 60 a 7,5 Hz
+(8× menos) y deja de repetir LOS por viewport. También se eliminan las
+allocations de strings/closures por frame. No cambia el gameplay porque
+`enemiesSeeing` solo alimenta el HUD y la regeneración (que exige 2 s sin ser
+visto) y los bots ya toleraban la latencia de su decisión.
 
 ### Cómo verificarlo
 
-Añadir contadores `app.stats.user` con `set('losChecks', …)` y medir
-`cpuUpdateTime`. En Node, ampliar `scripts/bench-core.mjs` con un benchmark de
-`refreshCombatVisibility` sintético.
+- Tests: `src/game/__tests__/visibilityCadence.test.ts` cubre el intervalo de 3
+  pasos, el épsilon de movimiento, los eventos que fuerzan cálculo y el reinicio
+  de partida.
+- `pnpm test`, `pnpm check` y `pnpm build` en verde.
+- `pnpm bench` añade `refreshCombatVisibility (8)`: en esta máquina da
+  ~180 000–280 000 cálculos/s (~3,5–5,5 µs por foto de 56 pares sin oclusores),
+  frente a los ~3 360/s que se pagaban a 60 Hz.
+- En el juego, `app.stats.user.get('losChecks')` y
+  `app.stats.user.get('pickupLosChecks')` muestran el trabajo de la última foto;
+  repetir con cámara fija y actores quietos debe dejar de actualizar
+  `visibilityMs`.
 
 ---
 
@@ -770,7 +801,8 @@ problemas con datos.
 3. **Audio por roster + música en streaming** — **hecho** (mayor ahorro de
    memoria después de las texturas).
 4. **Quitar blur del HUD en partida y medir composición**.
-5. **Amortizar visibilidad y conocimiento de objetos**.
+5. **Amortizar visibilidad y conocimiento de objetos** - **hecho** (20 Hz con
+   eventos inmediatos y conocimiento de objetos por índice).
 6. **Sombras instanciadas y LOD de contornos en viewports pequeños**.
 7. **Bench con `AppStats` + longtasks + CI**.
 8. **Pre-bake de suelos y `codeSplitting`**.

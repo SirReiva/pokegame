@@ -20,6 +20,12 @@ export interface PickupSpawn {
   type: ItemId;
   x: number;
   z: number;
+  /**
+   * Índice estable dentro de la partida. Lo asigna `mapRuntime` al cargar el
+   * mapa (el orden del array) para que la visibilidad y el conocimiento de los
+   * bots usen claves numéricas en vez de strings `"x:z"`.
+   */
+  id?: number;
 }
 
 /**

@@ -12,6 +12,7 @@ import { decorateDamage } from '../src/game/combat.ts';
 import { aoeContains } from '../src/game/aoeGeometry.ts';
 import { buildBotHazards } from '../src/game/ai/hazards.ts';
 import { normalizeModeSettings } from '../src/game/modes.ts';
+import { refreshCombatVisibility } from '../src/game/sim/visibility.ts';
 
 const results = [];
 
@@ -80,6 +81,45 @@ bench('normalizeModeSettings', 200_000, () =>
     zoneRadius: 6,
     zoneMovement: 'mobile'
   })
+);
+
+// Visibilidad de una partida de 8 actores (4 contra 4) sin oclusores: es el
+// coste O(n²) que la cadencia reparte a 20 Hz. Antes se pagaba en cada paso de
+// 60 Hz, así que 3× este número es el ahorro por segundo.
+const visionPlayers = Array.from({ length: 8 }, (_, index) => ({
+  slot: index,
+  team: index < 4 ? 'red' : 'blue',
+  x: (index % 4) * 4,
+  z: Math.floor(index / 4) * 4,
+  visionRange: 18,
+  visionFactor: 1,
+  concealment: { value: 0 },
+  alive: true,
+  hidden: false,
+  deathFade: 0,
+  enemiesSeeing: 0
+}));
+const visionPrevious = {
+  red: new Set(),
+  blue: new Set(),
+  yellow: new Set(),
+  green: new Set()
+};
+const visionCurrent = {
+  red: new Set(),
+  blue: new Set(),
+  yellow: new Set(),
+  green: new Set()
+};
+
+bench('refreshCombatVisibility (8)', 50_000, () =>
+  refreshCombatVisibility(
+    visionPlayers,
+    visionPrevious,
+    visionCurrent,
+    [],
+    1
+  )
 );
 
 console.log('Benchmark de CPU (Node, sin GPU)\n');
