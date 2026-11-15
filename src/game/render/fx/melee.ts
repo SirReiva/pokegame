@@ -149,9 +149,9 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       }
     }
 
-    const slashSlices: {
+    const slashClaws: {
       material: pc.StandardMaterial;
-      revealAt: number;
+      delay: number;
       peak: number;
     }[] = [];
     if (
@@ -163,10 +163,12 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       // Tres zarpas blancas paralelas tumbadas sobre el cono: cubren su
       // superficie desde el lanzador hasta el borde y comparten apertura, así
       // que se leen como un único tajo de tres filos dentro del área de golpe.
-      // Cada garra se parte en tramos estáticos que se encienden de derecha a
-      // izquierda, de modo que el trazo parece dibujarse sobre el cono. La Garra
-      // Metal usa dos filos de acero, el Tajo Umbrío dos violetas y el
-      // Lengüetazo tres trazos fantasmales.
+      // Cada zarpa es una sola cinta continua que se enciende de golpe con un
+      // pequeño retardo respecto a la anterior. Antes se partía en diez tramos
+      // con un material por tramo y se encendían de uno en uno: en los frames
+      // intermedios solo se veían trozos sueltos y el zarpazo parecía roto o
+      // flotando. La Garra Metal usa dos filos de acero, el Tajo Umbrío dos
+      // violetas y el Lengüetazo tres trazos fantasmales.
       const steel = style === 'steel';
       const dark = style === 'dark';
       const ghost = style === 'ghost';
@@ -174,8 +176,6 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       material.opacity = steel ? 0.08 : dark ? 0.09 : ghost ? 0.08 : 0.1;
       const span = halfAngle * 1.9;
       const start = -span * 0.5;
-      const slices = 10;
-      const drawTime = steel ? 0.08 : dark ? 0.07 : ghost ? 0.08 : 0.1;
       const clawTint: [number, number, number] = steel
         ? [214, 232, 255]
         : dark
@@ -199,43 +199,41 @@ export function spawnMelee(ctx: FxRuntime, x: number,
               { inner: 0.42, outer: 0.68, delay: 0.03, peak: 0.95 },
               { inner: 0.1, outer: 0.36, delay: 0.06, peak: 0.9 }
             ];
+      // La zarpa fantasma se mantiene pegada al cono: a media altura de un
+      // cuerpo pequeño parecía flotar sobre el suelo, sobre todo con la cámara
+      // inclinada.
+      const liftStart = ghost ? 0.04 : 0.1;
+      const liftEnd = ghost ? 0.09 : 0.2;
+      const bow = ghost ? 0.02 : 0.04;
       for (let index = 0; index < claws.length; index++) {
         const claw = claws[index];
-        for (let slice = 0; slice < slices; slice++) {
-          const tStart = slice / slices;
-          const tEnd = (slice + 1) / slices;
-          const sliceMaterial = ctx.createMaterial(clawTint, 0);
-          sliceMaterial.blendType = pc.BLEND_NORMAL;
-          sliceMaterial.opacity = 0;
-          sliceMaterial.update();
-          materials.push(sliceMaterial);
-          ctx.createEntity(
-            createSlashStreakMesh(
-              ctx.device,
-              range * claw.inner,
-              range * claw.outer,
-              range * 0.07,
-              start,
-              span,
-              4,
-              0.1,
-              0.2,
-              0.04,
-              index * 1.9,
-              tStart,
-              tEnd
-            ),
-            [sliceMaterial],
-            entity
-          );
-          slashSlices.push({
-            material: sliceMaterial,
-            // De derecha (t = 1) a izquierda (t = 0).
-            revealAt:
-              claw.delay + ((slices - 1 - slice) / slices) * drawTime,
-            peak: claw.peak
-          });
-        }
+        const clawMaterial = ctx.createMaterial(clawTint, 0);
+        clawMaterial.blendType = pc.BLEND_NORMAL;
+        clawMaterial.opacity = 0;
+        clawMaterial.update();
+        materials.push(clawMaterial);
+        ctx.createEntity(
+          createSlashStreakMesh(
+            ctx.device,
+            range * claw.inner,
+            range * claw.outer,
+            range * 0.07,
+            start,
+            span,
+            32,
+            liftStart,
+            liftEnd,
+            bow,
+            index * 1.9
+          ),
+          [clawMaterial],
+          entity
+        );
+        slashClaws.push({
+          material: clawMaterial,
+          delay: claw.delay,
+          peak: claw.peak
+        });
       }
     }
 
@@ -424,14 +422,14 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         arc.material.opacity = arc.peak * Math.max(0, fade);
       }
       const now = t * effectDuration;
-      for (const slice of slashSlices) {
-        const appear = Math.min(
-          1,
-          Math.max(0, (now - slice.revealAt) / 0.012)
-        );
+      for (const claw of slashClaws) {
+        // Encendido rápido y continuo de la zarpa completa. El desfase entre
+        // zarpas conserva la lectura de tres tajos seguidos sin que la cinta se
+        // fragmente en tramos.
+        const appear = Math.min(1, Math.max(0, (now - claw.delay) / 0.05));
         const fadeOut =
           1 - Math.min(1, Math.max(0, (now - 0.2) / (effectDuration - 0.2)));
-        slice.material.opacity = slice.peak * appear * Math.max(0, fadeOut);
+        claw.material.opacity = claw.peak * appear * Math.max(0, fadeOut);
       }
       for (const leaf of leaves) {
         leaf.entity.setLocalPosition(
