@@ -626,8 +626,9 @@ export class Game {
       this.app.scene.layers.getLayerByName('World')?.id ?? pc.LAYERID_WORLD;
     this.worldLayerId = worldLayerId;
 
-    // El SoundManager de PlayCanvas se crea con la aplicación; los sonidos se
-    // precargan en segundo plano mientras se construye el mapa.
+    // El SoundManager de PlayCanvas se crea con la aplicación. Los efectos se
+    // cargan al empezar la partida (`prepareMatchAudio`), no al construir el
+    // mapa: así la carga no compite por red y memoria con las hojas de sprite.
     configureAudio(this.app);
     // Los FX preguntan en qué capas de vista deben dibujarse; el resolvedor usa
     // la misma visibilidad que la niebla de los actores.

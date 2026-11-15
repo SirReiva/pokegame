@@ -132,7 +132,3 @@ export const HIT_SOUNDS = {
   weak: 'hit/weak.mp3'
 } as const;
 
-/** Todas las rutas que hay que precargar al empezar una partida. */
-export const ALL_SFX_PATHS: readonly string[] = [
-  ...new Set([...Object.values(ABILITY_CAST_SOUNDS), ...Object.values(HIT_SOUNDS)])
-];

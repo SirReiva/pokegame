@@ -4,20 +4,22 @@
  * PlayCanvas ya se encarga de crear el AudioContext y de reanudarlo con el
  * primer gesto del usuario (`SoundManager` registra sus propios listeners de
  * desbloqueo). Aquí cargamos los MP3 como assets de tipo `audio`, disparamos un
- * `pc.SoundInstance` por efecto y mantenemos una instancia en bucle para el
- * tema de combate.
+ * `pc.SoundInstance` por efecto y mantenemos el tema de combate en un
+ * `<audio loop>`: un MP3 de varios minutos en un `AudioBuffer` ocupa decenas de
+ * MB de PCM y no aporta nada frente a la reproducción en streaming.
+ *
+ * Los efectos se cargan por roster al empezar la partida (ver
+ * `audioRoster.ts`): solo las habilidades y los instintos que pueden sonar en
+ * esa partida. El resto se pide bajo demanda en el primer casteo.
  *
  * El volumen general se aplica al manager (`soundManager.volume`); el de
- * efectos y el de música, a cada instancia.
+ * efectos va por instancia y el de música, al elemento de audio.
  */
 
 import * as pc from 'playcanvas';
 import type { AbilityDef } from './abilities';
-import {
-  ABILITY_CAST_SOUNDS,
-  ALL_SFX_PATHS,
-  HIT_SOUNDS
-} from './abilitySounds';
+import { ABILITY_CAST_SOUNDS, HIT_SOUNDS } from './abilitySounds';
+import { sfxPathsForRoster, type AudioRosterEntry } from './audioRoster';
 import { getAudioSettings, subscribeAudioSettings } from './audioSettings';
 import { publicUrl } from './publicUrl';
 
@@ -37,13 +39,22 @@ const MATCH_MUSIC_PATH = 'music/battle-team-plasma.mp3';
 let soundManager: pc.SoundManager | null = null;
 let currentApp: pc.AppBase | null = null;
 const sounds = new Map<string, pc.Sound>();
+/** Assets cargados, para poder liberarlos al terminar la partida. */
+const assets = new Map<string, pc.Asset>();
 const loading = new Map<string, Promise<pc.Sound | null>>();
 const failed = new Set<string>();
 const lastPlayedAt = new Map<string, number>();
+/**
+ * Se incrementa al soltar los efectos de una partida. Las cargas que terminen
+ * después pertenecen a un roster anterior y no deben rellenar la caché.
+ */
+let loadGeneration = 0;
 let activeVoices = 0;
 let volumeSubscribed = false;
 
-let musicInstance: pc.SoundInstance | null = null;
+let musicElement: HTMLAudioElement | null = null;
+/** Reintento de reproducción tras un bloqueo de autoplay. */
+let musicRetry: (() => void) | null = null;
 let musicWanted = false;
 let musicPaused = false;
 
@@ -52,52 +63,90 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+/** Volumen efectivo de la música: general × música. */
+function musicVolume(): number {
+  const settings = getAudioSettings();
+  return clamp01(settings.master * settings.music);
+}
+
 /** Aplica el volumen general al manager; el de efectos va por instancia. */
 function applyVolume(): void {
-  if (!soundManager) return;
   const settings = getAudioSettings();
-  soundManager.volume = settings.master;
-  if (musicInstance) musicInstance.volume = clamp01(settings.music);
+  if (soundManager) soundManager.volume = settings.master;
+  if (musicElement) musicElement.volume = musicVolume();
 }
 
 /**
- * Engancha el audio a la aplicación de PlayCanvas y precarga los sonidos.
- * Se llama al crear `Game`, antes de que empiece la partida.
+ * Engancha el audio a la aplicación de PlayCanvas.
+ *
+ * No precarga nada: el mapa se construye sin competir por red y memoria con
+ * los MP3. `prepareMatchAudio()` decide qué suena en cada partida.
  */
 export function configureAudio(app: pc.AppBase): void {
   if (currentApp === app) return;
   // La música pertenece a la aplicación anterior: se corta antes de cambiar.
-  musicWanted = false;
-  musicPaused = false;
-  musicInstance?.stop();
-  musicInstance = null;
+  stopMatchMusic();
   currentApp = app;
   soundManager = app.soundManager;
-  sounds.clear();
-  loading.clear();
-  failed.clear();
-  lastPlayedAt.clear();
-  activeVoices = 0;
+  resetSfxTracking();
   if (!volumeSubscribed) {
     volumeSubscribed = true;
     subscribeAudioSettings(applyVolume);
   }
   applyVolume();
-  void preloadAudio();
-  void loadSound(MATCH_MUSIC_PATH);
 }
 
 /** Suelta las referencias cuando se destruye la aplicación. */
 export function disposeAudio(app: pc.AppBase): void {
   if (currentApp !== app) return;
   stopMatchMusic();
+  // Los assets se descargan aquí; la app se destruye justo después y su
+  // registro vuelve a pasar por `unload()`, que es idempotente.
+  resetSfxTracking();
   currentApp = null;
   soundManager = null;
+}
+
+/** Vacía las estructuras y descarga los assets (cambio o cierre de app). */
+function resetSfxTracking(): void {
+  loadGeneration += 1;
+  releaseSfxAssets();
   sounds.clear();
   loading.clear();
   failed.clear();
   lastPlayedAt.clear();
   activeVoices = 0;
+}
+
+function releaseSfxAssets(): void {
+  for (const asset of assets.values()) unloadAsset(asset);
+  assets.clear();
+}
+
+/**
+ * Libera los efectos de la partida terminada.
+ *
+ * Sin esto, jugar con rosters distintos acumularía los `AudioBuffer` de todas
+ * las especies jugadas. Los assets se descargan del registro de PlayCanvas; el
+ * siguiente roster los vuelve a pedir (normalmente desde la caché HTTP).
+ */
+export function releaseMatchAudio(): void {
+  if (!currentApp) return;
+  loadGeneration += 1;
+  loading.clear();
+  failed.clear();
+  lastPlayedAt.clear();
+  activeVoices = 0;
+  sounds.clear();
+  releaseSfxAssets();
+}
+
+function unloadAsset(asset: pc.Asset): void {
+  try {
+    asset.unload();
+  } catch {
+    // La app pudo liberarlo antes (destrucción en curso): no hay nada que hacer.
+  }
 }
 
 function loadSound(path: string): Promise<pc.Sound | null> {
@@ -107,7 +156,9 @@ function loadSound(path: string): Promise<pc.Sound | null> {
   if (pending) return pending;
   if (failed.has(path) || !currentApp) return Promise.resolve(null);
 
-  const promise = new Promise<pc.Sound | null>((resolve) => {
+  const generation = loadGeneration;
+  let promise: Promise<pc.Sound | null>;
+  promise = new Promise<pc.Sound | null>((resolve) => {
     const app = currentApp;
     if (!app) {
       resolve(null);
@@ -125,20 +176,38 @@ function loadSound(path: string): Promise<pc.Sound | null> {
         resolve(null);
         return;
       }
+      // El roster cambió mientras cargaba: se descarta para no retener PCM de
+      // una partida que ya terminó.
+      if (generation !== loadGeneration) {
+        unloadAsset(asset);
+        resolve(null);
+        return;
+      }
       const sound = asset.resource as pc.Sound;
+      assets.set(path, asset);
       sounds.set(path, sound);
       resolve(sound);
     });
   }).finally(() => {
-    loading.delete(path);
+    // Una carga antigua no debe borrar la promesa nueva del mismo path.
+    if (loading.get(path) === promise) loading.delete(path);
   });
 
   loading.set(path, promise);
   return promise;
 }
 
-async function preloadAudio(): Promise<void> {
-  const paths = ALL_SFX_PATHS;
+/**
+ * Prepara los efectos que pueden sonar en una partida y suelta los de la
+ * anterior. Se llama al empezar; la música arranca en `startMatchMusic()`.
+ */
+export function prepareMatchAudio(roster: readonly AudioRosterEntry[]): void {
+  if (!currentApp) return;
+  releaseMatchAudio();
+  void preloadPaths(sfxPathsForRoster(roster));
+}
+
+async function preloadPaths(paths: readonly string[]): Promise<void> {
   let cursor = 0;
   const worker = async () => {
     while (cursor < paths.length) {
@@ -221,61 +290,97 @@ export function playArmorBlock(): void {
   );
 }
 
-function startMusicInstance(sound: pc.Sound): void {
-  const manager = soundManager;
-  if (!manager || musicInstance) return;
-  const instance = new pc.SoundInstance(manager, sound, {
-    loop: true,
-    volume: clamp01(getAudioSettings().music)
-  });
-  instance.play();
-  musicInstance = instance;
+/**
+ * El tema de combate se reproduce con un `<audio loop>` en streaming: el
+ * navegador descarga y decodifica por delante, sin mantener los ~67 MB de PCM
+ * que ocuparía la pista completa en un `AudioBuffer`.
+ */
+function ensureMusicElement(): HTMLAudioElement | null {
+  if (musicElement) return musicElement;
+  if (typeof document === 'undefined') return null;
+  const element = document.createElement('audio');
+  element.src = publicUrl(`audio/${MATCH_MUSIC_PATH}`);
+  element.loop = true;
+  element.preload = 'auto';
+  element.volume = musicVolume();
+  musicElement = element;
+  return element;
+}
+
+function tryPlayMusic(): void {
+  const element = ensureMusicElement();
+  if (!element) return;
+  element.volume = musicVolume();
+  const playback = element.play();
+  if (playback) {
+    // El navegador puede exigir un gesto (autoplay). Se reintenta en el
+    // siguiente clic o tecla, sin bloquear la partida.
+    playback.catch(() => armMusicRetry());
+  }
+}
+
+function armMusicRetry(): void {
+  if (musicRetry || typeof window === 'undefined') return;
+  const retry = () => {
+    if (musicRetry !== retry) return;
+    disarmMusicRetry();
+    if (musicWanted && !musicPaused) tryPlayMusic();
+  };
+  musicRetry = retry;
+  window.addEventListener('pointerdown', retry, true);
+  window.addEventListener('keydown', retry, true);
+}
+
+function disarmMusicRetry(): void {
+  const retry = musicRetry;
+  if (!retry) return;
+  musicRetry = null;
+  window.removeEventListener('pointerdown', retry, true);
+  window.removeEventListener('keydown', retry, true);
+}
+
+function releaseMusicElement(): void {
+  const element = musicElement;
+  musicElement = null;
+  if (!element) return;
+  try {
+    element.pause();
+    element.removeAttribute('src');
+    // Fuerza al navegador a soltar el buffer en streaming del tema.
+    element.load();
+  } catch {
+    // Elemento ya descartado por el navegador.
+  }
 }
 
 /**
- * Arranca el tema de combate al empezar una partida. Si el MP3 aún se está
- * decodificando, arranca en cuanto esté listo (si la partida sigue activa).
+ * Arranca el tema de combate al empezar una partida. El elemento se crea en
+ * este momento, no al construir el motor.
  */
 export function startMatchMusic(): void {
+  if (!currentApp) return;
   musicWanted = true;
   musicPaused = false;
-  if (!soundManager) return;
-  if (musicInstance) {
-    musicInstance.volume = clamp01(getAudioSettings().music);
-    musicInstance.resume();
-    return;
-  }
-  const sound = sounds.get(MATCH_MUSIC_PATH);
-  if (sound) {
-    startMusicInstance(sound);
-    return;
-  }
-  void loadSound(MATCH_MUSIC_PATH).then((loaded) => {
-    if (loaded && musicWanted && !musicPaused) startMusicInstance(loaded);
-  });
+  tryPlayMusic();
 }
 
 /** Pausa la música sin perder el punto de reproducción (menú de pausa). */
 export function pauseMatchMusic(): void {
   musicPaused = true;
-  musicInstance?.pause();
+  musicElement?.pause();
 }
 
 /** Reanuda la música tras cerrar el menú de pausa. */
 export function resumeMatchMusic(): void {
   if (!musicWanted) return;
   musicPaused = false;
-  if (musicInstance) {
-    musicInstance.resume();
-    return;
-  }
-  startMatchMusic();
+  tryPlayMusic();
 }
 
 /** Detiene y reinicia el tema al terminar o abandonar la partida. */
 export function stopMatchMusic(): void {
   musicWanted = false;
   musicPaused = false;
-  musicInstance?.stop();
-  musicInstance = null;
+  disarmMusicRetry();
+  releaseMusicElement();
 }

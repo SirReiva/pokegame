@@ -163,7 +163,12 @@ cobertura alfa preservada o mantener `mipmaps: false` solo en `nearest`. En
 
 ## 1.3 Audio: carga por roster y música fuera del AudioBuffer
 
-### Qué pasa hoy
+> **Estado (noviembre de 2026): implementado.** `configureAudio()` ya no
+> precarga nada; `prepareMatchAudio()` carga solo las rutas del roster y
+> `releaseMatchAudio()` las libera al terminar. La música se reproduce con un
+> `<audio loop>` en streaming. Queda pendiente el reencodeo opcional a Opus.
+
+### Qué pasaba antes
 
 `configureAudio()` precarga **todos** los SFX al crear la app
 (`src/game/audio.ts:86-88`) y lanza la música (`loadSound(MATCH_MUSIC_PATH)`).
@@ -183,32 +188,45 @@ decodificado.
   (`Asset.unload()`); al destruir la app se libera, pero en un cambio de mapa con
   `Game` nuevo se vuelve a descargar y decodificar todo.
 
-### Qué haría
+### Qué se cambió
 
-1. Precargar solo lo que va a sonar en esa partida: las 4 habilidades + instinto
-   común de cada especie seleccionada, más `HIT_SOUNDS` y
-   `proteccion`/`impulso`. El resto, bajo demanda al primer casteo (el camino ya
-   existe en `playSound()` para "primera reproducción antes de la precarga").
-2. Guardar una referencia al `Asset` para poder hacer `asset.unload()` al
-   terminar la partida.
-3. Música: al ser un loop largo, reproducirla con un `<audio loop>` /
-   `MediaElementSource` en vez de decodificar 3,2 min en un `AudioBuffer`. Si se
-   mantiene PlayCanvas, cargarla solo al empezar la partida y no en
-   `configureAudio()`.
-4. Reencodeo opcional a Opus 96–128 kbps para bajar descarga (la memoria
-   decodificada depende de la duración, no del bitrate).
+1. `audioRoster.ts` proyecta el roster sobre `MOVESETS`: devuelve las 4
+   habilidades de cada especie, el instinto común de cada jugador, `HIT_SOUNDS`
+   y `proteccion`/`impulso` (este último también suena al bloquear con
+   armadura). El resto se sigue pidiendo bajo demanda en el primer casteo por el
+   camino que ya tenía `playSound()`.
+2. `prepareMatchAudio()` se llama en `startMatch()`: suelta los efectos de la
+   partida anterior y precarga solo ese subconjunto durante la cuenta atrás.
+3. Se guarda el `pc.Asset` de cada efecto y `releaseMatchAudio()` llama a
+   `asset.unload()` al terminar la partida. Un contador de generación descarta
+   las cargas que terminan tarde, para que no rellenen la caché con el roster
+   anterior.
+4. La música ya no pasa por `loadSound()`: se crea un `<audio loop>` al empezar
+   la partida y se pausa, reanuda o suelta con el ciclo de la sesión. El volumen
+   efectivo es `master × music`, actualizado desde `subscribeAudioSettings()`.
+   Si el navegador bloquea el autoplay, se reintenta en el siguiente clic o
+   tecla.
+5. Queda pendiente el reencodeo opcional a Opus 96–128 kbps para bajar descarga
+   (la memoria decodificada depende de la duración, no del bitrate).
 
 ### Impacto
 
-Reduce el pico de memoria en ~150–180 MB, acelera la carga y evita descargar
-sonidos de Pokémon que no juegan.
+Se pasa de hasta ~200 MB de PCM residentes a unos 50–55 MB en el peor caso
+(unas 30 habilidades únicas de 8 especies, más impactos e instintos) y la música
+deja de ocupar ~67 MB. La carga del mapa ya no compite por red y memoria con 73
+MP3, y cambiar de roster no acumula buffers.
 
 ### Cómo verificarlo
 
-Chrome DevTools → Memory: comparar "AudioBuffers" y JS heap antes y después;
-contar peticiones de red en la pantalla de carga. En el bench,
-`performance.measureUserAgentSpecificMemory()` si está disponible, o
-`performance.memory`.
+- Tests: `src/game/__tests__/audioRoster.test.ts` cubre la selección de rutas,
+  la deduplicación y las especies sin moveset.
+- `pnpm test`, `pnpm check` y `pnpm build` en verde.
+- Prueba manual: Chrome DevTools → Memory, comparar `AudioBuffers` y JS heap
+  antes y después; Network debe mostrar solo los ~35 efectos del roster al
+  empezar y ninguno durante la carga del mapa. Repetir con otro roster y
+  comprobar que los anteriores se liberan.
+- En el bench, `performance.measureUserAgentSpecificMemory()` si está
+  disponible, o `performance.memory`.
 
 ---
 
@@ -749,8 +767,8 @@ problemas con datos.
    recargas y cambios de mapa).
 2. **Escala adaptativa + mipmaps** (mayor ahorro de VRAM; requiere validación
    visual en 1 y 8 vistas).
-3. **Audio por roster + música en streaming** (mayor ahorro de memoria después de
-   las texturas).
+3. **Audio por roster + música en streaming** — **hecho** (mayor ahorro de
+   memoria después de las texturas).
 4. **Quitar blur del HUD en partida y medir composición**.
 5. **Amortizar visibilidad y conocimiento de objetos**.
 6. **Sombras instanciadas y LOD de contornos en viewports pequeños**.

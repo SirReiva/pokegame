@@ -11,7 +11,12 @@ import * as pc from 'playcanvas';
 import { DEFAULT_COMMON_ABILITY, MOVESETS, isCommonAbilityId } from '../abilities';
 import { Actor, actorSpriteHeight } from '../actor';
 import { rollAtmosphere, type AtmosphereId } from '../atmosphere';
-import { startMatchMusic, stopMatchMusic } from '../audio';
+import {
+  prepareMatchAudio,
+  releaseMatchAudio,
+  startMatchMusic,
+  stopMatchMusic
+} from '../audio';
 import { BotController, botVisionFactor, createBotSquad } from '../bot';
 import { BotNavGrid } from '../botNav';
 import { CameraRig } from '../camera';
@@ -230,6 +235,9 @@ export const MATCH_COUNTDOWN_SECONDS = 5;
 export function endMatch(host: MatchSessionHost): void {
   clearMatch(host);
   stopMatchMusic();
+  // Los efectos del roster dejan de ser útiles: se descargan para que una
+  // partida con otras especies no acumule AudioBuffer.
+  releaseMatchAudio();
   host.pickups?.reset();
   host.mode = 'menu';
   host.paused = false;
@@ -388,6 +396,9 @@ export function startMatch(
   // Si el lobby desactiva los cambios atmosféricos, siempre se juega en
   // despejado y no se aplica ningún efecto de combate.
   host.setAtmosphere(host.atmosphereEnabled ? rollAtmosphere() : 'clear');
+  // Solo las habilidades del roster, los instintos comunes y los impactos.
+  // La cuenta atrás da margen a que terminen de decodificar.
+  prepareMatchAudio(valid);
   startMatchMusic();
   host.statsTimer = 0;
   host.fps = 0;
