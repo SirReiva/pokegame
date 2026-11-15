@@ -1301,6 +1301,8 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 export * from './effectMotionsProjectilesWGSL';
 /** Movimientos de impactos, separados por tamaño. */
 export * from './effectMotionsImpactWGSL';
+/** Movimientos de áreas con muchos escombros, separados por tamaño. */
+export * from './effectMotionsAoeWGSL';
 
 /** Púas de roca que emergen del suelo en el haz de Roca. */
 export const MOTION_ROCK_BEAM_SPIKES_WGSL = `

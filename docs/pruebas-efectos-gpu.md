@@ -85,17 +85,27 @@ Siguen con entidades por elemento:
 - El cuerpo de los haces `fire`, `grass`, `water`, `ice`, `air` y `rock`
   (tres capas); los jirones, aros y ojos de `dark`/`ghost` y las púas del haz
   de Roca ya usan lotes. El haz eléctrico y el psíquico también están por lotes.
-- La decoración de los proyectiles de fuego, roca y veneno, y las garras y
-  ondas del melee.
-- El área `burrow` de **Excavar**: cráter, losas y rocas con entidades propias;
-  comprueba que la erupción coincide con el punto donde emerge el lanzador.
+- La decoración de los proyectiles de fuego, roca y veneno: núcleo, halo y
+  cola usan materiales y colores distintos, así que fundirlos cambiaría la
+  paleta.
+- Las garras y ondas del melee: la geometría ya se comparte entre casteos
+  (`cachedMesh`), pero cada zarpa conserva su material para animar su propia
+  opacidad.
 - La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.
+
+El área `burrow` de **Excavar** ya usa lotes para grietas, losas, rocas, puffs
+y anillos; solo el cráter y su borde quedan como entidades. Las ondas del área
+psíquica también van en un lote.
 
 Los impactos, las hojas y puffs del melee, las mordidas y la decoración de la
 mayoría de proyectiles usan lotes instanciados. Los emisores de partículas de
 combate usan `EffectParticleBatch` (efectos fijos) o `WorldTrailBatch` (estelas
 en espacio de mundo): no queda ningún `ParticleSystem` de combate ni pasadas de
 `preWarm` en los casteos.
+
+El clima del mundo (`atmosphereVisuals.ts`) también dejó de usar
+`ParticleSystem`: reutiliza `BatchedParticles` y se actualiza con un único
+`uTime` por tipo.
 
 ## Señales de que algo va mal
 

@@ -1,7 +1,7 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
-import { EffectBatch, MOTION_BLIZZARD_CRYSTALS, MOTION_BLIZZARD_PUFFS, MOTION_FLAME_JET, MOTION_ICE_MIST, MOTION_ICE_SPARKS, MOTION_ICE_SPIKES, MOTION_PULSE_SPHERE, MOTION_SHEER_COLD_BODY, MOTION_SNOWFLAKES } from '../../effectBatch';
+import { EffectBatch, MOTION_BLIZZARD_CRYSTALS, MOTION_BLIZZARD_PUFFS, MOTION_FLAME_JET, MOTION_ICE_MIST, MOTION_ICE_RINGS, MOTION_ICE_SPARKS, MOTION_ICE_SPIKES, MOTION_PULSE_SPHERE, MOTION_SHEER_COLD_BODY, MOTION_SNOWFLAKES } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { AoeFxHandle } from '../../core/ports/fx';
 import { coneAnchors, createFlameConeMesh } from './fxGeometry';
@@ -42,13 +42,19 @@ const life = Math.max(0.2, duration);
     floor.setLocalPosition(0, 0.02, 0);
     floor.setLocalScale(radius * 2, 1, radius * 2);
 
-    const rings: pc.Entity[] = [];
-    const ringMesh = ctx.cachedArcBand(0.955, 1, Math.PI, 64);
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ringMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.cachedArcBand(0.955, 1, Math.PI, 64),
+      material: ringMaterial,
+      instances: [0, 1].map((index) => ({
+        anim0: [index === 0 ? 80 : -60, 0.1 + index * 0.03, 0.3, 0.5],
+        anim1: [0.5, 0, 0, 0]
+      })),
+      motion: MOTION_ICE_RINGS,
+      radius,
+      life
+    });
 
     const spikeInstances: EffectBatchInstance[] = [];
     const deepSpikeInstances: EffectBatchInstance[] = [];
@@ -153,17 +159,11 @@ const life = Math.max(0.2, duration);
       const fadeIn = Math.min(1, time / 0.16);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
       const envelope = Math.min(fadeIn, fadeOut);
-      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.3), 2);
       const pulse = 0.55 + Math.sin(time * 8) * 0.2;
 
       ringMaterial.opacity = (0.3 + pulse * 0.15) * envelope;
       floorMaterial.opacity = 0.1 * envelope;
-      const ringScale = radius * (0.5 + grow * 0.5);
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        ring.setLocalScale(ringScale, 1, ringScale);
-        ring.setLocalEulerAngles(0, time * (index === 0 ? 80 : -60), 0);
-      }
+      ringBatch.setTime(time);
 
       for (const batch of spikeBatches) batch.setTime(time);
       mistBatch.setTime(time);
@@ -217,13 +217,19 @@ const life = Math.max(0.3, duration);
     floor.setLocalPosition(0, 0.02, 0);
     floor.setLocalScale(radius * 2, 1, radius * 2);
 
-    const rings: pc.Entity[] = [];
-    const ringMesh = ctx.cachedArcBand(0.955, 1, Math.PI, 64);
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ringMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.1 + index * 0.03, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.cachedArcBand(0.955, 1, Math.PI, 64),
+      material: ringMaterial,
+      instances: [0, 1].map((index) => ({
+        anim0: [index === 0 ? 70 : -50, 0.1 + index * 0.03, 0.4, 0.55],
+        anim1: [0.55, 0, 0, 0]
+      })),
+      motion: MOTION_ICE_RINGS,
+      radius,
+      life
+    });
 
     const flash = ctx.createEntity(ctx.sphereMesh, [flashMaterial], root);
     flash.setLocalPosition(0, 0.75, 0);
@@ -331,17 +337,11 @@ const life = Math.max(0.3, duration);
       const fadeIn = Math.min(1, time / 0.12);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.24));
       const envelope = Math.min(fadeIn, fadeOut);
-      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.4), 2);
       const pulse = 0.55 + Math.sin(time * 8) * 0.18;
 
       ringMaterial.opacity = (0.28 + pulse * 0.15) * envelope;
       floorMaterial.opacity = 0.09 * envelope;
-      const ringScale = radius * (0.55 + grow * 0.55);
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        ring.setLocalScale(ringScale, 1, ringScale);
-        ring.setLocalEulerAngles(0, time * (index === 0 ? 70 : -50), 0);
-      }
+      ringBatch.setTime(time);
 
       const flashIn = Math.min(1, time / 0.14);
       const flashScale = radius * (0.1 + flashIn * 0.28);

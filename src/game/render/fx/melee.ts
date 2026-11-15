@@ -4,7 +4,7 @@ import type { ImpactStyle } from '../../abilities';
 import { DEG } from '../../config';
 import { EffectBatch, applyVertexEffectShader, MOTION_MELEE_LEAVES, MOTION_MELEE_PUFFS, MOTION_PSYCHIC_WAVE, MOTION_SPORE_SWARM, MOTION_STATIC } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
-import { MELEE_ARC_OPACITY, createArcBandMesh, createArcMesh, createSlashStreakMesh } from './fxGeometry';
+import { MELEE_ARC_OPACITY, createArcMesh, createSlashStreakMesh } from './fxGeometry';
 
 /**
    * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
@@ -125,13 +125,9 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         waveMaterial.opacity = 0;
         applyVertexEffectShader(waveMaterial, MOTION_PSYCHIC_WAVE);
         materials.push(waveMaterial);
-        const { mesh: waveMesh } = createArcBandMesh(
-          ctx.device,
-          0.94,
-          1,
-          halfAngle,
-          segments
-        );
+        // La geometría es idéntica para todas las ondas: se comparte entre
+        // casteos en vez de reconstruir cinco mallas cada vez.
+        const waveMesh = ctx.cachedArcBand(0.94, 1, halfAngle, segments);
         const wave = ctx.createEntity(waveMesh, [waveMaterial], entity);
         const lift = 0.12 + index * 0.012;
         wave.setLocalPosition(0, lift, 0);
@@ -213,23 +209,26 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         clawMaterial.opacity = 0;
         clawMaterial.update();
         materials.push(clawMaterial);
-        ctx.createEntity(
-          createSlashStreakMesh(
-            ctx.device,
-            range * claw.inner,
-            range * claw.outer,
-            range * 0.07,
-            start,
-            span,
-            32,
-            liftStart,
-            liftEnd,
-            bow,
-            index * 1.9
-          ),
-          [clawMaterial],
-          entity
+        // Las tres zarpas comparten parámetros por estilo; se cachean por
+        // geometría para no crear mallas nuevas en cada golpe.
+        const clawMesh = ctx.cachedMesh(
+          `slash-streak:${(range * claw.inner).toFixed(3)}:${(range * claw.outer).toFixed(3)}:${start.toFixed(3)}:${span.toFixed(3)}:${index}`,
+          () =>
+            createSlashStreakMesh(
+              ctx.device,
+              range * claw.inner,
+              range * claw.outer,
+              range * 0.07,
+              start,
+              span,
+              32,
+              liftStart,
+              liftEnd,
+              bow,
+              index * 1.9
+            )
         );
+        ctx.createEntity(clawMesh, [clawMaterial], entity);
         slashClaws.push({
           material: clawMaterial,
           delay: claw.delay,
@@ -262,13 +261,7 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         arcMaterial.opacity = 0;
         arcMaterial.update();
         materials.push(arcMaterial);
-        const { mesh: arcMesh } = createArcBandMesh(
-          ctx.device,
-          0.84,
-          1,
-          halfAngle,
-          26
-        );
+        const arcMesh = ctx.cachedArcBand(0.84, 1, halfAngle, 26);
         const arc = ctx.createEntity(arcMesh, [arcMaterial], entity);
         arc.setLocalPosition(0, 0.12 + index * 0.035, 0);
         arc.setLocalScale(0.001, 1, 0.001);

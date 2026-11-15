@@ -491,13 +491,44 @@ jirones. Medido con una vista:
 | Proyectil eléctrico | 6 | **4** |
 | Proyectil de hojas | 7 | **3** |
 | Proyectil shuriken | 7 | **5** |
+| Área psíquica | 7 | **6** |
+| Área de hielo / Ventisca | 7 | **6** |
+| Área de Excavar | ~56 | **10** |
 
 El proyectil eléctrico reutiliza una única malla de rayo cacheada y dibuja sus
 tres arcos en un lote, así que tampoco genera geometría nueva por casteo.
 
-Quedan como entidades sueltas las garras y ondas del melee, las marcas de área
-y la decoración de los proyectiles de fuego, roca y veneno. Son efectos de un
-solo golpe, con pocas mallas y menor frecuencia que los ya migrados.
+### Áreas con escombros
+
+`Excavar` era el efecto más fragmentado: el cráter, dos anillos, once grietas,
+nueve losas, veinte rocas y once puffs eran entidades independientes. Ahora las
+grietas, losas, rocas, puffs y anillos se dibujan en siete lotes instanciados
+con la animación en el vertex shader. La malla del cráter y su borde siguen
+siendo dos entidades porque usan geometría propia. Las áreas de hielo también
+dibujan sus dos aros de escarcha en un único lote.
+
+En melee, las ondas psíquicas, los arcos de golpe y las zarpas comparten la
+geometría de casteos anteriores mediante `cachedArcBand` y `cachedMesh`: ya no
+se reconstruyen cinco mallas de onda, cuatro de arco y tres de zarpa en cada
+golpe.
+
+Quedan como entidades sueltas las garras y ondas del melee (con geometría ya
+compartida), las marcas de área y la decoración de los proyectiles de fuego,
+roca y veneno. Son efectos de un solo golpe, con pocas mallas y materiales
+distintos que no se pueden fundir sin cambiar su paleta.
+
+## Clima del mundo: `ParticleSystem` → lote analítico — aplicada
+
+La capa de clima (`atmosphereVisuals.ts`) era el último `ParticleSystem` del
+juego. La lluvia, la nieve, la arena, el granizo y la niebla se simulaban en una
+pasada de GPU por emisor y se dibujaban con un material propio.
+
+Ahora usan el mismo `BatchedParticles` que las motas ambientales del mapa: un
+lote por tipo de partícula, posición, caída y desvanecido en el vertex shader.
+Una tormenta pasa de dos emisores con simulación por frame a **2 draw calls**
+(lluvia y niebla) sin `preWarm` ni buffers float de simulación. El AABB del lote
+se calcula a partir del recorrido real de las motas, así que la lluvia que cae
+desde y ≈ 9 no se recorta por cámara.
 
 ## Prioridad recomendada
 

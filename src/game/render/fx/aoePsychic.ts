@@ -1,6 +1,6 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
-import { EffectBatch, MOTION_GHOST_EYES, MOTION_GHOST_WISPS, MOTION_PSYCHIC_SHARDS } from '../../effectBatch';
+import { EffectBatch, MOTION_GHOST_EYES, MOTION_GHOST_WISPS, MOTION_PSYCHIC_RINGS, MOTION_PSYCHIC_SHARDS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 
 /**
@@ -37,13 +37,23 @@ const life = Math.max(0.2, duration);
     fill.setLocalPosition(0, 0.03, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
 
-    // Tres ondas de choque que se expanden hacia el borde.
-    const waves: pc.Entity[] = [];
-    for (let index = 0; index < 3; index++) {
-      const wave = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      wave.setLocalPosition(0, 0.14 + index * 0.06, 0);
-      waves.push(wave);
-    }
+    // Tres ondas de choque que se expanden hacia el borde. Comparten material
+    // con el aro del suelo, así que el lote usa uno propio para no pisar el
+    // chunk instanciado del material original.
+    const waveMaterial = ctx.createMaterial(color, 0.42);
+    materials.push(waveMaterial);
+    const waveBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: waveMaterial,
+      instances: [0, 1, 2].map((index) => ({
+        anim0: [index * 0.09, 0.42, 0.14 + index * 0.06, 0]
+      })),
+      motion: MOTION_PSYCHIC_RINGS,
+      radius,
+      life
+    });
 
     const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
     core.setLocalPosition(0, 0.7, 0);
@@ -86,19 +96,10 @@ const life = Math.max(0.2, duration);
 
       ringMaterial.opacity = (0.22 + pulse * 0.24) * fadeOut;
       fillMaterial.opacity = (0.06 + pulse * 0.06) * fadeOut;
+      waveMaterial.opacity = ringMaterial.opacity;
       const groundScale = radius * 2 * (0.98 + pulse * 0.03);
       ring.setLocalScale(groundScale, 1, groundScale);
-
-      for (let index = 0; index < waves.length; index++) {
-        const wave = waves[index];
-        const progress = Math.min(
-          1,
-          Math.max(0, (time - index * 0.09) / 0.42)
-        );
-        const ease = 1 - (1 - progress) * (1 - progress);
-        const scale = Math.max(0.01, radius * 2 * ease);
-        wave.setLocalScale(scale, 1, scale);
-      }
+      waveBatch.setTime(time);
 
       // El núcleo se contrae durante la implosión y luego estalla.
       const implosion = Math.min(1, time / 0.14);

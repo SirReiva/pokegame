@@ -417,6 +417,12 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_FISSURE_SLABS, wgslMotions.MOTION_FISSURE_SLABS_WGSL],
     [MOTION_FISSURE_SPIKES, wgslMotions.MOTION_FISSURE_SPIKES_WGSL],
     [MOTION_FISSURE_PEBBLES, wgslMotions.MOTION_FISSURE_PEBBLES_WGSL],
+    [MOTION_PSYCHIC_RINGS, wgslMotions.MOTION_PSYCHIC_RINGS_WGSL],
+    [MOTION_BURROW_WAVES, wgslMotions.MOTION_BURROW_WAVES_WGSL],
+    [MOTION_BURROW_CRACKS, wgslMotions.MOTION_BURROW_CRACKS_WGSL],
+    [MOTION_BURROW_SLABS, wgslMotions.MOTION_BURROW_SLABS_WGSL],
+    [MOTION_BURROW_ROCKS, wgslMotions.MOTION_BURROW_ROCKS_WGSL],
+    [MOTION_BURROW_PUFFS, wgslMotions.MOTION_BURROW_PUFFS_WGSL],
     [MOTION_FIRE_WHIRL_FLAMES, wgslMotions.MOTION_FIRE_WHIRL_FLAMES_WGSL],
     [MOTION_FLAME_JET, wgslMotions.MOTION_FLAME_JET_WGSL],
     [MOTION_SPORE_SWARM, wgslMotions.MOTION_SPORE_SWARM_WGSL],
@@ -428,6 +434,7 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_GROUND_PUFFS, wgslMotions.MOTION_GROUND_PUFFS_WGSL],
     [MOTION_RECOVERY_MOTES, wgslMotions.MOTION_RECOVERY_MOTES_WGSL],
     [MOTION_ICE_SPIKES, wgslMotions.MOTION_ICE_SPIKES_WGSL],
+    [MOTION_ICE_RINGS, wgslMotions.MOTION_ICE_RINGS_WGSL],
     [MOTION_ICE_MIST, wgslMotions.MOTION_ICE_MIST_WGSL],
     [MOTION_ICE_SPARKS, wgslMotions.MOTION_ICE_SPARKS_WGSL],
     [MOTION_EXPLOSION_DEBRIS, wgslMotions.MOTION_EXPLOSION_DEBRIS_WGSL],
@@ -1383,6 +1390,147 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
+/** Olas de choque del área psíquica: tres frentes con retardo. */
+export const MOTION_PSYCHIC_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float progress = clamp(
+    (uEffectTime - a0.x) / max(a0.y, 0.001),
+    0.0,
+    1.0
+  );
+  float ease = 1.0 - (1.0 - progress) * (1.0 - progress);
+  float scale = max(0.01, uEffectRadius * 2.0 * ease);
+  return effectTRS(
+    vec3(0.0, a0.z, 0.0),
+    vec3(scale, 1.0, scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Olas de choque del cráter de `Excavar`. */
+export const MOTION_BURROW_WAVES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float waveT = min(1.0, uEffectTime / 0.4);
+  float wave = 1.0 - pow(1.0 - waveT, 3.0);
+  float scale = max(
+    0.001,
+    uEffectRadius * 2.0 * (0.25 + wave * (1.5 + a0.x * 0.5))
+  );
+  return effectTRS(
+    vec3(0.0, a0.y, 0.0),
+    vec3(scale, 1.0, scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Grietas que se abren en el cráter de `Excavar`. */
+export const MOTION_BURROW_CRACKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float burst = 1.0 - pow(1.0 - min(1.0, uEffectTime / 0.12), 3.0);
+  float reach = a0.y * burst;
+  float width = max(0.001, a0.w * burst);
+  return effectTRS(
+    vec3(sin(a0.x) * reach * 0.5, 0.03, cos(a0.x) * reach * 0.5),
+    vec3(width, 0.02, max(0.001, reach)),
+    effectRotY(a0.x)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Losas que saltan del cráter de `Excavar`. */
+export const MOTION_BURROW_SLABS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a1.y) / 0.55, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float distance = a0.y * ease;
+  float height = sin(local * EFFECT_PI) * a0.w;
+  float fade = min(1.0, local / 0.08) *
+    max(0.0, 1.0 - max(0.0, local - 0.72) / 0.28);
+  float scale = a0.z * fade;
+  return effectTRS(
+    vec3(sin(a0.x) * distance, 0.04 + height, cos(a0.x) * distance),
+    vec3(
+      max(0.001, scale),
+      max(0.001, scale * 0.38),
+      max(0.001, scale * 0.8)
+    ),
+    effectEulerZYX(
+      a1.x * local * EFFECT_DEG,
+      a0.x,
+      a1.x * 0.45 * local * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Rocas despedidas por el cráter de `Excavar`. */
+export const MOTION_BURROW_ROCKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a1.y) / 0.7, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float distance = a0.y * ease;
+  float height = sin(local * EFFECT_PI) * a0.w;
+  float fade = max(0.0, 1.0 - local);
+  float scale = a0.z * (1.0 - local * 0.35) * fade;
+  return effectTRS(
+    vec3(sin(a0.x) * distance, 0.1 + height, cos(a0.x) * distance),
+    vec3(
+      max(0.001, scale),
+      max(0.001, scale * 0.82),
+      max(0.001, scale * 0.94)
+    ),
+    effectEulerZYX(
+      local * 300.0 * EFFECT_DEG,
+      a0.x + local * a1.x * EFFECT_DEG,
+      local * 190.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Puffs de polvo que suben del cráter de `Excavar`. */
+export const MOTION_BURROW_PUFFS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a1.y) / 0.6, 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float distance = a0.y * ease;
+  float rise = a0.w * ease;
+  float fade = max(0.0, 1.0 - local);
+  float scale = a0.z * (0.5 + ease * 1.5) * fade;
+  return effectTRS(
+    vec3(sin(a0.x) * distance, 0.12 + rise, cos(a0.x) * distance),
+    vec3(max(0.001, scale), max(0.001, scale * 0.72), max(0.001, scale)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
 /** Llamas del remolino de `Torbellino Ígneo`. */
 export const MOTION_FIRE_WHIRL_FLAMES = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
@@ -1769,6 +1917,26 @@ mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
       a1.z * EFFECT_DEG,
       a1.w * EFFECT_DEG
     )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Aros de escarcha de `Viento Gélido` y `Ventisca`. */
+export const MOTION_ICE_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float grow = 1.0 - pow(
+    1.0 - min(1.0, uEffectTime / max(a0.z, 0.001)),
+    2.0
+  );
+  float scale = max(0.001, uEffectRadius * (a0.w + grow * a1.x));
+  return effectTRS(
+    vec3(0.0, a0.y, 0.0),
+    vec3(scale, 1.0, scale),
+    effectRotY(uEffectTime * a0.x * EFFECT_DEG)
   );
 }
 

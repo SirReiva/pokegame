@@ -342,6 +342,12 @@ export class BatchedParticles {
 
       const { drift, sway, swaySpeed, lifetime } = batch.options;
       let particle = 0;
+      // La caja de culling debe cubrir el recorrido completo: la lluvia nace
+      // alto y cae varias unidades durante su vida.
+      const verticalRange =
+        Math.abs(drift[1]) * lifetime + sway + batch.options.sizeMid + 2;
+      let minY = Infinity;
+      let maxY = -Infinity;
 
       for (const emitter of batch.emitters) {
         const rand = mulberry32(emitter.seed);
@@ -349,6 +355,8 @@ export class BatchedParticles {
           const sx = emitter.x + (rand() - 0.5) * emitter.ex;
           const sy = emitter.y + (rand() - 0.5) * emitter.ey;
           const sz = emitter.z + (rand() - 0.5) * emitter.ez;
+          if (sy < minY) minY = sy;
+          if (sy > maxY) maxY = sy;
           const speedScale = 0.7 + rand() * 0.6;
           const sizeJitter = 0.85 + rand() * 0.3;
           const phase = rand();
@@ -454,9 +462,13 @@ export class BatchedParticles {
       render.meshInstances = [instance];
       render.castShadows = false;
       render.receiveShadows = false;
+      const aabbCenterY = Number.isFinite(minY) ? (minY + maxY) / 2 : 2;
+      const aabbHalfY = Number.isFinite(minY)
+        ? (maxY - minY) / 2 + verticalRange
+        : 8;
       render.customAabb = new pc.BoundingBox(
-        new pc.Vec3(0, 2, 0),
-        new pc.Vec3(halfSize.x + 2, 8, halfSize.z + 2)
+        new pc.Vec3(0, aabbCenterY, 0),
+        new pc.Vec3(halfSize.x + 2, aabbHalfY, halfSize.z + 2)
       );
       root.addChild(entity);
 

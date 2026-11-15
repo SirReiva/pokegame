@@ -9,8 +9,7 @@
 
 import * as pc from 'playcanvas';
 import { ATMOSPHERES, type AtmosphereId, type AtmosphereVisual } from './atmosphere';
-
-type ParticleOptions = pc.ComponentOptions<'particlesystem'>;
+import { BatchedParticles } from './batchedParticles';
 
 export interface AtmosphereTextures {
   rain: pc.Texture;
@@ -189,6 +188,7 @@ export function createAtmosphereVisuals(
   let currentId: AtmosphereId | null = null;
   let currentVisual: AtmosphereVisual | null = null;
   let effectRoot: pc.Entity | null = null;
+  let weather: BatchedParticles | null = null;
   let lightning: LightningState | null = null;
 
   const applyLights = (visual: AtmosphereVisual, flash = 0) => {
@@ -221,31 +221,9 @@ export function createAtmosphereVisuals(
     skyMaterial.update();
   };
 
-  const addParticles = (
-    parent: pc.Entity,
-    name: string,
-    position: [number, number, number],
-    particleOptions: ParticleOptions
-  ): pc.Entity => {
-    const entity = new pc.Entity(name);
-    entity.setPosition(position[0], position[1], position[2]);
-    entity.addComponent('particlesystem', {
-      loop: true,
-      preWarm: true,
-      autoPlay: true,
-      blendType: pc.BLEND_NORMAL,
-      depthWrite: false,
-      useFog: true,
-      lighting: false,
-      intensity: 1,
-      orientation: pc.PARTICLEORIENTATION_SCREEN,
-      ...particleOptions
-    });
-    parent.addChild(entity);
-    return entity;
-  };
-
   const clearEffects = () => {
+    weather?.destroy();
+    weather = null;
     if (lightning) {
       for (const mesh of lightning.meshes) mesh.destroy();
       lightning.material.destroy();
@@ -305,6 +283,12 @@ export function createAtmosphereVisuals(
     };
   };
 
+  /**
+   * El clima usa el mismo lote analítico que las partículas ambientales del
+   * mapa: sin `ParticleSystem`, sin pasada de simulación y con un draw call
+   * por tipo. La lluvia, la nieve y la arena son billboards que caen o cruzan
+   * el mapa calculados en el vertex shader.
+   */
   const buildEffects = (id: AtmosphereId) => {
     const effect = ATMOSPHERES[id].visual.effect;
     if (!effect) return;
@@ -313,342 +297,248 @@ export function createAtmosphereVisuals(
     app.root.addChild(root);
     effectRoot = root;
 
-    // `emitterExtents` es el tamaño completo de la caja: PlayCanvas reparte
-    // las partículas en [-0.5, 0.5] y luego multiplica por esos valores. Por
-    // eso se pasa el ancho del mapa completo (2 × media anchura) y no la mitad.
+    // `emitterExtents` era el tamaño completo de la caja. El lote analítico
+    // reparte las motas en esa misma caja, así que se pasa el ancho del mapa
+    // completo (2 × media anchura) y no la mitad.
     const spanX = bounds.x * 2 * 0.98;
     const spanZ = bounds.z * 2 * 0.98;
     const area = Math.max(1, bounds.x * bounds.z);
     const density = Math.max(0.55, Math.min(2.2, area / 420));
+    const particles = new BatchedParticles();
+    weather = particles;
+    const box = (x: number, y: number, z: number): pc.Vec3 =>
+      new pc.Vec3(x, y, z);
 
     switch (effect) {
       case 'sunMotes': {
-        addParticles(root, 'sun-motes', [0, 2.4, 0], {
-          numParticles: Math.round(120 * density),
+        particles.define('sun-motes', {
+          texture: textures.pollen,
+          additive: true,
+          colorStart: [0.88, 1, 0.94],
+          colorEnd: [0.52, 1, 0.68],
+          opacity: 0.56,
+          sizeStart: 0.04,
+          sizeMid: 0.09,
+          sizeEnd: 0.05,
           lifetime: 9,
-          rate: 0.055,
-          rate2: 0.08,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 1.9, spanZ),
-          colorMap: textures.pollen,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 1, 1, 1],
-              [0, 0.88, 1, 0.94],
-              [0, 0.52, 1, 0.68]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.16, 0.7, 0.8, 0.45, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0.04, 0.5, 0.09, 1, 0.05]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.12, 1, 0.28],
-              [0, 0.05, 1, 0.12],
-              [0, 0.08, 1, 0.2]
-            ]
-          },
-          blendType: pc.BLEND_ADDITIVE,
-          intensity: 0.8
+          fadeIn: 0.16,
+          fadeOut: 0.8,
+          drift: [0.2, 0.08, 0.14],
+          sway: 0.35,
+          swaySpeed: 0.4
         });
+        particles.emit(
+          'sun-motes',
+          [0, 2.4, 0],
+          box(spanX, 1.9, spanZ),
+          Math.round(120 * density),
+          0x51a3
+        );
         break;
       }
       case 'rain':
       case 'downpour':
       case 'storm': {
         const heavy = effect !== 'rain';
-        addParticles(root, `${effect}-rain`, [0, 9, 0], {
-          numParticles: Math.round((heavy ? 1000 : 650) * density),
-          lifetime: heavy ? 1.0 : 1.18,
-          rate: heavy ? 0.0008 : 0.0016,
-          rate2: heavy ? 0.0012 : 0.0022,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 5.6, spanZ),
-          colorMap: textures.rain,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, heavy ? 0.5 : 0.64, 1, 0.72],
-              [0, heavy ? 0.62 : 0.78, 1, 0.84],
-              [0, heavy ? 0.78 : 0.96, 1, 1]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.1, heavy ? 0.7 : 0.5, 0.8, 0.32, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, heavy ? 0.62 : 0.42, 0.5, heavy ? 0.78 : 0.56, 1, 0.5]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.5, 1, 1.2],
-              [0, heavy ? -23 : -17, 1, heavy ? -29 : -22],
-              [0, 0.2, 1, 0.6]
-            ]
-          }
+        particles.define(`${effect}-rain`, {
+          texture: textures.rain,
+          colorStart: heavy ? [0.5, 1, 0.72] : [0.64, 1, 0.72],
+          colorEnd: heavy ? [0.78, 1, 1] : [0.96, 1, 1],
+          opacity: heavy ? 0.7 : 0.5,
+          sizeStart: heavy ? 0.62 : 0.42,
+          sizeMid: heavy ? 0.78 : 0.56,
+          sizeEnd: 0.5,
+          lifetime: heavy ? 1 : 1.18,
+          fadeIn: 0.1,
+          fadeOut: 0.8,
+          drift: [0.85, heavy ? -26 : -20, 0.4],
+          sway: 0.12,
+          swaySpeed: 0.6
         });
+        particles.emit(
+          `${effect}-rain`,
+          [0, 9, 0],
+          box(spanX, 5.6, spanZ),
+          Math.round((heavy ? 1000 : 650) * density),
+          0x2f17 + (heavy ? 1 : 0)
+        );
         if (effect !== 'rain') {
-          addParticles(root, `${effect}-mist`, [0, 1.1, 0], {
-            numParticles: Math.round(110 * density),
+          particles.define(`${effect}-mist`, {
+            texture: textures.mist,
+            colorStart: [0.7, 1, 0.82],
+            colorEnd: [0.84, 1, 0.94],
+            opacity: 0.1,
+            sizeStart: 2.4,
+            sizeMid: 3.6,
+            sizeEnd: 2.8,
             lifetime: 7.5,
-            rate: 0.06,
-            rate2: 0.09,
-            emitterShape: pc.EMITTERSHAPE_BOX,
-            emitterExtents: new pc.Vec3(spanX, 0.9, spanZ),
-            colorMap: textures.mist,
-            colorGraph: {
-              type: pc.CURVE_LINEAR,
-              keys: [
-                [0, 0.7, 1, 0.82],
-                [0, 0.76, 1, 0.88],
-                [0, 0.84, 1, 0.94]
-              ]
-            },
-            alphaGraph: {
-              type: pc.CURVE_LINEAR,
-              keys: [0, 0, 0.2, 0.1, 0.8, 0.08, 1, 0]
-            },
-            scaleGraph: {
-              type: pc.CURVE_LINEAR,
-              keys: [0, 2.4, 0.5, 3.6, 1, 2.8]
-            },
-            velocityGraph: {
-              type: pc.CURVE_LINEAR,
-              keys: [
-                [0, 0.12, 1, 0.3],
-                [0, 0.02, 1, 0.06],
-                [0, 0.06, 1, 0.16]
-              ]
-            }
+            fadeIn: 0.2,
+            fadeOut: 0.8,
+            drift: [0.21, 0.05, 0.11],
+            sway: 0.5,
+            swaySpeed: 0.25
           });
+          particles.emit(
+            `${effect}-mist`,
+            [0, 1.1, 0],
+            box(spanX, 0.9, spanZ),
+            Math.round(110 * density),
+            0x6d21
+          );
         }
         if (effect === 'storm') buildLightning(root);
         break;
       }
       case 'sand': {
-        addParticles(root, 'sand-streaks', [0, 2.1, 0], {
-          numParticles: Math.round(520 * density),
+        particles.define('sand-streaks', {
+          texture: textures.dust,
+          colorStart: [0.94, 1, 1],
+          colorEnd: [0.34, 1, 0.42],
+          opacity: 0.42,
+          sizeStart: 0.18,
+          sizeMid: 0.32,
+          sizeEnd: 0.24,
           lifetime: 2.1,
-          rate: 0.003,
-          rate2: 0.0045,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 2.4, spanZ),
-          colorMap: textures.dust,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.94, 1, 1],
-              [0, 0.64, 1, 0.72],
-              [0, 0.34, 1, 0.42]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.15, 0.42, 0.75, 0.3, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0.18, 0.5, 0.32, 1, 0.24]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 10, 1, 17],
-              [0, -1.2, 1, 0.4],
-              [0, 1.5, 1, 4.5]
-            ]
-          }
+          fadeIn: 0.15,
+          fadeOut: 0.75,
+          drift: [13, 0.3, 3],
+          sway: 0.5,
+          swaySpeed: 1.2
         });
-        addParticles(root, 'sand-haze', [0, 1.2, 0], {
-          numParticles: Math.round(80 * density),
+        particles.emit(
+          'sand-streaks',
+          [0, 2.1, 0],
+          box(spanX, 2.4, spanZ),
+          Math.round(520 * density),
+          0x3b11
+        );
+        particles.define('sand-haze', {
+          texture: textures.mist,
+          colorStart: [1, 1, 1],
+          colorEnd: [0.48, 1, 0.54],
+          opacity: 0.12,
+          sizeStart: 2.8,
+          sizeMid: 4.4,
+          sizeEnd: 3.2,
           lifetime: 9,
-          rate: 0.1,
-          rate2: 0.15,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 0.8, spanZ),
-          colorMap: textures.mist,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 1, 1, 1],
-              [0, 0.76, 1, 0.82],
-              [0, 0.48, 1, 0.54]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.2, 0.12, 0.8, 0.09, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 2.8, 0.5, 4.4, 1, 3.2]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 1.2, 1, 2.2],
-              [0, 0, 1, 0.08],
-              [0, 0.2, 1, 0.6]
-            ]
-          }
+          fadeIn: 0.2,
+          fadeOut: 0.8,
+          drift: [0.2, 0, 0.05],
+          sway: 0.4,
+          swaySpeed: 0.3
         });
+        particles.emit(
+          'sand-haze',
+          [0, 1.2, 0],
+          box(spanX, 0.8, spanZ),
+          Math.round(80 * density),
+          0x77c1
+        );
         break;
       }
       case 'hail': {
-        addParticles(root, 'hail', [0, 8, 0], {
-          numParticles: Math.round(620 * density),
+        particles.define('hail', {
+          texture: textures.frost,
+          colorStart: [0.86, 1, 1],
+          colorEnd: [1, 1, 1],
+          opacity: 0.9,
+          sizeStart: 0.12,
+          sizeMid: 0.17,
+          sizeEnd: 0.1,
           lifetime: 1.35,
-          rate: 0.0018,
-          rate2: 0.0026,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 5, spanZ),
-          colorMap: textures.frost,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.86, 1, 1],
-              [0, 0.92, 1, 1],
-              [0, 1, 1, 1]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.08, 0.9, 0.85, 0.6, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0.12, 0.5, 0.17, 1, 0.1]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.8, 1, 1.8],
-              [0, -15, 1, -20],
-              [0, 0.4, 1, 1]
-            ]
-          }
+          fadeIn: 0.08,
+          fadeOut: 0.85,
+          drift: [1.3, -17.5, 0.7],
+          sway: 0.15,
+          swaySpeed: 0.5
         });
+        particles.emit(
+          'hail',
+          [0, 8, 0],
+          box(spanX, 5, spanZ),
+          Math.round(620 * density),
+          0x4a9d
+        );
         break;
       }
       case 'fog': {
-        addParticles(root, 'fog-banks', [0, 1.15, 0], {
-          numParticles: Math.round(160 * density),
+        particles.define('fog-banks', {
+          texture: textures.mist,
+          colorStart: [0.92, 1, 1],
+          colorEnd: [1, 1, 1],
+          opacity: 0.12,
+          sizeStart: 2.8,
+          sizeMid: 4.6,
+          sizeEnd: 3.4,
           lifetime: 15,
-          rate: 0.08,
-          rate2: 0.12,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 1, spanZ),
-          colorMap: textures.mist,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.92, 1, 1],
-              [0, 0.96, 1, 1],
-              [0, 1, 1, 1]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.18, 0.12, 0.8, 0.09, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 2.8, 0.5, 4.6, 1, 3.4]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.14, 1, 0.34],
-              [0, 0.01, 1, 0.04],
-              [0, 0.08, 1, 0.2]
-            ]
-          }
+          fadeIn: 0.18,
+          fadeOut: 0.8,
+          drift: [0.24, 0.02, 0.14],
+          sway: 0.6,
+          swaySpeed: 0.2
         });
+        particles.emit(
+          'fog-banks',
+          [0, 1.15, 0],
+          box(spanX, 1, spanZ),
+          Math.round(160 * density),
+          0x1f6b
+        );
         break;
       }
       case 'wind': {
-        addParticles(root, 'wind-streaks', [0, 2.2, 0], {
-          numParticles: Math.round(460 * density),
+        particles.define('wind-streaks', {
+          texture: textures.dust,
+          colorStart: [0.82, 1, 0.9],
+          colorEnd: [0.78, 1, 0.88],
+          opacity: 0.4,
+          sizeStart: 0.14,
+          sizeMid: 0.26,
+          sizeEnd: 0.18,
           lifetime: 2.6,
-          rate: 0.005,
-          rate2: 0.0075,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 2.2, spanZ),
-          colorMap: textures.dust,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.82, 1, 0.9],
-              [0, 0.94, 1, 1],
-              [0, 0.78, 1, 0.88]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.14, 0.4, 0.8, 0.26, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0.14, 0.5, 0.26, 1, 0.18]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 9, 1, 16],
-              [0, -0.8, 1, 1.6],
-              [0, 2, 1, 6]
-            ]
-          }
+          fadeIn: 0.14,
+          fadeOut: 0.8,
+          drift: [12.5, 0.4, 4],
+          sway: 0.6,
+          swaySpeed: 1.5
         });
+        particles.emit(
+          'wind-streaks',
+          [0, 2.2, 0],
+          box(spanX, 2.2, spanZ),
+          Math.round(460 * density),
+          0x5e2f
+        );
         break;
       }
       case 'snow': {
-        addParticles(root, 'snow', [0, 7, 0], {
-          numParticles: Math.round(700 * density),
+        particles.define('snow', {
+          texture: textures.frost,
+          colorStart: [0.9, 1, 1],
+          colorEnd: [1, 1, 1],
+          opacity: 0.85,
+          sizeStart: 0.08,
+          sizeMid: 0.15,
+          sizeEnd: 0.1,
           lifetime: 6.5,
-          rate: 0.007,
-          rate2: 0.01,
-          emitterShape: pc.EMITTERSHAPE_BOX,
-          emitterExtents: new pc.Vec3(spanX, 4.5, spanZ),
-          colorMap: textures.frost,
-          colorGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.9, 1, 1],
-              [0, 0.95, 1, 1],
-              [0, 1, 1, 1]
-            ]
-          },
-          alphaGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0, 0.12, 0.85, 0.85, 0.55, 1, 0]
-          },
-          scaleGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [0, 0.08, 0.5, 0.15, 1, 0.1]
-          },
-          velocityGraph: {
-            type: pc.CURVE_LINEAR,
-            keys: [
-              [0, 0.5, 1, 1.3],
-              [0, -1.8, 1, -2.6],
-              [0, 0.2, 1, 0.8]
-            ]
-          }
+          fadeIn: 0.12,
+          fadeOut: 0.85,
+          drift: [0.9, -2.2, 0.5],
+          sway: 0.5,
+          swaySpeed: 0.6
         });
+        particles.emit(
+          'snow',
+          [0, 7, 0],
+          box(spanX, 4.5, spanZ),
+          Math.round(700 * density),
+          0x2c81
+        );
         break;
       }
     }
+
+    particles.build(device, root, bounds);
   };
 
   const triggerLightning = () => {
@@ -680,7 +570,9 @@ export function createAtmosphereVisuals(
       buildEffects(id);
     },
     update(dt: number) {
-      if (!currentVisual || !lightning) return;
+      if (!currentVisual) return;
+      weather?.update(dt, scene.fog);
+      if (!lightning) return;
       if (lightning.flash > 0) {
         lightning.flash = Math.max(0, lightning.flash - dt);
         const progress = 1 - lightning.flash / lightning.duration;
