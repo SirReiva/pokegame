@@ -90,6 +90,10 @@ export function syncMatchView(sync: MatchViewSync): void {
       copy.update(sync.dt, cameraPosition);
     }
 
+    // El lote de sombras de esta vista se reescribe una sola vez, cuando ya se
+    // han movido todas sus copias: una subida de buffer por viewport y frame.
+    cameraView.shadowBatch?.commit();
+
     // El retrato de la marca de KO se mantiene de pie en cada vista aunque la
     // cámara orbite alrededor del cuerpo. El centro muestra los segundos que
     // faltan para que el Pokémon vuelva a la vida.

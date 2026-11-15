@@ -11,6 +11,8 @@ import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { publicUrl } from './publicUrl';
 import { defaultSkinFor } from './skins';
 import { FALLBACK_SPRITE_BUDGET_MB } from './spriteBudget';
+import { spriteOutlineWidth } from './spriteDetail';
+import { applySpriteOutline } from './spriteOutline';
 import { setTextureSource } from './textures';
 import type {
   AnimationName,
@@ -127,21 +129,6 @@ const SILHOUETTE_OPACITY = 0.72;
 const SILHOUETTE_COLOR: readonly [number, number, number] = [255, 242, 209];
 /** Por encima de las partículas y del agua, para que no la tapen. */
 const SILHOUETTE_DRAW_ORDER = 4;
-
-/**
- * Contorno de equipo de los Pokémon ajenos. El grosor es proporcional al
- * tamaño del sprite, con un mínimo en unidades de mundo para que las especies
- * pequeñas también se distingan.
- */
-const OUTLINE_SCALE = 0.06;
-const OUTLINE_MIN_GROW = 0.04;
-/**
- * El contorno vive un poco por detrás del cuerpo en el plano del billboard.
- * Así el cuerpo lo tapa por dentro pase lo que pase con el orden de dibujado:
- * solo se ve el borde que sobresale de la silueta.
- */
-const OUTLINE_DEPTH = 0.035;
-const OUTLINE_DRAW_ORDER = -1;
 
 /**
  * Resolución de las texturas de sprite respecto a las celdas del manifiesto.
@@ -715,19 +702,10 @@ export function disposeSpriteAsset(asset: SpriteAsset): void {
   for (const texture of Object.values(asset.textures)) texture?.destroy();
   const geometry = billboardGeometryByAsset.get(asset);
   if (geometry) {
-    for (const entry of geometry.values()) {
-      entry.mesh.destroy();
-      entry.outlineMesh.destroy();
-    }
+    for (const mesh of geometry.values()) mesh.destroy();
     geometry.clear();
     billboardGeometryByAsset.delete(asset);
   }
-}
-
-/** Geometría de un billboard para una animación; se comparte entre copias. */
-interface BillboardGeometry {
-  readonly mesh: pc.Mesh;
-  readonly outlineMesh: pc.Mesh;
 }
 
 /**
@@ -737,7 +715,7 @@ interface BillboardGeometry {
  */
 const billboardGeometryByAsset = new WeakMap<
   SpriteAsset,
-  Map<AnimationName, BillboardGeometry>
+  Map<AnimationName, pc.Mesh>
 >();
 
 function billboardGeometry(
@@ -746,7 +724,7 @@ function billboardGeometry(
   name: AnimationName,
   animation: SpriteAnimation,
   options: BillboardOptions
-): BillboardGeometry {
+): pc.Mesh {
   let byAnimation = billboardGeometryByAsset.get(asset);
   if (!byAnimation) {
     byAnimation = new Map();
@@ -780,23 +758,8 @@ function billboardGeometry(
   // PlayCanvas no debe liberar la malla compartida.
   mesh.incRefCount();
 
-  const growX = Math.max(OUTLINE_MIN_GROW, (left + right) * OUTLINE_SCALE);
-  const growY = Math.max(OUTLINE_MIN_GROW, (top - bottom) * OUTLINE_SCALE);
-  const outlineMesh = new pc.Mesh(device);
-  outlineMesh.setPositions([
-    -(left + growX), bottom - growY, -OUTLINE_DEPTH,
-    right + growX, bottom - growY, -OUTLINE_DEPTH,
-    right + growX, top + growY, -OUTLINE_DEPTH,
-    -(left + growX), top + growY, -OUTLINE_DEPTH
-  ]);
-  outlineMesh.setUvs(0, [0, 0, 1, 0, 1, 1, 0, 1]);
-  outlineMesh.setIndices([0, 1, 2, 0, 2, 3]);
-  outlineMesh.update();
-  outlineMesh.incRefCount();
-
-  const created: BillboardGeometry = { mesh, outlineMesh };
-  byAnimation.set(name, created);
-  return created;
+  byAnimation.set(name, mesh);
+  return mesh;
 }
 
 interface BillboardOptions {
@@ -812,6 +775,8 @@ interface BillboardOptions {
    * Pokémon que no controla el jugador de ese viewport; `null` lo desactiva.
    */
   outlineColor?: readonly [number, number, number] | null;
+  /** Grosor del contorno, en píxeles del arte. */
+  outlineWidth?: number;
   /**
    * No crea la capa de `idle` al construir el actor; `Game` las calienta por
    * tandas durante la cuenta atrás. Evita congelar la pantalla al empezar una
@@ -820,7 +785,11 @@ interface BillboardOptions {
   deferLayers?: boolean;
 }
 
-function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.StandardMaterial {
+function createSpriteMaterial(
+  texture: pc.Texture,
+  alphaTest: number,
+  outlineColor: readonly [number, number, number] | null
+): pc.StandardMaterial {
   const material = new pc.StandardMaterial();
   material.name = `sprite-${texture.name}`;
   material.useLighting = false;
@@ -841,6 +810,9 @@ function createSpriteMaterial(texture: pc.Texture, alphaTest: number): pc.Standa
   material.depthWrite = true;
   material.depthTest = true;
   material.cull = pc.CULLFACE_NONE;
+  // El borde de equipo viaja en este mismo material: `alphaTestPS` dilata el
+  // alfa y `emissivePS` tiñe solo los píxeles que añade la dilatación.
+  if (outlineColor) applySpriteOutline(material, outlineColor);
   material.update();
   return material;
 }
@@ -879,37 +851,6 @@ function createSilhouetteMaterial(
   return material;
 }
 
-/**
- * Contorno de equipo: una silueta sólida del mismo sprite, dibujada un poco
- * más grande y por detrás del cuerpo. Comparte el recorte alfa y la celda de la
- * hoja, pero no escribe profundidad para no competir con el sprite real.
- */
-function createOutlineMaterial(
-  texture: pc.Texture,
-  alphaTest: number,
-  color: readonly [number, number, number]
-): pc.StandardMaterial {
-  const material = new pc.StandardMaterial();
-  material.name = `outline-${texture.name}`;
-  material.useLighting = false;
-  material.useSkybox = false;
-  material.useFog = true;
-  material.diffuse = new pc.Color(0, 0, 0);
-  material.emissive = new pc.Color(color[0] / 255, color[1] / 255, color[2] / 255);
-  material.emissiveIntensity = 1;
-  material.opacityMap = texture;
-  material.opacityMapChannel = 'a';
-  material.opacity = 1;
-  material.alphaTest = alphaTest;
-  material.alphaToCoverage = CONFIG.sprite.alphaToCoverage;
-  material.blendType = pc.BLEND_NONE;
-  material.depthWrite = false;
-  material.depthTest = true;
-  material.cull = pc.CULLFACE_NONE;
-  material.update();
-  return material;
-}
-
 interface FrameLayer {
   entity: pc.Entity;
   material: pc.StandardMaterial;
@@ -919,9 +860,6 @@ interface FrameLayer {
   textureScale: number;
   silhouette: pc.MeshInstance;
   silhouetteMaterial: pc.StandardMaterial;
-  outline: pc.MeshInstance | null;
-  outlineMesh: pc.Mesh | null;
-  outlineMaterial: pc.StandardMaterial | null;
 }
 
 /**
@@ -971,6 +909,11 @@ export class SpriteBillboard {
   /** UVs reutilizadas al cambiar de frame; asignar Vec2 nuevos generaba GC. */
   private readonly uvTiling = new pc.Vec2();
   private readonly uvOffset = new pc.Vec2();
+  /** Paso de la dilatación del contorno, en UV; depende del recorte del frame. */
+  private readonly outlineStep = new Float32Array(2);
+  /** Celda de la hoja donde puede muestrear el contorno, ya con la V de PlayCanvas. */
+  private readonly outlineMin = new Float32Array(2);
+  private readonly outlineMax = new Float32Array(2);
 
   constructor(app: pc.AppBase, asset: SpriteAsset, options: BillboardOptions) {
     this.options = options;
@@ -1034,45 +977,24 @@ export class SpriteBillboard {
     const refAnchorY = animation.anchors[0]?.y ?? animation.frameHeight * 0.75;
 
     // Malla compartida por todas las copias de este sprite y animación.
-    const geometry = billboardGeometry(
+    const mesh = billboardGeometry(
       this.device,
       this.asset,
       name,
       animation,
       this.options
     );
-    const mesh = geometry.mesh;
 
-    const material = createSpriteMaterial(texture, this.options.alphaTest);
+    const material = createSpriteMaterial(
+      texture,
+      this.options.alphaTest,
+      this.options.outlineColor ?? null
+    );
     const silhouetteMaterial = createSilhouetteMaterial(
       texture,
       this.options.alphaTest,
       this.options.silhouetteColor ?? SILHOUETTE_COLOR
     );
-
-    // Contorno de equipo: mismo recorte de la hoja, un poco más grande y un
-    // poco por detrás del cuerpo. Al compartir la entidad, sigue el lift de los
-    // frames y el giro del billboard sin trabajo extra.
-    const outlineColor = this.options.outlineColor;
-    let outlineMesh: pc.Mesh | null = null;
-    let outlineMaterial: pc.StandardMaterial | null = null;
-    let outline: pc.MeshInstance | null = null;
-    if (outlineColor) {
-      outlineMesh = geometry.outlineMesh;
-      outlineMaterial = createOutlineMaterial(
-        texture,
-        this.options.alphaTest,
-        outlineColor
-      );
-      outline = new pc.MeshInstance(outlineMesh, outlineMaterial);
-      outline.castShadows = false;
-      outline.receiveShadows = false;
-      outline.drawOrder = OUTLINE_DRAW_ORDER;
-      if (this.device.supportsStencil) {
-        outline.stencilFront = FOG_EXCLUDED_STENCIL;
-        outline.stencilBack = FOG_EXCLUDED_STENCIL;
-      }
-    }
 
     const entity = new pc.Entity(`sprite-${name}`);
     entity.addComponent('render');
@@ -1099,9 +1021,7 @@ export class SpriteBillboard {
     // tenerla activa. Solo el jugador la lleva, para no llenar la base de
     // contornos pálidos cuando los NPC quedan detrás de un árbol.
     silhouette.visible = this.options.silhouette === true;
-    render.meshInstances = outline
-      ? [instance, outline, silhouette]
-      : [instance, silhouette];
+    render.meshInstances = [instance, silhouette];
 
     return {
       entity,
@@ -1111,10 +1031,7 @@ export class SpriteBillboard {
       refAnchorY,
       textureScale,
       silhouette,
-      silhouetteMaterial,
-      outline,
-      outlineMesh,
-      outlineMaterial
+      silhouetteMaterial
     };
   }
 
@@ -1298,6 +1215,14 @@ export class SpriteBillboard {
     const sheetWidth = frameWidth * animation.columns;
     const sheetHeight = frameHeight * animation.rows;
     const content = animation.content;
+    // Ancho y alto del arte en píxeles originales: es la unidad del grosor del
+    // contorno, para que no dependa de la escala a la que se subió la hoja.
+    const artWidth = content
+      ? content.left + content.right + 1
+      : animation.frameWidth;
+    const artHeight = content
+      ? content.top + content.bottom + 1
+      : animation.frameHeight;
 
     let u0: number;
     let v0: number;
@@ -1340,11 +1265,23 @@ export class SpriteBillboard {
     layer.silhouetteMaterial.opacityMapTiling = uvTiling;
     layer.silhouetteMaterial.opacityMapOffset = uvOffset;
 
-    // El contorno usa la misma celda: si no, el borde se quedaría con la pose
-    // del primer frame.
-    if (layer.outlineMaterial) {
-      layer.outlineMaterial.opacityMapTiling = uvTiling;
-      layer.outlineMaterial.opacityMapOffset = uvOffset;
+    // El contorno vive en el material del cuerpo: basta con indicarle cuánto es
+    // un píxel de arte en UV para que la dilatación mida lo mismo en todas las
+    // animaciones, tengan el recorte que tengan. Los límites evitan muestrear
+    // frames vecinos de la hoja. PlayCanvas transforma la V como
+    // `1 - offset - tiling`, así que los límites van ya volteados.
+    if (this.options.outlineColor) {
+      const width =
+        this.options.outlineWidth ?? spriteOutlineWidth(this.asset, 0);
+      this.outlineStep[0] = (du * width) / Math.max(1, artWidth);
+      this.outlineStep[1] = (dv * width) / Math.max(1, artHeight);
+      this.outlineMin[0] = u0;
+      this.outlineMin[1] = 1 - v0 - dv;
+      this.outlineMax[0] = u0 + du;
+      this.outlineMax[1] = 1 - v0;
+      layer.material.setParameter('uOutlineStep', this.outlineStep);
+      layer.material.setParameter('uOutlineMin', this.outlineMin);
+      layer.material.setParameter('uOutlineMax', this.outlineMax);
     }
 
     // PlayCanvas solo recalcula uniforms y variantes de shader al llamar a
@@ -1352,7 +1289,6 @@ export class SpriteBillboard {
     // primera que se aplicó: la animación no avanza y la dirección nunca cambia.
     layer.material.update();
     if (layer.silhouette.visible) layer.silhouetteMaterial.update();
-    layer.outlineMaterial?.update();
   }
 
   update(dt: number, cameraPosition: pc.Vec3): void {
@@ -1404,12 +1340,11 @@ export class SpriteBillboard {
   destroy(): void {
     this.root.destroy();
     for (const layer of this.layers.values()) {
-      // La malla y el contorno son compartidos por todas las copias del sprite
-      // y los libera `disposeSpriteAsset`; aquí solo se destruyen los
-      // materiales, que sí son exclusivos de esta copia.
+      // La malla es compartida por todas las copias del sprite y la libera
+      // `disposeSpriteAsset`; aquí solo se destruyen los materiales, que sí son
+      // exclusivos de esta copia.
       layer.material.destroy();
       layer.silhouetteMaterial.destroy();
-      layer.outlineMaterial?.destroy();
     }
     this.layers.clear();
   }

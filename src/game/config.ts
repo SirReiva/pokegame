@@ -132,6 +132,14 @@ export const CONFIG = {
      * contorno; en 'nearest' apenas se nota (alfa de 1 bit).
      */
     alphaToCoverage: true,
+    /**
+     * Alto de viewport (píxeles de dispositivo) por debajo del cual se activan
+     * los ajustes de detalle reducido: el contorno de equipo se engorda para
+     * seguir leyéndose y la silueta de oclusión del dueño se desactiva, porque a
+     * ese tamaño ocupa más de lo que ayuda. En escritorio con 1-4 vistas no se
+     * activa nunca; sí en móvil, WebView o ventanas pequeñas con 8 vistas.
+     */
+    smallViewportPx: 300,
     /** Escala de reproducción de la animación de andar según la velocidad. */
     walkRateMin: 0.75,
     walkRateMax: 1.5,

@@ -2,6 +2,7 @@ import * as pc from 'playcanvas';
 import { CONFIG } from './config';
 import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
+import type { ActorShadowSlot } from './render/actorShadows';
 import { SpriteBillboard, type SpriteAsset } from './sprite';
 import type { AnimationName } from './types';
 
@@ -17,6 +18,34 @@ const SHADOW_BASE_Y = 0.05;
 const WATER_MARKER_LIFT = 0.015;
 /** Hundimiento a partir del cual el anillo ya flota del todo en la superficie. */
 const MARKER_FLOAT_SINK = 0.12;
+
+/**
+ * Todo lo que necesita una copia de un Pokémon del mundo. Va como objeto porque
+ * la lista de banderas (anillo, silueta, contorno, capas diferidas) ya era
+ * demasiado larga para pasarla por posición sin equivocarse.
+ */
+export interface ActorOptions {
+  app: pc.AppBase;
+  asset: SpriteAsset;
+  position: ActorTransform;
+  facing: number;
+  /**
+   * Ranura del lote de sombras del viewport. La sombra no crea entidad ni
+   * material propios: todas las copias de una vista comparten un draw call.
+   */
+  shadow?: ActorShadowSlot | null;
+  /** Anillo de rumbo; solo lo lleva el jugador de esa vista. */
+  withMarker?: boolean;
+  /** Silueta que asoma tras los obstáculos; solo la copia del dueño. */
+  silhouette?: boolean;
+  accent?: readonly [number, number, number];
+  /** Contorno de equipo; lo llevan las copias que no controla el jugador. */
+  withOutline?: boolean;
+  /** Grosor del contorno en píxeles de arte (ver `spriteOutlineWidth`). */
+  outlineWidth?: number;
+  hitRadius?: number;
+  deferLayers?: boolean;
+}
 
 /**
  * Un Pokémon del mundo: billboard + sombra de contacto.
@@ -37,7 +66,9 @@ export function actorSpriteHeight(asset: SpriteAsset): number {
 export class Actor {
   readonly billboard: SpriteBillboard;
   private readonly app: pc.AppBase;
-  private readonly shadow: pc.Entity;
+  /** Ranura compartida de sombra; `null` si el actor no la lleva. */
+  private readonly shadow: ActorShadowSlot | null;
+  private readonly shadowDiameter: number;
   /** Altura local sobre la raíz del billboard donde apoya la barra de vida. */
   readonly barAnchorOffset: number;
   /** Altura de mundo cacheada; evita pedir la posición al nodo cada frame. */
@@ -62,25 +93,15 @@ export class Actor {
   /** Altura del sprite sobre el suelo; escala cuánto se hunde en el agua. */
   private readonly visibleHeight: number;
 
-  constructor(
-    app: pc.AppBase,
-    asset: SpriteAsset,
-    shadowMaterial: pc.StandardMaterial,
-    position: ActorTransform,
-    facing: number,
-    withMarker = false,
-    silhouette = false,
-    accent: readonly [number, number, number] = [255, 224, 102],
-    withOutline = false,
-    hitRadius = 0,
-    deferLayers = false
-  ) {
+  constructor(options: ActorOptions) {
+    const { app, asset } = options;
     this.app = app;
     this.asset = asset;
-    this.hitRadius = hitRadius;
-    this.position = { ...position };
-    this.facing = facing;
-    this.homeFacing = facing;
+    this.hitRadius = options.hitRadius ?? 0;
+    this.position = { ...options.position };
+    this.facing = options.facing;
+    this.homeFacing = options.facing;
+    this.shadow = options.shadow ?? null;
 
     const idle = asset.skin.animations.idle;
     const spriteHeight = actorSpriteHeight(asset);
@@ -88,34 +109,25 @@ export class Actor {
     // La barra de vida se dibuja en el overlay 2D a esta altura; el actor solo
     // publica el punto de anclaje para que la capa lo proyecte.
     this.barAnchorOffset = spriteHeight + 0.18;
+    this.shadowDiameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
 
+    const accent = options.accent ?? [255, 224, 102];
     this.billboard = new SpriteBillboard(app, asset, {
       pixelScale: CONFIG.sprite.pixelScale,
       verticalStretch: CONFIG.sprite.verticalStretch,
       alphaTest: CONFIG.sprite.alphaTest,
-      silhouette,
+      silhouette: options.silhouette === true,
       // La silueta que asoma tras los árboles usa el color del equipo, igual
       // que el anillo de rumbo.
       silhouetteColor: accent,
       // El resto de Pokémon de la vista llevan un borde de su color de equipo.
-      outlineColor: withOutline ? accent : null,
-      deferLayers
+      outlineColor: options.withOutline ? accent : null,
+      outlineWidth: options.outlineWidth,
+      deferLayers: options.deferLayers === true
     });
-    this.billboard.setFacing(facing);
+    this.billboard.setFacing(options.facing);
 
-    const diameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
-    this.shadow = new pc.Entity(`shadow-${asset.entry.id}`);
-    this.shadow.addComponent('render', { type: 'plane' });
-    const shadowRender = this.shadow.render!;
-    shadowRender.material = shadowMaterial;
-    shadowRender.castShadows = false;
-    shadowRender.receiveShadows = false;
-    const shadowInstance = shadowRender.meshInstances[0];
-    if (shadowInstance) shadowInstance.drawOrder = 2;
-    this.shadow.setLocalScale(diameter, 1, diameter);
-    app.root.addChild(this.shadow);
-
-    this.marker = withMarker
+    this.marker = options.withMarker
       ? new PlayerMarker(
           app,
           CONFIG.player.markerDiameter,
@@ -124,11 +136,11 @@ export class Actor {
           accent
         )
       : null;
-    this.marker?.setFacing(facing);
+    this.marker?.setFacing(options.facing);
 
     this.setHitboxDebug(CONFIG.debug.showHitboxes);
 
-    this.setPosition(position.x, position.z);
+    this.setPosition(this.position.x, this.position.z);
   }
 
   setPosition(x: number, z: number): void {
@@ -177,8 +189,13 @@ export class Actor {
       BILLBOARD_BASE_Y - this.sink,
       this.position.z
     );
-    this.shadow.setPosition(this.position.x, SHADOW_BASE_Y - this.sink, this.position.z);
-    this.shadow.enabled = this.visible && this.sink <= 0.001;
+    this.shadow?.setShadow(
+      this.position.x,
+      SHADOW_BASE_Y - this.sink,
+      this.position.z,
+      this.shadowDiameter,
+      this.visible && this.sink <= 0.001
+    );
     this.barAnchorYValue = BILLBOARD_BASE_Y - this.sink + this.barAnchorOffset;
 
     if (this.marker) {
@@ -239,7 +256,13 @@ export class Actor {
   setVisible(visible: boolean): void {
     this.visible = visible;
     this.billboard.setVisible(visible);
-    this.shadow.enabled = visible && this.sink <= 0.001;
+    this.shadow?.setShadow(
+      this.position.x,
+      SHADOW_BASE_Y - this.sink,
+      this.position.z,
+      this.shadowDiameter,
+      visible && this.sink <= 0.001
+    );
     this.marker?.setVisible(visible);
     this.hitboxDebug?.setVisible(visible);
   }
@@ -277,15 +300,12 @@ export class Actor {
   setLayer(layerId: number): void {
     this.layerId = layerId;
     this.billboard.setLayer(layerId);
-    const shadowRender = this.shadow.render;
-    if (shadowRender) shadowRender.layers = [layerId];
     this.marker?.setLayer(layerId);
     this.hitboxDebug?.setLayer(layerId);
   }
 
   destroy(): void {
     this.billboard.destroy();
-    this.shadow.destroy();
     this.marker?.destroy();
     this.hitboxDebug?.destroy();
   }

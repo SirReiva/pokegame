@@ -55,12 +55,14 @@ import {
   facingToCenter,
   matchPixelRatio,
   spawnForTeam,
+  viewportHeightPx,
   type KillFeedEntry,
   type MatchPlayerConfig,
   type PlayerMatchStats
 } from '../multiplayer';
 import type { PickupField } from '../pickups';
 import { baseStatsFor, combatStatsFor } from '../pokedex';
+import { ActorShadowBatch } from '../render/actorShadows';
 import { createPlayerView, type PlayerView } from '../render/playerView';
 import type { CombatFx } from '../render/fx/CombatFx';
 import type { VisionView } from '../render/visionView';
@@ -68,6 +70,7 @@ import { hitRadiusForPokemon, speedForPokemon } from '../roster';
 import type { PendingAoeEnd } from '../sim/aoes';
 import { DEFAULT_SKIN_ID } from '../skins';
 import { BILLBOARD_ANIMATION_ORDER, type SpriteAsset } from '../sprite';
+import { isSmallViewport, spriteOutlineWidth } from '../spriteDetail';
 import { terrainAt, type Team } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import type { AnimationName } from '../types';
@@ -314,6 +317,9 @@ export function clearMatch(host: MatchSessionHost): void {
       view.camera.dispose();
     }
   }
+  // Los lotes de sombras son de la vista, no de la copia: se destruyen una vez
+  // liberadas todas las ranuras de sus actores.
+  for (const view of host.playerViews.values()) view.shadowBatch?.destroy();
   host.playerViews.clear();
   for (const layer of host.viewLayers) host.app.scene.layers.remove(layer);
   host.matchPlayers = [];
@@ -408,6 +414,14 @@ export function startMatch(
   );
 
   const layout = computeSplitLayout(humanConfigs.length);
+  // Tamaño real de cada viewport: decide el grosor del contorno y si la
+  // silueta de oclusión compensa. Ambas cosas se resuelven una vez por partida.
+  const viewportPx = viewportHeightPx(
+    window.innerHeight,
+    window.devicePixelRatio || 1,
+    humanConfigs.length
+  );
+  const smallViewport = isSmallViewport(viewportPx);
   const hasBots = valid.some((config) => config.isBot);
   const botNav = hasBots ? new BotNavGrid(host.world.colliders) : null;
   const botSquad = hasBots ? createBotSquad() : null;
@@ -444,6 +458,7 @@ export function startMatch(
 
     let layer: pc.Layer | null = null;
     let skyLayer: pc.Layer | null = null;
+    let shadowBatch: ActorShadowBatch | null = null;
     if (!isBot) {
       const layerComposition = host.app.scene.layers;
       layer = new pc.Layer({ name: `match-view-${currentView + 1}` });
@@ -466,6 +481,13 @@ export function startMatch(
       layerComposition.pushTransparent(layer);
       host.viewLayers.push(layer);
       host.viewSkyLayers.push(skyLayer);
+      // Todas las sombras de esta vista comparten un draw call.
+      shadowBatch = new ActorShadowBatch(
+        host.app,
+        host.world.shadowMaterial,
+        layer.id,
+        MAX_PLAYERS
+      );
     }
 
     const camera = new CameraRig(host.app, spawnPoint);
@@ -575,7 +597,8 @@ export function startMatch(
       createPlayerView(
         camera,
         bar,
-        layer ? layout[currentView] : { x: 0, y: 0, w: 1, h: 1 }
+        layer ? layout[currentView] : { x: 0, y: 0, w: 1, h: 1 },
+        shadowBatch
       )
     );
 
@@ -619,25 +642,32 @@ export function startMatch(
   host.matchPlayers.forEach((player) => {
     const asset = host.assetFor(player.pokemonId, player.skinId);
     if (!asset) return;
+    // El grosor del contorno depende del aspecto, no del viewport.
+    const outlineWidth = spriteOutlineWidth(asset, viewportPx);
     host.views.forEach((viewer, viewIndex) => {
-      const copy = new Actor(
-        host.app,
+      const viewerView = host.viewOf(viewer);
+      const copy = new Actor({
+        app: host.app,
         asset,
-        host.world.shadowMaterial,
-        { x: player.x, z: player.z },
-        player.facing,
+        position: { x: player.x, z: player.z },
+        facing: player.facing,
+        // La sombra se dibuja en el lote del viewport: una instancia para todos.
+        shadow: viewerView.shadowBatch?.allocate() ?? null,
         // Solo la copia del dueño lleva anillo de rumbo. Antes lo llevaban
         // todas (también los rivales), lo que añadía un draw call y una
         // textura por copia sin aportar información nueva.
-        viewer.slot === player.slot,
-        viewer.slot === player.slot,
-        TEAM_INFO[player.team].accent,
+        withMarker: viewer.slot === player.slot,
+        // La silueta de oclusión solo la lleva el dueño y solo cuando el
+        // viewport es lo bastante grande para que el detalle compense.
+        silhouette: viewer.slot === player.slot && !smallViewport,
+        accent: TEAM_INFO[player.team].accent,
         // Solo el Pokémon que controla este viewport va sin contorno.
-        viewer.slot !== player.slot,
-        player.hitRadius,
+        withOutline: viewer.slot !== player.slot,
+        outlineWidth,
+        hitRadius: player.hitRadius,
         // Las capas de animación se crean por tandas durante la cuenta atrás.
-        true
-      );
+        deferLayers: true
+      });
       const layer = host.viewLayers[viewIndex];
       if (layer) copy.setLayer(layer.id);
       copy.play('idle');

@@ -418,48 +418,78 @@ visto) y los bots ya toleraban la latencia de su decisión.
 
 ## 2.2 Draw calls del splitscreen: contornos, siluetas y sombras
 
-### Qué pasa hoy
+> **Estado (noviembre de 2026): implementado.** El contorno de equipo pasó al
+> material del sprite (`alphaTestPS` + `emissivePS`, GLSL y WGSL), las sombras de
+> contacto se dibujan con una instancia por viewport (`ActorShadowBatch`) y la
+> silueta se omite en viewports diminutos (`spriteDetail.ts`). El contorno se
+> mantiene en todos los tamaños: es información de equipo, no decoración.
 
-Cada copia crea un `render` con 2–3 `MeshInstance`:
+### Qué pasaba antes
+
+Cada copia creaba un `render` con 2–3 `MeshInstance`:
 
 - sprite,
 - silueta (`depthFunc = GREATER`, visible en la copia del dueño),
 - contorno de equipo (solo copias ajenas).
 
-Está en `src/game/sprite.ts:956-984` y la creación de copias en
-`src/game/app/matchSession.ts:615-637`. Cada copia añade además una sombra de
-contacto (`src/game/actor.ts:107-116`) y los dueños un anillo. Con 8 vistas hay 64
-copias, 64 sombras y 16 anillos. El documento de rendimiento cuenta 269 draw calls
-totales en 8 vistas; el reparto exacto conviene re-medirlo porque los
-contornos/siluetas añaden instancias que la tabla no desglosa.
+Además, cada copia añadía una entidad y un componente de render solo para su
+sombra de contacto, y los dueños un anillo. Con 8 vistas eran 64 copias, 64
+sombras y 16 anillos: cada copia visible costaba hasta 4 draw calls (sprite,
+silueta, contorno y sombra) más el anillo del dueño.
 
-### Qué haría, por orden de relación impacto/riesgo
+### Qué se cambió
 
-1. **LOD por viewport:** si el área del viewport es pequeña (8 jugadores),
-   desactivar contorno de equipo, silueta y quizá sombra de contacto en las
-   copias ajenas. A 1/8 de pantalla no se perciben y ahorran decenas de draw
-   calls. Es un `if` en la creación o en `syncMatchView`.
-2. **Sombras instanciadas por vista:** las 8 sombras comparten malla, material y
-   textura; solo cambia la matriz. El proyecto ya usa
-   `MeshInstance.setInstancing(vb)` + `instancingCount` en
-   `src/game/render/world/foliage.ts` (y cactus). Un `VertexBuffer` dinámico por
-   vista con 8 matrices reduce 64 sombras a 8 draw calls (una por viewport).
-3. **Fusionar contorno y sprite en un solo material:** dibujar el sprite con un
-   shader que dilate el alfa (4–8 taps) para el borde de equipo. Pasa de 2 draw
-   calls por copia a 1, a cambio de más muestras de textura en los píxeles
-   visibles del sprite (pocos). Hay que medirlo: no siempre gana en GPUs
-   integradas.
+1. **Sombras instanciadas por vista** (`src/game/render/actorShadows.ts`). Cada
+   viewport tiene un `ActorShadowBatch` con un plano unitario, el material
+   compartido de sombra y un `VertexBuffer` dinámico de 8 matrices. Los actores
+   escriben su posición en una ranura; `syncMatchView` compacta las visibles y
+   sube el buffer una vez por vista. `instancingCount` decide cuántas se dibujan
+   y el nodo del lote se coloca en el centro de la tanda para que el orden de
+   transparencias no lo mande al origen del mapa.
+2. **Contorno dentro del material del sprite** (`src/game/spriteOutline.ts`). Se
+   sustituyen los chunks `alphaTestPS` y `emissivePS` por versiones que dilatan
+   el alfa con 8 muestras vecinas y tiñen solo los píxeles que el cuerpo habría
+   descartado. Los taps se recortan a la celda de la hoja (`uOutlineMin` /
+   `uOutlineMax`) para no leer frames vecinos, y `dAlpha` sube a 1 en el borde
+   para que `alphaToCoverage` no lo recorte. El paso se mide en píxeles de arte
+   (`uOutlineStep`) y se recalcula en cada frame desde el recorte real.
+   - PlayCanvas aplica la transformación V como `1 - offset - tiling`, así que
+     los límites se pasan ya invertidos; sin eso el recorte deja el contorno sin
+     dilatar.
+   - Hay versión GLSL y WGSL: en WebGPU el material compila con los chunks WGSL
+     y el contorno desaparecería sin error si solo se inyectara GLSL.
+3. **LOD por viewport** (`src/game/spriteDetail.ts`). Con un alto de viewport por
+   debajo de `CONFIG.sprite.smallViewportPx` se omite la silueta de oclusión del
+   dueño y el contorno se engorda un 25 % para seguir leyéndose. El umbral se
+   calcula con el mismo reparto de filas y tope de DPR que la densidad de
+   texturas (`viewportHeightPx` en `multiplayer.ts`), así que ambas cuentas no se
+   desincronizan.
 
 ### Impacto
 
-Los puntos 1 y 2 pueden quitar ~60–70 draw calls de los 269 de 8 vistas sin tocar
-la simulación. El punto 3 es más agresivo pero localizado.
+Cada copia visible pasa de hasta 4 draw calls a 1 (el sprite, con su contorno
+incluido); la sombra se comparte entre todas las copias de la vista. En el bench
+estándar (arena, 8 vistas, SwiftShader, con la niebla ocultando parte de los
+rivales) se mide **622 → 590** draw calls totales con la misma cámara inicial, y
+**80 → 74** con una vista. El ahorro crece con el número de copias en pantalla:
+en una refriega con los 8 Pokémon visibles en las 8 vistas son hasta 56
+contornos y 56 sombras menos.
+
+El coste nuevo es de 8 muestras de textura por fragmento de sprite con contorno;
+los sprites ocupan una fracción pequeña de cada viewport, y el bench no muestra
+regresión de frame time.
 
 ### Cómo verificarlo
 
-`app.stats.drawCalls.forward`, `app.stats.drawCallCount` y
-`removedByInstancing`. Hacer la medición con cámara fija como advierte el propio
-documento (los respawns cambian el culling).
+- Tests: `src/game/__tests__/spriteDetail.test.ts` cubre el reparto de filas, el
+  tope de DPR, el umbral de detalle y el grosor del contorno.
+- `pnpm test`, `pnpm check` y `pnpm build` en verde.
+- Draw calls: leer `app.stats.drawCalls.total` con el mismo mapa, número de
+  vistas y cámara inicial (los respawns y la niebla cambian el culling, así que
+  hay que comparar la misma ventana de tiempo).
+- Capturas 1 / 4 / 8 vistas para comprobar que el contorno conserva color y
+  grosor y que no aparecen motas fuera de la silueta (síntoma de taps que leen
+  el frame vecino).
 
 ---
 
@@ -803,7 +833,9 @@ problemas con datos.
 4. **Quitar blur del HUD en partida y medir composición**.
 5. **Amortizar visibilidad y conocimiento de objetos** - **hecho** (20 Hz con
    eventos inmediatos y conocimiento de objetos por índice).
-6. **Sombras instanciadas y LOD de contornos en viewports pequeños**.
+6. **Sombras instanciadas y LOD de contornos en viewports pequeños** -
+   **hecho** (una instancia de sombra por vista y contorno dentro del material
+   del sprite; la silueta se omite solo en pantallas diminutas).
 7. **Bench con `AppStats` + longtasks + CI**.
 8. **Pre-bake de suelos y `codeSplitting`**.
 

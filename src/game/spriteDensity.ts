@@ -13,7 +13,7 @@
  */
 
 import { CONFIG, DEG } from './config';
-import { computeSplitLayout, matchPixelRatio } from './multiplayer';
+import { viewportHeightPx } from './multiplayer';
 
 /** Escala mínima: por debajo de ×1 no hay nada que recortar. */
 const MIN_SCALE = 1;
@@ -49,9 +49,10 @@ export function spriteDensityScale(input: SpriteDensityInput): number {
     return maxScale;
   }
   const views = Math.max(1, Math.min(8, Math.round(input.humanCount) || 1));
-  const rowHeight = computeSplitLayout(views)[0]?.h ?? 1;
-  const ratio = matchPixelRatio(input.devicePixelRatio, views);
-  const viewportPx = Math.max(1, input.cssHeight * ratio * rowHeight);
+  const viewportPx = Math.max(
+    1,
+    viewportHeightPx(input.cssHeight, input.devicePixelRatio, views)
+  );
   const distance =
     CONFIG.camera.distance * (views > 2 ? CONFIG.camera.splitDistanceScale : 1);
 

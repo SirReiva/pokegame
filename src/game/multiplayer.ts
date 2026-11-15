@@ -296,6 +296,25 @@ export function matchPixelRatio(
   return Math.min(devicePixelRatio || 1, cap);
 }
 
+/**
+ * Alto real de cada viewport de una partida, en píxeles de dispositivo.
+ *
+ * Lo usan la densidad de las hojas de sprite y el nivel de detalle (contorno y
+ * silueta): si divergieran, una vista podría pedir texturas para un tamaño que
+ * no es el suyo. Devuelve `0` cuando no hay una altura fiable (SSR, canvas
+ * oculto) para que cada consumidor decida su valor por defecto.
+ */
+export function viewportHeightPx(
+  cssHeight: number,
+  devicePixelRatio: number,
+  humanCount: number
+): number {
+  if (!(cssHeight > 0) || !Number.isFinite(cssHeight)) return 0;
+  const views = Math.max(1, Math.min(MAX_PLAYERS, Math.round(humanCount) || 1));
+  const rowHeight = computeSplitLayout(views)[0]?.h ?? 1;
+  return cssHeight * matchPixelRatio(devicePixelRatio, views) * rowHeight;
+}
+
 /** Estilo CSS de un viewport (origen arriba-izquierda). */
 export function splitRectToStyle(rect: SplitRect): {
   left: string;

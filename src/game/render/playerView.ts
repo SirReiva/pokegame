@@ -10,18 +10,25 @@ import type { Actor } from '../actor';
 import type { CameraRig } from '../camera';
 import type { HealthBarArt } from '../healthBar';
 import type { SplitRect } from '../multiplayer';
+import type { ActorShadowBatch } from './actorShadows';
 
 export interface PlayerView {
   readonly camera: CameraRig;
   readonly copies: Actor[];
   readonly bar: HealthBarArt;
   readonly viewport: SplitRect;
+  /**
+   * Lote de sombras del viewport. Solo lo tienen las vistas humanas: los bots
+   * no dibujan su propia pantalla.
+   */
+  readonly shadowBatch: ActorShadowBatch | null;
 }
 
 export function createPlayerView(
   camera: CameraRig,
   bar: HealthBarArt,
-  viewport: SplitRect
+  viewport: SplitRect,
+  shadowBatch: ActorShadowBatch | null = null
 ): PlayerView {
-  return { camera, copies: [], bar, viewport };
+  return { camera, copies: [], bar, viewport, shadowBatch };
 }
