@@ -444,8 +444,10 @@ silueta, contorno y sombra) más el anillo del dueño.
    compartido de sombra y un `VertexBuffer` dinámico de 8 matrices. Los actores
    escriben su posición en una ranura; `syncMatchView` compacta las visibles y
    sube el buffer una vez por vista. `instancingCount` decide cuántas se dibujan
-   y el nodo del lote se coloca en el centro de la tanda para que el orden de
-   transparencias no lo mande al origen del mapa.
+   y el lote recibe una `aabb` que envuelve sus instancias para que el orden de
+   transparencias no las mande al origen del mapa. El nodo se queda en el origen
+   porque PlayCanvas calcula `matrix_model * instancia`: moverlo desplazaría
+   otra vez todas las sombras.
 2. **Contorno dentro del material del sprite** (`src/game/spriteOutline.ts`). Se
    sustituyen los chunks `alphaTestPS` y `emissivePS` por versiones que dilatan
    el alfa con 8 muestras vecinas y tiñen solo los píxeles que el cuerpo habría

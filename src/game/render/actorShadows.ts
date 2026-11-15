@@ -65,6 +65,12 @@ export class ActorShadowBatch {
   private readonly entity: pc.Entity;
   private readonly slots: SlotState[] = [];
   private readonly capacity: number;
+  /**
+   * Caja que envuelve las sombras activas. PlayCanvas ordena las transparencias
+   * por `aabb.center`, y el nodo del lote se queda en el origen (su matriz se
+   * multiplica por la de cada instancia).
+   */
+  private readonly bounds = new pc.BoundingBox();
   private dirty = true;
 
   constructor(
@@ -184,15 +190,17 @@ export class ActorShadowBatch {
     if (count === 0) return;
 
     this.buffer.setData(this.data);
-    // El nodo se coloca en el centro de la tanda: las matrices de instancia son
-    // absolutas, pero PlayCanvas ordena las transparencias por la posición del
-    // nodo. Sin esto, todas las sombras se ordenarían como si estuvieran en el
-    // origen del mapa y podrían colarse por delante del agua.
-    this.entity.setPosition(
-      (minX + maxX) * 0.5,
-      0,
-      (minZ + maxZ) * 0.5
+    // La malla y la matriz del nodo se quedan en el origen: PlayCanvas calcula
+    // `matrix_model * instancia`, así que mover el nodo desplazaría otra vez
+    // todas las sombras. Para que el orden de transparencias no las mande al
+    // origen del mapa se le da al lote una caja que envuelve sus instancias.
+    this.bounds.center.set((minX + maxX) * 0.5, 0, (minZ + maxZ) * 0.5);
+    this.bounds.halfExtents.set(
+      (maxX - minX) * 0.5 + 1,
+      0.5,
+      (maxZ - minZ) * 0.5 + 1
     );
+    this.instance.aabb = this.bounds;
   }
 
   destroy(): void {
