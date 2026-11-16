@@ -10,7 +10,7 @@
 import { performance } from 'node:perf_hooks';
 import { decorateDamage } from '../src/game/combat.ts';
 import { aoeContains } from '../src/game/aoeGeometry.ts';
-import { buildBotHazards } from '../src/game/ai/hazards.ts';
+import { buildBotHazards, createBotHazardBuffer } from '../src/game/ai/hazards.ts';
 import { normalizeModeSettings } from '../src/game/modes.ts';
 import { refreshCombatVisibility } from '../src/game/sim/visibility.ts';
 
@@ -73,6 +73,11 @@ const aoes = Array.from({ length: 20 }, (_, i) => ({
 
 bench('buildBotHazards (100+20)', 20_000, () =>
   buildBotHazards(projectiles, aoes)
+);
+
+const hazardBuffer = createBotHazardBuffer();
+bench('buildBotHazards con buffer (100+20)', 20_000, () =>
+  buildBotHazards(projectiles, aoes, hazardBuffer)
 );
 
 bench('normalizeModeSettings', 200_000, () =>

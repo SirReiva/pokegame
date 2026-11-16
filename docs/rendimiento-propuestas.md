@@ -663,30 +663,74 @@ comparar FPS, draw calls y memoria.
 
 ## 2.6 Micro-GC en simulación
 
-### Qué pasa hoy
+> **Estado (noviembre de 2026): implementado.** `visibleEnemies` se vacía con
+> `length = 0` en vez de crear un array por paso; `buildBotHazards()` acepta un
+> `BotHazardBuffer` que reescribe el array y recicla los objetos de peligro; y
+> `simulateStep()` reutiliza cuatro `MutableBotWorldView` y pide
+> `getBotObjective()` una sola vez por paso. Cubierto por
+> `src/game/ai/__tests__/hazards.test.ts`. Queda pendiente el resto de
+> `filter()` por paso y los arrays de `navHazards()`.
 
-Aunque el bucle principal está muy limpio, quedan allocations por paso:
+### Qué pasaba antes
 
-- `this.visibleEnemies = []` en `updateTarget` (`src/game/bot.ts:1251`).
-- `buildBotHazards()` devuelve un array nuevo por paso
-  (`src/game/ai/hazards.ts:13-51`).
-- `src/game/game.ts:2215-2236` crea `botViews` con cuatro objetos por paso.
+Aunque el bucle principal está muy limpio, quedaban allocations por paso:
+
+- `updateTarget()` hacía `this.visibleEnemies = []` en cada paso de cada bot
+  (`src/game/bot.ts`).
+- `buildBotHazards()` devolvía un array nuevo y asignaba un objeto por
+  proyectil y por área persistente, en cada paso (`src/game/ai/hazards.ts`).
+- `simulateStep()` creaba el registro `botViews` y cuatro objetos
+  `BotWorldView` por paso, y llamaba cuatro veces a `getBotObjective()`
+  (`src/game/game.ts`).
 
 ### Por qué cuesta
 
-A 60 Hz con 7 bots son cientos de objetos pequeños por segundo. No es el cuello de
-botella, pero contribuye a GC y a picos de frame en partidas largas.
+A 60 Hz con 7 bots son cientos de objetos pequeños por segundo: el array y los
+peligros de cada paso, la lista de enemigos visibles de cada bot y las cuatro
+vistas de equipo. No es el cuello de botella, pero alimenta el GC y produce
+picos de frame en partidas largas, sobre todo cuando coinciden con ráfagas de
+proyectiles.
 
-### Qué haría
+### Qué se cambió
 
-Reutilizar arrays/objetos con `length = 0` y buffers por equipo, como ya se hace
-con `fxVisibilityCache` y `pickupSeenScratch`. También se puede cachear
-`getBotObjective()` una vez por paso en lugar de llamarlo cuatro veces.
+1. `this.visibleEnemies.length = 0` en `updateTarget()` y en
+   `resetCombatState()`. Los consumidores (`decision.ts`, los `filter()` de
+   objetivos) leen la lista durante el mismo `update` y no guardan la
+   referencia, así que reutilizarla es seguro.
+2. `BotHazardBuffer` (`src/game/ai/hazards.ts`) agrupa el array visible y un
+   `pool` de objetos. `buildBotHazards(projectiles, activeAoes, buffer)`
+   reescribe los mismos objetos y recorta solo el array visible, de modo que
+   los peligros que sobran se reutilizan en el siguiente pico. Sin buffer, la
+   función sigue creando un array nuevo, como antes.
+3. `Game` guarda `botWorldViews` (cuatro objetos con campos reasignables,
+   `MutableBotWorldView` en `src/game/ai/types.ts`) y `botHazards`. En cada
+   paso solo actualiza `visibleSlots`, `atmosphere` y `objective`, y calcula la
+   zona objetivo una vez para los cuatro equipos.
 
 ### Impacto
 
-Bajo, pero barato y alineado con el resto del código. Lo dejaría para una limpieza
-posterior a los puntos grandes.
+Bajo en ms, pero constante: desaparecen el array de enemigos por bot, el array
+y los objetos de peligros, el registro de vistas y tres de las cuatro consultas
+al modo. En una partida de 5 minutos con 7 bots se evitan del orden de
+**cientos de miles de objetos pequeños**, lo que reduce la frecuencia de GC y
+los picos que se notaban en ráfagas de proyectiles. En el bench sintético
+(`pnpm bench`, 100 proyectiles + 20 áreas), construir los peligros con buffer
+pasa de ~140 000 a ~225 000 llamadas por segundo.
+
+### Qué queda pendiente
+
+- Los `visibleEnemies.filter(...)` de `bot.ts` y `decision.ts`, que siguen
+  creando un array por llamada; se pueden escribir en buffers por bot.
+- `navHazards()` asigna un `NavHazard[]` y un objeto por disco de cono en cada
+  consulta; es candidato a un scratch reutilizable como el de peligros.
+
+### Cómo verificarlo
+
+Los tests de `hazards.test.ts` comprueban identidad de array y de objetos,
+recorte del array visible, conservación del pool y cambio de `kind` sin datos
+activos. Para el resto, Chrome DevTools → Memory → Allocation instrumentation
+con 8 bots y una lluvia de proyectiles: el número de objetos por paso debe caer
+sin mover `app.stats.cpuUpdateTime`.
 
 ---
 

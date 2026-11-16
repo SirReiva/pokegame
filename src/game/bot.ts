@@ -914,7 +914,7 @@ export class BotController {
     this.targetMatchupDefense = 1;
     this.engageTarget = true;
     this.visibleTimer = 0;
-    this.visibleEnemies = [];
+    this.visibleEnemies.length = 0;
     this.threat = null;
     this.hazards = NO_HAZARDS;
     this.hazardEvasion = null;
@@ -1274,7 +1274,9 @@ export class BotController {
     let immuneBest: MatchPlayerState | null = null;
     let immuneScore = Infinity;
     let immuneDefense = 1;
-    this.visibleEnemies = [];
+    // El array se reutiliza entre pasos: los consumidores lo leen durante este
+    // mismo `update` y no guardan la lista.
+    this.visibleEnemies.length = 0;
     const team = this.squad[self.team];
     const focus = team.focus;
     if (focus.until <= this.clock) focus.slot = null;

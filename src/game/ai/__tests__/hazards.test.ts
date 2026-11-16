@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBotHazards } from '../hazards.ts';
+import { buildBotHazards, createBotHazardBuffer } from '../hazards.ts';
 import { maxHitRadius } from '../../roster.ts';
 import type { SlowSpec } from '../../abilities.ts';
 import type { ActiveAoe, Projectile } from '../../matchState.ts';
@@ -51,4 +51,59 @@ test('buildBotHazards calcula vida restante y radio del área', () => {
   assert.equal(area.ownerTeam, 'blue');
   assert.equal(area.radius, 3 + maxHitRadius());
   assert.equal(area.remaining, 3);
+});
+
+test('buildBotHazards reutiliza el array y los objetos del buffer', () => {
+  const buffer = createBotHazardBuffer();
+  const projectiles = [projectile(40)];
+  const first = buildBotHazards(projectiles, [], buffer);
+  const hazard = first[0];
+
+  assert.equal(first, buffer.hazards);
+
+  projectiles[0].x = 9;
+  const second = buildBotHazards(projectiles, [], buffer);
+
+  // Mismo array y mismo objeto: solo cambian los valores.
+  assert.equal(second, buffer.hazards);
+  assert.equal(second[0], hazard);
+  assert.equal(second[0].x, 9);
+});
+
+test('el pool conserva los objetos aunque el paso tenga menos peligros', () => {
+  const buffer = createBotHazardBuffer();
+  buildBotHazards([projectile(40)], [aoe(40)], buffer);
+  const [first, second] = buffer.hazards;
+  assert.equal(buffer.pool.length, 2);
+
+  buildBotHazards([], [], buffer);
+  assert.equal(buffer.hazards.length, 0);
+  // El pool sigue vivo para el siguiente pico de proyectiles.
+  assert.equal(buffer.pool.length, 2);
+
+  const rebuilt = buildBotHazards([projectile(40), projectile(40)], [], buffer);
+  assert.equal(rebuilt.length, 2);
+  assert.equal(rebuilt[0], first);
+  assert.equal(rebuilt[1], second);
+});
+
+test('un objeto reciclado cambia de tipo sin arrastrar datos activos', () => {
+  const buffer = createBotHazardBuffer();
+  buildBotHazards([], [aoe(40)], buffer);
+  const reused = buffer.hazards[0];
+
+  const [hazard] = buildBotHazards([projectile(40)], [], buffer);
+
+  assert.equal(hazard, reused);
+  assert.equal(hazard.kind, 'projectile');
+  assert.equal(hazard.vx, 6);
+  assert.equal(hazard.remaining, 1);
+});
+
+test('sin buffer cada llamada crea su propio array', () => {
+  const first = buildBotHazards([projectile(40)], []);
+  const second = buildBotHazards([projectile(40)], []);
+
+  assert.notEqual(first, second);
+  assert.notEqual(first[0], second[0]);
 });

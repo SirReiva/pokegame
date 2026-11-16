@@ -39,10 +39,8 @@ import {
   resumeMatchMusic,
   stopMatchMusic
 } from './audio';
-import {
-  BotController,
-  type BotWorldView
-} from './bot';
+import { BotController } from './bot';
+import type { MutableBotWorldView } from './ai/types';
 import { BotNavGrid } from './botNav';
 import { CameraRig } from './camera';
 import {
@@ -110,7 +108,7 @@ import {
 import { syncMatchView } from './render/matchView';
 import { updatePlayerCamera } from './render/playerCamera';
 import type { PlayerView } from './render/playerView';
-import { buildBotHazards } from './ai/hazards';
+import { buildBotHazards, createBotHazardBuffer } from './ai/hazards';
 import { HealthBarOverlay } from './healthBarOverlay';
 import {
   IDLE_INPUT,
@@ -162,6 +160,7 @@ import {
 } from './pickupKnowledge';
 import {
   TEAM_INFO,
+  TEAM_ORDER,
   createTeamRecord,
   facingToCenter,
   type MatchEndResult,
@@ -557,6 +556,19 @@ export class Game {
   private visibleByTeamScratch: Record<Team, Set<number>> = createTeamRecord(
     () => new Set<number>()
   );
+  /**
+   * Vista táctica que recibe cada equipo. Se reutilizan los mismos cuatro
+   * objetos y se reescriben sus campos en cada paso, en vez de asignar un
+   * `BotWorldView` nuevo por equipo y paso.
+   */
+  private readonly botWorldViews: Record<Team, MutableBotWorldView> =
+    createTeamRecord(() => ({
+      visibleSlots: new Set<number>(),
+      atmosphere: 'clear' as const,
+      objective: undefined
+    }));
+  /** Peligros en vuelo compartidos por los bots; se reescriben cada paso. */
+  private readonly botHazards = createBotHazardBuffer();
   /**
    * Paso de simulación actual. La visibilidad de combate se resuelve una vez
    * por paso, no una vez por render: así el segundo paso fijo de un render no
@@ -2280,36 +2292,24 @@ export class Game {
     if (this.matchOver) return;
     // El presupuesto de A* se reparte por paso de simulación.
     this.botNav?.beginFrame();
-    // Vista compacta de lo que ya está en el aire. Se construye por paso y
-    // todos los bots de ambos equipos la comparten: cada uno filtra por equipo.
-    const hazards =
-      this.bots.size > 0
-        ? buildBotHazards(this.projectiles, this.activeAoes)
-        : [];
+    // Vista compacta de lo que ya está en el aire. Se reutiliza el mismo
+    // buffer en cada paso: los bots lo consumen dentro de este `simulateStep`.
+    const hazards = this.botHazards.hazards;
+    if (this.bots.size > 0) {
+      buildBotHazards(this.projectiles, this.activeAoes, this.botHazards);
+    } else {
+      hazards.length = 0;
+    }
     // La visión de equipo viene de la última foto de `refreshCombatVisibility`
     // (final del paso anterior); es la que corresponde a estas posiciones.
-    const botViews: Record<Team, BotWorldView> = {
-      red: {
-        visibleSlots: this.visibleByTeam.red,
-        atmosphere: this.atmosphere,
-        objective: this.gameMode?.getBotObjective() ?? undefined
-      },
-      blue: {
-        visibleSlots: this.visibleByTeam.blue,
-        atmosphere: this.atmosphere,
-        objective: this.gameMode?.getBotObjective() ?? undefined
-      },
-      yellow: {
-        visibleSlots: this.visibleByTeam.yellow,
-        atmosphere: this.atmosphere,
-        objective: this.gameMode?.getBotObjective() ?? undefined
-      },
-      green: {
-        visibleSlots: this.visibleByTeam.green,
-        atmosphere: this.atmosphere,
-        objective: this.gameMode?.getBotObjective() ?? undefined
-      }
-    };
+    // La zona objetivo es la misma para los cuatro equipos: se pide una vez.
+    const objective = this.gameMode?.getBotObjective() ?? undefined;
+    for (const team of TEAM_ORDER) {
+      const view = this.botWorldViews[team];
+      view.visibleSlots = this.visibleByTeam[team];
+      view.atmosphere = this.atmosphere;
+      view.objective = objective;
+    }
 
     for (const player of this.matchPlayers) {
       const bot = player.isBot ? this.bots.get(player.slot) : null;
@@ -2321,7 +2321,7 @@ export class Game {
             this.world.colliders,
             this.pickupKnowledge[player.team],
             hazards,
-            botViews[player.team]
+            this.botWorldViews[player.team]
           )
         : this.inputBuffer.resolve(player, frame, firstStep);
       stepPlayerSystem(this.hosts.player, player, input, stepDt);

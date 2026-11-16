@@ -111,6 +111,15 @@ export interface BotWorldView {
   readonly objective?: { x: number; z: number; radius: number };
 }
 
+/**
+ * `BotWorldView` con campos reasignables. El motor guarda una instancia por
+ * equipo y actualiza sus campos en cada paso, en vez de asignar cuatro objetos
+ * nuevos por paso.
+ */
+export type MutableBotWorldView = {
+  -readonly [K in keyof BotWorldView]: BotWorldView[K];
+};
+
 /** Amenaza inmediata creada por el windup visible de un rival. */
 export interface IncomingThreat {
   source: MatchPlayerState;
