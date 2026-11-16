@@ -487,9 +487,16 @@ jirones. Medido con una vista:
 | Impacto de mandíbula | 10 | **4** |
 | Melee de Planta | 10 | **2** |
 | Melee de Veneno | 10 | **4** |
+| Melee psíquico | 6 | **2** |
+| Melee de arco | 4 | **2** |
+| Melee de garra | 4 | **2** |
 | Mordida de mandíbula | ~22 | **3** |
-| Proyectil eléctrico | 6 | **4** |
-| Proyectil de hojas | 7 | **3** |
+| Proyectil eléctrico | 6 | **3** |
+| Proyectil de hojas | 7 | **2** |
+| Proyectil de fuego | 6 | **3** |
+| Proyectil de veneno | 3 | **2** |
+| Proyectil de roca | 5 | **2** |
+| Proyectil de sombra | 8 | **3** |
 | Proyectil shuriken | 7 | **5** |
 | Área psíquica | 7 | **6** |
 | Área de hielo / Ventisca | 7 | **6** |
@@ -497,6 +504,42 @@ jirones. Medido con una vista:
 
 El proyectil eléctrico reutiliza una única malla de rayo cacheada y dibuja sus
 tres arcos en un lote, así que tampoco genera geometría nueva por casteo.
+
+### Lote con tinte por instancia
+
+`EffectBatch` comparte el material del efecto, así que todas sus instancias
+tienen el mismo color y la misma opacidad. Eso dejaba fuera las capas que mezclan
+tonos en un mismo efecto. `EffectTintBatch`
+(`src/game/render/fx/effectTintBatch.ts`) usa un `ShaderMaterial` propio sin
+iluminación y guarda en el buffer de instancias el **color, el alfa y una
+ventana de desvanecido por instancia**. La animación sigue saliendo del mismo
+banco de `MOTION_*` y de su gemelo WGSL.
+
+Con él se funden:
+
+- las tres esferas del proyectil de fuego (núcleo, halo interior y halo
+  exterior) y sus dos colas de llama texturizada;
+- el núcleo y el halo de los proyectiles de veneno, eléctrico y de hojas;
+- el cuerpo, la estela y los jirones del proyectil de sombra;
+- las cinco ondas psíquicas, los tres o cuatro frentes del arco de golpe y las
+  tres zarpas del melee (estas últimas, además, en una sola malla fundida);
+- el cuerpo, los bultos, las vetas, la espuma, las gotas y la punta del chorro
+  de agua; las lenguas del haz de fuego; las hélices, anillos y plumas de los
+  haces de aire y Planta; y los cristales, anillos y neblina del haz de hielo.
+
+### Haces por lotes
+
+| Haz | Antes | Ahora |
+| --- | ---: | ---: |
+| Chorro de agua | ~50 | **10** |
+| Haz de fuego | 12 | **5** |
+| Haz de aire | ~54 | **5** |
+| Haz de Planta | ~48 | **3** |
+| Haz de hielo | 26 | **5** |
+
+Los haces de aire, Planta y hielo siguen creando su cilindro base con
+`CylinderGeometry` una vez por casteo; el resto de capas ya no instancia
+entidades.
 
 ### Áreas con escombros
 
@@ -510,12 +553,16 @@ dibujan sus dos aros de escarcha en un único lote.
 En melee, las ondas psíquicas, los arcos de golpe y las zarpas comparten la
 geometría de casteos anteriores mediante `cachedArcBand` y `cachedMesh`: ya no
 se reconstruyen cinco mallas de onda, cuatro de arco y tres de zarpa en cada
-golpe.
+golpe. Las tres zarpas se funden además en una sola malla.
 
-Quedan como entidades sueltas las garras y ondas del melee (con geometría ya
-compartida), las marcas de área y la decoración de los proyectiles de fuego,
-roca y veneno. Son efectos de un solo golpe, con pocas mallas y materiales
-distintos que no se pueden fundir sin cambiar su paleta.
+El proyectil de roca se reconstruyó como un único boulder: cuatro fragmentos de
+la misma roca, solapados y con un solo material iluminado, giran en un lote. Su
+estela de polvo nace pegada a la parte trasera y usa una entrada de alfa corta
+para no leerse como un segundo proyectil.
+
+Quedan como entidades sueltas las marcas de área persistentes, la grieta y la
+cresta del haz de roca, y las cuatro piezas del shuriken, que usan mallas y
+materiales distintos.
 
 ## Clima del mundo: `ParticleSystem` → lote analítico — aplicada
 

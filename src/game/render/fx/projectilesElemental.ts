@@ -7,6 +7,7 @@ import {
   MOTION_PROJECTILE_BLADES,
   MOTION_PROJECTILE_EYES,
   MOTION_PROJECTILE_FEATHERS,
+  MOTION_PROJECTILE_ROCK,
   MOTION_PROJECTILE_TRAIL,
   MOTION_PROJECTILE_WISPS,
   MOTION_STATIC
@@ -343,49 +344,83 @@ export function spawnRockProjectile(ctx: FxRuntime, x: number,
     radius: number,
     dirX: number,
     dirZ: number,
-    color: readonly [number, number, number]): EffectHandle {
+    _color: readonly [number, number, number]): EffectHandle {
 const root = new pc.Entity('rock-projectile');
     root.setPosition(x, 0.8, z);
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createRockMaterial(color, 1);
-    const darkMaterial = ctx.createRockMaterial([112, 96, 76], 1);
-    const lightMaterial = ctx.createRockMaterial([214, 194, 158], 1);
-    const spikeMaterial = ctx.createRockMaterial([236, 218, 184], 0.95);
-    const materials = [coreMaterial, darkMaterial, lightMaterial, spikeMaterial];
+    // Un único boulder: cuatro fragmentos de la misma roca, solapados y con el
+    // mismo material. Antes eran cajas de colores distintos separadas, que se
+    // leían como dos proyectiles.
+    const rockMaterial = ctx.createRockMaterial([172, 152, 124], 1);
+    const materials = [rockMaterial];
+    const mainScale = [radius * 2.6, radius * 2.2, radius * 2.8] as const;
+    const rocks: EffectBatchInstance[] = [
+      {
+        anim0: [18, 0, 10, 0],
+        anim1: [150, 190, 230, 0],
+        anim2: [mainScale[0], mainScale[1], mainScale[2], 0]
+      },
+      {
+        x: radius * 0.75,
+        y: radius * 0.15,
+        z: -radius * 0.35,
+        anim0: [40, 20, -15, 0],
+        anim1: [200, -160, 120, 0],
+        anim2: [radius * 1.5, radius * 1.3, radius * 1.4, 0]
+      },
+      {
+        x: -radius * 0.65,
+        y: -radius * 0.1,
+        z: radius * 0.3,
+        anim0: [-25, 60, 30, 0],
+        anim1: [-180, 220, -140, 0],
+        anim2: [radius * 1.3, radius * 1.05, radius * 1.2, 0]
+      },
+      {
+        x: radius * 0.9,
+        y: radius * 0.05,
+        z: radius * 0.55,
+        anim0: [10, 0, -20, 0],
+        anim1: [120, -200, 90, 0],
+        anim2: [radius * 0.9, radius * 0.8, radius * 1.4, 0]
+      }
+    ];
+    const rockBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.rockChunkMesh,
+      material: rockMaterial,
+      instances: rocks,
+      motion: MOTION_PROJECTILE_ROCK,
+      radius
+    });
+    rockBatch.entity.render!.customAabb = new pc.BoundingBox(
+      new pc.Vec3(0, 0, 0),
+      new pc.Vec3(radius * 3.4, radius * 3.2, radius * 3.6)
+    );
 
-    const core = ctx.createEntity(ctx.boxMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 2.2, radius * 1.8, radius * 2.4);
-    core.setLocalEulerAngles(18, 0, 10);
-
-    const chunkA = ctx.createEntity(ctx.boxMesh, [darkMaterial], root);
-    chunkA.setLocalPosition(radius * 0.95, radius * 0.4, -radius * 0.25);
-    chunkA.setLocalScale(radius * 1.3, radius * 1.1, radius * 1.2);
-
-    const chunkB = ctx.createEntity(ctx.boxMesh, [lightMaterial], root);
-    chunkB.setLocalPosition(-radius * 0.85, -radius * 0.3, radius * 0.2);
-    chunkB.setLocalScale(radius * 1.05, radius * 0.85, radius * 1.1);
-
-    const spike = ctx.createEntity(ctx.rockSpikeMesh, [spikeMaterial], root);
-    spike.setLocalPosition(0, 0, radius * 1.1);
-    spike.setLocalScale(radius * 0.9, radius * 1.5, radius * 0.9);
-    spike.setLocalEulerAngles(90, 0, 0);
-
+    // Polvo pegado a la parte trasera del boulder: sin el hueco que dejaba la
+    // entrada del alfa, para que no parezca una segunda roca persiguiéndola.
     ctx.spawnSporeParticles(
       root,
       {
-        extents: [radius * 0.8, radius * 0.8, radius * 0.4],
-        velocity: [-dirX * 1.8, 0.2, -dirZ * 1.8],
-        velocityEnd: [-dirX * 3.4, 0.7, -dirZ * 3.4],
-        sizeStart: radius * 1.1,
-        sizeMid: radius * 1.9,
-        sizeEnd: radius * 0.5,
-        lifetime: 0.45,
-        rate: 0.04,
+        z: -radius * 1.1,
+        extents: [radius * 0.4, radius * 0.4, radius * 0.2],
+        velocity: [-dirX * 1.0, 0.1, -dirZ * 1.0],
+        velocityEnd: [-dirX * 2.0, 0.4, -dirZ * 2.0],
+        sizeStart: radius * 0.45,
+        sizeMid: radius * 0.8,
+        sizeEnd: radius * 0.2,
+        lifetime: 0.34,
+        rate: 0.025,
         numParticles: 40,
         blendType: pc.BLEND_NORMAL,
-        worldSpaceTrail: true
+        worldSpaceTrail: true,
+        fadeIn: 0.02,
+        fadeOut: 0.6,
+        opacity: 0.55
       },
       [176, 158, 130],
       ctx.dustTexture
@@ -397,21 +432,7 @@ const root = new pc.Entity('rock-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        core.setLocalEulerAngles(18 + time * 150, time * 190, 10 + time * 230);
-        chunkA.setLocalEulerAngles(time * 260, 24 + time * 180, time * 140);
-        chunkB.setLocalEulerAngles(64 - time * 220, time * 150, time * 300);
-        const pulse = 0.92 + Math.sin(time * 18) * 0.08;
-        core.setLocalScale(
-          radius * 2.2 * pulse,
-          radius * 1.8 * pulse,
-          radius * 2.4 * pulse
-        );
-        spike.setLocalEulerAngles(90, 0, Math.sin(time * 12) * 18);
-        coreMaterial.opacity = 0.96;
-        darkMaterial.opacity = 0.94;
-        lightMaterial.opacity = 0.92;
-        spikeMaterial.opacity = 0.8 + Math.sin(time * 15) * 0.1;
-        for (const material of materials) material.update();
+        rockBatch.setTime(time);
       }
     };
     visual.update(0);

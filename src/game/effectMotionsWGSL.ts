@@ -1303,6 +1303,8 @@ export * from './effectMotionsProjectilesWGSL';
 export * from './effectMotionsImpactWGSL';
 /** Movimientos de áreas con muchos escombros, separados por tamaño. */
 export * from './effectMotionsAoeWGSL';
+/** Movimientos del lote con tinte por instancia. */
+export * from './effectMotionsTintWGSL';
 
 /** Púas de roca que emergen del suelo en el haz de Roca. */
 export const MOTION_ROCK_BEAM_SPIKES_WGSL = `

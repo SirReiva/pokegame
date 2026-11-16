@@ -1,8 +1,10 @@
 import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import { DEG } from '../../config';
-import { EffectBatch, MOTION_ROCK_BEAM_SPIKES } from '../../effectBatch';
+import { EffectBatch, MOTION_ICE_BEAM_CRYSTALS, MOTION_ROCK_BEAM_SPIKES, MOTION_TINT_BEAM_BULGES, MOTION_TINT_BEAM_CYLINDER, MOTION_TINT_BEAM_DROPS, MOTION_TINT_BEAM_FEATHERS, MOTION_TINT_BEAM_FIRE_LICKS, MOTION_TINT_BEAM_FOAM, MOTION_TINT_BEAM_LAYER, MOTION_TINT_BEAM_LEAVES, MOTION_TINT_BEAM_MIST, MOTION_TINT_BEAM_RIBBONS, MOTION_TINT_BEAM_RINGS, MOTION_TINT_BEAM_STREAKS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
+import { EffectTintBatch } from './effectTintBatch';
+import type { TintEffectInstance } from './effectTintBatch';
 import { tintColor } from './fxGeometry';
 
 /**
@@ -26,96 +28,129 @@ const dx = x2 - x1;
     root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const mistMaterial = ctx.createWaterMaterial(color, 0.18);
-    const bodyMaterial = ctx.createWaterMaterial(color, 0.42);
-    const coreMaterial = ctx.createWaterMaterial([236, 252, 255], 0.95);
-    const foamMaterial = ctx.createWaterMaterial([216, 245, 255], 0.55);
-    const streakMaterial = ctx.createWaterMaterial([250, 255, 255], 0.9);
+    const coreColor: [number, number, number] = [236, 252, 255];
+    const foamColor: [number, number, number] = [216, 245, 255];
+    const streakColor: [number, number, number] = [250, 255, 255];
+
+    const coreMaterial = ctx.createWaterMaterial(coreColor, 0.95);
     const ringMaterial = ctx.createWaterMaterial([200, 240, 255], 0.7);
-    const materials = [
-      mistMaterial,
-      bodyMaterial,
-      coreMaterial,
-      foamMaterial,
-      streakMaterial,
-      ringMaterial
-    ];
+    const materials = [coreMaterial, ringMaterial];
 
     const mistWidth = Math.max(0.14, width * 3.2);
     const bodyWidth = Math.max(0.1, width * 1.8);
     const coreWidth = Math.max(0.06, width * 0.9);
+    const reveal = 0.09;
+    const lengthHalf = length / 2;
+    const lateralHalf = mistWidth * 1.5 + width * 3;
 
-    const sheath = ctx.createEntity(ctx.sphereMesh, [mistMaterial], root);
-    const body = ctx.createEntity(ctx.sphereMesh, [bodyMaterial], root);
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
+    // Capas del chorro: neblina, cuerpo y núcleo comparten la malla esférica.
+    // Antes eran tres entidades con materiales distintos.
+    const layerBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        { color, alpha: 0.16, anim0: [mistWidth, 0, 0, 0] },
+        { color, alpha: 0.4, anim0: [bodyWidth, 0, 0, 0] },
+        { color: coreColor, alpha: 0.92, anim0: [coreWidth, 0, 0, 0] }
+      ],
+      motion: MOTION_TINT_BEAM_LAYER,
+      radius: length,
+      life: 0.55,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     // Bultos que viajan por el chorro: rompen la silueta del tubo y transmiten
     // la presión del agua.
-    const bulges: {
-      entity: pc.Entity;
-      phase: number;
-      speed: number;
-      wobble: number;
-      size: number;
-    }[] = [];
+    const bulgeInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 12; index++) {
-      const bulge = ctx.createEntity(ctx.sphereMesh, [bodyMaterial], root);
       const size = bodyWidth * (0.55 + Math.random() * 0.3);
-      bulge.setLocalScale(size, size, size * 1.6);
-      bulges.push({
-        entity: bulge,
-        phase: Math.random(),
-        speed: 2.1 + Math.random() * 1.1,
-        wobble: 14 + Math.random() * 10,
-        size
+      bulgeInstances.push({
+        color,
+        alpha: 0.4,
+        anim0: [
+          Math.random(),
+          2.1 + Math.random() * 1.1,
+          14 + Math.random() * 10,
+          size
+        ],
+        anim1: [coreWidth, 0, 0, 0]
       });
     }
+    const bulgeBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: bulgeInstances,
+      motion: MOTION_TINT_BEAM_BULGES,
+      radius: length,
+      life: 0.55,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     // Vetas blancas rápidas dentro del núcleo, como agua a toda velocidad.
-    const streaks: {
-      entity: pc.Entity;
-      phase: number;
-      speed: number;
-      x: number;
-      y: number;
-      length: number;
-    }[] = [];
+    const streakInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 14; index++) {
-      const streak = ctx.createEntity(ctx.boxMesh, [streakMaterial], root);
-      streaks.push({
-        entity: streak,
-        phase: Math.random(),
-        speed: 4.2 + Math.random() * 2.2,
-        x: (Math.random() - 0.5) * coreWidth * 0.9,
-        y: (Math.random() - 0.5) * coreWidth * 0.7,
-        length: length * (0.06 + Math.random() * 0.06)
+      streakInstances.push({
+        color: streakColor,
+        alpha: 0.82,
+        anim0: [
+          Math.random(),
+          4.2 + Math.random() * 2.2,
+          (Math.random() - 0.5) * coreWidth * 0.9,
+          (Math.random() - 0.5) * coreWidth * 0.7
+        ],
+        anim1: [width, length * (0.06 + Math.random() * 0.06), 0, 0]
       });
     }
+    const streakBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      instances: streakInstances,
+      motion: MOTION_TINT_BEAM_STREAKS,
+      radius: length,
+      life: 0.55,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     // Espuma en la boca del lanzador.
-    const foam: {
-      entity: pc.Entity;
-      size: number;
-      phase: number;
-      z: number;
-    }[] = [];
+    const foamInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 4; index++) {
-      const bubble = ctx.createEntity(ctx.sphereMesh, [foamMaterial], root);
-      const size = bodyWidth * (0.5 + Math.random() * 0.45);
-      bubble.setLocalScale(size, size, size);
-      foam.push({
-        entity: bubble,
-        size,
-        phase: Math.random() * Math.PI * 2,
-        z: 0.02 + Math.random() * 0.35
+      foamInstances.push({
+        color: foamColor,
+        alpha: 0.5,
+        anim0: [
+          bodyWidth * (0.5 + Math.random() * 0.45),
+          Math.random() * Math.PI * 2,
+          0.02 + Math.random() * 0.35,
+          0
+        ],
+        anim1: [bodyWidth, 0, 0, 0]
       });
     }
+    const foamBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: foamInstances,
+      motion: MOTION_TINT_BEAM_FOAM,
+      radius: length,
+      life: 0.55,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     // Salpicadura en la punta: casquete, dos ondas y gotas.
     const cap = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    cap.setLocalPosition(0, 0, length);
     const capScale = Math.max(0.12, width * 1.7);
-    cap.setLocalScale(capScale, capScale, capScale);
 
     const splashRings: pc.Entity[] = [];
     for (let index = 0; index < 2; index++) {
@@ -124,29 +159,37 @@ const dx = x2 - x1;
       splashRings.push(ring);
     }
 
-    const drops: {
-      entity: pc.Entity;
-      angle: number;
-      distance: number;
-      rise: number;
-      size: number;
-      phase: number;
-      speed: number;
-    }[] = [];
+    const dropInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 12; index++) {
-      const drop = ctx.createEntity(ctx.sphereMesh, [foamMaterial], root);
-      const size = width * (0.12 + Math.random() * 0.14);
-      drop.setLocalScale(size, size, size);
-      drops.push({
-        entity: drop,
-        angle: Math.random() * Math.PI * 2,
-        distance: width * (1.4 + Math.random() * 2.6),
-        rise: width * (1 + Math.random() * 2),
-        size,
-        phase: Math.random(),
-        speed: 1.8 + Math.random() * 1.6
+      dropInstances.push({
+        color: foamColor,
+        alpha: 0.5,
+        anim0: [
+          Math.random() * Math.PI * 2,
+          width * (1.4 + Math.random() * 2.6),
+          width * (1 + Math.random() * 2),
+          Math.random()
+        ],
+        anim1: [
+          width * (0.12 + Math.random() * 0.14),
+          1.8 + Math.random() * 1.6,
+          0,
+          0
+        ]
       });
     }
+    const dropBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: dropInstances,
+      motion: MOTION_TINT_BEAM_DROPS,
+      radius: length,
+      life: 0.55,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     // Rocío localizado en la boca y en la punta: el chorro no lleva una niebla
     // continua en medio, solo salpicadura donde nace y donde impacta.
@@ -201,58 +244,25 @@ const dx = x2 - x1;
     let time = 0;
     ctx.addEffect(root, materials, 0.55, (_t, dt) => {
       time += dt;
+      const fade = 1 - Math.max(0, (time - 0.3) / 0.25);
       // El chorro sale del lanzador en el primer tramo del efecto.
-      const advance = Math.min(1, time / 0.09);
-      const reveal = 1 - (1 - advance) * (1 - advance);
-      const visibleLength = Math.max(0.04, length * reveal);
+      const advance = Math.min(1, time / reveal);
+      const revealEase = 1 - (1 - advance) * (1 - advance);
+      const visibleLength = Math.max(0.04, length * revealEase);
 
-      sheath.setLocalPosition(0, 0, visibleLength / 2);
-      sheath.setLocalScale(mistWidth, mistWidth, visibleLength);
-      body.setLocalPosition(0, 0, visibleLength / 2);
-      body.setLocalScale(bodyWidth, bodyWidth, visibleLength);
-      core.setLocalPosition(0, 0, visibleLength / 2);
-      core.setLocalScale(coreWidth, coreWidth, visibleLength);
+      layerBatch.setTime(time);
+      layerBatch.setOpacity(fade);
+      bulgeBatch.setTime(time);
+      bulgeBatch.setOpacity(fade);
+      streakBatch.setTime(time);
+      streakBatch.setOpacity(fade);
+      foamBatch.setTime(time);
+      foamBatch.setOpacity(fade);
+      dropBatch.setTime(time);
+      dropBatch.setOpacity(fade);
 
-      for (const bulge of bulges) {
-        const phase = (bulge.phase + time * bulge.speed) % 1;
-        const wobble = Math.sin(time * bulge.wobble + bulge.phase * 6.28);
-        const size = bulge.size * (0.82 + wobble * 0.22);
-        bulge.entity.setLocalPosition(
-          Math.sin(time * 13 + bulge.phase * 6.28) * coreWidth * 0.7,
-          Math.cos(time * 11 + bulge.phase * 6.28) * coreWidth * 0.5,
-          phase * visibleLength
-        );
-        bulge.entity.setLocalScale(size, size, size * 1.6);
-      }
-
-      for (const streak of streaks) {
-        const phase = (streak.phase + time * streak.speed) % 1;
-        streak.entity.setLocalPosition(
-          streak.x,
-          streak.y,
-          phase * visibleLength
-        );
-        streak.entity.setLocalScale(
-          Math.max(0.02, width * 0.09),
-          Math.max(0.02, width * 0.09),
-          Math.max(0.04, streak.length)
-        );
-      }
-
-      for (const bubble of foam) {
-        const pulse = 0.8 + Math.sin(time * 34 + bubble.phase) * 0.28;
-        const size = bubble.size * pulse;
-        bubble.entity.setLocalPosition(
-          Math.sin(time * 18 + bubble.phase) * bodyWidth * 0.28,
-          Math.cos(time * 16 + bubble.phase) * bodyWidth * 0.22,
-          bubble.z * reveal
-        );
-        bubble.entity.setLocalScale(size, size, size);
-      }
-
-      const tipZ = visibleLength;
       const capPulse = 0.9 + Math.sin(time * 46) * 0.18;
-      cap.setLocalPosition(0, 0, tipZ);
+      cap.setLocalPosition(0, 0, visibleLength);
       cap.setLocalScale(
         capScale * capPulse,
         capScale * capPulse,
@@ -262,37 +272,15 @@ const dx = x2 - x1;
       splashRings.forEach((ring, index) => {
         const phase = (time * 2.6 + index * 0.5) % 1;
         const scale = Math.max(0.08, width * (1.6 + phase * 5));
-        ring.setLocalPosition(0, 0, tipZ);
+        ring.setLocalPosition(0, 0, visibleLength);
         ring.setLocalScale(scale, scale, scale);
       });
 
-      for (const drop of drops) {
-        const phase = (drop.phase + time * drop.speed) % 1;
-        const distance = drop.distance * phase;
-        drop.entity.setLocalPosition(
-          Math.cos(drop.angle) * distance,
-          Math.sin(phase * Math.PI) * drop.rise,
-          tipZ + Math.sin(drop.angle) * distance * 0.55
-        );
-        const fade = Math.max(0, 1 - phase);
-        drop.entity.setLocalScale(
-          drop.size * fade,
-          drop.size * fade,
-          drop.size * fade
-        );
-      }
-
-      const fade = 1 - Math.max(0, (time - 0.3) / 0.25);
-      mistMaterial.opacity = 0.16 * fade;
-      bodyMaterial.opacity = 0.4 * fade;
       coreMaterial.opacity = 0.92 * fade;
-      foamMaterial.opacity = 0.5 * fade;
-      streakMaterial.opacity = 0.82 * fade;
       ringMaterial.opacity =
         0.62 * fade * Math.max(0, 1 - ((time * 2.6) % 1));
     });
 }
-
 /**
    * Chorro de fuego: partículas orientadas a cámara a lo largo del recorrido,
    * lenguas texturizadas que les dan silueta y un núcleo cálido. Avanza muy
@@ -302,7 +290,7 @@ export function spawnFireBeam(ctx: FxRuntime, x1: number,
     z1: number,
     x2: number,
     z2: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     width: number): void {
 const dx = x2 - x1;
     const dz = z2 - z1;
@@ -313,10 +301,8 @@ const dx = x2 - x1;
     ctx.app.root.addChild(root);
 
     const coreMaterial = ctx.createMaterial([255, 226, 170], 0.5);
-    const flameMaterial = ctx.createFlameMaterial([255, 255, 255], 0.5);
     const hotMaterial = ctx.createFlameMaterial([255, 242, 200], 0.55);
-    const glowMaterial = ctx.createMaterial(color, 0.16);
-    const materials = [coreMaterial, flameMaterial, hotMaterial, glowMaterial];
+    const materials = [coreMaterial, hotMaterial];
 
     ctx.spawnFlameParticles(root, {
       x: 0,
@@ -343,90 +329,100 @@ const dx = x2 - x1;
       6.5
     );
 
+    const reveal = 0.18;
+    const lengthHalf = length / 2;
+    const lateralHalf = width * 6;
     const coreWidth = Math.max(0.04, width * 0.28);
     const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
 
     // Lenguas tumbadas que se solapan a lo largo del chorro: son las que dan
-    // la silueta irregular de fuego; el núcleo brillante solo las une.
-    const licks: {
-      entity: pc.Entity;
-      baseWidth: number;
-      baseHeight: number;
-      phase: number;
-      offsetZ: number;
-      offsetX: number;
-      offsetY: number;
-      pitch: number;
-      yaw: number;
-      roll: number;
-      vertical: boolean;
-    }[] = [];
+    // la silueta irregular de fuego; el núcleo brillante solo las une. Las
+    // llamas normales y las calientes se dibujan en dos lotes con tinte.
+    const flameInstances: TintEffectInstance[] = [];
+    const hotInstances: TintEffectInstance[] = [];
     const horizontalCount = Math.min(
       22,
       Math.max(6, Math.round(length / 0.8))
     );
     for (let index = 0; index < horizontalCount; index++) {
       const spread = ((index * 37) % 10) / 10;
-      const baseWidth = width * (2.2 + spread * 1.5);
-      const baseHeight = width * (4.2 + spread * 3.2);
       const pitch = index % 2 === 0 ? -90 : -72;
-      // Yaw pequeño: las lenguas deben alargarse a lo largo del chorro, no
-      // cruzándose en cualquier dirección.
       const yaw = ((index * 53) % 30) - 15;
       const roll = ((index * 71) % 90) - 45;
-      const entity = ctx.createFlame(root, index % 3 === 0 ? hotMaterial : flameMaterial, {
-        x: 0,
-        y: 0,
-        z: 0,
-        width: baseWidth,
-        height: baseHeight,
-        pitch,
-        yaw,
-        roll
-      });
-      licks.push({
-        entity,
-        baseWidth,
-        baseHeight,
-        phase: index * 1.7,
-        offsetZ: ((index + 0.5) / horizontalCount) * length,
-        offsetX: Math.cos(index * 1.7) * width * 0.7,
-        offsetY: Math.sin(index * 2.3) * width * 0.55,
-        pitch,
-        yaw,
-        roll,
-        vertical: false
-      });
+      const instance: TintEffectInstance = {
+        color: index % 3 === 0 ? [255, 242, 200] : [255, 255, 255],
+        alpha: 0.28 + Math.random() * 0.16,
+        anim0: [
+          index * 1.7,
+          ((index + 0.5) / horizontalCount) * length,
+          Math.cos(index * 1.7) * width * 0.7,
+          Math.sin(index * 2.3) * width * 0.55
+        ],
+        anim1: [
+          width * (2.2 + spread * 1.5),
+          width * (4.2 + spread * 3.2),
+          pitch,
+          yaw
+        ],
+        anim2: [roll, 0, 0, 0]
+      };
+      if (index % 3 === 0) hotInstances.push(instance);
+      else flameInstances.push(instance);
     }
 
     // Algunas llamas verticales sobre el chorro rompen la línea recta.
     const verticalCount = Math.min(8, Math.max(3, Math.round(length / 2.2)));
     for (let index = 0; index < verticalCount; index++) {
       const spread = ((index * 29) % 10) / 10;
-      const baseWidth = width * (1.8 + spread * 1.4);
-      const baseHeight = width * (3.4 + spread * 2.6);
-      const yaw = (index * 67) % 360;
-      licks.push({
-        entity: ctx.createFlame(root, flameMaterial, {
-          x: 0,
-          y: 0,
-          z: 0,
-          width: baseWidth,
-          height: baseHeight,
-          yaw
-        }),
-        baseWidth,
-        baseHeight,
-        phase: index * 2.3 + 0.8,
-        offsetZ: ((index + 0.5) / verticalCount) * length,
-        offsetX: Math.cos(index * 2.1) * width * 1.1,
-        offsetY: 0,
-        pitch: 0,
-        yaw,
-        roll: 0,
-        vertical: true
+      flameInstances.push({
+        color: [255, 255, 255],
+        alpha: 0.28 + Math.random() * 0.16,
+        anim0: [
+          index * 2.3 + 0.8,
+          ((index + 0.5) / verticalCount) * length,
+          Math.cos(index * 2.1) * width * 1.1,
+          0
+        ],
+        anim1: [
+          width * (1.8 + spread * 1.4),
+          width * (3.4 + spread * 2.6),
+          0,
+          (index * 67) % 360
+        ],
+        anim2: [0, 1, 0, 0]
       });
     }
+
+    const flameBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.flameMesh,
+      instances: flameInstances,
+      motion: MOTION_TINT_BEAM_FIRE_LICKS,
+      radius: length,
+      life: 0.45,
+      params: [reveal, width, 0, 0],
+      additive: true,
+      texture: ctx.flameTexture,
+      intensity: 1.12,
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, width * 8, lengthHalf + width * 6]
+    });
+    const hotBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.flameMesh,
+      instances: hotInstances,
+      motion: MOTION_TINT_BEAM_FIRE_LICKS,
+      radius: length,
+      life: 0.45,
+      params: [reveal, width, 0, 0],
+      additive: true,
+      texture: ctx.flameTexture,
+      intensity: 1.12,
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, width * 8, lengthHalf + width * 6]
+    });
 
     const tipWidth = width * 4;
     const tipHeight = width * 8;
@@ -442,9 +438,8 @@ const dx = x2 - x1;
     let time = 0;
     const animate = (t: number, dt: number): void => {
       time += dt;
-      // El chorro sale muy rápido: en el primer 18 % ya está casi entero.
-      const reveal = Math.min(1, t / 0.18);
-      const revealEase = 1 - (1 - reveal) * (1 - reveal);
+      const revealValue = Math.min(1, t / reveal);
+      const revealEase = 1 - (1 - revealValue) * (1 - revealValue);
       const visibleLength = length * revealEase;
 
       core.setLocalPosition(0, 0, visibleLength / 2);
@@ -454,37 +449,11 @@ const dx = x2 - x1;
         Math.max(0.02, visibleLength)
       );
 
-      for (const lick of licks) {
-        if (lick.offsetZ > visibleLength) {
-          lick.entity.setLocalScale(0, 0, 0);
-          continue;
-        }
-        const pulse = 0.78 + Math.sin(time * 21 + lick.phase) * 0.24;
-        const stretch = 0.86 + Math.sin(time * 17 + lick.phase * 1.3) * 0.22;
-        const sway = Math.sin(time * 11 + lick.phase) * width * 0.55;
-        const rise = Math.cos(time * 8 + lick.phase) * width * 0.55;
-        const widthNow = lick.baseWidth * pulse;
-        const heightNow = lick.baseHeight * stretch;
-        lick.entity.setLocalPosition(
-          lick.offsetX + sway,
-          lick.offsetY + rise,
-          lick.offsetZ
-        );
-        lick.entity.setLocalScale(widthNow, heightNow, widthNow);
-        if (lick.vertical) {
-          lick.entity.setLocalEulerAngles(
-            0,
-            lick.yaw + Math.sin(time * 6 + lick.phase) * 18,
-            Math.sin(time * 13 + lick.phase) * 8
-          );
-        } else {
-          lick.entity.setLocalEulerAngles(
-            lick.pitch,
-            lick.yaw + Math.sin(time * 9 + lick.phase) * 14,
-            lick.roll + Math.sin(time * 15 + lick.phase) * 12
-          );
-        }
-      }
+      const fade = 1 - Math.max(0, (t - 0.45) / 0.55);
+      flameBatch.setTime(time);
+      flameBatch.setOpacity(fade);
+      hotBatch.setTime(time);
+      hotBatch.setOpacity(fade);
 
       tip.setLocalPosition(0, 0, visibleLength);
       const tipStretch = 0.82 + Math.sin(time * 24) * 0.24;
@@ -497,18 +466,14 @@ const dx = x2 - x1;
       );
       tip.setLocalEulerAngles(-90, 0, Math.sin(time * 18) * 14);
 
-      const fade = 1 - Math.max(0, (t - 0.45) / 0.55);
       coreMaterial.opacity = 0.4 * fade * (0.85 + Math.random() * 0.15);
-      flameMaterial.opacity = (0.28 + Math.random() * 0.16) * fade;
       hotMaterial.opacity = (0.34 + Math.random() * 0.18) * fade;
-      glowMaterial.opacity = 0.14 * fade * (0.7 + Math.random() * 0.3);
       beamLight.light!.intensity =
         1.3 * fade * (0.68 + Math.random() * 0.32);
     };
     ctx.addEffect(root, materials, 0.45, animate);
     animate(0, 0);
 }
-
 /**
    * Haz de aire: columna blanca-cálida con tres hélices de viento que giran en
    * espiral, anillos que viajan hacia la punta y plumas arrastradas. El cuerpo
@@ -528,20 +493,13 @@ const dx = x2 - x1;
     root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const bodyMaterial = ctx.createWaterMaterial(color, 0.24);
-    const coreMaterial = ctx.createWaterMaterial(tintColor(color, 0.9), 0.52);
-    const ribbonMaterial = ctx.createWaterMaterial(tintColor(color, 0.68), 0.48);
-    const hotMaterial = ctx.createMaterial(color, 0.42);
-    const ringMaterial = ctx.createMaterial(tintColor(color, 0.78), 0.42);
-    const featherMaterial = ctx.createLeafMaterial(tintColor(color, 0.52), 0.78);
-    const materials = [
-      bodyMaterial,
-      coreMaterial,
-      ribbonMaterial,
-      hotMaterial,
-      ringMaterial,
-      featherMaterial
-    ];
+    const coreColor = tintColor(color, 0.9);
+    const ribbonColor = tintColor(color, 0.68);
+    const ringColor = tintColor(color, 0.78);
+    const featherColor = tintColor(color, 0.52);
+    const reveal = 0.1;
+    const lengthHalf = length / 2;
+    const lateralHalf = width * 5;
 
     const beamMesh = pc.Mesh.fromGeometry(
       ctx.device,
@@ -552,135 +510,138 @@ const dx = x2 - x1;
         capSegments: 14
       })
     );
-    const body = ctx.createEntity(beamMesh, [bodyMaterial], root);
-    const core = ctx.createEntity(beamMesh, [coreMaterial], root);
-    body.setLocalEulerAngles(90, 0, 0);
-    core.setLocalEulerAngles(90, 0, 0);
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: beamMesh,
+      instances: [
+        { color, alpha: 0.2, anim0: [width * 2, width * 2, 0, 0] },
+        { color: coreColor, alpha: 0.48, anim0: [width * 0.58, width * 0.58, 0, 0] }
+      ],
+      motion: MOTION_TINT_BEAM_CYLINDER,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 1, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    const ribbons: {
-      entity: pc.Entity;
-      baseAngle: number;
-      offset: number;
-      radius: number;
-    }[] = [];
+    // Tres hélices de viento: los segmentos normales y los calientes giran en
+    // espiral alrededor del eje. Antes eran 42 entidades.
+    const ribbonInstances: TintEffectInstance[] = [];
+    const hotRibbonInstances: TintEffectInstance[] = [];
     const segments = 14;
     for (let helix = 0; helix < 3; helix++) {
       for (let index = 0; index < segments; index++) {
-        const ribbon = ctx.createEntity(
-          ctx.boxMesh,
-          [helix === 1 ? hotMaterial : ribbonMaterial],
-          root
-        );
         const t = (index + 1) / segments;
-        ribbon.setLocalScale(width * 0.13, width * 0.13, width * 0.82);
-        ribbons.push({
-          entity: ribbon,
-          baseAngle: (helix / 3) * Math.PI * 2,
-          offset: t,
-          radius: width * (1.05 + 0.12 * Math.sin(t * Math.PI))
-        });
+        const instance: TintEffectInstance = {
+          color: helix === 1 ? color : ribbonColor,
+          alpha: helix === 1 ? 0.34 : 0.42,
+          anim0: [
+            (helix / 3) * Math.PI * 2,
+            t,
+            width * (1.05 + 0.12 * Math.sin(t * Math.PI)),
+            0
+          ],
+          anim1: [width * 0.13, width * 0.82, 0, 0]
+        };
+        if (helix === 1) hotRibbonInstances.push(instance);
+        else ribbonInstances.push(instance);
       }
     }
+    const ribbonBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      instances: ribbonInstances,
+      motion: MOTION_TINT_BEAM_RIBBONS,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 7, 5, 1],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
+    const hotRibbonBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      instances: hotRibbonInstances,
+      motion: MOTION_TINT_BEAM_RIBBONS,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 7, 5, 1],
+      additive: true,
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 4; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
-    }
+    // Anillos que viajan hacia la punta.
+    const ringBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      instances: [0, 1, 2, 3].map((index) => ({
+        color: ringColor,
+        alpha: 0.4,
+        anim0: [index, 0, 0, 0]
+      })),
+      motion: MOTION_TINT_BEAM_RINGS,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 2.4, width, 1],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    const feathers: {
-      entity: pc.Entity;
-      angle: number;
-      offset: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    // Plumas arrastradas por el viento.
+    const featherInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 6; index++) {
       const size = width * (0.5 + Math.random() * 0.25);
-      const feather = ctx.createLeaf(root, featherMaterial, {
-        x: 0,
-        y: 0,
-        z: length * 0.5,
-        width: size,
-        height: size * 2.1,
-        yaw: Math.random() * 360
-      });
-      feathers.push({
-        entity: feather,
-        angle: (index / 6) * Math.PI * 2,
-        offset: Math.random(),
-        size,
-        phase: Math.random() * Math.PI * 2
+      featherInstances.push({
+        color: featherColor,
+        alpha: 0.7,
+        anim0: [
+          (index / 6) * Math.PI * 2,
+          Math.random(),
+          size,
+          Math.random() * Math.PI * 2
+        ]
       });
     }
+    const featherBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.leafMesh,
+      instances: featherInstances,
+      motion: MOTION_TINT_BEAM_FEATHERS,
+      radius: length,
+      life: 0.46,
+      params: [reveal, width, 0, 0],
+      texture: ctx.leafTexture,
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     let time = 0;
-    ctx.addEffect(root, materials, 0.46, (_t, dt) => {
+    ctx.addEffect(root, [], 0.46, (_t, dt) => {
       time += dt;
-      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
-      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
       const pulse = 0.86 + Math.random() * 0.14;
-      const visibleLength = Math.max(0.02, length * reveal);
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
 
-      body.setLocalPosition(0, 0, visibleLength / 2);
-      body.setLocalScale(
-        width * 2 * pulse,
-        visibleLength,
-        width * 2 * pulse
-      );
-      core.setLocalPosition(0, 0, visibleLength / 2);
-      core.setLocalScale(
-        width * 0.58 * pulse,
-        visibleLength,
-        width * 0.58 * pulse
-      );
-
-      for (const ribbon of ribbons) {
-        const z = ribbon.offset * visibleLength;
-        const angle =
-          ribbon.baseAngle + time * 7 + ribbon.offset * Math.PI * 5;
-        ribbon.entity.setLocalPosition(
-          Math.cos(angle) * ribbon.radius * (0.85 + pulse * 0.2),
-          Math.sin(angle) * ribbon.radius * (0.85 + pulse * 0.2),
-          z
-        );
-        ribbon.entity.setLocalEulerAngles(0, -angle / DEG, angle / DEG + 20);
-      }
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 2.4 + index / rings.length) % 1;
-        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
-        const ringScale =
-          width * (1.4 + Math.sin(path * Math.PI) * 1.1) * pulse;
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 180 + index * 40);
-      }
-
-      for (const feather of feathers) {
-        const local = Math.min(1, time / 0.4);
-        const angle = feather.angle + time * 3.2;
-        feather.entity.setLocalPosition(
-          Math.cos(angle) * width * (1.2 + local * 0.7),
-          Math.sin(angle) * width * (1.2 + local * 0.7),
-          feather.offset * visibleLength
-        );
-        feather.entity.setLocalEulerAngles(
-          Math.sin(time * 9 + feather.phase) * 35,
-          angle / DEG + time * 160,
-          Math.cos(time * 8 + feather.phase) * 45
-        );
-        const scale = feather.size * Math.max(0, 1 - local * 0.7);
-        feather.entity.setLocalScale(scale, scale * 2.1, scale);
-      }
-
-      bodyMaterial.opacity = 0.2 * pulse * fade;
-      coreMaterial.opacity = 0.48 * pulse * fade;
-      ribbonMaterial.opacity = 0.42 * fade;
-      hotMaterial.opacity = 0.34 * fade;
-      ringMaterial.opacity = 0.4 * fade;
-      featherMaterial.opacity = 0.7 * fade;
+      bodyBatch.setTime(time);
+      bodyBatch.setParams(reveal, pulse, 0, 0);
+      bodyBatch.setOpacity(pulse * fade);
+      ribbonBatch.setTime(time);
+      ribbonBatch.setParams(reveal, 7, 5, pulse);
+      ribbonBatch.setOpacity(fade);
+      hotRibbonBatch.setTime(time);
+      hotRibbonBatch.setParams(reveal, 7, 5, pulse);
+      hotRibbonBatch.setOpacity(fade);
+      ringBatch.setTime(time);
+      ringBatch.setParams(reveal, 2.4, width, pulse);
+      ringBatch.setOpacity(fade);
+      featherBatch.setTime(time);
+      featherBatch.setOpacity(fade);
     });
 }
 
@@ -704,18 +665,13 @@ const dx = x2 - x1;
     root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const bodyMaterial = ctx.createWaterMaterial(color, 0.22);
-    const coreMaterial = ctx.createWaterMaterial([244, 255, 206], 0.5);
-    const ringMaterial = ctx.createMaterial([214, 248, 160], 0.4);
-    const leafMaterial = ctx.createLeafMaterial([226, 250, 184], 0.9);
-    const hotLeafMaterial = ctx.createLeafMaterial([248, 255, 222], 0.9);
-    const materials = [
-      bodyMaterial,
-      coreMaterial,
-      ringMaterial,
-      leafMaterial,
-      hotLeafMaterial
-    ];
+    const coreColor: [number, number, number] = [244, 255, 206];
+    const ringColor: [number, number, number] = [214, 248, 160];
+    const leafColor: [number, number, number] = [226, 250, 184];
+    const hotLeafColor: [number, number, number] = [248, 255, 222];
+    const reveal = 0.1;
+    const lengthHalf = length / 2;
+    const lateralHalf = width * 5;
 
     const beamMesh = pc.Mesh.fromGeometry(
       ctx.device,
@@ -726,107 +682,89 @@ const dx = x2 - x1;
         capSegments: 14
       })
     );
-    const body = ctx.createEntity(beamMesh, [bodyMaterial], root);
-    const core = ctx.createEntity(beamMesh, [coreMaterial], root);
-    body.setLocalEulerAngles(90, 0, 0);
-    core.setLocalEulerAngles(90, 0, 0);
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: beamMesh,
+      instances: [
+        { color, alpha: 0.2, anim0: [width * 2, width * 2, 0, 0] },
+        { color: coreColor, alpha: 0.48, anim0: [width * 0.58, width * 0.58, 0, 0] }
+      ],
+      motion: MOTION_TINT_BEAM_CYLINDER,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 1, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    // Tres hélices de hojas: cada una gira alrededor del eje del haz mientras
-    // avanza a lo largo de la línea.
-    const leaves: {
-      entity: pc.Entity;
-      angle: number;
-      offset: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    // Tres hélices de hojas; las hojas calientes van en el mismo lote con su
+    // propio tinte por instancia.
+    const leafInstances: TintEffectInstance[] = [];
     const segments = 14;
     for (let helix = 0; helix < 3; helix++) {
       for (let index = 0; index < segments; index++) {
         const size = width * (0.32 + Math.random() * 0.14);
-        const leaf = ctx.createLeaf(
-          root,
-          helix === 1 ? hotLeafMaterial : leafMaterial,
-          {
-            x: 0,
-            y: 0,
-            z: 0,
-            width: size,
-            height: size * 1.8,
-            yaw: Math.random() * 360
-          }
-        );
-        leaves.push({
-          entity: leaf,
-          angle: (helix / 3) * Math.PI * 2,
-          offset: (index + 1) / segments,
-          size,
-          phase: Math.random() * Math.PI * 2
+        const offset = (index + 1) / segments;
+        leafInstances.push({
+          color: helix === 1 ? hotLeafColor : leafColor,
+          alpha: 0.82,
+          anim0: [
+            (helix / 3) * Math.PI * 2,
+            offset,
+            width * (1.05 + Math.sin(offset * Math.PI) * 0.18),
+            Math.random() * Math.PI * 2
+          ],
+          anim1: [size, 0, 0, 0]
         });
       }
     }
+    const leafBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.leafMesh,
+      instances: leafInstances,
+      motion: MOTION_TINT_BEAM_LEAVES,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 8, 6, 1],
+      texture: ctx.leafTexture,
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 4; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
-    }
+    const ringBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      instances: [0, 1, 2, 3].map((index) => ({
+        color: ringColor,
+        alpha: 0.4,
+        anim0: [index, 0, 0, 0]
+      })),
+      motion: MOTION_TINT_BEAM_RINGS,
+      radius: length,
+      life: 0.46,
+      params: [reveal, 2.4, width, 1],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     let time = 0;
-    ctx.addEffect(root, materials, 0.46, (_t, dt) => {
+    ctx.addEffect(root, [], 0.46, (_t, dt) => {
       time += dt;
-      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
-      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
       const pulse = 0.86 + Math.random() * 0.14;
-      const visibleLength = Math.max(0.02, length * reveal);
+      const fade = 1 - Math.max(0, (time - 0.28) / 0.18);
 
-      body.setLocalPosition(0, 0, visibleLength / 2);
-      body.setLocalScale(
-        width * 2 * pulse,
-        visibleLength,
-        width * 2 * pulse
-      );
-      core.setLocalPosition(0, 0, visibleLength / 2);
-      core.setLocalScale(
-        width * 0.58 * pulse,
-        visibleLength,
-        width * 0.58 * pulse
-      );
-
-      for (const leaf of leaves) {
-        const z = leaf.offset * visibleLength;
-        const angle = leaf.angle + time * 8 + leaf.offset * Math.PI * 6;
-        const radius = width * (1.05 + Math.sin(leaf.offset * Math.PI) * 0.18);
-        leaf.entity.setLocalPosition(
-          Math.cos(angle) * radius,
-          Math.sin(angle) * radius,
-          z
-        );
-        leaf.entity.setLocalEulerAngles(
-          Math.sin(time * 10 + leaf.phase) * 35,
-          angle / DEG + time * 220,
-          Math.cos(time * 8 + leaf.phase) * 45
-        );
-        const scale = leaf.size * (0.8 + pulse * 0.2);
-        leaf.entity.setLocalScale(scale, scale * 1.8, scale);
-      }
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 2.4 + index / rings.length) % 1;
-        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
-        const ringScale =
-          width * (1.4 + Math.sin(path * Math.PI) * 1.1) * pulse;
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 180 + index * 40);
-      }
-
-      bodyMaterial.opacity = 0.2 * pulse * fade;
-      coreMaterial.opacity = 0.48 * pulse * fade;
-      ringMaterial.opacity = 0.4 * fade;
-      leafMaterial.opacity = 0.82 * fade;
-      hotLeafMaterial.opacity = 0.82 * fade;
+      bodyBatch.setTime(time);
+      bodyBatch.setParams(reveal, pulse, 0, 0);
+      bodyBatch.setOpacity(pulse * fade);
+      leafBatch.setTime(time);
+      leafBatch.setParams(reveal, 8, 6, pulse);
+      leafBatch.setOpacity(fade);
+      ringBatch.setTime(time);
+      ringBatch.setParams(reveal, 2.4, width, pulse);
+      ringBatch.setOpacity(fade);
     });
 }
 
@@ -848,21 +786,18 @@ const dx = x2 - x1;
     root.setEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const bodyMaterial = ctx.createWaterMaterial(color, 0.3);
-    const coreMaterial = ctx.createWaterMaterial([242, 252, 255], 0.56);
-    const crystalMaterial = ctx.createIceCrystalMaterial(
-      [205, 242, 255],
-      0.86
-    );
-    const deepMaterial = ctx.createIceCrystalMaterial([96, 176, 230], 0.7);
-    const mistMaterial = ctx.createWaterMaterial([225, 247, 255], 0.24);
-    const materials = [
-      bodyMaterial,
-      coreMaterial,
-      crystalMaterial,
-      deepMaterial,
-      mistMaterial
-    ];
+    const coreColor: [number, number, number] = [242, 252, 255];
+    const mistColor: [number, number, number] = [225, 247, 255];
+    const crystalColor: [number, number, number] = [205, 242, 255];
+    const deepColor: [number, number, number] = [96, 176, 230];
+    const reveal = 0.1;
+    const lengthHalf = length / 2;
+    const lateralHalf = width * 4;
+
+    const crystalBatchLight = ctx.createIceCrystalMaterial(crystalColor, 0.66);
+    const crystalBatchDeep = ctx.createIceCrystalMaterial(deepColor, 0.44);
+    const crystalRing = ctx.createIceCrystalMaterial(crystalColor, 0.66);
+    const materials = [crystalBatchLight, crystalBatchDeep, crystalRing];
 
     const beamMesh = pc.Mesh.fromGeometry(
       ctx.device,
@@ -873,147 +808,135 @@ const dx = x2 - x1;
         capSegments: 14
       })
     );
-    const body = ctx.createEntity(beamMesh, [bodyMaterial], root);
-    const core = ctx.createEntity(beamMesh, [coreMaterial], root);
-    body.setLocalEulerAngles(90, 0, 0);
-    core.setLocalEulerAngles(90, 0, 0);
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: beamMesh,
+      instances: [
+        { color, alpha: 0.26, anim0: [width * 2.1, width * 2.1, 0, 0] },
+        { color: coreColor, alpha: 0.52, anim0: [width * 0.62, width * 0.62, 0, 0] }
+      ],
+      motion: MOTION_TINT_BEAM_CYLINDER,
+      radius: length,
+      life: 0.48,
+      params: [reveal, 1, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
-    const crystals: {
-      entity: pc.Entity;
-      offset: number;
-      angle: number;
-      radius: number;
-      size: number;
-      phase: number;
-    }[] = [];
+    // Cristales incrustados y de la punta: la misma malla y el mismo material,
+    // con el tipo codificado en anim1.y.
+    const lightCrystals: EffectBatchInstance[] = [];
+    const deepCrystals: EffectBatchInstance[] = [];
     for (let index = 0; index < 12; index++) {
-      const crystal = ctx.createEntity(
-        ctx.iceCrystalMesh,
-        [index % 3 === 0 ? deepMaterial : crystalMaterial],
-        root
-      );
       const size = width * (0.5 + Math.random() * 0.35);
-      crystal.setLocalScale(size * 0.7, size * 1.9, size * 0.7);
-      crystals.push({
-        entity: crystal,
-        offset: (index + 0.5) / 12,
-        angle: (index / 12) * Math.PI * 2 + Math.random() * 0.4,
-        radius: width * (0.7 + Math.random() * 0.6),
-        size,
-        phase: Math.random() * Math.PI * 2
-      });
+      const instance: EffectBatchInstance = {
+        anim0: [
+          (index + 0.5) / 12,
+          (index / 12) * Math.PI * 2 + Math.random() * 0.4,
+          width * (0.7 + Math.random() * 0.6),
+          size
+        ],
+        anim1: [Math.random() * Math.PI * 2, 0, 0, 0]
+      };
+      if (index % 3 === 0) deepCrystals.push(instance);
+      else lightCrystals.push(instance);
     }
-
-    const rings: pc.Entity[] = [];
-    for (let index = 0; index < 4; index++) {
-      const ring = ctx.createEntity(ctx.torusMesh, [crystalMaterial], root);
-      ring.setLocalEulerAngles(90, 0, 0);
-      rings.push(ring);
-    }
-
-    const tipCrystals: { entity: pc.Entity; angle: number; size: number }[] = [];
     for (let index = 0; index < 3; index++) {
       const size = width * (0.7 + index * 0.15);
-      const crystal = ctx.createEntity(
-        ctx.iceCrystalMesh,
-        [index === 0 ? crystalMaterial : deepMaterial],
-        root
-      );
-      crystal.setLocalScale(size * 0.65, size * 2, size * 0.65);
-      tipCrystals.push({
-        entity: crystal,
-        angle: (index / 3) * Math.PI * 2,
-        size
-      });
+      const instance: EffectBatchInstance = {
+        anim0: [0, (index / 3) * Math.PI * 2, 0, size],
+        anim1: [0, 1, 0, 0]
+      };
+      if (index === 0) lightCrystals.push(instance);
+      else deepCrystals.push(instance);
     }
+    const crystalLightBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.iceCrystalMesh,
+      material: crystalBatchLight,
+      instances: lightCrystals,
+      motion: MOTION_ICE_BEAM_CRYSTALS,
+      radius: length,
+      life: 0.48,
+      params: [reveal, 1, width * 0.5, 0]
+    });
+    const crystalDeepBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.iceCrystalMesh,
+      material: crystalBatchDeep,
+      instances: deepCrystals,
+      motion: MOTION_ICE_BEAM_CRYSTALS,
+      radius: length,
+      life: 0.48,
+      params: [reveal, 1, width * 0.5, 0]
+    });
 
-    const mist: { entity: pc.Entity; offset: number; angle: number; size: number }[] = [];
+    // Anillos de escarcha que viajan hacia la punta.
+    const ringBatch = new EffectBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.torusMesh,
+      material: crystalRing,
+      instances: [0, 1, 2, 3].map((index) => ({
+        anim0: [index, 0, 0, 0]
+      })),
+      motion: MOTION_TINT_BEAM_RINGS,
+      radius: length,
+      life: 0.48,
+      params: [reveal, 2.2, width, 1]
+    });
+
+    // Neblina que gira alrededor de la columna.
+    const mistInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 5; index++) {
-      const size = width * (0.8 + Math.random() * 0.5);
-      const puff = ctx.createEntity(ctx.sphereMesh, [mistMaterial], root);
-      puff.setLocalScale(size, size * 0.7, size);
-      mist.push({
-        entity: puff,
-        offset: (index + 0.5) / 5,
-        angle: Math.random() * Math.PI * 2,
-        size
+      mistInstances.push({
+        color: mistColor,
+        alpha: 0.2,
+        anim0: [
+          (index + 0.5) / 5,
+          Math.random() * Math.PI * 2,
+          width * (0.8 + Math.random() * 0.5),
+          0
+        ]
       });
     }
+    const mistBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: mistInstances,
+      motion: MOTION_TINT_BEAM_MIST,
+      radius: length,
+      life: 0.48,
+      params: [reveal, width, 0, 0],
+      boundsCenter: [0, 0, lengthHalf],
+      boundsHalf: [lateralHalf, lateralHalf, lengthHalf + width * 3]
+    });
 
     let time = 0;
     ctx.addEffect(root, materials, 0.48, (_t, dt) => {
       time += dt;
-      const reveal = 1 - Math.pow(1 - Math.min(1, time / 0.1), 2);
       const fade = 1 - Math.max(0, (time - 0.28) / 0.2);
       const pulse = 0.86 + Math.random() * 0.14;
-      const visibleLength = Math.max(0.02, length * reveal);
 
-      body.setLocalPosition(0, 0, visibleLength / 2);
-      body.setLocalScale(
-        width * 2.1 * pulse,
-        visibleLength,
-        width * 2.1 * pulse
-      );
-      core.setLocalPosition(0, 0, visibleLength / 2);
-      core.setLocalScale(
-        width * 0.62 * pulse,
-        visibleLength,
-        width * 0.62 * pulse
-      );
+      bodyBatch.setTime(time);
+      bodyBatch.setParams(reveal, pulse, 0, 0);
+      bodyBatch.setOpacity(pulse * fade);
+      crystalLightBatch.setTime(time);
+      crystalLightBatch.setParams(reveal, pulse, width * 0.5, 0);
+      crystalDeepBatch.setTime(time);
+      crystalDeepBatch.setParams(reveal, pulse, width * 0.5, 0);
+      ringBatch.setTime(time);
+      ringBatch.setParams(reveal, 2.2, width, pulse);
+      mistBatch.setTime(time);
+      mistBatch.setOpacity(fade);
 
-      for (const crystal of crystals) {
-        const angle = crystal.angle + time * 4.5 + crystal.phase;
-        const radius = crystal.radius * (0.85 + pulse * 0.25);
-        crystal.entity.setLocalPosition(
-          Math.cos(angle) * radius,
-          Math.sin(angle) * radius,
-          crystal.offset * visibleLength
-        );
-        crystal.entity.setLocalEulerAngles(
-          time * 120 + crystal.phase * 40,
-          angle / DEG,
-          time * 80
-        );
-        const scale = crystal.size * (0.75 + Math.sin(time * 8 + crystal.phase) * 0.2);
-        crystal.entity.setLocalScale(scale * 0.7, scale * 1.9, scale * 0.7);
-      }
-
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        const path = (time * 2.2 + index / rings.length) % 1;
-        ring.setLocalPosition(0, 0, visibleLength * (0.08 + path * 0.92));
-        const ringScale =
-          width * (1.3 + Math.sin(path * Math.PI) * 1.1) * pulse;
-        ring.setLocalScale(ringScale, ringScale, ringScale);
-        ring.setLocalEulerAngles(90, 0, time * 160 + index * 45);
-      }
-
-      for (const tip of tipCrystals) {
-        const angle = tip.angle + time * 3;
-        tip.entity.setLocalPosition(
-          Math.cos(angle) * width * 0.5,
-          Math.sin(angle) * width * 0.5,
-          visibleLength
-        );
-        tip.entity.setLocalEulerAngles(time * 160, angle / DEG, time * 90);
-      }
-
-      for (const puff of mist) {
-        const angle = puff.angle + time * 2.4;
-        puff.entity.setLocalPosition(
-          Math.cos(angle) * width * 1.2,
-          Math.sin(angle) * width * 0.8,
-          puff.offset * visibleLength
-        );
-        const scale = puff.size * (0.7 + Math.sin(time * 5 + puff.angle) * 0.2) * fade;
-        puff.entity.setLocalScale(scale, scale * 0.7, scale);
-      }
-
-      bodyMaterial.opacity = 0.26 * pulse * fade;
-      coreMaterial.opacity = 0.52 * pulse * fade;
-      crystalMaterial.opacity = 0.66 * fade;
-      deepMaterial.opacity = 0.44 * fade;
-      mistMaterial.opacity = 0.2 * fade;
+      crystalBatchLight.opacity = 0.66 * fade;
+      crystalBatchDeep.opacity = 0.44 * fade;
+      crystalRing.opacity = 0.66 * fade;
     });
 }
 

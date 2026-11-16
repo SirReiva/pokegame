@@ -177,6 +177,11 @@ export interface FlameParticleOptions {
   preWarm?: boolean;
   /** Mezcla de partículas; por defecto, aditiva. */
   blendType?: number;
+  /** Sobrescribe la entrada/salida del alfa para pegar la estela al emisor. */
+  fadeIn?: number;
+  fadeOut?: number;
+  /** Opacidad máxima del emisor; útil para estelas de polvo discretas. */
+  opacity?: number;
 }
 
 export function createArcMesh(
@@ -383,24 +388,42 @@ export function createShurikenMesh(
  * `tStart`/`tEnd` permiten generar solo un tramo del tajo; el dibujo de derecha
  * a izquierda usa varios tramos estáticos en vez de deformar el mesh por frame.
  */
-export function createSlashStreakMesh(
-  device: pc.GraphicsDevice,
-  innerRadius: number,
-  outerRadius: number,
-  halfThickness: number,
-  angleStart: number,
-  angleSweep: number,
-  segments: number,
-  liftStart: number,
-  liftEnd: number,
-  bow: number,
-  phase: number,
-  tStart = 0,
-  tEnd = 1
-): pc.Mesh {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const indices: number[] = [];
+export interface SlashStreakSpec {
+  innerRadius: number;
+  outerRadius: number;
+  halfThickness: number;
+  angleStart: number;
+  angleSweep: number;
+  segments: number;
+  liftStart: number;
+  liftEnd: number;
+  bow: number;
+  phase: number;
+  tStart?: number;
+  tEnd?: number;
+}
+
+function appendSlashStreak(
+  positions: number[],
+  normals: number[],
+  indices: number[],
+  spec: SlashStreakSpec
+): void {
+  const {
+    innerRadius,
+    outerRadius,
+    halfThickness,
+    angleStart,
+    angleSweep,
+    segments,
+    liftStart,
+    liftEnd,
+    bow,
+    phase,
+    tStart = 0,
+    tEnd = 1
+  } = spec;
+  const vertexBase = positions.length / 3;
 
   for (let i = 0; i <= segments; i++) {
     const u = i / segments;
@@ -425,17 +448,76 @@ export function createSlashStreakMesh(
   }
 
   for (let i = 0; i < segments; i++) {
-    const base = i * 2;
+    const base = vertexBase + i * 2;
     indices.push(base, base + 1, base + 2);
     indices.push(base + 1, base + 3, base + 2);
   }
+}
 
+function slashStreakMesh(
+  device: pc.GraphicsDevice,
+  positions: number[],
+  normals: number[],
+  indices: number[]
+): pc.Mesh {
   const mesh = new pc.Mesh(device);
   mesh.setPositions(positions);
   mesh.setNormals(normals);
   mesh.setIndices(indices);
   mesh.update();
   return mesh;
+}
+
+export function createSlashStreakMesh(
+  device: pc.GraphicsDevice,
+  innerRadius: number,
+  outerRadius: number,
+  halfThickness: number,
+  angleStart: number,
+  angleSweep: number,
+  segments: number,
+  liftStart: number,
+  liftEnd: number,
+  bow: number,
+  phase: number,
+  tStart = 0,
+  tEnd = 1
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  appendSlashStreak(positions, normals, indices, {
+    innerRadius,
+    outerRadius,
+    halfThickness,
+    angleStart,
+    angleSweep,
+    segments,
+    liftStart,
+    liftEnd,
+    bow,
+    phase,
+    tStart,
+    tEnd
+  });
+  return slashStreakMesh(device, positions, normals, indices);
+}
+
+/**
+ * Varias garras en una sola malla. Permite dibujar el zarpazo completo en una
+ * entidad en lugar de una por filo.
+ */
+export function createSlashStreakSetMesh(
+  device: pc.GraphicsDevice,
+  specs: readonly SlashStreakSpec[]
+): pc.Mesh {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  for (const spec of specs) {
+    appendSlashStreak(positions, normals, indices, spec);
+  }
+  return slashStreakMesh(device, positions, normals, indices);
 }
 
 /**

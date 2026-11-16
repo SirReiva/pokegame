@@ -8,9 +8,14 @@ import {
   MOTION_PROJECTILE_LEAF_RING,
   MOTION_PROJECTILE_ORBIT_XZ,
   MOTION_PROJECTILE_SPIN_RING,
-  MOTION_STATIC
+  MOTION_STATIC,
+  MOTION_TINT_PROJECTILE_BODY,
+  MOTION_TINT_PROJECTILE_FLAME_TAIL,
+  MOTION_TINT_PROJECTILE_ORBIT_WISPS
 } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
+import { EffectTintBatch } from './effectTintBatch';
+import type { TintEffectInstance } from './effectTintBatch';
 import type { ProjectileVisual } from './fxGeometry';
 import { createLightningMesh } from './fxGeometry';
 
@@ -56,17 +61,38 @@ const root = new pc.Entity('electric-projectile');
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createMaterial([255, 255, 220], 0.95);
-    const glowMaterial = ctx.createMaterial([255, 230, 90], 0.35);
     const arcMaterial = ctx.createMaterial([255, 245, 170], 0.9);
     const tailMaterial = ctx.createMaterial([255, 220, 80], 0.45);
-    const materials = [coreMaterial, glowMaterial, arcMaterial, tailMaterial];
+    const materials = [arcMaterial, tailMaterial];
 
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 1.9, radius * 1.9, radius * 1.9);
-
-    const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
-    glow.setLocalScale(radius * 4.2, radius * 4.2, radius * 4.2);
+    // Núcleo y halo comparten esfera y se dibujan en un lote con su propio
+    // pulso por instancia.
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        {
+          color: [255, 255, 220],
+          alpha: 0.9,
+          sx: radius * 1.9,
+          sy: radius * 1.9,
+          sz: radius * 1.9,
+          anim0: [35, 0, 0.06, 0]
+        },
+        {
+          color: [255, 230, 90],
+          alpha: 0.25,
+          sx: radius * 4.2,
+          sy: radius * 4.2,
+          sz: radius * 4.2,
+          anim0: [22, 0, 0.08, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      additive: true,
+      boundsHalf: [radius * 5, radius * 5, radius * 9]
+    });
 
     const tail = ctx.createEntity(ctx.boxMesh, [tailMaterial], root);
     tail.setLocalPosition(0, 0, -radius * 2.8);
@@ -102,26 +128,9 @@ const root = new pc.Entity('electric-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        coreMaterial.opacity = 0.85 + Math.random() * 0.15;
-        glowMaterial.opacity = 0.16 + Math.random() * 0.14;
         arcMaterial.opacity = 0.45 + Math.random() * 0.3;
         tailMaterial.opacity = 0.18 + Math.random() * 0.14;
-
-        const pulse = 1 + Math.sin(time * 35) * 0.06;
-        const glowPulse = 1 + Math.sin(time * 22) * 0.08;
-        core.setLocalScale(
-          radius * 1.9 * pulse,
-          radius * 1.9 * pulse,
-          radius * 1.9 * pulse
-        );
-        glow.setLocalScale(
-          radius * 4.2 * glowPulse,
-          radius * 4.2 * glowPulse,
-          radius * 4.2 * glowPulse
-        );
-
-        coreMaterial.update();
-        glowMaterial.update();
+        bodyBatch.setTime(time);
         arcMaterial.update();
         tailMaterial.update();
         arcBatch.setTime(time);
@@ -154,48 +163,73 @@ const root = new pc.Entity('fire-projectile');
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createMaterial([255, 248, 216], 0.9);
-    const innerMaterial = ctx.createMaterial([255, 176, 64], 0.45);
-    const glowMaterial = ctx.createMaterial([255, 84, 24], 0.22);
-    const flameMaterial = ctx.createFlameMaterial([255, 255, 255], 0.55);
-    const innerFlameMaterial = ctx.createFlameMaterial([255, 244, 205], 0.6);
-    const materials = [
-      coreMaterial,
-      innerMaterial,
-      glowMaterial,
-      flameMaterial,
-      innerFlameMaterial
-    ];
-
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 1.5, radius * 1.5, radius * 1.5);
-
-    const inner = ctx.createEntity(ctx.sphereMesh, [innerMaterial], root);
-    inner.setLocalScale(radius * 2.6, radius * 2.6, radius * 2.6);
-
-    const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
-    glow.setLocalScale(radius * 4.5, radius * 4.5, radius * 4.5);
+    // Núcleo, halo interior y halo exterior comparten la malla esférica y se
+    // dibujan en un lote con color y alfa por instancia.
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        {
+          color: [255, 248, 216],
+          alpha: 0.9,
+          sx: radius * 1.5,
+          sy: radius * 1.5,
+          sz: radius * 1.5,
+          anim0: [32, 0, 0.07, 0]
+        },
+        {
+          color: [255, 176, 64],
+          alpha: 0.45,
+          sx: radius * 2.6,
+          sy: radius * 2.6,
+          sz: radius * 2.6,
+          anim0: [22, 0, 0.09, 0]
+        },
+        {
+          color: [255, 84, 24],
+          alpha: 0.22,
+          sx: radius * 4.5,
+          sy: radius * 4.5,
+          sz: radius * 4.5,
+          anim0: [17, 0, 0.11, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      additive: true,
+      boundsHalf: [radius * 5.5, radius * 5.5, radius * 5.5]
+    });
 
     // Dos lenguas tumbadas hacia atrás: la exterior ancha y la interior más
     // corta y clara, para que la estela tenga cuerpo y no sea un halo.
-    const tailWidth = radius * 3.4;
-    const tailLength = radius * 7.6;
-    const tail = ctx.createFlame(root, flameMaterial, {
-      x: 0,
-      y: 0,
-      z: radius * 0.35,
-      width: tailWidth,
-      height: tailLength,
-      pitch: -90
-    });
-    const innerTail = ctx.createFlame(root, innerFlameMaterial, {
-      x: 0,
-      y: radius * 0.2,
-      z: radius * 0.45,
-      width: radius * 2,
-      height: radius * 4.6,
-      pitch: -90,
-      roll: 35
+    const tailBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.flameMesh,
+      instances: [
+        {
+          z: radius * 0.35,
+          color: [255, 255, 255],
+          alpha: 0.37,
+          anim0: [21, 27, 0, 0],
+          anim1: [radius * 3.4, radius * 7.6, 0, 0.82],
+          anim2: [0.14, 12, 13, 0]
+        },
+        {
+          y: radius * 0.2,
+          z: radius * 0.45,
+          color: [255, 244, 205],
+          alpha: 0.44,
+          anim0: [29, 33, 1.2, 0.5],
+          anim1: [radius * 2, radius * 4.6, 35, 0.78],
+          anim2: [0.2, 18, 19, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_FLAME_TAIL,
+      additive: true,
+      texture: ctx.flameTexture,
+      intensity: 1.12,
+      boundsHalf: [radius * 5, radius * 5, radius * 9]
     });
 
     ctx.spawnFlameParticles(root, {
@@ -216,55 +250,11 @@ const root = new pc.Entity('fire-projectile');
     let time = 0;
     const visual: ProjectileVisual = {
       entity: root,
-      materials,
+      materials: [],
       update: (dt) => {
         time += dt;
-        coreMaterial.opacity = 0.78 + Math.random() * 0.15;
-        innerMaterial.opacity = 0.3 + Math.random() * 0.18;
-        glowMaterial.opacity = 0.12 + Math.random() * 0.1;
-        flameMaterial.opacity = 0.3 + Math.random() * 0.15;
-        innerFlameMaterial.opacity = 0.35 + Math.random() * 0.18;
-
-        const pulse = 1 + Math.sin(time * 32) * 0.07;
-        const innerPulse = 1 + Math.sin(time * 22) * 0.09;
-        const glowPulse = 1 + Math.sin(time * 17) * 0.11;
-        core.setLocalScale(
-          radius * 1.5 * pulse,
-          radius * 1.5 * pulse,
-          radius * 1.5 * pulse
-        );
-        inner.setLocalScale(
-          radius * 2.6 * innerPulse,
-          radius * 2.6 * innerPulse,
-          radius * 2.6 * innerPulse
-        );
-        glow.setLocalScale(
-          radius * 4.5 * glowPulse,
-          radius * 4.5 * glowPulse,
-          radius * 4.5 * glowPulse
-        );
-
-        const tailStretch = 0.82 + Math.sin(time * 21) * 0.2;
-        const tailSway = 1 + Math.sin(time * 27) * 0.14;
-        tail.setLocalScale(
-          tailWidth * tailSway,
-          tailLength * tailStretch,
-          tailWidth * tailSway
-        );
-        tail.setLocalEulerAngles(-90, 0, Math.sin(time * 13) * 12);
-
-        const innerStretch = 0.78 + Math.sin(time * 29 + 1.2) * 0.26;
-        const innerSway = 1 + Math.sin(time * 33 + 0.5) * 0.2;
-        innerTail.setLocalScale(
-          radius * 2 * innerSway,
-          radius * 4.6 * innerStretch,
-          radius * 2 * innerSway
-        );
-        innerTail.setLocalEulerAngles(
-          -90,
-          0,
-          35 + Math.sin(time * 19) * 18
-        );
+        bodyBatch.setTime(time);
+        tailBatch.setTime(time);
       }
     };
     visual.update(0);
@@ -276,7 +266,7 @@ const root = new pc.Entity('fire-projectile');
       destroy: () => {
         if (!ctx.projectiles.delete(visual)) return;
         ctx.destroyFxRoot(root);
-        ctx.releaseMaterials(materials);
+        ctx.releaseMaterials(visual.materials);
       }
     };
 }
@@ -293,15 +283,35 @@ const root = new pc.Entity('grass-projectile');
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createMaterial([230, 255, 200], 0.95);
-    const glowMaterial = ctx.createMaterial(color, 0.25);
     const leafMaterial = ctx.createLeafMaterial(color, 0.95);
-    const materials = [coreMaterial, glowMaterial, leafMaterial];
+    const materials = [leafMaterial];
 
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 1.7, radius * 1.7, radius * 1.7);
-    const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
-    glow.setLocalScale(radius * 4, radius * 4, radius * 4);
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        {
+          color: [230, 255, 200],
+          alpha: 0.9,
+          sx: radius * 1.7,
+          sy: radius * 1.7,
+          sz: radius * 1.7,
+          anim0: [26, 0, 0.08, 0]
+        },
+        {
+          color,
+          alpha: 0.25,
+          sx: radius * 4,
+          sy: radius * 4,
+          sz: radius * 4,
+          anim0: [15, 0, 0.1, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      additive: true,
+      boundsHalf: [radius * 5, radius * 5, radius * 5]
+    });
 
     const leafInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 5; index++) {
@@ -332,17 +342,7 @@ const root = new pc.Entity('grass-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        const pulse = 1 + Math.sin(time * 26) * 0.08;
-        core.setLocalScale(
-          radius * 1.7 * pulse,
-          radius * 1.7 * pulse,
-          radius * 1.7 * pulse
-        );
-        glow.setLocalScale(
-          radius * 4 * (1 + Math.sin(time * 15) * 0.1),
-          radius * 4 * (1 + Math.sin(time * 15) * 0.1),
-          radius * 4 * (1 + Math.sin(time * 15) * 0.1)
-        );
+        bodyBatch.setTime(time);
         leafBatch.setTime(time);
         leafMaterial.opacity = 0.75 + Math.random() * 0.25;
         leafMaterial.update();
@@ -374,14 +374,33 @@ const root = new pc.Entity('poison-projectile');
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createMaterial(color, 0.9);
-    const glowMaterial = ctx.createMaterial([196, 118, 214], 0.24);
-    const materials = [coreMaterial, glowMaterial];
-
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 1.9, radius * 1.9, radius * 1.9);
-    const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
-    glow.setLocalScale(radius * 4.4, radius * 4.4, radius * 4.4);
+    // Núcleo y halo en un lote: el halo queda casi estático y el núcleo late.
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        {
+          color,
+          alpha: 0.9,
+          sx: radius * 1.9,
+          sy: radius * 1.9,
+          sz: radius * 1.9,
+          anim0: [22, 0, 0.1, 0]
+        },
+        {
+          color: [196, 118, 214],
+          alpha: 0.24,
+          sx: radius * 4.4,
+          sy: radius * 4.4,
+          sz: radius * 4.4,
+          anim0: [22, 0, 0, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      additive: true,
+      boundsHalf: [radius * 5, radius * 5, radius * 5]
+    });
 
     ctx.spawnSporeParticles(
       root,
@@ -404,16 +423,10 @@ const root = new pc.Entity('poison-projectile');
     let time = 0;
     const visual: ProjectileVisual = {
       entity: root,
-      materials,
+      materials: [],
       update: (dt) => {
         time += dt;
-        const pulse = 1 + Math.sin(time * 22) * 0.1;
-        core.setLocalScale(
-          radius * 1.9 * pulse,
-          radius * 1.9 * pulse,
-          radius * 1.9 * pulse
-        );
-        glowMaterial.opacity = 0.18 + Math.random() * 0.12;
+        bodyBatch.setTime(time);
       }
     };
     visual.update(0);
@@ -425,7 +438,7 @@ const root = new pc.Entity('poison-projectile');
       destroy: () => {
         if (!ctx.projectiles.delete(visual)) return;
         ctx.destroyFxRoot(root);
-        ctx.releaseMaterials(materials);
+        ctx.releaseMaterials(visual.materials);
       }
     };
 }
@@ -601,78 +614,85 @@ const root = new pc.Entity('shadow-projectile');
     root.setEulerAngles(0, Math.atan2(dirX, dirZ) / DEG, 0);
     ctx.app.root.addChild(root);
 
-    const coreMaterial = ctx.createMaterial([226, 208, 255], 0.95);
-    const bodyMaterial = ctx.createWaterMaterial(color, 0.6);
-    const wispMaterial = ctx.createWaterMaterial([176, 142, 240], 0.55);
-    const trailMaterial = ctx.createWaterMaterial(color, 0.28);
-    const materials = [
-      coreMaterial,
-      bodyMaterial,
-      wispMaterial,
-      trailMaterial
+    // Núcleo blanco aditivo, cuerpo y estela translúcidos, y jirones en órbita.
+    const coreBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: [
+        {
+          color: [226, 208, 255],
+          alpha: 0.95,
+          sx: radius * 1.5,
+          sy: radius * 1.5,
+          sz: radius * 1.5,
+          anim0: [20, 0, 0.09, 0]
+        }
+      ],
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      additive: true,
+      boundsHalf: [radius * 4, radius * 4, radius * 8]
+    });
+
+    const bodyInstances: TintEffectInstance[] = [
+      {
+        color,
+        alpha: 0.55,
+        sx: radius * 3,
+        sy: radius * 3,
+        sz: radius * 3,
+        anim0: [13, 0, 0.08, 0]
+      }
     ];
-
-    const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
-    core.setLocalScale(radius * 1.5, radius * 1.5, radius * 1.5);
-    const body = ctx.createEntity(ctx.sphereMesh, [bodyMaterial], root);
-    body.setLocalScale(radius * 3, radius * 3, radius * 3);
-
-    const wisps: { entity: pc.Entity; phase: number; orbit: number }[] = [];
     for (let index = 0; index < 3; index++) {
-      const wisp = ctx.createEntity(ctx.boxMesh, [wispMaterial], root);
-      wisp.setLocalScale(radius * 0.35, radius * 0.35, radius * 1.6);
-      wisps.push({
-        entity: wisp,
-        phase: (index / 3) * Math.PI * 2,
-        orbit: radius * (2.2 + index * 0.4)
+      const scale = radius * (1.7 - index * 0.4);
+      bodyInstances.push({
+        z: -radius * (2.6 + index * 2.2),
+        color,
+        alpha: 0.26,
+        sx: scale,
+        sy: scale,
+        sz: scale,
+        anim0: [11, 0, 0, 0]
       });
     }
+    const bodyBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.sphereMesh,
+      instances: bodyInstances,
+      motion: MOTION_TINT_PROJECTILE_BODY,
+      boundsHalf: [radius * 4, radius * 4, radius * 10]
+    });
 
-    const trail: pc.Entity[] = [];
+    const wispInstances: TintEffectInstance[] = [];
     for (let index = 0; index < 3; index++) {
-      const puff = ctx.createEntity(ctx.sphereMesh, [trailMaterial], root);
-      puff.setLocalPosition(0, 0, -radius * (2.6 + index * 2.2));
-      const scale = radius * (1.7 - index * 0.4);
-      puff.setLocalScale(scale, scale, scale);
-      trail.push(puff);
+      wispInstances.push({
+        color: [176, 142, 240],
+        alpha: 0.5,
+        anim0: [(index / 3) * Math.PI * 2, radius * (2.2 + index * 0.4), 0, 0],
+        anim1: [radius * 0.35, radius * 1.6, 0, 0]
+      });
     }
+    const wispBatch = new EffectTintBatch({
+      app: ctx.app,
+      parent: root,
+      mesh: ctx.boxMesh,
+      instances: wispInstances,
+      motion: MOTION_TINT_PROJECTILE_ORBIT_WISPS,
+      radius,
+      boundsHalf: [radius * 4, radius * 4, radius * 4]
+    });
 
     let time = 0;
     const visual: ProjectileVisual = {
       entity: root,
-      materials,
+      materials: [],
       update: (dt) => {
         time += dt;
-        const pulse = 1 + Math.sin(time * 20) * 0.09;
-        core.setLocalScale(
-          radius * 1.5 * pulse,
-          radius * 1.5 * pulse,
-          radius * 1.5 * pulse
-        );
-        const bodyPulse = 1 + Math.sin(time * 13) * 0.08;
-        body.setLocalScale(
-          radius * 3 * bodyPulse,
-          radius * 3 * bodyPulse,
-          radius * 3 * bodyPulse
-        );
-        for (const wisp of wisps) {
-          const angle = wisp.phase + time * 5.2;
-          wisp.entity.setLocalPosition(
-            Math.cos(angle) * wisp.orbit,
-            Math.sin(angle * 1.4) * radius * 0.8,
-            Math.sin(angle) * wisp.orbit
-          );
-          wisp.entity.setLocalEulerAngles(
-            0,
-            -angle / DEG,
-            Math.sin(angle * 2) * 40
-          );
-        }
-        coreMaterial.opacity = 0.9 + Math.sin(time * 28) * 0.08;
-        bodyMaterial.opacity = 0.5 + Math.sin(time * 15) * 0.08;
-        wispMaterial.opacity = 0.45 + Math.sin(time * 19) * 0.12;
-        trailMaterial.opacity = 0.22 + Math.sin(time * 11) * 0.06;
-        for (const material of materials) material.update();
+        coreBatch.setTime(time);
+        bodyBatch.setTime(time);
+        wispBatch.setTime(time);
       }
     };
     visual.update(0);
@@ -684,7 +704,7 @@ const root = new pc.Entity('shadow-projectile');
       destroy: () => {
         if (!ctx.projectiles.delete(visual)) return;
         ctx.destroyFxRoot(root);
-        ctx.releaseMaterials(materials);
+        ctx.releaseMaterials(visual.materials);
       }
     };
 }

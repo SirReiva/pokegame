@@ -74,7 +74,7 @@ function getInstanceFormat(device: pc.GraphicsDevice): pc.VertexFormat {
 }
 
 /** Declaraciones y utilidades comunes a todos los shaders de efecto. */
-const EFFECT_SHADER_COMMON = `
+export const EFFECT_SHADER_COMMON = `
 attribute vec4 vertex_position;
 uniform mat4 matrix_viewProjection;
 uniform mat4 matrix_model;
@@ -219,7 +219,7 @@ vec3 getLocalPosition(vec3 vertexPosition) {
 }
 
 /** Equivalentes WGSL de las utilidades y uniforms de `EFFECT_SHADER_COMMON`. */
-const EFFECT_SHADER_COMMON_WGSL = `
+export const EFFECT_SHADER_COMMON_WGSL = `
 attribute vertex_position: vec4f;
 uniform matrix_viewProjection: mat4x4f;
 uniform uEffectTime: f32;
@@ -385,6 +385,11 @@ fn getLocalPosition(vertexPosition: vec3f) -> vec3f {
  */
 let motionWgslSources: Map<string, string> | null = null;
 
+/** Gemelo WGSL de un movimiento GLSL, o `undefined` si falta. */
+export function effectMotionWgsl(motion: string): string | undefined {
+  return getMotionWgslSources().get(motion);
+}
+
 function getMotionWgslSources(): Map<string, string> {
   motionWgslSources ??= new Map<string, string>([
     [MOTION_STATIC, wgslMotions.MOTION_STATIC_WGSL],
@@ -423,6 +428,25 @@ function getMotionWgslSources(): Map<string, string> {
     [MOTION_BURROW_SLABS, wgslMotions.MOTION_BURROW_SLABS_WGSL],
     [MOTION_BURROW_ROCKS, wgslMotions.MOTION_BURROW_ROCKS_WGSL],
     [MOTION_BURROW_PUFFS, wgslMotions.MOTION_BURROW_PUFFS_WGSL],
+    [MOTION_TINT_MELEE_ARCS, wgslMotions.MOTION_TINT_MELEE_ARCS_WGSL],
+    [MOTION_TINT_MELEE_WAVES, wgslMotions.MOTION_TINT_MELEE_WAVES_WGSL],
+    [MOTION_TINT_BEAM_LAYER, wgslMotions.MOTION_TINT_BEAM_LAYER_WGSL],
+    [MOTION_TINT_BEAM_BULGES, wgslMotions.MOTION_TINT_BEAM_BULGES_WGSL],
+    [MOTION_TINT_BEAM_STREAKS, wgslMotions.MOTION_TINT_BEAM_STREAKS_WGSL],
+    [MOTION_TINT_BEAM_FOAM, wgslMotions.MOTION_TINT_BEAM_FOAM_WGSL],
+    [MOTION_TINT_BEAM_DROPS, wgslMotions.MOTION_TINT_BEAM_DROPS_WGSL],
+    [MOTION_TINT_BEAM_FIRE_LICKS, wgslMotions.MOTION_TINT_BEAM_FIRE_LICKS_WGSL],
+    [MOTION_TINT_BEAM_CYLINDER, wgslMotions.MOTION_TINT_BEAM_CYLINDER_WGSL],
+    [MOTION_TINT_BEAM_RIBBONS, wgslMotions.MOTION_TINT_BEAM_RIBBONS_WGSL],
+    [MOTION_TINT_BEAM_LEAVES, wgslMotions.MOTION_TINT_BEAM_LEAVES_WGSL],
+    [MOTION_TINT_BEAM_RINGS, wgslMotions.MOTION_TINT_BEAM_RINGS_WGSL],
+    [MOTION_TINT_BEAM_FEATHERS, wgslMotions.MOTION_TINT_BEAM_FEATHERS_WGSL],
+    [MOTION_ICE_BEAM_CRYSTALS, wgslMotions.MOTION_ICE_BEAM_CRYSTALS_WGSL],
+    [MOTION_TINT_BEAM_MIST, wgslMotions.MOTION_TINT_BEAM_MIST_WGSL],
+    [MOTION_TINT_PROJECTILE_BODY, wgslMotions.MOTION_TINT_PROJECTILE_BODY_WGSL],
+    [MOTION_TINT_PROJECTILE_FLAME_TAIL, wgslMotions.MOTION_TINT_PROJECTILE_FLAME_TAIL_WGSL],
+    [MOTION_TINT_PROJECTILE_ORBIT_WISPS, wgslMotions.MOTION_TINT_PROJECTILE_ORBIT_WISPS_WGSL],
+    [MOTION_PROJECTILE_ROCK, wgslMotions.MOTION_PROJECTILE_ROCK_WGSL],
     [MOTION_FIRE_WHIRL_FLAMES, wgslMotions.MOTION_FIRE_WHIRL_FLAMES_WGSL],
     [MOTION_FLAME_JET, wgslMotions.MOTION_FLAME_JET_WGSL],
     [MOTION_SPORE_SWARM, wgslMotions.MOTION_SPORE_SWARM_WGSL],
@@ -2796,6 +2820,470 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
+/** Arcos de golpe del melee: cada frente sale con su propio retardo. */
+export const MOTION_TINT_MELEE_ARCS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.x) / max(a0.y, 0.001), 0.0, 1.0);
+  float ease = 1.0 - pow(1.0 - local, 3.0);
+  float radius = uEffectRadius * (a0.z + (1.0 - a0.z) * ease);
+  return effectTRS(
+    vec3(0.0, a0.w, 0.0),
+    vec3(max(0.001, radius), 1.0, max(0.001, radius)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Ondas psíquicas del melee: frentes curvos con fase y ritmo propios. */
+export const MOTION_TINT_MELEE_WAVES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float local = clamp((uEffectTime - a0.x) / max(a0.y, 0.001), 0.0, 1.0);
+  float ease = 1.0 - (1.0 - local) * (1.0 - local);
+  float radius = uEffectRadius * (0.1 + 0.95 * ease);
+  float lift = a0.z + sin(uEffectTime * 8.0 + a1.y) * 0.025;
+  return effectTRS(
+    vec3(0.0, lift, 0.0),
+    vec3(max(0.001, radius), 1.0, max(0.001, radius)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  float angle = atan(vertexPosition.x, vertexPosition.z);
+  float edge = step(0.97, length(vertexPosition.xz));
+  float wave = sin(
+    angle * a1.z +
+    uEffectTime * 11.0 +
+    a1.y +
+    edge * 0.9
+  ) * a1.x;
+  return vec3(vertexPosition.x, wave, vertexPosition.z);
+}
+`;
+
+/** Capas del cuerpo de un haz: se revelan desde el lanzador a la punta. */
+export const MOTION_TINT_BEAM_LAYER = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.04, uEffectRadius * reveal);
+  return effectTRS(
+    vec3(0.0, 0.0, visible * 0.5),
+    vec3(a0.x, a0.x, visible),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Bultos que viajan por el cuerpo del haz. */
+export const MOTION_TINT_BEAM_BULGES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.04, uEffectRadius * reveal);
+  float phase = fract(a0.x + uEffectTime * a0.y);
+  float wobble = sin(uEffectTime * a0.z + a0.x * 6.2831853);
+  float size = a0.w * (0.82 + wobble * 0.22);
+  return effectTRS(
+    vec3(
+      sin(uEffectTime * 13.0 + a0.x * 6.2831853) * a1.x * 0.7,
+      cos(uEffectTime * 11.0 + a0.x * 6.2831853) * a1.x * 0.5,
+      phase * visible
+    ),
+    vec3(size, size, size * 1.6),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Vetas blancas que recorren el núcleo del haz. */
+export const MOTION_TINT_BEAM_STREAKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.04, uEffectRadius * reveal);
+  float phase = fract(a0.x + uEffectTime * a0.y);
+  float thickness = max(0.02, a1.x * 0.09);
+  return effectTRS(
+    vec3(a0.z, a0.w, phase * visible),
+    vec3(thickness, thickness, max(0.04, a1.y)),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Espuma que pulsa en la boca del haz. */
+export const MOTION_TINT_BEAM_FOAM = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float pulse = 0.8 + sin(uEffectTime * 34.0 + a0.y) * 0.28;
+  float size = a0.x * pulse;
+  return effectTRS(
+    vec3(
+      sin(uEffectTime * 18.0 + a0.y) * a1.x * 0.28,
+      cos(uEffectTime * 16.0 + a0.y) * a1.x * 0.22,
+      a0.z * reveal
+    ),
+    vec3(size, size, size),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Gotas de la salpicadura de la punta del haz. */
+export const MOTION_TINT_BEAM_DROPS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.04, uEffectRadius * reveal);
+  float phase = fract(a0.w + uEffectTime * a1.y);
+  float distance = a0.y * phase;
+  float fade = max(0.0, 1.0 - phase);
+  float scale = max(0.001, a1.x * fade);
+  return effectTRS(
+    vec3(
+      cos(a0.x) * distance,
+      sin(phase * EFFECT_PI) * a0.z,
+      visible + sin(a0.x) * distance * 0.55
+    ),
+    vec3(scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Lenguas de fuego que cubren el chorro del haz ígneo. */
+export const MOTION_TINT_BEAM_FIRE_LICKS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.04, uEffectRadius * reveal);
+  if (a0.y > visible) {
+    return effectTRS(vec3(0.0), vec3(0.0001), effectRotY(0.0));
+  }
+  float phase = a0.x;
+  float pulse = 0.78 + sin(uEffectTime * 21.0 + phase) * 0.24;
+  float stretch = 0.86 + sin(uEffectTime * 17.0 + phase * 1.3) * 0.22;
+  float sway = sin(uEffectTime * 11.0 + phase) * uEffectParam1 * 0.55;
+  float rise = cos(uEffectTime * 8.0 + phase) * uEffectParam1 * 0.55;
+  float widthNow = a1.x * pulse;
+  float heightNow = a1.y * stretch;
+  float yaw = a1.w * EFFECT_DEG;
+  mat4 rotation;
+  if (instance_anim2.y > 0.5) {
+    rotation = effectEulerZYX(
+      0.0,
+      yaw + sin(uEffectTime * 6.0 + phase) * 18.0 * EFFECT_DEG,
+      sin(uEffectTime * 13.0 + phase) * 8.0 * EFFECT_DEG
+    );
+  } else {
+    rotation = effectEulerZYX(
+      a1.z * EFFECT_DEG,
+      yaw + sin(uEffectTime * 9.0 + phase) * 14.0 * EFFECT_DEG,
+      instance_anim2.x * EFFECT_DEG + sin(uEffectTime * 15.0 + phase) * 12.0 * EFFECT_DEG
+    );
+  }
+  return effectTRS(
+    vec3(a0.z + sway, a0.w + rise, a0.y),
+    vec3(widthNow, heightNow, widthNow),
+    rotation
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Cilindro del cuerpo de un haz (eje Y rotado al eje del haz). */
+export const MOTION_TINT_BEAM_CYLINDER = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float pulse = uEffectParam1;
+  return effectTRS(
+    vec3(0.0, 0.0, visible * 0.5),
+    vec3(a0.x * pulse, visible, a0.y * pulse),
+    effectRotX(90.0 * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Segmentos rectangulares en hélice de los haces de aire. */
+export const MOTION_TINT_BEAM_RIBBONS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float angle =
+    a0.x + uEffectTime * uEffectParam1 + a0.y * EFFECT_PI * uEffectParam2;
+  float radius = a0.z * (0.85 + uEffectParam3 * 0.2);
+  return effectTRS(
+    vec3(cos(angle) * radius, sin(angle) * radius, a0.y * visible),
+    vec3(a1.x, a1.x, a1.y),
+    effectEulerZYX(0.0, -angle, angle + 20.0 * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Hojas en hélice de los haces de Planta. */
+export const MOTION_TINT_BEAM_LEAVES = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float angle =
+    a0.x + uEffectTime * uEffectParam1 + a0.y * EFFECT_PI * uEffectParam2;
+  float radius = a0.z;
+  float scale = a1.x * (0.8 + uEffectParam3 * 0.2);
+  return effectTRS(
+    vec3(cos(angle) * radius, sin(angle) * radius, a0.y * visible),
+    vec3(scale, scale * 1.8, scale),
+    effectEulerZYX(
+      sin(uEffectTime * 10.0 + a0.w) * 35.0 * EFFECT_DEG,
+      angle + uEffectTime * 220.0 * EFFECT_DEG,
+      cos(uEffectTime * 8.0 + a0.w) * 45.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Anillos que recorren el haz de aire, planta o hielo. */
+export const MOTION_TINT_BEAM_RINGS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float path = fract(uEffectTime * uEffectParam1 + a0.x * 0.25);
+  float scale =
+    uEffectParam2 * (1.4 + sin(path * EFFECT_PI) * 1.1) * uEffectParam3;
+  return effectTRS(
+    vec3(0.0, 0.0, visible * (0.08 + path * 0.92)),
+    vec3(scale, scale, scale),
+    effectEulerZYX(
+      90.0 * EFFECT_DEG,
+      0.0,
+      (uEffectTime * 180.0 + a0.x * 40.0) * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Plumas que escoltan el haz de aire. */
+export const MOTION_TINT_BEAM_FEATHERS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float local = min(1.0, uEffectTime / 0.4);
+  float angle = a0.x + uEffectTime * 3.2;
+  float radius = uEffectParam1 * (1.2 + local * 0.7);
+  float scale = a0.z * max(0.0, 1.0 - local * 0.7);
+  return effectTRS(
+    vec3(cos(angle) * radius, sin(angle) * radius, a0.y * visible),
+    vec3(scale, scale * 2.1, scale),
+    effectEulerZYX(
+      sin(uEffectTime * 9.0 + a0.w) * 35.0 * EFFECT_DEG,
+      angle + uEffectTime * 160.0 * EFFECT_DEG,
+      cos(uEffectTime * 8.0 + a0.w) * 45.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Cristales incrustados y de la punta del haz de hielo. */
+export const MOTION_ICE_BEAM_CRYSTALS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float pulse = uEffectParam1;
+  float angle;
+  vec3 pos;
+  mat4 rotation;
+  vec3 size;
+  if (a1.y > 0.5) {
+    angle = a0.y + uEffectTime * 3.0;
+    pos = vec3(
+      cos(angle) * uEffectParam2,
+      sin(angle) * uEffectParam2,
+      visible
+    );
+    rotation = effectEulerZYX(
+      uEffectTime * 160.0 * EFFECT_DEG,
+      angle,
+      uEffectTime * 90.0 * EFFECT_DEG
+    );
+    size = vec3(a0.w * 0.65, a0.w * 2.0, a0.w * 0.65);
+  } else {
+    angle = a0.y + uEffectTime * 4.5 + a1.x;
+    float radius = a0.z * (0.85 + pulse * 0.25);
+    float scale = a0.w * (0.75 + sin(uEffectTime * 8.0 + a1.x) * 0.2);
+    pos = vec3(cos(angle) * radius, sin(angle) * radius, a0.x * visible);
+    rotation = effectEulerZYX(
+      (uEffectTime * 120.0 + a1.x * 40.0) * EFFECT_DEG,
+      angle,
+      uEffectTime * 80.0 * EFFECT_DEG
+    );
+    size = vec3(scale * 0.7, scale * 1.9, scale * 0.7);
+  }
+  return effectTRS(pos, size, rotation);
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Neblina que gira alrededor del haz de hielo. */
+export const MOTION_TINT_BEAM_MIST = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float revealDur = max(uEffectParam0, 0.001);
+  float reveal = 1.0 - pow(1.0 - min(1.0, uEffectTime / revealDur), 2.0);
+  float visible = max(0.02, uEffectRadius * reveal);
+  float angle = a0.y + uEffectTime * 2.4;
+  float scale =
+    a0.z * (0.7 + sin(uEffectTime * 5.0 + a0.y) * 0.2);
+  return effectTRS(
+    vec3(
+      cos(angle) * uEffectParam1 * 1.2,
+      sin(angle) * uEffectParam1 * 0.8,
+      a0.x * visible
+    ),
+    vec3(scale, scale * 0.7, scale),
+    effectRotY(0.0)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Núcleo y halos de un proyectil que laten a distinta velocidad. */
+export const MOTION_TINT_PROJECTILE_BODY = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float pulse = 1.0 + sin(uEffectTime * a0.x + a0.y) * a0.z;
+  mat4 result = base;
+  result[0] *= pulse;
+  result[1] *= pulse;
+  result[2] *= pulse;
+  return result;
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Dos lenguas de fuego que forman la cola de un proyectil. */
+export const MOTION_TINT_PROJECTILE_FLAME_TAIL = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float stretch = a1.w + sin(uEffectTime * a0.x + a0.z) * 0.2;
+  float sway = 1.0 + sin(uEffectTime * a0.y + a0.w) * instance_anim2.x;
+  float roll =
+    a1.z + sin(uEffectTime * instance_anim2.z + a0.w) * instance_anim2.y;
+  return effectTRS(
+    base[3].xyz,
+    vec3(a1.x * sway, a1.y * stretch, a1.x * sway),
+    effectEulerZYX(-90.0 * EFFECT_DEG, 0.0, roll * EFFECT_DEG)
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Jirones que orbitan el proyectil de sombra. */
+export const MOTION_TINT_PROJECTILE_ORBIT_WISPS = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  float angle = a0.x + uEffectTime * 5.2;
+  return effectTRS(
+    vec3(
+      cos(angle) * a0.y,
+      sin(angle * 1.4) * uEffectRadius * 0.8,
+      sin(angle) * a0.y
+    ),
+    vec3(a1.x, a1.x, a1.y),
+    effectEulerZYX(
+      0.0,
+      -angle,
+      sin(angle * 2.0) * 40.0 * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
+/** Piedras del proyectil de roca: giran como un único boulder. */
+export const MOTION_PROJECTILE_ROCK = `
+mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
+  return effectTRS(
+    base[3].xyz,
+    vec3(instance_anim2.x, instance_anim2.y, instance_anim2.z),
+    effectEulerZYX(
+      (a0.x + uEffectTime * a1.x) * EFFECT_DEG,
+      (a0.y + uEffectTime * a1.y) * EFFECT_DEG,
+      (a0.z + uEffectTime * a1.z) * EFFECT_DEG
+    )
+  );
+}
+
+vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
+  return vertexPosition;
+}
+`;
+
 /** Jirones del área fantasma. */
 export const MOTION_GHOST_WISPS = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
@@ -2874,3 +3362,4 @@ vec3 effectLocalPosition(vec3 vertexPosition) {
   return vec3(vertexPosition.x, wave, vertexPosition.z);
 }
 `;
+

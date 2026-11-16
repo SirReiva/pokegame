@@ -82,19 +82,22 @@ Ahora todas las áreas (`ring`, `grass`, `water`, `cyclone`, `heat`, `fire`,
 
 Siguen con entidades por elemento:
 
-- El cuerpo de los haces `fire`, `grass`, `water`, `ice`, `air` y `rock`
-  (tres capas); los jirones, aros y ojos de `dark`/`ghost` y las púas del haz
-  de Roca ya usan lotes. El haz eléctrico y el psíquico también están por lotes.
-- La decoración de los proyectiles de fuego, roca y veneno: núcleo, halo y
-  cola usan materiales y colores distintos, así que fundirlos cambiaría la
-  paleta.
-- Las garras y ondas del melee: la geometría ya se comparte entre casteos
-  (`cachedMesh`), pero cada zarpa conserva su material para animar su propia
-  opacidad.
-- La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos.
+- Las cuatro piezas del **shuriken**: estrella exterior, estrella interior,
+  núcleo y halo usan mallas y materiales diferentes.
+- El haz de **roca**: la grieta luminosa y la cresta del suelo son dos cajas con
+  materiales propios; las púas sí van por lotes.
+- La marca previa de área (`spawnAoeTelegraph`), que son pocos aros y discos
+  persistentes.
 
-El área `burrow` de **Excavar** ya usa lotes para grietas, losas, rocas, puffs
-y anillos; solo el cráter y su borde quedan como entidades. Las ondas del área
+El resto de capas se dibuja con `EffectTintBatch`, que permite color y alfa por
+instancia: cuerpo y decoración de los proyectiles de fuego, veneno, eléctrico,
+hojas y sombra; ondas, arcos y garras del melee; y todas las capas de los haces
+de agua, fuego, aire, Planta e hielo. El cuerpo del proyectil de roca usa
+`EffectBatch`: sus cuatro fragmentos comparten el material iluminado y giran
+como un solo boulder.
+
+El área `burrow` de **Excavar** usa lotes para grietas, losas, rocas, puffs y
+anillos; solo el cráter y su borde quedan como entidades. Las ondas del área
 psíquica también van en un lote.
 
 Los impactos, las hojas y puffs del melee, las mordidas y la decoración de la

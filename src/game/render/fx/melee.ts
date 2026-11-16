@@ -2,9 +2,12 @@ import type { FxRuntime } from './fxRuntime';
 import * as pc from 'playcanvas';
 import type { ImpactStyle } from '../../abilities';
 import { DEG } from '../../config';
-import { EffectBatch, applyVertexEffectShader, MOTION_MELEE_LEAVES, MOTION_MELEE_PUFFS, MOTION_PSYCHIC_WAVE, MOTION_SPORE_SWARM, MOTION_STATIC } from '../../effectBatch';
+import { EffectBatch, MOTION_MELEE_LEAVES, MOTION_MELEE_PUFFS, MOTION_SPORE_SWARM, MOTION_STATIC, MOTION_TINT_MELEE_ARCS, MOTION_TINT_MELEE_WAVES } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
-import { MELEE_ARC_OPACITY, createArcMesh, createSlashStreakMesh } from './fxGeometry';
+import { EffectTintBatch } from './effectTintBatch';
+import type { TintEffectInstance } from './effectTintBatch';
+import { MELEE_ARC_OPACITY, createArcMesh, createSlashStreakSetMesh } from './fxGeometry';
+import type { SlashStreakSpec } from './fxGeometry';
 
 /**
    * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
@@ -90,22 +93,14 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       });
     }
 
-    const psychicWaves: {
-      entity: pc.Entity;
-      material: pc.StandardMaterial;
-      delay: number;
-      travel: number;
-      opacity: number;
-      lift: number;
-      phase: number;
-      amplitude: number;
-      ripple: number;
-    }[] = [];
+    let waveBatch: EffectTintBatch | null = null;
     if (style === 'psychic') {
       // Onda sonora psíquica: frentes curvos que nacen en el lanzador y
       // recorren el cono hasta su borde. Cada frente se deforma en Y como una
       // cinta ondulada. Se usan dos tonos del color de la habilidad y mezcla
       // normal: con aditivo el violeta se lavaba a blanco sobre terrenos claros.
+      // Las cinco ondas se dibujan en un único lote con tinte y alfa por
+      // instancia.
       effectDuration = 0.75;
       material.opacity = 0.14;
       const highlightTint: [number, number, number] = [
@@ -113,44 +108,32 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         Math.round(color[1] + (255 - color[1]) * 0.32),
         Math.round(color[2] + (255 - color[2]) * 0.32)
       ];
-      const waveCount = 5;
-      const segments = 30;
-      for (let index = 0; index < waveCount; index++) {
+      const travel = 0.42;
+      const waveInstances: TintEffectInstance[] = [];
+      for (let index = 0; index < 5; index++) {
         const highlight = index % 2 === 0;
-        const waveMaterial = ctx.createMaterial(
-          highlight ? highlightTint : color,
-          highlight ? 0.9 : 0.75
-        );
-        waveMaterial.blendType = pc.BLEND_NORMAL;
-        waveMaterial.opacity = 0;
-        applyVertexEffectShader(waveMaterial, MOTION_PSYCHIC_WAVE);
-        materials.push(waveMaterial);
-        // La geometría es idéntica para todas las ondas: se comparte entre
-        // casteos en vez de reconstruir cinco mallas cada vez.
-        const waveMesh = ctx.cachedArcBand(0.94, 1, halfAngle, segments);
-        const wave = ctx.createEntity(waveMesh, [waveMaterial], entity);
-        const lift = 0.12 + index * 0.012;
-        wave.setLocalPosition(0, lift, 0);
-        wave.setLocalScale(0.001, 1, 0.001);
-        psychicWaves.push({
-          entity: wave,
-          material: waveMaterial,
-          delay: index * 0.07,
-          travel: 0.42,
-          opacity: highlight ? 0.9 : 0.75,
-          lift,
-          phase: index * 1.7,
-          amplitude: 0.14 + index * 0.012,
-          ripple: 4 + (index % 3)
+        const delay = index * 0.07;
+        waveInstances.push({
+          color: highlight ? highlightTint : color,
+          alpha: highlight ? 0.9 : 0.75,
+          fade: [delay, travel * 0.12, travel * 0.7, travel * 0.3],
+          anim0: [delay, travel, 0.12 + index * 0.012, 0],
+          anim1: [0.14 + index * 0.012, index * 1.7, 4 + (index % 3), 0]
         });
       }
+      waveBatch = new EffectTintBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.cachedArcBand(0.94, 1, halfAngle, 30),
+        instances: waveInstances,
+        motion: MOTION_TINT_MELEE_WAVES,
+        radius: range,
+        life: effectDuration,
+        boundsHalf: [range + 1, 1, range + 1]
+      });
     }
 
-    const slashClaws: {
-      material: pc.StandardMaterial;
-      delay: number;
-      peak: number;
-    }[] = [];
+    let clawMaterial: pc.StandardMaterial | null = null;
     if (
       style === 'slash' ||
       style === 'steel' ||
@@ -202,48 +185,36 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       const liftStart = ghost ? 0.04 : 0.1;
       const liftEnd = ghost ? 0.09 : 0.2;
       const bow = ghost ? 0.02 : 0.04;
-      for (let index = 0; index < claws.length; index++) {
-        const claw = claws[index];
-        const clawMaterial = ctx.createMaterial(clawTint, 0);
-        clawMaterial.blendType = pc.BLEND_NORMAL;
-        clawMaterial.opacity = 0;
-        clawMaterial.update();
-        materials.push(clawMaterial);
-        // Las tres zarpas comparten parámetros por estilo; se cachean por
-        // geometría para no crear mallas nuevas en cada golpe.
-        const clawMesh = ctx.cachedMesh(
-          `slash-streak:${(range * claw.inner).toFixed(3)}:${(range * claw.outer).toFixed(3)}:${start.toFixed(3)}:${span.toFixed(3)}:${index}`,
-          () =>
-            createSlashStreakMesh(
-              ctx.device,
-              range * claw.inner,
-              range * claw.outer,
-              range * 0.07,
-              start,
-              span,
-              32,
-              liftStart,
-              liftEnd,
-              bow,
-              index * 1.9
-            )
-        );
-        ctx.createEntity(clawMesh, [clawMaterial], entity);
-        slashClaws.push({
-          material: clawMaterial,
-          delay: claw.delay,
-          peak: claw.peak
-        });
-      }
+      const materialForClaws = ctx.createMaterial(clawTint, 0);
+      materialForClaws.blendType = pc.BLEND_NORMAL;
+      materialForClaws.opacity = 0;
+      materialForClaws.update();
+      materials.push(materialForClaws);
+      clawMaterial = materialForClaws;
+
+      // Las garras comparten material y se funden en una sola malla: el
+      // zarpazo completo cuesta una entidad en vez de una por filo. La
+      // geometría se cachea por estilo y alcance.
+      const specs: SlashStreakSpec[] = claws.map((claw, index) => ({
+        innerRadius: range * claw.inner,
+        outerRadius: range * claw.outer,
+        halfThickness: range * 0.07,
+        angleStart: start,
+        angleSweep: span,
+        segments: 32,
+        liftStart,
+        liftEnd,
+        bow,
+        phase: index * 1.9
+      }));
+      const clawMesh = ctx.cachedMesh(
+        `slash-streak-set:${range.toFixed(3)}:${span.toFixed(3)}:${liftStart}:${liftEnd}:${bow}:${claws.map((claw) => `${claw.inner}-${claw.outer}`).join('|')}`,
+        () => createSlashStreakSetMesh(ctx.device, specs)
+      );
+      ctx.createEntity(clawMesh, [materialForClaws], entity);
     }
 
-    const attackArcs: {
-      entity: pc.Entity;
-      material: pc.StandardMaterial;
-      delay: number;
-      travel: number;
-      peak: number;
-    }[] = [];
+    let attackArcBatch: EffectTintBatch | null = null;
     if (style === 'arc' || style === 'fighting' || style === 'air') {
       // Arco de ataque: tres frentes curvos que salen del lanzador y recorren
       // el cono hasta su borde, marcando la dirección y el alcance del golpe.
@@ -255,24 +226,27 @@ export function spawnMelee(ctx: FxRuntime, x: number,
       effectDuration = fighting ? 0.4 : 0.34;
       material.opacity = 0.16;
       const frontCount = fighting ? 4 : 3;
+      const travel = fighting ? 0.17 : 0.2;
+      const arcInstances: TintEffectInstance[] = [];
       for (let index = 0; index < frontCount; index++) {
-        const arcMaterial = ctx.createMaterial(color, 0);
-        arcMaterial.blendType = pc.BLEND_NORMAL;
-        arcMaterial.opacity = 0;
-        arcMaterial.update();
-        materials.push(arcMaterial);
-        const arcMesh = ctx.cachedArcBand(0.84, 1, halfAngle, 26);
-        const arc = ctx.createEntity(arcMesh, [arcMaterial], entity);
-        arc.setLocalPosition(0, 0.12 + index * 0.035, 0);
-        arc.setLocalScale(0.001, 1, 0.001);
-        attackArcs.push({
-          entity: arc,
-          material: arcMaterial,
-          delay: index * (fighting ? 0.035 : 0.05),
-          travel: fighting ? 0.17 : 0.2,
-          peak: 1 - index * (fighting ? 0.14 : 0.15)
+        const delay = index * (fighting ? 0.035 : 0.05);
+        arcInstances.push({
+          color,
+          alpha: 1 - index * (fighting ? 0.14 : 0.15),
+          fade: [delay, travel * 0.18, travel * 0.18, travel * 0.82],
+          anim0: [delay, travel, 0.28, 0.12 + index * 0.035]
         });
       }
+      attackArcBatch = new EffectTintBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.cachedArcBand(0.84, 1, halfAngle, 26),
+        instances: arcInstances,
+        motion: MOTION_TINT_MELEE_ARCS,
+        radius: range,
+        life: effectDuration,
+        boundsHalf: [range + 1, 1, range + 1]
+      });
     }
 
     let cloudMaterial: pc.StandardMaterial | null = null;
@@ -409,57 +383,19 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
       }
-      for (const arc of attackArcs) {
-        const local = Math.min(
-          1,
-          Math.max(0, (time - arc.delay) / arc.travel)
-        );
-        const ease = 1 - Math.pow(1 - local, 3);
-        const radius = range * (0.28 + 0.72 * ease);
-        arc.entity.setLocalScale(radius, 1, radius);
-        const fade = Math.min(1, local / 0.18) * (1 - local);
-        arc.material.opacity = arc.peak * Math.max(0, fade);
-      }
+      attackArcBatch?.setTime(time);
       const now = t * effectDuration;
-      for (const claw of slashClaws) {
-        // Encendido rápido y continuo de la zarpa completa. El desfase entre
-        // zarpas conserva la lectura de tres tajos seguidos sin que la cinta se
-        // fragmente en tramos.
-        const appear = Math.min(1, Math.max(0, (now - claw.delay) / 0.05));
+      if (clawMaterial) {
+        // Encendido rápido y continuo de la zarpa completa, con el desfase
+        // mínimo del primer filo.
+        const appear = Math.min(1, Math.max(0, now / 0.05));
         const fadeOut =
           1 - Math.min(1, Math.max(0, (now - 0.2) / (effectDuration - 0.2)));
-        claw.material.opacity = claw.peak * appear * Math.max(0, fadeOut);
+        clawMaterial.opacity = appear * Math.max(0, fadeOut);
       }
       leafBatch?.setTime(time);
       sporeBatch?.setTime(time);
-
-      for (const wave of psychicWaves) {
-        const local = Math.min(
-          1,
-          Math.max(0, (time - wave.delay) / wave.travel)
-        );
-        const ease = 1 - (1 - local) * (1 - local);
-        const radius = range * (0.1 + 0.95 * ease);
-        wave.entity.setLocalScale(radius, 1, radius);
-        const fade =
-          local <= 0
-            ? 0
-            : Math.min(1, local / 0.12) * Math.min(1, (1 - local) / 0.3);
-        wave.material.opacity = wave.opacity * Math.max(0, fade);
-
-        // La ondulación de la cinta vive en el vertex shader: solo se suben
-        // tres uniformes por onda en vez de reescribir la malla cada frame.
-        wave.material.setParameter('uEffectTime', time);
-        wave.material.setParameter('uEffectParam0', wave.phase);
-        wave.material.setParameter('uEffectParam1', wave.amplitude);
-        wave.material.setParameter('uEffectParam2', wave.ripple);
-
-        wave.entity.setLocalPosition(
-          0,
-          wave.lift + Math.sin(time * 8 + wave.phase) * 0.025,
-          0
-        );
-      }
+      waveBatch?.setTime(time);
 
       if (cloudMaterial) cloudMaterial.opacity = 0.26 * (1 - t);
       if (cloudHotMaterial) cloudHotMaterial.opacity = 0.2 * (1 - t);
