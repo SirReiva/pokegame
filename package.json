@@ -28,6 +28,7 @@
     "test": "node scripts/run-tests.mjs",
     "bench": "node --import tsx scripts/bench-core.mjs",
     "bench:frame": "node scripts/bench-frame.mjs",
+    "sim": "node --import tsx scripts/sim-headless.ts",
     "preview": "vite preview"
   },
   "dependencies": {

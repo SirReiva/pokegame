@@ -622,19 +622,27 @@ También se pueden aleatorizar skins y nombres para dar variedad visual.
 
 ## 9. Ingeniería, tests y rendimiento
 
-### 9.1 Simulación headless
+### 9.1 Simulación headless — Hecho (spike)
 
-No hay script de test en `package.json`. Antes de seguir ajustando la IA,
-montaría una simulación con bots enfrentándose y métricas:
-
-- tiempo atascado,
-- habilidades lanzadas/impactadas,
-- cooldowns desperdiciados,
-- KOs y muertes,
-- eficiencia de pociones,
-- errores de ruta,
-- tiempo en rango de objetivo,
-- daño evitable recibido.
+> **Estado: implementado.** `pnpm sim` ejecuta `scripts/sim-headless.ts` sin
+> PlayCanvas, DOM ni GPU: carga un mapa real, reconstruye los colliders de bases
+> y cordilleras, monta bots y avanza el mismo paso fijo de 60 Hz que `Game`.
+>
+> ```bash
+> pnpm sim --map arena --bots 4 --seconds 60
+> pnpm sim --mode koth --bots 8 --seconds 120 --seed 7
+> pnpm sim --seconds 60 --trace .cache/sim.jsonl --every 5 --json .cache/sim.json
+> ```
+>
+> Ya da métricas de KOs, casteos, impactos, proyectiles, áreas, daño, curación,
+> XP y distancia, con RNG reproducible (`--seed`). La traza JSONL incluye
+> posición, vida, casteo, objetivo y estado de retirada/regeneración de cada bot.
+>
+> Limitaciones del spike: no genera los colliders de árboles y rocas (solo bases
+> y cordilleras), no simula objetos recogibles y omite animación y audio. Las
+> métricas pendientes del plan original (tiempo atascado, cooldowns
+> desperdiciados, eficiencia de pociones, errores de ruta, tiempo en objetivo)
+> se pueden añadir sobre la misma traza.
 
 ### 9.2 Overlay de debug
 
