@@ -442,9 +442,8 @@ export class BotDecision {
       );
       let cover = this.state.retreatCover;
       if (cover) {
-        const coverEnemies = this.state.visibleEnemies.filter(
-          (enemy) => enemy.alive && enemy.team !== self.team
-        );
+        // `visibleEnemies` ya solo contiene rivales vivos del otro equipo.
+        const coverEnemies = this.state.visibleEnemies;
         const stale =
           this.state.clock >= this.state.retreatCoverUntil ||
           Math.hypot(cover.x - self.x, cover.z - self.z) < 0.9 ||

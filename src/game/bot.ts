@@ -327,10 +327,32 @@ export class BotController {
   /** `false` si el objetivo visible es inmune a todo el daño del bot. */
   private engageTarget = true;
   private visibleTimer = 0;
+  /**
+   * Rivales vivos del equipo contrario vistos por el bot. `updateTarget` lo
+   * reconstruye en cada paso con ese filtro, así que sus consumidores pueden
+   * recorrerlo sin hacer una copia.
+   */
   private visibleEnemies: MatchPlayerState[] = [];
   private threat: IncomingThreat | null = null;
   /** Peligros ya lanzados (proyectiles y áreas persistentes) de este frame. */
   private hazards: readonly BotHazard[] = NO_HAZARDS;
+  /** Buffer de peligros para A*; se reescribe en cada consulta. */
+  private readonly navHazardScratch: NavHazard[] = [];
+  /** Objetos del buffer anterior, conservados aunque la vista se recorte. */
+  private readonly navHazardPool: NavHazard[] = [];
+  /** Área de peligro compartida; no debe conservarse entre llamadas. */
+  private readonly hazardAreaScratch: AoeArea = {
+    shape: 'circle',
+    x: 0,
+    z: 0,
+    radius: 0,
+    dirX: 0,
+    dirZ: 1,
+    halfAngle: 0
+  };
+  /** Observador y objetivo compartidos por las pruebas de cobertura. */
+  private readonly sightObserver = { x: 0, z: 0, visionRange: 0 };
+  private readonly sightTarget = { x: 0, z: 0 };
   /** Salida del peligro ya lanzado más urgente, o `null` si no hay ninguno. */
   private hazardEvasion: HazardEvasion | null = null;
   /** Error angular de apuntado vigente; cambia cada pocas decisiones. */
@@ -1803,17 +1825,20 @@ export class BotController {
     };
   }
 
-  /** Geometría de un peligro de área ya lanzado. */
+  /**
+   * Geometría de un peligro de área ya lanzado. Devuelve un objeto compartido
+   * por el bot: hay que usarlo en el acto y no guardarlo entre llamadas.
+   */
   private hazardArea(hazard: BotHazard): AoeArea {
-    return {
-      shape: hazard.shape ?? 'circle',
-      x: hazard.x,
-      z: hazard.z,
-      radius: hazard.radius,
-      dirX: hazard.dirX ?? 0,
-      dirZ: hazard.dirZ ?? 1,
-      halfAngle: hazard.halfAngle ?? 0
-    };
+    const area = this.hazardAreaScratch;
+    area.shape = hazard.shape ?? 'circle';
+    area.x = hazard.x;
+    area.z = hazard.z;
+    area.radius = hazard.radius;
+    area.dirX = hazard.dirX ?? 0;
+    area.dirZ = hazard.dirZ ?? 1;
+    area.halfAngle = hazard.halfAngle ?? 0;
+    return area;
   }
 
   /**
@@ -2016,7 +2041,11 @@ export class BotController {
    * porque se mueven y la ruta se recalcula con poca frecuencia.
    */
   private navHazards(self: MatchPlayerState): NavHazard[] | undefined {
-    const hazards: NavHazard[] = [];
+    // El array y sus objetos se reutilizan entre consultas: `findPath` los
+    // consume de forma síncrona y no guarda la referencia.
+    const hazards = this.navHazardScratch;
+    hazards.length = 0;
+    let count = 0;
     for (const hazard of this.hazards) {
       if (hazard.ownerTeam === self.team) continue;
       if (hazard.kind === 'projectile') continue;
@@ -2024,11 +2053,12 @@ export class BotController {
       const padding = self.hitRadius + HAZARD_AOE_MARGIN;
       const area = this.hazardArea(hazard);
       if (area.shape === 'circle') {
-        hazards.push({
-          x: area.x,
-          z: area.z,
-          radius: area.radius + padding
-        });
+        const navHazard = this.acquireNavHazard(count);
+        navHazard.x = area.x;
+        navHazard.z = area.z;
+        navHazard.radius = area.radius + padding;
+        hazards[count] = navHazard;
+        count += 1;
         continue;
       }
       // La navegación solo entiende círculos: un cono se aproxima con varios
@@ -2037,14 +2067,30 @@ export class BotController {
       for (let index = 0; index < segments; index++) {
         const t = (index + 0.5) / segments;
         const width = area.radius * t * Math.tan(area.halfAngle);
-        hazards.push({
-          x: area.x + area.dirX * area.radius * t,
-          z: area.z + area.dirZ * area.radius * t,
-          radius: Math.max(0.35, width) + padding
-        });
+        const navHazard = this.acquireNavHazard(count);
+        navHazard.x = area.x + area.dirX * area.radius * t;
+        navHazard.z = area.z + area.dirZ * area.radius * t;
+        navHazard.radius = Math.max(0.35, width) + padding;
+        hazards[count] = navHazard;
+        count += 1;
       }
     }
-    return hazards.length > 0 ? hazards : undefined;
+    hazards.length = count;
+    return count > 0 ? hazards : undefined;
+  }
+
+  /**
+   * Devuelve el hueco `index` del pool de peligros de navegación, creándolo
+   * solo la primera vez. Los valores de relleno se sobrescriben antes de
+   * publicar el array.
+   */
+  private acquireNavHazard(index: number): NavHazard {
+    const pool = this.navHazardPool;
+    const existing = pool[index];
+    if (existing !== undefined) return existing;
+    const hazard: NavHazard = { x: 0, z: 0, radius: 0 };
+    pool[index] = hazard;
+    return hazard;
   }
 
   /**
@@ -2518,9 +2564,8 @@ export class BotController {
     colliders: readonly Collider[]
   ): Vec2 | null {
     if (self.enemiesSeeing === 0) return null;
-    const enemies = this.visibleEnemies.filter(
-      (enemy) => enemy.alive && enemy.team !== self.team
-    );
+    // `visibleEnemies` ya contiene solo rivales vivos y del otro equipo.
+    const enemies = this.visibleEnemies;
     if (enemies.length === 0) return null;
 
     const currentBaseDistance = Math.hypot(
@@ -2705,9 +2750,8 @@ export class BotController {
     self: MatchPlayerState,
     colliders: readonly Collider[]
   ): Vec2 | null {
-    const enemies = this.visibleEnemies.filter(
-      (enemy) => enemy.alive && enemy.team !== self.team
-    );
+    // Sin copia: la lista de visibles ya está filtrada por `updateTarget`.
+    const enemies = this.visibleEnemies;
     let best: Vec2 | null = null;
     let bestScore = -Infinity;
 
@@ -2778,9 +2822,7 @@ export class BotController {
     // a la vista.
     if (this.hazardPathBlocked(self, point)) return false;
 
-    const enemies = this.visibleEnemies.filter(
-      (enemy) => enemy.alive && enemy.team !== self.team
-    );
+    const enemies = this.visibleEnemies;
     const concealment = terrainConcealment(
       terrainAt(point.x, point.z),
       self.types
@@ -2827,16 +2869,16 @@ export class BotController {
       const x = self.x + (point.x - self.x) * t;
       const z = self.z + (point.z - self.z) * t;
       const concealment = terrainConcealment(terrainAt(x, z), self.types).value;
+      const observer = this.sightObserver;
+      const target = this.sightTarget;
+      target.x = x;
+      target.z = z;
       for (const enemy of enemies) {
-        const observer = {
-          x: enemy.x,
-          z: enemy.z,
-          visionRange:
-            enemy.visionRange * atmosphereVisionMultiplier(this.atmosphere)
-        };
-        if (
-          isTargetVisible(observer, { x, z }, concealment, colliders, false)
-        ) {
+        observer.x = enemy.x;
+        observer.z = enemy.z;
+        observer.visionRange =
+          enemy.visionRange * atmosphereVisionMultiplier(this.atmosphere);
+        if (isTargetVisible(observer, target, concealment, colliders, false)) {
           return false;
         }
       }

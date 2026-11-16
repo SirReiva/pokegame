@@ -665,11 +665,11 @@ comparar FPS, draw calls y memoria.
 
 > **Estado (noviembre de 2026): implementado.** `visibleEnemies` se vacía con
 > `length = 0` en vez de crear un array por paso; `buildBotHazards()` acepta un
-> `BotHazardBuffer` que reescribe el array y recicla los objetos de peligro; y
+> `BotHazardBuffer` que reescribe el array y recicla los objetos de peligro;
 > `simulateStep()` reutiliza cuatro `MutableBotWorldView` y pide
-> `getBotObjective()` una sola vez por paso. Cubierto por
-> `src/game/ai/__tests__/hazards.test.ts`. Queda pendiente el resto de
-> `filter()` por paso y los arrays de `navHazards()`.
+> `getBotObjective()` una sola vez por paso; y las búsquedas de cobertura,
+> refugio y navegación ya no copian enemigos ni crean objetos por muestra. Los
+> tests de `src/game/ai/__tests__/hazards.test.ts` cubren el buffer de peligros.
 
 ### Qué pasaba antes
 
@@ -682,20 +682,29 @@ Aunque el bucle principal está muy limpio, quedaban allocations por paso:
 - `simulateStep()` creaba el registro `botViews` y cuatro objetos
   `BotWorldView` por paso, y llamaba cuatro veces a `getBotObjective()`
   (`src/game/game.ts`).
+- `pickRetreatCover()`, `pickRegenPoint()`, `regenPointSafe()` y la decisión de
+  retirada copiaban `visibleEnemies` con `filter()` aunque la lista ya venía
+  filtrada.
+- `regenSegmentHidden()` creaba un observador y un objetivo por cada rival y
+  cada muestra del trayecto; `hazardArea()` creaba un área por peligro y
+  `navHazards()` un array y un objeto por disco de cono en cada consulta.
 
 ### Por qué cuesta
 
 A 60 Hz con 7 bots son cientos de objetos pequeños por segundo: el array y los
 peligros de cada paso, la lista de enemigos visibles de cada bot y las cuatro
-vistas de equipo. No es el cuello de botella, pero alimenta el GC y produce
-picos de frame en partidas largas, sobre todo cuando coinciden con ráfagas de
-proyectiles.
+vistas de equipo. Las búsquedas de refugio son peores: con 10 intentos, 13
+muestras de trayecto y 3 rivales se creaban hasta ~780 objetos por llamada
+(observador + objetivo por muestra), y hasta ~1 500 al buscar cobertura de
+retirada. No es el cuello de botella, pero alimenta el GC y produce picos de
+frame en partidas largas, sobre todo cuando coinciden con ráfagas de proyectiles
+y regeneración.
 
 ### Qué se cambió
 
 1. `this.visibleEnemies.length = 0` en `updateTarget()` y en
-   `resetCombatState()`. Los consumidores (`decision.ts`, los `filter()` de
-   objetivos) leen la lista durante el mismo `update` y no guardan la
+   `resetCombatState()`. Los consumidores (`decision.ts`, las búsquedas de
+   cobertura y refugio) leen la lista durante el mismo `update` y no guardan la
    referencia, así que reutilizarla es seguro.
 2. `BotHazardBuffer` (`src/game/ai/hazards.ts`) agrupa el array visible y un
    `pool` de objetos. `buildBotHazards(projectiles, activeAoes, buffer)`
@@ -706,31 +715,42 @@ proyectiles.
    `MutableBotWorldView` en `src/game/ai/types.ts`) y `botHazards`. En cada
    paso solo actualiza `visibleSlots`, `atmosphere` y `objective`, y calcula la
    zona objetivo una vez para los cuatro equipos.
+4. Las cuatro copias con `filter()` se sustituyen por la lista viva:
+   `updateTarget()` ya solo guarda rivales vivos y del otro equipo, así que
+   `pickRetreatCover()`, `pickRegenPoint()`, `regenPointSafe()` y
+   `decision.ts` la recorren sin duplicarla.
+5. `regenSegmentHidden()` reutiliza un observador y un objetivo compartidos por
+   bot; `hazardArea()` rellena un `AoeArea` compartido (con aviso de no
+   conservarlo); y `navHazards()` reutiliza array y objetos con un pool propio,
+   igual que los peligros de combate.
 
 ### Impacto
 
 Bajo en ms, pero constante: desaparecen el array de enemigos por bot, el array
 y los objetos de peligros, el registro de vistas y tres de las cuatro consultas
-al modo. En una partida de 5 minutos con 7 bots se evitan del orden de
-**cientos de miles de objetos pequeños**, lo que reduce la frecuencia de GC y
-los picos que se notaban en ráfagas de proyectiles. En el bench sintético
-(`pnpm bench`, 100 proyectiles + 20 áreas), construir los peligros con buffer
-pasa de ~140 000 a ~225 000 llamadas por segundo.
+al modo, además de los cientos de objetos de las búsquedas de refugio. En una
+partida de 5 minutos con 7 bots se evitan del orden de **cientos de miles de
+objetos pequeños**, lo que reduce la frecuencia de GC y los picos que se notaban
+en ráfagas de proyectiles. En el bench sintético (`pnpm bench`, 100 proyectiles
++ 20 áreas), construir los peligros con buffer pasa de ~140 000 a ~225 000
+llamadas por segundo.
 
 ### Qué queda pendiente
 
-- Los `visibleEnemies.filter(...)` de `bot.ts` y `decision.ts`, que siguen
-  creando un array por llamada; se pueden escribir en buffers por bot.
-- `navHazards()` asigna un `NavHazard[]` y un objeto por disco de cono en cada
-  consulta; es candidato a un scratch reutilizable como el de peligros.
+- Los `Vec2` pequeños que devuelven helpers de decisión (`pickHazardEscape()`,
+  `aoeEvadeDirection()`), fuera del camino caliente y sin impacto medible.
+- Confirmar con el HUD de rendimiento (3.4) que el GC baja en partidas reales de
+  8 vistas; el cambio no altera ningún cálculo de gameplay.
 
 ### Cómo verificarlo
 
 Los tests de `hazards.test.ts` comprueban identidad de array y de objetos,
 recorte del array visible, conservación del pool y cambio de `kind` sin datos
-activos. Para el resto, Chrome DevTools → Memory → Allocation instrumentation
-con 8 bots y una lluvia de proyectiles: el número de objetos por paso debe caer
-sin mover `app.stats.cpuUpdateTime`.
+activos. `node --import tsx scripts/sim-headless.ts --map arena --bots 4
+--seconds 60` ejercita las rutas de decisión, retirada y cobertura sin GPU. Para
+el resto, Chrome DevTools → Memory → Allocation instrumentation con 8 bots y una
+lluvia de proyectiles: el número de objetos por paso debe caer sin mover
+`app.stats.cpuUpdateTime`.
 
 ---
 
