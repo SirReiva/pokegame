@@ -652,6 +652,16 @@ También se pueden aleatorizar skins y nombres para dar variedad visual.
 > restante. Es la medida de referencia para ajustar números; las matrices
 > estáticas de [`combat-balance.md`](combat-balance.md) siguen siendo la cota de
 > la fórmula.
+>
+> **Balance 4v4 (2026-11-16).** `pnpm balance:teams` juega partidas completas
+> 4v4 con 8 bots: sortea cuatro especies por equipo, juega las dos orientaciones
+> de spawn y varias semillas, y ajusta un modelo logístico con efecto de lado
+> para estimar la contribución marginal de cada especie (rating tipo Elo). El
+> informe sale en [`balance-equipos.md`](balance-equipos.md) y los datos crudos
+> en `.cache/balance-teams.json`. Mide el modo principal, no la fuerza de duelo:
+> incluye daño de área, curación, control, respawn y límite de tiempo. También
+> admite `--design robin --teams "..."` para comparar composiciones cerradas y
+> `--mode koth` para el modo de la colina.
 
 ### 9.2 Overlay de debug
 

@@ -30,6 +30,7 @@
     "bench:frame": "node scripts/bench-frame.mjs",
     "sim": "node --import tsx scripts/sim-headless.ts",
     "balance": "node --import tsx scripts/balance-report.ts",
+    "balance:teams": "node --import tsx scripts/balance-teams.ts",
     "preview": "vite preview"
   },
   "dependencies": {

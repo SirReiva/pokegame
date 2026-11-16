@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Trazas y datos de simulación locales
+.cache
+
 node_modules
 dist
 dist-ssr

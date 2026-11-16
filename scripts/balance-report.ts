@@ -459,6 +459,11 @@ function buildMarkdown(input: {
       `Tiempo de pared: ${wallSeconds.toFixed(1)} s.`
   );
   lines.push('');
+  lines.push(
+    'Las **propuestas de ajuste** curadas están al final del informe: ' +
+      '[Propuestas de ajuste](#propuestas-de-ajuste).'
+  );
+  lines.push('');
   lines.push('### Sesgo de spawn (espejos)');
   lines.push('');
   lines.push(
