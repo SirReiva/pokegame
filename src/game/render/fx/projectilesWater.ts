@@ -11,6 +11,7 @@ import {
 } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
+import { updateMaterialIfChanged } from './materialUpdates';
 
 /**
    * Proyectil de agua: tres burbujas pequeñas que giran entre sí alrededor de
@@ -91,7 +92,7 @@ const root = new pc.Entity('water-projectile');
         shineBatch.setTime(time);
         bubbleMaterial.opacity = 0.44 + Math.sin(time * 16) * 0.07;
         shineMaterial.opacity = 0.86 + Math.sin(time * 24) * 0.1;
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);
@@ -274,7 +275,7 @@ const root = new pc.Entity('water-jet-projectile');
         dropletBatch.setTime(time);
         ringBatch.setTime(time);
 
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);
@@ -387,7 +388,7 @@ const root = new pc.Entity('shuriken-projectile');
         glowMaterial.opacity = 0.18 + Math.sin(time * 12) * 0.05;
         trailMaterial.opacity = 0.18 + Math.sin(time * 16) * 0.05;
         trailBatch.setTime(time);
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);

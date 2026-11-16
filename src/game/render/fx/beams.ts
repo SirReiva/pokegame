@@ -4,6 +4,7 @@ import { DEG } from '../../config';
 import { EffectBatch, MOTION_BEAM_EYES, MOTION_BEAM_RINGS, MOTION_BEAM_WISPS, MOTION_PSYCHIC_BEAM_BODY, MOTION_PSYCHIC_BEAM_FLASH, MOTION_PSYCHIC_BEAM_RINGS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import { createLightningMesh } from './fxGeometry';
+import { updateMaterialIfChanged } from './materialUpdates';
 
 /**
    * Haz eléctrico: dos rayos zigzagueantes que giran en sentidos opuestos,
@@ -73,8 +74,8 @@ const dx = x2 - x1;
       const fade = 1 - Math.max(0, (t - 0.4) / 0.6);
       strandMaterial.opacity = 0.95 * flicker * fade;
       coreMaterial.opacity = 0.55 * flicker * fade;
-      strandMaterial.update();
-      coreMaterial.update();
+      updateMaterialIfChanged(strandMaterial);
+      updateMaterialIfChanged(coreMaterial);
     });
 }
 

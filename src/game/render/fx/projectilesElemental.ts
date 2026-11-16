@@ -15,6 +15,7 @@ import {
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { ProjectileVisual } from './fxGeometry';
 import { tintColor } from './fxGeometry';
+import { updateMaterialIfChanged } from './materialUpdates';
 
 /**
    * Proyectil de aire: dos ruedas de aspas de viento cruzadas giran alrededor
@@ -163,7 +164,7 @@ const root = new pc.Entity('air-projectile');
         featherBatch.setTime(time);
         trailBatch.setTime(time);
 
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);
@@ -291,7 +292,7 @@ const root = new pc.Entity('ice-projectile');
         crystalMaterial.opacity = 0.62 + Math.sin(time * 16) * 0.12;
         deepMaterial.opacity = 0.38 + Math.sin(time * 18 + 1) * 0.1;
         trailMaterial.opacity = 0.26 + Math.sin(time * 10) * 0.08;
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
 
         for (const shard of shards) {
           const flicker = 0.9 + Math.sin(time * 13 + shard.phase) * 0.12;
@@ -563,7 +564,7 @@ const root = new pc.Entity('ghost-projectile');
         wispMaterial.opacity = 0.42 + Math.sin(time * 17) * 0.1;
         eyeMaterial.opacity = 0.95;
         trailMaterial.opacity = 0.2 + Math.sin(time * 11) * 0.05;
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);

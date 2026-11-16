@@ -10,6 +10,7 @@
 
 import * as pc from 'playcanvas';
 import { DEG } from './config';
+import { updateMaterialIfChanged } from './render/fx/materialUpdates';
 import { setTextureSource } from './textures';
 
 export interface DamageNumberView {
@@ -517,7 +518,7 @@ export class DamageNumbers {
 
       slot.material.emissive = tint;
       slot.material.opacity = 1;
-      slot.material.update();
+      updateMaterialIfChanged(slot.material);
 
       const render = slot.entity.render;
       if (render) render.layers = [view.layerId];
@@ -570,10 +571,12 @@ export class DamageNumbers {
       entry.elapsed += dt;
       const t = Math.min(1, entry.elapsed / entry.duration);
 
-      // Mantiene el texto legible un momento y después se desvanece.
+      // Mantiene el texto legible un momento y después se desvanece. Durante el
+      // tramo legible la opacidad no cambia, así que el material no se vuelve a
+      // subir hasta que empieza el fundido.
       entry.slot.material.opacity =
         t < FADE_START ? 1 : Math.max(0, 1 - (t - FADE_START) / (1 - FADE_START));
-      entry.slot.material.update();
+      updateMaterialIfChanged(entry.slot.material);
 
       const entity = entry.slot.entity;
       entity.setPosition(entry.x, entry.startY + entry.rise * t, entry.z);

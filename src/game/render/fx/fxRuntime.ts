@@ -5,6 +5,7 @@ import type { FxHandle, FxLayerResolver, TelegraphOwner } from '../../core/ports
 import type { ActiveEffect, FlameParticleOptions, FxAnchors, GroundTelegraph, ProjectileVisual } from './fxGeometry';
 import { MATERIAL_POOL_LIMIT, TELEGRAPH_WALL_OPACITY, createArcBandMesh, createCrossQuadMesh, createCycloneArmMesh, createDashRingMesh, createDiscMesh, createIceCrystalMesh, createShurikenMesh, createWaterJetMesh, createWindBladeMesh, sameLayers } from './fxGeometry';
 import { EffectParticleBatch } from './effectParticleBatch';
+import { updateMaterialIfChanged } from './materialUpdates';
 import { WorldTrailBatch } from './worldTrailBatch';
 
 export class FxRuntime {
@@ -1061,7 +1062,9 @@ constructor(
           telegraph.owner
         );
       }
-      for (const material of telegraph.materials) material.update();
+      for (const material of telegraph.materials) {
+        updateMaterialIfChanged(material);
+      }
       // Pequeña prórroga: el lanzamiento la retira explícitamente al impactar;
       // esto solo evita que se quede viva si algo lo interrumpe sin cancelar.
       if (telegraph.elapsed >= telegraph.duration + 0.1) {
@@ -1081,7 +1084,11 @@ constructor(
       }
       // `opacity` es un uniforme del material: sin update() el fundido no
       // llega a la GPU igual que ocurre con los offsets de textura del sprite.
-      for (const material of effect.materials) material.update();
+      // Solo se sube el material si el efecto cambió algún valor animado: las
+      // piezas estáticas y los tramos sin variación no pagan el coste.
+      for (const material of effect.materials) {
+        updateMaterialIfChanged(material);
+      }
       if (effect.elapsed < effect.duration) continue;
 
       this.disposeEffect(effect);

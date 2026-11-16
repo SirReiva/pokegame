@@ -18,6 +18,7 @@ import { EffectTintBatch } from './effectTintBatch';
 import type { TintEffectInstance } from './effectTintBatch';
 import type { ProjectileVisual } from './fxGeometry';
 import { createLightningMesh } from './fxGeometry';
+import { updateMaterialIfChanged } from './materialUpdates';
 
 /** Proyectil genérico: esfera emisiva del color de la habilidad. */
 export function spawnOrbProjectile(ctx: FxRuntime, x: number,
@@ -131,8 +132,8 @@ const root = new pc.Entity('electric-projectile');
         arcMaterial.opacity = 0.45 + Math.random() * 0.3;
         tailMaterial.opacity = 0.18 + Math.random() * 0.14;
         bodyBatch.setTime(time);
-        arcMaterial.update();
-        tailMaterial.update();
+        updateMaterialIfChanged(arcMaterial);
+        updateMaterialIfChanged(tailMaterial);
         arcBatch.setTime(time);
       }
     };
@@ -345,7 +346,7 @@ const root = new pc.Entity('grass-projectile');
         bodyBatch.setTime(time);
         leafBatch.setTime(time);
         leafMaterial.opacity = 0.75 + Math.random() * 0.25;
-        leafMaterial.update();
+        updateMaterialIfChanged(leafMaterial);
       }
     };
     visual.update(0);
@@ -581,7 +582,7 @@ const root = new pc.Entity('aura-projectile');
         haloMaterial.opacity = 0.12 + Math.sin(time * 9) * 0.05;
         ringMaterial.opacity = 0.58 + Math.sin(time * 18) * 0.12;
         trailMaterial.opacity = 0.22 + Math.sin(time * 12) * 0.06;
-        for (const material of materials) material.update();
+        for (const material of materials) updateMaterialIfChanged(material);
       }
     };
     visual.update(0);

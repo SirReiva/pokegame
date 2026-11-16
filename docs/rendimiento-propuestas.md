@@ -539,49 +539,79 @@ pantalla real o un test E2E.
 
 ## 2.4 Evitar `material.update()` innecesarios en efectos y números de daño
 
-### Qué pasa hoy
+> **Estado (noviembre de 2026): implementado.** `updateMaterialIfChanged()`
+> (`src/game/render/fx/materialUpdates.ts`) guarda en un `WeakMap` la última
+> opacidad, tinte e intensidad emisiva aplicados a cada material y solo llama a
+> `update()` cuando alguno cambia. Se usa en el bucle central de efectos y marcas
+> de área, en los avances por frame de proyectiles y haces y en los números de
+> daño. El seguimiento reutiliza el mismo objeto por material, así que no añade
+> basura. Cubierto por `src/game/__tests__/materialUpdates.test.ts`. Queda
+> pendiente mover la animación a shaders por estilo y el presupuesto de efectos
+> por vista.
 
-- `fxRuntime.update()` llama `material.update()` por cada material de cada marca
-  de área (`src/game/render/fx/fxRuntime.ts:1302`) y por cada material de cada
-  efecto activo (`:1322`).
-- `damageNumbers.update()` hace lo mismo por cada número activo
-  (`src/game/damageNumbers.ts:576`).
-- Hay efectos con varios materiales (hasta 5–8 en un área compleja).
+### Qué pasaba antes
+
+- `fxRuntime.update()` llamaba `material.update()` por cada material de cada
+  marca de área y por cada material de cada efecto activo, aunque el efecto solo
+  hubiera movido entidades.
+- Varias fábricas (`projectiles.ts`, `projectilesWater.ts`,
+  `projectilesElemental.ts`, `beams.ts`) recorrían además su lista de materiales
+  y llamaban a `update()` dentro del propio callback, justo antes de que el
+  bucle central repitiera la misma llamada: dos subidas por material y frame.
+- `damageNumbers.update()` hacía lo mismo por cada número activo en cada frame,
+  incluido el tramo en el que la opacidad se queda fija en 1.
+- Hay efectos con varios materiales (hasta 5–8 en un área compleja) y hasta 64
+  números activos a la vez.
 
 ### Por qué cuesta
 
-`material.update()` no es un simple setter: marca el material como dirty,
-recalcula uniforms y, en algunos casos, puede provocar recompilación de variantes
-si cambian defines. Hacerlo 60 veces por segundo por cada material activo,
-aunque el valor no haya cambiado, es trabajo puro de CPU y presión sobre el
-estado gráfico.
+`material.update()` no es un setter: convierte las propiedades modificadas al
+uniform buffer, recalcula los transforms de texturas (`_mapTransforms`) y sube
+el buffer completo en el siguiente render. Llamarlo 60 veces por segundo por
+material cuando el valor es idéntico es trabajo de CPU y ancho de banda de
+uniformes que no cambia un solo píxel. Con varios materiales por efecto y varias
+vistas, el coste se multiplica en los picos de combate.
 
-### Qué haría
+### Qué se cambió
 
-1. Guardar el último valor de `opacity`, offsets UV, color, etc. y llamar a
-   `update()` solo si cambia. Es un patrón de "dirty flag" por material.
-2. Para efectos puramente temporales, mover la animación al vertex/fragment
-   shader con un uniform de tiempo (`uEffectTime`) y actualizar **un material por
-   estilo**, no uno por entidad. Esto ya se hace en `MOTION_PRIMORDIAL_*` y en las
-   partículas ambientales (`batchedParticles.ts`), así que hay precedente en el
-   proyecto.
-3. Poner un presupuesto de efectos simultáneos por vista: descartar o simplificar
-   efectos que caen en viewports de área pequeña (8 jugadores) o a mucha
-   distancia. El `applyVisibility()` ya decide capas; ahí se puede añadir "si el
-   viewport es pequeño, no dibujar este estilo".
-4. Los números de daño ya usan atlas y pool de ranuras; conviene agrupar la
-   opacidad en un solo material compartido o bajar la frecuencia de actualización
-   a 30 Hz (el fade dura ~1 s y no se nota).
+1. `updateMaterialIfChanged(material)` compara `opacity`, `emissive.r/g/b` y
+   `emissiveIntensity` contra la última foto y solo entonces llama a `update()`.
+   Los cambios estructurales (defines, mezcla, texturas) siguen usando `update()`
+   explícito en las fábricas, como antes.
+2. El bucle central de `FxRuntime` usa el helper tanto para marcas de área como
+   para efectos. Los callbacks que ya subían sus materiales (`projectiles*`,
+   `beams`) también lo usan, de modo que desaparece la doble subida por frame.
+3. Los números de daño usan el mismo helper en `spawn()` y en `update()`. Como
+   la opacidad se mantiene en 1 durante el 50 % de la vida
+   (`FADE_START = 0.45` sobre `LIFETIME = 0.9`), ese tramo ya no sube el material:
+   cada número pasa de ~55 subidas a ~28.
+4. El número de actualizaciones reales se puede contar en un test sin GPU:
+   `materialUpdates.test.ts` comprueba que valores repetidos no disparan
+   `update()`, que sí lo hacen los cambios de opacidad, tinte e intensidad y que
+   cada material lleva su propio seguimiento.
 
 ### Impacto
 
-Menos ms de CPU en combates con muchas áreas simultáneas y menos picos al castear
-definitivas.
+Menos subidas de uniform buffer en combates con muchas áreas simultáneas, sin
+cambios visuales. Los materiales estáticos de un efecto (aros, halos, piezas que
+solo rotan) dejan de pagar `update()` cada frame, y los números de daño ahorran
+la mitad de sus actualizaciones.
+
+### Qué queda pendiente
+
+- Mover la animación de opacidad de los efectos puramente temporales a un shader
+  con `uEffectTime`, para actualizar un material por estilo en vez de uno por
+  entidad. Ya hay precedente en `MOTION_PRIMORDIAL_*` y en las partículas
+  ambientales.
+- Presupuesto de efectos simultáneos por vista, descartando o simplificando los
+  que caen en viewports pequeños.
 
 ### Cómo verificarlo
 
-Contar efectos/materiales activos en `app.stats.user` y medir `cpuUpdateTime`.
-Probar un escenario de estrés (8 bots spameando áreas) con y sin el dirty-check.
+Contar efectos/materiales activos en `app.stats.user` junto a
+`app.stats.cpuUpdateTime` en un escenario de estrés (8 bots spameando áreas), y
+comparar el perfil con y sin el dirty-check. El test unitario cubre la lógica de
+decisión; la medición real queda para el HUD de rendimiento (3.4).
 
 ---
 
