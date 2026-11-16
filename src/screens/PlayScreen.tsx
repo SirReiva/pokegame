@@ -273,6 +273,7 @@ function PlayScreen({
         <PauseDialog
           manifest={manifest}
           players={players}
+          teams={teams}
           onResume={resumeGame}
           onBackToRoster={backToRoster}
           onBackToTeams={backToTeams}

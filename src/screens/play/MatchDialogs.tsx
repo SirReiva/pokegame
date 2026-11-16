@@ -39,6 +39,7 @@ function formatScore(value: number): string {
 interface PauseDialogProps {
   manifest: SpriteManifest;
   players: LobbyPlayer[];
+  teams: Team[];
   onResume: () => void;
   onBackToRoster: () => void;
   onBackToTeams: () => void;
@@ -50,6 +51,7 @@ interface PauseDialogProps {
 export function PauseDialog({
   manifest,
   players,
+  teams,
   onResume,
   onBackToRoster,
   onBackToTeams,
@@ -59,6 +61,10 @@ export function PauseDialog({
 }: PauseDialogProps) {
   const selectedEntryFor = (pokemonId: string) =>
     manifest.pokemon.find((entry) => entry.id === pokemonId) ?? null;
+  // Solo se pintan los equipos con jugadores para no dejar huecos vacíos.
+  const activeTeams = teams.filter((team) =>
+    players.some((player) => player.team === team)
+  );
 
   return (
     <div className="fixed inset-0 z-12 flex animate-fade-in items-center justify-center bg-night-950/72 backdrop-blur-[7px]">
@@ -74,40 +80,64 @@ export function PauseDialog({
         </header>
 
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-2 max-[760px]:grid-cols-1">
-            {players.map((player) => {
-              const entry = selectedEntryFor(player.pokemonId);
-              const skin = entry ? skinFor(entry, player.skinId) : null;
-              const info = TEAM_INFO[player.team];
+          <div
+            className={`grid gap-2 ${
+              activeTeams.length > 1 ? 'grid-cols-2 max-[760px]:grid-cols-1' : 'grid-cols-1'
+            }`}
+          >
+            {activeTeams.map((team) => {
+              const info = TEAM_INFO[team];
+              const members = players
+                .filter((player) => player.team === team)
+                .sort((a, b) => a.slot - b.slot);
               return (
-                <div
-                  key={player.slot}
-                  className="flex items-center gap-2 rounded-xl border border-[color-mix(in_srgb,var(--team)_38%,var(--color-line))] border-l-[3px] border-l-(--team) bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_10%,rgb(8_13_21/0.9)),rgb(8_13_21/0.9))] px-2.25 py-1.75"
+                <section
+                  key={team}
+                  className="overflow-hidden rounded-xl border border-[color-mix(in_srgb,var(--team)_38%,var(--color-line))] bg-[linear-gradient(100deg,color-mix(in_srgb,var(--team)_8%,rgb(8_13_21/0.9)),rgb(8_13_21/0.9))]"
                   style={
                     {
                       '--team': info.color
                     } as CSSProperties
                   }
                 >
-                  <span className="grid size-9 place-items-center">
-                    {entry ? (
-                      <PokemonPortrait entry={entry} skin={skin} height={36} />
-                    ) : (
-                      '—'
-                    )}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <strong className="font-mono text-9.92 tracking-[0.06em]">
-                      {player.name}
-                    </strong>
-                    <span className="text-11.2 text-steel-400">
-                      {entry?.name ?? '—'}
+                  <header className="flex items-center justify-between gap-2 border-b border-line/60 px-2.25 py-1.5">
+                    <span className="flex items-center gap-1.5 font-mono text-9.28 font-semibold tracking-widest text-(--team) uppercase">
+                      <span className="size-2 rounded-full bg-(--team)" />
+                      {info.label}
                     </span>
-                  </span>
-                  <span className="font-mono text-8.32 uppercase text-(--team)">
-                    {info.short}
-                  </span>
-                </div>
+                    <span className="font-mono text-8.32 text-steel-500 uppercase">
+                      {members.length} jug.
+                    </span>
+                  </header>
+                  <ul className="divide-y divide-line/50">
+                    {members.map((player) => {
+                      const entry = selectedEntryFor(player.pokemonId);
+                      const skin = entry ? skinFor(entry, player.skinId) : null;
+                      return (
+                        <li
+                          key={player.slot}
+                          className="flex items-center gap-2 px-2.25 py-1.75"
+                        >
+                          <span className="grid size-9 shrink-0 place-items-center">
+                            {entry ? (
+                              <PokemonPortrait entry={entry} skin={skin} height={36} />
+                            ) : (
+                              '—'
+                            )}
+                          </span>
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <strong className="truncate font-mono text-9.92 tracking-[0.06em]">
+                              {player.name}
+                            </strong>
+                            <span className="truncate text-11.2 text-steel-400">
+                              {entry?.name ?? '—'}
+                            </span>
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               );
             })}
           </div>
