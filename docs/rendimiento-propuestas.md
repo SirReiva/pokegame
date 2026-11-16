@@ -36,6 +36,7 @@ qué impacto espero y cómo lo verificaría.
    - [2.4 Evitar material.update() innecesarios](#24-evitar-materialupdate-innecesarios-en-efectos-y-números-de-daño)
    - [2.5 Presets de calidad por tier de GPU](#25-presets-de-calidad-automáticos-por-tier-de-gpu)
    - [2.6 Micro-GC en simulación](#26-micro-gc-en-simulación)
+   - [2.7 Dirty flags en la IA](#27-dirty-flags-en-la-ia)
 3. [Medición e infraestructura](#3-medición-e-infraestructura)
    - [3.1 Ampliar el benchmark](#31-ampliar-el-benchmark-para-medir-lo-que-de-verdad-importa)
    - [3.2 Pre-bake del suelo y caché persistente](#32-pre-bake-del-suelo-y-caché-que-sobreviva-a-la-partida)
@@ -806,6 +807,98 @@ que ejercita movimiento, dash, colisiones y casteos sin GPU. Para el resto,
 Chrome DevTools → Memory → Allocation instrumentation con 8 bots y una lluvia de
 proyectiles: el número de objetos por paso debe caer sin mover
 `app.stats.cpuUpdateTime`.
+
+---
+
+## 2.7 Dirty flags en la IA
+
+> **Estado (noviembre de 2026): implementado.** La IA ya no paga tres trabajos
+> que se repetían en cada paso aunque su entrada no hubiera cambiado: las
+> ventajas de tipo por rival se cachean (`src/game/ai/matchups.ts`), la
+> comprobación de línea recta del movimiento se reutiliza mientras el bot sigue
+> sobre el mismo segmento (`src/game/ai/movement.ts`) y las fases de amenaza y
+> esquiva no se recalculan en pasos en los que el bot no puede actuar
+> (`src/game/bot.ts`). Cubierto por `src/game/ai/__tests__/matchups.test.ts` y
+> `src/game/ai/__tests__/movementCache.test.ts`.
+
+### Qué pasaba antes
+
+`BotController.update()` ejecuta varias fases por paso: pizarra de equipo,
+movimiento de aliados, rastro, objetivo, amenazas y peligros ya lanzados.
+Algunas de ellas repetían trabajo cuyo resultado no podía cambiar:
+
+- `updateTarget()` pedía `bestDamageMultiplier()` dos veces por rival visible
+  (una en cada sentido). Cada llamada recorre las cuatro habilidades, la tabla
+  de tipos y el clima. Posición, vida, cooldowns y facing no intervienen: solo
+  cambiaría si cambiara el rival, sus tipos/habilidades o el clima.
+- `BotMovement.moveTowards()` llamaba a `nav.lineClear()` en cada paso mientras
+  caminaba a un destino. La comprobación muestrea la recta cada 0,28 u, así que
+  un trayecto de 20 u hace ~70 lecturas de rejilla por paso y por bot, aunque el
+  bot siga exactamente la misma recta que ya validó.
+- `updateThreat()` y `updateHazardEvasion()` se ejecutaban también en pasos
+  bloqueados (dash, hitstun o casteo que clava al lanzador), justo antes de
+  devolver el snapshot idle. Nadie consumía el resultado: `drive()` no se llama
+  en esos pasos.
+
+### Por qué cuesta
+
+Ninguna de las tres es el cuello de botella, pero las tres son trabajo puro de
+CPU que se repite a 60 Hz por bot. Con 7 bots y 3 rivales visibles, la ventaja de
+tipo son ~2 500 recorridos de tabla por segundo; la línea recta, decenas de
+miles de lecturas de rejilla por segundo durante los desplazamientos largos; y
+las fases de amenaza se pagan enteras durante cada casteo con `startup` largo o
+cada aturdimiento, que es justo cuando hay más efectos en pantalla.
+
+### Qué se cambió
+
+1. `MatchupCache` guarda por plaza la ventaja ofensiva y defensiva junto con
+   clima, identidad del atacante y del rival y **referencias** a sus arrays de
+   tipos y habilidades. `lookup()` devuelve `null` si cualquiera cambió y
+   `store()` guarda el cálculo recién hecho. El objeto de resultado se reutiliza
+   para no asignar uno por rival y paso. `resetCombatState()` lo vacía.
+2. `BotMovement` recuerda la última recta validada (punto de origen, destino y
+   resultado). Mientras el bot avance sobre ese mismo segmento —proyección
+   dentro del tramo y desvío lateral ≤ 0,1 u— reutiliza el `true`; el tramo que
+   queda es un subconjunto del ya comprobado. Un destino nuevo (> 0,05 u), un
+   empujón lateral, retroceder por detrás del ancla o un peligro invalidan la
+   caché. Los resultados bloqueados no se guardan para volver a probar en el
+   siguiente paso. `invalidateStraightLine()` la limpia en muerte/respawn.
+3. `updateThreat()` y `updateHazardEvasion()` se mueven detrás de la comprobación
+   de paso bloqueado. El resto del estado (pizarra, aliados, rastro, objetivo)
+   se sigue manteniendo al día; solo se evita la geometría que `drive()` no va a
+   leer. En el primer paso que el bot vuelve a actuar se recalculan antes de
+   decidir y mover.
+
+### Impacto
+
+Se elimina casi todo el coste de ventaja de tipo en pasos repetidos, la
+comprobación de línea recta pasa de una vez por paso a una vez por tramo recto
+en los desplazamientos a destinos fijos, y los pasos bloqueados dejan de pagar
+amenazas y esquivas. No cambia ningún cálculo de juego: la caché de tipos es una
+función pura de entradas que se comparan, la recta reutilizada es un subconjunto
+validado del mismo segmento y las fases omitidas solo las lee `drive()`, que no
+se ejecuta mientras el bot está bloqueado.
+
+### Qué queda pendiente
+
+- `canHitPrediction()` sigue haciendo una comprobación de colliders por paso y
+  por objetivo visible en `drive()`. Se podría cachear con una tolerancia de
+  posición del rival, pero ahí la ventana es más corta y conviene medir antes.
+- La pizarra de equipo la mantiene cada bot de la misma escuadra. Mover el
+  mantenimiento compartido a una llamada por equipo y paso ahorraría barridos
+  duplicados, pero el estado es pequeño y el ahorro no compensa el cambio de
+  contrato.
+
+### Cómo verificarlo
+
+- Tests: `matchups.test.ts` comprueba reutilización, invalidación por clima,
+  rival, tipos, habilidades y `clear()`; `movementCache.test.ts` cuenta las
+  llamadas a `lineClear` y verifica que se reutiliza al avanzar en recta y se
+  invalida con desvío, destino nuevo, retroceso o bloqueo.
+- `pnpm test`, `pnpm check` y `pnpm build` en verde.
+- En el juego, comparar `app.stats.cpuUpdateTime` en una partida con 7 bots con
+  y sin estos cambios, y el perfil de `sim-headless` con bots patrullando
+  (`node --import tsx scripts/sim-headless.ts --map arena --bots 7 --seconds 60`).
 
 ---
 

@@ -29,6 +29,15 @@ const ALLY_YIELD_RELEASE = 2.6;
 /** Distancia que se retrocede por el rastro para salir de un bloqueo. */
 const BACK_OFF_DISTANCE = 1.6;
 
+/**
+ * Desvío lateral máximo para reutilizar una comprobación de línea recta. Al
+ * avanzar por una recta ya validada, el tramo que queda es un subconjunto del
+ * que se comprobó; solo un desvío real invalida el resultado.
+ */
+const STRAIGHT_CACHE_LATERAL = 0.1;
+/** Variación máxima del destino para conservar la comprobación anterior. */
+const STRAIGHT_CACHE_GOAL = 0.05;
+
 /** Estado de navegación que comparte con el controlador. */
 export interface BotMovementState {
   path: NavPoint[];
@@ -82,6 +91,17 @@ export class BotMovement implements BotMovementState {
   yieldSource: MatchPlayerState | null = null;
   yieldUntil = 0;
 
+  /**
+   * Última comprobación de línea recta despejada: desde qué punto se hizo y
+   * hacia qué destino. Solo se reutiliza un resultado positivo mientras el bot
+   * siga sobre ese mismo segmento, porque el tramo restante ya está validado.
+   */
+  private straightFromX = 0;
+  private straightFromZ = 0;
+  private straightGoalX = 0;
+  private straightGoalZ = 0;
+  private straightValid = false;
+
   private readonly ctx: BotMovementContext;
 
   constructor(context: BotMovementContext) {
@@ -124,15 +144,7 @@ export class BotMovement implements BotMovementState {
       // empujando contra un muro fino.
       if (
         !directBlockedByHazard &&
-        (directPickup ||
-          this.ctx.nav.lineClear(
-            self.x,
-            self.z,
-            goal.x,
-            goal.z,
-            undefined,
-            self.team
-          ))
+        (directPickup || this.straightClear(self, goal))
       ) {
         this.path = [];
         this.pathTimer = 0;
@@ -140,22 +152,62 @@ export class BotMovement implements BotMovementState {
       }
       return this.followPath(self, goal, dt);
     }
-    if (
-      !directBlockedByHazard &&
-      this.ctx.nav.lineClear(
-        self.x,
-        self.z,
-        goal.x,
-        goal.z,
-        undefined,
-        self.team
-      )
-    ) {
+    if (!directBlockedByHazard && this.straightClear(self, goal)) {
       this.path = [];
       this.pathTimer = 0;
       return directionTo(self, goal);
     }
     return this.followPath(self, goal, dt);
+  }
+
+  /**
+   * ¿La línea recta hasta `goal` está despejada en la rejilla?
+   *
+   * Recorrerla cuesta una muestra cada 0,28 u, y se consultaba en cada paso.
+   * Mientras el bot avanza en recta hacia un destino fijo, el tramo que queda
+   * es un subconjunto del ya validado, así que se reutiliza el resultado. Un
+   * destino nuevo o un empujón lateral invalidan la caché; los peligros los
+   * comprueba el llamador aparte y, si bloquean el atajo, ni se llega aquí. Un
+   * resultado bloqueado no se guarda: conviene volver a probar en cuanto el bot
+   * se mueva.
+   */
+  private straightClear(self: MatchPlayerState, goal: Vec2): boolean {
+    if (
+      this.straightValid &&
+      Math.abs(goal.x - this.straightGoalX) <= STRAIGHT_CACHE_GOAL &&
+      Math.abs(goal.z - this.straightGoalZ) <= STRAIGHT_CACHE_GOAL
+    ) {
+      const toGoalX = goal.x - this.straightFromX;
+      const toGoalZ = goal.z - this.straightFromZ;
+      const length = Math.hypot(toGoalX, toGoalZ);
+      if (length > 0.001) {
+        const offsetX = self.x - this.straightFromX;
+        const offsetZ = self.z - this.straightFromZ;
+        const along = (offsetX * toGoalX + offsetZ * toGoalZ) / length;
+        const lateral =
+          Math.abs(offsetX * toGoalZ - offsetZ * toGoalX) / length;
+        if (along >= 0 && along <= length && lateral <= STRAIGHT_CACHE_LATERAL) {
+          return true;
+        }
+      }
+    }
+
+    const clear = this.ctx.nav.lineClear(
+      self.x,
+      self.z,
+      goal.x,
+      goal.z,
+      undefined,
+      self.team
+    );
+    this.straightValid = clear;
+    if (clear) {
+      this.straightFromX = self.x;
+      this.straightFromZ = self.z;
+      this.straightGoalX = goal.x;
+      this.straightGoalZ = goal.z;
+    }
+    return clear;
   }
 
   private followPath(self: MatchPlayerState, goal: Vec2, dt: number): Vec2 {
@@ -367,6 +419,11 @@ export class BotMovement implements BotMovementState {
       return { x: -step.x, z: -step.z };
     }
     return step;
+  }
+
+  /** Olvida la comprobación de línea recta (muerte, respawn o teletransporte). */
+  invalidateStraightLine(): void {
+    this.straightValid = false;
   }
 
   /** ¿Hay sitio transitable para desplazarse un poco en esta dirección? */

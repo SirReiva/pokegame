@@ -76,6 +76,7 @@ import type {
 import { EMPTY_BOT_WORLD_VIEW, NO_HAZARDS } from './ai/blackboard';
 import { BotDecision, type BotDecisionContext } from './ai/decision';
 import { clamp, directionTo, normalizeAngle } from './ai/math';
+import { MatchupCache, type MatchupValues } from './ai/matchups';
 import { BotMovement } from './ai/movement';
 import { TUNING, type BotTuning } from './ai/tuning';
 
@@ -312,6 +313,11 @@ export class BotController {
   private readonly movement: BotMovement;
   /** Decisión de alto nivel; comparte el estado del controlador. */
   private readonly decision: BotDecision;
+  /**
+   * Ventajas de tipo por rival. Solo cambian con el clima o si el rival de esa
+   * plaza es otro, así que `updateTarget` reutiliza el cálculo entre pasos.
+   */
+  private readonly matchups = new MatchupCache();
 
   private clock = 0;
   private atmosphere: AtmosphereId = 'clear';
@@ -847,13 +853,16 @@ export class BotController {
     this.updateAllyMotion(dt, self, players);
     this.recordTrail(dt, self);
     this.updateTarget(dt, self, players, view);
-    this.updateThreat(self, colliders);
-    this.updateHazardEvasion(self, colliders);
 
     // Un dash, hitstun o una preparación que clava al lanzador consumen el
     // frame: el snapshot idle evita pulsar habilidades que el motor rechaza.
     // Las preparaciones con `moveWhileStartup` sí llegan a `drive`, que deja
     // mover al bot pero no dispara otra habilidad mientras canaliza.
+    //
+    // `threat` y `hazardEvasion` solo los consume `drive` (y `decide`, que
+    // tampoco se ejecuta aquí), así que en un paso bloqueado no hace falta
+    // recalcular su geometría: se refrescan en el primer paso que vuelva a
+    // actuar, antes de usarlos. El resto del estado sí se mantiene al día.
     if (
       self.dash !== null ||
       self.stunTimer > 0 ||
@@ -866,6 +875,9 @@ export class BotController {
     ) {
       return { ...IDLE_INPUT };
     }
+
+    this.updateThreat(self, colliders);
+    this.updateHazardEvasion(self, colliders);
 
     this.decisionTimer -= dt;
     if (this.decisionTimer <= 0) {
@@ -945,6 +957,7 @@ export class BotController {
     this.aimBiasTarget = null;
     this.lastSeen = null;
     this.punishReads.clear();
+    this.matchups.clear();
     this.abilitySlot = null;
     this.supportCast = false;
     this.useCommon = false;
@@ -962,6 +975,7 @@ export class BotController {
     this.regenCheckTimer = 0;
     this.holdingObjective = false;
     this.path = [];
+    this.movement.invalidateStraightLine();
     this.stuckTimer = 0;
     this.detourTimer = 0;
     this.stuckCount = 0;
@@ -1322,8 +1336,9 @@ export class BotController {
 
       const distance = Math.hypot(enemy.x - self.x, enemy.z - self.z);
       const hpFraction = enemy.hp / Math.max(1, enemy.maxHp);
-      const offense = this.bestDamageMultiplier(self, enemy);
-      const defense = this.bestDamageMultiplier(enemy, self);
+      const matchup = this.matchupFor(self, enemy);
+      const offense = matchup.offense;
+      const defense = matchup.defense;
       const typeWeight = this.tuning.matchupWeight;
       const sheltered =
         terrainTeam(terrainAt(enemy.x, enemy.z)) === enemy.team;
@@ -1461,7 +1476,7 @@ export class BotController {
           focusEnemy !== null &&
           focusEnemy.alive &&
           this.visibleEnemies.includes(focusEnemy) &&
-          this.bestDamageMultiplier(self, focusEnemy) > 0;
+          this.matchupFor(self, focusEnemy).offense > 0;
         if (focus.slot === null || !focusUsable) {
           focus.slot = chosen.slot;
           focus.until = this.clock + FOCUS_HOLD_SECONDS;
@@ -2627,6 +2642,26 @@ export class BotController {
     }
 
     return best;
+  }
+
+  /**
+   * Ventaja de tipo en ambos sentidos contra `enemy`, reutilizando el cálculo
+   * mientras sigan vigentes clima, rival y sus tipos/habilidades. Es lo que
+   * evita recorrer la tabla de tipos dos veces por rival y paso.
+   */
+  private matchupFor(
+    self: MatchPlayerState,
+    enemy: MatchPlayerState
+  ): MatchupValues {
+    const cached = this.matchups.lookup(self, enemy, this.atmosphere);
+    if (cached) return cached;
+    return this.matchups.store(
+      self,
+      enemy,
+      this.atmosphere,
+      this.bestDamageMultiplier(self, enemy),
+      this.bestDamageMultiplier(enemy, self)
+    );
   }
 
   /**
