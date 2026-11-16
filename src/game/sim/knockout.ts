@@ -6,6 +6,7 @@
  */
 
 import { CONFIG } from '../config';
+import type { AssistCredit } from '../core/match/assists';
 import type { MatchPlayerState } from '../matchState';
 import type { SpriteAsset } from '../sprite';
 import { breakRegen } from './status';
@@ -17,12 +18,21 @@ export interface KnockoutHost {
   clearRepeatCooldown(player: MatchPlayerState): void;
   playDeathCopies(target: MatchPlayerState, animation: 'faint' | 'hurt'): void;
   spawnDeathMarker(target: MatchPlayerState): void;
+  collectAssists(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState
+  ): AssistCredit[];
   pushKillFeed(
     killer: MatchPlayerState,
     victim: MatchPlayerState,
-    abilityName: string
+    abilityName: string,
+    assists: readonly AssistCredit[]
   ): void;
-  awardKillXp(killer: MatchPlayerState, victim: MatchPlayerState): void;
+  awardKillXp(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState,
+    assists: readonly AssistCredit[]
+  ): void;
   /** Marcador, XP de objetivo y cierre de partida, si el modo lo decide. */
   handleModeKnockout(killer: MatchPlayerState, victim: MatchPlayerState): void;
   emitStats(): void;
@@ -74,11 +84,15 @@ export function knockOut(
   host.playDeathCopies(target, animation);
   host.spawnDeathMarker(target);
 
-  host.pushKillFeed(killer, target, abilityName);
+  // Las asistencias se calculan antes de confirmar la baja porque la muerte
+  // limpia las aportaciones de esta vida. El mismo reparto alimenta el feed y
+  // la XP, así nunca se descuadran.
+  const assists = host.collectAssists(killer, target);
+  host.pushKillFeed(killer, target, abilityName, assists);
 
   if (killer.team !== target.team) {
     killer.kills += 1;
-    host.awardKillXp(killer, target);
+    host.awardKillXp(killer, target, assists);
     host.handleModeKnockout(killer, target);
   }
 
@@ -87,5 +101,7 @@ export function knockOut(
   target.killStreak = 0;
   target.recentKills = [];
   target.damageContributors.clear();
+  target.slowContributors.clear();
+  target.supportContributors.clear();
   host.emitStats();
 }

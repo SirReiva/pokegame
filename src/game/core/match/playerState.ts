@@ -51,6 +51,22 @@ export interface DamageContribution {
   xp: number;
 }
 
+/**
+ * Aportación de apoyo que un aliado hizo sobre otro jugador (curación o
+ * revivir). Se guarda en el jugador ayudado para poder acreditar la asistencia
+ * si este consigue una baja poco después.
+ */
+export interface SupportContribution {
+  /** PV curados por el aliado dentro de la ventana reciente. */
+  heal: number;
+  /** Último instante en el que curó. */
+  healAt: number;
+  /** Veces que lo devolvió a la vida. */
+  revives: number;
+  /** Último instante en el que lo revivió. */
+  reviveAt: number;
+}
+
 /** Bajas repetidas contra un mismo rival, para reducir la XP por farmeo. */
 export interface KillFarmRecord {
   count: number;
@@ -350,6 +366,8 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   deathFade: number;
   kills: number;
   deaths: number;
+  /** Asistencias confirmadas en toda la partida. */
+  assists: number;
   /** Daño real infligido a rivales (sin contar el exceso sobre la vida restante). */
   damageDealt: number;
   /** Daño real recibido de rivales y autodaño. */
@@ -368,6 +386,10 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   recentKills: number[];
   /** Daño real de cada rival en la vida actual, para repartir asistencias. */
   damageContributors: Map<number, DamageContribution>;
+  /** Último instante en que cada rival le aplicó una ralentización. */
+  slowContributors: Map<number, number>;
+  /** Curación y revividas que cada aliado le ha dado recientemente. */
+  supportContributors: Map<number, SupportContribution>;
   /** Bajas repetidas contra cada víctima, para el XP decreciente. */
   killFarm: Map<number, KillFarmRecord>;
   /** Segundos vivos acumulados para la XP de participación. */

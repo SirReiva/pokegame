@@ -12,6 +12,7 @@ import type {
   BotDifficulty,
   MovementMode
 } from './core/match/config';
+import type { AssistKind } from './core/match/assists';
 import type { InputDeviceInfo } from './input';
 
 export type {
@@ -451,6 +452,8 @@ export interface PlayerMatchStats {
   invulnerable: boolean;
   kills: number;
   deaths: number;
+  /** Asistencias confirmadas en la partida. */
+  assists: number;
   /** Daño real infligido a rivales en toda la partida. */
   damageDealt: number;
   /** Daño real recibido de rivales y autodaño en toda la partida. */
@@ -499,6 +502,16 @@ export interface PlayerMatchStats {
   winner: Team | null;
 }
 
+/** Asistente de un KO: quién ayudó y cómo. */
+export interface KillFeedAssist {
+  slot: number;
+  name: string;
+  team: Team;
+  pokemonId: string;
+  /** Tipos de aportación (daño, control, curación o revive). */
+  kinds: AssistKind[];
+}
+
 /** Un KO reciente para el feed de cada vista. */
 export interface KillFeedEntry {
   /** Identificador creciente para animar solo las entradas nuevas. */
@@ -515,6 +528,8 @@ export interface KillFeedEntry {
   victimPokemonId: string;
   /** Nombre de la habilidad con la que se logró el KO. */
   abilityName: string;
+  /** Compañeros que participaron en la baja, sin el killer. */
+  assists: KillFeedAssist[];
 }
 
 /** Resultado final que React usa para mostrar la pantalla de victoria. */

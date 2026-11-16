@@ -74,8 +74,14 @@ export const XP_SOURCE_LABELS: Record<XpSource, string> = {
 export const XP_REWARDS = {
   /** Baja confirmada. */
   ko: 40,
-  /** Asistencia: daño suficiente en la ventana de asistencia. */
+  /** Asistencia por daño suficiente en la ventana de asistencia. */
   assist: 15,
+  /** Asistencia solo por control (ralentizar a la víctima). */
+  assistSlow: 8,
+  /** Asistencia solo por curación al killer dentro de la ventana. */
+  assistHeal: 10,
+  /** Asistencia solo por revivir al killer dentro de la ventana. */
+  assistRevive: 12,
   /** XP por cada barra de vida (100 % de la vida máxima) infligida. */
   damagePerMaxHp: 25,
   /** Tope de XP de daño contra un mismo rival en una misma vida. */
@@ -112,8 +118,10 @@ export const XP_REWARDS = {
 export const XP_RULES = {
   /** Tiempo máximo desde el último daño para contar como asistencia. */
   assistWindowSeconds: 10,
-  /** Fracción de la vida máxima que debe aportar un asistente. */
+  /** Fracción de la vida máxima que debe aportar un asistente por daño. */
   assistMinDamageFraction: 0.2,
+  /** Fracción de la vida máxima del killer que debe curar un aliado. */
+  assistMinHealingFraction: 0.1,
   /** Ventana para encadenar multibajas. */
   multikillWindowSeconds: 10,
   /** Bajas seguidas que convierten a la víctima en objetivo de shutdown. */

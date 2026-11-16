@@ -59,6 +59,11 @@ import {
 } from './combat';
 import { CombatFx } from './combatFx';
 import type { TelegraphHandle, TelegraphOwner } from './core/ports/fx';
+import {
+  assistXpFor,
+  collectKillAssists,
+  type AssistCredit
+} from './core/match/assists';
 import { CONFIG } from './config';
 import {
   DamageNumbers,
@@ -134,7 +139,8 @@ import type {
   PendingMeleeHit,
   Projectile,
   QueuedCast,
-  SlowEffect
+  SlowEffect,
+  SupportContribution
 } from './matchState';
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
@@ -975,9 +981,12 @@ export class Game {
         }
       },
       spawnDeathMarker: (target) => self.spawnDeathMarker(target),
-      pushKillFeed: (killer, victim, abilityName) =>
-        self.pushKillFeed(killer, victim, abilityName),
-      awardKillXp: (killer, victim) => self.awardKillXp(killer, victim),
+      collectAssists: (killer, victim) =>
+        self.collectAssists(killer, victim),
+      pushKillFeed: (killer, victim, abilityName, assists) =>
+        self.pushKillFeed(killer, victim, abilityName, assists),
+      awardKillXp: (killer, victim, assists) =>
+        self.awardKillXp(killer, victim, assists),
       handleModeKnockout: (killer, victim) => {
         const result = self.gameMode?.onEvent(self.modeContext(), {
           type: 'knockout',
@@ -2643,6 +2652,7 @@ export class Game {
     // o una cordillera entre ambos impide revivir, igual que impide el daño.
     if (!target.lineOfSight) return false;
     this.revivePlayer(player, player.x, player.z, fraction);
+    this.recordSupport(caster, player, 'revive');
     this.showHealPopup(player, player.hp, caster);
     this.combatFx.spawnBuff(player.x, player.z, def.color, 1.1);
     // La XP de revivir premia al lanzador, igual que la de curación: el
@@ -3291,6 +3301,11 @@ export class Game {
     target.slowEffects.push(effect);
     this.refreshSlowMultiplier(target);
     this.combatFx.spawnBuff(target.x, target.z, color, 0.95);
+    // Se guarda para acreditar una asistencia de control si la víctima cae
+    // dentro de la ventana. Solo cuenta un rival.
+    if (attacker.team !== target.team) {
+      target.slowContributors.set(attacker.slot, this.matchElapsed);
+    }
   }
 
   /** Recalcula la velocidad con la ralentización más fuerte que siga activa. */
@@ -3401,7 +3416,42 @@ export class Game {
     amount: number,
     source: MatchPlayerState | null
   ): void {
+    this.recordSupport(source, target, 'heal', amount);
     this.enqueuePopup(target, source, amount, 'heal');
+  }
+
+  /**
+   * Registra la aportación de apoyo de un aliado sobre otro jugador. Se apunta
+   * en el jugador ayudado para poder acreditarle la asistencia al aliado si
+   * consigue una baja poco después. La ventana se reinicia cuando la última
+   * aportación ya está fuera de plazo, así no se acumula curación antigua.
+   */
+  private recordSupport(
+    source: MatchPlayerState | null,
+    target: MatchPlayerState,
+    kind: 'heal' | 'revive',
+    amount = 0
+  ): void {
+    if (!source || source === target || source.team !== target.team) return;
+    if (kind === 'heal' && amount <= 0) return;
+    const window = XP_RULES.assistWindowSeconds;
+    const now = this.matchElapsed;
+    let contribution: SupportContribution | undefined =
+      target.supportContributors.get(source.slot);
+    if (
+      !contribution ||
+      now - Math.max(contribution.healAt, contribution.reviveAt) > window
+    ) {
+      contribution = { heal: 0, healAt: 0, revives: 0, reviveAt: 0 };
+      target.supportContributors.set(source.slot, contribution);
+    }
+    if (kind === 'heal') {
+      contribution.heal += amount;
+      contribution.healAt = now;
+    } else {
+      contribution.revives += 1;
+      contribution.reviveAt = now;
+    }
   }
 
   /** Marca de inmunidad cuando la habilidad conecta pero el tipo la anula. */
@@ -3525,7 +3575,8 @@ export class Game {
   private pushKillFeed(
     killer: MatchPlayerState,
     victim: MatchPlayerState,
-    abilityName: string
+    abilityName: string,
+    assists: readonly AssistCredit[]
   ): void {
     const entry: KillFeedEntry = {
       id: ++this.killFeedSeq,
@@ -3538,7 +3589,21 @@ export class Game {
       victimTeam: victim.team,
       victimSlot: victim.slot,
       victimPokemonId: victim.pokemonId,
-      abilityName
+      abilityName,
+      assists: assists.flatMap((assist) => {
+        const player = this.playerBySlot.get(assist.slot);
+        return player
+          ? [
+              {
+                slot: player.slot,
+                name: player.name,
+                team: player.team,
+                pokemonId: player.pokemonId,
+                kinds: [...assist.kinds]
+              }
+            ]
+          : [];
+      })
     };
     this.killFeed = [entry, ...this.killFeed].slice(0, KILL_FEED_MAX_ENTRIES);
   }
@@ -3629,10 +3694,28 @@ export class Game {
     }
   }
 
+  /**
+   * Reparte las asistencias de una baja con las reglas puras de
+   * `core/match/assists.ts`. Debe llamarse antes de limpiar las aportaciones
+   * de la víctima.
+   */
+  private collectAssists(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState
+  ): AssistCredit[] {
+    return collectKillAssists(
+      killer,
+      victim,
+      this.playerBySlot,
+      this.matchElapsed
+    );
+  }
+
   /** XP de una baja: KO, shutdown, asistencias y multibajas. */
   private awardKillXp(
     killer: MatchPlayerState,
-    target: MatchPlayerState
+    target: MatchPlayerState,
+    assists: readonly AssistCredit[]
   ): void {
     // Farmeo: matar una y otra vez al mismo rival rinde cada vez menos.
     const farm = killer.killFarm.get(target.slot);
@@ -3652,25 +3735,14 @@ export class Game {
       this.awardXp(killer, 'shutdown', XP_REWARDS.shutdown);
     }
 
-    // Asistencias: quien aportó al menos el 20 % de la vida de la víctima en
-    // los últimos 10 s. La ventana se mide contra la última aportación.
-    for (const [slot, contribution] of target.damageContributors) {
-      if (slot === killer.slot) continue;
-      if (
-        contribution.amount <
-        target.maxHp * XP_RULES.assistMinDamageFraction
-      ) {
-        continue;
-      }
-      if (
-        this.matchElapsed - contribution.at >
-        XP_RULES.assistWindowSeconds
-      ) {
-        continue;
-      }
-      const assistant = this.playerBySlot.get(slot);
-      if (!assistant || assistant.team === target.team) continue;
-      this.awardXp(assistant, 'assist', XP_REWARDS.assist);
+    // Asistencias: daño, control, curación o revive recientes. Cada asistente
+    // suma una asistencia y cobra el peso mayor de los tipos que aportó, para
+    // no premiar dos veces la misma baja.
+    for (const assist of assists) {
+      const assistant = this.playerBySlot.get(assist.slot);
+      if (!assistant) continue;
+      assistant.assists += 1;
+      this.awardXp(assistant, 'assist', assistXpFor(assist.kinds));
     }
 
     // Multibajas: se premia la 2.ª, la 3.ª y la 4.ª baja de la cadena. Las

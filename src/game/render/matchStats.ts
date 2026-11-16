@@ -97,6 +97,7 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
       invulnerable: player.invulnerableTimer > 0,
       kills: player.kills,
       deaths: player.deaths,
+      assists: player.assists,
       damageDealt: player.damageDealt,
       damageTaken: player.damageTaken,
       abilityHealing: player.abilityHealing,

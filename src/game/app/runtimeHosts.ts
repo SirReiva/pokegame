@@ -107,6 +107,7 @@ export interface RuntimeState {
   clearRepeatCooldown: KnockoutHost['clearRepeatCooldown'];
   playDeathCopies: KnockoutHost['playDeathCopies'];
   spawnDeathMarker: KnockoutHost['spawnDeathMarker'];
+  collectAssists: KnockoutHost['collectAssists'];
   pushKillFeed: KnockoutHost['pushKillFeed'];
   awardKillXp: KnockoutHost['awardKillXp'];
   handleModeKnockout: KnockoutHost['handleModeKnockout'];
@@ -248,6 +249,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       clearRepeatCooldown: state.clearRepeatCooldown,
       playDeathCopies: state.playDeathCopies,
       spawnDeathMarker: state.spawnDeathMarker,
+      collectAssists: state.collectAssists,
       pushKillFeed: state.pushKillFeed,
       awardKillXp: state.awardKillXp,
       handleModeKnockout: state.handleModeKnockout,

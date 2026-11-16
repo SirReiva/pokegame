@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { BuffStat } from '../game/abilities';
 import type { AtmosphereState } from '../game/atmosphere';
+import { ASSIST_KIND_LABELS } from '../game/core/match/assists';
 import {
   TEAM_INFO,
   computeSplitLayout,
@@ -161,6 +162,24 @@ const KillFeed = memo(function KillFeed({
           pokemonNames.get(entry.victimPokemonId) ?? entry.victimPokemonId;
         const killerIsOwn = entry.killerSlot === ownSlot;
         const victimIsOwn = entry.victimSlot === ownSlot;
+        const ownAssist = entry.assists.some(
+          (assist) => assist.slot === ownSlot
+        );
+        const assistTitle =
+          entry.assists.length > 0
+            ? 'Asistencias: ' +
+              entry.assists
+                .map((assist) => {
+                  const pokemon =
+                    pokemonNames.get(assist.pokemonId) ??
+                    assist.pokemonId;
+                  const kinds = assist.kinds
+                    .map((kind) => ASSIST_KIND_LABELS[kind])
+                    .join(', ');
+                  return `${assist.name} (${pokemon}${kinds ? `, ${kinds}` : ''})`;
+                })
+                .join(' · ')
+            : undefined;
         return (
           <li
             key={entry.id}
@@ -182,6 +201,20 @@ const KillFeed = memo(function KillFeed({
               </span>{' '}
               <span className="text-steel-450">({killerPokemon})</span>
             </span>
+            {entry.assists.length > 0 && (
+              <span
+                className={`shrink-0 rounded-full px-1 py-px font-mono font-bold leading-none ${
+                  compact ? 'text-6.4' : 'text-7.36'
+                } ${
+                  ownAssist
+                    ? 'bg-success-deep/70 text-accent-soft'
+                    : 'bg-white/10 text-steel-300'
+                }`}
+                title={assistTitle}
+              >
+                +{entry.assists.length}
+              </span>
+            )}
             <span className="shrink-0 font-mono text-7.36 font-bold tracking-[0.08em] text-steel-450 uppercase">
               KO
             </span>
@@ -258,6 +291,7 @@ const PlayerIdentity = memo(function PlayerIdentity({
 const CombatRow = memo(function CombatRow({
   kills,
   deaths,
+  assists,
   damageDealt,
   abilityHealing,
   pickupHealing,
@@ -267,6 +301,7 @@ const CombatRow = memo(function CombatRow({
 }: {
   kills: number;
   deaths: number;
+  assists: number;
   damageDealt: number;
   abilityHealing: number;
   pickupHealing: number;
@@ -282,7 +317,7 @@ const CombatRow = memo(function CombatRow({
       title={title}
     >
       <span className="text-steel-650">
-        K{kills} D{deaths}
+        K{kills} D{deaths} A{assists}
       </span>
       {!compact && (
         <span className="text-steel-500">DÑO {formatCount(damageDealt)}</span>
@@ -418,6 +453,7 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
     a.invulnerable === b.invulnerable &&
     a.kills === b.kills &&
     a.deaths === b.deaths &&
+    a.assists === b.assists &&
     a.damageDealt === b.damageDealt &&
     a.damageTaken === b.damageTaken &&
     a.abilityHealing === b.abilityHealing &&
@@ -519,7 +555,9 @@ const PlayerHud = memo(function PlayerHud({
       `Con el mismo rango base, te detectan a ${playerStats.detectionRange.toFixed(1)} u.`
     : undefined;
   const combatTitle = playerStats
-    ? `Daño hecho ${formatCount(playerStats.damageDealt)} · ` +
+    ? `KOs ${playerStats.kills} · Asistencias ${playerStats.assists} · ` +
+      `Muertes ${playerStats.deaths} · ` +
+      `Daño hecho ${formatCount(playerStats.damageDealt)} · ` +
       `Daño recibido ${formatCount(playerStats.damageTaken)} · ` +
       `Curación con habilidades ${formatCount(playerStats.abilityHealing)} · ` +
       `Curación con objetos ${formatCount(playerStats.pickupHealing)}`
@@ -732,6 +770,7 @@ const PlayerHud = memo(function PlayerHud({
               <CombatRow
                 kills={playerStats.kills}
                 deaths={playerStats.deaths}
+                assists={playerStats.assists}
                 damageDealt={playerStats.damageDealt}
                 abilityHealing={playerStats.abilityHealing}
                 pickupHealing={playerStats.pickupHealing}

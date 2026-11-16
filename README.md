@@ -142,7 +142,7 @@ Cada equipo aparece en su base (roja, azul, amarilla o verde). La pantalla se re
 
 ## Combate
 
-La partida es un **team deathmatch con límite de KOs configurable** en `/lobby` (15 por defecto; también 30 o 50): cada baja suma un punto al equipo que la consigue y gana el primero que llegue al objetivo. Al morir se reaparece en la base a los 5 s, con 2 s de invulnerabilidad; los enfriamientos del kit siguen corriendo durante la muerte y solo se reinicia el del instinto activo. Atacar retira la invulnerabilidad de spawn. El HUD muestra el marcador, la vida, los KO/muertes, el daño hecho y los enfriamientos de las cuatro habilidades y del instinto común de cada jugador. La pantalla de fin de partida añade, por jugador, el **daño hecho** y el **daño recibido** acumulados. Cada vista tiene además su propio **kill feed** en el lateral derecho: muestra hasta cuatro KOs, coloreados por equipo, cada uno durante 6 s. Si entra uno nuevo con el feed lleno, desaparece el más antiguo.
+La partida es un **team deathmatch con límite de KOs configurable** en `/lobby` (15 por defecto; también 30 o 50): cada baja suma un punto al equipo que la consigue y gana el primero que llegue al objetivo. Al morir se reaparece en la base a los 5 s, con 2 s de invulnerabilidad; los enfriamientos del kit siguen corriendo durante la muerte y solo se reinicia el del instinto activo. Atacar retira la invulnerabilidad de spawn. El HUD muestra el marcador, la vida, los KO/muertes/asistencias, el daño hecho y los enfriamientos de las cuatro habilidades y del instinto común de cada jugador. La pantalla de fin de partida añade, por jugador, el **daño hecho**, el **daño recibido** y las **asistencias** acumuladas. Cada vista tiene además su propio **kill feed** en el lateral derecho: muestra hasta cuatro KOs coloreados por equipo, cada uno durante 6 s, con un badge `+N` cuando hubo asistentes. Si entra uno nuevo con el feed lleno, desaparece el más antiguo.
 
 Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`): el jugador apunta colocándose y girando con el movimiento. Los proyectiles y los haces de jugadores humanos pueden usar una **ayuda de apuntado opcional** (`Opciones → Ayuda de apuntado`) que corrige ligeramente el ángulo hacia el rival más cercano a la mira si cae dentro de un cono estrecho y hay línea de visión; los bots no la usan. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
 
@@ -157,7 +157,10 @@ La curva es aritmética: cada nivel cuesta 20 XP más que el anterior. El nivel 
 | Fuente | Valor |
 | --- | --- |
 | KO | 40 |
-| Asistencia (≥20 % de la vida del rival en 10 s) | 15 |
+| Asistencia por daño (≥20 % de la vida del rival en 10 s) | 15 |
+| Asistencia solo por control (ralentizar al rival en 10 s) | 8 |
+| Asistencia solo por curación (≥10 % de la vida del killer en 10 s) | 10 |
+| Asistencia solo por revivir al killer en 10 s | 12 |
 | Daño hecho | 25 XP por barra de vida del rival |
 | Daño recibido | 10 XP por barra de vida |
 | Daño bloqueado con Protección | 10 XP por barra absorbida |
@@ -170,6 +173,8 @@ La curva es aritmética: cada nivel cuesta 20 XP más que el anterior. El nivel 
 | Participación | 1 XP cada 10 s vivos con actividad reciente (tope 30) |
 
 Para evitar farmeo, la XP de daño se normaliza por la vida máxima del objetivo, se limita a 35 por rival y vida, y matar repetidamente al mismo rival dentro de 180 s rinde 100 % → 50 % → 25 %. El autodaño, el daño a rivales invulnerables y el exceso de un golpe letal no cuentan. Toda la curva y los pesos viven en `src/game/xp.ts`.
+
+Una **asistencia** es la aportación de un compañero del killer a la baja: daño sobre la víctima, control (haberla ralentizado), curación recibida por el killer o un revive. Cada compañero cobra como máximo una asistencia por baja, aunque acumule varios tipos, y se queda con el peso mayor de los aplicables. El killer, los rivales y las bajas entre compañeros no reparten asistencia. Las reglas puras viven en `src/game/core/match/assists.ts` y las consumen tanto la XP como el contador, el kill feed y el marcador final.
 
 ### Instintos comunes
 

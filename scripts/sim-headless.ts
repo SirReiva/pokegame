@@ -55,6 +55,11 @@ import {
 import { CONFIG } from '../src/game/config';
 import type { CombatFxPort, TelegraphHandle } from '../src/game/core/ports/fx';
 import type { AoeFallenAlly } from '../src/game/core/abilities/aoe';
+import {
+  assistXpFor,
+  collectKillAssists,
+  type AssistCredit
+} from '../src/game/core/match/assists';
 import type { Collider } from '../src/game/core/world';
 import { CAST_EFFECTS } from '../src/game/effects';
 import { combatStatsFor, baseStatsFor } from '../src/game/pokedex';
@@ -66,7 +71,8 @@ import type {
   PendingInstantHit,
   PendingMeleeHit,
   Projectile,
-  QueuedCast
+  QueuedCast,
+  SupportContribution
 } from '../src/game/matchState';
 import type { DeviceInputSnapshot } from '../src/game/input';
 import { IDLE_INPUT } from '../src/game/input';
@@ -792,6 +798,7 @@ export class HeadlessMatch {
       deathFade: 0,
       kills: 0,
       deaths: 0,
+      assists: 0,
       damageDealt: 0,
       damageTaken: 0,
       abilityHealing: 0,
@@ -801,6 +808,8 @@ export class HeadlessMatch {
       killStreak: 0,
       recentKills: [],
       damageContributors: new Map(),
+      slowContributors: new Map(),
+      supportContributors: new Map(),
       killFarm: new Map(),
       participationTimer: 0,
       participationAwarded: 0,
@@ -835,7 +844,8 @@ export class HeadlessMatch {
       playImpactSound: () => {},
       showImmunePopup: () => {},
       showDamagePopup: () => {},
-      showHealPopup: () => {},
+      showHealPopup: (target, amount, source) =>
+        this.recordSupport(source, target, 'heal', amount),
       awardCombatXp: (attacker, target, applied, raw, final) =>
         this.awardCombatXp(attacker, target, applied, raw, final),
       awardXp: (player, source, amount) => this.awardXp(player, source, amount),
@@ -861,7 +871,8 @@ export class HeadlessMatch {
         this.applySlow(attacker, target, def, slow, color),
       reviveAoeAlly: (target, fraction, def, caster) =>
         this.reviveAoeAlly(target, fraction, def, caster),
-      showHealPopup: () => {},
+      showHealPopup: (target, amount, source) =>
+        this.recordSupport(source, target, 'heal', amount),
       awardXp: (player, source, amount) => this.awardXp(player, source, amount)
     };
 
@@ -987,9 +998,11 @@ export class HeadlessMatch {
         this.clearRepeatCooldown(playerToClear),
       playDeathCopies: () => {},
       spawnDeathMarker: () => {},
-      pushKillFeed: (killer, victim, abilityName) =>
-        this.pushKillFeed(killer, victim, abilityName),
-      awardKillXp: (killer, victim) => this.awardKillXp(killer, victim),
+      collectAssists: (killer, victim) => this.collectAssists(killer, victim),
+      pushKillFeed: (killer, victim, abilityName, assists) =>
+        this.pushKillFeed(killer, victim, abilityName, assists),
+      awardKillXp: (killer, victim, assists) =>
+        this.awardKillXp(killer, victim, assists),
       handleModeKnockout: (killer, victim) =>
         this.handleModeKnockout(killer, victim),
       emitStats: () => {}
@@ -1466,6 +1479,9 @@ export class HeadlessMatch {
       remaining: slow.duration
     });
     this.refreshSlowMultiplier(target);
+    if (attacker.team !== target.team) {
+      target.slowContributors.set(attacker.slot, this.matchElapsed);
+    }
   }
 
   private refreshSlowMultiplier(target: MatchPlayerState): void {
@@ -1712,8 +1728,56 @@ export class HeadlessMatch {
     if (player.alive) return false;
     if (!target.lineOfSight) return false;
     this.revivePlayer(player, player.x, player.z, fraction);
+    this.recordSupport(caster, player, 'revive');
     this.awardXp(caster, 'revive', XP_REWARDS.revive);
     return true;
+  }
+
+  /**
+   * Registra la curación o el revive de un aliado, con la misma ventana que la
+   * partida real, para que las asistencias del banco de pruebas no divergan.
+   */
+  private recordSupport(
+    source: MatchPlayerState | null,
+    target: MatchPlayerState,
+    kind: 'heal' | 'revive',
+    amount = 0
+  ): void {
+    if (!source || source === target || source.team !== target.team) return;
+    if (kind === 'heal' && amount <= 0) return;
+    const window = XP_RULES.assistWindowSeconds;
+    const now = this.matchElapsed;
+    let contribution: SupportContribution | undefined =
+      target.supportContributors.get(source.slot);
+    if (
+      !contribution ||
+      now - Math.max(contribution.healAt, contribution.reviveAt) > window
+    ) {
+      contribution = { heal: 0, healAt: 0, revives: 0, reviveAt: 0 };
+      target.supportContributors.set(source.slot, contribution);
+    }
+    if (kind === 'heal') {
+      contribution.heal += amount;
+      contribution.healAt = now;
+    } else {
+      contribution.revives += 1;
+      contribution.reviveAt = now;
+    }
+  }
+
+  private collectAssists(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState
+  ): AssistCredit[] {
+    const playersBySlot = new Map(
+      this.players.map((player) => [player.slot, player])
+    );
+    return collectKillAssists(
+      killer,
+      victim,
+      playersBySlot,
+      this.matchElapsed
+    );
   }
 
   private knockOut(
@@ -1727,7 +1791,8 @@ export class HeadlessMatch {
   private pushKillFeed(
     killer: MatchPlayerState,
     victim: MatchPlayerState,
-    abilityName: string
+    abilityName: string,
+    _assists: readonly AssistCredit[]
   ): void {
     this.metrics.kills.push({
       at: this.matchElapsed,
@@ -1802,7 +1867,8 @@ export class HeadlessMatch {
 
   private awardKillXp(
     killer: MatchPlayerState,
-    target: MatchPlayerState
+    target: MatchPlayerState,
+    assists: readonly AssistCredit[]
   ): void {
     const farm = killer.killFarm.get(target.slot);
     const repeated =
@@ -1820,23 +1886,13 @@ export class HeadlessMatch {
       this.awardXp(killer, 'shutdown', XP_REWARDS.shutdown);
     }
 
-    for (const [slot, contribution] of target.damageContributors) {
-      if (slot === killer.slot) continue;
-      if (
-        contribution.amount <
-        target.maxHp * XP_RULES.assistMinDamageFraction
-      ) {
-        continue;
-      }
-      if (
-        this.matchElapsed - contribution.at >
-        XP_RULES.assistWindowSeconds
-      ) {
-        continue;
-      }
-      const assistant = this.players.find((player) => player.slot === slot);
-      if (!assistant || assistant.team === target.team) continue;
-      this.awardXp(assistant, 'assist', XP_REWARDS.assist);
+    for (const assist of assists) {
+      const assistant = this.players.find(
+        (player) => player.slot === assist.slot
+      );
+      if (!assistant) continue;
+      assistant.assists += 1;
+      this.awardXp(assistant, 'assist', assistXpFor(assist.kinds));
     }
 
     killer.recentKills.push(this.matchElapsed);

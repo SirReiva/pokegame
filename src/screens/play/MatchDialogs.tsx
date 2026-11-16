@@ -277,6 +277,7 @@ function MatchScoreboard({
     | 'skinId'
     | 'kills'
     | 'deaths'
+    | 'assists'
     | 'damageDealt'
     | 'damageTaken'
     | 'abilityHealing'
@@ -306,6 +307,7 @@ function MatchScoreboard({
             skinId: player.skinId ?? DEFAULT_SKIN_ID,
             kills: 0,
             deaths: 0,
+            assists: 0,
             damageDealt: 0,
             damageTaken: 0,
             abilityHealing: 0,
@@ -326,7 +328,10 @@ function MatchScoreboard({
           .filter((entry) => entry.team === team)
           .sort(
             (a, b) =>
-              b.kills - a.kills || a.deaths - b.deaths || a.slot - b.slot
+              b.kills - a.kills ||
+              b.assists - a.assists ||
+              a.deaths - b.deaths ||
+              a.slot - b.slot
           );
         // Sumatorio del equipo: se calcula con las mismas filas que se pintan
         // para que los totales cuadren siempre con la lista de arriba.
@@ -334,6 +339,7 @@ function MatchScoreboard({
           (acc, row) => ({
             kills: acc.kills + row.kills,
             deaths: acc.deaths + row.deaths,
+            assists: acc.assists + row.assists,
             damageDealt: acc.damageDealt + row.damageDealt,
             damageTaken: acc.damageTaken + row.damageTaken,
             abilityHealing: acc.abilityHealing + row.abilityHealing,
@@ -342,6 +348,7 @@ function MatchScoreboard({
           {
             kills: 0,
             deaths: 0,
+            assists: 0,
             damageDealt: 0,
             damageTaken: 0,
             abilityHealing: 0,
@@ -416,12 +423,18 @@ function MatchScoreboard({
                       )}
                     </span>
                     <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
-                      <span className="flex flex-col items-end leading-none">
+                      <span
+                        className="flex flex-col items-end leading-none"
+                        title={`${row.kills} KO · ${row.assists} asistencias`}
+                      >
                         <strong className="text-13.6 text-steel-150">
                           {row.kills}
+                          <span className="text-9.6 text-steel-500">
+                            /{row.assists}
+                          </span>
                         </strong>
                         <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          KO
+                          KO / Asist.
                         </span>
                       </span>
                       <span className="flex flex-col items-end leading-none">
@@ -498,12 +511,18 @@ function MatchScoreboard({
                   </span>
                 </span>
                 <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
-                  <span className="flex flex-col items-end leading-none">
+                  <span
+                    className="flex flex-col items-end leading-none"
+                    title={`${totals.kills} KO · ${totals.assists} asistencias`}
+                  >
                     <strong className="text-13.6 text-(--team)">
                       {totals.kills}
+                      <span className="text-9.6 text-steel-500">
+                        /{totals.assists}
+                      </span>
                     </strong>
                     <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      KO
+                      KO / Asist.
                     </span>
                   </span>
                   <span className="flex flex-col items-end leading-none">
