@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       playcanvas:
-        specifier: 2.24.0
-        version: 2.24.0
+        specifier: 2.24.1
+        version: 2.24.1
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -1157,8 +1157,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  playcanvas@2.24.0:
-    resolution: {integrity: sha512-1zWNMmEPK+/g55knPERlnutr4BoqhhfDVa1Kyn7AwrrCpVkmc1HHRsd7O8nP3SoEjvtKnlpXutqkQIMBZC10dg==}
+  playcanvas@2.24.1:
+    resolution: {integrity: sha512-tWZDt1evgPdS9tTjqOTH+YP6UY78KcXzpnhGAapsiCXpT8uciw/+ogZLcSt3xLjcbSvZmniTStQldZhkylsoXA==}
     engines: {node: '>=18.3.0'}
 
   postcss-selector-parser@6.0.2:
@@ -1975,7 +1975,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  playcanvas@2.24.0:
+  playcanvas@2.24.1:
     dependencies:
       '@types/webxr': 0.5.24
       '@webgpu/types': 0.1.74

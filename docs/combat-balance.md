@@ -235,6 +235,19 @@
 > no dejar los conjuntos vacíos. La ayuda de apuntado dejó de leer el conjunto
 > del paso y comprueba la LOS directa del lanzador en el instante del disparo.
 > La histéresis de 0,2 s se conserva entre pasos.
+>
+> **Actualización 2026-11-16**: el balance ya se puede medir con combate real.
+> `pnpm balance` (`scripts/balance-report.ts`) reutiliza el arnés headless,
+> enfrenta a las 24 especies con moveset en 1v1 con bots, juega cada pareja en
+> las dos orientaciones de spawn y agrega winrate, TTK, daño y vida restante con
+> semillas reproducibles. El informe se escribe en
+> [`balance-simulacion.md`](balance-simulacion.md) y los datos crudos en
+> `.cache/balance-report.json`. El simulador añade `--duel` para cerrar la
+> partida en el primer KO, porque el `koTarget` del lobby solo admite 15/30/50.
+> Esta medición complementa (no sustituye) las matrices estáticas de §4: usa
+> los bots reales, pero no simula árboles/rocas ni objetos y no representa a un
+> humano. Las tablas de §4 siguen siendo la foto de la fórmula y deben
+> regenerarse por separado.
 
 ## Resumen ejecutivo
 
@@ -864,6 +877,12 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   `hitRadius` de 0,34-0,60 u, así que las especies grandes son más
   fáciles de golpear y las pequeñas más difíciles. Las tablas de §4.3-§4.5 son
   una cota de daño, no un ranking efectivo de combate.
+- **Simulación con bots (desde 2026-11-16)**: `pnpm balance` mide el combate
+  real con el arnés headless: 1v1, primer KO, ambas orientaciones de spawn,
+  varias semillas e instinto común fijo. Genera winrate, TTK, daño y vida
+  restante por especie en [`balance-simulacion.md`](balance-simulacion.md). Es
+  una medida complementaria: incluye puntería, rangos, retiradas y tiempos de
+  casteo, pero depende de la IA de los bots y no simula árboles/rocas ni objetos.
 
 ### 4.2. Cobertura y stats
 
@@ -1578,8 +1597,12 @@ así que se pueden añadir tests baratos:
   Tyranitar y Groudon incluidos. El script de invariantes debería ponderar o al
   menos imprimir el hurtbox junto al daño.
 
-Un script de balance como el usado para este informe se puede añadir a
-`scripts/balance-report.mjs` para regenerar las tablas tras cada cambio.
+Un script de balance como el usado para este informe está implementado en
+`scripts/balance-report.ts`: `pnpm balance` regenera
+[`balance-simulacion.md`](balance-simulacion.md) con duelos 1v1 reales. Las
+tablas estáticas de §4 se siguen regenerando con
+`node scripts/generate-damage-matrix.mjs`; conviene actualizar ambas tras cada
+cambio de números.
 
 ---
 

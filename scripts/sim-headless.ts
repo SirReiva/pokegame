@@ -22,6 +22,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { fileURLToPath } from 'node:url';
 
 import {
   ABILITIES,
@@ -175,7 +176,7 @@ const FIXED_STEP = 1 / 60;
 // CLI
 // ---------------------------------------------------------------------------
 
-interface Options {
+export interface Options {
   map: string;
   bots: number;
   seconds: number;
@@ -189,6 +190,8 @@ interface Options {
   maxKos: number;
   pokemon: string[];
   common: CommonAbilityId | 'mix';
+  /** Cierra la partida en el primer KO (duelos de balance). */
+  duel: boolean;
   quiet: boolean;
 }
 
@@ -204,7 +207,7 @@ function parseArgs(argv: readonly string[]): Options {
       throw new Error(`Argumento no reconocido: ${arg}`);
     }
     const key = arg.slice(2);
-    if (key === 'quiet') {
+    if (key === 'quiet' || key === 'duel') {
       values.set(key, 'true');
       continue;
     }
@@ -268,6 +271,7 @@ function parseArgs(argv: readonly string[]): Options {
       .map((value) => value.trim())
       .filter(Boolean),
     common,
+    duel: values.get('duel') === 'true',
     quiet: values.get('quiet') === 'true'
   };
 }
@@ -289,6 +293,7 @@ Opciones:
   --max-kos <n>       KOs para ganar en tdm (por defecto: 50)
   --pokemon <ids>     Lista separada por comas (por defecto: 0025,0094,0658,0007)
   --common <id|mix>   Instinto común (por defecto: mix)
+  --duel              Termina la partida en el primer KO (duelos de balance)
   --quiet             No imprime la tabla final
   --help              Muestra esta ayuda`);
 }
@@ -298,7 +303,7 @@ Opciones:
 // ---------------------------------------------------------------------------
 
 /** Mulberry32: suficiente para reproducir decisiones y tiradas de daño. */
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) | 0;
@@ -312,15 +317,17 @@ function mulberry32(seed: number): () => number {
 // Datos puros del mapa y los Pokémon
 // ---------------------------------------------------------------------------
 
-interface PokemonEntry {
+export interface PokemonEntry {
+  name: string;
   types: string[];
   accent: [number, number, number];
 }
 
-function loadManifest(file: string): Map<string, PokemonEntry> {
+export function loadManifest(file: string): Map<string, PokemonEntry> {
   const raw = JSON.parse(readFileSync(file, 'utf8')) as {
     pokemon?: Array<{
       id?: string;
+      name?: string;
       types?: string[];
       accent?: string;
     }>;
@@ -329,6 +336,7 @@ function loadManifest(file: string): Map<string, PokemonEntry> {
   for (const pokemon of raw.pokemon ?? []) {
     if (!pokemon.id) continue;
     entries.set(pokemon.id, {
+      name: pokemon.name ?? pokemon.id,
       types: pokemon.types?.length ? pokemon.types : ['Normal'],
       accent: hexToRgb(pokemon.accent ?? '#ffffff')
     });
@@ -346,7 +354,7 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-function loadMapFile(id: string): GameMap {
+export function loadMapFile(id: string): GameMap {
   const indexRaw = JSON.parse(
     readFileSync(path.resolve('public/maps/index.json'), 'utf8')
   ) as { maps?: MapIndexEntry[] } | MapIndexEntry[];
@@ -529,7 +537,7 @@ interface FrameTrace {
   }>;
 }
 
-interface SimSummary {
+export interface SimSummary {
   map: string;
   mode: GameModeId;
   bots: number;
@@ -559,6 +567,8 @@ interface SimSummary {
     distance: number;
     casts: number;
     hits: number;
+    hp: number;
+    maxHp: number;
   }>;
   totals: {
     casts: number;
@@ -574,7 +584,7 @@ interface SimSummary {
 // Partida headless
 // ---------------------------------------------------------------------------
 
-class HeadlessMatch {
+export class HeadlessMatch {
   readonly map: GameMap;
   readonly world: World;
   readonly players: MatchPlayerState[] = [];
@@ -2048,6 +2058,24 @@ class HeadlessMatch {
         z: player.z
       });
     }
+
+    if (this.options.duel && !this.matchOver && this.metrics.kills.length > 0) {
+      this.finishDuel();
+    }
+  }
+
+  /** Cierra el duelo en el primer KO; el ganador es el equipo del lanzador. */
+  private finishDuel(): void {
+    const kill = this.metrics.kills[0];
+    const killer = this.players.find((player) => player.slot === kill.killer);
+    const victim = this.players.find((player) => player.slot === kill.victim);
+    const winner =
+      killer && victim && killer.team !== victim.team ? killer.team : null;
+    this.finishMatch({
+      winner,
+      reason: 'koTarget',
+      detail: 'Duelo cerrado en el primer KO.'
+    });
   }
 
   private readonly previousPositions = new Map<
@@ -2124,7 +2152,9 @@ class HeadlessMatch {
           (this.metrics.distanceBySlot.get(player.slot) ?? 0).toFixed(1)
         ),
         casts: this.metrics.castsBySlot.get(player.slot) ?? 0,
-        hits: this.metrics.hitsBySlot.get(player.slot) ?? 0
+        hits: this.metrics.hitsBySlot.get(player.slot) ?? 0,
+        hp: Number(player.hp.toFixed(1)),
+        maxHp: player.maxHp
       })),
       totals: {
         casts: this.metrics.casts,
@@ -2142,7 +2172,7 @@ class HeadlessMatch {
 // Arranque
 // ---------------------------------------------------------------------------
 
-function formatSummary(summary: SimSummary): string {
+export function formatSummary(summary: SimSummary): string {
   const lines: string[] = [];
   lines.push('');
   lines.push('Simulación headless newpoke');
@@ -2261,4 +2291,8 @@ function main(): void {
   }
 }
 
-main();
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) main();

@@ -29,10 +29,11 @@
     "bench": "node --import tsx scripts/bench-core.mjs",
     "bench:frame": "node scripts/bench-frame.mjs",
     "sim": "node --import tsx scripts/sim-headless.ts",
+    "balance": "node --import tsx scripts/balance-report.ts",
     "preview": "vite preview"
   },
   "dependencies": {
-    "playcanvas": "2.24.0",
+    "playcanvas": "2.24.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "wouter": "3.13.0"

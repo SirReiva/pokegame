@@ -643,6 +643,15 @@ También se pueden aleatorizar skins y nombres para dar variedad visual.
 > métricas pendientes del plan original (tiempo atascado, cooldowns
 > desperdiciados, eficiencia de pociones, errores de ruta, tiempo en objetivo)
 > se pueden añadir sobre la misma traza.
+>
+> **Balance (2026-11-16).** `pnpm balance` reutiliza este arnés para jugar un
+> round-robin 1v1 entre todas las especies con moveset: `--duel` cierra la
+> partida en el primer KO, cada pareja se juega en las dos orientaciones de
+> spawn y varias semillas, y el resultado se agrega en
+> [`balance-simulacion.md`](balance-simulacion.md) con winrate, TTK, daño y vida
+> restante. Es la medida de referencia para ajustar números; las matrices
+> estáticas de [`combat-balance.md`](combat-balance.md) siguen siendo la cota de
+> la fórmula.
 
 ### 9.2 Overlay de debug
 
