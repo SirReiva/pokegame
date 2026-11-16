@@ -627,13 +627,15 @@ export class HeadlessMatch {
   readonly timeLimitSeconds: number;
 
   hosts: Hosts;
+  private readonly options: Options;
 
   constructor(
     map: GameMap,
-    private readonly options: Options,
+    options: Options,
     manifest: Map<string, PokemonEntry>
   ) {
     this.map = map;
+    this.options = options;
     setActiveMap(map);
 
     const colliders = buildMapColliders(map);

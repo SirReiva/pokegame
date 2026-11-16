@@ -42,6 +42,7 @@ import {
 } from '../src/game/abilities';
 import { baseStatsFor, combatStatsFor } from '../src/game/pokedex';
 import { hitRadiusForPokemon, speedForPokemon } from '../src/game/roster';
+import type { Team } from '../src/game/terrain';
 import {
   HeadlessMatch,
   loadManifest,
@@ -434,8 +435,8 @@ function runTeamMatch(input: {
   seed: number;
   orientation: 0 | 1;
   maxSteps: number;
-  teamAId: string;
-  teamBId: string;
+  teamAId: Team;
+  teamBId: Team;
 }): TeamMatchResult {
   const { map, manifest, base, teamA, teamB, seed, orientation } = input;
   Math.random = mulberry32(seed);
@@ -928,7 +929,7 @@ interface ReportInput {
   wallSeconds: number;
   commit: string;
   teamSize: number;
-  teamAId: string;
+  teamAId: Team;
   sideWinRate: { red: number; total: number; wins: number };
 }
 
