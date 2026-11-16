@@ -441,12 +441,15 @@ function resolveBlockedCells(
   team: Team | null,
   out: Point2
 ): Point2 {
-  if (!activeMap) {
+  if (!activeMap || radius <= 0) {
+    // Sin mapa o sin radio no hay celda que empujar; misma salida que el
+    // recorrido directo, sin calcular nada.
     out[0] = x;
     out[1] = z;
     return out;
   }
   const blocksWater = team === null;
+  const radiusSq = radius * radius;
   let px = x;
   let pz = z;
 
@@ -487,8 +490,10 @@ function resolveBlockedCells(
         const closestZ = Math.min(cellMaxZ, Math.max(cellMinZ, pz));
         const dx = px - closestX;
         const dz = pz - closestZ;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        if (distance >= radius) continue;
+        // Comparación al cuadrado: la raíz solo se necesita al empujar.
+        const distanceSq = dx * dx + dz * dz;
+        if (distanceSq >= radiusSq) continue;
+        const distance = Math.sqrt(distanceSq);
 
         if (distance < 0.0001) {
           // Centro dentro de la celda: sale por la cara más cercana.

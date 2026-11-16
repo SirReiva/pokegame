@@ -756,9 +756,11 @@ y regeneración.
     buffers en vez de asignar `[]` en cada intercambio. El consumidor solo lee
     el array durante la llamada, así que el buffer viejo se vacía en el
     intercambio siguiente.
-11. `Math.hypot` se sustituye por `Math.sqrt` en los bucles que recorren
-    colliders, celdas de terreno y proyectiles: son magnitudes de juego, sin
-    riesgo de desbordamiento, y `hypot` paga un escalado por llamada.
+11. En los bucles de colisión (colliders, jugadores, celdas de terreno y anclas
+    de FX) la distancia se compara al cuadrado y la raíz solo se calcula cuando
+    hay solapamiento real; `buildBotHazards()` usa `Math.sqrt` porque ahí sí hace
+    falta el valor para dividir. Las magnitudes de juego no desbordan y las
+    comparaciones conservan la regla anterior para radios nulos o negativos.
 12. `syncMatchView()` recibe un objeto de dependencias reutilizado que se
     reescribe en cada render, y el array de vistas y las opciones del número de
     daño también se reciclan. Con esto el bucle de render no asigna objetos de

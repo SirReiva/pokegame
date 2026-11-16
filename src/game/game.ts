@@ -3815,12 +3815,12 @@ export class Game {
     if (!ignoreTerrainConcealment) {
       for (const player of this.matchPlayers) {
         if (!player.alive) continue;
-        if (
-          Math.hypot(player.x - x, player.z - z) >
-          player.hitRadius + 0.1
-        ) {
-          continue;
-        }
+        // Solo interesa si el ancla cae dentro del cuerpo: comparación al
+        // cuadrado, sin raíz por cada jugador y efecto.
+        const dx = player.x - x;
+        const dz = player.z - z;
+        const reach = player.hitRadius + 0.1;
+        if (dx * dx + dz * dz > reach * reach) continue;
         concealment = Math.max(concealment, player.concealment.value);
       }
     }
@@ -4112,11 +4112,13 @@ export class Game {
         closestPointOnColliderInto(collider, px, pz, nearest);
         const dx = px - nearest.x;
         const dz = pz - nearest.z;
-        // `sqrt` en vez de `hypot`: evita el escalado de `hypot` en un bucle que
-        // recorre todos los colliders en cada iteración.
-        const distance = Math.sqrt(dx * dx + dz * dz);
         const minimum = collider.radius + radius;
-        if (distance < minimum) {
+        const distanceSq = dx * dx + dz * dz;
+        // La mayoría de colliders no solapan: se compara al cuadrado y la raíz
+        // solo se calcula cuando hay que empujar. `minimum > 0` conserva la
+        // regla anterior para radios degenerados.
+        if (minimum > 0 && distanceSq < minimum * minimum) {
+          const distance = Math.sqrt(distanceSq);
           if (distance < 0.0001) {
             px += minimum;
           } else {
@@ -4153,18 +4155,20 @@ export class Game {
       }
 
       // Colisión entre jugadores vivos; un KO no bloquea el paso.
+      const playerMinimum = radius * 2;
+      const playerMinimumSq = playerMinimum * playerMinimum;
       for (const other of this.matchPlayers) {
         if (other === self || !other.alive) continue;
         const dx = px - other.x;
         const dz = pz - other.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        const minimum = radius * 2;
-        if (distance < minimum) {
+        const distanceSq = dx * dx + dz * dz;
+        if (distanceSq < playerMinimumSq) {
+          const distance = Math.sqrt(distanceSq);
           if (distance < 0.0001) {
-            px += minimum;
+            px += playerMinimum;
           } else {
-            px = other.x + (dx / distance) * minimum;
-            pz = other.z + (dz / distance) * minimum;
+            px = other.x + (dx / distance) * playerMinimum;
+            pz = other.z + (dz / distance) * playerMinimum;
           }
           pushed = true;
         }
@@ -4203,7 +4207,9 @@ export class Game {
     const steps = Math.max(1, Math.ceil(distance / stepLength));
     const stepX = (dirX * distance) / steps;
     const stepZ = (dirZ * distance) / steps;
-    const stepSize = Math.sqrt(stepX * stepX + stepZ * stepZ);
+    // Umbral de avance al cuadrado (`moved < stepSize * 0.35`): la raíz solo
+    // haría falta para el valor, no para la comparación.
+    const minMoveSq = (stepX * stepX + stepZ * stepZ) * (0.35 * 0.35);
     const colliders = this.world.colliders;
     let x = startX;
     let z = startZ;
@@ -4227,10 +4233,11 @@ export class Game {
       const next = this.resolvePosition(self, targetX, targetZ);
       const nx = next.x;
       const nz = next.z;
-      const moved = Math.sqrt((nx - x) * (nx - x) + (nz - z) * (nz - z));
+      const movedX = nx - x;
+      const movedZ = nz - z;
       // También frena si el paso se queda atascado contra otro jugador, un
       // límite del mapa o un agua profunda.
-      if (moved < stepSize * 0.35) break;
+      if (movedX * movedX + movedZ * movedZ < minMoveSq) break;
       x = nx;
       z = nz;
     }
