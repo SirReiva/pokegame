@@ -12,7 +12,7 @@ import { publicUrl } from './publicUrl';
 import { defaultSkinFor } from './skins';
 import { FALLBACK_SPRITE_BUDGET_MB } from './spriteBudget';
 import { spriteOutlineWidth } from './spriteDetail';
-import { applySpriteOutline } from './spriteOutline';
+import { applySpriteShading } from './spriteOutline';
 import { setTextureSource } from './textures';
 import type {
   AnimationName,
@@ -129,6 +129,12 @@ const SILHOUETTE_OPACITY = 0.72;
 const SILHOUETTE_COLOR: readonly [number, number, number] = [255, 242, 209];
 /** Por encima de las partículas y del agua, para que no la tapen. */
 const SILHOUETTE_DRAW_ORDER = 4;
+/**
+ * Constante de tiempo (s) del gris del KO. Es un suavizado exponencial: a los
+ * ~3× este valor el cuerpo ya está prácticamente gris, así que acompaña al clip
+ * `faint` (que dura del orden de medio segundo) sin retrasarse.
+ */
+const DESATURATION_SECONDS = 0.08;
 
 /**
  * Resolución de las texturas de sprite respecto a las celdas del manifiesto.
@@ -810,9 +816,10 @@ function createSpriteMaterial(
   material.depthWrite = true;
   material.depthTest = true;
   material.cull = pc.CULLFACE_NONE;
-  // El borde de equipo viaja en este mismo material: `alphaTestPS` dilata el
-  // alfa y `emissivePS` tiñe solo los píxeles que añade la dilatación.
-  if (outlineColor) applySpriteOutline(material, outlineColor);
+  // El borde de equipo y el gris del KO viajan en este mismo material:
+  // `alphaTestPS` dilata el alfa (solo si hay borde) y `emissivePS` tiñe los
+  // píxeles que añade la dilatación y desatura el cuerpo al morir.
+  applySpriteShading(material, outlineColor);
   material.update();
   return material;
 }
@@ -858,6 +865,8 @@ interface FrameLayer {
   animation: SpriteAnimation;
   refAnchorY: number;
   textureScale: number;
+  /** Último `uDesaturate` subido a este material, para no repetir el uniform. */
+  desaturation: number;
   silhouette: pc.MeshInstance;
   silhouetteMaterial: pc.StandardMaterial;
 }
@@ -885,6 +894,9 @@ export class SpriteBillboard {
   private row = 0;
   private elapsed = 0;
   private playback = 1;
+  /** Gris del KO actual y objetivo: 0 = color, 1 = escala de grises. */
+  private desaturation = 0;
+  private desaturationTarget = 0;
   /** Si es `false`, el clip se detiene en su último frame en vez de repetirse. */
   private loop = true;
   /**
@@ -949,7 +961,12 @@ export class SpriteBillboard {
   /** Crea la capa de una animación la primera vez que se necesita. */
   private ensureLayer(name: AnimationName): FrameLayer | null {
     const existing = this.layers.get(name);
-    if (existing) return existing;
+    if (existing) {
+      // Una capa precalentada puede venir de antes de morir: al reactivarla hay
+      // que ponerla al día para que el gris no salte un frame.
+      this.applyDesaturation(existing);
+      return existing;
+    }
     const animation = this.asset.skin.animations[name];
     const texture = this.asset.textures[name];
     if (!animation || !texture) return null;
@@ -990,6 +1007,8 @@ export class SpriteBillboard {
       this.options.alphaTest,
       this.options.outlineColor ?? null
     );
+    // Una capa creada a mitad del KO nace ya con el gris que toque.
+    material.setParameter('uDesaturate', this.desaturation);
     const silhouetteMaterial = createSilhouetteMaterial(
       texture,
       this.options.alphaTest,
@@ -1030,6 +1049,7 @@ export class SpriteBillboard {
       animation,
       refAnchorY,
       textureScale,
+      desaturation: this.desaturation,
       silhouette,
       silhouetteMaterial
     };
@@ -1062,6 +1082,41 @@ export class SpriteBillboard {
 
   setPlayback(rate: number): void {
     this.playback = rate;
+  }
+
+  /**
+   * Pide el gris del KO (0 = color, 1 = escala de grises). La caída se interpola
+   * en `update()`, así que se puede llamar cada frame: repetir el mismo objetivo
+   * no hace trabajo. Al revivir se recupera el color de golpe, para que el
+   * Pokémon reaparezca vivo y no con un parpadeo gris.
+   */
+  setDesaturation(target: number): void {
+    this.desaturationTarget = Math.min(1, Math.max(0, target));
+    if (this.desaturationTarget >= this.desaturation) return;
+    this.desaturation = this.desaturationTarget;
+    const layer = this.layers.get(this.animation);
+    if (layer) this.applyDesaturation(layer);
+  }
+
+  /** Sube el gris actual al material de una capa si aún no lo tenía. */
+  private applyDesaturation(layer: FrameLayer): void {
+    if (layer.desaturation === this.desaturation) return;
+    layer.desaturation = this.desaturation;
+    layer.material.setParameter('uDesaturate', this.desaturation);
+  }
+
+  private stepDesaturation(dt: number): void {
+    if (this.desaturation === this.desaturationTarget) return;
+    const blend = 1 - Math.exp(-dt / DESATURATION_SECONDS);
+    const next =
+      this.desaturation + (this.desaturationTarget - this.desaturation) * blend;
+    // Se cierra en el objetivo: así el uniform deja de subirse cada frame.
+    this.desaturation =
+      Math.abs(this.desaturationTarget - next) < 0.004
+        ? this.desaturationTarget
+        : next;
+    const layer = this.layers.get(this.animation);
+    if (layer) this.applyDesaturation(layer);
   }
 
   get currentFrame(): number {
@@ -1323,12 +1378,15 @@ export class SpriteBillboard {
     // 3. Aplicar frame/dirección.
     this.applyFrame();
 
-    // 4. Billboard: solo giro en Y, se mantiene de pie.
+    // 4. Gris del KO (interpolado; sin trabajo si ya está en el objetivo).
+    this.stepDesaturation(dt);
+
+    // 5. Billboard: solo giro en Y, se mantiene de pie.
     const dx = cameraPosition.x - this.root.getPosition().x;
     const dz = cameraPosition.z - this.root.getPosition().z;
     this.pivot.setLocalEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
 
-    // 5. Avance visual sobre el suelo para el movimiento interno vertical.
+    // 6. Avance visual sobre el suelo para el movimiento interno vertical.
     const distance = Math.hypot(dx, dz) || 1;
     this.pivot.setLocalPosition(
       (dx / distance) * this.motionOffset,

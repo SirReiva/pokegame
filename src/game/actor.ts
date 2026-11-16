@@ -241,6 +241,11 @@ export class Actor {
     this.billboard.setLoop(loop);
   }
 
+  /** Gris del KO (0 = color, 1 = escala de grises); el billboard lo interpola. */
+  setDesaturation(value: number): void {
+    this.billboard.setDesaturation(value);
+  }
+
   /**
    * Crea una capa de animación concreta si falta. Devuelve `true` si ha tenido
    * que crearla.

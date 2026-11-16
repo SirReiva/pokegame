@@ -87,6 +87,10 @@ export function syncMatchView(sync: MatchViewSync): void {
         copy.setLoop(true);
       }
       copy.setHitboxDebug(CONFIG.debug.showHitboxes);
+      // Mientras dura el `faint` el cuerpo se va a gris; al reaparecer recupera
+      // el color de inmediato. El billboard interpola la caída, así que llamar
+      // cada frame no cuesta nada cuando el valor no cambia.
+      copy.setDesaturation(player.alive ? 0 : 1);
       copy.update(sync.dt, cameraPosition);
     }
 
