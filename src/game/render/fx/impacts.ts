@@ -3,6 +3,8 @@ import * as pc from 'playcanvas';
 import { EffectBatch, MOTION_FIGHTING_CORES, MOTION_FIGHTING_LINES, MOTION_FIRE_BURST_FLAMES, MOTION_FIRE_BURST_SPARKS, MOTION_IMPACT_PUFFS, MOTION_IMPACT_RADIAL, MOTION_IMPACT_RINGS, MOTION_JAW_SHARDS, MOTION_PROJECTILE_ARCS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import { createLightningMesh } from './fxGeometry';
+import { polar } from './fxTrig';
+import type { Polar } from './fxTrig';
 
 /** Impacto de un golpe. `effectiveness` tiñe el destello. */
 export function spawnHit(ctx: FxRuntime, x: number,
@@ -301,20 +303,19 @@ const root = new pc.Entity('dark-burst');
       life: 0.4
     });
 
-    const smoke: {
+    const smoke: (Polar & {
       entity: pc.Entity;
-      angle: number;
       distance: number;
       rise: number;
       size: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 4; index++) {
       const puff = ctx.createEntity(ctx.sphereMesh, [smokeMaterial], root);
       const size = 0.35 + Math.random() * 0.25;
       puff.setLocalScale(size, size * 0.7, size);
       smoke.push({
         entity: puff,
-        angle: (index / 4) * Math.PI * 2 + Math.random() * 0.5,
+        ...polar((index / 4) * Math.PI * 2 + Math.random() * 0.5),
         distance: (0.25 + Math.random() * 0.35) * power,
         rise: 0.25 + Math.random() * 0.35,
         size
@@ -352,9 +353,9 @@ const root = new pc.Entity('dark-burst');
         const local = Math.min(1, Math.max(0, t / 0.9));
         const distance = puff.distance * (0.4 + local * 1.2);
         puff.entity.setLocalPosition(
-          Math.cos(puff.angle) * distance,
+          puff.cos * distance,
           0.4 + local * puff.rise,
-          Math.sin(puff.angle) * distance
+          puff.sin * distance
         );
         const grow = 0.8 + local * 0.9;
         const fade = Math.max(0, 1 - local);
@@ -433,20 +434,19 @@ const root = new pc.Entity('steel-burst');
       life: 0.34
     });
 
-    const shards: {
+    const shards: (Polar & {
       entity: pc.Entity;
-      angle: number;
       distance: number;
       rise: number;
       length: number;
       yaw: number;
       roll: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 6; index++) {
       const shard = ctx.createEntity(ctx.boxMesh, [steelMaterial], root);
       shards.push({
         entity: shard,
-        angle: (index / 6) * Math.PI * 2 + 0.35,
+        ...polar((index / 6) * Math.PI * 2 + 0.35),
         distance: (0.45 + Math.random() * 0.5) * power,
         rise: 0.12 + Math.random() * 0.35,
         length: 0.28 + Math.random() * 0.26,
@@ -504,19 +504,21 @@ const root = new pc.Entity('steel-burst');
       ringBatch.setTime(time);
       sparkBatch.setTime(time);
 
+      // Tiempo, arco y fundido son iguales para todas las esquirlas: fuera del bucle.
+      const shardLocal = Math.min(1, Math.max(0, (t - 0.03) / 0.75));
+      const shardArc = Math.sin(shardLocal * Math.PI);
+      const shardFade = Math.max(0, 1 - shardLocal);
       for (const shard of shards) {
-        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.75));
-        const distance = shard.distance * local;
+        const distance = shard.distance * shardLocal;
         shard.entity.setLocalPosition(
-          Math.cos(shard.angle) * distance,
-          0.65 + Math.sin(local * Math.PI) * shard.rise,
-          Math.sin(shard.angle) * distance
+          shard.cos * distance,
+          0.65 + shardArc * shard.rise,
+          shard.sin * distance
         );
-        const fade = Math.max(0, 1 - local);
         shard.entity.setLocalScale(
-          0.07 * fade,
-          0.07 * fade,
-          shard.length * fade
+          0.07 * shardFade,
+          0.07 * shardFade,
+          shard.length * shardFade
         );
         shard.entity.setLocalEulerAngles(
           shard.yaw + t * 180,

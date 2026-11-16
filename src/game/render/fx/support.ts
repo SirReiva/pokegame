@@ -4,6 +4,8 @@ import { DEG } from '../../config';
 import { EffectBatch, MOTION_RECOVERY_MOTES } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { FxHandle } from '../../core/ports/fx';
+import { polar } from './fxTrig';
+import type { Polar } from './fxTrig';
 
 /** Estela del desplazamiento de un dash. */
 export function spawnDash(ctx: FxRuntime, x1: number,
@@ -250,13 +252,12 @@ const root = new pc.Entity('heal-burst');
       rings.push(ring);
     }
 
-    const sparks: {
+    const sparks: (Polar & {
       entity: pc.Entity;
-      angle: number;
       distance: number;
       lift: number;
       size: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 14; index++) {
       const angle = (index / 14) * Math.PI * 2 + Math.random() * 0.4;
       const size = 0.06 + Math.random() * 0.06;
@@ -264,7 +265,7 @@ const root = new pc.Entity('heal-burst');
       spark.setLocalScale(size, size, size);
       sparks.push({
         entity: spark,
-        angle,
+        ...polar(angle),
         distance: 0.15 + Math.random() * 0.35,
         lift: 0.7 + Math.random() * 0.8,
         size
@@ -284,14 +285,15 @@ const root = new pc.Entity('heal-burst');
         ringMaterial.opacity = 0.65 * (1 - t) * (index === 0 ? 1 : 0.7);
       });
 
+      // El desvanecido no depende de la chispa: se calcula una vez por frame.
+      const fade = Math.sin(Math.min(1, t * 1.15) * Math.PI);
       for (const spark of sparks) {
         const spread = (spark.distance + t * 0.55) * sizeScale;
         spark.entity.setLocalPosition(
-          Math.cos(spark.angle) * spread,
+          spark.cos * spread,
           0.2 + t * spark.lift,
-          Math.sin(spark.angle) * spread
+          spark.sin * spread
         );
-        const fade = Math.sin(Math.min(1, t * 1.15) * Math.PI);
         const size = spark.size * (0.6 + fade * 0.9);
         spark.entity.setLocalScale(size, size, size);
       }

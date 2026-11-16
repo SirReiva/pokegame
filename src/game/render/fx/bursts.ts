@@ -4,6 +4,8 @@ import { DEG } from '../../config';
 import { EffectBatch, MOTION_PSYCHIC_ORB_RINGS, MOTION_PSYCHIC_RAYS, MOTION_PSYCHIC_RIM, MOTION_PSYCHIC_SHELL, MOTION_PSYCHIC_SHARDS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
 import { tintColor } from './fxGeometry';
+import { polar } from './fxTrig';
+import type { Polar } from './fxTrig';
 
 /** Impacto de Planta: núcleo claro, hojas despedidas y anillo verde. */
 export function spawnGrassBurst(ctx: FxRuntime, x: number,
@@ -50,13 +52,12 @@ const root = new pc.Entity('grass-burst');
       color
     );
 
-    const leaves: {
+    const leaves: (Polar & {
       entity: pc.Entity;
-      angle: number;
       dist: number;
       spin: number;
       size: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 11; index++) {
       const angle = Math.random() * Math.PI * 2;
       const size = 0.2 + Math.random() * 0.16;
@@ -75,7 +76,7 @@ const root = new pc.Entity('grass-burst');
       );
       leaves.push({
         entity,
-        angle,
+        ...polar(angle),
         dist: 0.55 + Math.random() * 0.55,
         spin: 140 + Math.random() * 220,
         size
@@ -94,9 +95,9 @@ const root = new pc.Entity('grass-burst');
       for (const leaf of leaves) {
         const distance = leaf.dist * (0.2 + t);
         leaf.entity.setLocalPosition(
-          Math.cos(leaf.angle) * distance,
+          leaf.cos * distance,
           0.55 + t * 0.9 - t * t * 1.1,
-          Math.sin(leaf.angle) * distance
+          leaf.sin * distance
         );
         leaf.entity.setLocalEulerAngles(
           t * 180,
@@ -146,21 +147,20 @@ const root = new pc.Entity('water-burst');
       rings.push(ring);
     }
 
-    const drops: {
+    const drops: (Polar & {
       entity: pc.Entity;
-      angle: number;
       distance: number;
       height: number;
       size: number;
       delay: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 12; index++) {
       const drop = ctx.createEntity(ctx.sphereMesh, [dropMaterial], root);
       const size = 0.07 + Math.random() * 0.06;
       drop.setLocalScale(size, size, size);
       drops.push({
         entity: drop,
-        angle: Math.random() * Math.PI * 2,
+        ...polar(Math.random() * Math.PI * 2),
         distance: 0.55 + Math.random() * 0.7,
         height: 0.45 + Math.random() * 0.55,
         size,
@@ -200,9 +200,9 @@ const root = new pc.Entity('water-burst');
         const distance = drop.distance * (0.15 + dropT);
         const rise = Math.sin(dropT * Math.PI) * drop.height;
         drop.entity.setLocalPosition(
-          Math.cos(drop.angle) * distance,
+          drop.cos * distance,
           0.28 + rise,
-          Math.sin(drop.angle) * distance
+          drop.sin * distance
         );
         const fade = Math.max(0, 1 - dropT);
         const size = drop.size * fade;
@@ -544,12 +544,12 @@ const root = new pc.Entity('air-burst');
       rings.push(ring);
     }
 
-    const blades: {
+    const blades: (Polar & {
       entity: pc.Entity;
       angle: number;
       size: number;
       delay: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 6; index++) {
       const angle = (index / 6) * Math.PI * 2 + 0.3;
       const blade = ctx.createEntity(
@@ -560,6 +560,7 @@ const root = new pc.Entity('air-burst');
       blade.setLocalEulerAngles(90, angle / DEG, 0);
       blades.push({
         entity: blade,
+        ...polar(angle),
         angle,
         size: 0.9 + ((index * 7) % 10) / 10 * 0.3,
         delay: index * 0.012
@@ -617,9 +618,9 @@ const root = new pc.Entity('air-burst');
         const local = Math.max(0, Math.min(1, (t - blade.delay) / 0.8));
         const distance = (0.1 + local * 1.85) * power;
         blade.entity.setLocalPosition(
-          Math.cos(blade.angle) * distance,
+          blade.cos * distance,
           0.18 + local * 0.55,
-          Math.sin(blade.angle) * distance
+          blade.sin * distance
         );
         const fade = Math.max(0, 1 - local);
         const scale = blade.size * fade * (0.7 + local * 0.8);
@@ -631,28 +632,30 @@ const root = new pc.Entity('air-burst');
         );
       }
 
+      // El avance de las plumas es común: solo el ángulo base cambia por pluma.
+      const featherLocal = Math.min(1, Math.max(0, (t - 0.03) / 0.85));
+      const featherEase = 1 - Math.pow(1 - featherLocal, 2);
+      const featherArc = Math.sin(featherLocal * Math.PI);
+      const featherFade = Math.max(0, 1 - featherLocal);
       for (const feather of feathers) {
-        const local = Math.min(1, Math.max(0, (t - 0.03) / 0.85));
-        const easeFeather = 1 - Math.pow(1 - local, 2);
-        const distance = feather.distance * easeFeather;
-        const angle = feather.angle + local * 1.5;
+        const distance = feather.distance * featherEase;
+        const angle = feather.angle + featherLocal * 1.5;
         const y =
-          0.45 + feather.lift * Math.sin(local * Math.PI) - local * local * 0.5;
+          0.45 + feather.lift * featherArc - featherLocal * featherLocal * 0.5;
         feather.entity.setLocalPosition(
           Math.cos(angle) * distance,
           Math.max(0.05, y),
           Math.sin(angle) * distance
         );
-        const fade = Math.max(0, 1 - local);
         feather.entity.setLocalScale(
-          feather.size * fade,
-          feather.size * 2.2 * fade,
-          feather.size * fade
+          feather.size * featherFade,
+          feather.size * 2.2 * featherFade,
+          feather.size * featherFade
         );
         feather.entity.setLocalEulerAngles(
-          local * 80,
-          angle / DEG + local * 180,
-          Math.sin(local * 7 + feather.phase) * 55
+          featherLocal * 80,
+          angle / DEG + featherLocal * 180,
+          Math.sin(featherLocal * 7 + feather.phase) * 55
         );
       }
 
@@ -1059,7 +1062,7 @@ const root = new pc.Entity('ground-burst');
       cracks.push(crack);
     }
 
-    const slabs: {
+    const slabs: (Polar & {
       entity: pc.Entity;
       angle: number;
       distance: number;
@@ -1067,7 +1070,7 @@ const root = new pc.Entity('ground-burst');
       tilt: number;
       delay: number;
       size: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 5; index++) {
       const angle = (index / 5) * Math.PI * 2 + Math.random() * 0.5;
       const slab = ctx.createEntity(
@@ -1080,6 +1083,7 @@ const root = new pc.Entity('ground-burst');
       slab.setLocalPosition(0, 0.02, 0);
       slabs.push({
         entity: slab,
+        ...polar(angle),
         angle,
         distance: (0.35 + Math.random() * 0.65) * power,
         lift: 0.2 + Math.random() * 0.35,
@@ -1089,7 +1093,7 @@ const root = new pc.Entity('ground-burst');
       });
     }
 
-    const rocks: {
+    const rocks: (Polar & {
       entity: pc.Entity;
       angle: number;
       distance: number;
@@ -1098,7 +1102,7 @@ const root = new pc.Entity('ground-burst');
       delay: number;
       fall: number;
       spin: number;
-    }[] = [];
+    })[] = [];
     for (let index = 0; index < 6; index++) {
       const angle = (index / 6) * Math.PI * 2 + Math.random() * 0.6;
       const size = 0.09 + Math.random() * 0.09;
@@ -1110,6 +1114,7 @@ const root = new pc.Entity('ground-burst');
       rock.setLocalScale(0.001, 0.001, 0.001);
       rocks.push({
         entity: rock,
+        ...polar(angle),
         angle,
         distance: (0.3 + Math.random() * 0.65) * power,
         size,
@@ -1181,9 +1186,9 @@ const root = new pc.Entity('ground-burst');
         const local = Math.max(0, Math.min(1, (t - slab.delay) / 0.55));
         const distance = slab.distance * local;
         slab.entity.setLocalPosition(
-          Math.sin(slab.angle) * distance,
+          slab.sin * distance,
           0.02 + local * slab.lift,
-          Math.cos(slab.angle) * distance
+          slab.cos * distance
         );
         slab.entity.setLocalEulerAngles(
           slab.tilt * local,
@@ -1207,9 +1212,9 @@ const root = new pc.Entity('ground-burst');
         const drop = local * local;
         const scale = rock.size * (0.85 + local * 0.15) * (1 - t * 0.35);
         rock.entity.setLocalPosition(
-          Math.sin(rock.angle) * rock.distance,
+          rock.sin * rock.distance,
           rock.startHeight * (1 - drop) + rock.size * 0.45,
-          Math.cos(rock.angle) * rock.distance
+          rock.cos * rock.distance
         );
         rock.entity.setLocalScale(
           Math.max(0.001, scale),

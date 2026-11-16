@@ -141,7 +141,8 @@ const life = Math.max(0.2, duration);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / fadeOutTime));
       const envelope = Math.min(fadeIn, fadeOut);
       const grow = 1 - Math.pow(1 - Math.min(1, time / growTime), 2);
-      const pulse = 0.5 + Math.sin(time * 7) * 0.2;
+      const sin7 = Math.sin(time * 7);
+      const pulse = 0.5 + sin7 * 0.2;
 
       const ringScale = Math.max(0.2, radius * 2) * (0.35 + 0.85 * grow);
       ring.setLocalScale(ringScale, 1, ringScale);
@@ -163,10 +164,12 @@ const life = Math.max(0.2, duration);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerLife = centerIn * envelope;
+      // Un solo seno por frecuencia alimenta las tres escalas y el balanceo.
+      const sway = Math.sin(time * 9) * 0.1;
       centerFlame.setLocalScale(
-        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1),
-        centerHeight * centerLife * (1 + Math.sin(time * 7) * 0.12),
-        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1)
+        centerWidth * centerLife * (1 + sway),
+        centerHeight * centerLife * (1 + sin7 * 0.12),
+        centerWidth * centerLife * (1 + sway)
       );
       centerFlame.setLocalEulerAngles(
         0,
@@ -315,12 +318,15 @@ const life = Math.max(0.2, duration);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerScale = centerIn * envelope;
+      // Un solo seno por frecuencia para las escalas y el balanceo.
+      const sin5 = Math.sin(time * 5);
+      const sin7 = Math.sin(time * 7);
       centerFlame.setLocalScale(
-        centerWidth * centerScale * (1 + Math.sin(time * 7) * 0.1),
-        centerHeight * centerScale * (1 + Math.sin(time * 5) * 0.12),
-        centerWidth * centerScale * (1 + Math.sin(time * 7) * 0.1)
+        centerWidth * centerScale * (1 + sin7 * 0.1),
+        centerHeight * centerScale * (1 + sin5 * 0.12),
+        centerWidth * centerScale * (1 + sin7 * 0.1)
       );
-      centerFlame.setLocalEulerAngles(6, time * 60, Math.sin(time * 5) * 8);
+      centerFlame.setLocalEulerAngles(6, time * 60, sin5 * 8);
 
       flameMaterial.opacity =
         0.44 * envelope * (0.85 + Math.random() * 0.15);
@@ -761,6 +767,7 @@ const life = Math.max(0.2, duration);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
       const envelope = Math.min(fadeIn, fadeOut);
       const grow = 1 - Math.pow(1 - Math.min(1, time / 0.32), 2);
+      const sin7 = Math.sin(time * 7);
       const pulse = 0.5 + Math.sin(time * 8) * 0.2;
 
       const ringScale = Math.max(0.2, radius * 2) * (0.38 + 0.8 * grow);
@@ -783,10 +790,12 @@ const life = Math.max(0.2, duration);
 
       const centerIn = Math.min(1, time / Math.min(0.3, life * 0.4));
       const centerLife = centerIn * envelope;
+      // Un solo seno por frecuencia alimenta las tres escalas y el balanceo.
+      const sway = Math.sin(time * 9) * 0.1;
       centerFlame.setLocalScale(
-        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1),
-        centerHeight * centerLife * (1 + Math.sin(time * 7) * 0.12),
-        centerWidth * centerLife * (1 + Math.sin(time * 9) * 0.1)
+        centerWidth * centerLife * (1 + sway),
+        centerHeight * centerLife * (1 + sin7 * 0.12),
+        centerWidth * centerLife * (1 + sway)
       );
       centerFlame.setLocalEulerAngles(
         0,

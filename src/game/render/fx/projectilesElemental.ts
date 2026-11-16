@@ -146,8 +146,8 @@ const root = new pc.Entity('air-projectile');
       materials,
       update: (dt) => {
         time += dt;
-        const pulse = 1 + Math.sin(time * 24) * 0.08;
-        const coreScale = radius * 1.15 * pulse;
+        const corePulse = 1 + Math.sin(time * 24) * 0.08;
+        const coreScale = radius * 1.15 * corePulse;
         core.setLocalScale(coreScale, coreScale, coreScale);
         const glowScale = radius * 4 * (1 + Math.sin(time * 16) * 0.1);
         glow.setLocalScale(glowScale, glowScale, glowScale);
@@ -155,9 +155,10 @@ const root = new pc.Entity('air-projectile');
         coreMaterial.opacity = 0.78 + Math.sin(time * 20) * 0.12;
         glowMaterial.opacity = 0.12 + Math.sin(time * 13) * 0.04;
         bladeMaterial.opacity = 0.5 + Math.sin(time * 17) * 0.11;
-        hotMaterial.opacity = 0.34 + Math.sin(time * 21 + 1) * 0.09;
+        const hotFlicker = Math.sin(time * 21 + 1) * 0.09;
+        hotMaterial.opacity = 0.34 + hotFlicker;
         featherMaterial.opacity = 0.62 + Math.sin(time * 12) * 0.14;
-        trailMaterial.opacity = 0.34 + Math.sin(time * 21 + 1) * 0.09;
+        trailMaterial.opacity = 0.34 + hotFlicker;
 
         bladeBatch.setTime(time);
         hotBladeBatch.setTime(time);
