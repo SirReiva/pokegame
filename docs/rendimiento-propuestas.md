@@ -2,7 +2,7 @@
 
 > Revisión técnica · noviembre de 2026
 >
-> Base de partida: `performance/frame-baseline.md` (60 FPS estables en las 9
+> Base de partida: `docs/performance/frame-baseline.md` (60 FPS estables en las 9
 > combinaciones mapa × vistas con GPU real) y las optimizaciones ya aplicadas en
 > `docs/rendimiento-carga-mapas.md`.
 >
@@ -669,7 +669,7 @@ posterior a los puntos grandes.
 `src/performance/bench.ts:87-114` solo mide intervalos de `requestAnimationFrame`
 (FPS, p50, p95, max). `scripts/bench-frame.mjs:222-229` imprime esa tabla. No se
 registran draw calls, tiempo de CPU del motor, compilación de shaders, tareas
-largas ni memoria, aunque `performance/baseline.md` los pide como criterio.
+largas ni memoria, aunque `docs/performance/baseline.md` los pide como criterio.
 
 ### Qué haría
 
@@ -686,7 +686,7 @@ largas ni memoria, aunque `performance/baseline.md` los pide como criterio.
    workflow.
 4. Añadir escenarios con HUD real (Playwright) para capturar el coste de
    composición, que el bench actual no ve.
-5. Comparar contra `performance/frame-baseline.md` en CI con umbrales relativos
+5. Comparar contra `docs/performance/frame-baseline.md` en CI con umbrales relativos
    (por ejemplo p95 +5 %, draw calls +2 %, ninguna tarea larga nueva). SwiftShader
    sirve para tendencias; la tabla de GPU real sigue siendo la referencia manual.
 

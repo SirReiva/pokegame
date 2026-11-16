@@ -632,7 +632,7 @@ flowchart LR
 
 Criterio de aceptación: mismos draw calls, ninguna tarea larga nueva, memoria
 estable y p95 dentro del ±3 %. Las referencias están en
-`performance/baseline.md` y `performance/frame-baseline.md`.
+`docs/performance/baseline.md` y `docs/performance/frame-baseline.md`.
 
 ## 15. Decisiones que explica el diagrama
 

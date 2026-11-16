@@ -3,7 +3,7 @@
  * Benchmark de frame real con Chrome headless.
  *
  * Requiere `pnpm build` previo. Levanta `vite preview`, abre
- * `performance/bench.html` con Chrome headless y lee `window.__benchResult`.
+ * `docs/performance/bench.html` con Chrome headless y lee `window.__benchResult`.
  *
  * Uso:
  *   node scripts/bench-frame.mjs --map caldera --views 8 --seconds 10
@@ -91,7 +91,7 @@ function json(url, method = 'GET') {
 
 async function runScenario(chrome, scenario) {
   const url =
-    `http://127.0.0.1:${previewPort}/performance/bench.html` +
+    `http://127.0.0.1:${previewPort}/docs/performance/bench.html` +
     `?map=${encodeURIComponent(scenario.map)}` +
     `&views=${scenario.views}&seconds=${seconds}`;
   const tab = await json(

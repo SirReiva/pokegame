@@ -784,8 +784,8 @@ Primera pasada aplicada:
   sidebar) y `screens/play/` (motor, ciclo, HUD, stage y diálogos).
 - **Benchmark:** `pnpm bench` mide CPU pura; `pnpm bench:frame` levanta
   `vite preview` y mide frames reales con Chrome headless sobre
-  `performance/bench.html`. `performance/baseline.md` y
-  `performance/frame-baseline.md` guardan las referencias. Con `--gpu` la
+  `docs/performance/bench.html`. `docs/performance/baseline.md` y
+  `docs/performance/frame-baseline.md` guardan las referencias. Con `--gpu` la
   medición usa aceleración por hardware; con SwiftShader sirve como referencia
   relativa de CPU.
 

@@ -17,7 +17,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: "index.html",
-        bench: "performance/bench.html",
+        bench: "docs/performance/bench.html",
       },
     },
   },
