@@ -51,7 +51,7 @@ import {
   type AtmosphereState
 } from './atmosphere';
 import {
-  closestPointOnCollider,
+  closestPointOnColliderInto,
   closestPointOnSegment,
   pointSegmentDistance,
   raycastColliderDistance,
@@ -60,7 +60,11 @@ import {
 import { CombatFx } from './combatFx';
 import type { TelegraphHandle, TelegraphOwner } from './core/ports/fx';
 import { CONFIG } from './config';
-import { DamageNumbers, type DamageNumberView } from './damageNumbers';
+import {
+  DamageNumbers,
+  type DamageNumberOptions,
+  type DamageNumberView
+} from './damageNumbers';
 import { DeathMarker } from './deathMarker';
 import { CAST_EFFECTS } from './effects';
 import { FogMask, FogView, createFogMesh, type SightOccluder } from './fog';
@@ -105,7 +109,7 @@ import {
   stepParticipation,
   stepRegeneration
 } from './sim/status';
-import { syncMatchView } from './render/matchView';
+import { syncMatchView, type MatchViewSync } from './render/matchView';
 import { updatePlayerCamera } from './render/playerCamera';
 import type { PlayerView } from './render/playerView';
 import { buildBotHazards, createBotHazardBuffer } from './ai/hazards';
@@ -189,9 +193,10 @@ import {
 import {
   ACTIVE_TEAMS,
   getActiveMap,
-  resolveDeepWater,
-  resolveTeamTerrain,
+  resolveDeepWaterInto,
+  resolveTeamTerrainInto,
   terrainAt,
+  type Point2,
   type Team
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
@@ -273,6 +278,31 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+/**
+ * Bit de equipo para marcar qué equipos ven un FX sin asignar un `Set` en cada
+ * consulta. `TEAM_ORDER` tiene cuatro equipos, así que cabe en un entero.
+ */
+function teamBit(team: Team): number {
+  return 1 << TEAM_ORDER.indexOf(team);
+}
+
+/**
+ * Número de daño con valores neutros. Solo se llama cuando el pool está vacío;
+ * `enqueuePopup` reescribe todos los campos antes de publicarlo.
+ */
+function createPendingPopup(target: MatchPlayerState): PendingPopup {
+  return {
+    target,
+    source: null,
+    amount: 0,
+    critical: false,
+    effectiveness: 1,
+    heal: false,
+    lethal: false,
+    immune: false
+  };
+}
+
 /** Tipos vacíos: la ocultación de un punto usa solo el terreno, sin especie. */
 const NO_TYPES: readonly string[] = [];
 
@@ -296,6 +326,26 @@ const DEATH_MARKER_WATER_LIFT = 0.02;
 const OBJECTIVE_NEUTRAL_COLOR: readonly [number, number, number] = [150, 158, 170];
 
 /**
+ * Entrada reutilizable de la caché de visibilidad de FX. Se compara por valor
+ * (sin claves string) y conserva su propio array de capas, que los consumidores
+ * copian al aplicarlo a un efecto.
+ */
+interface FxLayerEntry {
+  x: number;
+  z: number;
+  /** Bit 0: ignora la ocultación del terreno. Bit 1: oculta a aliados. */
+  flags: number;
+  ownerTeam: Team | null;
+  ownerSlot: number;
+  layers: number[];
+}
+
+/** `MatchViewSync` sin `readonly`: se reescribe una vez por render. */
+type MutableMatchViewSync = {
+  -readonly [K in keyof MatchViewSync]: MatchViewSync[K];
+};
+
+/**
  * Paso fijo de la simulación autoritativa: 60 Hz, el mismo tick que los
  * sprites. El render puede ir a otra frecuencia; la presentación se actualiza
  * una vez por render con su `dt` real.
@@ -317,6 +367,13 @@ const MAX_FIXED_STEPS = 2;
 const POPUP_RENDER_BUDGET_MS = 2;
 /** Cola máxima de números pendientes; si se desborda se descarta el más viejo. */
 const MAX_PENDING_POPUPS = 24;
+
+/**
+ * Entradas de la caché de visibilidad de FX por paso. Varios efectos de una
+ * misma habilidad comparten ancla y se resuelven una sola vez; 64 huecos cubren
+ * de sobra los efectos simultáneos de una refriega sin asignar nada.
+ */
+const FX_VISIBILITY_CACHE_ENTRIES = 64;
 
 /**
  * Especies cuyas hojas se decodifican y componen a la vez durante la carga.
@@ -452,6 +509,8 @@ export class Game {
   private debugHideBars = false;
   /** Números de daño que aún no se han dibujado (ver `flushPendingPopups`). */
   private pendingPopups: PendingPopup[] = [];
+  /** Objetos ya dibujados que se reutilizan al encolar el siguiente número. */
+  private readonly popupPool: PendingPopup[] = [];
   private bots = new Map<number, BotController>();
   /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
   private botNav: BotNavGrid | null = null;
@@ -490,10 +549,16 @@ export class Game {
   private pendingAoeEnds: PendingAoeEnd[] = [];
   /** Golpes melee del frame actual, resueltos después de mover a todos. */
   private pendingMeleeHits: PendingMeleeHit[] = [];
+  /** Buffer de relevo de `pendingMeleeHits` para no asignar un array por golpe. */
+  private pendingMeleeHitsSpare: PendingMeleeHit[] = [];
   /** Habilidades instantáneas que esperan al final del frame para ejecutarse. */
   private queuedCasts: QueuedCast[] = [];
+  /** Buffer de relevo de `queuedCasts`; ver `resolveQueuedCasts`. */
+  private queuedCastsSpare: QueuedCast[] = [];
   /** Golpes de dash detectados al moverse, resueltos con el resto del frame. */
   private pendingInstantHits: PendingInstantHit[] = [];
+  /** Buffer de relevo de `pendingInstantHits`; ver `takeInstantHits`. */
+  private pendingInstantHitsSpare: PendingInstantHit[] = [];
   /** Marcador de la partida; gana el primero que lleve al objetivo del modo. */
   private teamScores: Record<Team, number> = createTeamRecord(() => 0);
   /** Modo elegido en el lobby. */
@@ -504,6 +569,23 @@ export class Game {
   private readonly timeLimitSeconds: number;
   /** Runtime del modo activo: decide victoria, HUD y objetivo de bots. */
   private gameMode: GameModeRuntime | null = null;
+  /**
+   * Contexto reutilizado por los modos. Se reescribe antes de cada consulta y
+   * los modos solo lo leen durante la llamada, así que no hace falta uno nuevo
+   * por paso.
+   */
+  private readonly modeCtx: ModeContext = {
+    elapsed: 0,
+    timeLimitSeconds: 0,
+    scores: this.teamScores,
+    players: this.matchPlayers,
+    objective: null
+  };
+  /** Evento de tick reutilizado: el modo lo consume en la propia llamada. */
+  private readonly tickEvent: { type: 'tick'; dt: number } = {
+    type: 'tick',
+    dt: 0
+  };
   /** Zona que disputan los modos de control, resuelta al empezar la partida. */
   private objectiveZone: ObjectiveZone | null = null;
   /** Aro de la zona de control; solo existe durante una partida de KOTH. */
@@ -531,6 +613,41 @@ export class Game {
   /** Niebla y copias por vista. */
   private readonly visionView = new VisionView();
   private readonly damageNumbers: DamageNumbers;
+  /**
+   * Vistas y opciones reutilizadas al dibujar un número de daño.
+   * `DamageNumbers.spawn` las consume de forma síncrona y copia lo que necesita,
+   * así que cada número no asigna un array ni un objeto por viewport. El array
+   * crece hasta el número de vistas y reutiliza sus ranuras.
+   */
+  private readonly damageNumberViews: DamageNumberView[] = [];
+  private readonly damageNumberOptions: DamageNumberOptions = {
+    x: 0,
+    y: 0,
+    z: 0,
+    amount: 0,
+    critical: false,
+    effectiveness: 1,
+    heal: false,
+    lethal: false,
+    immune: false,
+    views: this.damageNumberViews
+  };
+  /**
+   * Dependencias reutilizadas por `syncMatchView`. Se reescriben en cada
+   * render: las vistas, los jugadores y el agua cambian al empezar otra partida
+   * y no conviene arrastrar las referencias anteriores.
+   */
+  private readonly matchViewSync: MutableMatchViewSync = {
+    views: [],
+    players: [],
+    viewsByPlayer: this.playerViews,
+    viewSkies: this.viewSkies,
+    deathMarkers: this.deathMarkers,
+    playerBySlot: this.playerBySlot,
+    waterHeight: 0,
+    debugHideActors: false,
+    dt: 0
+  };
   /** Overlay opcional con las fases de casteo. */
   private readonly castDebug: CastDebugOverlay | null = null;
   /** Quads de niebla, uno por vista. */
@@ -570,17 +687,38 @@ export class Game {
   /** Peligros en vuelo compartidos por los bots; se reescriben cada paso. */
   private readonly botHazards = createBotHazardBuffer();
   /**
+   * Scratch de la resolución de posiciones. `resolvePosition` y `dashPosition`
+   * se llaman varias veces por jugador y paso (y por cada tramo de dash), así
+   * que devuelven estos objetos reutilizados en vez de asignar uno nuevo: el
+   * llamador debe copiar `x/z` antes de volver a llamar.
+   */
+  private readonly resolvedPosition = { x: 0, z: 0 };
+  private readonly resolvedDash = { x: 0, z: 0 };
+  /** Punto más cercano del collider que se está resolviendo. */
+  private readonly nearestPoint = { x: 0, z: 0 };
+  /** Resultados de los empujes de terreno y agua profunda. */
+  private readonly waterResolution: Point2 = [0, 0];
+  private readonly teamResolution: Point2 = [0, 0];
+  /**
    * Paso de simulación actual. La visibilidad de combate se resuelve una vez
    * por paso, no una vez por render: así el segundo paso fijo de un render no
    * reutiliza la visibilidad del render anterior.
    */
   private simulationStep = 0;
   /**
-   * Memo de capas de FX dentro del frame actual. Varios efectos de una misma
+   * Memo de capas de FX dentro del paso actual. Varios efectos de una misma
    * habilidad comparten anclas; sin esta caché cada uno repetía la prueba de
-   * visión del equipo. Se vacía al empezar cada frame.
+   * visión del equipo. Se reinicia al empezar cada paso. Se reutilizan las
+   * entradas y sus arrays: no se crean claves string ni conjuntos por consulta.
    */
-  private readonly fxVisibilityCache = new Map<string, number[]>();
+  private readonly fxLayerEntries: FxLayerEntry[] = Array.from(
+    { length: FX_VISIBILITY_CACHE_ENTRIES },
+    () => ({ x: 0, z: 0, flags: 0, ownerTeam: null, ownerSlot: -1, layers: [] })
+  );
+  /** Entradas válidas desde el último reinicio. */
+  private fxLayerCount = 0;
+  /** Siguiente entrada a reemplazar cuando la caché está llena. */
+  private fxLayerWrite = 0;
   /**
    * Objetos que cada equipo ve y si están disponibles, indexados por
    * `PickupSpawn.id`. Solo contiene puntos visibles: los bots no pueden
@@ -775,12 +913,20 @@ export class Game {
         ),
       takeInstantHits: () => {
         const hits = self.pendingInstantHits;
-        self.pendingInstantHits = [];
+        const spare = self.pendingInstantHitsSpare;
+        // El array devuelto en el paso anterior ya no se usa: se vacía y pasa a
+        // ser la cola nueva. Así un paso con golpes no asigna un array.
+        spare.length = 0;
+        self.pendingInstantHits = spare;
+        self.pendingInstantHitsSpare = hits;
         return hits;
       },
       takeMeleeHits: () => {
         const hits = self.pendingMeleeHits;
-        self.pendingMeleeHits = [];
+        const spare = self.pendingMeleeHitsSpare;
+        spare.length = 0;
+        self.pendingMeleeHits = spare;
+        self.pendingMeleeHitsSpare = hits;
         return hits;
       },
       dashSweepHits: (target, ax, az, bx, bz, dirX, dirZ, reach) =>
@@ -1887,15 +2033,16 @@ export class Game {
     }
   }
 
-  /** Contexto compacto que comparten todos los modos. */
+  /** Contexto compacto que comparten todos los modos; ver `modeCtx`. */
   private modeContext(): ModeContext {
-    return {
-      elapsed: this.matchElapsed,
-      timeLimitSeconds: this.timeLimitSeconds,
-      scores: this.teamScores,
-      players: this.matchPlayers,
-      objective: this.objectiveZone
-    };
+    const ctx = this.modeCtx;
+    ctx.elapsed = this.matchElapsed;
+    ctx.timeLimitSeconds = this.timeLimitSeconds;
+    // `scores`, `players` y el objetivo se reasignan al reiniciar la partida.
+    ctx.scores = this.teamScores;
+    ctx.players = this.matchPlayers;
+    ctx.objective = this.objectiveZone;
+    return ctx;
   }
 
   /**
@@ -1905,7 +2052,8 @@ export class Game {
   private advanceGameMode(dt: number): void {
     if (!this.gameMode || this.matchOver) return;
     const ctx = this.modeContext();
-    const result = this.gameMode.onEvent(ctx, { type: 'tick', dt });
+    this.tickEvent.dt = dt;
+    const result = this.gameMode.onEvent(ctx, this.tickEvent);
     this.applyModeXp(result.xp);
     this.syncObjectiveMarker();
     if (result.outcome) {
@@ -1923,9 +2071,8 @@ export class Game {
   private applyModeXp(awards: readonly ModeXpAward[]): void {
     for (const award of awards) {
       if (!Number.isFinite(award.amount) || award.amount <= 0) continue;
-      const player = this.matchPlayers.find(
-        (candidate) => candidate.slot === award.slot
-      );
+      // `playerBySlot` ya resuelve la plaza sin recorrer ni crear un `find`.
+      const player = this.playerBySlot.get(award.slot);
       if (!player) continue;
       this.awardXp(player, award.source, award.amount);
     }
@@ -2068,7 +2215,7 @@ export class Game {
     if (this.matchOver) {
       this.world.update(frameDt);
       this.world.updateAmbient(frameDt);
-      this.fxVisibilityCache.clear();
+      this.resetFxVisibilityCache();
       this.combatFx.update(frameDt);
       this.flushPendingPopups();
       this.damageNumbers.update(frameDt);
@@ -2139,7 +2286,7 @@ export class Game {
     this.prewarmBillboards();
     // La visibilidad de los FX se consulta muchas veces por frame con las
     // mismas anclas; la memoización solo es válida dentro de este frame.
-    this.fxVisibilityCache.clear();
+    this.resetFxVisibilityCache();
     // Start/Escape pausan la partida. En mando, B (cancel) solo vuelve en los
     // menús: no pausa, para no provocar pausas accidentales al desmarcar. El
     // coste de comprobarlo antes de mover es despreciable y evita un frame de
@@ -2191,18 +2338,19 @@ export class Game {
     this.updateVision(dt);
 
     // Las copias visibles se sincronizan en un módulo aparte: `Game` conserva
-    // la simulación y la niebla, y `matchView` solo mueve billboards.
-    syncMatchView({
-      views: this.views,
-      players: this.matchPlayers,
-      viewsByPlayer: this.playerViews,
-      viewSkies: this.viewSkies,
-      deathMarkers: this.deathMarkers,
-      playerBySlot: this.playerBySlot,
-      waterHeight: this.world.waterHeight,
-      debugHideActors: this.debugHideActors,
-      dt
-    });
+    // la simulación y la niebla, y `matchView` solo mueve billboards. El objeto
+    // de dependencias se reutiliza para no asignar uno por render.
+    const sync = this.matchViewSync;
+    sync.views = this.views;
+    sync.players = this.matchPlayers;
+    sync.viewsByPlayer = this.playerViews;
+    sync.viewSkies = this.viewSkies;
+    sync.deathMarkers = this.deathMarkers;
+    sync.playerBySlot = this.playerBySlot;
+    sync.waterHeight = this.world.waterHeight;
+    sync.debugHideActors = this.debugHideActors;
+    sync.dt = dt;
+    syncMatchView(sync);
 
     // La barra es única por jugador: se actualiza una vez por frame, no una vez
     // por copia, y el overlay la proyecta después en cada viewport.
@@ -2284,7 +2432,7 @@ export class Game {
     // última; el siguiente paso usa la que dejó el paso anterior.
     this.simulationStep += 1;
     // La caché de visibilidad de FX es válida solo con las posiciones actuales.
-    this.fxVisibilityCache.clear();
+    this.resetFxVisibilityCache();
     this.matchElapsed += stepDt;
     // El modo consume el tick antes de mover a nadie: si se agota el tiempo,
     // la partida se cierra en el mismo instante y no se simula un frame extra.
@@ -2333,7 +2481,7 @@ export class Game {
     // Los observadores ya no se moverán hasta el siguiente paso. Se tira la
     // caché que pudieran haber llenado efectos creados durante `stepPlayer`
     // para que las fases de resolución usen las posiciones finales.
-    this.fxVisibilityCache.clear();
+    this.resetFxVisibilityCache();
 
     // El daño residual del clima se cobra una vez por tick y antes de resolver
     // golpes: así un Pokémon que ya estaba a 1 PV no muere por arena o granizo.
@@ -2856,7 +3004,13 @@ export class Game {
   private resolveQueuedCasts(): void {
     if (this.queuedCasts.length === 0) return;
     const casts = this.queuedCasts;
-    this.queuedCasts = [];
+    const spare = this.queuedCastsSpare;
+    // Se intercambian los buffers: lo que se encole durante esta fase va al
+    // otro array y el recorrido se libera en el siguiente intercambio. Antes se
+    // asignaba un array nuevo por cada tanda de habilidades instantáneas.
+    spare.length = 0;
+    this.queuedCasts = spare;
+    this.queuedCastsSpare = casts;
     for (const cast of casts) {
       // Un golpe anterior de esta misma tanda pudo cerrar la partida.
       if (this.matchOver) break;
@@ -3230,14 +3384,15 @@ export class Game {
     lethal: boolean,
     source: MatchPlayerState | null
   ): void {
-    this.spawnNumberPopup(target, {
+    this.enqueuePopup(
+      target,
       source,
       amount,
+      'damage',
       critical,
       effectiveness,
-      heal: false,
       lethal
-    });
+    );
   }
 
   /** Número de curación flotante, con el mismo sistema que el daño. */
@@ -3246,14 +3401,7 @@ export class Game {
     amount: number,
     source: MatchPlayerState | null
   ): void {
-    this.spawnNumberPopup(target, {
-      source,
-      amount,
-      critical: false,
-      effectiveness: 1,
-      heal: true,
-      lethal: false
-    });
+    this.enqueuePopup(target, source, amount, 'heal');
   }
 
   /** Marca de inmunidad cuando la habilidad conecta pero el tipo la anula. */
@@ -3261,46 +3409,41 @@ export class Game {
     target: MatchPlayerState,
     source: MatchPlayerState | null
   ): void {
-    this.spawnNumberPopup(target, {
-      source,
-      amount: 0,
-      critical: false,
-      effectiveness: 1,
-      heal: false,
-      lethal: false,
-      immune: true
-    });
+    this.enqueuePopup(target, source, 0, 'immune');
   }
 
   /**
    * Encola el número de daño. Componer un número cuesta poco, pero varios
    * impactos en el mismo render se acumulaban en el p99: el render los dibuja
    * con presupuesto y los que sobran salen en el siguiente.
+   *
+   * Los objetos salen de `popupPool` (números ya dibujados) en vez de asignar
+   * uno por impacto; si la cola está llena, se recicla el más viejo.
    */
-  private spawnNumberPopup(
+  private enqueuePopup(
     target: MatchPlayerState,
-    options: {
-      /** Atacante o lanzador; `null` si la fuente es el entorno. */
-      source: MatchPlayerState | null;
-      amount: number;
-      critical: boolean;
-      effectiveness: number;
-      heal: boolean;
-      lethal: boolean;
-      immune?: boolean;
-    }
+    source: MatchPlayerState | null,
+    amount: number,
+    kind: 'damage' | 'heal' | 'immune',
+    critical = false,
+    effectiveness = 1,
+    lethal = false
   ): void {
-    if (this.pendingPopups.length >= MAX_PENDING_POPUPS) this.pendingPopups.shift();
-    this.pendingPopups.push({
-      target,
-      source: options.source,
-      amount: options.amount,
-      critical: options.critical,
-      effectiveness: options.effectiveness,
-      heal: options.heal,
-      lethal: options.lethal,
-      immune: options.immune ?? false
-    });
+    const popup =
+      (this.pendingPopups.length >= MAX_PENDING_POPUPS
+        ? this.pendingPopups.shift()
+        : undefined) ??
+      this.popupPool.pop() ??
+      createPendingPopup(target);
+    popup.target = target;
+    popup.source = source;
+    popup.amount = amount;
+    popup.critical = critical;
+    popup.effectiveness = effectiveness;
+    popup.heal = kind === 'heal';
+    popup.lethal = lethal;
+    popup.immune = kind === 'immune';
+    this.pendingPopups.push(popup);
   }
 
   /** Dibuja números pendientes hasta agotar el presupuesto de este render. */
@@ -3311,6 +3454,8 @@ export class Game {
       const popup = this.pendingPopups.shift();
       if (!popup) break;
       this.drawNumberPopup(popup);
+      // El número ya está copiado en `DamageNumbers`: el objeto vuelve al pool.
+      this.popupPool.push(popup);
       if (performance.now() - start >= POPUP_RENDER_BUDGET_MS) break;
     }
   }
@@ -3327,8 +3472,11 @@ export class Game {
       anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch +
       0.2;
 
-    const views: DamageNumberView[] = [];
-    this.views.forEach((viewer, viewIndex) => {
+    const views = this.damageNumberViews;
+    const targetView = this.viewOf(target);
+    let count = 0;
+    for (let viewIndex = 0; viewIndex < this.views.length; viewIndex++) {
+      const viewer = this.views[viewIndex];
       // «Solo los míos»: cada vista muestra lo que hace o recibe su jugador.
       // El autodaño y las pociones cumplen ambas condiciones a la vez.
       if (
@@ -3336,28 +3484,37 @@ export class Game {
         viewer !== target &&
         viewer !== popup.source
       ) {
-        return;
+        continue;
       }
-      const copy = this.viewOf(target).copies[viewIndex];
+      const copy = targetView.copies[viewIndex];
       const camera = this.viewOf(viewer).camera.entity.camera;
       const layer = this.viewLayers[viewIndex];
-      if (!copy?.isVisible || !camera || !layer) return;
-      views.push({ camera, layerId: layer.id });
-    });
+      if (!copy?.isVisible || !camera || !layer) continue;
+      // Ranura reutilizada: `DamageNumbers.spawn` copia cámara y capa antes de
+      // volver, así que el array se puede reescribir en el siguiente número.
+      const slot = views[count];
+      if (slot) {
+        slot.camera = camera;
+        slot.layerId = layer.id;
+      } else {
+        views.push({ camera, layerId: layer.id });
+      }
+      count++;
+    }
+    views.length = count;
 
-    if (views.length === 0) return;
-    this.damageNumbers.spawn({
-      x: target.x,
-      y: worldY,
-      z: target.z,
-      amount: popup.amount,
-      critical: popup.critical,
-      effectiveness: popup.effectiveness,
-      heal: popup.heal,
-      lethal: popup.lethal,
-      immune: popup.immune,
-      views
-    });
+    if (count === 0) return;
+    const options = this.damageNumberOptions;
+    options.x = target.x;
+    options.y = worldY;
+    options.z = target.z;
+    options.amount = popup.amount;
+    options.critical = popup.critical;
+    options.effectiveness = popup.effectiveness;
+    options.heal = popup.heal;
+    options.lethal = popup.lethal;
+    options.immune = popup.immune;
+    this.damageNumbers.spawn(options);
   }
 
 
@@ -3511,7 +3668,7 @@ export class Game {
       ) {
         continue;
       }
-      const assistant = this.matchPlayers.find((player) => player.slot === slot);
+      const assistant = this.playerBySlot.get(slot);
       if (!assistant || assistant.team === target.team) continue;
       this.awardXp(assistant, 'assist', XP_REWARDS.assist);
     }
@@ -3621,10 +3778,31 @@ export class Game {
       return [this.worldLayerId];
     }
     const hideAllied = owner !== undefined && CONFIG.telegraphs.hideAllied;
-    const ownerKey = hideAllied ? `${owner.team}#${owner.slot}` : '-';
-    const cacheKey = `${ignoreTerrainConcealment ? 1 : 0}:${x}:${z}:${ownerKey}`;
-    const cached = this.fxVisibilityCache.get(cacheKey);
-    if (cached) return cached;
+    const flags = (ignoreTerrainConcealment ? 1 : 0) | (hideAllied ? 2 : 0);
+    const ownerTeam = hideAllied ? owner.team : null;
+    const ownerSlot = hideAllied ? owner.slot : -1;
+    // Memo por valor y sin claves string: los efectos de una misma habilidad
+    // comparten ancla y esta consulta se hace varias veces por paso.
+    for (let index = 0; index < this.fxLayerCount; index++) {
+      const entry = this.fxLayerEntries[index];
+      if (
+        entry.x === x &&
+        entry.z === z &&
+        entry.flags === flags &&
+        entry.ownerTeam === ownerTeam &&
+        entry.ownerSlot === ownerSlot
+      ) {
+        return entry.layers;
+      }
+    }
+    const entry = this.acquireFxLayerEntry();
+    entry.x = x;
+    entry.z = z;
+    entry.flags = flags;
+    entry.ownerTeam = ownerTeam;
+    entry.ownerSlot = ownerSlot;
+    const layers = entry.layers;
+    layers.length = 0;
     const colliders = this.world.colliders;
     // La ocultación del punto sale del terreno, pero si el ancla cae sobre un
     // Pokémon se usa la suya (terreno + tipos): así el FX se oculta exactamente
@@ -3646,25 +3824,27 @@ export class Game {
         concealment = Math.max(concealment, player.concealment.value);
       }
     }
-    const layers: number[] = [];
     // La visión es de equipo: un FX se dibuja si lo ve cualquier Pokémon vivo
     // del equipo de esa vista, incluidos los bots. Los equipos suelen tener
-    // varias vistas, así que el chequeo se hace una sola vez por equipo.
-    const seenTeams = new Set<Team>();
-    this.views.forEach((observer, index) => {
+    // varias vistas, así que el chequeo se hace una sola vez por equipo; el
+    // registro de vistos es un bitmask, no un `Set` nuevo por efecto.
+    let seenTeams = 0;
+    for (let index = 0; index < this.views.length; index++) {
+      const observer = this.views[index];
       const layer = this.viewLayers[index];
-      if (!layer) return;
+      if (!layer) continue;
       // Marca aliada: solo la dibuja la vista de su lanzador. El resto de su
       // equipo no necesita el aviso, pero los rivales sí para poder esquivar.
       if (
+        hideAllied &&
         owner !== undefined &&
-        CONFIG.telegraphs.hideAllied &&
         observer.team === owner.team &&
         observer.slot !== owner.slot
       ) {
-        return;
+        continue;
       }
-      if (!seenTeams.has(observer.team)) {
+      const bit = teamBit(observer.team);
+      if ((seenTeams & bit) === 0) {
         if (
           teamSeesPoint(
             this.matchPlayers,
@@ -3676,13 +3856,30 @@ export class Game {
             this.atmosphereVision
           )
         ) {
-          seenTeams.add(observer.team);
+          seenTeams |= bit;
         }
       }
-      if (seenTeams.has(observer.team)) layers.push(layer.id);
-    });
-    this.fxVisibilityCache.set(cacheKey, layers);
+      if ((seenTeams & bit) !== 0) layers.push(layer.id);
+    }
     return layers;
+  }
+
+  /** Hueco de la memo de FX, reutilizando arrays y entradas ya creados. */
+  private acquireFxLayerEntry(): FxLayerEntry {
+    if (this.fxLayerCount < this.fxLayerEntries.length) {
+      const entry = this.fxLayerEntries[this.fxLayerCount];
+      this.fxLayerCount += 1;
+      return entry;
+    }
+    const entry = this.fxLayerEntries[this.fxLayerWrite];
+    this.fxLayerWrite = (this.fxLayerWrite + 1) % this.fxLayerEntries.length;
+    return entry;
+  }
+
+  /** Invalida la memo de capas de FX: las posiciones pueden haber cambiado. */
+  private resetFxVisibilityCache(): void {
+    this.fxLayerCount = 0;
+    this.fxLayerWrite = 0;
   }
 
   
@@ -3887,6 +4084,16 @@ export class Game {
   }
 
   
+  /**
+   * Resuelve la posición contra colliders, agua profunda, santuarios y otros
+   * jugadores.
+   *
+   * El objeto devuelto **se reutiliza** en la siguiente llamada, igual que el
+   * de `dashPosition`: el llamador debe copiar `x/z` antes de volver a resolver
+   * una posición. Es la ruta más caliente de la simulación (cada jugador y cada
+   * tramo de dash la recorren una vez por paso), así que un objeto nuevo por
+   * llamada generaba miles de asignaciones por frame.
+   */
   private resolvePosition(
     self: Pick<MatchPlayerState, 'types' | 'team'>,
     x: number,
@@ -3894,6 +4101,7 @@ export class Game {
   ): { x: number; z: number } {
     const radius = CONFIG.player.radius;
     const colliders: Collider[] = this.world.colliders;
+    const nearest = this.nearestPoint;
     let px = x;
     let pz = z;
 
@@ -3901,17 +4109,19 @@ export class Game {
       let pushed = false;
 
       for (const collider of colliders) {
-        const closest = closestPointOnCollider(collider, px, pz);
-        const dx = px - closest.x;
-        const dz = pz - closest.z;
-        const distance = Math.hypot(dx, dz);
+        closestPointOnColliderInto(collider, px, pz, nearest);
+        const dx = px - nearest.x;
+        const dz = pz - nearest.z;
+        // `sqrt` en vez de `hypot`: evita el escalado de `hypot` en un bucle que
+        // recorre todos los colliders en cada iteración.
+        const distance = Math.sqrt(dx * dx + dz * dz);
         const minimum = collider.radius + radius;
         if (distance < minimum) {
           if (distance < 0.0001) {
             px += minimum;
           } else {
-            px = closest.x + (dx / distance) * minimum;
-            pz = closest.z + (dz / distance) * minimum;
+            px = nearest.x + (dx / distance) * minimum;
+            pz = nearest.z + (dz / distance) * minimum;
           }
           pushed = true;
         }
@@ -3919,7 +4129,7 @@ export class Game {
 
       // Aguas profundas: solo los Pokémon de tipo Agua pueden entrar.
       if (!self.types.includes('Water')) {
-        const resolved = resolveDeepWater(px, pz, radius);
+        const resolved = resolveDeepWaterInto(px, pz, radius, this.waterResolution);
         if (resolved[0] !== px || resolved[1] !== pz) {
           px = resolved[0];
           pz = resolved[1];
@@ -3929,7 +4139,13 @@ export class Game {
 
       // Santuarios de equipo: solo los Pokémon del equipo propietario pueden
       // pisarlos. El resto los trata como un muro infranqueable.
-      const resolvedTeam = resolveTeamTerrain(px, pz, radius, self.team);
+      const resolvedTeam = resolveTeamTerrainInto(
+        px,
+        pz,
+        radius,
+        self.team,
+        this.teamResolution
+      );
       if (resolvedTeam[0] !== px || resolvedTeam[1] !== pz) {
         px = resolvedTeam[0];
         pz = resolvedTeam[1];
@@ -3941,7 +4157,7 @@ export class Game {
         if (other === self || !other.alive) continue;
         const dx = px - other.x;
         const dz = pz - other.z;
-        const distance = Math.hypot(dx, dz);
+        const distance = Math.sqrt(dx * dx + dz * dz);
         const minimum = radius * 2;
         if (distance < minimum) {
           if (distance < 0.0001) {
@@ -3958,10 +4174,10 @@ export class Game {
     }
 
     const bounds = this.world.bounds;
-    return {
-      x: clamp(px, -bounds.x, bounds.x),
-      z: clamp(pz, -bounds.z, bounds.z)
-    };
+    const out = this.resolvedPosition;
+    out.x = clamp(px, -bounds.x, bounds.x);
+    out.z = clamp(pz, -bounds.z, bounds.z);
+    return out;
   }
 
   /**
@@ -3971,6 +4187,9 @@ export class Game {
    * otro lado de un separador fino. Aquí cada paso comprueba el segmento
    * recorrido: si un separador, árbol o muro lo bloquea, el dash se detiene en
    * el último punto seguro.
+   *
+   * Devuelve un objeto reutilizado (ver `resolvedDash`): copia `x/z` antes de
+   * volver a llamar.
    */
   private dashPosition(
     self: MatchPlayerState,
@@ -3984,7 +4203,7 @@ export class Game {
     const steps = Math.max(1, Math.ceil(distance / stepLength));
     const stepX = (dirX * distance) / steps;
     const stepZ = (dirZ * distance) / steps;
-    const stepSize = Math.hypot(stepX, stepZ);
+    const stepSize = Math.sqrt(stepX * stepX + stepZ * stepZ);
     const colliders = this.world.colliders;
     let x = startX;
     let z = startZ;
@@ -4006,15 +4225,20 @@ export class Game {
       }
 
       const next = this.resolvePosition(self, targetX, targetZ);
-      const moved = Math.hypot(next.x - x, next.z - z);
+      const nx = next.x;
+      const nz = next.z;
+      const moved = Math.sqrt((nx - x) * (nx - x) + (nz - z) * (nz - z));
       // También frena si el paso se queda atascado contra otro jugador, un
       // límite del mapa o un agua profunda.
       if (moved < stepSize * 0.35) break;
-      x = next.x;
-      z = next.z;
+      x = nx;
+      z = nz;
     }
 
-    return { x, z };
+    const out = this.resolvedDash;
+    out.x = x;
+    out.z = z;
+    return out;
   }
 
   dispose(): void {

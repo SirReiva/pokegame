@@ -22,6 +22,11 @@ export interface DashSystemHost {
   readonly pendingInstantHits: PendingInstantHit[];
   readonly combatFx: CombatFxPort;
   isMatchOver(): boolean;
+  /**
+   * Avanza un tramo del dash con colisiones. El objeto devuelto puede ser
+   * reutilizado por la siguiente llamada: copia `x/z` antes de volver a
+   * resolver otra posición.
+   */
   dashPosition(
     player: MatchPlayerState,
     x: number,

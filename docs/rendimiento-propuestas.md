@@ -670,6 +670,12 @@ comparar FPS, draw calls y memoria.
 > `getBotObjective()` una sola vez por paso; y las búsquedas de cobertura,
 > refugio y navegación ya no copian enemigos ni crean objetos por muestra. Los
 > tests de `src/game/ai/__tests__/hazards.test.ts` cubren el buffer de peligros.
+>
+> Una segunda pasada elimina el resto de allocations del camino de simulación:
+> la resolución de posiciones (`resolvePosition`/`dashPosition`) devuelve
+> objetos reutilizados y no asigna un punto por collider, la memo de capas de FX
+> no crea claves string ni `Set`, los números de daño salen de un pool y las
+> colas de golpes y casteos alternan dos buffers.
 
 ### Qué pasaba antes
 
@@ -726,6 +732,37 @@ y regeneración.
    `Readonly<AoeArea>`); y `navHazards()` reutiliza array y objetos con un pool
    propio, igual que los peligros de combate. El buffer de navegación cruza a
    `movement.ts` como `readonly NavHazard[]`.
+6. `resolvePosition()` y `dashPosition()` escriben en objetos reutilizados
+   (`resolvedPosition`/`resolvedDash`) y leen el punto más cercano de cada
+   collider con `closestPointOnColliderInto()`, sin asignar uno por collider y
+   por iteración. Los empujes de agua profunda y santuarios escriben en tuplas
+   compartidas (`resolveDeepWaterInto`, `resolveTeamTerrainInto`) y ya no crean
+   el predicado ni el array de retorno. Era la ruta más caliente: cada jugador y
+   cada tramo de dash la recorren una vez por paso, con una vuelta por collider
+   y hasta cuatro iteraciones de empuje. Los contratos documentan que el
+   resultado es compartido y hay que copiar `x/z` antes de volver a llamar.
+7. La memo de capas de FX (`fxLayersAt`) deja de ser un `Map<string, number[]>`
+   y de crear un `Set<Team>` por consulta: 64 entradas reutilizables comparadas
+   por valor (sin claves string), un bitmask por equipo y arrays de capas
+   reciclados. Los consumidores copian el resultado al aplicarlo a un efecto,
+   así que reescribir las entradas en el siguiente paso es seguro.
+8. `modeContext()` rellena un único objeto y el evento `tick` se reutiliza en
+   cada paso; las recompensas de XP del modo y las asistencias resuelven la
+   plaza con `playerBySlot` en vez de un `find()` con closure.
+9. Los números de daño salen de un pool (`popupPool`) y vuelven a él al
+   dibujarse; también se reutilizan el array de vistas y el objeto de opciones
+   que recibe `DamageNumbers.spawn`.
+10. `queuedCasts`, `pendingInstantHits` y `pendingMeleeHits` alternan dos
+    buffers en vez de asignar `[]` en cada intercambio. El consumidor solo lee
+    el array durante la llamada, así que el buffer viejo se vacía en el
+    intercambio siguiente.
+11. `Math.hypot` se sustituye por `Math.sqrt` en los bucles que recorren
+    colliders, celdas de terreno y proyectiles: son magnitudes de juego, sin
+    riesgo de desbordamiento, y `hypot` paga un escalado por llamada.
+12. `syncMatchView()` recibe un objeto de dependencias reutilizado que se
+    reescribe en cada render, y el array de vistas y las opciones del número de
+    daño también se reciclan. Con esto el bucle de render no asigna objetos de
+    estado por frame salvo los que crea el propio motor.
 
 ### Impacto
 
@@ -738,10 +775,22 @@ en ráfagas de proyectiles. En el bench sintético (`pnpm bench`, 100 proyectile
 + 20 áreas), construir los peligros con buffer pasa de ~140 000 a ~225 000
 llamadas por segundo.
 
+La segunda pasada ataca el allocator más grande: con 8 jugadores, 100 colliders
+y dos pasos por render, `resolvePosition()` asignaba hasta ~6 400 objetos por
+render solo en puntos de collider, y un dash corto multiplicaba esa cifra por
+cada tramo de 0,15 u. Ahora esas rutas no asignan nada; un dash completo reutiliza
+el mismo objeto y la misma tupla de terreno en todos sus tramos.
+
 ### Qué queda pendiente
 
 - Los `Vec2` pequeños que devuelven helpers de decisión (`pickHazardEscape()`,
   `aoeEvadeDirection()`), fuera del camino caliente y sin impacto medible.
+- `xpStatus()` sigue creando un objeto por jugador y render en el HUD (8 como
+  mucho). Es despreciable frente a los miles de objetos de la resolución de
+  posiciones, pero se puede reutilizar si el HUD lo pide.
+- El registro de dependencias de `executeAbility()` (objeto y closures por
+  casteo) y el array de objetivos de `aimAssistDirection()`: no son por frame,
+  pero sí por habilidad lanzada en una refriega.
 - Confirmar con el HUD de rendimiento (3.4) que el GC baja en partidas reales de
   8 vistas; el cambio no altera ningún cálculo de gameplay.
 
@@ -749,10 +798,11 @@ llamadas por segundo.
 
 Los tests de `hazards.test.ts` comprueban identidad de array y de objetos,
 recorte del array visible, conservación del pool y cambio de `kind` sin datos
-activos. `node --import tsx scripts/sim-headless.ts --map arena --bots 4
---seconds 60` ejercita las rutas de decisión, retirada y cobertura sin GPU. Para
-el resto, Chrome DevTools → Memory → Allocation instrumentation con 8 bots y una
-lluvia de proyectiles: el número de objetos por paso debe caer sin mover
+activos. La segunda pasada mantiene verdes `pnpm check`, `pnpm test` y
+`node --import tsx scripts/sim-headless.ts --map arena --bots 4 --seconds 60`,
+que ejercita movimiento, dash, colisiones y casteos sin GPU. Para el resto,
+Chrome DevTools → Memory → Allocation instrumentation con 8 bots y una lluvia de
+proyectiles: el número de objetos por paso debe caer sin mover
 `app.stats.cpuUpdateTime`.
 
 ---

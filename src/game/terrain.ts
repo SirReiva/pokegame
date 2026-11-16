@@ -427,17 +427,26 @@ export function mountainAtInMap(map: GameMap, x: number, z: number): boolean {
 }
 
 /**
- * Empuja un círculo fuera de las celdas que bloquea un predicado. Devuelve la
- * posición corregida; el llamador decide qué celdas bloquean según el tipo o el
- * equipo del Pokémon.
+ * Empuja un círculo fuera de las celdas bloqueadas, escribiendo el resultado en
+ * `out`. Con `team = null` bloquea el agua profunda; con un equipo, los
+ * santuarios de cualquier otro equipo. Escribe en `out` y no crea closures:
+ * `resolvePosition` la llama en cada paso de simulación por cada jugador y por
+ * cada tramo de dash, así que el array y el predicado nuevos de antes eran
+ * basura constante.
  */
 function resolveBlockedCells(
   x: number,
   z: number,
   radius: number,
-  blocks: (row: number, col: number) => boolean
+  team: Team | null,
+  out: Point2
 ): Point2 {
-  if (!activeMap) return [x, z];
+  if (!activeMap) {
+    out[0] = x;
+    out[1] = z;
+    return out;
+  }
+  const blocksWater = team === null;
   let px = x;
   let pz = z;
 
@@ -462,7 +471,13 @@ function resolveBlockedCells(
 
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
-        if (!blocks(row, col)) continue;
+        const terrain = terrainAtCell(row, col);
+        if (blocksWater) {
+          if (terrain !== 'waterHigh') continue;
+        } else {
+          const owner = terrainTeam(terrain);
+          if (owner === null || owner === team) continue;
+        }
 
         const cellMinX = col * activeTileSize - activeHalfX;
         const cellMaxX = cellMinX + activeTileSize;
@@ -472,7 +487,7 @@ function resolveBlockedCells(
         const closestZ = Math.min(cellMaxZ, Math.max(cellMinZ, pz));
         const dx = px - closestX;
         const dz = pz - closestZ;
-        const distance = Math.hypot(dx, dz);
+        const distance = Math.sqrt(dx * dx + dz * dz);
         if (distance >= radius) continue;
 
         if (distance < 0.0001) {
@@ -497,7 +512,9 @@ function resolveBlockedCells(
     if (!pushed) break;
   }
 
-  return [px, pz];
+  out[0] = px;
+  out[1] = pz;
+  return out;
 }
 
 /**
@@ -505,12 +522,17 @@ function resolveBlockedCells(
  * corregida; el llamador decide si el Pokémon puede cruzarla según su tipo.
  */
 export function resolveDeepWater(x: number, z: number, radius: number): Point2 {
-  return resolveBlockedCells(
-    x,
-    z,
-    radius,
-    (row, col) => terrainAtCell(row, col) === 'waterHigh'
-  );
+  return resolveDeepWaterInto(x, z, radius, [x, z]);
+}
+
+/** Variante sin asignaciones de `resolveDeepWater`; escribe en `out`. */
+export function resolveDeepWaterInto(
+  x: number,
+  z: number,
+  radius: number,
+  out: Point2
+): Point2 {
+  return resolveBlockedCells(x, z, radius, null, out);
 }
 
 /**
@@ -525,10 +547,18 @@ export function resolveTeamTerrain(
   radius: number,
   team: Team
 ): Point2 {
-  return resolveBlockedCells(x, z, radius, (row, col) => {
-    const owner = terrainTeam(terrainAtCell(row, col));
-    return owner !== null && owner !== team;
-  });
+  return resolveTeamTerrainInto(x, z, radius, team, [x, z]);
+}
+
+/** Variante sin asignaciones de `resolveTeamTerrain`; escribe en `out`. */
+export function resolveTeamTerrainInto(
+  x: number,
+  z: number,
+  radius: number,
+  team: Team,
+  out: Point2
+): Point2 {
+  return resolveBlockedCells(x, z, radius, team, out);
 }
 
 export function terrainAtCell(row: number, col: number): TerrainId {

@@ -36,6 +36,11 @@ export interface PlayerSystemHost {
     dt: number
   ): boolean;
   buffMultiplier(player: MatchPlayerState, stat: BuffStat): number;
+  /**
+   * Resuelve la posición contra el mundo. El objeto devuelto puede ser
+   * reutilizado por la siguiente llamada: copia `x/z` antes de volver a
+   * resolver otra posición.
+   */
   resolvePosition(
     player: MatchPlayerState,
     x: number,

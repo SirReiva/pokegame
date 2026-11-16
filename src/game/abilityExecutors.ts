@@ -79,6 +79,7 @@ export interface AbilityExecutorDeps {
     def: AbilityDef,
     options?: AbilityDamageOptions
   ): boolean;
+  /** Tramo de dash resuelto; el objeto devuelto es compartido (copiar x/z). */
   dashPosition(
     player: MatchPlayerState,
     x: number,

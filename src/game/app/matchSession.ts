@@ -198,7 +198,10 @@ export interface MatchSessionHost {
   // --- Acciones de `Game` ---
   /** Zonas declaradas por el mapa, para los modos de control. */
   resolveObjectiveZones(): ObjectiveZone[];
-  /** Resuelve una posición contra colliders, límites y agua profunda. */
+  /**
+   * Resuelve una posición contra colliders, límites y agua profunda. El
+   * objeto devuelto es compartido: copia `x/z` antes de volver a llamar.
+   */
   resolvePosition(
     self: Pick<MatchPlayerState, 'types' | 'team'>,
     x: number,

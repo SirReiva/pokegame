@@ -38,7 +38,12 @@ export function buildBotHazards(
   let count = 0;
   for (const projectile of projectiles) {
     if (projectile.def.power <= 0 && projectile.def.slow === null) continue;
-    const speed = Math.hypot(projectile.vx, projectile.vz);
+    // `Math.sqrt` en vez de `Math.hypot`: mismas magnitudes (velocidades de
+    // juego) con menos coste en un bucle que recorre todos los proyectiles por
+    // paso.
+    const speed = Math.sqrt(
+      projectile.vx * projectile.vx + projectile.vz * projectile.vz
+    );
     const remainingDistance = Math.max(0, projectile.def.range - projectile.traveled);
     const hazard = acquireHazard(pool, count);
     hazards[count] = hazard;

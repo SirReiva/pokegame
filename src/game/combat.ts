@@ -309,16 +309,21 @@ function pointToCollider(
 }
 
 /**
- * Punto más cercano de un collider a `px/pz`. Permite resolver la separación
- * de círculos y cápsulas con el mismo código.
+ * Punto más cercano de un collider a `px/pz`, escrito en `out`. Es la variante
+ * sin asignaciones de `closestPointOnCollider`: la resolución de posiciones la
+ * llama una vez por collider y por iteración, así que devolver un objeto nuevo
+ * generaba miles de objetos por paso. `out` se reescribe en cada llamada.
  */
-export function closestPointOnCollider(
+export function closestPointOnColliderInto(
   collider: SegmentCollider,
   px: number,
-  pz: number
-): { x: number; z: number } {
+  pz: number,
+  out: { x: number; z: number }
+): void {
   if (collider.type === 'circle') {
-    return { x: collider.x, z: collider.z };
+    out.x = collider.x;
+    out.z = collider.z;
+    return;
   }
   const dx = collider.bx - collider.ax;
   const dz = collider.bz - collider.az;
@@ -327,7 +332,23 @@ export function closestPointOnCollider(
     lengthSq > 0
       ? Math.min(1, Math.max(0, ((px - collider.ax) * dx + (pz - collider.az) * dz) / lengthSq))
       : 0;
-  return { x: collider.ax + dx * t, z: collider.az + dz * t };
+  out.x = collider.ax + dx * t;
+  out.z = collider.az + dz * t;
+}
+
+/**
+ * Punto más cercano de un collider a `px/pz`. Permite resolver la separación
+ * de círculos y cápsulas con el mismo código. Reserva un objeto por llamada:
+ * dentro de un bucle caliente, usa `closestPointOnColliderInto`.
+ */
+export function closestPointOnCollider(
+  collider: SegmentCollider,
+  px: number,
+  pz: number
+): { x: number; z: number } {
+  const out = { x: 0, z: 0 };
+  closestPointOnColliderInto(collider, px, pz, out);
+  return out;
 }
 
 function segmentToCollider(
