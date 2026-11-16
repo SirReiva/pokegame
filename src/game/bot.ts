@@ -1829,7 +1829,7 @@ export class BotController {
    * Geometría de un peligro de área ya lanzado. Devuelve un objeto compartido
    * por el bot: hay que usarlo en el acto y no guardarlo entre llamadas.
    */
-  private hazardArea(hazard: BotHazard): AoeArea {
+  private hazardArea(hazard: BotHazard): Readonly<AoeArea> {
     const area = this.hazardAreaScratch;
     area.shape = hazard.shape ?? 'circle';
     area.x = hazard.x;
@@ -2040,7 +2040,9 @@ export class BotController {
    * Peligros persistentes que A* debe rodear. Los proyectiles se excluyen
    * porque se mueven y la ruta se recalcula con poca frecuencia.
    */
-  private navHazards(self: MatchPlayerState): NavHazard[] | undefined {
+  private navHazards(
+    self: MatchPlayerState
+  ): readonly NavHazard[] | undefined {
     // El array y sus objetos se reutilizan entre consultas: `findPath` los
     // consume de forma síncrona y no guarda la referencia.
     const hazards = this.navHazardScratch;

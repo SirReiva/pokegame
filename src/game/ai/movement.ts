@@ -62,7 +62,11 @@ export interface BotMovementContext {
   isTargetVisible(): boolean;
   now(): number;
   hazardPathBlocked(self: MatchPlayerState, point: Vec2): boolean;
-  navHazards(self: MatchPlayerState): NavHazard[] | undefined;
+  /**
+   * Peligros persistentes para la ruta. Devuelve un buffer compartido: solo
+   * lectura, no lo guardes ni lo modifiques.
+   */
+  navHazards(self: MatchPlayerState): readonly NavHazard[] | undefined;
   avoidCurrentPickupGoal(self: MatchPlayerState): void;
   abandonGoal(self: MatchPlayerState): void;
   isAllyStill(other: MatchPlayerState): boolean;

@@ -84,7 +84,12 @@ export interface BotDecisionState {
   engageTarget: boolean;
   hazardEvasion: HazardEvasion | null;
   threat: IncomingThreat | null;
-  visibleEnemies: MatchPlayerState[];
+  /**
+   * Rivales vivos del otro equipo visibles en este paso. Es la misma instancia
+   * que reconstruye `updateTarget`, así que solo se puede leer: mutarla
+   * corrompería la lista que verán el resto de consumidores.
+   */
+  readonly visibleEnemies: readonly MatchPlayerState[];
   visibleTimer: number;
   abilitySlot: number | null;
   supportCast: boolean;

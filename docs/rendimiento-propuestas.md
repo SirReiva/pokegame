@@ -718,11 +718,14 @@ y regeneración.
 4. Las cuatro copias con `filter()` se sustituyen por la lista viva:
    `updateTarget()` ya solo guarda rivales vivos y del otro equipo, así que
    `pickRetreatCover()`, `pickRegenPoint()`, `regenPointSafe()` y
-   `decision.ts` la recorren sin duplicarla.
+   `decision.ts` la recorren sin duplicarla. El contrato queda tipado como
+   `readonly` en `BotDecisionState` para que nadie la mute desde la capa de
+   decisión.
 5. `regenSegmentHidden()` reutiliza un observador y un objetivo compartidos por
-   bot; `hazardArea()` rellena un `AoeArea` compartido (con aviso de no
-   conservarlo); y `navHazards()` reutiliza array y objetos con un pool propio,
-   igual que los peligros de combate.
+   bot; `hazardArea()` rellena un `AoeArea` compartido (devuelto como
+   `Readonly<AoeArea>`); y `navHazards()` reutiliza array y objetos con un pool
+   propio, igual que los peligros de combate. El buffer de navegación cruza a
+   `movement.ts` como `readonly NavHazard[]`.
 
 ### Impacto
 
