@@ -6,6 +6,7 @@
 
 > Diagramas de todas las capas, con descripciones:
 > [arquitectura-diagrama.md](./arquitectura-diagrama.md).
+> Vista del motor sin React: [arquitectura-juego.md](./arquitectura-juego.md).
 
 ## 1. Diagnóstico
 

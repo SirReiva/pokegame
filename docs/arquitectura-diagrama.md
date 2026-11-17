@@ -4,6 +4,8 @@
 > estado compartido, bucle de juego, simulación, render, IA, mundo, UI y
 > guardarraíles. Los diagramas están en Mermaid y se renderizan en GitHub, en
 > VS Code (extensión Markdown/Mermaid) y en la mayoría de visores de Markdown.
+>
+> Solo el motor, sin React: [arquitectura-juego.md](./arquitectura-juego.md).
 
 ## Leyenda
 
