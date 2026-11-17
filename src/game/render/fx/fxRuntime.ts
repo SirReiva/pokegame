@@ -30,6 +30,11 @@ public readonly app: pc.AppBase;
   public readonly sphereMesh: pc.Mesh;
   public readonly boxMesh: pc.Mesh;
   public readonly torusMesh: pc.Mesh;
+  /**
+   * Aro de la marca de área circular: la mitad de grosor que `torusMesh` para
+   * que el borde no domine sobre el relleno del área.
+   */
+  public readonly telegraphRingMesh: pc.Mesh;
   /** Aro más fino para los bucles psíquicos, que necesitan leerse como cintas. */
   public readonly psychicRingMesh: pc.Mesh;
   /** Textura de lengua de fuego y malla de tres quads cruzados. */
@@ -107,6 +112,10 @@ constructor(
       this.device,
       new pc.TorusGeometry({ ringRadius: 0.5, tubeRadius: 0.05 })
     );
+    this.telegraphRingMesh = pc.Mesh.fromGeometry(
+      this.device,
+      new pc.TorusGeometry({ ringRadius: 0.5, tubeRadius: 0.025 })
+    );
     this.psychicRingMesh = pc.Mesh.fromGeometry(
       this.device,
       new pc.TorusGeometry({ ringRadius: 0.5, tubeRadius: 0.022 })
@@ -159,6 +168,7 @@ constructor(
     this.sphereMesh.incRefCount();
     this.boxMesh.incRefCount();
     this.torusMesh.incRefCount();
+    this.telegraphRingMesh.incRefCount();
     this.psychicRingMesh.incRefCount();
     this.flameMesh.incRefCount();
     for (const mesh of this.waterJetMeshes) mesh.incRefCount();
@@ -1120,6 +1130,7 @@ constructor(
     this.sphereMesh.destroy();
     this.boxMesh.destroy();
     this.torusMesh.destroy();
+    this.telegraphRingMesh.destroy();
     this.flameMesh.destroy();
     this.flameTexture.destroy();
     this.leafMesh.destroy();

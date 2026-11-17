@@ -43,7 +43,7 @@ const root = new pc.Entity('aoe-telegraph');
       wallMaterial
     ];
 
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
+    const ring = ctx.createEntity(ctx.telegraphRingMesh, [ringMaterial], root);
     ring.setLocalScale(radius * 2, 1, radius * 2);
 
     const dash = ctx.createEntity(ctx.dashRingMesh, [dashMaterial], root);

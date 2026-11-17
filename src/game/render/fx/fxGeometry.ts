@@ -1242,11 +1242,12 @@ export function createPressureDomeMesh(
 /**
  * Anillo discontinuo unitario (radio exterior 0,5) para la marca de área.
  * Los huecos entre segmentos lo distinguen de un simple círculo de efecto.
+ * El grosor es la mitad del aro macizo (`0.035` frente a `0.07`).
  */
 export function createDashRingMesh(
   device: pc.GraphicsDevice,
   dashes = 20,
-  inner = 0.43,
+  inner = 0.465,
   outer = 0.5,
   fill = 0.72
 ): pc.Mesh {
