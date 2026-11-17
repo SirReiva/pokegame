@@ -532,6 +532,7 @@ export function startMatch(
       x: spawnPoint.x,
       z: spawnPoint.z,
       facing,
+      aimYaw: null,
       cameraYaw: camera.yaw,
       vx: 0,
       vz: 0,

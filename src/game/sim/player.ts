@@ -61,12 +61,35 @@ function angleLerp(current: number, target: number, t: number): number {
   return current + delta * t;
 }
 
+/**
+ * Convierte el stick derecho (relativo a la cámara) en un rumbo de mundo. Sin
+ * desviación devuelve `null` para que los ataques vuelvan a seguir `facing`.
+ */
+export function aimYawFromInput(
+  cameraYaw: number,
+  aimX: number,
+  aimY: number
+): number | null {
+  if (Math.hypot(aimX, aimY) < 0.001) return null;
+  const forwardX = -Math.sin(cameraYaw);
+  const forwardZ = -Math.cos(cameraYaw);
+  const rightX = Math.cos(cameraYaw);
+  const rightZ = -Math.sin(cameraYaw);
+  const dirX = rightX * aimX + forwardX * aimY;
+  const dirZ = rightZ * aimX + forwardZ * aimY;
+  return Math.atan2(dirX, dirZ);
+}
+
 export function stepPlayer(
   host: PlayerSystemHost,
   player: MatchPlayerState,
   input: DeviceInputSnapshot,
   dt: number
 ): void {
+  // Se resuelve antes de cualquier retorno temprano: así apuntar sigue
+  // funcionando durante un casteo o un aturdimiento.
+  player.aimYaw = aimYawFromInput(player.cameraYaw, input.aimX, input.aimY);
+
   // Temporizadores de combate: corren también mientras el jugador está KO.
   for (let index = 0; index < player.cooldowns.length; index++) {
     player.cooldowns[index] = Math.max(0, player.cooldowns[index] - dt);

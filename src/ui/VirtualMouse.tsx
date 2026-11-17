@@ -330,8 +330,9 @@ function updatePad(runtime: CursorRuntime, pad: Gamepad, dt: number): void {
  *
  * El stick derecho mueve un cursor propio de cada mando y el gatillo derecho
  * hace clic sobre el elemento que haya debajo. Se desactiva en la partida,
- * donde el stick y el gatillo ya controlan la cámara y el instinto, pero se
- * puede reactivar sobre la pausa, los diálogos y las pantallas de carga.
+ * donde el stick derecho apunta, la cruceta gira y hace zoom con la cámara y
+ * el gatillo derecho controla el instinto, pero se puede reactivar sobre la
+ * pausa, los diálogos y las pantallas de carga.
  */
 export function VirtualMouseLayer({ enabled = true }: { enabled?: boolean }) {
   const [padIndexes, setPadIndexes] = useState<number[]>([]);

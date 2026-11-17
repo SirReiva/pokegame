@@ -76,7 +76,9 @@ export function syncMatchView(sync: MatchViewSync): void {
         player.submerge,
         sync.waterHeight
       );
-      copy.setFacing(player.facing);
+      // El cuerpo mantiene su mirada; la flecha del suelo muestra el apuntado
+      // del stick derecho mientras esté desviado.
+      copy.setFacing(player.facing, player.aimYaw ?? player.facing);
       if (player.animationFrame !== null) {
         // El plan de casteo fija el frame; todas las vistas dibujan el mismo.
         copy.setManualFrame(player.animation, player.animationFrame);

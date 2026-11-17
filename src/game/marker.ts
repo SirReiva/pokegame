@@ -10,11 +10,13 @@ import {
 } from './textures';
 
 /**
- * Anillo plano bajo los pies del jugador con una flecha que señala su rumbo.
+ * Anillo plano bajo los pies del jugador con una flecha que señala hacia dónde
+ * apunta.
  *
  * - Vive en el suelo (no es un billboard): gira solo en Y.
  * - La flecha de la textura apunta a +Z, así que rotar el plano por el rumbo
- *   del actor la alinea con `facing` (0 = sur, 90º = este).
+ *   del actor la alinea con `facing` (0 = sur, 90º = este). En partida puede
+ *   recibir un rumbo distinto: el del apuntado con el stick derecho.
  * - El material es unlit y usa `alphaTest`, de modo que la silueta se recorta
  *   limpia y escribe profundidad por encima de la sombra de contacto.
  *

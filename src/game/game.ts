@@ -145,6 +145,7 @@ import type {
   SlowEffect,
   SupportContribution
 } from './matchState';
+import { attackYaw } from './matchState';
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
   normalizeModeSettings,
@@ -2809,6 +2810,11 @@ export class Game {
 
     // Cualquier habilidad usada corta la regeneración pasiva.
     breakRegen(player);
+    // Antes de ejecutar una habilidad direccional, el cuerpo gira hacia el
+    // apuntado (stick derecho si está desviado). Así el lanzamiento y el sprite
+    // coinciden; después sigue el flujo normal de startup/activo/recuperación.
+    const castYaw = attackYaw(player);
+    if (def.shape !== 'self') player.facing = castYaw;
     // Atacar desde la protección de spawn la retira: la invulnerabilidad
     // defensiva no debe servir para lanzar gratis una rotación ofensiva. Los
     // buffs y dash de estado (Protección, Impulso, Agilidad) no la rompen.
@@ -2830,8 +2836,8 @@ export class Game {
     const plan = buildCastPlan(def, (name) =>
       resolveAnimationClip(asset, name)
     );
-    let dirX = Math.sin(player.facing);
-    let dirZ = Math.cos(player.facing);
+    let dirX = Math.sin(castYaw);
+    let dirZ = Math.cos(castYaw);
     // Los haces fijan su carril al empezar la carga, así que la ayuda de
     // apuntado se resuelve aquí. Los proyectiles la consultan al salir, cuando
     // la dirección real ya no puede cambiar (ver `executeProjectile`).
@@ -2840,6 +2846,7 @@ export class Game {
       if (assisted) {
         dirX = assisted.dirX;
         dirZ = assisted.dirZ;
+        // El cuerpo acompaña al disparo corregido: primero gira, luego el haz.
         player.facing = Math.atan2(dirX, dirZ);
       }
     }

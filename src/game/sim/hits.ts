@@ -13,6 +13,7 @@ import type {
   PendingInstantHit,
   PendingMeleeHit
 } from '../matchState';
+import { attackYaw } from '../matchState';
 import { maxHitRadius } from '../roster';
 import {
   sectorOverlapsCircle,
@@ -108,7 +109,7 @@ function meleeHitValid(host: HitSystemHost, hit: PendingMeleeHit): boolean {
     !sectorOverlapsCircle(
       attacker.x,
       attacker.z,
-      attacker.facing,
+      attackYaw(attacker),
       def.halfAngle * DEG,
       def.range + maxHitRadius(),
       target.x,

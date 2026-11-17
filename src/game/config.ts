@@ -165,7 +165,7 @@ export const CONFIG = {
     splitDistanceScale: 1.12,
     minDistance: 10,
     maxDistance: 27,
-    /** Rad/s con el stick derecho a tope. */
+    /** Rad/s con la cámara girando a tope (`Q`/`E` o cruceta). */
     stickSpeed: 2.6,
     keyboardSpeed: 2.2,
     /** Rad por píxel de arrastre. */

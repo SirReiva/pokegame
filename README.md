@@ -119,10 +119,11 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Abrir el teclado del nombre (lobby) | `X` | Escribe directamente en la tarjeta |
 | Girar la card del Pokémon | `X` / `Y` | `Tab` / `F` |
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
-| Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
-| Zoom | Gatillo `L2` o stick derecho vertical | Rueda |
+| Apuntar habilidades | Stick derecho | — |
+| Girar tu cámara | Cruceta ← / → | `Q` / `E` o arrastrar con el ratón |
+| Zoom | Cruceta ↑ / ↓ | Rueda |
 | Habilidad básica | `X` | `J` |
-| Habilidad 1 | `Y` | `K` |
+| Habilidad 1 | `L2` | `K` |
 | Habilidad 2 | `RB` | `L` |
 | Habilidad 3 | `LB` | `U` |
 | Instinto común | `RT` | `I` |
@@ -130,7 +131,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Pausa | `Start` | `Esc` |
 | Ocultar HUD | — | `H` |
 
-Cada jugador se mueve con el stick o las teclas de dirección y el Pokémon gira hacia donde camina: el stick se orienta respecto a la cámara y las habilidades se lanzan hacia esa mirada.
+Cada jugador se mueve con el stick o las teclas de dirección y el Pokémon gira hacia donde camina: el stick se orienta respecto a la cámara y las habilidades se lanzan hacia esa mirada. Con mando, el stick derecho apunta en otra dirección mientras esté desviado; la flecha del suelo muestra ese apuntado y, al lanzar una habilidad, el Pokémon gira primero hacia él y después sigue el casteo normal. Al soltar el stick, el apuntado vuelve a la mirada del Pokémon. La cámara se gira con la cruceta ← / → y se acerca o aleja con la cruceta ↑ / ↓.
 
 La configuración tiene dos rutas:
 

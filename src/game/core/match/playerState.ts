@@ -315,6 +315,11 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   z: number;
   facing: number;
   /**
+   * Dirección de apuntado del stick derecho, en radianes. `null` cuando el
+   * stick está centrado: los ataques usan entonces `facing`.
+   */
+  aimYaw: number | null;
+  /**
    * Yaw de la cámara de este jugador, copiado desde su `PlayerView` en cada
    * paso. La simulación lo usa para convertir la entrada en movimiento
    * relativo sin conocer `CameraRig`.
@@ -447,4 +452,13 @@ export interface MatchPlayerState extends MatchPlayerConfig {
    * `null` deja un hueco vacío.
    */
   abilityIds: (string | null)[];
+}
+
+/**
+ * Dirección a la que sale un ataque: el stick derecho mientras está desviado o,
+ * si no, la mirada del cuerpo. Los bots nunca desvían el stick, así que siguen
+ * apuntando con `facing`.
+ */
+export function attackYaw(player: MatchPlayerState): number {
+  return player.aimYaw ?? player.facing;
 }

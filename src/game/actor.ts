@@ -209,10 +209,15 @@ export class Actor {
     this.hitboxDebug?.setPosition(this.position.x, this.position.z);
   }
 
-  setFacing(yaw: number): void {
+  /**
+   * Orienta el sprite y la flecha del suelo. `markerYaw` permite que la flecha
+   * muestre una dirección distinta de la mirada, como el apuntado del stick
+   * derecho; por defecto acompaña al cuerpo.
+   */
+  setFacing(yaw: number, markerYaw = yaw): void {
     this.facing = yaw;
     this.billboard.setFacing(yaw);
-    this.marker?.setFacing(yaw);
+    this.marker?.setFacing(markerYaw);
   }
 
   play(name: AnimationName, restart = false): void {

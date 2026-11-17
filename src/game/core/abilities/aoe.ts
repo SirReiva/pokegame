@@ -88,7 +88,8 @@ export interface AoeMovementContext<
   originZ: number;
   /**
    * Dirección horizontal del lanzamiento (desde el lanzador hacia el centro),
-   * normalizada. Si el área nació sobre el lanzador, es su `facing`.
+   * normalizada. Si el área nació sobre el lanzador, es su dirección de
+   * apuntado.
    */
   dirX: number;
   dirZ: number;

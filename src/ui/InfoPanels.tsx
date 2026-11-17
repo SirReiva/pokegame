@@ -25,16 +25,22 @@ export function ControlsPanel() {
             <KeyPill>Stick izquierdo</KeyPill> moverte y navegar por los menús
           </li>
           <li className="flex flex-wrap items-center gap-2">
-            <KeyPill>Stick derecho</KeyPill> girar tu cámara
+            <KeyPill>Stick derecho</KeyPill> apuntar habilidades
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>Cruceta ← / →</KeyPill> girar la cámara
+          </li>
+          <li className="flex flex-wrap items-center gap-2">
+            <KeyPill>Cruceta ↑ / ↓</KeyPill> zoom
           </li>
           <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Stick derecho + RT</KeyPill> cursor virtual y clic en los menús
           </li>
           <li className="flex flex-wrap items-center gap-2">
-            <KeyPill>L2 / R2</KeyPill> alejar / acercar
+            <KeyPill>X / L2 / RB / LB</KeyPill> habilidades (básica, 1, 2 y 3)
           </li>
           <li className="flex flex-wrap items-center gap-2">
-            <KeyPill>X / Y / RB / LB</KeyPill> habilidades (básica, 1, 2 y 3)
+            <KeyPill>RT</KeyPill> instinto común
           </li>
           <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Start</KeyPill> pausar la partida

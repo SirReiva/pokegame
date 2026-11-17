@@ -17,9 +17,10 @@
  * `power: 0` o `category: 'status'` convierten la habilidad en no dañina; los
  * `buffs` se aplican siempre al lanzador.
  *
- * Las habilidades direccionales usan el `facing` actual del Pokémon, sin
- * corrección de apuntado. El jugador apunta colocándose y girando con el
- * movimiento.
+ * Las habilidades direccionales usan el apuntado actual del Pokémon: el stick
+ * derecho si está desviado o, si no, su `facing`. Al lanzar la habilidad, el
+ * cuerpo gira primero hacia ese apuntado y después arranca el casteo normal.
+ * Sin stick, el jugador apunta colocándose y girando con el movimiento.
  */
 
 import type {

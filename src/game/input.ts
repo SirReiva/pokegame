@@ -63,7 +63,12 @@ export function detectGamepadFamily(id: string): GamepadFamily {
 export interface DeviceInputSnapshot {
   moveX: number;
   moveY: number;
+  /** Stick derecho en partida: apuntado relativo a la cámara. */
+  aimX: number;
+  aimY: number;
+  /** Cruceta horizontal: gira la cámara. */
   cameraX: number;
+  /** Cruceta vertical: acerca (positivo) o aleja (negativo). */
   zoom: number;
   wheel: number;
   pointerYaw: number;
@@ -72,7 +77,7 @@ export interface DeviceInputSnapshot {
   /** Pulsaciones de borde, no estados mantenidos. */
   confirm: boolean;
   cancel: boolean;
-  /** Habilidades de combate: J/K/L/U o X/Y/RB/LB. */
+  /** Habilidades de combate: J/K/L/U o X/L2/RB/LB. */
   ability1: boolean;
   ability2: boolean;
   ability3: boolean;
@@ -112,8 +117,15 @@ const KEYBOARD_ABILITY_KEYS = ['j', 'k', 'l', 'u'] as const;
 /** Tecla del instinto común activo. */
 const KEYBOARD_COMMON_KEY = 'i' as const;
 
-/** Botones de mando de las cuatro habilidades: X, Y, RB y LB. */
-const PAD_ABILITY_BUTTONS = [2, 3, 5, 4] as const;
+/** Botones de mando de las cuatro habilidades: X, L2, RB y LB. */
+const PAD_ABILITY_BUTTONS = [2, 6, 5, 4] as const;
+
+/**
+ * Umbral del gatillo izquierdo analógico (L2/LT). El navegador marca `pressed`
+ * bastante tarde, así que se usa el valor para que la habilidad salga al
+ * empezar a apretar. `Y` (Triángulo) deja de lanzar habilidades.
+ */
+const ANALOG_PRESS = 0.35;
 
 /** Gatillo derecho del mando para el instinto común. */
 const PAD_COMMON_BUTTON = 7 as const;
@@ -327,6 +339,8 @@ export class Input {
     const snapshot: DeviceInputSnapshot = {
       moveX,
       moveY,
+      aimX: 0,
+      aimY: 0,
       cameraX: (has('e') ? 1 : 0) - (has('q') ? 1 : 0),
       zoom: 0,
       wheel: this.wheel,
@@ -353,19 +367,20 @@ export class Input {
     };
     this.padStates.set(pad.index, state);
 
-    const pressed = (index: number) => pad.buttons[index]?.pressed ?? false;
+    const pressed = (index: number) => {
+      const button = pad.buttons[index];
+      return button ? button.pressed || button.value >= ANALOG_PRESS : false;
+    };
     const edge = (index: number) => pressed(index) && !state.buttons[index];
 
     const axes = pad.axes;
     const leftX = applyDeadzone(axes[0] ?? 0);
     const leftY = applyDeadzone(axes[1] ?? 0);
 
+    // El stick izquierdo mueve; la cruceta queda para la cámara en partida
+    // (y para navegar los menús mediante `navNow`).
     let moveX = leftX;
     let moveY = -leftY;
-    if (pressed(14)) moveX -= 1;
-    if (pressed(15)) moveX += 1;
-    if (pressed(12)) moveY += 1;
-    if (pressed(13)) moveY -= 1;
     const moveLength = Math.hypot(moveX, moveY);
     if (moveLength > 1) {
       moveX /= moveLength;
@@ -400,12 +415,14 @@ export class Input {
     // habilidades 3 y 4; las acciones de menú no afectan al juego.
     const prevMap = edge(4);
     const nextMap = edge(5);
-    // X, Y, RB y LB. El botón B queda reservado para volver/continuar.
+    // X, L2, RB y LB. El botón B queda reservado para volver/continuar.
     const [ability1, ability2, ability3, ability4] =
       PAD_ABILITY_BUTTONS.map(edge);
     const commonAbility = edge(PAD_COMMON_BUTTON);
 
-    state.buttons = pad.buttons.map((button) => button.pressed);
+    state.buttons = pad.buttons.map(
+      (button) => button.pressed || button.value >= ANALOG_PRESS
+    );
     state.nav = navNow;
 
     const action = resolveMenuAction({
@@ -421,15 +438,20 @@ export class Input {
       right
     });
 
-    // RT queda reservado para el instinto común; LT sigue alejando la cámara.
-    const zoom =
-      -applyDeadzone(axes[3] ?? 0) -
-      (pad.buttons[6]?.value ?? 0) * 0.75;
+    // La cruceta controla la cámara durante la partida: izquierda/derecha la
+    // giran y arriba/abajo acercan o alejan. El stick derecho apunta siempre.
+    // RT queda reservado para el instinto común.
+    const rightX = applyDeadzone(axes[2] ?? 0);
+    const rightY = applyDeadzone(axes[3] ?? 0);
+    const cameraX = (pressed(15) ? 1 : 0) - (pressed(14) ? 1 : 0);
+    const zoom = (pressed(12) ? 1 : 0) - (pressed(13) ? 1 : 0);
 
     const snapshot: DeviceInputSnapshot = {
       moveX,
       moveY,
-      cameraX: applyDeadzone(axes[2] ?? 0),
+      aimX: rightX,
+      aimY: -rightY,
+      cameraX,
       zoom,
       wheel: 0,
       pointerYaw: 0,
@@ -497,6 +519,8 @@ export class Input {
 export const IDLE_INPUT: DeviceInputSnapshot = {
   moveX: 0,
   moveY: 0,
+  aimX: 0,
+  aimY: 0,
   cameraX: 0,
   zoom: 0,
   wheel: 0,

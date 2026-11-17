@@ -760,6 +760,7 @@ export class HeadlessMatch {
       x: spawn.x,
       z: spawn.z,
       facing,
+      aimYaw: null,
       cameraYaw: cameraYawForTeam(team, spawn.x, spawn.z),
       vx: 0,
       vz: 0,

@@ -29,6 +29,7 @@ import type {
   PendingMeleeHit,
   Projectile
 } from './matchState';
+import { attackYaw } from './matchState';
 import { TEAM_INFO } from './multiplayer';
 import { maxHitRadius } from './roster';
 import type { World } from './world';
@@ -159,6 +160,10 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
+  // El cuerpo gira hacia el apuntado antes de dibujar el arco y resolver el
+  // golpe, igual que hacen los proyectiles al salir.
+  const yaw = attackYaw(player);
+  player.facing = yaw;
   // El arco dibuja el radio máximo de golpe (`range` + el mayor hurtbox) y el
   // golpe cuenta el cuerpo del rival desde el borde hacia dentro: si su hurtbox
   // roza el cono, recibe daño. Así no hay franjas donde el aviso cubra al rival
@@ -166,7 +171,7 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
   deps.combatFx.spawnMelee(
     player.x,
     player.z,
-    player.facing,
+    yaw,
     def.range + maxHitRadius(),
     def.halfAngle,
     def.color,
@@ -194,7 +199,7 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
       !sectorOverlapsCircle(
         player.x,
         player.z,
-        player.facing,
+        yaw,
         def.halfAngle * DEG,
         def.range + maxHitRadius(),
         target.x,
@@ -214,16 +219,15 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeProjectile: AbilityExecutor = (player, def, deps) => {
-  let dirX = Math.sin(player.facing);
-  let dirZ = Math.cos(player.facing);
-  // Ayuda de apuntado suave: se aplica al salir el proyectil y también gira el
-  // cuerpo, para que el disparo y el sprite coincidan. Sin ajuste activo, o si
-  // el rival no está cerca de la mira, la dirección no cambia.
+  const yaw = attackYaw(player);
+  let dirX = Math.sin(yaw);
+  let dirZ = Math.cos(yaw);
+  // Ayuda de apuntado suave: se aplica al salir el proyectil. Si corrige el
+  // tiro, el cuerpo gira con él para que el disparo y el sprite coincidan.
   const assisted = deps.aimAssist?.(player, def, dirX, dirZ);
   if (assisted) {
     dirX = assisted.dirX;
     dirZ = assisted.dirZ;
-    // El cuerpo acompaña al tiro para que el disparo y el sprite coincidan.
     player.facing = Math.atan2(dirX, dirZ);
   }
   const originX = player.x + dirX * 0.4;
@@ -254,8 +258,9 @@ const executeProjectile: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
-  let dirX = Math.sin(player.facing);
-  let dirZ = Math.cos(player.facing);
+  const yaw = attackYaw(player);
+  let dirX = Math.sin(yaw);
+  let dirZ = Math.cos(yaw);
   let distance: number;
   if (targetX !== undefined && targetZ !== undefined) {
     // Extremo fijado al empezar el windup: el haz termina donde se dibujó el
@@ -342,8 +347,9 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
 const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   // En las áreas con preparación se conserva la dirección del lanzamiento; el
   // jugador pudo girar durante un `windup` móvil y el centro ya estaba fijado.
-  const dirX = deps.castDirX ?? Math.sin(player.facing);
-  const dirZ = deps.castDirZ ?? Math.cos(player.facing);
+  const yaw = attackYaw(player);
+  const dirX = deps.castDirX ?? Math.sin(yaw);
+  const dirZ = deps.castDirZ ?? Math.cos(yaw);
   // El centro no puede quedar detrás de un obstáculo: se detiene antes del
   // primer collider para que el telegraph y el daño coincidan con lo que ve el
   // jugador.
@@ -503,8 +509,9 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
   // jugador puede seguir girando (y el frame del lanzamiento mueve antes de
   // resolver el efecto), pero el dash debe salir hacia donde apuntaba la
   // habilidad al iniciarse, como las áreas con `windup`.
-  const dirX = deps.castDirX ?? Math.sin(player.facing);
-  const dirZ = deps.castDirZ ?? Math.cos(player.facing);
+  const yaw = attackYaw(player);
+  const dirX = deps.castDirX ?? Math.sin(yaw);
+  const dirZ = deps.castDirZ ?? Math.cos(yaw);
   const dashDistance = def.dashBlocksOnEnemies
     ? dashEnemyLimit(player, dirX, dirZ, def.dashDistance, deps)
     : def.dashDistance;

@@ -887,7 +887,7 @@ const PlayerHud = memo(function PlayerHud({
                     ? Math.min(100, (ability.cooldown / ability.duration) * 100)
                     : 0;
                 const keys = playerStats.gamepad
-                  ? ['X', 'Y', 'RB', 'LB']
+                  ? ['X', 'L2', 'RB', 'LB']
                   : ['J', 'K', 'L', 'U'];
                 const typeLabel = TYPE_LABELS[ability.type] ?? ability.type;
                 const typeBadge = compact
