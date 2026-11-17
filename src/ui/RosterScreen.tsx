@@ -9,6 +9,7 @@ import {
   type CommonAbilityId,
   type DamageCategory
 } from '../game/abilities';
+import { passiveFor } from '../game/passives';
 import { baseStatsFor, combatStatsFor } from '../game/pokedex';
 import { speedForPokemon } from '../game/roster';
 import { skinFor, skinsFor } from '../game/skins';
@@ -247,6 +248,7 @@ function PlayerPanel({
   const stats = combatStatsFor(baseStatsFor(entry.id));
   const speed = speedForPokemon(entry.id);
   const common = commonAbilityOption(player.commonAbilityId);
+  const passive = passiveFor(entry.id);
   const skins = skinsFor(entry);
   const selectedSkin = skinFor(entry, player.skinId);
 
@@ -393,8 +395,16 @@ function PlayerPanel({
               <span className="font-mono text-9.92 tracking-wider uppercase text-steel-600">
                 Vel. {speed.toFixed(1)} u/s
               </span>
-              <span className="font-mono text-8.96 tracking-[0.08em] uppercase text-accent-soft">
-                Instinto: {common?.name ?? '—'}
+              <span className="grid w-full grid-cols-2 gap-x-3">
+                <span className="truncate font-mono text-8.96 tracking-[0.08em] uppercase text-accent-soft">
+                  Instinto: {common?.name ?? '—'}
+                </span>
+                <span
+                  className="truncate font-mono text-8.96 tracking-[0.08em] uppercase text-steel-500"
+                  title={passive ? `${passive.name}: ${passive.description}` : undefined}
+                >
+                  Pasiva: {passive?.name ?? '—'}
+                </span>
               </span>
             </div>
 
@@ -469,6 +479,23 @@ function PlayerPanel({
                 </div>
                 <p className="mt-1 text-8.96 leading-[1.35] text-steel-450">
                   {common?.description ?? ''}
+                </p>
+              </div>
+
+              <div className="mb-1.5 rounded-lg border border-accent/30 bg-night-820/70 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-8 tracking-[0.12em] uppercase text-steel-600">
+                    Pasiva
+                  </span>
+                  <span className="rounded-full border border-accent/40 bg-accent/10 px-1 py-px font-mono text-7.36 font-bold tracking-[0.06em] uppercase text-accent-soft">
+                    P
+                  </span>
+                </div>
+                <strong className="mt-0.5 block truncate font-display text-11.52 text-ink">
+                  {passive?.name ?? 'Sin pasiva'}
+                </strong>
+                <p className="mt-0.5 text-8.96 leading-[1.35] text-steel-450">
+                  {passive?.description ?? 'Este Pokémon aún no tiene pasiva definida.'}
                 </p>
               </div>
 
