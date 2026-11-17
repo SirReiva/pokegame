@@ -30,3 +30,7 @@ cerrar cada fase hay que medir con Chrome headless y `pnpm build` +
 - misma cámara, mismos bots y mismo seed.
 
 Criterio: p95 dentro de ±3 %, mismos draw calls y ninguna tarea larga nueva.
+
+Las pasadas de partida real (v0.28.4, 1 vista, GPU hardware) están en
+`docs/performance/revision-2026-11-18.md`: 60,0 fps estables, p95 de 21,4 ms y
+p99 del tick de 14,7 ms. Quedan pendientes las combinaciones de 4 y 8 vistas.

@@ -79,3 +79,11 @@ vistas se mantiene.
   Chrome DevTools para registrar draw calls y frame CPU.
 - Criterio de aceptación de refactor: p95 dentro de ±3 % respecto a esta tabla
   en el mismo entorno, mismos draw calls y sin tareas largas nuevas.
+
+## Partida real en producción
+
+Medición complementaria sobre la build desplegada (v0.28.4, 1 vista, GPU real):
+60,0 fps en estado estable, p95 21,4 ms y p99 del tick de 14,7 ms.
+Detalle y limitaciones en `docs/performance/revision-2026-11-18.md`. La tabla de
+arriba sigue siendo la referencia del benchmark headless; la partida real se usa
+para frame pacing y para validar que el juego no se sale del presupuesto.
