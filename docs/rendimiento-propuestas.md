@@ -461,12 +461,13 @@ silueta, contorno y sombra) más el anillo del dueño.
      dilatar.
    - Hay versión GLSL y WGSL: en WebGPU el material compila con los chunks WGSL
      y el contorno desaparecería sin error si solo se inyectara GLSL.
-3. **LOD por viewport** (`src/game/spriteDetail.ts`). Con un alto de viewport por
-   debajo de `CONFIG.sprite.smallViewportPx` se omite la silueta de oclusión del
-   dueño y el contorno se engorda un 25 % para seguir leyéndose. El umbral se
-   calcula con el mismo reparto de filas y tope de DPR que la densidad de
-   texturas (`viewportHeightPx` en `multiplayer.ts`), así que ambas cuentas no se
-   desincronizan.
+3. **LOD por viewport** (`src/game/spriteDetail.ts`). El grosor base del contorno
+   es el 3 % del alto del arte de `idle`, con un mínimo de 0,75 px de arte. Con
+   un alto de viewport por debajo de `CONFIG.sprite.smallViewportPx` se omite la
+   silueta de oclusión del dueño y el contorno se engorda un 25 % para seguir
+   leyéndose. El umbral se calcula con el mismo reparto de filas y tope de DPR
+   que la densidad de texturas (`viewportHeightPx` en `multiplayer.ts`), así que
+   ambas cuentas no se desincronizan.
 
 ### Impacto
 

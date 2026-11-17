@@ -35,7 +35,7 @@ export interface SpriteOutlineSource {
  * así que el grosor se mide en píxeles del arte original y se traduce a UV en
  * cada frame.
  */
-const OUTLINE_HEIGHT_RATIO = 0.045;
+const OUTLINE_HEIGHT_RATIO = 0.03;
 /** Mínimo para las especies pequeñas, en píxeles de arte. */
 const OUTLINE_MIN_ART_PIXELS = 0.75;
 /** En pantallas muy pequeñas se engorda: el borde quedaría bajo el píxel. */
