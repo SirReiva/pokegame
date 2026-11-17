@@ -183,7 +183,7 @@ try {
   );
   lines.push(
     '- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, ' +
-      'random medio 0,925, crítico 1/24 (×1,5). STAB incluido.'
+      'random medio 0,925, crítico 1/24 (×1,05). STAB ×1,05 incluido.'
   );
   lines.push(
     '- **Áreas**: se valoran con el rival en el centro (100 %). En el borde el ' +
@@ -421,7 +421,7 @@ try {
   );
   dpsLines.push(
     '- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, ' +
-      'random medio 0,925, crítico 1/24 (×1,5). STAB incluido.'
+      'random medio 0,925, crítico 1/24 (×1,05). STAB ×1,05 incluido.'
   );
   dpsLines.push(
     '- **Áreas**: se valoran con el rival en el centro (100 %). En el borde el ' +

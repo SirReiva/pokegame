@@ -25,7 +25,7 @@ test('decorateDamage aplica crítico, aleatorio, STAB y efectividad en orden', (
       stab: false,
       effectiveness: 1
     }),
-    150
+    105
   );
   assert.equal(
     decorateDamage(100, {
@@ -34,7 +34,7 @@ test('decorateDamage aplica crítico, aleatorio, STAB y efectividad en orden', (
       stab: true,
       effectiveness: 2
     }),
-    300
+    210
   );
   assert.equal(
     decorateDamage(101, {

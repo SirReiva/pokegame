@@ -15,6 +15,8 @@ export const KO_TARGET = CONFIG.combat.koTarget;
 const CRIT_CHANCE = CONFIG.combat.critChance;
 /** Multiplicador de daño de un crítico. */
 const CRIT_MULTIPLIER = CONFIG.combat.critMultiplier;
+/** Multiplicador de daño por STAB. */
+const STAB_MULTIPLIER = CONFIG.combat.stabMultiplier;
 /** Factor aleatorio oficial del daño: entre 0,85 y 1,00. */
 const RANDOM_MIN = CONFIG.combat.randomMin;
 const RANDOM_MAX = CONFIG.combat.randomMax;
@@ -77,7 +79,8 @@ export const DAMAGE_MODIFIERS: readonly DamageModifier[] = [
   (damage, context) =>
     context.critical ? Math.floor(damage * CRIT_MULTIPLIER) : damage,
   (damage, context) => Math.floor(damage * context.randomFactor),
-  (damage, context) => (context.stab ? Math.floor(damage * 1.5) : damage),
+  (damage, context) =>
+    context.stab ? Math.floor(damage * STAB_MULTIPLIER) : damage,
   (damage, context) => Math.floor(damage * context.effectiveness)
 ];
 

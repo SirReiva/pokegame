@@ -367,8 +367,8 @@ daño = floor(base × crítico) → floor(× random) → floor(× STAB) → floo
 ```
 
 - Físico usa Ataque/Defensa; especial usa Ataque Especial/Defensa Especial.
-- STAB ×1,5 si el movimiento comparte tipo con el atacante.
-- Crítico 1/24, ×1,5.
+- STAB ×1,05 si el movimiento comparte tipo con el atacante.
+- Crítico 1/24, ×1,05.
 - Factor aleatorio 0,85-1,00.
 - Sin tirada de precisión: si la geometría del golpe alcanza al objetivo, el
   golpe conecta siempre. El acierto depende del apuntado del jugador.

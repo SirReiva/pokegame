@@ -268,8 +268,10 @@ export const CONFIG = {
     aoeSightPadding: 0.25,
     /** Probabilidad de crítico (1/24 en la generación VII+). */
     critChance: 1 / 24,
-    /** Multiplicador de daño de un crítico. */
-    critMultiplier: 1.5,
+    /** Multiplicador de daño de un crítico: +5 %. */
+    critMultiplier: 1.05,
+    /** Multiplicador de daño por STAB: +5 %. */
+    stabMultiplier: 1.05,
     /** Rango del factor aleatorio oficial de daño. */
     randomMin: 0.85,
     randomMax: 1,

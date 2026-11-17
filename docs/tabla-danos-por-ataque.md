@@ -6,7 +6,7 @@
 
 - **Agrupación**: una sección por Pokémon atacante y una fila por rival. Cada columna es uno de sus cuatro ataques.
 - **Celda**: daño esperado de un lanzamiento completo y, al lado, la efectividad de ese tipo contra el rival.
-- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, random medio 0,925, crítico 1/24 (×1,5). STAB incluido.
+- **Daño esperado**: nivel 50, IV 31, EV 0, naturaleza neutra, sin buffs, random medio 0,925, crítico 1/24 (×1,05). STAB ×1,05 incluido.
 - **Áreas**: se valoran con el rival en el centro (100 %). En el borde el daño radial baja hasta `radialMinDamage`.
 - **Áreas `overTime`**: el total suma todos los ticks (`ceil(duración / intervalo)`) con potencia por tick = `power × intervalo`. El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento.
 - **Estado**: la habilidad no hace daño. `Estado (×0)` indica que el tipo es inmune y el estado tampoco se aplica.
@@ -49,33 +49,33 @@ Tipos: **Electric** · HP 110 · Atk 75 · Def 60 · SpA 70 · SpD 70 · Vel 110
 
 | Rival | Básica: Placaje<br>Normal · Fís · Pot 55 | Habilidad 1: Ataque Rápido<br>Normal · Fís · Pot 60 | Habilidad 2: Impactrueno<br>Electric · Esp · Pot 70 | Definitiva: Rayo<br>Electric · Esp · Pot 130 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 26 ×1 | 28 ×1 | 18 ×½ | 34 ×½ |
-| Charmander | 28 ×1 | 31 ×1 | 44 ×1 | 83 ×1 |
-| Squirtle | 21 ×1 | 23 ×1 | 74 ×2 | 137 ×2 |
-| Gengar | 0 ×0 | 0 ×0 | 34 ×1 | 61 ×1 |
-| Voltorb | 25 ×1 | 28 ×1 | 20 ×½ | 38 ×½ |
-| Eevee | 25 ×1 | 28 ×1 | 37 ×1 | 68 ×1 |
-| Lucario | 10 ×½ | 11 ×½ | 35 ×1 | 64 ×1 |
-| Greninja | 20 ×1 | 22 ×1 | 69 ×2 | 129 ×2 |
-| Mewtwo | 16 ×1 | 18 ×1 | 29 ×1 | 53 ×1 |
-| Mew | 15 ×1 | 16 ×1 | 26 ×1 | 49 ×1 |
+| Bulbasaur | 25 ×1 | 27 ×1 | 12 ×½ | 23 ×½ |
+| Charmander | 27 ×1 | 30 ×1 | 30 ×1 | 56 ×1 |
+| Squirtle | 21 ×1 | 23 ×1 | 50 ×2 | 94 ×2 |
+| Gengar | 0 ×0 | 0 ×0 | 23 ×1 | 42 ×1 |
+| Voltorb | 24 ×1 | 27 ×1 | 14 ×½ | 26 ×½ |
+| Eevee | 24 ×1 | 27 ×1 | 25 ×1 | 47 ×1 |
+| Lucario | 10 ×½ | 11 ×½ | 24 ×1 | 44 ×1 |
+| Greninja | 20 ×1 | 22 ×1 | 48 ×2 | 88 ×2 |
+| Mewtwo | 16 ×1 | 18 ×1 | 19 ×1 | 36 ×1 |
+| Mew | 15 ×1 | 16 ×1 | 17 ×1 | 33 ×1 |
 | Onix | 5 ×½ | 6 ×½ | 0 ×0 | 0 ×0 |
-| Scyther | 18 ×1 | 19 ×1 | 63 ×2 | 117 ×2 |
-| Gyarados | 18 ×1 | 20 ×1 | 102 ×4 | 196 ×4 |
-| Tyranitar | 6 ×½ | 7 ×½ | 26 ×1 | 49 ×1 |
-| Articuno | 15 ×1 | 16 ×1 | 43 ×2 | 80 ×2 |
-| Zapdos | 17 ×1 | 18 ×1 | 29 ×1 | 53 ×1 |
-| Moltres | 16 ×1 | 18 ×1 | 61 ×2 | 112 ×2 |
-| Raikou | 19 ×1 | 20 ×1 | 12 ×½ | 25 ×½ |
-| Entei | 17 ×1 | 18 ×1 | 34 ×1 | 61 ×1 |
-| Suicune | 13 ×1 | 14 ×1 | 45 ×2 | 86 ×2 |
-| Lugia | 12 ×1 | 13 ×1 | 37 ×2 | 69 ×2 |
-| Ho-Oh | 16 ×1 | 18 ×1 | 37 ×2 | 69 ×2 |
-| Celebi | 15 ×1 | 16 ×1 | 12 ×½ | 25 ×½ |
-| Kyogre | 16 ×1 | 18 ×1 | 39 ×2 | 74 ×2 |
+| Scyther | 18 ×1 | 19 ×1 | 44 ×2 | 78 ×2 |
+| Gyarados | 18 ×1 | 20 ×1 | 68 ×4 | 132 ×4 |
+| Tyranitar | 6 ×½ | 7 ×½ | 17 ×1 | 33 ×1 |
+| Articuno | 15 ×1 | 16 ×1 | 28 ×2 | 54 ×2 |
+| Zapdos | 17 ×1 | 18 ×1 | 19 ×1 | 36 ×1 |
+| Moltres | 16 ×1 | 18 ×1 | 42 ×2 | 76 ×2 |
+| Raikou | 19 ×1 | 20 ×1 | 8 ×½ | 16 ×½ |
+| Entei | 17 ×1 | 18 ×1 | 23 ×1 | 42 ×1 |
+| Suicune | 13 ×1 | 14 ×1 | 30 ×2 | 58 ×2 |
+| Lugia | 12 ×1 | 13 ×1 | 24 ×2 | 48 ×2 |
+| Ho-Oh | 16 ×1 | 18 ×1 | 24 ×2 | 48 ×2 |
+| Celebi | 15 ×1 | 16 ×1 | 8 ×½ | 16 ×½ |
+| Kyogre | 16 ×1 | 18 ×1 | 26 ×2 | 50 ×2 |
 | Groudon | 12 ×1 | 12 ×1 | 0 ×0 | 0 ×0 |
-| Rayquaza | 16 ×1 | 18 ×1 | 29 ×1 | 53 ×1 |
-| **Mediana de daño** | 16 | 18 | 34 | 63 |
+| Rayquaza | 16 ×1 | 18 ×1 | 19 ×1 | 36 ×1 |
+| **Mediana de daño** | 16 | 18 | 24 | 43 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Voltorb
@@ -84,33 +84,33 @@ Tipos: **Electric** · HP 115 · Atk 50 · Def 70 · SpA 75 · SpD 75 · Vel 120
 
 | Rival | Básica: Chispa<br>Electric · Fís · Pot 80 | Habilidad 1: Rollout<br>Normal · Fís · Pot 100 | Habilidad 2: Onda Trueno<br>Electric · Estado · Pot — | Definitiva: Explosión<br>Electric · Esp · Pot 200 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 18 ×½ | 31 ×1 | Estado | 55 ×½ |
-| Charmander | 40 ×1 | 34 ×1 | Estado | 135 ×1 |
-| Squirtle | 61 ×2 | 25 ×1 | Estado | 227 ×2 |
-| Pikachu | 21 ×½ | 36 ×1 | Estado | 67 ×½ |
-| Gengar | 34 ×1 | 0 ×0 | Estado | 99 ×1 |
-| Eevee | 37 ×1 | 31 ×1 | Estado | 111 ×1 |
-| Lucario | 29 ×1 | 12 ×½ | Estado | 105 ×1 |
-| Greninja | 61 ×2 | 25 ×1 | Estado | 208 ×2 |
-| Mewtwo | 25 ×1 | 20 ×1 | Estado | 87 ×1 |
-| Mew | 22 ×1 | 18 ×1 | Estado | 80 ×1 |
+| Bulbasaur | 12 ×½ | 30 ×1 | Estado | 38 ×½ |
+| Charmander | 27 ×1 | 33 ×1 | Estado | 92 ×1 |
+| Squirtle | 42 ×2 | 24 ×1 | Estado | 154 ×2 |
+| Pikachu | 14 ×½ | 35 ×1 | Estado | 46 ×½ |
+| Gengar | 23 ×1 | 0 ×0 | Estado | 68 ×1 |
+| Eevee | 25 ×1 | 30 ×1 | Estado | 76 ×1 |
+| Lucario | 19 ×1 | 12 ×½ | Estado | 72 ×1 |
+| Greninja | 42 ×2 | 24 ×1 | Estado | 142 ×2 |
+| Mewtwo | 16 ×1 | 20 ×1 | Estado | 59 ×1 |
+| Mew | 14 ×1 | 18 ×1 | Estado | 54 ×1 |
 | Onix | 0 ×0 | 6 ×½ | Estado (×0) | 0 ×0 |
-| Scyther | 51 ×2 | 22 ×1 | Estado | 190 ×2 |
-| Gyarados | 102 ×4 | 22 ×1 | Estado | 319 ×4 |
-| Tyranitar | 19 ×1 | 8 ×½ | Estado | 80 ×1 |
-| Articuno | 43 ×2 | 18 ×1 | Estado | 131 ×2 |
-| Zapdos | 25 ×1 | 20 ×1 | Estado | 87 ×1 |
-| Moltres | 49 ×2 | 20 ×1 | Estado | 180 ×2 |
-| Raikou | 13 ×½ | 23 ×1 | Estado | 40 ×½ |
-| Entei | 25 ×1 | 20 ×1 | Estado | 99 ×1 |
-| Suicune | 39 ×2 | 16 ×1 | Estado | 141 ×2 |
-| Lugia | 37 ×2 | 14 ×1 | Estado | 110 ×2 |
-| Ho-Oh | 49 ×2 | 20 ×1 | Estado | 110 ×2 |
-| Celebi | 10 ×½ | 18 ×1 | Estado | 40 ×½ |
-| Kyogre | 49 ×2 | 20 ×1 | Estado | 119 ×2 |
+| Scyther | 34 ×2 | 22 ×1 | Estado | 130 ×2 |
+| Gyarados | 68 ×4 | 22 ×1 | Estado | 216 ×4 |
+| Tyranitar | 13 ×1 | 8 ×½ | Estado | 54 ×1 |
+| Articuno | 28 ×2 | 18 ×1 | Estado | 90 ×2 |
+| Zapdos | 16 ×1 | 20 ×1 | Estado | 59 ×1 |
+| Moltres | 32 ×2 | 20 ×1 | Estado | 122 ×2 |
+| Raikou | 9 ×½ | 23 ×1 | Estado | 27 ×½ |
+| Entei | 16 ×1 | 20 ×1 | Estado | 68 ×1 |
+| Suicune | 26 ×2 | 16 ×1 | Estado | 96 ×2 |
+| Lugia | 24 ×2 | 14 ×1 | Estado | 74 ×2 |
+| Ho-Oh | 32 ×2 | 20 ×1 | Estado | 74 ×2 |
+| Celebi | 7 ×½ | 18 ×1 | Estado | 27 ×½ |
+| Kyogre | 32 ×2 | 20 ×1 | Estado | 80 ×2 |
 | Groudon | 0 ×0 | 13 ×1 | Estado (×0) | 0 ×0 |
-| Rayquaza | 25 ×1 | 20 ×1 | Estado | 87 ×1 |
-| **Mediana de daño** | 31 | 20 | — | 102 |
+| Rayquaza | 16 ×1 | 20 ×1 | Estado | 59 ×1 |
+| **Mediana de daño** | 21 | 20 | — | 70 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Gengar
@@ -119,33 +119,33 @@ Tipos: **Ghost / Poison** · HP 135 · Atk 85 · Def 80 · SpA 150 · SpD 95 · 
 
 | Rival | Básica: Lengüetazo<br>Ghost · Fís · Pot 42 | Habilidad 1: Bola Sombra<br>Ghost · Esp · Pot 62 | Habilidad 2: Bomba Lodo<br>Poison · Esp · Pot 20/s | Definitiva: Come Sueños<br>Ghost · Esp · Pot 80 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 34 ×1 | 70 ×1 | 49 ×1 | 90 ×1 |
-| Charmander | 37 ×1 | 84 ×1 | 64 ×1 | 108 ×1 |
-| Squirtle | 28 ×1 | 70 ×1 | 49 ×1 | 90 ×1 |
-| Pikachu | 38 ×1 | 84 ×1 | 64 ×1 | 108 ×1 |
-| Voltorb | 34 ×1 | 78 ×1 | 54 ×1 | 101 ×1 |
-| Eevee | 0 ×0 | 0 ×0 | 49 ×1 | 0 ×0 |
-| Lucario | 26 ×1 | 65 ×1 | 0 ×0 | 84 ×1 |
-| Greninja | 13 ×½ | 32 ×½ | 49 ×1 | 42 ×½ |
-| Mewtwo | 43 ×2 | 110 ×2 | 39 ×1 | 141 ×2 |
-| Mew | 39 ×2 | 100 ×2 | 34 ×1 | 129 ×2 |
-| Onix | 13 ×1 | 90 ×1 | 16 ×¼ | 116 ×1 |
-| Scyther | 23 ×1 | 58 ×1 | 39 ×1 | 75 ×1 |
-| Gyarados | 23 ×1 | 50 ×1 | 34 ×1 | 64 ×1 |
-| Tyranitar | 9 ×½ | 25 ×½ | 16 ×½ | 32 ×½ |
-| Articuno | 19 ×1 | 41 ×1 | 24 ×1 | 53 ×1 |
-| Zapdos | 22 ×1 | 55 ×1 | 39 ×1 | 70 ×1 |
-| Moltres | 22 ×1 | 56 ×1 | 39 ×1 | 74 ×1 |
-| Raikou | 25 ×1 | 50 ×1 | 34 ×1 | 64 ×1 |
-| Entei | 22 ×1 | 62 ×1 | 39 ×1 | 80 ×1 |
-| Suicune | 18 ×1 | 44 ×1 | 24 ×1 | 56 ×1 |
-| Lugia | 33 ×2 | 69 ×2 | 18 ×1 | 88 ×2 |
-| Ho-Oh | 22 ×1 | 35 ×1 | 18 ×1 | 44 ×1 |
-| Celebi | 39 ×2 | 100 ×2 | 67 ×2 | 129 ×2 |
-| Kyogre | 22 ×1 | 37 ×1 | 24 ×1 | 49 ×1 |
-| Groudon | 15 ×1 | 55 ×1 | 18 ×½ | 70 ×1 |
-| Rayquaza | 22 ×1 | 55 ×1 | 39 ×1 | 70 ×1 |
-| **Mediana de daño** | 22 | 57 | 39 | 74 |
+| Bulbasaur | 23 ×1 | 48 ×1 | 32 ×1 | 61 ×1 |
+| Charmander | 25 ×1 | 57 ×1 | 42 ×1 | 74 ×1 |
+| Squirtle | 18 ×1 | 48 ×1 | 32 ×1 | 61 ×1 |
+| Pikachu | 26 ×1 | 57 ×1 | 42 ×1 | 74 ×1 |
+| Voltorb | 23 ×1 | 53 ×1 | 37 ×1 | 69 ×1 |
+| Eevee | 0 ×0 | 0 ×0 | 32 ×1 | 0 ×0 |
+| Lucario | 17 ×1 | 45 ×1 | 0 ×0 | 57 ×1 |
+| Greninja | 9 ×½ | 22 ×½ | 32 ×1 | 28 ×½ |
+| Mewtwo | 28 ×2 | 74 ×2 | 27 ×1 | 96 ×2 |
+| Mew | 26 ×2 | 68 ×2 | 22 ×1 | 88 ×2 |
+| Onix | 9 ×1 | 61 ×1 | 10 ×¼ | 79 ×1 |
+| Scyther | 15 ×1 | 39 ×1 | 27 ×1 | 51 ×1 |
+| Gyarados | 15 ×1 | 34 ×1 | 22 ×1 | 44 ×1 |
+| Tyranitar | 6 ×½ | 17 ×½ | 11 ×½ | 22 ×½ |
+| Articuno | 13 ×1 | 28 ×1 | 17 ×1 | 36 ×1 |
+| Zapdos | 14 ×1 | 37 ×1 | 27 ×1 | 48 ×1 |
+| Moltres | 14 ×1 | 38 ×1 | 27 ×1 | 50 ×1 |
+| Raikou | 16 ×1 | 34 ×1 | 22 ×1 | 44 ×1 |
+| Entei | 14 ×1 | 43 ×1 | 27 ×1 | 54 ×1 |
+| Suicune | 12 ×1 | 30 ×1 | 17 ×1 | 38 ×1 |
+| Lugia | 22 ×2 | 48 ×2 | 12 ×1 | 60 ×2 |
+| Ho-Oh | 14 ×1 | 24 ×1 | 12 ×1 | 30 ×1 |
+| Celebi | 26 ×2 | 68 ×2 | 44 ×2 | 88 ×2 |
+| Kyogre | 14 ×1 | 25 ×1 | 17 ×1 | 33 ×1 |
+| Groudon | 10 ×1 | 37 ×1 | 11 ×½ | 48 ×1 |
+| Rayquaza | 14 ×1 | 37 ×1 | 27 ×1 | 48 ×1 |
+| **Mediana de daño** | 15 | 39 | 27 | 51 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Bulbasaur
@@ -154,33 +154,33 @@ Tipos: **Grass / Poison** · HP 120 · Atk 69 · Def 69 · SpA 85 · SpD 85 · V
 
 | Rival | Básica: Placaje<br>Normal · Fís · Pot 55 | Habilidad 1: Paralizador<br>Grass · Estado · Pot — | Habilidad 2: Hoja Afilada<br>Grass · Esp · Pot 100 | Definitiva: Lluevehojas<br>Grass · Esp · Pot 160 |
 | --- | ---: | ---: | ---: | ---: |
-| Charmander | 26 ×1 | Estado | 38 ×½ | 61 ×½ |
-| Squirtle | 19 ×1 | Estado | 129 ×2 | 204 ×2 |
-| Pikachu | 27 ×1 | Estado | 77 ×1 | 123 ×1 |
-| Gengar | 0 ×0 | Estado | 28 ×½ | 45 ×½ |
-| Voltorb | 23 ×1 | Estado | 71 ×1 | 113 ×1 |
-| Eevee | 23 ×1 | Estado | 64 ×1 | 101 ×1 |
-| Lucario | 9 ×½ | Estado | 30 ×½ | 47 ×½ |
-| Greninja | 19 ×1 | Estado | 119 ×2 | 186 ×2 |
-| Mewtwo | 15 ×1 | Estado | 50 ×1 | 78 ×1 |
-| Mew | 13 ×1 | Estado | 46 ×1 | 71 ×1 |
-| Onix | 5 ×½ | Estado | 331 ×4 | 527 ×4 |
-| Scyther | 16 ×1 | Estado | 13 ×¼ | 21 ×¼ |
-| Gyarados | 16 ×1 | Estado | 46 ×1 | 71 ×1 |
-| Tyranitar | 6 ×½ | Estado | 92 ×2 | 143 ×2 |
-| Articuno | 13 ×1 | Estado | 18 ×½ | 30 ×½ |
-| Zapdos | 15 ×1 | Estado | 25 ×½ | 39 ×½ |
-| Moltres | 15 ×1 | Estado | 12 ×¼ | 19 ×¼ |
-| Raikou | 17 ×1 | Estado | 46 ×1 | 71 ×1 |
-| Entei | 15 ×1 | Estado | 28 ×½ | 45 ×½ |
-| Suicune | 12 ×1 | Estado | 80 ×2 | 129 ×2 |
-| Lugia | 12 ×1 | Estado | 15 ×½ | 25 ×½ |
-| Ho-Oh | 15 ×1 | Estado | 7 ×¼ | 12 ×¼ |
-| Celebi | 13 ×1 | Estado | 22 ×½ | 36 ×½ |
-| Kyogre | 15 ×1 | Estado | 69 ×2 | 110 ×2 |
-| Groudon | 11 ×1 | Estado | 100 ×2 | 155 ×2 |
-| Rayquaza | 15 ×1 | Estado | 12 ×¼ | 19 ×¼ |
-| **Mediana de daño** | 15 | — | 46 | 71 |
+| Charmander | 25 ×1 | Estado | 26 ×½ | 42 ×½ |
+| Squirtle | 19 ×1 | Estado | 88 ×2 | 140 ×2 |
+| Pikachu | 26 ×1 | Estado | 52 ×1 | 84 ×1 |
+| Gengar | 0 ×0 | Estado | 19 ×½ | 30 ×½ |
+| Voltorb | 23 ×1 | Estado | 49 ×1 | 77 ×1 |
+| Eevee | 23 ×1 | Estado | 44 ×1 | 69 ×1 |
+| Lucario | 9 ×½ | Estado | 20 ×½ | 32 ×½ |
+| Greninja | 19 ×1 | Estado | 80 ×2 | 128 ×2 |
+| Mewtwo | 15 ×1 | Estado | 34 ×1 | 53 ×1 |
+| Mew | 13 ×1 | Estado | 31 ×1 | 49 ×1 |
+| Onix | 5 ×½ | Estado | 224 ×4 | 361 ×4 |
+| Scyther | 16 ×1 | Estado | 9 ×¼ | 14 ×¼ |
+| Gyarados | 16 ×1 | Estado | 31 ×1 | 49 ×1 |
+| Tyranitar | 6 ×½ | Estado | 62 ×2 | 98 ×2 |
+| Articuno | 13 ×1 | Estado | 12 ×½ | 20 ×½ |
+| Zapdos | 15 ×1 | Estado | 17 ×½ | 26 ×½ |
+| Moltres | 15 ×1 | Estado | 8 ×¼ | 13 ×¼ |
+| Raikou | 17 ×1 | Estado | 31 ×1 | 49 ×1 |
+| Entei | 15 ×1 | Estado | 19 ×½ | 30 ×½ |
+| Suicune | 12 ×1 | Estado | 54 ×2 | 88 ×2 |
+| Lugia | 12 ×1 | Estado | 11 ×½ | 17 ×½ |
+| Ho-Oh | 15 ×1 | Estado | 5 ×¼ | 8 ×¼ |
+| Celebi | 13 ×1 | Estado | 15 ×½ | 24 ×½ |
+| Kyogre | 15 ×1 | Estado | 48 ×2 | 74 ×2 |
+| Groudon | 11 ×1 | Estado | 68 ×2 | 106 ×2 |
+| Rayquaza | 15 ×1 | Estado | 8 ×¼ | 13 ×¼ |
+| **Mediana de daño** | 15 | — | 31 | 49 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Charmander
@@ -189,33 +189,33 @@ Tipos: **Fire** · HP 114 · Atk 72 · Def 63 · SpA 80 · SpD 70 · Vel 85
 
 | Rival | Básica: Arañazo<br>Normal · Fís · Pot 55 | Habilidad 1: Giro Fuego<br>Fire · Esp · Pot 40/s | Habilidad 2: Lanzallamas<br>Fire · Esp · Pot 100 | Definitiva: Anillo Ígneo<br>Fire · Esp · Pot 130 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 25 ×1 | 93 ×2 | 119 ×2 | 153 ×2 |
-| Squirtle | 20 ×1 | 21 ×½ | 30 ×½ | 39 ×½ |
-| Pikachu | 29 ×1 | 65 ×1 | 74 ×1 | 93 ×1 |
-| Gengar | 0 ×0 | 40 ×1 | 55 ×1 | 70 ×1 |
-| Voltorb | 25 ×1 | 58 ×1 | 67 ×1 | 89 ×1 |
-| Eevee | 25 ×1 | 46 ×1 | 59 ×1 | 77 ×1 |
-| Lucario | 9 ×½ | 93 ×2 | 112 ×2 | 147 ×2 |
-| Greninja | 20 ×1 | 21 ×½ | 28 ×½ | 37 ×½ |
-| Mewtwo | 15 ×1 | 40 ×1 | 47 ×1 | 59 ×1 |
-| Mew | 14 ×1 | 28 ×1 | 43 ×1 | 56 ×1 |
-| Onix | 5 ×½ | 32 ×½ | 39 ×½ | 50 ×½ |
-| Scyther | 17 ×1 | 80 ×2 | 104 ×2 | 131 ×2 |
-| Gyarados | 17 ×1 | 13 ×½ | 21 ×½ | 28 ×½ |
-| Tyranitar | 6 ×½ | 13 ×½ | 21 ×½ | 28 ×½ |
-| Articuno | 14 ×1 | 43 ×2 | 74 ×2 | 92 ×2 |
-| Zapdos | 16 ×1 | 40 ×1 | 47 ×1 | 59 ×1 |
-| Moltres | 15 ×1 | 19 ×½ | 25 ×½ | 31 ×½ |
-| Raikou | 18 ×1 | 28 ×1 | 43 ×1 | 56 ×1 |
-| Entei | 16 ×1 | 19 ×½ | 28 ×½ | 35 ×½ |
-| Suicune | 12 ×1 | 13 ×½ | 18 ×½ | 25 ×½ |
-| Lugia | 12 ×1 | 21 ×1 | 31 ×1 | 38 ×1 |
-| Ho-Oh | 15 ×1 | 8 ×½ | 15 ×½ | 18 ×½ |
-| Celebi | 14 ×1 | 56 ×2 | 86 ×2 | 112 ×2 |
-| Kyogre | 15 ×1 | 8 ×½ | 16 ×½ | 20 ×½ |
-| Groudon | 11 ×1 | 40 ×1 | 47 ×1 | 59 ×1 |
-| Rayquaza | 15 ×1 | 19 ×½ | 24 ×½ | 30 ×½ |
-| **Mediana de daño** | 15 | 30 | 43 | 56 |
+| Bulbasaur | 24 ×1 | 64 ×2 | 80 ×2 | 104 ×2 |
+| Squirtle | 20 ×1 | 13 ×½ | 20 ×½ | 26 ×½ |
+| Pikachu | 28 ×1 | 44 ×1 | 50 ×1 | 64 ×1 |
+| Gengar | 0 ×0 | 26 ×1 | 37 ×1 | 48 ×1 |
+| Voltorb | 24 ×1 | 38 ×1 | 46 ×1 | 60 ×1 |
+| Eevee | 24 ×1 | 32 ×1 | 40 ×1 | 52 ×1 |
+| Lucario | 9 ×½ | 64 ×2 | 76 ×2 | 100 ×2 |
+| Greninja | 20 ×1 | 13 ×½ | 19 ×½ | 25 ×½ |
+| Mewtwo | 15 ×1 | 26 ×1 | 32 ×1 | 40 ×1 |
+| Mew | 14 ×1 | 20 ×1 | 29 ×1 | 38 ×1 |
+| Onix | 5 ×½ | 19 ×½ | 26 ×½ | 34 ×½ |
+| Scyther | 17 ×1 | 52 ×2 | 70 ×2 | 90 ×2 |
+| Gyarados | 17 ×1 | 7 ×½ | 14 ×½ | 19 ×½ |
+| Tyranitar | 6 ×½ | 7 ×½ | 14 ×½ | 19 ×½ |
+| Articuno | 14 ×1 | 28 ×2 | 50 ×2 | 62 ×2 |
+| Zapdos | 16 ×1 | 26 ×1 | 32 ×1 | 40 ×1 |
+| Moltres | 15 ×1 | 13 ×½ | 16 ×½ | 21 ×½ |
+| Raikou | 18 ×1 | 20 ×1 | 29 ×1 | 38 ×1 |
+| Entei | 16 ×1 | 13 ×½ | 18 ×½ | 24 ×½ |
+| Suicune | 12 ×1 | 7 ×½ | 13 ×½ | 16 ×½ |
+| Lugia | 12 ×1 | 14 ×1 | 21 ×1 | 26 ×1 |
+| Ho-Oh | 15 ×1 | 7 ×½ | 10 ×½ | 13 ×½ |
+| Celebi | 14 ×1 | 40 ×2 | 58 ×2 | 76 ×2 |
+| Kyogre | 15 ×1 | 7 ×½ | 11 ×½ | 14 ×½ |
+| Groudon | 11 ×1 | 26 ×1 | 32 ×1 | 40 ×1 |
+| Rayquaza | 15 ×1 | 13 ×½ | 16 ×½ | 20 ×½ |
+| **Mediana de daño** | 15 | 20 | 29 | 38 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Squirtle
@@ -224,33 +224,33 @@ Tipos: **Water** · HP 119 · Atk 68 · Def 85 · SpA 70 · SpD 84 · Vel 63
 
 | Rival | Básica: Placaje<br>Normal · Fís · Pot 55 | Habilidad 1: Acua Jet<br>Water · Fís · Pot 65 | Habilidad 2: Rayo Burbuja<br>Water · Esp · Pot 80 | Definitiva: Hidrobomba<br>Water · Esp · Pot 140 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 23 ×1 | 20 ×½ | 20 ×½ | 37 ×½ |
-| Charmander | 26 ×1 | 88 ×2 | 104 ×2 | 178 ×2 |
-| Pikachu | 27 ×1 | 47 ×1 | 52 ×1 | 89 ×1 |
-| Gengar | 0 ×0 | 37 ×1 | 37 ×1 | 65 ×1 |
-| Voltorb | 23 ×1 | 40 ×1 | 47 ×1 | 83 ×1 |
-| Eevee | 23 ×1 | 40 ×1 | 41 ×1 | 74 ×1 |
-| Lucario | 9 ×½ | 32 ×1 | 40 ×1 | 68 ×1 |
-| Greninja | 18 ×1 | 16 ×½ | 19 ×½ | 34 ×½ |
-| Mewtwo | 14 ×1 | 26 ×1 | 34 ×1 | 56 ×1 |
-| Mew | 13 ×1 | 25 ×1 | 31 ×1 | 52 ×1 |
-| Onix | 5 ×½ | 65 ×4 | 220 ×4 | 380 ×4 |
-| Scyther | 16 ×1 | 29 ×1 | 37 ×1 | 62 ×1 |
-| Gyarados | 16 ×1 | 14 ×½ | 15 ×½ | 26 ×½ |
-| Tyranitar | 6 ×½ | 43 ×2 | 61 ×2 | 104 ×2 |
-| Articuno | 13 ×1 | 25 ×1 | 25 ×1 | 43 ×1 |
-| Zapdos | 15 ×1 | 28 ×1 | 34 ×1 | 56 ×1 |
-| Moltres | 14 ×1 | 51 ×2 | 69 ×2 | 119 ×2 |
-| Raikou | 17 ×1 | 31 ×1 | 31 ×1 | 52 ×1 |
-| Entei | 15 ×1 | 55 ×2 | 74 ×2 | 131 ×2 |
-| Suicune | 12 ×1 | 10 ×½ | 13 ×½ | 22 ×½ |
-| Lugia | 11 ×1 | 18 ×1 | 22 ×1 | 37 ×1 |
-| Ho-Oh | 14 ×1 | 51 ×2 | 43 ×2 | 74 ×2 |
-| Celebi | 13 ×1 | 12 ×½ | 15 ×½ | 26 ×½ |
-| Kyogre | 14 ×1 | 12 ×½ | 11 ×½ | 18 ×½ |
-| Groudon | 11 ×1 | 37 ×2 | 67 ×2 | 112 ×2 |
-| Rayquaza | 14 ×1 | 12 ×½ | 16 ×½ | 28 ×½ |
-| **Mediana de daño** | 14 | 30 | 35 | 59 |
+| Bulbasaur | 23 ×1 | 14 ×½ | 14 ×½ | 25 ×½ |
+| Charmander | 25 ×1 | 60 ×2 | 70 ×2 | 120 ×2 |
+| Pikachu | 26 ×1 | 32 ×1 | 35 ×1 | 60 ×1 |
+| Gengar | 0 ×0 | 25 ×1 | 25 ×1 | 45 ×1 |
+| Voltorb | 23 ×1 | 27 ×1 | 32 ×1 | 56 ×1 |
+| Eevee | 23 ×1 | 27 ×1 | 28 ×1 | 50 ×1 |
+| Lucario | 9 ×½ | 22 ×1 | 27 ×1 | 47 ×1 |
+| Greninja | 18 ×1 | 11 ×½ | 13 ×½ | 23 ×½ |
+| Mewtwo | 14 ×1 | 17 ×1 | 23 ×1 | 38 ×1 |
+| Mew | 13 ×1 | 16 ×1 | 21 ×1 | 35 ×1 |
+| Onix | 5 ×½ | 44 ×4 | 148 ×4 | 261 ×4 |
+| Scyther | 16 ×1 | 19 ×1 | 25 ×1 | 43 ×1 |
+| Gyarados | 16 ×1 | 9 ×½ | 10 ×½ | 17 ×½ |
+| Tyranitar | 6 ×½ | 28 ×2 | 42 ×2 | 70 ×2 |
+| Articuno | 13 ×1 | 16 ×1 | 16 ×1 | 29 ×1 |
+| Zapdos | 15 ×1 | 18 ×1 | 23 ×1 | 38 ×1 |
+| Moltres | 14 ×1 | 34 ×2 | 48 ×2 | 80 ×2 |
+| Raikou | 17 ×1 | 21 ×1 | 21 ×1 | 35 ×1 |
+| Entei | 15 ×1 | 36 ×2 | 50 ×2 | 90 ×2 |
+| Suicune | 12 ×1 | 7 ×½ | 9 ×½ | 15 ×½ |
+| Lugia | 11 ×1 | 12 ×1 | 14 ×1 | 25 ×1 |
+| Ho-Oh | 14 ×1 | 34 ×2 | 28 ×2 | 50 ×2 |
+| Celebi | 13 ×1 | 8 ×½ | 10 ×½ | 17 ×½ |
+| Kyogre | 14 ×1 | 8 ×½ | 7 ×½ | 13 ×½ |
+| Groudon | 11 ×1 | 24 ×2 | 46 ×2 | 76 ×2 |
+| Rayquaza | 14 ×1 | 8 ×½ | 11 ×½ | 19 ×½ |
+| **Mediana de daño** | 14 | 20 | 24 | 41 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Lucario
@@ -259,33 +259,33 @@ Tipos: **Fighting / Steel** · HP 145 · Atk 130 · Def 90 · SpA 135 · SpD 90 
 
 | Rival | Básica: Garra Metal<br>Steel · Fís · Pot 45 | Habilidad 1: Velocidad Extrema<br>Normal · Fís · Pot 55 | Habilidad 2: Esfera Aura<br>Fighting · Esp · Pot 60 | Definitiva: Combate Cercano<br>Fighting · Fís · Pot 125 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 55 ×1 | 44 ×1 | 30 ×½ | 74 ×½ |
-| Charmander | 29 ×½ | 48 ×1 | 74 ×1 | 162 ×1 |
-| Squirtle | 22 ×½ | 37 ×1 | 61 ×1 | 121 ×1 |
-| Pikachu | 31 ×½ | 50 ×1 | 74 ×1 | 170 ×1 |
-| Gengar | 47 ×1 | 0 ×0 | 0 ×0 | 0 ×0 |
-| Voltorb | 27 ×½ | 43 ×1 | 68 ×1 | 147 ×1 |
-| Eevee | 53 ×1 | 43 ×1 | 119 ×2 | 294 ×2 |
-| Greninja | 21 ×½ | 36 ×1 | 112 ×2 | 235 ×2 |
-| Mewtwo | 35 ×1 | 28 ×1 | 24 ×½ | 46 ×½ |
-| Mew | 32 ×1 | 26 ×1 | 21 ×½ | 43 ×½ |
-| Onix | 43 ×2 | 8 ×½ | 155 ×2 | 112 ×2 |
-| Scyther | 37 ×1 | 31 ×1 | 12 ×¼ | 26 ×¼ |
-| Gyarados | 18 ×½ | 31 ×1 | 21 ×½ | 52 ×½ |
-| Tyranitar | 57 ×2 | 12 ×½ | 172 ×4 | 319 ×4 |
-| Articuno | 63 ×2 | 26 ×1 | 37 ×1 | 86 ×1 |
-| Zapdos | 18 ×½ | 29 ×1 | 24 ×½ | 49 ×½ |
-| Moltres | 17 ×½ | 28 ×1 | 25 ×½ | 46 ×½ |
-| Raikou | 19 ×½ | 33 ×1 | 43 ×1 | 108 ×1 |
-| Entei | 18 ×½ | 29 ×1 | 55 ×1 | 98 ×1 |
-| Suicune | 14 ×½ | 23 ×1 | 38 ×1 | 75 ×1 |
-| Lugia | 26 ×1 | 20 ×1 | 7 ×¼ | 16 ×¼ |
-| Ho-Oh | 17 ×½ | 28 ×1 | 15 ×½ | 46 ×½ |
-| Celebi | 32 ×1 | 26 ×1 | 21 ×½ | 43 ×½ |
-| Kyogre | 17 ×½ | 28 ×1 | 34 ×1 | 93 ×1 |
-| Groudon | 25 ×1 | 19 ×1 | 47 ×1 | 64 ×1 |
-| Rayquaza | 35 ×1 | 28 ×1 | 24 ×½ | 46 ×½ |
-| **Mediana de daño** | 28 | 28 | 35 | 74 |
+| Bulbasaur | 37 ×1 | 43 ×1 | 20 ×½ | 50 ×½ |
+| Charmander | 19 ×½ | 47 ×1 | 50 ×1 | 111 ×1 |
+| Squirtle | 15 ×½ | 36 ×1 | 42 ×1 | 82 ×1 |
+| Pikachu | 21 ×½ | 49 ×1 | 50 ×1 | 116 ×1 |
+| Gengar | 32 ×1 | 0 ×0 | 0 ×0 | 0 ×0 |
+| Voltorb | 18 ×½ | 42 ×1 | 47 ×1 | 100 ×1 |
+| Eevee | 36 ×1 | 42 ×1 | 80 ×2 | 200 ×2 |
+| Greninja | 14 ×½ | 35 ×1 | 76 ×2 | 160 ×2 |
+| Mewtwo | 24 ×1 | 27 ×1 | 16 ×½ | 32 ×½ |
+| Mew | 22 ×1 | 25 ×1 | 14 ×½ | 29 ×½ |
+| Onix | 28 ×2 | 8 ×½ | 106 ×2 | 76 ×2 |
+| Scyther | 25 ×1 | 30 ×1 | 8 ×¼ | 17 ×¼ |
+| Gyarados | 13 ×½ | 30 ×1 | 14 ×½ | 35 ×½ |
+| Tyranitar | 38 ×2 | 12 ×½ | 116 ×4 | 216 ×4 |
+| Articuno | 44 ×2 | 25 ×1 | 25 ×1 | 58 ×1 |
+| Zapdos | 12 ×½ | 28 ×1 | 16 ×½ | 33 ×½ |
+| Moltres | 12 ×½ | 27 ×1 | 16 ×½ | 32 ×½ |
+| Raikou | 13 ×½ | 32 ×1 | 29 ×1 | 74 ×1 |
+| Entei | 12 ×½ | 28 ×1 | 37 ×1 | 67 ×1 |
+| Suicune | 9 ×½ | 23 ×1 | 26 ×1 | 51 ×1 |
+| Lugia | 17 ×1 | 20 ×1 | 5 ×¼ | 11 ×¼ |
+| Ho-Oh | 12 ×½ | 27 ×1 | 10 ×½ | 32 ×½ |
+| Celebi | 22 ×1 | 25 ×1 | 14 ×½ | 29 ×½ |
+| Kyogre | 12 ×½ | 27 ×1 | 23 ×1 | 64 ×1 |
+| Groudon | 16 ×1 | 19 ×1 | 32 ×1 | 44 ×1 |
+| Rayquaza | 24 ×1 | 27 ×1 | 16 ×½ | 32 ×½ |
+| **Mediana de daño** | 19 | 27 | 24 | 51 |
 | **Efectividad mediana** | ×0.75 | ×1 | ×1 | ×1 |
 
 ## Greninja
@@ -294,33 +294,33 @@ Tipos: **Water / Dark** · HP 147 · Atk 115 · Def 87 · SpA 123 · SpD 91 · V
 
 | Rival | Básica: Shuriken de Agua<br>Water · Esp · Pot 42 | Habilidad 1: Tajo Umbrío<br>Dark · Fís · Pot 65 | Habilidad 2: Sombra Vil<br>Dark · Fís · Pot 50 | Definitiva: Pulso Umbrío<br>Dark · Esp · Pot 85 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 18 ×½ | 68 ×1 | 53 ×1 | 78 ×1 |
-| Charmander | 94 ×2 | 75 ×1 | 58 ×1 | 93 ×1 |
-| Squirtle | 19 ×½ | 56 ×1 | 43 ×1 | 78 ×1 |
-| Pikachu | 47 ×1 | 78 ×1 | 61 ×1 | 93 ×1 |
-| Gengar | 35 ×1 | 119 ×2 | 92 ×2 | 141 ×2 |
-| Voltorb | 44 ×1 | 67 ×1 | 53 ×1 | 89 ×1 |
-| Eevee | 38 ×1 | 67 ×1 | 53 ×1 | 78 ×1 |
-| Lucario | 37 ×1 | 27 ×½ | 20 ×½ | 37 ×½ |
-| Mewtwo | 31 ×1 | 86 ×2 | 69 ×2 | 119 ×2 |
-| Mew | 28 ×1 | 80 ×2 | 63 ×2 | 112 ×2 |
-| Onix | 200 ×4 | 28 ×1 | 22 ×1 | 101 ×1 |
-| Scyther | 34 ×1 | 47 ×1 | 37 ×1 | 67 ×1 |
-| Gyarados | 13 ×½ | 49 ×1 | 37 ×1 | 56 ×1 |
-| Tyranitar | 55 ×2 | 18 ×½ | 14 ×½ | 28 ×½ |
-| Articuno | 23 ×1 | 40 ×1 | 32 ×1 | 46 ×1 |
-| Zapdos | 31 ×1 | 46 ×1 | 37 ×1 | 59 ×1 |
-| Moltres | 63 ×2 | 43 ×1 | 35 ×1 | 62 ×1 |
-| Raikou | 28 ×1 | 50 ×1 | 38 ×1 | 56 ×1 |
-| Entei | 69 ×2 | 46 ×1 | 37 ×1 | 70 ×1 |
-| Suicune | 12 ×½ | 37 ×1 | 28 ×1 | 50 ×1 |
-| Lugia | 19 ×1 | 63 ×2 | 49 ×2 | 76 ×2 |
-| Ho-Oh | 39 ×2 | 43 ×1 | 35 ×1 | 38 ×1 |
-| Celebi | 13 ×½ | 80 ×2 | 63 ×2 | 112 ×2 |
-| Kyogre | 10 ×½ | 43 ×1 | 35 ×1 | 41 ×1 |
-| Groudon | 61 ×2 | 31 ×1 | 23 ×1 | 59 ×1 |
-| Rayquaza | 15 ×½ | 43 ×1 | 35 ×1 | 59 ×1 |
-| **Mediana de daño** | 32 | 48 | 37 | 69 |
+| Bulbasaur | 13 ×½ | 47 ×1 | 36 ×1 | 53 ×1 |
+| Charmander | 64 ×2 | 51 ×1 | 39 ×1 | 64 ×1 |
+| Squirtle | 13 ×½ | 38 ×1 | 29 ×1 | 53 ×1 |
+| Pikachu | 32 ×1 | 53 ×1 | 42 ×1 | 64 ×1 |
+| Gengar | 24 ×1 | 80 ×2 | 62 ×2 | 96 ×2 |
+| Voltorb | 30 ×1 | 46 ×1 | 36 ×1 | 60 ×1 |
+| Eevee | 26 ×1 | 46 ×1 | 36 ×1 | 53 ×1 |
+| Lucario | 25 ×1 | 18 ×½ | 14 ×½ | 25 ×½ |
+| Mewtwo | 21 ×1 | 58 ×2 | 48 ×2 | 80 ×2 |
+| Mew | 18 ×1 | 54 ×2 | 44 ×2 | 76 ×2 |
+| Onix | 136 ×4 | 18 ×1 | 14 ×1 | 69 ×1 |
+| Scyther | 23 ×1 | 32 ×1 | 25 ×1 | 46 ×1 |
+| Gyarados | 9 ×½ | 33 ×1 | 25 ×1 | 38 ×1 |
+| Tyranitar | 36 ×2 | 12 ×½ | 9 ×½ | 19 ×½ |
+| Articuno | 15 ×1 | 27 ×1 | 22 ×1 | 31 ×1 |
+| Zapdos | 21 ×1 | 31 ×1 | 25 ×1 | 40 ×1 |
+| Moltres | 44 ×2 | 29 ×1 | 24 ×1 | 43 ×1 |
+| Raikou | 18 ×1 | 34 ×1 | 26 ×1 | 38 ×1 |
+| Entei | 48 ×2 | 31 ×1 | 25 ×1 | 48 ×1 |
+| Suicune | 8 ×½ | 25 ×1 | 18 ×1 | 34 ×1 |
+| Lugia | 13 ×1 | 44 ×2 | 32 ×2 | 52 ×2 |
+| Ho-Oh | 26 ×2 | 29 ×1 | 24 ×1 | 26 ×1 |
+| Celebi | 9 ×½ | 54 ×2 | 44 ×2 | 76 ×2 |
+| Kyogre | 7 ×½ | 29 ×1 | 24 ×1 | 28 ×1 |
+| Groudon | 42 ×2 | 21 ×1 | 15 ×1 | 40 ×1 |
+| Rayquaza | 10 ×½ | 29 ×1 | 24 ×1 | 40 ×1 |
+| **Mediana de daño** | 22 | 33 | 25 | 47 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Articuno
@@ -329,33 +329,33 @@ Tipos: **Ice / Flying** · HP 165 · Atk 105 · Def 120 · SpA 115 · SpD 145 ·
 
 | Rival | Básica: Golpe Ala<br>Flying · Fís · Pot 55 | Habilidad 1: Rayo Hielo<br>Ice · Esp · Pot 90 | Habilidad 2: Viento Gélido<br>Ice · Esp · Pot 55 | Definitiva: Ventisca<br>Ice · Esp · Pot 100 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 106 ×2 | 153 ×2 | 94 ×2 | 172 ×2 |
-| Charmander | 58 ×1 | 46 ×½ | 28 ×½ | 52 ×½ |
-| Squirtle | 43 ×1 | 39 ×½ | 25 ×½ | 43 ×½ |
-| Pikachu | 31 ×½ | 93 ×1 | 56 ×1 | 104 ×1 |
-| Gengar | 46 ×1 | 68 ×1 | 43 ×1 | 77 ×1 |
-| Voltorb | 27 ×½ | 87 ×1 | 55 ×1 | 96 ×1 |
-| Eevee | 53 ×1 | 77 ×1 | 47 ×1 | 86 ×1 |
-| Lucario | 41 ×1 | 37 ×½ | 22 ×½ | 40 ×½ |
-| Greninja | 43 ×1 | 37 ×½ | 22 ×½ | 40 ×½ |
-| Mewtwo | 35 ×1 | 59 ×1 | 37 ×1 | 67 ×1 |
-| Mew | 32 ×1 | 55 ×1 | 35 ×1 | 61 ×1 |
-| Onix | 10 ×½ | 202 ×2 | 123 ×2 | 223 ×2 |
-| Scyther | 74 ×2 | 131 ×2 | 80 ×2 | 147 ×2 |
-| Gyarados | 37 ×1 | 55 ×1 | 35 ×1 | 61 ×1 |
-| Tyranitar | 14 ×½ | 55 ×1 | 35 ×1 | 61 ×1 |
-| Zapdos | 18 ×½ | 119 ×2 | 74 ×2 | 135 ×2 |
-| Moltres | 35 ×1 | 62 ×1 | 38 ×1 | 70 ×1 |
-| Raikou | 18 ×½ | 55 ×1 | 35 ×1 | 61 ×1 |
-| Entei | 37 ×1 | 34 ×½ | 21 ×½ | 38 ×½ |
-| Suicune | 28 ×1 | 25 ×½ | 15 ×½ | 28 ×½ |
-| Lugia | 25 ×1 | 76 ×2 | 45 ×2 | 86 ×2 |
-| Ho-Oh | 35 ×1 | 38 ×1 | 23 ×1 | 43 ×1 |
-| Celebi | 63 ×2 | 110 ×2 | 69 ×2 | 123 ×2 |
-| Kyogre | 35 ×1 | 20 ×½ | 12 ×½ | 22 ×½ |
-| Groudon | 23 ×1 | 119 ×2 | 74 ×2 | 135 ×2 |
-| Rayquaza | 35 ×1 | 237 ×4 | 147 ×4 | 270 ×4 |
-| **Mediana de daño** | 35 | 61 | 37 | 69 |
+| Bulbasaur | 72 ×2 | 104 ×2 | 64 ×2 | 116 ×2 |
+| Charmander | 39 ×1 | 32 ×½ | 19 ×½ | 35 ×½ |
+| Squirtle | 29 ×1 | 26 ×½ | 16 ×½ | 29 ×½ |
+| Pikachu | 21 ×½ | 64 ×1 | 38 ×1 | 71 ×1 |
+| Gengar | 31 ×1 | 47 ×1 | 29 ×1 | 52 ×1 |
+| Voltorb | 18 ×½ | 59 ×1 | 37 ×1 | 66 ×1 |
+| Eevee | 36 ×1 | 52 ×1 | 32 ×1 | 58 ×1 |
+| Lucario | 28 ×1 | 25 ×½ | 15 ×½ | 27 ×½ |
+| Greninja | 29 ×1 | 25 ×½ | 15 ×½ | 27 ×½ |
+| Mewtwo | 24 ×1 | 40 ×1 | 25 ×1 | 46 ×1 |
+| Mew | 22 ×1 | 37 ×1 | 24 ×1 | 42 ×1 |
+| Onix | 7 ×½ | 138 ×2 | 84 ×2 | 152 ×2 |
+| Scyther | 50 ×2 | 90 ×2 | 54 ×2 | 100 ×2 |
+| Gyarados | 25 ×1 | 37 ×1 | 24 ×1 | 42 ×1 |
+| Tyranitar | 9 ×½ | 37 ×1 | 24 ×1 | 42 ×1 |
+| Zapdos | 12 ×½ | 80 ×2 | 50 ×2 | 92 ×2 |
+| Moltres | 24 ×1 | 43 ×1 | 26 ×1 | 48 ×1 |
+| Raikou | 13 ×½ | 37 ×1 | 24 ×1 | 42 ×1 |
+| Entei | 25 ×1 | 23 ×½ | 14 ×½ | 26 ×½ |
+| Suicune | 18 ×1 | 16 ×½ | 10 ×½ | 18 ×½ |
+| Lugia | 16 ×1 | 52 ×2 | 30 ×2 | 58 ×2 |
+| Ho-Oh | 24 ×1 | 26 ×1 | 15 ×1 | 29 ×1 |
+| Celebi | 44 ×2 | 74 ×2 | 48 ×2 | 84 ×2 |
+| Kyogre | 24 ×1 | 14 ×½ | 8 ×½ | 15 ×½ |
+| Groudon | 15 ×1 | 80 ×2 | 50 ×2 | 92 ×2 |
+| Rayquaza | 24 ×1 | 161 ×4 | 100 ×4 | 184 ×4 |
+| **Mediana de daño** | 24 | 42 | 26 | 47 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Zapdos
@@ -364,33 +364,33 @@ Tipos: **Electric / Flying** · HP 165 · Atk 110 · Def 105 · SpA 145 · SpD 1
 
 | Rival | Básica: Pico Taladro<br>Flying · Fís · Pot 60 | Habilidad 1: Onda Trueno<br>Electric · Estado · Pot — | Habilidad 2: Descarga<br>Electric · Esp · Pot 75 | Definitiva: Trueno<br>Electric · Esp · Pot 145 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 123 ×2 | Estado | 40 ×½ | 77 ×½ |
-| Charmander | 67 ×1 | Estado | 98 ×1 | 188 ×1 |
-| Squirtle | 50 ×1 | Estado | 161 ×2 | 315 ×2 |
-| Pikachu | 35 ×½ | Estado | 49 ×½ | 94 ×½ |
-| Gengar | 53 ×1 | Estado | 74 ×1 | 139 ×1 |
-| Voltorb | 30 ×½ | Estado | 46 ×½ | 88 ×½ |
-| Eevee | 59 ×1 | Estado | 81 ×1 | 154 ×1 |
-| Lucario | 47 ×1 | Estado | 77 ×1 | 147 ×1 |
-| Greninja | 49 ×1 | Estado | 149 ×2 | 290 ×2 |
-| Mewtwo | 38 ×1 | Estado | 62 ×1 | 121 ×1 |
-| Mew | 37 ×1 | Estado | 56 ×1 | 111 ×1 |
-| Onix | 12 ×½ | Estado (×0) | 0 ×0 | 0 ×0 |
-| Scyther | 86 ×2 | Estado | 137 ×2 | 264 ×2 |
-| Gyarados | 43 ×1 | Estado | 225 ×4 | 445 ×4 |
-| Tyranitar | 16 ×½ | Estado | 56 ×1 | 111 ×1 |
-| Articuno | 37 ×1 | Estado | 98 ×2 | 184 ×2 |
-| Moltres | 38 ×1 | Estado | 131 ×2 | 253 ×2 |
-| Raikou | 22 ×½ | Estado | 28 ×½ | 55 ×½ |
-| Entei | 40 ×1 | Estado | 74 ×1 | 139 ×1 |
-| Suicune | 32 ×1 | Estado | 104 ×2 | 196 ×2 |
-| Lugia | 29 ×1 | Estado | 80 ×2 | 153 ×2 |
-| Ho-Oh | 38 ×1 | Estado | 80 ×2 | 153 ×2 |
-| Celebi | 74 ×2 | Estado | 28 ×½ | 55 ×½ |
-| Kyogre | 38 ×1 | Estado | 86 ×2 | 165 ×2 |
-| Groudon | 28 ×1 | Estado (×0) | 0 ×0 | 0 ×0 |
-| Rayquaza | 38 ×1 | Estado | 62 ×1 | 121 ×1 |
-| **Mediana de daño** | 38 | — | 75 | 143 |
+| Bulbasaur | 84 ×2 | Estado | 27 ×½ | 53 ×½ |
+| Charmander | 46 ×1 | Estado | 67 ×1 | 129 ×1 |
+| Squirtle | 34 ×1 | Estado | 110 ×2 | 216 ×2 |
+| Pikachu | 24 ×½ | Estado | 33 ×½ | 64 ×½ |
+| Gengar | 36 ×1 | Estado | 50 ×1 | 95 ×1 |
+| Voltorb | 20 ×½ | Estado | 31 ×½ | 60 ×½ |
+| Eevee | 40 ×1 | Estado | 55 ×1 | 106 ×1 |
+| Lucario | 32 ×1 | Estado | 52 ×1 | 100 ×1 |
+| Greninja | 33 ×1 | Estado | 102 ×2 | 198 ×2 |
+| Mewtwo | 26 ×1 | Estado | 43 ×1 | 82 ×1 |
+| Mew | 25 ×1 | Estado | 38 ×1 | 76 ×1 |
+| Onix | 8 ×½ | Estado (×0) | 0 ×0 | 0 ×0 |
+| Scyther | 58 ×2 | Estado | 94 ×2 | 180 ×2 |
+| Gyarados | 29 ×1 | Estado | 152 ×4 | 304 ×4 |
+| Tyranitar | 11 ×½ | Estado | 38 ×1 | 76 ×1 |
+| Articuno | 25 ×1 | Estado | 66 ×2 | 126 ×2 |
+| Moltres | 26 ×1 | Estado | 90 ×2 | 174 ×2 |
+| Raikou | 15 ×½ | Estado | 19 ×½ | 38 ×½ |
+| Entei | 27 ×1 | Estado | 50 ×1 | 95 ×1 |
+| Suicune | 22 ×1 | Estado | 70 ×2 | 134 ×2 |
+| Lugia | 19 ×1 | Estado | 54 ×2 | 104 ×2 |
+| Ho-Oh | 26 ×1 | Estado | 54 ×2 | 104 ×2 |
+| Celebi | 50 ×2 | Estado | 19 ×½ | 38 ×½ |
+| Kyogre | 26 ×1 | Estado | 58 ×2 | 112 ×2 |
+| Groudon | 18 ×1 | Estado (×0) | 0 ×0 | 0 ×0 |
+| Rayquaza | 26 ×1 | Estado | 43 ×1 | 82 ×1 |
+| **Mediana de daño** | 26 | — | 51 | 98 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Moltres
@@ -399,33 +399,33 @@ Tipos: **Fire / Flying** · HP 165 · Atk 120 · Def 110 · SpA 145 · SpD 105 �
 
 | Rival | Básica: Ataque Aéreo<br>Flying · Fís · Pot 55 | Habilidad 1: Tajo Aéreo<br>Flying · Esp · Pot 65 | Habilidad 2: Onda Ígnea<br>Fire · Esp · Pot 60 | Definitiva: Ataque Celeste<br>Flying · Fís · Pot 115 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 123 ×2 | 141 ×2 | 131 ×2 | 253 ×2 |
-| Charmander | 67 ×1 | 86 ×1 | 39 ×½ | 138 ×1 |
-| Squirtle | 50 ×1 | 71 ×1 | 33 ×½ | 102 ×1 |
-| Pikachu | 35 ×½ | 43 ×½ | 78 ×1 | 72 ×½ |
-| Gengar | 53 ×1 | 62 ×1 | 58 ×1 | 108 ×1 |
-| Voltorb | 30 ×½ | 40 ×½ | 75 ×1 | 61 ×½ |
-| Eevee | 59 ×1 | 70 ×1 | 65 ×1 | 124 ×1 |
-| Lucario | 47 ×1 | 67 ×1 | 123 ×2 | 96 ×1 |
-| Greninja | 49 ×1 | 65 ×1 | 31 ×½ | 99 ×1 |
-| Mewtwo | 38 ×1 | 55 ×1 | 50 ×1 | 80 ×1 |
-| Mew | 37 ×1 | 50 ×1 | 46 ×1 | 74 ×1 |
-| Onix | 12 ×½ | 46 ×½ | 42 ×½ | 25 ×½ |
-| Scyther | 86 ×2 | 119 ×2 | 112 ×2 | 174 ×2 |
-| Gyarados | 43 ×1 | 50 ×1 | 22 ×½ | 89 ×1 |
-| Tyranitar | 16 ×½ | 25 ×½ | 22 ×½ | 34 ×½ |
-| Articuno | 37 ×1 | 41 ×1 | 76 ×2 | 74 ×1 |
-| Zapdos | 19 ×½ | 28 ×½ | 50 ×1 | 41 ×½ |
-| Raikou | 22 ×½ | 25 ×½ | 46 ×1 | 46 ×½ |
-| Entei | 40 ×1 | 62 ×1 | 29 ×½ | 83 ×1 |
-| Suicune | 32 ×1 | 44 ×1 | 20 ×½ | 64 ×1 |
-| Lugia | 29 ×1 | 35 ×1 | 34 ×1 | 58 ×1 |
-| Ho-Oh | 38 ×1 | 35 ×1 | 16 ×½ | 80 ×1 |
-| Celebi | 74 ×2 | 100 ×2 | 92 ×2 | 147 ×2 |
-| Kyogre | 38 ×1 | 37 ×1 | 17 ×½ | 80 ×1 |
-| Groudon | 28 ×1 | 55 ×1 | 50 ×1 | 55 ×1 |
-| Rayquaza | 38 ×1 | 55 ×1 | 25 ×½ | 80 ×1 |
-| **Mediana de daño** | 38 | 53 | 46 | 80 |
+| Bulbasaur | 84 ×2 | 96 ×2 | 90 ×2 | 174 ×2 |
+| Charmander | 46 ×1 | 58 ×1 | 26 ×½ | 94 ×1 |
+| Squirtle | 34 ×1 | 49 ×1 | 22 ×½ | 70 ×1 |
+| Pikachu | 24 ×½ | 29 ×½ | 53 ×1 | 49 ×½ |
+| Gengar | 36 ×1 | 43 ×1 | 39 ×1 | 74 ×1 |
+| Voltorb | 20 ×½ | 27 ×½ | 51 ×1 | 42 ×½ |
+| Eevee | 40 ×1 | 48 ×1 | 45 ×1 | 85 ×1 |
+| Lucario | 32 ×1 | 46 ×1 | 84 ×2 | 66 ×1 |
+| Greninja | 33 ×1 | 45 ×1 | 21 ×½ | 68 ×1 |
+| Mewtwo | 26 ×1 | 37 ×1 | 34 ×1 | 54 ×1 |
+| Mew | 25 ×1 | 34 ×1 | 31 ×1 | 50 ×1 |
+| Onix | 8 ×½ | 31 ×½ | 28 ×½ | 16 ×½ |
+| Scyther | 58 ×2 | 80 ×2 | 76 ×2 | 118 ×2 |
+| Gyarados | 29 ×1 | 34 ×1 | 15 ×½ | 60 ×1 |
+| Tyranitar | 11 ×½ | 17 ×½ | 15 ×½ | 23 ×½ |
+| Articuno | 25 ×1 | 28 ×1 | 52 ×2 | 50 ×1 |
+| Zapdos | 13 ×½ | 18 ×½ | 34 ×1 | 28 ×½ |
+| Raikou | 15 ×½ | 17 ×½ | 31 ×1 | 31 ×½ |
+| Entei | 27 ×1 | 43 ×1 | 19 ×½ | 56 ×1 |
+| Suicune | 22 ×1 | 30 ×1 | 14 ×½ | 44 ×1 |
+| Lugia | 19 ×1 | 24 ×1 | 23 ×1 | 39 ×1 |
+| Ho-Oh | 26 ×1 | 24 ×1 | 11 ×½ | 54 ×1 |
+| Celebi | 50 ×2 | 68 ×2 | 62 ×2 | 100 ×2 |
+| Kyogre | 26 ×1 | 25 ×1 | 12 ×½ | 54 ×1 |
+| Groudon | 18 ×1 | 37 ×1 | 34 ×1 | 37 ×1 |
+| Rayquaza | 26 ×1 | 37 ×1 | 17 ×½ | 54 ×1 |
+| **Mediana de daño** | 26 | 36 | 31 | 54 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Mewtwo
@@ -434,33 +434,33 @@ Tipos: **Psychic** · HP 181 · Atk 130 · Def 110 · SpA 174 · SpD 110 · Vel 
 
 | Rival | Básica: Telequinesis<br>Psychic · Esp · Pot 45 | Habilidad 1: Teletransporte<br>Psychic · Estado · Pot — | Habilidad 2: Psíquico<br>Psychic · Esp · Pot 80 | Definitiva: Psicoataque<br>Psychic · Esp · Pot 100 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 117 ×2 | Estado | 208 ×2 | 259 ×2 |
-| Charmander | 71 ×1 | Estado | 126 ×1 | 156 ×1 |
-| Squirtle | 59 ×1 | Estado | 104 ×1 | 132 ×1 |
-| Pikachu | 71 ×1 | Estado | 126 ×1 | 156 ×1 |
-| Gengar | 106 ×2 | Estado | 186 ×2 | 229 ×2 |
-| Voltorb | 65 ×1 | Estado | 116 ×1 | 147 ×1 |
-| Eevee | 58 ×1 | Estado | 104 ×1 | 130 ×1 |
-| Lucario | 56 ×1 | Estado | 98 ×1 | 123 ×1 |
+| Bulbasaur | 78 ×2 | Estado | 142 ×2 | 178 ×2 |
+| Charmander | 49 ×1 | Estado | 86 ×1 | 107 ×1 |
+| Squirtle | 40 ×1 | Estado | 71 ×1 | 90 ×1 |
+| Pikachu | 49 ×1 | Estado | 86 ×1 | 107 ×1 |
+| Gengar | 72 ×2 | Estado | 128 ×2 | 156 ×2 |
+| Voltorb | 45 ×1 | Estado | 79 ×1 | 100 ×1 |
+| Eevee | 39 ×1 | Estado | 71 ×1 | 89 ×1 |
+| Lucario | 38 ×1 | Estado | 67 ×1 | 84 ×1 |
 | Greninja | 0 ×0 | Estado (×0) | 0 ×0 | 0 ×0 |
-| Mew | 20 ×½ | Estado | 37 ×½ | 46 ×½ |
-| Onix | 77 ×1 | Estado | 135 ×1 | 168 ×1 |
-| Scyther | 50 ×1 | Estado | 89 ×1 | 110 ×1 |
-| Gyarados | 41 ×1 | Estado | 75 ×1 | 92 ×1 |
+| Mew | 14 ×½ | Estado | 25 ×½ | 31 ×½ |
+| Onix | 52 ×1 | Estado | 92 ×1 | 115 ×1 |
+| Scyther | 34 ×1 | Estado | 60 ×1 | 75 ×1 |
+| Gyarados | 28 ×1 | Estado | 51 ×1 | 63 ×1 |
 | Tyranitar | 0 ×0 | Estado (×0) | 0 ×0 | 0 ×0 |
-| Articuno | 35 ×1 | Estado | 61 ×1 | 75 ×1 |
-| Zapdos | 46 ×1 | Estado | 80 ×1 | 99 ×1 |
-| Moltres | 47 ×1 | Estado | 84 ×1 | 104 ×1 |
-| Raikou | 41 ×1 | Estado | 75 ×1 | 92 ×1 |
-| Entei | 53 ×1 | Estado | 93 ×1 | 114 ×1 |
-| Suicune | 37 ×1 | Estado | 65 ×1 | 81 ×1 |
-| Lugia | 14 ×½ | Estado | 26 ×½ | 32 ×½ |
-| Ho-Oh | 29 ×1 | Estado | 52 ×1 | 64 ×1 |
-| Celebi | 20 ×½ | Estado | 37 ×½ | 46 ×½ |
-| Kyogre | 32 ×1 | Estado | 56 ×1 | 68 ×1 |
-| Groudon | 46 ×1 | Estado | 80 ×1 | 99 ×1 |
-| Rayquaza | 46 ×1 | Estado | 80 ×1 | 99 ×1 |
-| **Mediana de daño** | 46 | — | 80 | 99 |
+| Articuno | 24 ×1 | Estado | 42 ×1 | 51 ×1 |
+| Zapdos | 31 ×1 | Estado | 54 ×1 | 68 ×1 |
+| Moltres | 32 ×1 | Estado | 57 ×1 | 71 ×1 |
+| Raikou | 28 ×1 | Estado | 51 ×1 | 63 ×1 |
+| Entei | 36 ×1 | Estado | 64 ×1 | 78 ×1 |
+| Suicune | 25 ×1 | Estado | 45 ×1 | 55 ×1 |
+| Lugia | 9 ×½ | Estado | 17 ×½ | 22 ×½ |
+| Ho-Oh | 19 ×1 | Estado | 35 ×1 | 44 ×1 |
+| Celebi | 14 ×½ | Estado | 25 ×½ | 31 ×½ |
+| Kyogre | 22 ×1 | Estado | 38 ×1 | 47 ×1 |
+| Groudon | 31 ×1 | Estado | 54 ×1 | 68 ×1 |
+| Rayquaza | 31 ×1 | Estado | 54 ×1 | 68 ×1 |
+| **Mediana de daño** | 31 | — | 54 | 68 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Mew
@@ -469,33 +469,33 @@ Tipos: **Psychic** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120 · Vel 
 
 | Rival | Básica: Golpe Psíquico<br>Psychic · Esp · Pot 45 | Habilidad 1: Agilidad<br>Psychic · Estado · Pot — | Habilidad 2: Premonición<br>Psychic · Esp · Pot 85 | Definitiva: Recuperación<br>Psychic · Estado · Pot — |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 80 ×2 | Estado | 149 ×2 | Estado |
-| Charmander | 49 ×1 | Estado | 93 ×1 | Estado |
-| Squirtle | 41 ×1 | Estado | 77 ×1 | Estado |
-| Pikachu | 49 ×1 | Estado | 93 ×1 | Estado |
-| Gengar | 74 ×2 | Estado | 137 ×2 | Estado |
-| Voltorb | 46 ×1 | Estado | 86 ×1 | Estado |
-| Eevee | 40 ×1 | Estado | 75 ×1 | Estado |
-| Lucario | 38 ×1 | Estado | 71 ×1 | Estado |
+| Bulbasaur | 54 ×2 | Estado | 102 ×2 | Estado |
+| Charmander | 33 ×1 | Estado | 64 ×1 | Estado |
+| Squirtle | 28 ×1 | Estado | 52 ×1 | Estado |
+| Pikachu | 33 ×1 | Estado | 64 ×1 | Estado |
+| Gengar | 50 ×2 | Estado | 94 ×2 | Estado |
+| Voltorb | 31 ×1 | Estado | 58 ×1 | Estado |
+| Eevee | 27 ×1 | Estado | 51 ×1 | Estado |
+| Lucario | 26 ×1 | Estado | 49 ×1 | Estado |
 | Greninja | 0 ×0 | Estado (×0) | 0 ×0 | Estado (×0) |
-| Mewtwo | 15 ×½ | Estado | 29 ×½ | Estado |
-| Onix | 53 ×1 | Estado | 99 ×1 | Estado |
-| Scyther | 35 ×1 | Estado | 64 ×1 | Estado |
-| Gyarados | 29 ×1 | Estado | 55 ×1 | Estado |
+| Mewtwo | 11 ×½ | Estado | 19 ×½ | Estado |
+| Onix | 36 ×1 | Estado | 68 ×1 | Estado |
+| Scyther | 24 ×1 | Estado | 44 ×1 | Estado |
+| Gyarados | 19 ×1 | Estado | 37 ×1 | Estado |
 | Tyranitar | 0 ×0 | Estado (×0) | 0 ×0 | Estado (×0) |
-| Articuno | 25 ×1 | Estado | 44 ×1 | Estado |
-| Zapdos | 32 ×1 | Estado | 58 ×1 | Estado |
-| Moltres | 34 ×1 | Estado | 61 ×1 | Estado |
-| Raikou | 29 ×1 | Estado | 55 ×1 | Estado |
-| Entei | 37 ×1 | Estado | 68 ×1 | Estado |
-| Suicune | 26 ×1 | Estado | 49 ×1 | Estado |
-| Lugia | 9 ×½ | Estado | 18 ×½ | Estado |
-| Ho-Oh | 19 ×1 | Estado | 37 ×1 | Estado |
-| Celebi | 14 ×½ | Estado | 28 ×½ | Estado |
-| Kyogre | 22 ×1 | Estado | 41 ×1 | Estado |
-| Groudon | 32 ×1 | Estado | 58 ×1 | Estado |
-| Rayquaza | 32 ×1 | Estado | 58 ×1 | Estado |
-| **Mediana de daño** | 32 | — | 58 | — |
+| Articuno | 16 ×1 | Estado | 30 ×1 | Estado |
+| Zapdos | 22 ×1 | Estado | 39 ×1 | Estado |
+| Moltres | 23 ×1 | Estado | 42 ×1 | Estado |
+| Raikou | 19 ×1 | Estado | 37 ×1 | Estado |
+| Entei | 25 ×1 | Estado | 47 ×1 | Estado |
+| Suicune | 17 ×1 | Estado | 33 ×1 | Estado |
+| Lugia | 6 ×½ | Estado | 12 ×½ | Estado |
+| Ho-Oh | 13 ×1 | Estado | 25 ×1 | Estado |
+| Celebi | 9 ×½ | Estado | 18 ×½ | Estado |
+| Kyogre | 14 ×1 | Estado | 28 ×1 | Estado |
+| Groudon | 22 ×1 | Estado | 39 ×1 | Estado |
+| Rayquaza | 22 ×1 | Estado | 39 ×1 | Estado |
+| **Mediana de daño** | 22 | — | 39 | — |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Scyther
@@ -504,33 +504,33 @@ Tipos: **Bug / Flying** · HP 145 · Atk 130 · Def 100 · SpA 75 · SpD 100 · 
 
 | Rival | Básica: Golpe Furia<br>Bug · Fís · Pot 45 | Habilidad 1: Corte Aéreo<br>Flying · Fís · Pot 60 | Habilidad 2: Danza Espada<br>Normal · Estado · Pot — | Definitiva: Tijera X<br>Bug · Fís · Pot 130 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 55 ×1 | 143 ×2 | Estado | 153 ×1 |
-| Charmander | 29 ×½ | 78 ×1 | Estado | 85 ×½ |
-| Squirtle | 44 ×1 | 58 ×1 | Estado | 126 ×1 |
-| Pikachu | 61 ×1 | 41 ×½ | Estado | 176 ×1 |
-| Gengar | 11 ×¼ | 61 ×1 | Estado (×0) | 33 ×¼ |
-| Voltorb | 53 ×1 | 36 ×½ | Estado | 151 ×1 |
-| Eevee | 53 ×1 | 71 ×1 | Estado | 151 ×1 |
-| Lucario | 10 ×¼ | 56 ×1 | Estado | 29 ×¼ |
-| Greninja | 86 ×2 | 56 ×1 | Estado | 245 ×2 |
-| Mewtwo | 69 ×2 | 46 ×1 | Estado | 192 ×2 |
-| Mew | 63 ×2 | 41 ×1 | Estado | 178 ×2 |
-| Onix | 22 ×1 | 14 ×½ | Estado | 59 ×1 |
-| Gyarados | 18 ×½ | 50 ×1 | Estado | 54 ×½ |
-| Tyranitar | 57 ×2 | 18 ×½ | Estado | 165 ×2 |
-| Articuno | 15 ×½ | 41 ×1 | Estado | 44 ×½ |
-| Zapdos | 18 ×½ | 24 ×½ | Estado | 50 ×½ |
-| Moltres | 8 ×¼ | 46 ×1 | Estado | 24 ×¼ |
-| Raikou | 40 ×1 | 27 ×½ | Estado | 113 ×1 |
-| Entei | 18 ×½ | 47 ×1 | Estado | 50 ×½ |
-| Suicune | 29 ×1 | 37 ×1 | Estado | 80 ×1 |
-| Lugia | 26 ×1 | 34 ×1 | Estado | 71 ×1 |
-| Ho-Oh | 8 ×¼ | 46 ×1 | Estado | 24 ×¼ |
-| Celebi | 127 ×4 | 82 ×2 | Estado | 355 ×4 |
-| Kyogre | 35 ×1 | 46 ×1 | Estado | 96 ×1 |
-| Groudon | 25 ×1 | 32 ×1 | Estado | 67 ×1 |
-| Rayquaza | 17 ×½ | 46 ×1 | Estado | 48 ×½ |
-| **Mediana de daño** | 29 | 46 | — | 82 |
+| Bulbasaur | 37 ×1 | 98 ×2 | Estado | 105 ×1 |
+| Charmander | 19 ×½ | 53 ×1 | Estado | 58 ×½ |
+| Squirtle | 30 ×1 | 39 ×1 | Estado | 86 ×1 |
+| Pikachu | 42 ×1 | 28 ×½ | Estado | 120 ×1 |
+| Gengar | 8 ×¼ | 42 ×1 | Estado (×0) | 22 ×¼ |
+| Voltorb | 36 ×1 | 24 ×½ | Estado | 103 ×1 |
+| Eevee | 36 ×1 | 49 ×1 | Estado | 103 ×1 |
+| Lucario | 7 ×¼ | 38 ×1 | Estado | 20 ×¼ |
+| Greninja | 58 ×2 | 38 ×1 | Estado | 168 ×2 |
+| Mewtwo | 48 ×2 | 31 ×1 | Estado | 132 ×2 |
+| Mew | 44 ×2 | 28 ×1 | Estado | 120 ×2 |
+| Onix | 14 ×1 | 9 ×½ | Estado | 40 ×1 |
+| Gyarados | 13 ×½ | 34 ×1 | Estado | 37 ×½ |
+| Tyranitar | 38 ×2 | 13 ×½ | Estado | 112 ×2 |
+| Articuno | 11 ×½ | 28 ×1 | Estado | 30 ×½ |
+| Zapdos | 12 ×½ | 16 ×½ | Estado | 34 ×½ |
+| Moltres | 6 ×¼ | 31 ×1 | Estado | 16 ×¼ |
+| Raikou | 27 ×1 | 18 ×½ | Estado | 77 ×1 |
+| Entei | 12 ×½ | 32 ×1 | Estado | 34 ×½ |
+| Suicune | 19 ×1 | 25 ×1 | Estado | 54 ×1 |
+| Lugia | 17 ×1 | 23 ×1 | Estado | 49 ×1 |
+| Ho-Oh | 6 ×¼ | 31 ×1 | Estado | 16 ×¼ |
+| Celebi | 88 ×4 | 56 ×2 | Estado | 241 ×4 |
+| Kyogre | 24 ×1 | 31 ×1 | Estado | 66 ×1 |
+| Groudon | 16 ×1 | 22 ×1 | Estado | 46 ×1 |
+| Rayquaza | 12 ×½ | 31 ×1 | Estado | 33 ×½ |
+| **Mediana de daño** | 19 | 31 | — | 56 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Tyranitar
@@ -539,33 +539,33 @@ Tipos: **Rock / Dark** · HP 175 · Atk 154 · Def 130 · SpA 115 · SpD 120 · 
 
 | Rival | Básica: Triturar<br>Dark · Fís · Pot 50 | Habilidad 1: Avalancha<br>Rock · Fís · Pot 55 | Habilidad 2: Terremoto<br>Ground · Fís · Pot 18/s | Definitiva: Roca Afilada<br>Rock · Fís · Pot 90 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 71 ×1 | 39 ×½ | 38 ×1 | 63 ×½ |
-| Charmander | 77 ×1 | 172 ×2 | 86 ×2 | 276 ×2 |
-| Squirtle | 56 ×1 | 62 ×1 | 33 ×1 | 102 ×1 |
-| Pikachu | 81 ×1 | 90 ×1 | 96 ×2 | 145 ×1 |
-| Gengar | 123 ×2 | 34 ×½ | 65 ×2 | 55 ×½ |
-| Voltorb | 70 ×1 | 77 ×1 | 76 ×2 | 126 ×1 |
-| Eevee | 70 ×1 | 77 ×1 | 38 ×1 | 126 ×1 |
-| Lucario | 28 ×½ | 14 ×¼ | 55 ×2 | 24 ×¼ |
-| Greninja | 28 ×½ | 61 ×1 | 33 ×1 | 101 ×1 |
-| Mewtwo | 88 ×2 | 49 ×1 | 22 ×1 | 80 ×1 |
-| Mew | 82 ×2 | 46 ×1 | 22 ×1 | 74 ×1 |
-| Onix | 28 ×1 | 15 ×½ | 25 ×2 | 25 ×½ |
-| Scyther | 49 ×1 | 220 ×4 | 0 ×0 | 347 ×4 |
-| Gyarados | 50 ×1 | 110 ×2 | 0 ×0 | 178 ×2 |
-| Articuno | 41 ×1 | 184 ×4 | 0 ×0 | 294 ×4 |
-| Zapdos | 47 ×1 | 104 ×2 | 0 ×0 | 168 ×2 |
-| Moltres | 44 ×1 | 196 ×4 | 0 ×0 | 319 ×4 |
-| Raikou | 52 ×1 | 56 ×1 | 55 ×2 | 93 ×1 |
-| Entei | 47 ×1 | 104 ×2 | 45 ×2 | 168 ×2 |
-| Suicune | 37 ×1 | 40 ×1 | 17 ×1 | 65 ×1 |
-| Lugia | 67 ×2 | 74 ×2 | 0 ×0 | 117 ×2 |
-| Ho-Oh | 44 ×1 | 196 ×4 | 0 ×0 | 319 ×4 |
-| Celebi | 82 ×2 | 46 ×1 | 11 ×½ | 74 ×1 |
-| Kyogre | 44 ×1 | 49 ×1 | 22 ×1 | 80 ×1 |
-| Groudon | 32 ×1 | 17 ×½ | 12 ×1 | 28 ×½ |
-| Rayquaza | 44 ×1 | 98 ×2 | 0 ×0 | 159 ×2 |
-| **Mediana de daño** | 50 | 68 | 22 | 109 |
+| Bulbasaur | 49 ×1 | 26 ×½ | 37 ×1 | 43 ×½ |
+| Charmander | 52 ×1 | 116 ×2 | 84 ×2 | 188 ×2 |
+| Squirtle | 38 ×1 | 43 ×1 | 32 ×1 | 70 ×1 |
+| Pikachu | 55 ×1 | 61 ×1 | 94 ×2 | 99 ×1 |
+| Gengar | 84 ×2 | 23 ×½ | 64 ×2 | 37 ×½ |
+| Voltorb | 48 ×1 | 52 ×1 | 74 ×2 | 86 ×1 |
+| Eevee | 48 ×1 | 52 ×1 | 37 ×1 | 86 ×1 |
+| Lucario | 18 ×½ | 10 ×¼ | 54 ×2 | 16 ×¼ |
+| Greninja | 19 ×½ | 42 ×1 | 32 ×1 | 69 ×1 |
+| Mewtwo | 60 ×2 | 33 ×1 | 22 ×1 | 54 ×1 |
+| Mew | 56 ×2 | 31 ×1 | 22 ×1 | 50 ×1 |
+| Onix | 18 ×1 | 10 ×½ | 24 ×2 | 16 ×½ |
+| Scyther | 33 ×1 | 148 ×4 | 0 ×0 | 237 ×4 |
+| Gyarados | 34 ×1 | 74 ×2 | 0 ×0 | 120 ×2 |
+| Articuno | 28 ×1 | 124 ×4 | 0 ×0 | 200 ×4 |
+| Zapdos | 32 ×1 | 70 ×2 | 0 ×0 | 114 ×2 |
+| Moltres | 30 ×1 | 132 ×4 | 0 ×0 | 216 ×4 |
+| Raikou | 35 ×1 | 38 ×1 | 54 ×2 | 64 ×1 |
+| Entei | 32 ×1 | 70 ×2 | 44 ×2 | 114 ×2 |
+| Suicune | 25 ×1 | 27 ×1 | 17 ×1 | 45 ×1 |
+| Lugia | 46 ×2 | 50 ×2 | 0 ×0 | 78 ×2 |
+| Ho-Oh | 30 ×1 | 132 ×4 | 0 ×0 | 216 ×4 |
+| Celebi | 56 ×2 | 31 ×1 | 11 ×½ | 50 ×1 |
+| Kyogre | 30 ×1 | 33 ×1 | 22 ×1 | 54 ×1 |
+| Groudon | 22 ×1 | 12 ×½ | 12 ×1 | 19 ×½ |
+| Rayquaza | 30 ×1 | 66 ×2 | 0 ×0 | 108 ×2 |
+| **Mediana de daño** | 34 | 47 | 22 | 74 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Onix
@@ -574,33 +574,33 @@ Tipos: **Rock / Ground** · HP 110 · Atk 65 · Def 180 · SpA 50 · SpD 65 · V
 
 | Rival | Básica: Atadura<br>Rock · Fís · Pot 65 | Habilidad 1: Lanzarrocas<br>Rock · Fís · Pot 85 | Habilidad 2: Excavar<br>Ground · Fís · Pot 85 | Definitiva: Fisura<br>Ground · Fís · Pot 155 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 18 ×½ | 26 ×½ | 52 ×1 | 93 ×1 |
-| Charmander | 86 ×2 | 112 ×2 | 112 ×2 | 202 ×2 |
-| Squirtle | 32 ×1 | 41 ×1 | 41 ×1 | 75 ×1 |
-| Pikachu | 44 ×1 | 58 ×1 | 117 ×2 | 210 ×2 |
-| Gengar | 17 ×½ | 22 ×½ | 88 ×2 | 159 ×2 |
-| Voltorb | 38 ×1 | 50 ×1 | 100 ×2 | 184 ×2 |
-| Eevee | 38 ×1 | 50 ×1 | 50 ×1 | 92 ×1 |
-| Lucario | 7 ×¼ | 9 ×¼ | 80 ×2 | 143 ×2 |
-| Greninja | 32 ×1 | 40 ×1 | 40 ×1 | 74 ×1 |
-| Mewtwo | 25 ×1 | 34 ×1 | 34 ×1 | 58 ×1 |
-| Mew | 23 ×1 | 31 ×1 | 31 ×1 | 53 ×1 |
-| Scyther | 110 ×4 | 147 ×4 | 0 ×0 | 0 ×0 |
-| Gyarados | 55 ×2 | 74 ×2 | 0 ×0 | 0 ×0 |
-| Tyranitar | 22 ×1 | 28 ×1 | 55 ×2 | 100 ×2 |
-| Articuno | 90 ×4 | 123 ×4 | 0 ×0 | 0 ×0 |
-| Zapdos | 51 ×2 | 69 ×2 | 0 ×0 | 0 ×0 |
-| Moltres | 98 ×4 | 135 ×4 | 0 ×0 | 0 ×0 |
-| Raikou | 29 ×1 | 37 ×1 | 74 ×2 | 135 ×2 |
-| Entei | 51 ×2 | 69 ×2 | 69 ×2 | 123 ×2 |
-| Suicune | 19 ×1 | 28 ×1 | 28 ×1 | 47 ×1 |
-| Lugia | 37 ×2 | 49 ×2 | 0 ×0 | 0 ×0 |
-| Ho-Oh | 98 ×4 | 135 ×4 | 0 ×0 | 0 ×0 |
-| Celebi | 23 ×1 | 31 ×1 | 15 ×½ | 27 ×½ |
-| Kyogre | 25 ×1 | 34 ×1 | 34 ×1 | 58 ×1 |
-| Groudon | 9 ×½ | 11 ×½ | 23 ×1 | 40 ×1 |
-| Rayquaza | 49 ×2 | 67 ×2 | 0 ×0 | 0 ×0 |
-| **Mediana de daño** | 34 | 45 | 34 | 58 |
+| Bulbasaur | 13 ×½ | 17 ×½ | 35 ×1 | 64 ×1 |
+| Charmander | 58 ×2 | 76 ×2 | 76 ×2 | 138 ×2 |
+| Squirtle | 22 ×1 | 28 ×1 | 28 ×1 | 51 ×1 |
+| Pikachu | 30 ×1 | 39 ×1 | 78 ×2 | 144 ×2 |
+| Gengar | 12 ×½ | 15 ×½ | 60 ×2 | 108 ×2 |
+| Voltorb | 26 ×1 | 34 ×1 | 68 ×2 | 126 ×2 |
+| Eevee | 26 ×1 | 34 ×1 | 34 ×1 | 63 ×1 |
+| Lucario | 5 ×¼ | 6 ×¼ | 54 ×2 | 98 ×2 |
+| Greninja | 22 ×1 | 27 ×1 | 27 ×1 | 50 ×1 |
+| Mewtwo | 16 ×1 | 23 ×1 | 23 ×1 | 39 ×1 |
+| Mew | 15 ×1 | 21 ×1 | 21 ×1 | 36 ×1 |
+| Scyther | 72 ×4 | 100 ×4 | 0 ×0 | 0 ×0 |
+| Gyarados | 36 ×2 | 50 ×2 | 0 ×0 | 0 ×0 |
+| Tyranitar | 14 ×1 | 18 ×1 | 36 ×2 | 68 ×2 |
+| Articuno | 60 ×4 | 84 ×4 | 0 ×0 | 0 ×0 |
+| Zapdos | 34 ×2 | 48 ×2 | 0 ×0 | 0 ×0 |
+| Moltres | 64 ×4 | 92 ×4 | 0 ×0 | 0 ×0 |
+| Raikou | 19 ×1 | 25 ×1 | 50 ×2 | 92 ×2 |
+| Entei | 34 ×2 | 48 ×2 | 48 ×2 | 84 ×2 |
+| Suicune | 13 ×1 | 18 ×1 | 18 ×1 | 32 ×1 |
+| Lugia | 24 ×2 | 32 ×2 | 0 ×0 | 0 ×0 |
+| Ho-Oh | 64 ×4 | 92 ×4 | 0 ×0 | 0 ×0 |
+| Celebi | 15 ×1 | 21 ×1 | 10 ×½ | 18 ×½ |
+| Kyogre | 16 ×1 | 23 ×1 | 23 ×1 | 39 ×1 |
+| Groudon | 6 ×½ | 7 ×½ | 15 ×1 | 27 ×1 |
+| Rayquaza | 32 ×2 | 46 ×2 | 0 ×0 | 0 ×0 |
+| **Mediana de daño** | 23 | 30 | 23 | 39 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Groudon
@@ -609,33 +609,33 @@ Tipos: **Ground** · HP 175 · Atk 170 · Def 160 · SpA 120 · SpD 110 · Vel 1
 
 | Rival | Básica: Cuchillada<br>Normal · Fís · Pot 45 | Habilidad 1: Terremoto<br>Ground · Fís · Pot 18/s | Habilidad 2: Avalancha<br>Rock · Fís · Pot 55 | Definitiva: Filo del Abismo<br>Ground · Fís · Pot 100 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 47 ×1 | 64 ×1 | 29 ×½ | 154 ×1 |
-| Charmander | 51 ×1 | 139 ×2 | 125 ×2 | 339 ×2 |
-| Squirtle | 38 ×1 | 49 ×1 | 47 ×1 | 127 ×1 |
-| Pikachu | 54 ×1 | 159 ×2 | 65 ×1 | 355 ×2 |
-| Gengar | 0 ×0 | 109 ×2 | 25 ×½ | 266 ×2 |
-| Voltorb | 47 ×1 | 129 ×2 | 56 ×1 | 302 ×2 |
-| Eevee | 47 ×1 | 64 ×1 | 56 ×1 | 151 ×1 |
-| Lucario | 18 ×½ | 98 ×2 | 10 ×¼ | 239 ×2 |
-| Greninja | 38 ×1 | 49 ×1 | 46 ×1 | 123 ×1 |
-| Mewtwo | 30 ×1 | 39 ×1 | 37 ×1 | 98 ×1 |
-| Mew | 28 ×1 | 34 ×1 | 34 ×1 | 90 ×1 |
-| Onix | 9 ×½ | 37 ×2 | 11 ×½ | 119 ×2 |
-| Scyther | 33 ×1 | 0 ×0 | 159 ×4 | 0 ×0 |
-| Gyarados | 34 ×1 | 0 ×0 | 80 ×2 | 0 ×0 |
-| Tyranitar | 12 ×½ | 67 ×2 | 31 ×1 | 165 ×2 |
-| Articuno | 28 ×1 | 0 ×0 | 135 ×4 | 0 ×0 |
-| Zapdos | 32 ×1 | 0 ×0 | 76 ×2 | 0 ×0 |
-| Moltres | 30 ×1 | 0 ×0 | 147 ×4 | 0 ×0 |
-| Raikou | 35 ×1 | 98 ×2 | 42 ×1 | 227 ×2 |
-| Entei | 32 ×1 | 78 ×2 | 76 ×2 | 204 ×2 |
-| Suicune | 25 ×1 | 24 ×1 | 30 ×1 | 80 ×1 |
-| Lugia | 22 ×1 | 0 ×0 | 53 ×2 | 0 ×0 |
-| Ho-Oh | 30 ×1 | 0 ×0 | 147 ×4 | 0 ×0 |
-| Celebi | 28 ×1 | 16 ×½ | 34 ×1 | 45 ×½ |
-| Kyogre | 30 ×1 | 39 ×1 | 37 ×1 | 98 ×1 |
-| Rayquaza | 30 ×1 | 0 ×0 | 73 ×2 | 0 ×0 |
-| **Mediana de daño** | 30 | 39 | 50 | 108 |
+| Bulbasaur | 46 ×1 | 42 ×1 | 28 ×½ | 106 ×1 |
+| Charmander | 50 ×1 | 94 ×2 | 122 ×2 | 232 ×2 |
+| Squirtle | 37 ×1 | 32 ×1 | 46 ×1 | 87 ×1 |
+| Pikachu | 53 ×1 | 104 ×2 | 64 ×1 | 243 ×2 |
+| Gengar | 0 ×0 | 74 ×2 | 24 ×½ | 182 ×2 |
+| Voltorb | 46 ×1 | 84 ×2 | 55 ×1 | 207 ×2 |
+| Eevee | 46 ×1 | 42 ×1 | 55 ×1 | 103 ×1 |
+| Lucario | 18 ×½ | 64 ×2 | 10 ×¼ | 162 ×2 |
+| Greninja | 37 ×1 | 32 ×1 | 45 ×1 | 84 ×1 |
+| Mewtwo | 29 ×1 | 27 ×1 | 36 ×1 | 67 ×1 |
+| Mew | 27 ×1 | 22 ×1 | 33 ×1 | 61 ×1 |
+| Onix | 9 ×½ | 24 ×2 | 11 ×½ | 80 ×2 |
+| Scyther | 32 ×1 | 0 ×0 | 156 ×4 | 0 ×0 |
+| Gyarados | 33 ×1 | 0 ×0 | 78 ×2 | 0 ×0 |
+| Tyranitar | 12 ×½ | 44 ×2 | 30 ×1 | 112 ×2 |
+| Articuno | 27 ×1 | 0 ×0 | 132 ×4 | 0 ×0 |
+| Zapdos | 31 ×1 | 0 ×0 | 74 ×2 | 0 ×0 |
+| Moltres | 29 ×1 | 0 ×0 | 144 ×4 | 0 ×0 |
+| Raikou | 34 ×1 | 64 ×2 | 41 ×1 | 154 ×2 |
+| Entei | 31 ×1 | 54 ×2 | 74 ×2 | 140 ×2 |
+| Suicune | 24 ×1 | 17 ×1 | 29 ×1 | 54 ×1 |
+| Lugia | 22 ×1 | 0 ×0 | 52 ×2 | 0 ×0 |
+| Ho-Oh | 29 ×1 | 0 ×0 | 144 ×4 | 0 ×0 |
+| Celebi | 27 ×1 | 11 ×½ | 33 ×1 | 30 ×½ |
+| Kyogre | 29 ×1 | 27 ×1 | 36 ×1 | 67 ×1 |
+| Rayquaza | 29 ×1 | 0 ×0 | 72 ×2 | 0 ×0 |
+| **Mediana de daño** | 29 | 27 | 49 | 74 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Celebi
@@ -644,33 +644,33 @@ Tipos: **Psychic / Grass** · HP 175 · Atk 120 · Def 120 · SpA 120 · SpD 120
 
 | Rival | Básica: Hoja Mágica<br>Grass · Esp · Pot 45 | Habilidad 1: Rayo Solar<br>Grass · Esp · Pot 85 | Habilidad 2: Deseo<br>Psychic · Estado · Pot — | Definitiva: Futuro Siniestro<br>Psychic · Esp · Pot 105 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 9 ×¼ | 18 ×¼ | Estado | 186 ×2 |
-| Charmander | 25 ×½ | 46 ×½ | Estado | 113 ×1 |
-| Squirtle | 82 ×2 | 153 ×2 | Estado | 95 ×1 |
-| Pikachu | 49 ×1 | 93 ×1 | Estado | 113 ×1 |
-| Gengar | 18 ×½ | 34 ×½ | Estado | 168 ×2 |
-| Voltorb | 46 ×1 | 86 ×1 | Estado | 105 ×1 |
-| Eevee | 40 ×1 | 75 ×1 | Estado | 93 ×1 |
-| Lucario | 18 ×½ | 36 ×½ | Estado | 89 ×1 |
-| Greninja | 76 ×2 | 143 ×2 | Estado (×0) | 0 ×0 |
-| Mewtwo | 32 ×1 | 58 ×1 | Estado | 37 ×½ |
-| Mew | 29 ×1 | 55 ×1 | Estado | 34 ×½ |
-| Onix | 212 ×4 | 396 ×4 | Estado | 123 ×1 |
-| Scyther | 8 ×¼ | 15 ×¼ | Estado | 80 ×1 |
-| Gyarados | 29 ×1 | 55 ×1 | Estado | 67 ×1 |
-| Tyranitar | 57 ×2 | 110 ×2 | Estado (×0) | 0 ×0 |
-| Articuno | 12 ×½ | 22 ×½ | Estado | 56 ×1 |
-| Zapdos | 15 ×½ | 29 ×½ | Estado | 74 ×1 |
-| Moltres | 8 ×¼ | 15 ×¼ | Estado | 75 ×1 |
-| Raikou | 29 ×1 | 55 ×1 | Estado | 67 ×1 |
-| Entei | 18 ×½ | 34 ×½ | Estado | 84 ×1 |
-| Suicune | 51 ×2 | 98 ×2 | Estado | 59 ×1 |
-| Lugia | 9 ×½ | 18 ×½ | Estado | 22 ×½ |
-| Ho-Oh | 4 ×¼ | 9 ×¼ | Estado | 46 ×1 |
-| Kyogre | 43 ×2 | 82 ×2 | Estado | 50 ×1 |
-| Groudon | 63 ×2 | 117 ×2 | Estado | 74 ×1 |
-| Rayquaza | 7 ×¼ | 14 ×¼ | Estado | 74 ×1 |
-| **Mediana de daño** | 29 | 55 | — | 74 |
+| Bulbasaur | 6 ×¼ | 12 ×¼ | Estado | 128 ×2 |
+| Charmander | 16 ×½ | 32 ×½ | Estado | 77 ×1 |
+| Squirtle | 56 ×2 | 104 ×2 | Estado | 65 ×1 |
+| Pikachu | 33 ×1 | 64 ×1 | Estado | 77 ×1 |
+| Gengar | 12 ×½ | 23 ×½ | Estado | 114 ×2 |
+| Voltorb | 31 ×1 | 58 ×1 | Estado | 72 ×1 |
+| Eevee | 27 ×1 | 51 ×1 | Estado | 64 ×1 |
+| Lucario | 13 ×½ | 24 ×½ | Estado | 60 ×1 |
+| Greninja | 52 ×2 | 98 ×2 | Estado (×0) | 0 ×0 |
+| Mewtwo | 22 ×1 | 39 ×1 | Estado | 25 ×½ |
+| Mew | 19 ×1 | 37 ×1 | Estado | 23 ×½ |
+| Onix | 144 ×4 | 273 ×4 | Estado | 84 ×1 |
+| Scyther | 6 ×¼ | 11 ×¼ | Estado | 54 ×1 |
+| Gyarados | 19 ×1 | 37 ×1 | Estado | 46 ×1 |
+| Tyranitar | 38 ×2 | 74 ×2 | Estado (×0) | 0 ×0 |
+| Articuno | 8 ×½ | 15 ×½ | Estado | 38 ×1 |
+| Zapdos | 11 ×½ | 19 ×½ | Estado | 50 ×1 |
+| Moltres | 5 ×¼ | 10 ×¼ | Estado | 51 ×1 |
+| Raikou | 19 ×1 | 37 ×1 | Estado | 46 ×1 |
+| Entei | 12 ×½ | 23 ×½ | Estado | 57 ×1 |
+| Suicune | 34 ×2 | 66 ×2 | Estado | 40 ×1 |
+| Lugia | 6 ×½ | 12 ×½ | Estado | 15 ×½ |
+| Ho-Oh | 3 ×¼ | 6 ×¼ | Estado | 31 ×1 |
+| Kyogre | 28 ×2 | 56 ×2 | Estado | 34 ×1 |
+| Groudon | 44 ×2 | 78 ×2 | Estado | 50 ×1 |
+| Rayquaza | 5 ×¼ | 9 ×¼ | Estado | 50 ×1 |
+| **Mediana de daño** | 19 | 37 | — | 50 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Lugia
@@ -679,33 +679,33 @@ Tipos: **Psychic / Flying** · HP 181 · Atk 110 · Def 150 · SpA 110 · SpD 17
 
 | Rival | Básica: Onda Mental<br>Psychic · Esp · Pot 50 | Habilidad 1: Marea<br>Water · Esp · Pot 30/s | Habilidad 2: Ciclón<br>Flying · Esp · Pot 45/s | Definitiva: Aerochorro<br>Flying · Esp · Pot 120 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 82 ×2 | 16 ×½ | 168 ×2 | 196 ×2 |
-| Charmander | 50 ×1 | 96 ×2 | 100 ×1 | 117 ×1 |
-| Squirtle | 41 ×1 | 16 ×½ | 84 ×1 | 99 ×1 |
-| Pikachu | 50 ×1 | 48 ×1 | 48 ×½ | 58 ×½ |
-| Gengar | 74 ×2 | 33 ×1 | 79 ×1 | 89 ×1 |
-| Voltorb | 47 ×1 | 43 ×1 | 47 ×½ | 55 ×½ |
-| Eevee | 41 ×1 | 38 ×1 | 84 ×1 | 98 ×1 |
-| Lucario | 38 ×1 | 38 ×1 | 84 ×1 | 93 ×1 |
-| Greninja | 0 ×0 | 16 ×½ | 79 ×1 | 92 ×1 |
-| Mewtwo | 16 ×½ | 28 ×1 | 64 ×1 | 75 ×1 |
-| Mew | 15 ×½ | 28 ×1 | 64 ×1 | 70 ×1 |
-| Onix | 55 ×1 | 212 ×4 | 53 ×½ | 64 ×½ |
-| Scyther | 37 ×1 | 33 ×1 | 139 ×2 | 168 ×2 |
-| Gyarados | 31 ×1 | 11 ×½ | 64 ×1 | 70 ×1 |
-| Tyranitar | 0 ×0 | 55 ×2 | 32 ×½ | 35 ×½ |
-| Articuno | 25 ×1 | 22 ×1 | 49 ×1 | 58 ×1 |
-| Zapdos | 34 ×1 | 28 ×1 | 32 ×½ | 37 ×½ |
-| Moltres | 35 ×1 | 55 ×2 | 69 ×1 | 80 ×1 |
-| Raikou | 31 ×1 | 28 ×1 | 32 ×½ | 35 ×½ |
-| Entei | 37 ×1 | 65 ×2 | 79 ×1 | 89 ×1 |
-| Suicune | 26 ×1 | 11 ×½ | 54 ×1 | 62 ×1 |
-| Ho-Oh | 19 ×1 | 35 ×2 | 39 ×1 | 49 ×1 |
-| Celebi | 15 ×½ | 11 ×½ | 129 ×2 | 141 ×2 |
-| Kyogre | 23 ×1 | 6 ×½ | 39 ×1 | 53 ×1 |
-| Groudon | 34 ×1 | 55 ×2 | 64 ×1 | 75 ×1 |
-| Rayquaza | 34 ×1 | 11 ×½ | 64 ×1 | 75 ×1 |
-| **Mediana de daño** | 34 | 30 | 64 | 75 |
+| Bulbasaur | 56 ×2 | 16 ×½ | 112 ×2 | 134 ×2 |
+| Charmander | 34 ×1 | 94 ×2 | 67 ×1 | 80 ×1 |
+| Squirtle | 28 ×1 | 16 ×½ | 56 ×1 | 68 ×1 |
+| Pikachu | 34 ×1 | 47 ×1 | 31 ×½ | 40 ×½ |
+| Gengar | 50 ×2 | 32 ×1 | 52 ×1 | 60 ×1 |
+| Voltorb | 32 ×1 | 42 ×1 | 31 ×½ | 38 ×½ |
+| Eevee | 28 ×1 | 37 ×1 | 56 ×1 | 67 ×1 |
+| Lucario | 26 ×1 | 37 ×1 | 56 ×1 | 64 ×1 |
+| Greninja | 0 ×0 | 16 ×½ | 52 ×1 | 63 ×1 |
+| Mewtwo | 11 ×½ | 27 ×1 | 42 ×1 | 51 ×1 |
+| Mew | 10 ×½ | 27 ×1 | 42 ×1 | 48 ×1 |
+| Onix | 37 ×1 | 208 ×4 | 36 ×½ | 44 ×½ |
+| Scyther | 25 ×1 | 32 ×1 | 94 ×2 | 114 ×2 |
+| Gyarados | 21 ×1 | 11 ×½ | 42 ×1 | 48 ×1 |
+| Tyranitar | 0 ×0 | 54 ×2 | 21 ×½ | 24 ×½ |
+| Articuno | 16 ×1 | 22 ×1 | 32 ×1 | 39 ×1 |
+| Zapdos | 23 ×1 | 27 ×1 | 21 ×½ | 25 ×½ |
+| Moltres | 24 ×1 | 54 ×2 | 47 ×1 | 54 ×1 |
+| Raikou | 21 ×1 | 27 ×1 | 21 ×½ | 24 ×½ |
+| Entei | 25 ×1 | 64 ×2 | 52 ×1 | 60 ×1 |
+| Suicune | 17 ×1 | 11 ×½ | 37 ×1 | 43 ×1 |
+| Ho-Oh | 13 ×1 | 34 ×2 | 27 ×1 | 33 ×1 |
+| Celebi | 10 ×½ | 11 ×½ | 84 ×2 | 96 ×2 |
+| Kyogre | 15 ×1 | 6 ×½ | 27 ×1 | 36 ×1 |
+| Groudon | 23 ×1 | 54 ×2 | 42 ×1 | 51 ×1 |
+| Rayquaza | 23 ×1 | 11 ×½ | 42 ×1 | 51 ×1 |
+| **Mediana de daño** | 23 | 30 | 42 | 51 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Ho-Oh
@@ -714,33 +714,33 @@ Tipos: **Fire / Flying** · HP 181 · Atk 150 · Def 110 · SpA 130 · SpD 174 �
 
 | Rival | Básica: Golpe Ala<br>Flying · Fís · Pot 55 | Habilidad 1: Pájaro Osado<br>Flying · Fís · Pot 100 | Habilidad 2: Recuperación<br>Fire · Estado · Pot — | Definitiva: Fuego Sagrado<br>Fire · Fís · Pot 50/s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 149 ×2 | 272 ×2 | Estado | 196 ×2 |
-| Charmander | 83 ×1 | 150 ×1 | Estado | 55 ×½ |
-| Squirtle | 61 ×1 | 111 ×1 | Estado | 39 ×½ |
-| Pikachu | 43 ×½ | 79 ×½ | Estado | 113 ×1 |
-| Gengar | 65 ×1 | 117 ×1 | Estado | 86 ×1 |
-| Voltorb | 37 ×½ | 67 ×½ | Estado | 98 ×1 |
-| Eevee | 75 ×1 | 135 ×1 | Estado | 98 ×1 |
-| Lucario | 58 ×1 | 105 ×1 | Estado | 153 ×2 |
-| Greninja | 59 ×1 | 108 ×1 | Estado | 38 ×½ |
-| Mewtwo | 49 ×1 | 87 ×1 | Estado | 61 ×1 |
-| Mew | 44 ×1 | 80 ×1 | Estado | 56 ×1 |
-| Onix | 15 ×½ | 27 ×½ | Estado | 19 ×½ |
-| Scyther | 106 ×2 | 190 ×2 | Estado | 135 ×2 |
-| Gyarados | 53 ×1 | 95 ×1 | Estado | 33 ×½ |
-| Tyranitar | 19 ×½ | 37 ×½ | Estado | 26 ×½ |
-| Articuno | 44 ×1 | 80 ×1 | Estado | 112 ×2 |
-| Zapdos | 25 ×½ | 45 ×½ | Estado | 61 ×1 |
-| Moltres | 49 ×1 | 87 ×1 | Estado | 30 ×½ |
-| Raikou | 28 ×½ | 49 ×½ | Estado | 71 ×1 |
-| Entei | 50 ×1 | 90 ×1 | Estado | 30 ×½ |
-| Suicune | 38 ×1 | 70 ×1 | Estado | 26 ×½ |
-| Lugia | 37 ×1 | 64 ×1 | Estado | 49 ×1 |
-| Celebi | 88 ×2 | 159 ×2 | Estado | 112 ×2 |
-| Kyogre | 49 ×1 | 87 ×1 | Estado | 30 ×½ |
-| Groudon | 34 ×1 | 59 ×1 | Estado | 43 ×1 |
-| Rayquaza | 49 ×1 | 87 ×1 | Estado | 30 ×½ |
-| **Mediana de daño** | 49 | 87 | — | 56 |
+| Bulbasaur | 102 ×2 | 186 ×2 | Estado | 136 ×2 |
+| Charmander | 56 ×1 | 102 ×1 | Estado | 37 ×½ |
+| Squirtle | 42 ×1 | 76 ×1 | Estado | 25 ×½ |
+| Pikachu | 29 ×½ | 54 ×½ | Estado | 77 ×1 |
+| Gengar | 45 ×1 | 80 ×1 | Estado | 57 ×1 |
+| Voltorb | 25 ×½ | 46 ×½ | Estado | 68 ×1 |
+| Eevee | 51 ×1 | 92 ×1 | Estado | 68 ×1 |
+| Lucario | 39 ×1 | 72 ×1 | Estado | 100 ×2 |
+| Greninja | 40 ×1 | 74 ×1 | Estado | 25 ×½ |
+| Mewtwo | 33 ×1 | 59 ×1 | Estado | 41 ×1 |
+| Mew | 30 ×1 | 54 ×1 | Estado | 37 ×1 |
+| Onix | 10 ×½ | 18 ×½ | Estado | 13 ×½ |
+| Scyther | 72 ×2 | 130 ×2 | Estado | 88 ×2 |
+| Gyarados | 36 ×1 | 65 ×1 | Estado | 22 ×½ |
+| Tyranitar | 13 ×½ | 25 ×½ | Estado | 16 ×½ |
+| Articuno | 30 ×1 | 54 ×1 | Estado | 74 ×2 |
+| Zapdos | 17 ×½ | 30 ×½ | Estado | 41 ×1 |
+| Moltres | 33 ×1 | 59 ×1 | Estado | 19 ×½ |
+| Raikou | 19 ×½ | 34 ×½ | Estado | 47 ×1 |
+| Entei | 34 ×1 | 61 ×1 | Estado | 19 ×½ |
+| Suicune | 26 ×1 | 48 ×1 | Estado | 16 ×½ |
+| Lugia | 25 ×1 | 44 ×1 | Estado | 32 ×1 |
+| Celebi | 60 ×2 | 108 ×2 | Estado | 74 ×2 |
+| Kyogre | 33 ×1 | 59 ×1 | Estado | 19 ×½ |
+| Groudon | 23 ×1 | 40 ×1 | Estado | 29 ×1 |
+| Rayquaza | 33 ×1 | 59 ×1 | Estado | 19 ×½ |
+| **Mediana de daño** | 33 | 59 | — | 37 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Gyarados
@@ -749,33 +749,33 @@ Tipos: **Water / Flying** · HP 170 · Atk 145 · Def 99 · SpA 80 · SpD 120 ·
 
 | Rival | Básica: Acua Cola<br>Water · Fís · Pot 55 | Habilidad 1: Cascada<br>Water · Fís · Pot 70 | Habilidad 2: Triturar<br>Dark · Fís · Pot 85 | Definitiva: Dragoaliento<br>Dragon · Fís · Pot 150 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 37 ×½ | 46 ×½ | 76 ×1 | 132 ×1 |
-| Charmander | 159 ×2 | 202 ×2 | 83 ×1 | 144 ×1 |
-| Squirtle | 30 ×½ | 37 ×½ | 61 ×1 | 107 ×1 |
-| Pikachu | 84 ×1 | 107 ×1 | 87 ×1 | 151 ×1 |
-| Gengar | 62 ×1 | 80 ×1 | 129 ×2 | 113 ×1 |
-| Voltorb | 74 ×1 | 92 ×1 | 75 ×1 | 130 ×1 |
-| Eevee | 74 ×1 | 92 ×1 | 75 ×1 | 130 ×1 |
-| Lucario | 56 ×1 | 71 ×1 | 29 ×½ | 50 ×½ |
-| Greninja | 29 ×½ | 37 ×½ | 30 ×½ | 105 ×1 |
-| Mewtwo | 46 ×1 | 58 ×1 | 96 ×2 | 84 ×1 |
-| Mew | 43 ×1 | 55 ×1 | 88 ×2 | 76 ×1 |
-| Onix | 114 ×4 | 147 ×4 | 30 ×1 | 51 ×1 |
-| Scyther | 52 ×1 | 64 ×1 | 52 ×1 | 91 ×1 |
-| Tyranitar | 76 ×2 | 100 ×2 | 19 ×½ | 70 ×1 |
-| Articuno | 43 ×1 | 55 ×1 | 44 ×1 | 76 ×1 |
-| Zapdos | 49 ×1 | 61 ×1 | 50 ×1 | 88 ×1 |
-| Moltres | 92 ×2 | 117 ×2 | 48 ×1 | 84 ×1 |
-| Raikou | 53 ×1 | 68 ×1 | 55 ×1 | 96 ×1 |
-| Entei | 98 ×2 | 123 ×2 | 50 ×1 | 88 ×1 |
-| Suicune | 18 ×½ | 25 ×½ | 39 ×1 | 67 ×1 |
-| Lugia | 35 ×1 | 43 ×1 | 71 ×2 | 61 ×1 |
-| Ho-Oh | 92 ×2 | 117 ×2 | 48 ×1 | 84 ×1 |
-| Celebi | 21 ×½ | 28 ×½ | 88 ×2 | 76 ×1 |
-| Kyogre | 22 ×½ | 29 ×½ | 48 ×1 | 84 ×1 |
-| Groudon | 63 ×2 | 80 ×2 | 33 ×1 | 57 ×1 |
-| Rayquaza | 22 ×½ | 29 ×½ | 48 ×1 | 167 ×2 |
-| **Mediana de daño** | 53 | 66 | 51 | 86 |
+| Bulbasaur | 25 ×½ | 32 ×½ | 74 ×1 | 129 ×1 |
+| Charmander | 108 ×2 | 138 ×2 | 81 ×1 | 141 ×1 |
+| Squirtle | 20 ×½ | 25 ×½ | 60 ×1 | 105 ×1 |
+| Pikachu | 57 ×1 | 73 ×1 | 85 ×1 | 148 ×1 |
+| Gengar | 43 ×1 | 54 ×1 | 126 ×2 | 111 ×1 |
+| Voltorb | 50 ×1 | 63 ×1 | 73 ×1 | 127 ×1 |
+| Eevee | 50 ×1 | 63 ×1 | 73 ×1 | 127 ×1 |
+| Lucario | 38 ×1 | 49 ×1 | 28 ×½ | 49 ×½ |
+| Greninja | 19 ×½ | 25 ×½ | 29 ×½ | 103 ×1 |
+| Mewtwo | 31 ×1 | 39 ×1 | 94 ×2 | 82 ×1 |
+| Mew | 29 ×1 | 37 ×1 | 86 ×2 | 74 ×1 |
+| Onix | 76 ×4 | 100 ×4 | 29 ×1 | 50 ×1 |
+| Scyther | 35 ×1 | 44 ×1 | 51 ×1 | 89 ×1 |
+| Tyranitar | 52 ×2 | 68 ×2 | 19 ×½ | 69 ×1 |
+| Articuno | 29 ×1 | 37 ×1 | 43 ×1 | 74 ×1 |
+| Zapdos | 33 ×1 | 42 ×1 | 49 ×1 | 86 ×1 |
+| Moltres | 62 ×2 | 78 ×2 | 47 ×1 | 82 ×1 |
+| Raikou | 36 ×1 | 47 ×1 | 54 ×1 | 94 ×1 |
+| Entei | 66 ×2 | 84 ×2 | 49 ×1 | 86 ×1 |
+| Suicune | 12 ×½ | 16 ×½ | 38 ×1 | 66 ×1 |
+| Lugia | 24 ×1 | 29 ×1 | 70 ×2 | 60 ×1 |
+| Ho-Oh | 62 ×2 | 78 ×2 | 47 ×1 | 82 ×1 |
+| Celebi | 14 ×½ | 18 ×½ | 86 ×2 | 74 ×1 |
+| Kyogre | 15 ×½ | 19 ×½ | 47 ×1 | 82 ×1 |
+| Groudon | 44 ×2 | 54 ×2 | 32 ×1 | 56 ×1 |
+| Rayquaza | 15 ×½ | 19 ×½ | 47 ×1 | 164 ×2 |
+| **Mediana de daño** | 36 | 46 | 50 | 84 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Suicune
@@ -784,33 +784,33 @@ Tipos: **Water** · HP 175 · Atk 95 · Def 135 · SpA 110 · SpD 135 · Vel 105
 
 | Rival | Básica: Golpe Cuerpo<br>Normal · Fís · Pot 80 | Habilidad 1: Chorro de Agua<br>Water · Esp · Pot 68 | Habilidad 2: Rayo Hielo<br>Ice · Esp · Pot 90 | Definitiva: Frío Polar<br>Ice · Esp · Pot 140 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 47 ×1 | 28 ×½ | 100 ×2 | 151 ×2 |
-| Charmander | 51 ×1 | 137 ×2 | 30 ×½ | 46 ×½ |
-| Squirtle | 38 ×1 | 28 ×½ | 25 ×½ | 38 ×½ |
-| Pikachu | 53 ×1 | 68 ×1 | 60 ×1 | 92 ×1 |
-| Gengar | 0 ×0 | 50 ×1 | 44 ×1 | 68 ×1 |
-| Voltorb | 46 ×1 | 62 ×1 | 56 ×1 | 87 ×1 |
-| Eevee | 46 ×1 | 56 ×1 | 50 ×1 | 76 ×1 |
-| Lucario | 18 ×½ | 53 ×1 | 23 ×½ | 36 ×½ |
-| Greninja | 38 ×1 | 27 ×½ | 22 ×½ | 36 ×½ |
-| Mewtwo | 30 ×1 | 43 ×1 | 38 ×1 | 59 ×1 |
-| Mew | 27 ×1 | 40 ×1 | 36 ×1 | 54 ×1 |
-| Onix | 9 ×½ | 294 ×4 | 129 ×2 | 200 ×2 |
-| Scyther | 33 ×1 | 47 ×1 | 84 ×2 | 129 ×2 |
-| Gyarados | 33 ×1 | 19 ×½ | 36 ×1 | 54 ×1 |
-| Tyranitar | 12 ×½ | 80 ×2 | 36 ×1 | 54 ×1 |
-| Articuno | 27 ×1 | 34 ×1 | 30 ×1 | 45 ×1 |
-| Zapdos | 31 ×1 | 43 ×1 | 76 ×2 | 118 ×2 |
-| Moltres | 30 ×1 | 92 ×2 | 40 ×1 | 62 ×1 |
-| Raikou | 35 ×1 | 40 ×1 | 36 ×1 | 54 ×1 |
-| Entei | 31 ×1 | 100 ×2 | 21 ×½ | 34 ×½ |
-| Lugia | 22 ×1 | 28 ×1 | 49 ×2 | 76 ×2 |
-| Ho-Oh | 30 ×1 | 55 ×2 | 25 ×1 | 38 ×1 |
-| Celebi | 27 ×1 | 19 ×½ | 71 ×2 | 108 ×2 |
-| Kyogre | 30 ×1 | 15 ×½ | 13 ×½ | 20 ×½ |
-| Groudon | 20 ×1 | 86 ×2 | 76 ×2 | 118 ×2 |
-| Rayquaza | 30 ×1 | 21 ×½ | 151 ×4 | 237 ×4 |
-| **Mediana de daño** | 30 | 45 | 39 | 61 |
+| Bulbasaur | 46 ×1 | 19 ×½ | 98 ×2 | 148 ×2 |
+| Charmander | 50 ×1 | 94 ×2 | 29 ×½ | 45 ×½ |
+| Squirtle | 37 ×1 | 19 ×½ | 24 ×½ | 37 ×½ |
+| Pikachu | 52 ×1 | 47 ×1 | 59 ×1 | 90 ×1 |
+| Gengar | 0 ×0 | 34 ×1 | 43 ×1 | 67 ×1 |
+| Voltorb | 45 ×1 | 43 ×1 | 55 ×1 | 85 ×1 |
+| Eevee | 45 ×1 | 38 ×1 | 49 ×1 | 74 ×1 |
+| Lucario | 18 ×½ | 36 ×1 | 23 ×½ | 35 ×½ |
+| Greninja | 37 ×1 | 18 ×½ | 22 ×½ | 35 ×½ |
+| Mewtwo | 29 ×1 | 29 ×1 | 37 ×1 | 58 ×1 |
+| Mew | 26 ×1 | 27 ×1 | 35 ×1 | 53 ×1 |
+| Onix | 9 ×½ | 200 ×4 | 126 ×2 | 196 ×2 |
+| Scyther | 32 ×1 | 32 ×1 | 82 ×2 | 126 ×2 |
+| Gyarados | 32 ×1 | 13 ×½ | 35 ×1 | 53 ×1 |
+| Tyranitar | 12 ×½ | 54 ×2 | 35 ×1 | 53 ×1 |
+| Articuno | 26 ×1 | 23 ×1 | 29 ×1 | 44 ×1 |
+| Zapdos | 30 ×1 | 29 ×1 | 74 ×2 | 116 ×2 |
+| Moltres | 29 ×1 | 62 ×2 | 39 ×1 | 61 ×1 |
+| Raikou | 34 ×1 | 27 ×1 | 35 ×1 | 53 ×1 |
+| Entei | 30 ×1 | 68 ×2 | 21 ×½ | 33 ×½ |
+| Lugia | 22 ×1 | 18 ×1 | 48 ×2 | 74 ×2 |
+| Ho-Oh | 29 ×1 | 36 ×2 | 24 ×1 | 37 ×1 |
+| Celebi | 26 ×1 | 13 ×½ | 70 ×2 | 106 ×2 |
+| Kyogre | 29 ×1 | 10 ×½ | 13 ×½ | 20 ×½ |
+| Groudon | 20 ×1 | 58 ×2 | 74 ×2 | 116 ×2 |
+| Rayquaza | 29 ×1 | 14 ×½ | 148 ×4 | 233 ×4 |
+| **Mediana de daño** | 29 | 31 | 38 | 60 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Kyogre
@@ -819,33 +819,33 @@ Tipos: **Water** · HP 175 · Atk 120 · Def 110 · SpA 170 · SpD 160 · Vel 11
 
 | Rival | Básica: Ráfaga Marina<br>Water · Esp · Pot 46 | Habilidad 1: Remolino Marino<br>Water · Esp · Pot 34/s | Habilidad 2: Aguas Curativas<br>Water · Estado · Pot — | Definitiva: Pulso Primigenio<br>Water · Esp · Pot 160/s |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 29 ×½ | 47 ×½ | Estado | 99 ×½ |
-| Charmander | 143 ×2 | 251 ×2 | Estado | 484 ×2 |
-| Squirtle | 29 ×½ | 48 ×½ | Estado | 100 ×½ |
-| Pikachu | 71 ×1 | 126 ×1 | Estado | 242 ×1 |
-| Gengar | 53 ×1 | 93 ×1 | Estado | 177 ×1 |
-| Voltorb | 65 ×1 | 111 ×1 | Estado | 225 ×1 |
-| Eevee | 58 ×1 | 95 ×1 | Estado | 199 ×1 |
-| Lucario | 56 ×1 | 95 ×1 | Estado | 188 ×1 |
-| Greninja | 28 ×½ | 46 ×½ | Estado | 92 ×½ |
-| Mewtwo | 46 ×1 | 79 ×1 | Estado | 152 ×1 |
-| Mew | 41 ×1 | 69 ×1 | Estado | 140 ×1 |
-| Onix | 298 ×4 | 522 ×4 | Estado | 1046 ×4 |
-| Scyther | 50 ×1 | 84 ×1 | Estado | 168 ×1 |
-| Gyarados | 20 ×½ | 33 ×½ | Estado | 69 ×½ |
-| Tyranitar | 82 ×2 | 139 ×2 | Estado | 280 ×2 |
-| Articuno | 35 ×1 | 54 ×1 | Estado | 115 ×1 |
-| Zapdos | 46 ×1 | 79 ×1 | Estado | 152 ×1 |
-| Moltres | 94 ×2 | 168 ×2 | Estado | 317 ×2 |
-| Raikou | 41 ×1 | 69 ×1 | Estado | 140 ×1 |
-| Entei | 106 ×2 | 185 ×2 | Estado | 353 ×2 |
-| Suicune | 18 ×½ | 32 ×½ | Estado | 62 ×½ |
-| Lugia | 29 ×1 | 49 ×1 | Estado | 97 ×1 |
-| Ho-Oh | 57 ×2 | 98 ×2 | Estado | 194 ×2 |
-| Celebi | 20 ×½ | 33 ×½ | Estado | 69 ×½ |
-| Groudon | 92 ×2 | 159 ×2 | Estado | 304 ×2 |
-| Rayquaza | 22 ×½ | 38 ×½ | Estado | 76 ×½ |
-| **Mediana de daño** | 48 | 82 | — | 160 |
+| Bulbasaur | 19 ×½ | 31 ×½ | Estado | 67 ×½ |
+| Charmander | 98 ×2 | 164 ×2 | Estado | 331 ×2 |
+| Squirtle | 19 ×½ | 31 ×½ | Estado | 69 ×½ |
+| Pikachu | 49 ×1 | 82 ×1 | Estado | 165 ×1 |
+| Gengar | 36 ×1 | 61 ×1 | Estado | 120 ×1 |
+| Voltorb | 45 ×1 | 72 ×1 | Estado | 153 ×1 |
+| Eevee | 39 ×1 | 62 ×1 | Estado | 136 ×1 |
+| Lucario | 38 ×1 | 62 ×1 | Estado | 129 ×1 |
+| Greninja | 18 ×½ | 30 ×½ | Estado | 63 ×½ |
+| Mewtwo | 31 ×1 | 52 ×1 | Estado | 104 ×1 |
+| Mew | 28 ×1 | 47 ×1 | Estado | 96 ×1 |
+| Onix | 204 ×4 | 348 ×4 | Estado | 717 ×4 |
+| Scyther | 34 ×1 | 56 ×1 | Estado | 114 ×1 |
+| Gyarados | 14 ×½ | 21 ×½ | Estado | 47 ×½ |
+| Tyranitar | 56 ×2 | 94 ×2 | Estado | 192 ×2 |
+| Articuno | 24 ×1 | 37 ×1 | Estado | 78 ×1 |
+| Zapdos | 31 ×1 | 52 ×1 | Estado | 104 ×1 |
+| Moltres | 64 ×2 | 112 ×2 | Estado | 216 ×2 |
+| Raikou | 28 ×1 | 47 ×1 | Estado | 96 ×1 |
+| Entei | 72 ×2 | 122 ×2 | Estado | 241 ×2 |
+| Suicune | 12 ×½ | 21 ×½ | Estado | 43 ×½ |
+| Lugia | 19 ×1 | 32 ×1 | Estado | 66 ×1 |
+| Ho-Oh | 38 ×2 | 64 ×2 | Estado | 132 ×2 |
+| Celebi | 14 ×½ | 21 ×½ | Estado | 47 ×½ |
+| Groudon | 62 ×2 | 104 ×2 | Estado | 208 ×2 |
+| Rayquaza | 15 ×½ | 26 ×½ | Estado | 51 ×½ |
+| **Mediana de daño** | 33 | 54 | — | 109 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Rayquaza
@@ -854,33 +854,33 @@ Tipos: **Dragon / Flying** · HP 180 · Atk 170 · Def 110 · SpA 170 · SpD 110
 
 | Rival | Básica: Garra Dragón<br>Dragon · Fís · Pot 50 | Habilidad 1: Vuelo Dragón<br>Flying · Fís · Pot 70 | Habilidad 2: Furia Dragón<br>Dragon · Esp · Pot 85 | Definitiva: Ascenso Draco<br>Flying · Fís · Pot 130 |
 | --- | ---: | ---: | ---: | ---: |
-| Bulbasaur | 78 ×1 | 216 ×2 | 107 ×1 | 400 ×2 |
-| Charmander | 86 ×1 | 119 ×1 | 130 ×1 | 221 ×1 |
-| Squirtle | 64 ×1 | 89 ×1 | 108 ×1 | 163 ×1 |
-| Pikachu | 90 ×1 | 62 ×½ | 130 ×1 | 115 ×½ |
-| Gengar | 67 ×1 | 93 ×1 | 95 ×1 | 173 ×1 |
-| Voltorb | 77 ×1 | 53 ×½ | 121 ×1 | 98 ×½ |
-| Eevee | 77 ×1 | 107 ×1 | 107 ×1 | 197 ×1 |
-| Lucario | 30 ×½ | 84 ×1 | 50 ×½ | 154 ×1 |
-| Greninja | 61 ×1 | 87 ×1 | 99 ×1 | 159 ×1 |
-| Mewtwo | 50 ×1 | 68 ×1 | 83 ×1 | 127 ×1 |
-| Mew | 46 ×1 | 62 ×1 | 75 ×1 | 116 ×1 |
-| Onix | 31 ×1 | 21 ×½ | 139 ×1 | 39 ×½ |
-| Scyther | 55 ×1 | 149 ×2 | 92 ×1 | 278 ×2 |
-| Gyarados | 55 ×1 | 75 ×1 | 75 ×1 | 141 ×1 |
-| Tyranitar | 41 ×1 | 29 ×½ | 75 ×1 | 53 ×½ |
-| Articuno | 46 ×1 | 62 ×1 | 62 ×1 | 116 ×1 |
-| Zapdos | 52 ×1 | 36 ×½ | 83 ×1 | 65 ×½ |
-| Moltres | 50 ×1 | 68 ×1 | 87 ×1 | 127 ×1 |
-| Raikou | 56 ×1 | 40 ×½ | 75 ×1 | 74 ×½ |
-| Entei | 52 ×1 | 71 ×1 | 95 ×1 | 132 ×1 |
-| Suicune | 40 ×1 | 56 ×1 | 68 ×1 | 104 ×1 |
-| Lugia | 37 ×1 | 50 ×1 | 53 ×1 | 93 ×1 |
-| Ho-Oh | 50 ×1 | 68 ×1 | 53 ×1 | 127 ×1 |
-| Celebi | 46 ×1 | 125 ×2 | 75 ×1 | 233 ×2 |
-| Kyogre | 50 ×1 | 68 ×1 | 56 ×1 | 127 ×1 |
-| Groudon | 35 ×1 | 47 ×1 | 83 ×1 | 87 ×1 |
-| **Mediana de daño** | 51 | 68 | 83 | 127 |
+| Bulbasaur | 53 ×1 | 148 ×2 | 73 ×1 | 275 ×2 |
+| Charmander | 58 ×1 | 81 ×1 | 89 ×1 | 151 ×1 |
+| Squirtle | 44 ×1 | 60 ×1 | 74 ×1 | 112 ×1 |
+| Pikachu | 61 ×1 | 43 ×½ | 89 ×1 | 79 ×½ |
+| Gengar | 46 ×1 | 64 ×1 | 65 ×1 | 118 ×1 |
+| Voltorb | 52 ×1 | 36 ×½ | 82 ×1 | 67 ×½ |
+| Eevee | 52 ×1 | 73 ×1 | 73 ×1 | 135 ×1 |
+| Lucario | 20 ×½ | 57 ×1 | 34 ×½ | 106 ×1 |
+| Greninja | 42 ×1 | 59 ×1 | 68 ×1 | 109 ×1 |
+| Mewtwo | 34 ×1 | 47 ×1 | 56 ×1 | 87 ×1 |
+| Mew | 31 ×1 | 43 ×1 | 51 ×1 | 79 ×1 |
+| Onix | 21 ×1 | 14 ×½ | 95 ×1 | 26 ×½ |
+| Scyther | 37 ×1 | 102 ×2 | 63 ×1 | 190 ×2 |
+| Gyarados | 37 ×1 | 51 ×1 | 51 ×1 | 96 ×1 |
+| Tyranitar | 28 ×1 | 19 ×½ | 51 ×1 | 36 ×½ |
+| Articuno | 31 ×1 | 43 ×1 | 43 ×1 | 79 ×1 |
+| Zapdos | 35 ×1 | 24 ×½ | 56 ×1 | 45 ×½ |
+| Moltres | 34 ×1 | 47 ×1 | 59 ×1 | 87 ×1 |
+| Raikou | 38 ×1 | 27 ×½ | 51 ×1 | 50 ×½ |
+| Entei | 35 ×1 | 49 ×1 | 65 ×1 | 90 ×1 |
+| Suicune | 27 ×1 | 38 ×1 | 47 ×1 | 71 ×1 |
+| Lugia | 25 ×1 | 34 ×1 | 36 ×1 | 64 ×1 |
+| Ho-Oh | 34 ×1 | 47 ×1 | 36 ×1 | 87 ×1 |
+| Celebi | 31 ×1 | 86 ×2 | 51 ×1 | 158 ×2 |
+| Kyogre | 34 ×1 | 47 ×1 | 38 ×1 | 87 ×1 |
+| Groudon | 24 ×1 | 32 ×1 | 56 ×1 | 59 ×1 |
+| **Mediana de daño** | 35 | 47 | 56 | 87 |
 | **Efectividad mediana** | ×1 | ×1 | ×1 | ×1 |
 
 ## Medianas por Pokémon
@@ -889,30 +889,30 @@ Resumen de las medianas de cada sección. `Combo` es la mediana del daño de los
 
 | Pokémon | Básica | Habilidad 1 | Habilidad 2 | Definitiva | Combo |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Pikachu | 16 | 18 | 34 | 63 | 126 |
-| Voltorb | 31 | 20 | — | 102 | 145 |
-| Gengar | 22 | 57 | 39 | 74 | 188 |
-| Bulbasaur | 15 | — | 46 | 71 | 132 |
-| Charmander | 15 | 30 | 43 | 56 | 143 |
-| Squirtle | 14 | 30 | 35 | 59 | 136 |
-| Lucario | 28 | 28 | 35 | 74 | 163 |
-| Greninja | 32 | 48 | 37 | 69 | 200 |
-| Articuno | 35 | 61 | 37 | 69 | 202 |
-| Zapdos | 38 | — | 75 | 143 | 263 |
-| Moltres | 38 | 53 | 46 | 80 | 210 |
-| Mewtwo | 46 | — | 80 | 99 | 225 |
-| Mew | 32 | — | 58 | — | 90 |
-| Scyther | 29 | 46 | — | 82 | 161 |
-| Tyranitar | 50 | 68 | 22 | 109 | 267 |
-| Onix | 34 | 45 | 34 | 58 | 196 |
-| Groudon | 30 | 39 | 50 | 108 | 203 |
-| Celebi | 29 | 55 | — | 74 | 159 |
-| Lugia | 34 | 30 | 64 | 75 | 198 |
-| Ho-Oh | 49 | 87 | — | 56 | 189 |
-| Gyarados | 53 | 66 | 51 | 86 | 266 |
-| Suicune | 30 | 45 | 39 | 61 | 184 |
-| Kyogre | 48 | 82 | — | 160 | 290 |
-| Rayquaza | 51 | 68 | 83 | 127 | 330 |
+| Pikachu | 16 | 18 | 24 | 43 | 94 |
+| Voltorb | 21 | 20 | — | 70 | 104 |
+| Gengar | 15 | 39 | 27 | 51 | 128 |
+| Bulbasaur | 15 | — | 31 | 49 | 95 |
+| Charmander | 15 | 20 | 29 | 38 | 103 |
+| Squirtle | 14 | 20 | 24 | 41 | 95 |
+| Lucario | 19 | 27 | 24 | 51 | 119 |
+| Greninja | 22 | 33 | 25 | 47 | 137 |
+| Articuno | 24 | 42 | 26 | 47 | 138 |
+| Zapdos | 26 | — | 51 | 98 | 179 |
+| Moltres | 26 | 36 | 31 | 54 | 143 |
+| Mewtwo | 31 | — | 54 | 68 | 153 |
+| Mew | 22 | — | 39 | — | 61 |
+| Scyther | 19 | 31 | — | 56 | 110 |
+| Tyranitar | 34 | 47 | 22 | 74 | 198 |
+| Onix | 23 | 30 | 23 | 39 | 133 |
+| Groudon | 29 | 27 | 49 | 74 | 181 |
+| Celebi | 19 | 37 | — | 50 | 107 |
+| Lugia | 23 | 30 | 42 | 51 | 148 |
+| Ho-Oh | 33 | 59 | — | 37 | 128 |
+| Gyarados | 36 | 46 | 50 | 84 | 229 |
+| Suicune | 29 | 31 | 38 | 60 | 158 |
+| Kyogre | 33 | 54 | — | 109 | 196 |
+| Rayquaza | 35 | 47 | 56 | 87 | 226 |
 
 ## Pokémon sin moveset
 
