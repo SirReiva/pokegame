@@ -60,6 +60,7 @@ export type {
 export type {
   AbilityDef,
   BuffSpec,
+  DamageOverTimeSpec,
   RepeatCooldownSpec,
   SlowSpec
 } from './core/abilities/def';
@@ -115,6 +116,7 @@ export const DEFAULT_ABILITY: Omit<
   knockback: 0,
   buffs: [],
   slow: null,
+  dot: null,
   healSelf: 0,
   healOnHit: false,
   selfDamage: 0,
@@ -374,6 +376,21 @@ export class AbilityBuilder {
 
   slow(multiplier: number, duration: number): this {
     this.draft.slow = { multiplier, duration };
+    return this;
+  }
+
+  /**
+   * Añade daño en el tiempo con su propio tipo. Quemadura y veneno comparten
+   * esta mecánica: solo cambia el tipo. `damage` es el daño fijo por tick y
+   * `duration` la duración total en segundos.
+   */
+  dot(
+    type: PokemonType,
+    damage: number,
+    duration: number,
+    interval = 1
+  ): this {
+    this.draft.dot = { type, damage, duration, interval };
     return this;
   }
 
@@ -834,6 +851,7 @@ registerAbility(
     .radius(2.4)
     .area('poison', 'overTime', 2.5, 0.5)
     .slow(0.75, 1.5)
+    .dot('Poison', 5, 3)
     .startup(0.35, { animation: 'shoot', move: true })
     .armor(20)
     .recovery(0.5)
@@ -841,7 +859,7 @@ registerAbility(
     .impact('poison')
     .color(150, 90, 180)
     .description(
-      'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 20 de daño por segundo y ralentiza un 25 %.'
+      'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 20 de daño por segundo, ralentiza un 25 % y envenena 3 s (5 PV/s).'
     )
 );
 
@@ -917,8 +935,11 @@ registerAbility(
     .animation('charge')
     .beam('fire')
     .impact('fire')
+    .dot('Fire', 6, 3)
     .color(255, 138, 42)
-    .description('Chorro de fuego instantáneo que atraviesa a los rivales en línea.')
+    .description(
+      'Chorro de fuego instantáneo que atraviesa a los rivales en línea y les aplica quemadura (6 PV/s durante 3 s).'
+    )
 );
 
 registerAbility(

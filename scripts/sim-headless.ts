@@ -114,6 +114,7 @@ import {
 } from '../src/game/sim/dash';
 import {
   applyAbilityDamage,
+  stepDamageOverTime,
   type DamageOptions,
   type DamageSystemHost
 } from '../src/game/sim/damage';
@@ -822,6 +823,7 @@ export class HeadlessMatch {
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
+      dots: [],
       abilityIds: [...moveset, commonAbilityId]
     };
   }
@@ -2068,6 +2070,15 @@ export class HeadlessMatch {
         : IDLE_INPUT;
       stepPlayer(this.hosts.player, player, input, FIXED_STEP);
       if (this.matchOver) break;
+    }
+
+    if (!this.matchOver) {
+      stepDamageOverTime(
+        this.players,
+        FIXED_STEP,
+        this.hosts.damage,
+        () => this.matchOver
+      );
     }
 
     if (!this.matchOver) {

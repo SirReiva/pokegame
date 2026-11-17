@@ -13,6 +13,7 @@ import type {
   MovementMode
 } from './core/match/config';
 import type { AssistKind } from './core/match/assists';
+import type { PokemonType } from './core/typeChart';
 import type { InputDeviceInfo } from './input';
 
 export type {
@@ -385,6 +386,18 @@ export interface ActiveSlowHud {
   remaining: number;
 }
 
+/** Daño en el tiempo activo tal y como lo pinta el HUD. */
+export interface ActiveDotHud {
+  /** Tipo del estado: `Fire` = quemadura, `Poison` = veneno, etc. */
+  type: PokemonType;
+  /** Daño fijo por tick, en PV. */
+  damage: number;
+  /** Segundos entre ticks. */
+  interval: number;
+  /** Segundos restantes. */
+  remaining: number;
+}
+
 /** Estado del instinto común para el HUD. */
 export interface CommonAbilityHud {
   id: CommonAbilityId;
@@ -480,6 +493,8 @@ export interface PlayerMatchStats {
   buffs: ActiveBuffHud[];
   /** Ralentizaciones activas que afectan al jugador. */
   slows: ActiveSlowHud[];
+  /** Daños en el tiempo activos (quemadura, veneno...). */
+  dots: ActiveDotHud[];
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;

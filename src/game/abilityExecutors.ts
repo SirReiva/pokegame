@@ -7,7 +7,12 @@
  * `case` al orquestador.
  */
 
-import type { AbilityDef, AbilityShape, SlowSpec } from './abilities';
+import type {
+  AbilityDef,
+  AbilityShape,
+  DamageOverTimeSpec,
+  SlowSpec
+} from './abilities';
 import type { AoeHitInput } from './aoeEffect';
 import { CONFIG, DEG } from './config';
 import {
@@ -43,6 +48,8 @@ export interface AbilityDamageOptions {
   knockback?: number | null;
   /** Ralentización. `null` la desactiva. Por defecto, `def.slow`. */
   slow?: SlowSpec | null;
+  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.dot`. */
+  dot?: DamageOverTimeSpec | null;
   /** Token compartido del lanzamiento para curar como máximo una vez. */
   healToken?: HealOnHitToken;
   /** Punto donde dibujar el impacto si no coincide con el centro del objetivo. */

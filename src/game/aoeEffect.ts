@@ -34,10 +34,15 @@ export type {
  * aplica el `slow` de la habilidad y deja el control solo en las instantáneas.
  */
 export const defaultAoeEffect: AoeEffect<MatchPlayerState, AbilityDef> = (context) => {
-  // Un área persistente sin daño ni slow no tiene nada que hacer en ese tick.
-  // Se mantiene la comprobación aquí (y no en el motor) para que un callback
-  // propio pueda seguir aplicando buffs aunque la potencia sea 0.
-  if (context.mode === 'overTime' && context.power <= 0 && !context.def.slow) {
+  // Un área persistente sin daño, slow ni DoT no tiene nada que hacer en ese
+  // tick. Se mantiene la comprobación aquí (y no en el motor) para que un
+  // callback propio pueda seguir aplicando buffs aunque la potencia sea 0.
+  if (
+    context.mode === 'overTime' &&
+    context.power <= 0 &&
+    !context.def.slow &&
+    !context.def.dot
+  ) {
     return;
   }
   for (const target of context.targets) {

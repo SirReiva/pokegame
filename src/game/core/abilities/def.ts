@@ -14,7 +14,7 @@ import type {
   AoePlayer,
   AoePrepareMovement
 } from './aoe';
-import type { BuffSpec, SlowSpec } from './specs';
+import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
 import type { AnimationName } from '../types';
 import type { PokemonType } from '../typeChart';
 import type {
@@ -29,7 +29,7 @@ import type {
   StartupAnimationMode
 } from './styles';
 
-export type { BuffSpec, SlowSpec } from './specs';
+export type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
 
 /**
  * Rampa de enfriamiento al repetir la misma habilidad de forma consecutiva.
@@ -147,6 +147,8 @@ export interface AbilityDef {
   buffs: BuffSpec[];
   /** Ralentización que se aplica a los enemigos golpeados. */
   slow: SlowSpec | null;
+  /** Daño en el tiempo que se aplica a los enemigos golpeados. */
+  dot: DamageOverTimeSpec | null;
   /**
    * Curación al lanzador como fracción de su vida máxima: `0.25` = 25 %.
    * `0` desactiva la curación. Se aplica al ejecutar la habilidad salvo que

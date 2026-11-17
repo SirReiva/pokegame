@@ -593,6 +593,7 @@ export function startMatch(
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
+      dots: [],
       abilityIds: [...moveset, commonAbilityId]
     };
     host.matchPlayers.push(player);

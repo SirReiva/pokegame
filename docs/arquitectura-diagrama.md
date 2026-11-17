@@ -227,7 +227,7 @@ y así los hosts siguen siendo estables.
 | `cast` | `sim/cast` | Reloj del casteo, pose de impacto y animación. |
 | `dash` | `sim/dash` | Desplazamiento y sincronización del dash. |
 | `atmosphere` | `sim/atmosphere` | Daño residual del clima. |
-| `damage` | `sim/damage` | Inmunidad, fórmula, slow, buffs, escudo, XP y KO. |
+| `damage` | `sim/damage` | Inmunidad, fórmula, slow, daño en el tiempo, buffs, escudo, XP y KO. |
 | `knockout` | `sim/knockout` | KO, respawn, marcador y evento al modo. |
 | `vision` | `render/visionView` | Niebla, copias visibles y máscara por equipo. |
 | `aoeResolution` | `sim/aoeResolution` | Contexto de área, callbacks y eventos. |

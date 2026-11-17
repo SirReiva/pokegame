@@ -25,7 +25,7 @@ import { CONCEALMENT_REASON_LABEL } from '../game/vision';
 import { XP_SOURCE_LABELS } from '../game/xp';
 import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
-import { TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
+import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
 import type { MatchStatsStore } from './matchStatsStore';
 
 interface MatchHudProps {
@@ -124,6 +124,12 @@ const BUFF_LABEL: Record<BuffStat, string> = {
   defense: 'DEF',
   spAttack: 'ATQ.ESP',
   spDefense: 'DEF.ESP'
+};
+
+/** Nombre corto del estado de daño en el tiempo según su tipo. */
+const DOT_LABEL: Record<string, string> = {
+  Fire: 'QUEMA',
+  Poison: 'VENENO'
 };
 
 const EMPTY_FEED: readonly KillFeedEntry[] = [];
@@ -381,6 +387,23 @@ function sameSlows(
   return true;
 }
 
+function sameDots(
+  a: PlayerMatchStats['dots'],
+  b: PlayerMatchStats['dots']
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].type !== b[i].type) return false;
+    if (a[i].damage !== b[i].damage) return false;
+    if (a[i].interval !== b[i].interval) return false;
+    if (Math.round(a[i].remaining * 10) !== Math.round(b[i].remaining * 10)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function sameAbilities(
   a: PlayerMatchStats['abilities'],
   b: PlayerMatchStats['abilities']
@@ -483,6 +506,7 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
     a.feed === b.feed &&
     sameBuffs(a.buffs, b.buffs) &&
     sameSlows(a.slows, b.slows) &&
+    sameDots(a.dots, b.dots) &&
     sameAbilities(a.abilities, b.abilities) &&
     sameCommon(a.commonAbility, b.commonAbility) &&
     sameXpBreakdown(a.xpBreakdown, b.xpBreakdown)
@@ -577,7 +601,9 @@ const PlayerHud = memo(function PlayerHud({
       }
     >
       {playerStats &&
-        (playerStats.buffs.length > 0 || playerStats.slows.length > 0) && (
+        (playerStats.buffs.length > 0 ||
+          playerStats.slows.length > 0 ||
+          playerStats.dots.length > 0) && (
           <div className="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[72%] flex-wrap gap-1">
             {playerStats.buffs.map((buff, buffIndex) => {
               const delta = Math.round((buff.multiplier - 1) * 100);
@@ -602,6 +628,27 @@ const PlayerHud = memo(function PlayerHud({
                   </span>
                   <span className="text-steel-500">
                     {buff.remaining.toFixed(1)}s
+                  </span>
+                </span>
+              );
+            })}
+            {playerStats.dots.map((dot, dotIndex) => {
+              const label =
+                DOT_LABEL[dot.type] ??
+                (TYPE_LABELS[dot.type] ?? dot.type).toUpperCase();
+              const color = TYPE_COLORS[dot.type] ?? '#8a93a6';
+              return (
+                <span
+                  key={`dot-${dot.type}-${dotIndex}`}
+                  className={`flex items-center gap-1 rounded-md border bg-night-850/82 px-2 py-1 font-mono leading-none backdrop-blur-[6px] ${
+                    compact ? 'text-8.32' : 'text-9.6'
+                  }`}
+                  style={{ borderColor: color }}
+                  title={`${label}: ${dot.damage} PV cada ${dot.interval} s durante ${dot.remaining.toFixed(1)} s`}
+                >
+                  <span style={{ color }}>{label}</span>
+                  <span className="text-steel-500">
+                    {dot.remaining.toFixed(1)}s
                   </span>
                 </span>
               );

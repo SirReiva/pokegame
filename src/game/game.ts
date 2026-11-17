@@ -96,7 +96,10 @@ import {
   resolveAoeHit as resolveAoeHitSystem
 } from './sim/aoeResolution';
 import { stepAtmosphere } from './sim/atmosphere';
-import { applyAbilityDamage as applyAbilityDamageSystem } from './sim/damage';
+import {
+  applyAbilityDamage as applyAbilityDamageSystem,
+  stepDamageOverTime as stepDamageOverTimeSystem
+} from './sim/damage';
 import { stepDash as stepDashSystem } from './sim/dash';
 import { knockOut as knockOutSystem } from './sim/knockout';
 import { stepInstantHits, stepMeleeHits } from './sim/hits';
@@ -2489,6 +2492,17 @@ export class Game {
     // para que las fases de resolución usen las posiciones finales.
     this.resetFxVisibilityCache();
 
+    // El daño en el tiempo se cobra antes de los golpes del paso. Corre con el
+    // reloj fijo de simulación para que no dependa del framerate.
+    if (!this.matchOver) {
+      stepDamageOverTimeSystem(
+        this.matchPlayers,
+        stepDt,
+        this.hosts.damage,
+        () => this.matchOver
+      );
+    }
+
     // El daño residual del clima se cobra una vez por tick y antes de resolver
     // golpes: así un Pokémon que ya estaba a 1 PV no muere por arena o granizo.
     if (!this.matchOver) {
@@ -2620,6 +2634,7 @@ export class Game {
     player.buffs = [];
     player.slowEffects = [];
     player.slowMultiplier = 1;
+    player.dots = [];
     player.damageReductionTimer = 0;
     player.damageReduction = 0;
     player.shieldSpeedMultiplier = 1;
@@ -2797,7 +2812,7 @@ export class Game {
     // Atacar desde la protección de spawn la retira: la invulnerabilidad
     // defensiva no debe servir para lanzar gratis una rotación ofensiva. Los
     // buffs y dash de estado (Protección, Impulso, Agilidad) no la rompen.
-    if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null)) {
+    if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null || def.dot !== null)) {
       player.invulnerableTimer = 0;
     }
     const cooldown = this.cooldownForCast(player, abilityId, def);

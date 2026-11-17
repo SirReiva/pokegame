@@ -6,7 +6,12 @@
  * reglas que ya viven en `Game`.
  */
 
-import type { AbilityDef, BuffStat, SlowSpec } from '../abilities';
+import type {
+  AbilityDef,
+  BuffStat,
+  DamageOverTimeSpec,
+  SlowSpec
+} from '../abilities';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -14,7 +19,11 @@ import {
   type AtmosphereId
 } from '../atmosphere';
 import type { CombatFxPort } from '../core/ports/fx';
-import type { HealOnHitToken, MatchPlayerState } from '../matchState';
+import type {
+  ActiveDamageOverTime,
+  HealOnHitToken,
+  MatchPlayerState
+} from '../matchState';
 import { CONFIG } from '../config';
 import { computeDamage, rollCritical, rollRandomFactor } from '../combat';
 import { applyHealSelf } from '../effects';
@@ -29,6 +38,8 @@ export interface DamageOptions {
   hitstun?: number;
   knockback?: number | null;
   slow?: SlowSpec | null;
+  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.dot`. */
+  dot?: DamageOverTimeSpec | null;
   healToken?: HealOnHitToken;
   impactX?: number;
   impactZ?: number;
@@ -100,6 +111,126 @@ export interface DamageSystemHost {
     killer: MatchPlayerState,
     abilityName: string
   ): void;
+}
+
+/** Intervalo por defecto entre ticks de un daño en el tiempo. */
+const DEFAULT_DOT_INTERVAL = 1;
+
+/**
+ * Aplica o refresca un daño en el tiempo sobre el objetivo.
+ *
+ * Solo puede haber una instancia por tipo de estado. Reaplicar el mismo tipo
+ * refresca la duración, conserva el daño por tick más alto y actualiza el
+ * lanzador al que se atribuye el daño posterior. El primer tick se resuelve en
+ * el siguiente paso de simulación, no dentro del golpe que lo aplica.
+ */
+export function applyDamageOverTime(
+  host: DamageSystemHost,
+  target: MatchPlayerState,
+  source: MatchPlayerState,
+  spec: DamageOverTimeSpec,
+  abilityName: string,
+  color: readonly [number, number, number]
+): void {
+  if (!target.alive || spec.damage <= 0 || spec.duration <= 0) return;
+  const interval =
+    spec.interval !== undefined && spec.interval > 0
+      ? spec.interval
+      : DEFAULT_DOT_INTERVAL;
+
+  const existing = target.dots.find((dot) => dot.type === spec.type);
+  if (existing) {
+    existing.damage = Math.max(existing.damage, spec.damage);
+    existing.remaining = Math.max(existing.remaining, spec.duration);
+    existing.source = source;
+    existing.abilityName = abilityName;
+    return;
+  }
+
+  target.dots.push({
+    type: spec.type,
+    damage: spec.damage,
+    interval,
+    remaining: spec.duration,
+    nextTick: 0,
+    source,
+    abilityName
+  });
+  host.combatFx.spawnBuff(target.x, target.z, color, 0.8);
+}
+
+/**
+ * Resuelve un tick de daño en el tiempo. Es daño fijo: no aplica STAB,
+ * crítico, efectividad, armadura de casteo ni hitstun. Protección sí lo
+ * reduce, y cada tick corta la regeneración pasiva.
+ */
+function applyDamageOverTimeTick(
+  host: DamageSystemHost,
+  target: MatchPlayerState,
+  dot: ActiveDamageOverTime
+): void {
+  if (!target.alive || target.invulnerableTimer > 0) return;
+
+  const reduction =
+    target.damageReductionTimer > 0 ? target.damageReduction : 0;
+  const finalDamage = Math.max(1, Math.round(dot.damage * (1 - reduction)));
+  const lethal = finalDamage >= target.hp;
+  const appliedDamage = Math.min(finalDamage, target.hp);
+
+  host.showDamagePopup(target, finalDamage, false, 1, lethal, dot.source);
+  target.hp = Math.max(0, target.hp - finalDamage);
+  target.damageTaken += appliedDamage;
+  if (dot.source.team !== target.team) {
+    dot.source.damageDealt += appliedDamage;
+  }
+  host.awardCombatXp(dot.source, target, appliedDamage, dot.damage, finalDamage);
+  breakRegen(target);
+  host.vibrateOnDamage(target, appliedDamage);
+  if (target.hp <= 0) {
+    host.knockOut(target, dot.source, dot.abilityName);
+  }
+}
+
+/**
+ * Avanza los temporizadores de daño en el tiempo. Corre una vez por paso de
+ * simulación para que el daño sea determinista y no dependa del framerate.
+ */
+export function stepDamageOverTime(
+  players: readonly MatchPlayerState[],
+  dt: number,
+  host: DamageSystemHost,
+  isMatchOver: () => boolean
+): void {
+  for (const player of players) {
+    if (player.dots.length === 0) continue;
+    if (!player.alive) {
+      player.dots.length = 0;
+      continue;
+    }
+
+    let count = 0;
+    for (const dot of player.dots) {
+      if (isMatchOver()) {
+        player.dots.length = 0;
+        return;
+      }
+
+      // Los ticks vencidos se cobran antes de avanzar los temporizadores. Un
+      // estado reaplicado conserva su cadencia: el refresco no dispara un tick
+      // extra por cada golpe que lo vuelve a aplicar.
+      while (dot.nextTick <= 0 && dot.remaining > 0) {
+        dot.nextTick += dot.interval;
+        applyDamageOverTimeTick(host, player, dot);
+        if (!player.alive || isMatchOver()) break;
+      }
+
+      dot.remaining -= dt;
+      dot.nextTick -= dt;
+
+      if (player.alive && dot.remaining > 0) player.dots[count++] = dot;
+    }
+    player.dots.length = count;
+  }
 }
 
 /**
@@ -183,6 +314,12 @@ export function applyAbilityDamage(
   // La ralentización se aplica aunque la habilidad no haga daño.
   if (slow && target.alive) {
     host.applySlow(attacker, target, def, slow, def.color);
+  }
+
+  // El daño en el tiempo también se aplica en habilidades de estado puras.
+  const dot = options.dot === undefined ? def.dot : options.dot;
+  if (dot && target.alive) {
+    applyDamageOverTime(host, target, attacker, dot, def.name, def.color);
   }
 
   // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:

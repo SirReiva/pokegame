@@ -118,6 +118,12 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
         multiplier: effect.multiplier,
         remaining: effect.remaining
       })),
+      dots: player.dots.map((dot) => ({
+        type: dot.type,
+        damage: dot.damage,
+        interval: dot.interval,
+        remaining: dot.remaining
+      })),
       abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
         const def = id ? ABILITIES[id] : null;
         return {

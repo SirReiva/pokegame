@@ -132,8 +132,9 @@ Reglas duras:
 
 ### 2.3. Estados propuestos
 
-El motor actual solo tiene ralentizaciones, buffs, escudos y curas. Las MT
-necesitan un módulo de estados (`status.ts`) con estas reglas:
+El motor actual tiene ralentizaciones, buffs, escudos, curas y daño en el
+tiempo genérico. Las MT necesitan ampliar el módulo de estados (`status.ts`)
+con estas reglas:
 
 | Estado | Duración | Efecto | Se rompe o limpia |
 | --- | --- | --- | --- |
