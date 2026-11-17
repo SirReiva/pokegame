@@ -302,8 +302,8 @@ const root = new pc.Entity('heal-burst');
 }
 
 /**
-   * Área de curación: disco y aro rosas que marcan todo el radio, ondas que
-   * recorren el área y motas que ascienden desde cualquier punto curado.
+   * Área de curación: disco que marca todo el radio, ondas que recorren el
+   * área y motas que ascienden desde cualquier punto curado.
    */
 export function spawnRecoveryAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -325,15 +325,10 @@ const life = Math.max(0.2, duration);
       Math.round(color[2] + (255 - color[2]) * amount)
     ];
 
-    const ringMaterial = ctx.createMaterial(color, 0.55);
     const fillMaterial = ctx.createMaterial(lighten(0.55), 0.12);
     const waveMaterial = ctx.createMaterial(lighten(0.35), 0.7);
     const moteMaterial = ctx.createMaterial(lighten(0.75), 0.95);
-    const materials = [ringMaterial, fillMaterial, waveMaterial, moteMaterial];
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
+    const materials = [fillMaterial, waveMaterial, moteMaterial];
 
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.03, 0);
@@ -378,11 +373,8 @@ const life = Math.max(0.2, duration);
       const fadeOut = Math.max(0, 1 - time / life);
       const pulse = 0.5 + Math.sin(time * 18) * 0.25;
 
-      ringMaterial.opacity = (0.35 + pulse * 0.25) * fadeOut;
       fillMaterial.opacity = (0.07 + pulse * 0.05) * fadeOut;
       waveMaterial.opacity = 0.65 * fadeOut;
-      const groundScale = radius * 2 * (0.98 + pulse * 0.04);
-      ring.setLocalScale(groundScale, 1, groundScale);
 
       for (let index = 0; index < waves.length; index++) {
         const progress = Math.min(

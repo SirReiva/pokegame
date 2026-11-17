@@ -5,12 +5,12 @@ import type { EffectBatchInstance } from '../../effectBatch';
 import { createPressureDomeMesh, tintColor } from './fxGeometry';
 
 /**
-   * Área de agua: un disco tenue y un aro de borde marcan el radio, mientras
-   * varios chorros con silueta de salpicadura brotan repartidos por toda la
-   * superficie. La textura procedural dibuja la base estrecha, la corona
-   * ondulada, los brillos y las gotas; los quads cruzados mantienen el volumen
-   * desde cualquier cámara. Los chorros oscilan en altura y grosor con fases
-   * distintas para que el área nunca parezca estática.
+   * Área de agua: un disco tenue marca el radio, mientras varios chorros con
+   * silueta de salpicadura brotan repartidos por toda la superficie. La textura
+   * procedural dibuja la base estrecha, la corona ondulada, los brillos y las
+   * gotas; los quads cruzados mantienen el volumen desde cualquier cámara. Los
+   * chorros oscilan en altura y grosor con fases distintas para que el área
+   * nunca parezca estática.
    */
 export function spawnWaterAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -23,17 +23,12 @@ const life = Math.max(0.3, duration);
     ctx.app.root.addChild(root);
 
     const fillMaterial = ctx.createWaterMaterial(color, 0.07);
-    const ringMaterial = ctx.createWaterMaterial(tintColor(color, 0.55), 0.4);
     const jetMaterial = ctx.createVertexColorMaterial(0.92);
-    const materials = [fillMaterial, ringMaterial, jetMaterial];
+    const materials = [fillMaterial, jetMaterial];
 
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.01, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
-
-    const border = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    border.setLocalPosition(0, 0.08, 0);
-    border.setLocalScale(radius * 2, 1, radius * 2);
 
     // Los 18 chorros se reparten en cuatro lotes, uno por variante de malla.
     // Así se conservan las siluetas distintas con cuatro draw calls en vez de
@@ -87,10 +82,6 @@ const life = Math.max(0.3, duration);
       const fillScale = radius * 2 * (0.97 + Math.sin(time * 5) * 0.02);
       fill.setLocalScale(fillScale, 1, fillScale);
 
-      const borderScale = radius * 2 * (1 + Math.sin(time * 4) * 0.012);
-      border.setLocalScale(borderScale, 1, borderScale);
-      ringMaterial.opacity = (0.28 + Math.sin(time * 6) * 0.07) * envelope;
-
       for (const batch of jetBatches) batch.setTime(time);
       jetMaterial.opacity = 0.92 * envelope;
     };
@@ -102,9 +93,9 @@ const life = Math.max(0.3, duration);
    * Doble cúpula de presión de `Pulso Primigenio`, animada íntegramente en GPU.
    *
    * Cada pulso abre una semiesfera de agua comprimida que crece desde el suelo,
-   * vibra como una membrana y colapsa antes del golpe siguiente. El estanque y
-   * el aro de borde mantienen el área entre beats; las bandas de refracción
-   * siguen la superficie de la cúpula y las gotas orbitan dentro del volumen.
+   * vibra como una membrana y colapsa antes del golpe siguiente. El estanque
+   * mantiene el área entre beats; las bandas de refracción siguen la superficie
+   * de la cúpula y las gotas orbitan dentro del volumen.
    * No hay chorros verticales: la CPU solo crea los lotes y avanza
    * `uEffectTime`, sin transforms ni opacidades por frame.
    */
@@ -129,7 +120,6 @@ export function spawnPrimordialPulseAoe(ctx: FxRuntime, x: number,
       Math.round(color[2] * 0.78)
     ];
     const glowColor = tintColor(color, 0.45);
-    const crestColor = tintColor(color, 0.85);
     const whiteColor: [number, number, number] = [236, 253, 255];
     // Verde-cyan reservado para la curación: no comparte tono con el daño.
     const healColor: [number, number, number] = [104, 246, 198];
@@ -137,7 +127,6 @@ export function spawnPrimordialPulseAoe(ctx: FxRuntime, x: number,
 
     const poolMaterial = ctx.createWaterMaterial(deepColor, 0.18);
     const shimmerMaterial = ctx.createWaterMaterial(glowColor, 0.07);
-    const rimMaterial = ctx.createWaterMaterial(crestColor, 0.34);
     const domeMaterial = ctx.createVertexColorMaterial(0.13);
     const innerDomeMaterial = ctx.createVertexColorMaterial(
       0.2,
@@ -155,7 +144,6 @@ export function spawnPrimordialPulseAoe(ctx: FxRuntime, x: number,
     const materials = [
       poolMaterial,
       shimmerMaterial,
-      rimMaterial,
       domeMaterial,
       innerDomeMaterial,
       coreDomeMaterial,
@@ -204,14 +192,6 @@ export function spawnPrimordialPulseAoe(ctx: FxRuntime, x: number,
       MOTION_PRIMORDIAL_POOL,
       { anim0: [0.52, 1.7, 0, 0], anim1: [0.44, 0.84, 0.05, 0] },
       [0.18, 0.16, 0.32, 0]
-    );
-    // Aro de borde: se mantiene toda la habilidad y se afina al final.
-    addBatch(
-      ctx.torusMesh,
-      rimMaterial,
-      MOTION_PRIMORDIAL_RING,
-      { anim0: [0, 0.24, 0.92, 1], anim1: [0.09, 0.05, 0, 0] },
-      [Math.max(0.1, life - 0.62), 0.38, 0, 0]
     );
 
     // --- Cúpulas de presión ----------------------------------------------

@@ -7,25 +7,24 @@ import type { AoeFxHandle } from '../../core/ports/fx';
 import { coneAnchors, createFlameConeMesh, createWindBladeMesh } from './fxGeometry';
 
 /**
-   * Área de fuego: anillo en el suelo, resplandor central y lenguas de fuego
-   * texturizadas que crecen, se mecen y se apagan. El conjunto gira lentamente
-   * para dar la sensación de remolino.
+   * Área de fuego: resplandor central y lenguas de fuego texturizadas que
+   * crecen, se mecen y se apagan. El conjunto gira lentamente para dar la
+   * sensación de remolino.
    */
 export function spawnFireAoe(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     duration: number): void {
 const life = Math.max(0.2, duration);
     const root = new pc.Entity('fire-aoe');
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(color, 0.4);
     const glowMaterial = ctx.createMaterial([255, 104, 30], 0.14);
     const flameMaterial = ctx.createFlameMaterial([255, 200, 140], 0.5);
     const hotMaterial = ctx.createFlameMaterial([255, 232, 185], 0.55);
-    const materials = [ringMaterial, glowMaterial, flameMaterial, hotMaterial];
+    const materials = [glowMaterial, flameMaterial, hotMaterial];
 
     const shortBurst = life < 1;
     ctx.spawnFlameParticles(root, {
@@ -53,9 +52,6 @@ const life = Math.max(0.2, duration);
       1.8,
       radius * 2.4
     );
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.12, 0);
 
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.14, 0);
@@ -144,10 +140,6 @@ const life = Math.max(0.2, duration);
       const sin7 = Math.sin(time * 7);
       const pulse = 0.5 + sin7 * 0.2;
 
-      const ringScale = Math.max(0.2, radius * 2) * (0.35 + 0.85 * grow);
-      ring.setLocalScale(ringScale, 1, ringScale);
-      ringMaterial.opacity = (0.24 + pulse * 0.2) * envelope;
-
       const glowScale = radius * 1.15 * (0.7 + 0.5 * grow);
       glow.setLocalScale(
         glowScale,
@@ -196,22 +188,17 @@ const life = Math.max(0.2, duration);
 export function spawnFireWhirl(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     duration: number): void {
 const life = Math.max(0.2, duration);
     const root = new pc.Entity('fire-whirl');
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(color, 0.3);
     const glowMaterial = ctx.createMaterial([255, 104, 30], 0.12);
     const flameMaterial = ctx.createFlameMaterial([255, 200, 140], 0.48);
     const hotMaterial = ctx.createFlameMaterial([255, 232, 185], 0.54);
-    const materials = [ringMaterial, glowMaterial, flameMaterial, hotMaterial];
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
+    const materials = [glowMaterial, flameMaterial, hotMaterial];
 
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.12, 0);
@@ -309,7 +296,6 @@ const life = Math.max(0.2, duration);
       const envelope = Math.min(fadeIn, fadeOut);
       const pulse = 0.5 + Math.sin(time * 8) * 0.2;
 
-      ringMaterial.opacity = (0.16 + pulse * 0.12) * envelope;
       glowMaterial.opacity = (0.08 + pulse * 0.05) * envelope;
       light.light!.intensity = 1.4 * envelope * (0.7 + Math.random() * 0.3);
 
@@ -584,21 +570,19 @@ const life = Math.max(0.2, duration);
 export function spawnHeatAoe(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     duration: number): void {
 const life = Math.max(0.2, duration);
     const root = new pc.Entity('heat-aoe');
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(color, 0.42);
     const glowMaterial = ctx.createMaterial([255, 112, 34], 0.16);
     const flameMaterial = ctx.createFlameMaterial([255, 204, 148], 0.5);
     const hotMaterial = ctx.createFlameMaterial([255, 240, 202], 0.58);
     const windMaterial = ctx.createWaterMaterial([255, 232, 190], 0.42);
     const emberMaterial = ctx.createMaterial([255, 176, 76], 0.85);
     const materials = [
-      ringMaterial,
       glowMaterial,
       flameMaterial,
       hotMaterial,
@@ -631,9 +615,6 @@ const life = Math.max(0.2, duration);
       1.7,
       radius * 2.6
     );
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.12, 0);
 
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.14, 0);
@@ -769,10 +750,6 @@ const life = Math.max(0.2, duration);
       const grow = 1 - Math.pow(1 - Math.min(1, time / 0.32), 2);
       const sin7 = Math.sin(time * 7);
       const pulse = 0.5 + Math.sin(time * 8) * 0.2;
-
-      const ringScale = Math.max(0.2, radius * 2) * (0.38 + 0.8 * grow);
-      ring.setLocalScale(ringScale, 1, ringScale);
-      ringMaterial.opacity = (0.3 + pulse * 0.2) * envelope;
 
       const glowScale = radius * 1.1 * (0.7 + 0.5 * grow);
       glow.setLocalScale(

@@ -5,10 +5,9 @@ import type { EffectBatchInstance } from '../../effectBatch';
 import { createWindBladeMesh, tintColor } from './fxGeometry';
 
 /**
-   * Área de aire: ondas concéntricas en el suelo, aspas que giran dentro del
-   * radio y plumas que suben en espiral. Es la base visual de Onda Ígnea y
-   * Ataque Celeste, con el naranja de la habilidad como cuerpo y blanco cálido
-   * en los filos.
+   * Área de aire: aspas que giran dentro del radio y plumas que suben en
+   * espiral. Es la base visual de Onda Ígnea y Ataque Celeste, con el naranja
+   * de la habilidad como cuerpo y blanco cálido en los filos.
    */
 export function spawnAirAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -20,7 +19,6 @@ const life = Math.max(0.2, duration);
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(tintColor(color, 0.6), 0.32);
     const bladeMaterial = ctx.createWaterMaterial(tintColor(color, 0.78), 0.58);
     const hotMaterial = ctx.createMaterial(color, 0.4);
     // Las brasas comparten color con las aspas calientes, pero necesitan otro
@@ -28,20 +26,11 @@ const life = Math.max(0.2, duration);
     const emberMaterial = ctx.createMaterial(color, 0.4);
     const featherMaterial = ctx.createLeafMaterial(tintColor(color, 0.5), 0.8);
     const materials = [
-      ringMaterial,
       bladeMaterial,
       hotMaterial,
       emberMaterial,
       featherMaterial
     ];
-
-    const rings: pc.Entity[] = [];
-    const ringMesh = ctx.cachedArcBand(0.955, 1, Math.PI, 64);
-    for (let index = 0; index < 2; index++) {
-      const ring = ctx.createEntity(ringMesh, [ringMaterial], root);
-      ring.setLocalPosition(0, 0.1 + index * 0.02, 0);
-      rings.push(ring);
-    }
 
     const bladeInstances: EffectBatchInstance[] = [];
     const hotBladeInstances: EffectBatchInstance[] = [];
@@ -142,20 +131,11 @@ const life = Math.max(0.2, duration);
       const fadeIn = Math.min(1, time / 0.16);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
       const envelope = Math.min(fadeIn, fadeOut);
-      const grow = 1 - Math.pow(1 - Math.min(1, time / 0.35), 2);
       const pulse = 0.55 + Math.sin(time * 8) * 0.2;
 
-      ringMaterial.opacity = (0.2 + pulse * 0.14) * envelope;
       bladeMaterial.opacity = (0.4 + pulse * 0.2) * envelope;
       hotMaterial.opacity = (0.3 + pulse * 0.16) * envelope;
       featherMaterial.opacity = (0.52 + pulse * 0.2) * envelope;
-
-      const ringScale = radius * (0.55 + grow * 0.5);
-      for (let index = 0; index < rings.length; index++) {
-        const ring = rings[index];
-        ring.setLocalScale(ringScale, 1, ringScale);
-        ring.setLocalEulerAngles(0, time * (index === 0 ? 90 : -70), 0);
-      }
 
       bladeBatch.setTime(time);
       hotBladeBatch.setTime(time);
@@ -167,8 +147,7 @@ const life = Math.max(0.2, duration);
 /**
    * Huracán de `Ciclón`: un vórtice de nubes 3D con ojo oscuro. Tres brazos
    * espirales de cinta abombada giran alrededor del centro, reforzados por
-   * nubes volumétricas y una banda exterior. El ojo queda libre y se marca con
-   * un disco azul oscuro.
+   * nubes volumétricas. El ojo queda libre y se marca con un disco azul oscuro.
    */
 export function spawnCycloneAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -197,17 +176,12 @@ const life = Math.max(0.2, duration);
     );
     const eyeMaterial = ctx.createWaterMaterial([18, 55, 92], 0.55);
     const eyeRingMaterial = ctx.createMaterial(tintColor(color, 0.55), 0.32);
-    const outerRingMaterial = ctx.createWaterMaterial(
-      tintColor(color, 0.6),
-      0.16
-    );
     const materials = [
       ...ribbonMaterials,
       puffMaterial,
       puffShadeMaterial,
       eyeMaterial,
-      eyeRingMaterial,
-      outerRingMaterial
+      eyeRingMaterial
     ];
 
     // Ojo del huracán.
@@ -217,15 +191,6 @@ const life = Math.max(0.2, duration);
     const eyeRing = ctx.createEntity(ctx.torusMesh, [eyeRingMaterial], root);
     eyeRing.setLocalPosition(0, 0.07, 0);
     eyeRing.setLocalScale(radius * 0.3, 1, radius * 0.3);
-
-    // Aro tenue para leer el radio del área.
-    const outerRing = ctx.createEntity(
-      ctx.torusMesh,
-      [outerRingMaterial],
-      root
-    );
-    outerRing.setLocalPosition(0, 0.06, 0);
-    outerRing.setLocalScale(radius * 2, 1, radius * 2);
 
     const arms = 3;
     const ribbonLayers = [
@@ -385,10 +350,6 @@ const life = Math.max(0.2, duration);
         (0.14 + Math.sin(time * 3.4 + 1) * 0.025) * envelope;
       eyeMaterial.opacity = 0.5 * envelope;
       eyeRingMaterial.opacity = (0.24 + Math.sin(time * 6) * 0.06) * envelope;
-      outerRingMaterial.opacity = 0.13 * envelope;
-
-      const ringScale = radius * 2 * (0.94 + Math.sin(time * 3) * 0.02);
-      outerRing.setLocalScale(ringScale, 1, ringScale);
 
       puffBatch.setTime(time);
       puffShadeBatch.setTime(time);

@@ -6,14 +6,13 @@ import type { EffectBatchInstance } from '../../effectBatch';
 import { areaAnchors } from './fxGeometry';
 
 /**
-   * Área de tierra: disco agrietado, anillos de polvo y una lluvia de rocas
-   * pequeñas que cae en oleadas y levanta polvo al impactar. Es el visual de
-   * Terremoto.
+   * Área de tierra: disco agrietado y una lluvia de rocas pequeñas que cae en
+   * oleadas y levanta polvo al impactar. Es el visual de Terremoto.
    */
 export function spawnGroundAoe(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     duration: number): void {
 const life = Math.max(0.3, duration);
     const root = new pc.Entity('ground-aoe');
@@ -21,14 +20,12 @@ const life = Math.max(0.3, duration);
     ctx.app.root.addChild(root);
 
     const fillMaterial = ctx.createWaterMaterial([118, 98, 76], 0.16);
-    const ringMaterial = ctx.createWaterMaterial(color, 0.5);
     const crackMaterial = ctx.createWaterMaterial([244, 206, 136], 0.62);
     const dustMaterial = ctx.createWaterMaterial([182, 162, 134], 0.34);
     const lightMaterial = ctx.createRockMaterial([198, 176, 140], 1);
     const darkMaterial = ctx.createRockMaterial([122, 104, 82], 1);
     const materials = [
       fillMaterial,
-      ringMaterial,
       crackMaterial,
       dustMaterial,
       lightMaterial,
@@ -38,10 +35,6 @@ const life = Math.max(0.3, duration);
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.01, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
 
     const crackInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 14; index++) {
@@ -162,10 +155,6 @@ const life = Math.max(0.3, duration);
       const fillScale = radius * 2 * (0.97 + pulse * 0.02);
       fill.setLocalScale(fillScale, 1, fillScale);
 
-      ringMaterial.opacity = (0.28 + pulse * 0.2) * envelope;
-      const ringScale = radius * 2 * (0.96 + pulse * 0.04);
-      ring.setLocalScale(ringScale, 1, ringScale);
-      ring.setLocalEulerAngles(0, time * 22, 0);
       crackMaterial.opacity = (0.38 + pulse * 0.26) * envelope;
 
       crackBatch.setTime(time);
@@ -195,7 +184,7 @@ const life = Math.max(0.3, duration);
 export function spawnFissureAoe(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
-    color: readonly [number, number, number],
+    _color: readonly [number, number, number],
     duration: number): void {
 const life = Math.max(0.3, duration);
     const root = new pc.Entity('fissure-aoe');
@@ -204,7 +193,6 @@ const life = Math.max(0.3, duration);
 
     const pitMaterial = ctx.createWaterMaterial([34, 27, 22], 0.62);
     const pitDeepMaterial = ctx.createWaterMaterial([18, 14, 12], 0.55);
-    const rimMaterial = ctx.createWaterMaterial(color, 0.45);
     const magmaMaterial = ctx.createMaterial([255, 166, 62], 0.8);
     const slabLight = ctx.createRockMaterial([116, 98, 74], 1);
     const slabDark = ctx.createRockMaterial([74, 61, 46], 1);
@@ -220,7 +208,6 @@ const life = Math.max(0.3, duration);
     const materials = [
       pitMaterial,
       pitDeepMaterial,
-      rimMaterial,
       magmaMaterial,
       slabLight,
       slabDark,
@@ -240,10 +227,6 @@ const life = Math.max(0.3, duration);
     const pitDeep = ctx.createEntity(ctx.discMesh, [pitDeepMaterial], root);
     pitDeep.setLocalPosition(0, 0.006, 0);
     pitDeep.setLocalScale(radius * 1.15, 1, radius * 1.15);
-
-    const rim = ctx.createEntity(ctx.torusMesh, [rimMaterial], root);
-    rim.setLocalPosition(0, 0.07, 0);
-    rim.setLocalScale(radius * 2, 1, radius * 2);
 
     const branchLightInstances: EffectBatchInstance[] = [];
     const branchDarkInstances: EffectBatchInstance[] = [];
@@ -516,8 +499,6 @@ const life = Math.max(0.3, duration);
       const deepScale = radius * 1.15 * (0.86 + Math.min(1, time / 0.16) * 0.14);
       pitDeep.setLocalScale(deepScale, 1, deepScale);
 
-      rimMaterial.opacity = (0.22 + pulse * 0.18) * envelope;
-      rim.setLocalEulerAngles(0, time * 10, 0);
       magmaMaterial.opacity = (0.5 + pulse * 0.3) * envelope;
       light.light!.intensity = 1.1 * envelope * (0.65 + Math.random() * 0.35);
 
@@ -556,7 +537,6 @@ const life = Math.max(0.4, duration);
     ctx.app.root.addChild(root);
 
     const pitMaterial = ctx.createWaterMaterial([40, 31, 23], 0.66);
-    const rimMaterial = ctx.createWaterMaterial(color, 0.5);
     const waveMaterial = ctx.createWaterMaterial(color, 0.42);
     const crackMaterial = ctx.createWaterMaterial([238, 206, 150], 0.55);
     const dustMaterial = ctx.createWaterMaterial([188, 164, 128], 0.38);
@@ -568,7 +548,6 @@ const life = Math.max(0.4, duration);
     const slabDark = ctx.createRockMaterial([118, 96, 72], 1);
     const materials = [
       pitMaterial,
-      rimMaterial,
       waveMaterial,
       crackMaterial,
       dustMaterial,
@@ -581,10 +560,6 @@ const life = Math.max(0.4, duration);
     const pit = ctx.createEntity(ctx.discMesh, [pitMaterial], root);
     pit.setLocalPosition(0, 0.006, 0);
     pit.setLocalScale(0.001, 1, 0.001);
-
-    const rim = ctx.createEntity(ctx.torusMesh, [rimMaterial], root);
-    rim.setLocalPosition(0, 0.055, 0);
-    rim.setLocalScale(0.001, 1, 0.001);
 
     const waveInstances: EffectBatchInstance[] = [];
     for (let index = 0; index < 2; index++) {
@@ -781,15 +756,6 @@ const life = Math.max(0.4, duration);
         1,
         Math.max(0.001, craterScale)
       );
-
-      rimMaterial.opacity = (0.28 + (1 - burst) * 0.28) * fadeOut;
-      const rimScale = radius * 2.16 * (0.45 + burst * 0.55);
-      rim.setLocalScale(
-        Math.max(0.001, rimScale),
-        1,
-        Math.max(0.001, rimScale)
-      );
-      rim.setLocalEulerAngles(0, time * 12, 0);
 
       waveMaterial.opacity = 0.42 * Math.max(0, 1 - waveT) * fadeOut;
       crackMaterial.opacity = 0.5 * burst * fadeOut;

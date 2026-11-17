@@ -5,8 +5,7 @@ import type { EffectBatchInstance } from '../../effectBatch';
 
 /**
    * Área de Planta: torbellino de hojas. Las hojas giran en espiral baja y
-   * ancha, ocupando todo el radio del área, mientras un anillo tenue marca
-   * el borde.
+   * ancha, ocupando todo el radio del área.
    */
 export function spawnGrassAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -18,20 +17,10 @@ const life = Math.max(0.2, duration);
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(color, 0.3);
     const fillMaterial = ctx.createMaterial([84, 148, 56], 0.1);
     const leafMaterial = ctx.createLeafMaterial([226, 248, 190], 0.95);
     const hotLeafMaterial = ctx.createLeafMaterial([248, 255, 220], 0.95);
-    const materials = [
-      ringMaterial,
-      fillMaterial,
-      leafMaterial,
-      hotLeafMaterial
-    ];
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
+    const materials = [fillMaterial, leafMaterial, hotLeafMaterial];
 
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.03, 0);
@@ -115,10 +104,7 @@ const life = Math.max(0.2, duration);
       // Giro global del embudo, además del giro individual de cada hoja.
       root.setLocalEulerAngles(0, time * 1.4, 0);
 
-      ringMaterial.opacity = (0.18 + pulse * 0.16) * envelope;
       fillMaterial.opacity = (0.05 + pulse * 0.04) * envelope;
-      const ringScale = radius * 2 * (0.94 + pulse * 0.06);
-      ring.setLocalScale(ringScale, 1, ringScale);
 
       leafBatch.setTime(time);
       hotLeafBatch.setTime(time);

@@ -5,8 +5,8 @@ import type { EffectBatchInstance } from '../../effectBatch';
 
 /**
    * Área psíquica: implosión central y estallido de ondas y esquirlas de
-   * energía que se abren hasta el borde del círculo. Marca el radio con un
-   * anillo y un disco tenue.
+   * energía que se abren hasta el borde del círculo. Un disco tenue marca el
+   * radio.
    */
 export function spawnPsychicAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -18,28 +18,20 @@ const life = Math.max(0.2, duration);
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createMaterial(color, 0.42);
     const fillMaterial = ctx.createMaterial([148, 88, 220], 0.12);
     const coreMaterial = ctx.createMaterial([255, 232, 255], 0.95);
     const shardMaterial = ctx.createMaterial([240, 186, 255], 0.9);
     const materials = [
-      ringMaterial,
       fillMaterial,
       coreMaterial,
       shardMaterial
     ];
 
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
-
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.03, 0);
     fill.setLocalScale(radius * 2, 1, radius * 2);
 
-    // Tres ondas de choque que se expanden hacia el borde. Comparten material
-    // con el aro del suelo, así que el lote usa uno propio para no pisar el
-    // chunk instanciado del material original.
+    // Tres ondas de choque que se expanden hacia el borde.
     const waveMaterial = ctx.createMaterial(color, 0.42);
     materials.push(waveMaterial);
     const waveBatch = new EffectBatch({
@@ -94,11 +86,8 @@ const life = Math.max(0.2, duration);
       const fadeOut = Math.min(1, Math.max(0, (life - time) / (life * 0.45)));
       const pulse = 0.5 + Math.sin(time * 24) * 0.2;
 
-      ringMaterial.opacity = (0.22 + pulse * 0.24) * fadeOut;
       fillMaterial.opacity = (0.06 + pulse * 0.06) * fadeOut;
-      waveMaterial.opacity = ringMaterial.opacity;
-      const groundScale = radius * 2 * (0.98 + pulse * 0.03);
-      ring.setLocalScale(groundScale, 1, groundScale);
+      waveMaterial.opacity = (0.22 + pulse * 0.24) * fadeOut;
       waveBatch.setTime(time);
 
       // El núcleo se contrae durante la implosión y luego estalla.
@@ -121,9 +110,9 @@ const life = Math.max(0.2, duration);
 }
 
 /**
-   * Área fantasma: disco tenue, anillo morado, jirones que suben del suelo y
-   * ojos que se encienden y se apagan alrededor del borde. Disponible para
-   * futuras habilidades de área de tipo Fantasma.
+   * Área fantasma: disco tenue, jirones que suben del suelo y ojos que se
+   * encienden y se apagan alrededor del borde. Disponible para futuras
+   * habilidades de área de tipo Fantasma.
    */
 export function spawnGhostAoe(ctx: FxRuntime, x: number,
     z: number,
@@ -135,20 +124,14 @@ const life = Math.max(0.2, duration);
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const ringMaterial = ctx.createWaterMaterial([190, 150, 255], 0.55);
     const fillMaterial = ctx.createWaterMaterial(color, 0.1);
     const wispMaterial = ctx.createWaterMaterial([158, 118, 226], 0.45);
     const eyeMaterial = ctx.createMaterial([255, 244, 198], 0.9);
     const materials = [
-      ringMaterial,
       fillMaterial,
       wispMaterial,
       eyeMaterial
     ];
-
-    const ring = ctx.createEntity(ctx.torusMesh, [ringMaterial], root);
-    ring.setLocalPosition(0, 0.1, 0);
-    ring.setLocalScale(radius * 2, 1, radius * 2);
 
     const fill = ctx.createEntity(ctx.discMesh, [fillMaterial], root);
     fill.setLocalPosition(0, 0.03, 0);
@@ -202,7 +185,6 @@ const life = Math.max(0.2, duration);
     ctx.addEffect(root, materials, life, (_t, dt) => {
       time += dt;
       const pulse = 0.5 + Math.sin(time * 6) * 0.2;
-      ringMaterial.opacity = (0.35 + pulse * 0.2) * (1 - time / life);
       fillMaterial.opacity = (0.06 + pulse * 0.04) * (1 - time / life);
 
       wispBatch.setTime(time);
