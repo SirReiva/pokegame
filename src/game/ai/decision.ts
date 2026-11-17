@@ -38,6 +38,12 @@ import type { BotTuning } from './tuning';
 
 /** Vida por debajo de la cual una pelea con desventaja de tipo justifica huir. */
 const MATCHUP_RETREAT_HP = 0.6;
+/**
+ * Diferencia mínima de efectividad para considerar que el rival nos supera.
+ * Con la escala plana un escalón son 0,05, así que 0,04 detecta una ventaja
+ * real sin dispararse por el ruido de coma flotante de los productos.
+ */
+const MATCHUP_RETREAT_EDGE = 0.04;
 /** Escala del cooldown de habilidad frente a la referencia de la puntuación. */
 const COOLDOWN_REFERENCE = 4;
 const COOLDOWN_WEIGHT_MIN = 0.45;
@@ -80,7 +86,6 @@ export interface BotDecisionState {
   targetVisible: boolean;
   targetMatchupOffense: number;
   targetMatchupDefense: number;
-  engageTarget: boolean;
   hazardEvasion: HazardEvasion | null;
   threat: IncomingThreat | null;
   /**
@@ -277,16 +282,17 @@ export class BotDecision {
         Math.random() < this.ctx.tuning.commonChance;
     }
 
-    // Lectura de tipos del objetivo: huir antes si nos supera en efectividad.
+    // Lectura de tipos del objetivo: huir antes si nos supera claramente en
+    // efectividad. La escala plana mueve el daño poco, así que se exige un
+    // escalón completo de diferencia y no cualquier décima.
     const targetOffense = target ? this.state.targetMatchupOffense : 1;
     const targetDefense = target ? this.state.targetMatchupDefense : 1;
     const outmatchedFight =
-      targetIsVisible && targetDefense > 1 && targetDefense > targetOffense;
+      targetIsVisible &&
+      targetDefense > 1 &&
+      targetDefense - targetOffense >= MATCHUP_RETREAT_EDGE;
     const badFight =
       outmatchedFight && hpFraction < MATCHUP_RETREAT_HP;
-    // Un rival que resiste todo nuestro daño es poco rentable: se patrulla por
-    // otra zona mientras no haya una pelea mejor.
-    this.state.engageTarget = !targetIsVisible || targetOffense >= 1;
 
     // La visión es compartida: un rival al otro lado del mapa visto por un
     // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
@@ -500,25 +506,17 @@ export class BotDecision {
       players,
       colliders
     );
-    if (supportSlot !== null && (!targetIsVisible || targetOffense === 0)) {
+    if (supportSlot !== null && !targetIsVisible) {
       this.state.abilitySlot = supportSlot;
       this.state.supportCast = true;
       return;
     }
 
-    // Sin rival útil a la vista, un bot dañado prefiere acercarse a un objeto
+    // Sin rival a la vista, un bot dañado prefiere acercarse a un objeto
     // conocido antes que perseguir una posición recordada o patrullar.
-    if (pickup && (!targetIsVisible || targetOffense === 0)) {
+    if (pickup && !targetIsVisible) {
       this.ctx.claimPickup(self, pickup);
       this.ctx.setGoal(pickup, pickup);
-      return;
-    }
-
-    if (targetIsVisible && targetOffense === 0) {
-      // Todos sus ataques son inmunes al objetivo: mejor buscar otra pelea.
-      this.state.lastSeen = null;
-      if (this.ctx.seekObjective(self)) return;
-      this.ctx.updatePatrol(self);
       return;
     }
 

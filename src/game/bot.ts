@@ -12,8 +12,7 @@
  * 2. Navegación: A* sobre `BotNavGrid` y seguimiento de waypoints.
  * 3. Combate: elección de objetivo y de habilidad por rango, cooldown, estado y
  *    ventaja de tipos. Los bots prefieren rivales a los que pueden golpear
- *    fuerte, desconfían de los que son eficaces contra ellos y evitan pelear
- *    contra rivales inmunes a todo su daño.
+ *    fuerte y desconfían de los que son eficaces contra ellos.
  * 4. Movimiento: mantiene la distancia, se acerca para apuntar y se separa de
  *    sus aliados.
  *
@@ -324,8 +323,6 @@ export class BotController {
    */
   private targetMatchupOffense = 1;
   private targetMatchupDefense = 1;
-  /** `false` si el objetivo visible es inmune a todo el daño del bot. */
-  private engageTarget = true;
   private visibleTimer = 0;
   /**
    * Rivales vivos del equipo contrario vistos por el bot. `updateTarget` lo
@@ -588,12 +585,6 @@ export class BotController {
         },
         set targetMatchupDefense(value) {
           controller.targetMatchupDefense = value;
-        },
-        get engageTarget() {
-          return controller.engageTarget;
-        },
-        set engageTarget(value) {
-          controller.engageTarget = value;
         },
         get hazardEvasion() {
           return controller.hazardEvasion;
@@ -940,7 +931,6 @@ export class BotController {
     this.targetVisible = false;
     this.targetMatchupOffense = 1;
     this.targetMatchupDefense = 1;
-    this.engageTarget = true;
     this.visibleTimer = 0;
     this.visibleEnemies.length = 0;
     this.threat = null;
@@ -1361,27 +1351,28 @@ export class BotController {
       }
       if (this.target === enemy) score -= 1.5;
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
-      // visible, en vez de repartirse al azar por el mapa. Un rival al que
-      // resistimos no recibe el bonus: el foco no debe arrastrarlo a una pelea
-      // poco rentable.
-      if (focus.slot === enemy.slot && offense >= 1) score -= 3.5;
+      // visible, en vez de repartirse al azar por el mapa.
+      if (focus.slot === enemy.slot) score -= 3.5;
 
       // Preferencia ofensiva: buscar al rival al que nuestros ataques le hacen
-      // más daño y evitar a los que resisten. La escala de efectividad es plana
-      // (±5-15 %), así que la diferencia se amplifica para que siga pesando
-      // como antes al elegir objetivo.
-      if (offense > 1) {
-        score -= (4 + (offense - 1) * 40) * typeWeight;
-      } else if (offense < 1) {
-        score += (1 - offense) * 30 * typeWeight;
+      // más daño y evitar a los que resisten. La escala plana mueve el daño un
+      // 5-15 %, así que se traduce a puntos con una pendiente fuerte pero
+      // acotada: una ventaja leve pesa como unos metros y una doble ventaja no
+      // domina por sí sola la decisión (el clima también entra aquí).
+      const offenseEdge = offense - 1;
+      if (offenseEdge > 0) {
+        score -= Math.min(10, offenseEdge * 90) * typeWeight;
+      } else if (offenseEdge < 0) {
+        score += Math.min(4, -offenseEdge * 30) * typeWeight;
       }
       // Cautela defensiva: un rival que nos pega súper eficaz es peligroso
       // aunque esté herido. Si su daño nos resulta poco eficaz, es una pelea
-      // cómoda.
-      if (defense > 1) {
-        score += (3 + (defense - 1) * 40) * typeWeight;
-      } else if (defense < 1) {
-        score -= (1 - defense) * 30 * typeWeight;
+      // cómoda. Misma escala acotada que la preferencia ofensiva.
+      const defenseEdge = defense - 1;
+      if (defenseEdge > 0) {
+        score += Math.min(8, defenseEdge * 70) * typeWeight;
+      } else if (defenseEdge < 0) {
+        score -= Math.min(4, -defenseEdge * 40) * typeWeight;
       }
       // Protección temporal: un rival invulnerable no recibe ningún golpe y
       // uno con escudo o buffs defensivos recibe menos. Sin esta penalización
@@ -1443,7 +1434,7 @@ export class BotController {
     if (chosen) {
       // Solo el líder del equipo cambia el foco, y lo mantiene varios segundos.
       // Así dos bots no se pasan el objetivo el uno al otro cada frame.
-      if (isLeader && chosenOffense >= 1) {
+      if (isLeader) {
         const focusEnemy =
           focus.slot === null
             ? null
@@ -1454,8 +1445,7 @@ export class BotController {
         const focusUsable =
           focusEnemy !== null &&
           focusEnemy.alive &&
-          this.visibleEnemies.includes(focusEnemy) &&
-          this.matchupFor(self, focusEnemy).offense >= 1;
+          this.visibleEnemies.includes(focusEnemy);
         if (focus.slot === null || !focusUsable) {
           focus.slot = chosen.slot;
           focus.until = this.clock + FOCUS_HOLD_SECONDS;
@@ -3185,7 +3175,7 @@ export class BotController {
     }
     const target = this.target;
     const targetIsVisible =
-      target !== null && this.targetVisible && target.alive && this.engageTarget;
+      target !== null && this.targetVisible && target.alive;
     const channeling = self.activeCast !== null;
     // El destino solo guía el movimiento cuando no hay combate ni amenaza:
     // en esos casos el bot orbita al rival a propósito y no debe considerarse
