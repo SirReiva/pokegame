@@ -25,8 +25,6 @@ import {
 } from '../game/modes';
 import {
   BOT_DIFFICULTY_LABEL,
-  DEFAULT_MOVEMENT_MODE,
-  MOVEMENT_MODES,
   PLAYER_NAME_MAX_LENGTH,
   countTeams,
   defaultPlayerName,
@@ -38,8 +36,7 @@ import {
   teamsForMap,
   type BotDifficulty,
   type LobbyPlayer,
-  type MatchPlayerConfig,
-  type MovementMode
+  type MatchPlayerConfig
 } from '../game/multiplayer';
 import {
   loadPlayerPreference,
@@ -207,7 +204,6 @@ function makeBotPlayer(
     pokemonId: entry?.id ?? manifest.pokemon[0]?.id ?? '',
     skinId: randomBotSkinId(manifest, entry?.id ?? manifest.pokemon[0]?.id ?? ''),
     commonAbilityId,
-    movementMode: DEFAULT_MOVEMENT_MODE,
     rosterReady: true,
     isBot: true,
     botDifficulty: difficulty
@@ -400,9 +396,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         manifestRef.current,
         humanTeamPokemonIds(current, team)
       );
-      // El nombre y el modo de control son propios del dispositivo: al volver
-      // a conectarse se recuperan de `sessionStorage` antes de aplicar los
-      // valores por defecto de la plaza.
+      // El nombre es propio del dispositivo: al volver a conectarse se recupera
+      // de `sessionStorage` antes de aplicar los valores por defecto de la
+      // plaza.
       const preference = loadPlayerPreference(device.id);
       const nextPlayers = [
         ...current,
@@ -418,7 +414,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           pokemonId: firstPokemon,
           skinId: DEFAULT_SKIN_ID,
           commonAbilityId: DEFAULT_COMMON_ABILITY,
-          movementMode: preference?.movementMode ?? DEFAULT_MOVEMENT_MODE,
           rosterReady: false
         }
       ];
@@ -480,36 +475,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     },
     [commitPlayers, maxTeamSize, teams]
-  );
-
-  const setPlayerMovementMode = useCallback(
-    (slot: number, mode: MovementMode) => {
-      const current = playersRef.current;
-      const player = current.find((entry) => entry.slot === slot);
-      if (!player || player.isBot || !MOVEMENT_MODES.includes(mode)) return;
-      if (player.movementMode === mode) return;
-      savePlayerPreference(player.deviceId, { movementMode: mode });
-      commitPlayers(
-        current.map((entry) =>
-          entry.slot === slot ? { ...entry, movementMode: mode } : entry
-        )
-      );
-    },
-    [commitPlayers]
-  );
-
-  const cyclePlayerMovementMode = useCallback(
-    (slot: number) => {
-      const player = playersRef.current.find((entry) => entry.slot === slot);
-      if (!player || player.isBot) return;
-      const index = Math.max(
-        0,
-        MOVEMENT_MODES.indexOf(player.movementMode ?? DEFAULT_MOVEMENT_MODE)
-      );
-      const next = MOVEMENT_MODES[(index + 1) % MOVEMENT_MODES.length];
-      setPlayerMovementMode(slot, next);
-    },
-    [setPlayerMovementMode]
   );
 
   const addBot = useCallback(
@@ -615,7 +580,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       pokemonId: player.pokemonId || firstPokemon,
       skinId: player.skinId ?? DEFAULT_SKIN_ID,
       commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
-      movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
       // Los bots ya están listos: no deben bloquear el paso al roster ni la
       // partida, y su selección no se toca al volver a elegir humanos.
       teamReady: player.isBot ? true : player.teamReady,
@@ -846,7 +810,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ? skinFor(entry, player.skinId).id
           : (player.skinId ?? DEFAULT_SKIN_ID),
         commonAbilityId: player.commonAbilityId,
-        movementMode: player.movementMode ?? DEFAULT_MOVEMENT_MODE,
         isBot: player.isBot,
         botDifficulty: player.botDifficulty
       };
@@ -881,8 +844,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setBotDifficulty,
       setPlayerName,
       setPlayerTeam,
-      setPlayerMovementMode,
-      cyclePlayerMovementMode,
       toggleTeamReady,
       leavePlayer,
       continueToRoster,
@@ -925,8 +886,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setBotDifficulty,
       setPlayerName,
       setPlayerTeam,
-      setPlayerMovementMode,
-      cyclePlayerMovementMode,
       toggleTeamReady,
       leavePlayer,
       continueToRoster,

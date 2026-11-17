@@ -6,8 +6,7 @@ import type { GameModeId, ModeSettingValue, ModeSettings } from '../game/modes';
 import type {
   BotDifficulty,
   LobbyPlayer,
-  MatchPlayerConfig,
-  MovementMode
+  MatchPlayerConfig
 } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
@@ -47,9 +46,6 @@ export interface SessionValue {
   setBotDifficulty: (difficulty: BotDifficulty) => void;
   setPlayerName: (slot: number, name: string) => void;
   setPlayerTeam: (slot: number, team: Team) => void;
-  /** Modo de control de un jugador humano; se elige en el lobby. */
-  setPlayerMovementMode: (slot: number, mode: MovementMode) => void;
-  cyclePlayerMovementMode: (slot: number) => void;
   toggleTeamReady: (slot: number) => void;
   leavePlayer: (slot: number) => void;
   continueToRoster: () => boolean;

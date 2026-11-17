@@ -33,7 +33,6 @@ function configsFor(): MatchPlayerConfig[] {
       team,
       pokemonId: pokemonIds[index % pokemonIds.length],
       commonAbilityId: 'proteccion',
-      movementMode: 'normal',
       isBot: !isHuman,
       botDifficulty: isHuman ? undefined : 'normal'
     };

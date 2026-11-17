@@ -137,11 +137,6 @@ export function stepPlayer(
   const rightX = Math.cos(yaw);
   const rightZ = -Math.sin(yaw);
 
-  // En el modo táctico el cuerpo no gira hacia la entrada: mira siempre hacia
-  // donde apunta la cámara y el stick se interpreta como avance/retroceso (eje
-  // Y) más desplazamiento lateral (eje X).
-  const tactical = !player.isBot && player.movementMode === 'tactical';
-
   // El bloqueo de movimiento lo consume `stepActiveCast`: si el casteo está en
   // startup o en la ventana activa de una melee, este bloque no se ejecuta.
   const moveX = input.moveX;
@@ -178,13 +173,11 @@ export function stepPlayer(
     const dirX = desiredX / magnitude;
     const dirZ = desiredZ / magnitude;
     // De entrada se apunta a la dirección exacta pedida. Solo se sustituye por
-    // un rumbo intermedio si hace falta girar poco a poco. El modo táctico no
-    // interpola: el desplazamiento lateral debe ser inmediato y no arrastrar el
-    // rumbo anterior, que es el de la cámara.
+    // un rumbo intermedio si hace falta girar poco a poco.
     let headingX = dirX;
     let headingZ = dirZ;
 
-    if (!tactical && currentSpeed > 0.0001) {
+    if (currentSpeed > 0.0001) {
       const currentX = player.vx / currentSpeed;
       const currentZ = player.vz / currentSpeed;
       const dot = clamp(currentX * dirX + currentZ * dirZ, -1, 1);
@@ -232,7 +225,7 @@ export function stepPlayer(
   player.z = resolved.z;
 
   const speed = Math.hypot(player.vx, player.vz);
-  if (!tactical && speed > CONFIG.player.minFacingSpeed) {
+  if (speed > CONFIG.player.minFacingSpeed) {
     const targetFacing = Math.atan2(player.vx, player.vz);
     player.facing = angleLerp(
       player.facing,

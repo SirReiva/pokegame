@@ -139,13 +139,6 @@ function LobbyContent() {
         return;
       }
 
-      // Y (o Triángulo / Tab / F) alterna el modo de movimiento de este
-      // jugador sin desmarcar su estado de listo.
-      if (action === 'flip') {
-        session.cyclePlayerMovementMode(player.slot);
-        return;
-      }
-
       if (!player.teamReady) {
         if (action === 'left' || action === 'right') {
           const teams = session.teams;
@@ -219,7 +212,6 @@ function LobbyContent() {
       onFillBots={session.fillBots}
       onJoin={session.joinDevice}
       onRename={session.setPlayerName}
-      onSetMovementMode={session.setPlayerMovementMode}
       onReady={session.toggleTeamReady}
       onLeave={session.leavePlayer}
       onContinue={() => {

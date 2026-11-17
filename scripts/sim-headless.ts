@@ -748,7 +748,6 @@ export class HeadlessMatch {
       team,
       pokemonId,
       commonAbilityId,
-      movementMode: 'normal',
       isBot: true,
       botDifficulty: this.options.difficulty
     };

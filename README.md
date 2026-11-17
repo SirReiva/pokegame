@@ -117,7 +117,6 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Elegir equipo | Cruceta izquierda / stick izquierdo | `A` / `D` o flechas |
 | Navegar por tu carrusel de Pokémon | Cruceta / stick izquierdo | `WASD` / flechas |
 | Abrir el teclado del nombre (lobby) | `X` | Escribe directamente en la tarjeta |
-| Cambiar modo de movimiento (lobby) | `Y` | `Tab` / `F` |
 | Girar la card del Pokémon | `X` / `Y` | `Tab` / `F` |
 | Moverte en el mapa | Stick izquierdo | `WASD` / flechas |
 | Girar tu cámara | Stick derecho | `Q` / `E` o arrastrar con el ratón |
@@ -131,7 +130,7 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Pausa | `Start` | `Esc` |
 | Ocultar HUD | — | `H` |
 
-Cada jugador elige su **modo de movimiento** en `/lobby`, en su propia tarjeta: **Normal**, donde el Pokémon gira hacia donde camina, o **Táctico**, donde mira siempre hacia donde apunta la cámara; allí el eje vertical del stick avanza o retrocede y el horizontal desplaza lateralmente sin girar el cuerpo. Al girar la cámara en modo táctico también gira el Pokémon, y las habilidades se lanzan hacia esa mirada. También se cambia con `Y` en el mando (o `Tab`/`F` en el teclado).
+Cada jugador se mueve con el stick o las teclas de dirección y el Pokémon gira hacia donde camina: el stick se orienta respecto a la cámara y las habilidades se lanzan hacia esa mirada.
 
 La configuración tiene dos rutas:
 

@@ -2840,11 +2840,7 @@ export class Game {
       if (assisted) {
         dirX = assisted.dirX;
         dirZ = assisted.dirZ;
-        // En modo táctico el cuerpo sigue a la cámara: la ayuda solo corrige
-        // la trayectoria y no debe girar el sprite contra el control.
-        if (player.movementMode !== 'tactical') {
-          player.facing = Math.atan2(dirX, dirZ);
-        }
+        player.facing = Math.atan2(dirX, dirZ);
       }
     }
     // Las habilidades de área no se pueden colocar detrás de un obstáculo:

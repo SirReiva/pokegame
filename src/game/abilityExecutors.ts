@@ -223,11 +223,8 @@ const executeProjectile: AbilityExecutor = (player, def, deps) => {
   if (assisted) {
     dirX = assisted.dirX;
     dirZ = assisted.dirZ;
-    // El modo táctico fija la mirada a la cámara; allí solo se corrige la
-    // trayectoria, no el sprite. En el modo normal el cuerpo acompaña al tiro.
-    if (player.movementMode !== 'tactical') {
-      player.facing = Math.atan2(dirX, dirZ);
-    }
+    // El cuerpo acompaña al tiro para que el disparo y el sprite coincidan.
+    player.facing = Math.atan2(dirX, dirZ);
   }
   const originX = player.x + dirX * 0.4;
   const originZ = player.z + dirZ * 0.4;

@@ -8,18 +8,14 @@
 
 import { CONFIG } from './config';
 import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
-import type {
-  BotDifficulty,
-  MovementMode
-} from './core/match/config';
+import type { BotDifficulty } from './core/match/config';
 import type { AssistKind } from './core/match/assists';
 import type { PokemonType } from './core/typeChart';
 import type { InputDeviceInfo } from './input';
 
 export type {
   BotDifficulty,
-  MatchPlayerConfig,
-  MovementMode
+  MatchPlayerConfig
 } from './core/match/config';
 import type {
   GameModeId,
@@ -63,22 +59,6 @@ export function normalizePlayerName(name: string, slot: number): string {
   const clean = name.replace(/\s+/g, ' ').trim().slice(0, PLAYER_NAME_MAX_LENGTH);
   return clean || defaultPlayerName(slot);
 }
-
-/**
- * Modo de movimiento de un jugador humano.
- *
- * `normal`: el Pokémon mira hacia donde camina y el stick se orienta respecto
- * a la cámara. `tactical`: mira siempre hacia donde apunta la cámara, el eje Y
- * avanza o retrocede y el eje X desplaza lateralmente sin girar el cuerpo.
- */
-export const MOVEMENT_MODES: readonly MovementMode[] = ['normal', 'tactical'];
-
-export const DEFAULT_MOVEMENT_MODE: MovementMode = 'normal';
-
-export const MOVEMENT_MODE_LABEL: Record<MovementMode, string> = {
-  normal: 'Normal',
-  tactical: 'Táctico'
-};
 
 export const BOT_DIFFICULTIES: readonly BotDifficulty[] = [
   'easy',
@@ -346,8 +326,6 @@ export interface LobbyPlayer {
   /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
   skinId?: string;
   commonAbilityId: CommonAbilityId;
-  /** Modo de control elegido por este jugador en el lobby. */
-  movementMode: MovementMode;
   rosterReady: boolean;
   /** `true` si la plaza la controla la IA en vez de un dispositivo. */
   isBot?: boolean;
