@@ -171,7 +171,7 @@ export interface AoeHitOptions {
   control?: boolean;
   /** Cancela dash y preparación. Por defecto, el valor de `control`. */
   cancel?: boolean;
-  /** Segundos de hitstun. Por defecto, el global si `control`, o 0 si no. */
+  /** Segundos de hitstun. Por defecto, `def.hitstun` si `control`, o 0 si no. */
   hitstun?: number;
   /**
    * Distancia de empuje. `null` lo desactiva. Por defecto, `def.knockback` si

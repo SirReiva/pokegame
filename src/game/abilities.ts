@@ -37,6 +37,8 @@ import type {
 import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
+import { CONFIG } from './config';
+
 import type {
   AbilityShape,
   AbilitySlot,
@@ -115,6 +117,7 @@ export const DEFAULT_ABILITY: Omit<
   pierce: 0,
   dashDistance: 0,
   knockback: 0,
+  hitstun: CONFIG.combat.hitstunSeconds,
   buffs: [],
   slow: null,
   dot: null,
@@ -364,6 +367,15 @@ export class AbilityBuilder {
 
   knockback(value: number): this {
     this.draft.knockback = value;
+    return this;
+  }
+
+  /**
+   * Segundos de hitstun que aplica el golpe. Por defecto, el global
+   * (`CONFIG.combat.hitstunSeconds`) y solo cuenta si el golpe lleva control.
+   */
+  hitstun(seconds: number): this {
+    this.draft.hitstun = seconds;
     return this;
   }
 

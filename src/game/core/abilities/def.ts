@@ -143,6 +143,12 @@ export interface AbilityDef {
   dashDistance: number;
   /** Empuje aplicado al objetivo al impactar, en unidades de mundo. */
   knockback: number;
+  /**
+   * Segundos de hitstun que aplica el golpe al impactar. Solo cuenta cuando el
+   * golpe lleva control (el valor por defecto). Por defecto, el global
+   * `CONFIG.combat.hitstunSeconds`.
+   */
+  hitstun: number;
   /** Buffs que se aplican al lanzador al usar la habilidad. */
   buffs: BuffSpec[];
   /** Ralentización que se aplica a los enemigos golpeados. */

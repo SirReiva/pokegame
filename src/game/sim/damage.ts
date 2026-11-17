@@ -24,7 +24,6 @@ import type {
   HealOnHitToken,
   MatchPlayerState
 } from '../matchState';
-import { CONFIG } from '../config';
 import { computeDamage, rollCritical, rollRandomFactor } from '../combat';
 import { applyHealSelf } from '../effects';
 import { typeEffectiveness } from '../core/typeChart';
@@ -296,7 +295,7 @@ export function applyAbilityDamage(
   const control = options.control ?? true;
   const cancel = options.cancel ?? control;
   const hitstun =
-    options.hitstun ?? (control ? CONFIG.combat.hitstunSeconds : 0);
+    options.hitstun ?? (control ? def.hitstun : 0);
   const knockback =
     options.knockback === undefined
       ? control
