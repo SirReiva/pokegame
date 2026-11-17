@@ -53,8 +53,8 @@ export interface TerrainRelation {
  * los tipos del Pokémon como defensores:
  *
  * - `home`: el Pokémon comparte el tipo del terreno.
- * - `hostile`: el terreno es súper eficaz contra el Pokémon (×2 o más).
- * - `comfortable`: el Pokémon lo resiste o es inmune (×0,5, ×0,25 o ×0).
+ * - `hostile`: el terreno es súper eficaz contra el Pokémon (×1,05 o más).
+ * - `comfortable`: el Pokémon lo resiste o es inmune (×0,95, ×0,90 o ×0,85).
  * - `neutral`: cualquier otra combinación.
  */
 export function terrainTypeRelation(
@@ -69,7 +69,7 @@ export function terrainTypeRelation(
 
   const effectiveness = typeEffectiveness(terrainType, pokemonTypes);
 
-  if (effectiveness >= 2) return { terrainType, reason: 'hostile' };
+  if (effectiveness > 1) return { terrainType, reason: 'hostile' };
   if (effectiveness < 1) return { terrainType, reason: 'comfortable' };
   return { terrainType, reason: 'neutral' };
 }

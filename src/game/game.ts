@@ -304,8 +304,7 @@ function createPendingPopup(target: MatchPlayerState): PendingPopup {
     critical: false,
     effectiveness: 1,
     heal: false,
-    lethal: false,
-    immune: false
+    lethal: false
   };
 }
 
@@ -635,7 +634,6 @@ export class Game {
     effectiveness: 1,
     heal: false,
     lethal: false,
-    immune: false,
     views: this.damageNumberViews
   };
   /**
@@ -965,7 +963,6 @@ export class Game {
       activeCastArmor: (target) => self.activeCastArmor(target),
       spawnArmorFeedback: (target, broke) => self.spawnArmorFeedback(target, broke),
       interruptWithRefund: (target, lethal) => self.interruptWithRefund(target, lethal),
-      showImmunePopup: (target, source) => self.showImmunePopup(target, source),
       showDamagePopup: (target, amount, critical, effectiveness, lethal, source) =>
         self.showDamagePopup(target, amount, critical, effectiveness, lethal, source),
       showHealPopup: (target, amount, source) => self.showHealPopup(target, amount, source),
@@ -3454,14 +3451,6 @@ export class Game {
     }
   }
 
-  /** Marca de inmunidad cuando la habilidad conecta pero el tipo la anula. */
-  private showImmunePopup(
-    target: MatchPlayerState,
-    source: MatchPlayerState | null
-  ): void {
-    this.enqueuePopup(target, source, 0, 'immune');
-  }
-
   /**
    * Encola el número de daño. Componer un número cuesta poco, pero varios
    * impactos en el mismo render se acumulaban en el p99: el render los dibuja
@@ -3474,7 +3463,7 @@ export class Game {
     target: MatchPlayerState,
     source: MatchPlayerState | null,
     amount: number,
-    kind: 'damage' | 'heal' | 'immune',
+    kind: 'damage' | 'heal',
     critical = false,
     effectiveness = 1,
     lethal = false
@@ -3492,7 +3481,6 @@ export class Game {
     popup.effectiveness = effectiveness;
     popup.heal = kind === 'heal';
     popup.lethal = lethal;
-    popup.immune = kind === 'immune';
     this.pendingPopups.push(popup);
   }
 
@@ -3563,7 +3551,6 @@ export class Game {
     options.effectiveness = popup.effectiveness;
     options.heal = popup.heal;
     options.lethal = popup.lethal;
-    options.immune = popup.immune;
     this.damageNumbers.spawn(options);
   }
 

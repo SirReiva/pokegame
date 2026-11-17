@@ -29,8 +29,6 @@ export interface DamageNumberOptions {
   heal?: boolean;
   /** `true` añade una calavera al número: el golpe ha dejado al objetivo a 0 PV. */
   lethal?: boolean;
-  /** `true` muestra la marca de inmunidad (🚫) en lugar de una cantidad. */
-  immune?: boolean;
   views: DamageNumberView[];
 }
 
@@ -62,10 +60,8 @@ const ATLAS_MAX_WIDTH = 1024;
 
 /** Calavera que marca un golpe mortal. */
 const SKULL = '💀';
-/** Marca que indica que el tipo del objetivo anula la habilidad. */
-const IMMUNE = '🚫';
 /** Glifos que forman parte del atlas. */
-const GLYPHS = `0123456789+!${SKULL}${IMMUNE} `;
+const GLYPHS = `0123456789+!${SKULL} `;
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** Estrategias de etiqueta: curación, crítico y daño normal. */
@@ -79,26 +75,14 @@ const LABELS: Record<
 };
 
 /** Estrategias de color de relleno del número. */
-const FILL_COLORS: Record<
-  'heal' | 'weak' | 'critical' | 'normal' | 'immune',
-  string
-> = {
+const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
   heal: '#6dff8e',
   weak: '#d46a75',
   critical: '#ff2d55',
-  normal: '#ff4d5a',
-  immune: '#e6e9ff'
-};
-
-/** Estrategias de resplandor: curación verde, daño rojo o inmunidad azul. */
-const GLOW_COLORS: Record<'heal' | 'damage' | 'immune', string> = {
-  heal: 'rgba(60, 255, 120, 0.9)',
-  damage: 'rgba(255, 40, 70, 0.85)',
-  immune: 'rgba(150, 180, 255, 0.9)'
+  normal: '#ff4d5a'
 };
 
 function labelFor(options: DamageNumberOptions): string {
-  if (options.immune) return IMMUNE;
   if (options.heal) return LABELS.heal(options.amount);
   const base = options.critical
     ? LABELS.critical(options.amount)
@@ -109,18 +93,15 @@ function labelFor(options: DamageNumberOptions): string {
 function fillFor(
   critical: boolean,
   effectiveness: number,
-  heal: boolean,
-  immune: boolean
+  heal: boolean
 ): string {
-  const key = immune
-    ? 'immune'
-    : heal
-      ? 'heal'
-      : effectiveness < 1
-        ? 'weak'
-        : critical
-          ? 'critical'
-          : 'normal';
+  const key = heal
+    ? 'heal'
+    : effectiveness < 1
+      ? 'weak'
+      : critical
+        ? 'critical'
+        : 'normal';
   return FILL_COLORS[key];
 }
 
@@ -209,7 +190,7 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   let rowY = 0;
   let atlasWidth = 0;
   for (const char of GLYPHS) {
-    const emoji = char === SKULL || char === IMMUNE;
+    const emoji = char === SKULL;
     measure.font = emoji ? emojiFont : numberFont;
     const advance = Math.max(2, Math.ceil(measure.measureText(char).width));
     const width = advance + ATLAS_PAD * 2;
@@ -236,14 +217,12 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   context.miterLimit = 2;
   for (const glyph of glyphs.values()) {
     if (glyph.char === ' ') continue;
-    const emoji = glyph.char === SKULL || glyph.char === IMMUNE;
+    const emoji = glyph.char === SKULL;
     const centerY = glyph.y + ATLAS_CELL_HEIGHT / 2;
     const x = glyph.x + glyph.pad;
     context.font = emoji ? emojiFont : numberFont;
-    // El resplandor va en blanco para que el tinte del material lo coloree. La
-    // inmunidad se dibuja ya en azul y se pinta sin tinte.
-    context.shadowColor =
-      glyph.char === IMMUNE ? GLOW_COLORS.immune : 'rgba(255, 255, 255, 0.9)';
+    // El resplandor va en blanco para que el tinte del material lo coloree.
+    context.shadowColor = 'rgba(255, 255, 255, 0.9)';
     context.shadowBlur = ATLAS_GLOW;
     if (!emoji) {
       context.lineWidth = ATLAS_STROKE;
@@ -498,9 +477,9 @@ export class DamageNumbers {
     }
     if (glyphs.length === 0) return;
 
-    const tint = options.immune
-      ? WHITE_TINT
-      : tintFor(fillFor(options.critical, options.effectiveness, options.heal ?? false, false));
+    const tint = tintFor(
+      fillFor(options.critical, options.effectiveness, options.heal ?? false)
+    );
 
     for (const view of options.views) {
       const slot = this.acquireSlot();

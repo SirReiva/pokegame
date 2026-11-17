@@ -66,11 +66,6 @@ export interface AoeHitInput<
   /** Token compartido del lanzamiento para que `healOnHit` cure una sola vez. */
   healToken?: HealOnHitToken;
   /**
-   * Slots que ya mostraron la marca de inmunidad en este lanzamiento. Las áreas
-   * persistentes lo comparten entre ticks para no repetir el aviso.
-   */
-  immuneMarked?: Set<number>;
-  /**
    * Slots que ya cobraron el término plano `+2` de la fórmula. Las áreas
    * persistentes lo comparten entre ticks para cobrarlo una sola vez por
    * objetivo en lugar de una por tick.

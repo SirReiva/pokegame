@@ -17,9 +17,9 @@ import type { MatchPlayerState } from '../matchState';
 
 /** Ventaja de tipo del bot contra el rival y del rival contra el bot. */
 export interface MatchupValues {
-  /** Mejor multiplicador del bot contra el rival (0 si es inmune a todo). */
+  /** Mejor multiplicador del bot contra el rival. */
   offense: number;
-  /** Mejor multiplicador del rival contra el bot (0 si es inmune a todo). */
+  /** Mejor multiplicador del rival contra el bot. */
   defense: number;
 }
 

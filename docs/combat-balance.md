@@ -343,7 +343,7 @@ input (edge) → castAbility()
         └─ applySelfDamage()
               ↓
         applyAbilityDamage() por cada objetivo
-          ├─ inmunidad de tipo → sin daño, estado ni control
+          ├─ efectividad de tipo → escala el daño (×0,85 a ×1,10)
           ├─ slow (si la habilidad lo define)
           ├─ si no hace daño (estado) → control y fin
           ├─ computeDamage (stats, STAB, tipos, crítico, random)
@@ -369,14 +369,18 @@ daño = floor(base × crítico) → floor(× random) → floor(× STAB) → floo
 - Físico usa Ataque/Defensa; especial usa Ataque Especial/Defensa Especial.
 - STAB ×1,05 si el movimiento comparte tipo con el atacante.
 - Crítico 1/24, ×1,05.
+- Efectividad plana: inmune ×0,85, resiste ×0,95, neutro ×1, débil ×1,05.
+  Contra dos tipos se multiplican (×0,95² ≈ ×0,90 y ×1,05² ≈ ×1,10). Ningún
+  tipo anula el golpe.
 - Factor aleatorio 0,85-1,00.
 - Sin tirada de precisión: si la geometría del golpe alcanza al objetivo, el
   golpe conecta siempre. El acierto depende del apuntado del jugador.
-- Inmunidad de tipo → 0; cualquier otro golpe válido hace al menos 1.
+- Ningún golpe válido se anula: el mínimo es 1 de daño.
 
-La tabla de tipos de `src/game/typeChart.ts` es correcta para la generación VI+
-(incluye las inmunidades Normal↔Ghost, Fighting→Ghost, Psychic→Dark,
-Poison→Steel, Ground→Flying, Electric→Ground y Dragon→Fairy).
+La tabla de tipos de `src/game/typeChart.ts` conserva las relaciones de la
+generación VI+ (incluidas las inmunidades Normal↔Ghost, Fighting→Ghost,
+Psychic→Dark, Poison→Steel, Ground→Flying, Electric→Ground y Dragon→Fairy),
+pero cada relación ya guarda directamente la escala plana del juego.
 
 ### Stats
 

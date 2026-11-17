@@ -842,7 +842,6 @@ export class HeadlessMatch {
       applyKnockback: (target, fromX, fromZ, distance) =>
         this.applyKnockback(target, fromX, fromZ, distance),
       playImpactSound: () => {},
-      showImmunePopup: () => {},
       showDamagePopup: () => {},
       showHealPopup: (target, amount, source) =>
         this.recordSupport(source, target, 'heal', amount),

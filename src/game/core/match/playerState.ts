@@ -271,11 +271,6 @@ export interface ActiveAoe {
   /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
   healToken?: HealOnHitToken;
   /**
-   * Slots que ya mostraron la marca de inmunidad en este lanzamiento. Evita
-   * apilar una marca por cada tick de un área persistente sobre el mismo rival.
-   */
-  immuneMarked: Set<number>;
-  /**
    * Slots que ya cobraron el `+2` de la fórmula en este lanzamiento. El área lo
    * comparte entre ticks para que el término plano no se multiplique por el
    * número de golpes.

@@ -134,12 +134,6 @@ const ORBIT_PROGRESS_GAIN = 0.35;
 const ALLY_DETOUR_SECONDS = 0.75;
 
 /**
- * Penalización para un rival inmune a todo el daño del bot. No lo convierte en
- * objetivo mientras haya cualquier otra pelea posible.
- */
-const IMMUNE_TARGET_PENALTY = 60;
-
-/**
  * Penalización al elegir objetivo por el daño que puede evitar ahora mismo.
  * Un rival invulnerable suma el máximo, y uno con escudo o buffs defensivos
  * solo la fracción mitigada: sigue siendo atacable si no hay otra opción.
@@ -1300,16 +1294,10 @@ export class BotController {
     players: readonly MatchPlayerState[],
     view: BotWorldView
   ): void {
-    // `best` agrupa a los rivales a los que el bot puede dañar; `immuneBest`
-    // queda como último recurso para no quedarse sin objetivo si todos los
-    // rivales visibles son inmunes a su daño.
     let best: MatchPlayerState | null = null;
     let bestScore = Infinity;
     let bestOffense = 1;
     let bestDefense = 1;
-    let immuneBest: MatchPlayerState | null = null;
-    let immuneScore = Infinity;
-    let immuneDefense = 1;
     // El array se reutiliza entre pasos: los consumidores lo leen durante este
     // mismo `update` y no guardan la lista.
     this.visibleEnemies.length = 0;
@@ -1373,24 +1361,27 @@ export class BotController {
       }
       if (this.target === enemy) score -= 1.5;
       // Foco de equipo: varios bots eligen al mismo objetivo mientras siga
-      // visible, en vez de repartirse al azar por el mapa. Un rival inmune a
-      // este bot no recibe el bonus: el foco no debe arrastrarlo a una pelea
-      // que no puede ganar.
-      if (focus.slot === enemy.slot && offense > 0) score -= 3.5;
+      // visible, en vez de repartirse al azar por el mapa. Un rival al que
+      // resistimos no recibe el bonus: el foco no debe arrastrarlo a una pelea
+      // poco rentable.
+      if (focus.slot === enemy.slot && offense >= 1) score -= 3.5;
 
       // Preferencia ofensiva: buscar al rival al que nuestros ataques le hacen
-      // más daño y evitar a los que resisten. La inmunidad se trata aparte.
-      if (offense >= 2) {
-        score -= (4 + (offense - 2) * 3) * typeWeight;
+      // más daño y evitar a los que resisten. La escala de efectividad es plana
+      // (±5-15 %), así que la diferencia se amplifica para que siga pesando
+      // como antes al elegir objetivo.
+      if (offense > 1) {
+        score -= (4 + (offense - 1) * 40) * typeWeight;
       } else if (offense < 1) {
-        score += (1 - offense) * 4 * typeWeight;
+        score += (1 - offense) * 30 * typeWeight;
       }
       // Cautela defensiva: un rival que nos pega súper eficaz es peligroso
-      // aunque esté herido. Si somos inmunes a su daño, es una pelea cómoda.
-      if (defense >= 2) {
-        score += (3 + (defense - 2) * 2) * typeWeight;
-      } else if (defense === 0) {
-        score -= 2.5 * typeWeight;
+      // aunque esté herido. Si su daño nos resulta poco eficaz, es una pelea
+      // cómoda.
+      if (defense > 1) {
+        score += (3 + (defense - 1) * 40) * typeWeight;
+      } else if (defense < 1) {
+        score -= (1 - defense) * 30 * typeWeight;
       }
       // Protección temporal: un rival invulnerable no recibe ningún golpe y
       // uno con escudo o buffs defensivos recibe menos. Sin esta penalización
@@ -1400,9 +1391,6 @@ export class BotController {
       const protection =
         enemy.invulnerableTimer > 0 ? 1 : 1 - this.damageTakenFactor(enemy, null);
       if (protection > 0) score += protection * MITIGATED_TARGET_PENALTY;
-      // Inmune a todo nuestro daño: mucho cuidado, solo se acepta si no hay
-      // ningún otro rival visible.
-      if (offense === 0) score += IMMUNE_TARGET_PENALTY;
 
       const pending = enemy.activeCast;
       if (pending) {
@@ -1431,15 +1419,6 @@ export class BotController {
         }
       }
 
-      if (offense === 0) {
-        if (score < immuneScore) {
-          immuneScore = score;
-          immuneBest = enemy;
-          immuneDefense = defense;
-        }
-        continue;
-      }
-
       if (score < bestScore) {
         bestScore = score;
         best = enemy;
@@ -1448,11 +1427,11 @@ export class BotController {
       }
     }
 
-    const chosen = best ?? immuneBest;
-    const chosenOffense = best ? bestOffense : 0;
-    const chosenDefense = best ? bestDefense : immuneDefense;
-    this.targetMatchupOffense = chosen ? chosenOffense : 1;
-    this.targetMatchupDefense = chosen ? chosenDefense : 1;
+    const chosen = best;
+    const chosenOffense = chosen ? bestOffense : 1;
+    const chosenDefense = chosen ? bestDefense : 1;
+    this.targetMatchupOffense = chosenOffense;
+    this.targetMatchupDefense = chosenDefense;
 
     if (chosen !== this.target) {
       this.visibleTimer = 0;
@@ -1464,7 +1443,7 @@ export class BotController {
     if (chosen) {
       // Solo el líder del equipo cambia el foco, y lo mantiene varios segundos.
       // Así dos bots no se pasan el objetivo el uno al otro cada frame.
-      if (isLeader && chosenOffense > 0) {
+      if (isLeader && chosenOffense >= 1) {
         const focusEnemy =
           focus.slot === null
             ? null
@@ -1476,7 +1455,7 @@ export class BotController {
           focusEnemy !== null &&
           focusEnemy.alive &&
           this.visibleEnemies.includes(focusEnemy) &&
-          this.matchupFor(self, focusEnemy).offense > 0;
+          this.matchupFor(self, focusEnemy).offense >= 1;
         if (focus.slot === null || !focusUsable) {
           focus.slot = chosen.slot;
           focus.until = this.clock + FOCUS_HOLD_SECONDS;
@@ -2133,10 +2112,6 @@ export class BotController {
       if (def.shape === 'aoe' || def.shape === 'self') continue;
       if (def.shape === 'dash' && def.power <= 0) continue;
 
-      // Un golpe inmune no interrumpe: el motor anula el impacto entero.
-      const effectiveness = typeEffectiveness(def.type, source.types);
-      if (effectiveness === 0) continue;
-
       // El golpe no llega en el instante actual: se adelanta el rival al
       // momento del impacto. En proyectiles el tiempo de vuelo depende de la
       // distancia, así que se recalcula una vez con el punto ya corregido. El
@@ -2221,7 +2196,8 @@ export class BotController {
 
       // El retardo manda, pero dentro del mismo frame vale más la habilidad
       // con más potencia efectiva.
-      const weightedPower = def.power * effectiveness;
+      const weightedPower =
+        def.power * typeEffectiveness(def.type, source.types);
       if (
         bestPlan === null ||
         delay < bestDelay - INTERRUPT_DELAY_TOLERANCE ||
@@ -2381,7 +2357,6 @@ export class BotController {
       const id = attacker.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def || def.power <= 0 || def.category === 'status') continue;
-      if (typeEffectiveness(def.type, defender.types) === 0) continue;
       // El DPS entrante no hereda el adelanto imperfecto de este bot: se asume
       // que el rival apunta bien.
       const prediction = this.predictTarget(
@@ -2667,8 +2642,7 @@ export class BotController {
   /**
    * Mejor multiplicador de daño que `attacker` puede aplicar a `defender` con
    * sus habilidades dañinas, incluyendo tipo y clima. Si no tiene ninguna
-   * registrada, usa sus propios tipos como aproximación. Devuelve 0 cuando todo
-   * su daño es inmune.
+   * registrada, usa sus propios tipos como aproximación.
    */
   private bestDamageMultiplier(
     attacker: MatchPlayerState,
@@ -3882,7 +3856,6 @@ export class BotController {
       // alcanzar a tiempo no cuenta como herramienta.
       if (def.shape === 'aoe' || def.shape === 'self') continue;
       if (def.shape === 'dash' && def.power <= 0) continue;
-      if (typeEffectiveness(def.type, target.types) === 0) continue;
       if (def.category === 'status') return true;
       if (def.power <= 0) continue;
       const damage = this.expectedDamage(self, target, def, prediction);
@@ -3911,7 +3884,6 @@ export class BotController {
       const id = enemy.abilityIds[0];
       const poke = id ? ABILITIES[id] : null;
       if (!poke || poke.power <= 0 || poke.category === 'status') continue;
-      if (typeEffectiveness(poke.type, self.types) === 0) continue;
       // Solo cuenta si el poke puede alcanzar al bot desde donde está.
       const reach =
         poke.shape === 'melee'
@@ -4406,13 +4378,15 @@ export class BotController {
     );
 
     // Cautela de tipos: contra un rival que nos pega súper eficaz se mantiene
-    // algo más de distancia; contra uno al que somos inmunes, se acorta. El
-    // ajuste nunca saca la distancia preferida del alcance de la habilidad.
+    // algo más de distancia; si su daño es poco eficaz contra nosotros, se
+    // acorta. El ajuste nunca saca la distancia del alcance de la habilidad.
     const caution = this.targetMatchupDefense;
     if (caution !== 1) {
       const maxPreferred = this.maxUsefulRange(def, target);
       const adjust =
-        caution === 0 ? -0.7 : Math.min(1.8, (caution - 1) * 0.7);
+        caution < 1
+          ? -Math.min(0.7, (1 - caution) * 5)
+          : Math.min(1.8, (caution - 1) * 7);
       preferred = clamp(preferred + adjust, 0.9, maxPreferred);
     }
 

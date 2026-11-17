@@ -34,8 +34,6 @@ export interface DamageOptions {
   impactZ?: number;
   sourceX?: number;
   sourceZ?: number;
-  /** Marca de inmunidad compartida por los ticks de un lanzamiento. */
-  immuneMarked?: Set<number>;
   /** Objetivos que ya pagaron el `+2` de la fórmula en este lanzamiento. */
   flatBonusApplied?: Set<number>;
 }
@@ -75,7 +73,6 @@ export interface DamageSystemHost {
     distance: number
   ): void;
   playImpactSound(effectiveness: number): void;
-  showImmunePopup(target: MatchPlayerState, source: MatchPlayerState): void;
   showDamagePopup(
     target: MatchPlayerState,
     amount: number,
@@ -177,16 +174,9 @@ export function applyAbilityDamage(
       : options.knockback ?? 0;
   const slow = options.slow === undefined ? def.slow : options.slow;
 
-  // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
-  // impacto, ni control.
+  // La efectividad solo escala el daño: ningún tipo anula ya el golpe
+  // completo, así que el estado y el control se aplican igual.
   const effectiveness = typeEffectiveness(def.type, target.types);
-  if (effectiveness === 0) {
-    if (!options.immuneMarked || !options.immuneMarked.has(target.slot)) {
-      host.showImmunePopup(target, attacker);
-      options.immuneMarked?.add(target.slot);
-    }
-    return false;
-  }
   // El impacto suena para cualquier golpe válido, también los de estado.
   host.playImpactSound(effectiveness);
 

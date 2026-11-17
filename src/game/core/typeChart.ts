@@ -1,5 +1,7 @@
 /**
- * Tabla de tipos completa de Pokémon (generación VI en adelante).
+ * Tabla de tipos completa de Pokémon (generación VI en adelante) con la escala
+ * de daño del juego: inmune ×0,85, resiste ×0,95 y débil ×1,05. Contra dos
+ * tipos los valores se multiplican.
  *
  * Vive en el núcleo porque la usan tanto el movimiento por terreno
  * (`terrainSpeed.ts`) como el combate (`combat.ts`). Solo se listan los valores
@@ -28,167 +30,169 @@ export type PokemonType =
 
 export const TYPE_CHART: Record<PokemonType, Partial<Record<PokemonType, number>>> = {
   Normal: {
-    Rock: 0.5,
-    Ghost: 0,
-    Steel: 0.5
+    Rock: 0.95,
+    Ghost: 0.85,
+    Steel: 0.95
   },
   Fire: {
-    Fire: 0.5,
-    Water: 0.5,
-    Grass: 2,
-    Ice: 2,
-    Bug: 2,
-    Rock: 0.5,
-    Dragon: 0.5,
-    Steel: 2
+    Fire: 0.95,
+    Water: 0.95,
+    Grass: 1.05,
+    Ice: 1.05,
+    Bug: 1.05,
+    Rock: 0.95,
+    Dragon: 0.95,
+    Steel: 1.05
   },
   Water: {
-    Fire: 2,
-    Water: 0.5,
-    Grass: 0.5,
-    Ground: 2,
-    Rock: 2,
-    Dragon: 0.5
+    Fire: 1.05,
+    Water: 0.95,
+    Grass: 0.95,
+    Ground: 1.05,
+    Rock: 1.05,
+    Dragon: 0.95
   },
   Electric: {
-    Water: 2,
-    Electric: 0.5,
-    Grass: 0.5,
-    Ground: 0,
-    Flying: 2,
-    Dragon: 0.5
+    Water: 1.05,
+    Electric: 0.95,
+    Grass: 0.95,
+    Ground: 0.85,
+    Flying: 1.05,
+    Dragon: 0.95
   },
   Grass: {
-    Fire: 0.5,
-    Water: 2,
-    Grass: 0.5,
-    Poison: 0.5,
-    Ground: 2,
-    Flying: 0.5,
-    Bug: 0.5,
-    Rock: 2,
-    Dragon: 0.5,
-    Steel: 0.5
+    Fire: 0.95,
+    Water: 1.05,
+    Grass: 0.95,
+    Poison: 0.95,
+    Ground: 1.05,
+    Flying: 0.95,
+    Bug: 0.95,
+    Rock: 1.05,
+    Dragon: 0.95,
+    Steel: 0.95
   },
   Ice: {
-    Fire: 0.5,
-    Water: 0.5,
-    Grass: 2,
-    Ice: 0.5,
-    Ground: 2,
-    Flying: 2,
-    Dragon: 2,
-    Steel: 0.5
+    Fire: 0.95,
+    Water: 0.95,
+    Grass: 1.05,
+    Ice: 0.95,
+    Ground: 1.05,
+    Flying: 1.05,
+    Dragon: 1.05,
+    Steel: 0.95
   },
   Fighting: {
-    Normal: 2,
-    Ice: 2,
-    Poison: 0.5,
-    Flying: 0.5,
-    Psychic: 0.5,
-    Bug: 0.5,
-    Rock: 2,
-    Ghost: 0,
-    Dark: 2,
-    Steel: 2,
-    Fairy: 0.5
+    Normal: 1.05,
+    Ice: 1.05,
+    Poison: 0.95,
+    Flying: 0.95,
+    Psychic: 0.95,
+    Bug: 0.95,
+    Rock: 1.05,
+    Ghost: 0.85,
+    Dark: 1.05,
+    Steel: 1.05,
+    Fairy: 0.95
   },
   Poison: {
-    Grass: 2,
-    Poison: 0.5,
-    Ground: 0.5,
-    Rock: 0.5,
-    Ghost: 0.5,
-    Steel: 0,
-    Fairy: 2
+    Grass: 1.05,
+    Poison: 0.95,
+    Ground: 0.95,
+    Rock: 0.95,
+    Ghost: 0.95,
+    Steel: 0.85,
+    Fairy: 1.05
   },
   Ground: {
-    Fire: 2,
-    Electric: 2,
-    Grass: 0.5,
-    Poison: 2,
-    Flying: 0,
-    Bug: 0.5,
-    Rock: 2,
-    Steel: 2
+    Fire: 1.05,
+    Electric: 1.05,
+    Grass: 0.95,
+    Poison: 1.05,
+    Flying: 0.85,
+    Bug: 0.95,
+    Rock: 1.05,
+    Steel: 1.05
   },
   Flying: {
-    Electric: 0.5,
-    Grass: 2,
-    Fighting: 2,
-    Bug: 2,
-    Rock: 0.5,
-    Steel: 0.5
+    Electric: 0.95,
+    Grass: 1.05,
+    Fighting: 1.05,
+    Bug: 1.05,
+    Rock: 0.95,
+    Steel: 0.95
   },
   Psychic: {
-    Fighting: 2,
-    Poison: 2,
-    Psychic: 0.5,
-    Dark: 0,
-    Steel: 0.5
+    Fighting: 1.05,
+    Poison: 1.05,
+    Psychic: 0.95,
+    Dark: 0.85,
+    Steel: 0.95
   },
   Bug: {
-    Fire: 0.5,
-    Grass: 2,
-    Fighting: 0.5,
-    Poison: 0.5,
-    Flying: 0.5,
-    Psychic: 2,
-    Ghost: 0.5,
-    Dark: 2,
-    Steel: 0.5,
-    Fairy: 0.5
+    Fire: 0.95,
+    Grass: 1.05,
+    Fighting: 0.95,
+    Poison: 0.95,
+    Flying: 0.95,
+    Psychic: 1.05,
+    Ghost: 0.95,
+    Dark: 1.05,
+    Steel: 0.95,
+    Fairy: 0.95
   },
   Rock: {
-    Fire: 2,
-    Ice: 2,
-    Fighting: 0.5,
-    Poison: 0.5,
-    Ground: 0.5,
-    Flying: 2,
-    Bug: 2,
-    Steel: 0.5
+    Fire: 1.05,
+    Ice: 1.05,
+    Fighting: 0.95,
+    Poison: 0.95,
+    Ground: 0.95,
+    Flying: 1.05,
+    Bug: 1.05,
+    Steel: 0.95
   },
   Ghost: {
-    Normal: 0,
-    Psychic: 2,
-    Ghost: 2,
-    Dark: 0.5
+    Normal: 0.85,
+    Psychic: 1.05,
+    Ghost: 1.05,
+    Dark: 0.95
   },
   Dragon: {
-    Dragon: 2,
-    Steel: 0.5,
-    Fairy: 0
+    Dragon: 1.05,
+    Steel: 0.95,
+    Fairy: 0.85
   },
   Dark: {
-    Fighting: 0.5,
-    Psychic: 2,
-    Ghost: 2,
-    Dark: 0.5,
-    Fairy: 0.5
+    Fighting: 0.95,
+    Psychic: 1.05,
+    Ghost: 1.05,
+    Dark: 0.95,
+    Fairy: 0.95
   },
   Steel: {
-    Fire: 0.5,
-    Water: 0.5,
-    Electric: 0.5,
-    Ice: 2,
-    Rock: 2,
-    Steel: 0.5,
-    Fairy: 2
+    Fire: 0.95,
+    Water: 0.95,
+    Electric: 0.95,
+    Ice: 1.05,
+    Rock: 1.05,
+    Steel: 0.95,
+    Fairy: 1.05
   },
   Fairy: {
-    Fire: 0.5,
-    Fighting: 2,
-    Poison: 0.5,
-    Dragon: 2,
-    Dark: 2,
-    Steel: 0.5
+    Fire: 0.95,
+    Fighting: 1.05,
+    Poison: 0.95,
+    Dragon: 1.05,
+    Dark: 1.05,
+    Steel: 0.95
   }
 };
 
 /**
- * Multiplicador de un movimiento contra un Pokémon de uno o dos tipos.
- * Es el producto de la efectividad contra cada tipo, como en los juegos.
+ * Multiplicador de un movimiento contra un Pokémon de uno o dos tipos. Es el
+ * producto de la efectividad contra cada tipo, con la escala del juego: una
+ * resistencia y una debilidad dobles multiplican sus valores (×0,95² ≈ ×0,90
+ * y ×1,05² ≈ ×1,10).
  */
 export function typeEffectiveness(
   moveType: string,

@@ -100,7 +100,6 @@ export interface PendingPopup {
   effectiveness: number;
   heal: boolean;
   lethal: boolean;
-  immune: boolean;
 }
 
 /**

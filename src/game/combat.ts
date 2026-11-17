@@ -108,8 +108,8 @@ export function decorateDamage(
  * nivel; el nivel solo entra en `2 × nivel / 5 + 2`, que se lee de
  * `COMBAT_LEVEL` en `pokedex.ts` para que stats y daño no se desincronicen.
  * La efectividad se aplica con `floor` después de cada modificador, como en el
- * juego. Un movimiento inmune hace 0; cualquier otro golpe válido hace al
- * menos 1 de daño.
+ * juego. La escala es plana (×0,85 a ×1,10), así que ningún golpe válido se
+ * anula: el mínimo es 1 de daño.
  *
  * El término plano `+2` se puede sobrescribir con `flatBonus`: las áreas
  * persistentes lo ponen a 0 en los ticks posteriores al primero que alcanza a
@@ -131,15 +131,6 @@ export function computeDamage(input: DamageInput): DamageResult {
     ) + flatBonus;
 
   const effectiveness = typeEffectiveness(input.moveType, input.defenderTypes);
-  if (effectiveness === 0) {
-    return {
-      damage: 0,
-      effectiveness,
-      stab: isStab(input.moveType, input.attackerTypes),
-      critical: input.critical
-    };
-  }
-
   const stab = isStab(input.moveType, input.attackerTypes);
   const damage = decorateDamage(base, {
     critical: input.critical,

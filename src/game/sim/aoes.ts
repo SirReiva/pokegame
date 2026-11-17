@@ -148,7 +148,6 @@ function tickAoe(host: AoeSystemHost, aoe: ActiveAoe): void {
     elapsed: aoe.elapsed,
     power: basePower,
     healToken: aoe.healToken,
-    immuneMarked: aoe.immuneMarked,
     flatBonusApplied: aoe.flatBonusApplied
   };
   host.resolveAoeHit(hit);

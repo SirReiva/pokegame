@@ -236,8 +236,7 @@ export function emitAoeEvent(
     mode: def.aoeDamageMode,
     tick: 0,
     elapsed,
-    power: def.power,
-    immuneMarked: new Set()
+    power: def.power
   };
   const context: AoeEventContext<MatchPlayerState, AbilityDef> = {
     ...buildAoeContext(host, hit),
@@ -284,7 +283,6 @@ function applyAoeHit(
     impactZ: options.impactZ,
     sourceX: options.sourceX ?? hit.x,
     sourceZ: options.sourceZ ?? hit.z,
-    immuneMarked: hit.immuneMarked,
     flatBonusApplied: hit.flatBonusApplied
   });
 }

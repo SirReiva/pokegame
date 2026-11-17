@@ -98,7 +98,6 @@ export interface RuntimeState {
   activeCastArmor: DamageSystemHost['activeCastArmor'];
   spawnArmorFeedback: DamageSystemHost['spawnArmorFeedback'];
   interruptWithRefund: DamageSystemHost['interruptWithRefund'];
-  showImmunePopup: DamageSystemHost['showImmunePopup'];
   showDamagePopup: DamageSystemHost['showDamagePopup'];
   showHealPopup: DamageSystemHost['showHealPopup'];
   awardCombatXp: DamageSystemHost['awardCombatXp'];
@@ -234,7 +233,6 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       interruptWithRefund: state.interruptWithRefund,
       applyKnockback: state.applyKnockback,
       playImpactSound: state.playImpactSound,
-      showImmunePopup: state.showImmunePopup,
       showDamagePopup: state.showDamagePopup,
       showHealPopup: state.showHealPopup,
       awardCombatXp: state.awardCombatXp,

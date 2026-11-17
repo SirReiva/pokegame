@@ -92,13 +92,13 @@ try {
   const SLOT_LABEL = ['Básica', 'Habilidad 1', 'Habilidad 2', 'Definitiva'];
 
   function multiplierLabel(multiplier) {
-    if (multiplier === 0) return '×0';
-    if (multiplier === 0.25) return '×¼';
-    if (multiplier === 0.5) return '×½';
+    if (multiplier === 0.85) return '×0,85';
+    if (multiplier === 0.9) return '×0,90';
+    if (multiplier === 0.95) return '×0,95';
     if (multiplier === 1) return '×1';
-    if (multiplier === 2) return '×2';
-    if (multiplier === 4) return '×4';
-    return `×${multiplier}`;
+    if (multiplier === 1.05) return '×1,05';
+    if (multiplier === 1.1) return '×1,10';
+    return `×${multiplier.toFixed(2).replace('.', ',')}`;
   }
 
   /** Mediana de una lista; con un número par promedia los dos centrales. */
@@ -150,7 +150,7 @@ try {
     if (attacker.id === defender.id) return '—';
     const multiplier = typeEffectiveness(def.type, defender.types);
     if (def.power <= 0 || def.category === 'status') {
-      return multiplier === 0 ? 'Estado (×0)' : 'Estado';
+      return 'Estado';
     }
     const damage = expectedCast(attacker, defender, def);
     return `${Math.round(damage)} ${multiplierLabel(multiplier)}`;
@@ -195,8 +195,8 @@ try {
       'El `+2` de la fórmula se cobra una sola vez por objetivo y lanzamiento.'
   );
   lines.push(
-    '- **Estado**: la habilidad no hace daño. `Estado (×0)` indica que el tipo ' +
-      'es inmune y el estado tampoco se aplica.'
+    '- **Estado**: la habilidad no hace daño. El estado se aplica aunque el ' +
+      'tipo sea poco eficaz.'
   );
   lines.push(
     '- **—**: el rival es el propio atacante (no se calcula el mirror).'
@@ -211,8 +211,9 @@ try {
       'rival no esquiva ni sale del área.'
   );
   lines.push('');
-  lines.push('**Efectividades**: ×0 inmune · ×¼ doble resistencia · ×½ resiste · ' +
-    '×1 neutro · ×2 débil · ×4 doble debilidad.');
+  lines.push('**Efectividades**: ×0,85 inmune · ×0,95 resiste · ×1 neutro · ' +
+    '×1,05 débil. Contra dos tipos se multiplican: ×0,90 doble resistencia · ' +
+    '×1,10 doble debilidad.');
   lines.push('');
 
   lines.push('## Índice');

@@ -24,7 +24,6 @@ import type { PickupSpawn } from '../items';
 import type { MatchPlayerState } from '../matchState';
 import { maxHitRadius } from '../roster';
 import { terrainAt, terrainTeam } from '../terrain';
-import { typeEffectiveness } from '../typeChart';
 import type { Collider } from '../world';
 import { clamp, directionTo } from './math';
 import type {
@@ -278,19 +277,16 @@ export class BotDecision {
         Math.random() < this.ctx.tuning.commonChance;
     }
 
-    // Lectura de tipos del objetivo: atacar solo si podemos dañarlo, y huir
-    // antes si nos supera claramente en efectividad.
+    // Lectura de tipos del objetivo: huir antes si nos supera en efectividad.
     const targetOffense = target ? this.state.targetMatchupOffense : 1;
     const targetDefense = target ? this.state.targetMatchupDefense : 1;
-    const hopelessFight =
-      targetIsVisible && targetOffense === 0 && targetDefense > 0;
     const outmatchedFight =
-      targetIsVisible && targetDefense >= 2 && targetDefense > targetOffense;
+      targetIsVisible && targetDefense > 1 && targetDefense > targetOffense;
     const badFight =
-      hopelessFight || (outmatchedFight && hpFraction < MATCHUP_RETREAT_HP);
-    // Un rival inmune a todo el daño del bot no merece perseguirlo: se patrulla
-    // por otra zona mientras no haya una pelea mejor.
-    this.state.engageTarget = !targetIsVisible || targetOffense > 0;
+      outmatchedFight && hpFraction < MATCHUP_RETREAT_HP;
+    // Un rival que resiste todo nuestro daño es poco rentable: se patrulla por
+    // otra zona mientras no haya una pelea mejor.
+    this.state.engageTarget = !targetIsVisible || targetOffense >= 1;
 
     // La visión es compartida: un rival al otro lado del mapa visto por un
     // aliado no debe mantener al bot huyendo. Solo cuenta una amenaza cercana.
@@ -694,19 +690,6 @@ export class BotDecision {
       def.shield ||
       def.shape === 'dash';
     if (!hasEffect) return -Infinity;
-
-    // Una habilidad inmune no hace daño ni aplica control: nunca es una buena
-    // elección contra ese objetivo.
-    if (def.power > 0 && typeEffectiveness(def.type, target.types) === 0) {
-      return -Infinity;
-    }
-    if (
-      def.power <= 0 &&
-      def.slow !== null &&
-      typeEffectiveness(def.type, target.types) === 0
-    ) {
-      return -Infinity;
-    }
 
     const hitChance = this.hitChance(self, target, def, prediction);
     const expectedDamage = this.expectedDamage(
