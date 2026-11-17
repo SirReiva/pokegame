@@ -1,50 +1,30 @@
 /**
- * Velocidad base de movimiento (u/s) de cada Pokémon jugable, por id de
- * Pokédex. Cada compañero se mueve a un ritmo propio: los ligeros corren más y
- * los pesados avanzan más despacio. Los valores están separados a propósito
- * para que el cambio se note al elegir Pokémon, sin que ninguno se sienta roto.
+ * Velocidad base de movimiento (u/s) y hurtbox de cada Pokémon jugable, por id
+ * de Pokédex. Cada compañero se mueve a un ritmo propio: los ligeros corren más
+ * y los pesados avanzan más despacio.
+ *
+ * La velocidad se lee de `POKEDEX_PROFILES` (es la estadística VEL de la ficha).
+ * El hurtbox se cura aquí a mano porque no forma parte de las siete
+ * estadísticas del rediseño.
  *
  * Vive fuera del manifiesto (`public/sprites/manifest.json`) porque ese archivo
  * lo regenera `pnpm sprites` desde PMD Sprite Collab y perdería los ajustes.
  */
 
 import { CONFIG } from './config';
+import { POKEDEX_PROFILES } from './core/pokedex';
 
-export const POKEMON_SPEEDS: Record<string, number> = {
-  '0001': 4.6, // Bulbasaur: pesado y de paso corto, entre los más lentos
-  '0004': 5.8, // Charmander: el starter más ágil, con paso ligero
-  '0007': 5.2, // Squirtle: algo más lento que Charmander, pero constante
-  '0025': 6.9, // Pikachu: muy rápido por sus sentidos eléctricos
-  '0094': 7.6, // Gengar: flota y se desliza, rápido y escurridizo
-  '0100': 8.2, // Voltorb: rueda y detona, el más rápido del roster
-  '0133': 6.1, // Eevee: ágil y equilibrado
-  '0448': 6.5, // Lucario: zancada larga, casi tan rápido como Pikachu
-  '0658': 7.4, // Greninja: un ninja acuático, el más rápido hasta ahora
-  '0150': 7.8, // Mewtwo: levita y se impulsa con poder psíquico, el más rápido
-  '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
-  '0095': 4.6, // Onix: una serpiente de piedra enorme, avanza pesada
-  '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
-  '0130': 6.2, // Gyarados: serpiente marina enorme; se desliza con impulso
-  '0248': 4.5, // Tyranitar: mole de roca y piel dura, avanza con paso implacable
-  '0144': 6.8, // Articuno: planea con calma gélida, sin prisa pero sin pausa
-  '0145': 7.6, // Zapdos: alas de tormenta, el ave legendaria más veloz
-  '0146': 7.0, // Moltres: vuelo ardiente y constante
-  '0243': 7.7, // Raikou: corre como un rayo, el más veloz de las bestias
-  '0244': 7.2, // Entei: zancada poderosa de león volcánico
-  '0245': 7.0, // Suicune: se desliza ligero, con la elegancia del agua
-  '0249': 7.5, // Lugia: guardián de los mares, se impulsa con poder psíquico
-  '0250': 6.9, // Ho-Oh: envergadura inmensa, arranque pausado
-  '0251': 7.1, // Celebi: viaja en el tiempo con un vuelo juguetón
-  '0382': 5.9, // Kyogre: coloso marino, flota con impulso lento y constante
-  '0383': 5.6, // Groudon: coloso de tierra, avanza con peso sísmico
-  '0384': 7.6 // Rayquaza: serpiente del cielo, se desliza veloz por el aire
-};
+/**
+ * Velocidad de movimiento: se lee de `POKEDEX_PROFILES.stats.speed`. La tabla
+ * antigua vivía aquí y se duplicaba con las estadísticas; ahora VEL tiene una
+ * sola fuente en el núcleo.
+ */
 
 /** Velocidad de respaldo si aparece un Pokémon sin entrada en la tabla. */
 export const DEFAULT_SPEED = 5.4;
 
 export function speedForPokemon(id: string): number {
-  return POKEMON_SPEEDS[id] ?? DEFAULT_SPEED;
+  return POKEDEX_PROFILES[id]?.stats.speed ?? DEFAULT_SPEED;
 }
 
 /**
@@ -63,6 +43,7 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0004': 0.38, // Charmander: bípedo estrecho; la llama no cuenta
   '0007': 0.40, // Squirtle: pequeño, pero el caparazón da volumen
   '0025': 0.36, // Pikachu: cuerpo pequeño; orejas y cola no cuentan
+  '0059': 0.50, // Arcanine: cuadrúpedo grande; melena y cola no cuentan
   '0094': 0.44, // Gengar: cuerpo redondo y ancho
   '0100': 0.34, // Voltorb: una esfera pequeña
   '0133': 0.36, // Eevee: cuadrúpedo pequeño

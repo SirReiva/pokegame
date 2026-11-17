@@ -11,7 +11,7 @@
  * casteo.
  */
 
-import { MOVESETS } from './abilities';
+import { baseAbilityId, MOVESETS } from './abilities';
 import { ABILITY_CAST_SOUNDS, HIT_SOUNDS } from './abilitySounds';
 import type { CommonAbilityId } from './core/abilities/common';
 
@@ -43,7 +43,9 @@ export function sfxPathsForRoster(
 
   for (const entry of roster) {
     for (const abilityId of MOVESETS[entry.pokemonId] ?? []) {
-      const path = abilityId ? ABILITY_CAST_SOUNDS[abilityId] : undefined;
+      const path = abilityId
+        ? ABILITY_CAST_SOUNDS[baseAbilityId(abilityId)]
+        : undefined;
       if (path) paths.add(path);
     }
     const commonPath = entry.commonAbilityId

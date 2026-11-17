@@ -128,11 +128,10 @@ export function stepPendingAoeEnds(host: AoeSystemHost, dt: number): void {
 
 function tickAoe(host: AoeSystemHost, aoe: ActiveAoe): void {
   const basePower = aoe.def.power * aoe.tickInterval;
-  // `flatBonusApplied` viaja con el tick para que `applyAbilityDamage` cobre el
-  // `+2` de la fórmula una sola vez por objetivo y lanzamiento. El callback de
-  // la habilidad decide qué se aplica en cada tick. El efecto por defecto
-  // conserva el comportamiento histórico: si no hay daño ni slow, el tick no
-  // hace nada, pero un callback propio puede seguir repartiendo buffs o debuffs.
+  // El callback de la habilidad decide qué se aplica en cada tick. El efecto
+  // por defecto conserva el comportamiento histórico: si no hay daño ni slow,
+  // el tick no hace nada, pero un callback propio puede seguir repartiendo
+  // buffs o debuffs.
   const hit: AoeHitInput<MatchPlayerState, AbilityDef> = {
     owner: aoe.owner,
     def: aoe.def,
@@ -148,8 +147,7 @@ function tickAoe(host: AoeSystemHost, aoe: ActiveAoe): void {
     elapsed: aoe.elapsed,
     power: basePower,
     healToken: aoe.healToken,
-    immuneMarked: aoe.immuneMarked,
-    flatBonusApplied: aoe.flatBonusApplied
+    immuneMarked: aoe.immuneMarked
   };
   host.resolveAoeHit(hit);
   aoe.tick += 1;

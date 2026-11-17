@@ -187,8 +187,12 @@ export const TYPE_CHART: Record<PokemonType, Partial<Record<PokemonType, number>
 };
 
 /**
- * Multiplicador de un movimiento contra un Pokémon de uno o dos tipos.
+ * Multiplicador clásico de un movimiento contra un Pokémon de uno o dos tipos.
  * Es el producto de la efectividad contra cada tipo, como en los juegos.
+ *
+ * Se conserva con los valores clásicos (×2, ×0,5, ×0) porque reglas que no son
+ * de daño —como la velocidad por terreno— siguen leyendo la tabla original.
+ * El combate usa `combatEffectiveness`, que suaviza el resultado.
  */
 export function typeEffectiveness(
   moveType: string,
@@ -201,7 +205,38 @@ export function typeEffectiveness(
   return multiplier;
 }
 
-/** STAB: el movimiento comparte tipo con quien lo usa. */
-export function isStab(moveType: string, attackerTypes: readonly string[]): boolean {
-  return attackerTypes.includes(moveType);
+/**
+ * Efectividades del rediseño:
+ *
+ * | Relación clásica | Multiplicador |
+ * |---|---:|
+ * | Súper eficaz | 1,15 |
+ * | Poco eficaz | 0,90 |
+ * | Inmunidad clásica | 0,85 |
+ * | Neutra | 1,00 |
+ *
+ * Los tipos dobles multiplican las relaciones clásicas y el resultado se
+ * clasifica en una de esas cuatro bandas. Así no existen ×4 ni inmunidades
+ * absolutas: el peor caso es 0,85 y el mejor 1,15. Un ataque siempre hace al
+ * menos 1 PV.
+ */
+export const COMBAT_EFFECTIVENESS = {
+  superEffective: 1.15,
+  notVeryEffective: 0.9,
+  immune: 0.85,
+  neutral: 1
+} as const;
+
+export function combatEffectiveness(
+  moveType: string,
+  defenderTypes: readonly string[]
+): number {
+  let product = 1;
+  for (const type of defenderTypes) {
+    product *= TYPE_CHART[moveType as PokemonType]?.[type as PokemonType] ?? 1;
+  }
+  if (product === 0) return COMBAT_EFFECTIVENESS.immune;
+  if (product >= 2) return COMBAT_EFFECTIVENESS.superEffective;
+  if (product <= 0.5) return COMBAT_EFFECTIVENESS.notVeryEffective;
+  return COMBAT_EFFECTIVENESS.neutral;
 }

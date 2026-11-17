@@ -16,6 +16,10 @@ const BAR_TEXTURE_HEIGHT = 28;
 const XP_TEXTURE_WIDTH = 256;
 const XP_TEXTURE_HEIGHT = 12;
 
+/** Tira de estados sobre la barra de vida (DoT, marcas, anti-heal, control). */
+const STATUS_TEXTURE_WIDTH = 256;
+const STATUS_TEXTURE_HEIGHT = 14;
+
 /**
  * Resolución del distintivo de nivel (cuadrado). Se dibuja con margen de sobra
  * y se reduce al pintarlo: el badge ocupa ~20-50 px en pantalla, así que una
@@ -53,6 +57,9 @@ export interface HealthBarLayout {
   xpWidth: number;
   xpHeight: number;
   xpGap: number;
+  statusWidth: number;
+  statusHeight: number;
+  statusGap: number;
   /** Altura sobre la raíz del billboard donde apoya la barra. */
   y: number;
 }
@@ -70,6 +77,9 @@ export function healthBarLayoutFor(spriteHeight: number): HealthBarLayout {
     xpWidth: width * 0.86,
     xpHeight,
     xpGap: Math.max(0.012, height * 0.2),
+    statusWidth: width,
+    statusHeight: Math.max(0.03, height * 0.26),
+    statusGap: Math.max(0.014, height * 0.22),
     y: spriteHeight + 0.18
   };
 }
@@ -125,10 +135,12 @@ export class HealthBarArt {
   readonly barCanvas: HTMLCanvasElement;
   readonly xpCanvas: HTMLCanvasElement;
   readonly badgeCanvas: HTMLCanvasElement;
+  readonly statusCanvas: HTMLCanvasElement;
 
   private readonly barContext: CanvasRenderingContext2D;
   private readonly xpContext: CanvasRenderingContext2D;
   private readonly badgeContext: CanvasRenderingContext2D;
+  private readonly statusContext: CanvasRenderingContext2D;
   private readonly accent: string;
   private readonly badgeTextColor: string;
 
@@ -137,6 +149,12 @@ export class HealthBarArt {
   /** Armadura de casteo restante respecto a la vida máxima (0-1). */
   private armorFraction = 0;
   private level = 1;
+  /** Estados visibles en la tira superior. */
+  private dotDps = 0;
+  private markStacks = 0;
+  private antiHeal = 0;
+  private rooted = false;
+  private silenced = false;
 
   constructor(layout: HealthBarLayout, accent: readonly [number, number, number]) {
     this.layout = layout;
@@ -164,6 +182,14 @@ export class HealthBarArt {
     this.badgeCanvas = badge.canvas;
     this.badgeContext = badge.context;
 
+    const status = createCanvas(
+      STATUS_TEXTURE_WIDTH,
+      STATUS_TEXTURE_HEIGHT,
+      'No se pudo dibujar la tira de estados'
+    );
+    this.statusCanvas = status.canvas;
+    this.statusContext = status.context;
+
     this.accent = `rgb(${accent[0]}, ${accent[1]}, ${accent[2]})`;
     // Texto oscuro sobre acentos claros y blanco sobre los oscuros: así el
     // nivel se lee también en equipos morados, azules o verdes.
@@ -174,6 +200,7 @@ export class HealthBarArt {
     this.drawBar();
     this.drawBadge();
     this.drawXpBar();
+    this.drawStatusStrip();
   }
 
   /** `fraction` va de 0 (KO) a 1 (vida completa); a 0 no se pinta la barra. */
@@ -212,6 +239,48 @@ export class HealthBarArt {
     this.drawBar();
   }
 
+  /**
+   * Actualiza la tira de estados. Solo redibuja si cambia algún valor visible:
+   * el HUD se actualiza cada frame y no debe generar trabajo de canvas extra.
+   */
+  setStatusEffects(
+    dotDps: number,
+    markStacks: number,
+    antiHeal: number,
+    rooted: boolean,
+    silenced: boolean
+  ): void {
+    const nextDot = dotDps > 0 ? Math.round(dotDps * 10) / 10 : 0;
+    const nextMarks = Math.max(0, Math.round(markStacks));
+    const nextAntiHeal = antiHeal > 0 ? Math.round(antiHeal * 100) / 100 : 0;
+    if (
+      nextDot === this.dotDps &&
+      nextMarks === this.markStacks &&
+      nextAntiHeal === this.antiHeal &&
+      rooted === this.rooted &&
+      silenced === this.silenced
+    ) {
+      return;
+    }
+    this.dotDps = nextDot;
+    this.markStacks = nextMarks;
+    this.antiHeal = nextAntiHeal;
+    this.rooted = rooted;
+    this.silenced = silenced;
+    this.drawStatusStrip();
+  }
+
+  /** `true` si hay algún estado que merezca pintar la tira. */
+  get hasStatusEffects(): boolean {
+    return (
+      this.dotDps > 0 ||
+      this.markStacks > 0 ||
+      this.antiHeal > 0 ||
+      this.rooted ||
+      this.silenced
+    );
+  }
+
   /** `true` mientras quede vida; a 0 la barra no debe pintarse. */
   get isVisible(): boolean {
     return this.fraction > 0;
@@ -225,6 +294,8 @@ export class HealthBarArt {
     this.xpCanvas.height = 0;
     this.badgeCanvas.width = 0;
     this.badgeCanvas.height = 0;
+    this.statusCanvas.width = 0;
+    this.statusCanvas.height = 0;
   }
 
   /** Redibuja el contorno, la pista y la porción de vida. */
@@ -349,6 +420,80 @@ export class HealthBarArt {
       width,
       Math.max(1, Math.round(innerHeight * 0.35))
     );
+  }
+
+  /**
+   * Tira compacta sobre la vida. Cada tipo de estado usa una forma y un color
+   * distintos para poder leerlo de un vistazo incluso a distancia:
+   * DoT (naranja, círculo), marcas (violeta, rombo), anti-heal (rojo, cruz),
+   * raíz (verde, anillo) y silencio (cian, anillo tachado).
+   */
+  private drawStatusStrip(): void {
+    const context = this.statusContext;
+    context.clearRect(0, 0, STATUS_TEXTURE_WIDTH, STATUS_TEXTURE_HEIGHT);
+    if (!this.hasStatusEffects) return;
+
+    type PipKind = 'dot' | 'mark' | 'anti' | 'root' | 'silence';
+    const pips: Array<{ color: string; kind: PipKind }> = [];
+    if (this.dotDps > 0) pips.push({ color: '#ff9a3c', kind: 'dot' });
+    if (this.antiHeal > 0) pips.push({ color: '#ef4452', kind: 'anti' });
+    if (this.rooted) pips.push({ color: '#6ee7b7', kind: 'root' });
+    if (this.silenced) pips.push({ color: '#67e8f9', kind: 'silence' });
+    const marks = Math.min(3, this.markStacks);
+    for (let index = 0; index < marks; index++) {
+      pips.push({ color: '#c084fc', kind: 'mark' });
+    }
+    if (pips.length === 0) return;
+
+    const size = 11;
+    const gap = 4;
+    const total = pips.length * size + (pips.length - 1) * gap;
+    let x = (STATUS_TEXTURE_WIDTH - total) / 2;
+    const y = (STATUS_TEXTURE_HEIGHT - size) / 2;
+
+    for (const pip of pips) {
+      // Fondo oscuro para despegar la forma del terreno y de la barra.
+      context.fillStyle = 'rgba(5, 8, 6, 0.78)';
+      roundedRect(context, x - 1, y - 1, size + 2, size + 2, 3);
+      context.fill();
+
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      context.fillStyle = pip.color;
+      context.strokeStyle = pip.color;
+      context.lineWidth = 2;
+
+      if (pip.kind === 'dot') {
+        context.beginPath();
+        context.arc(cx, cy, 3.6, 0, Math.PI * 2);
+        context.fill();
+      } else if (pip.kind === 'mark') {
+        context.beginPath();
+        context.moveTo(cx, cy - 4.2);
+        context.lineTo(cx + 4.2, cy);
+        context.lineTo(cx, cy + 4.2);
+        context.lineTo(cx - 4.2, cy);
+        context.closePath();
+        context.fill();
+      } else if (pip.kind === 'anti') {
+        context.fillRect(cx - 1.5, cy - 4, 3, 8);
+        context.fillRect(cx - 4, cy - 1.5, 8, 3);
+      } else if (pip.kind === 'root') {
+        context.beginPath();
+        context.arc(cx, cy, 3.6, 0, Math.PI * 2);
+        context.stroke();
+      } else {
+        context.beginPath();
+        context.arc(cx, cy, 3.6, 0, Math.PI * 2);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(cx - 3, cy + 3);
+        context.lineTo(cx + 3, cy - 3);
+        context.stroke();
+      }
+
+      x += size + gap;
+    }
   }
 
   /** Redibuja el distintivo con el número de nivel. */

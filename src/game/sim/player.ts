@@ -98,6 +98,15 @@ export function stepPlayer(
   if (player.stunTimer > 0) {
     player.stunTimer = Math.max(0, player.stunTimer - dt);
   }
+  if (player.status.rootTimer > 0) {
+    player.status.rootTimer = Math.max(0, player.status.rootTimer - dt);
+  }
+  if (player.status.silenceTimer > 0) {
+    player.status.silenceTimer = Math.max(
+      0,
+      player.status.silenceTimer - dt
+    );
+  }
   if (player.hurtTimer > 0) player.hurtTimer = Math.max(0, player.hurtTimer - dt);
 
   if (player.deathFade > 0) player.deathFade = Math.max(0, player.deathFade - dt);
@@ -127,6 +136,24 @@ export function stepPlayer(
 
   // Un casteo bloquea movimiento y otras habilidades mientras se reproduce.
   if (host.stepActiveCast(player, input, dt)) return;
+
+  // Enraizado: no se mueve ni usa dash, pero sí puede lanzar habilidades.
+  if (player.status.rootTimer > 0) {
+    player.vx = 0;
+    player.vz = 0;
+    player.animation = 'idle';
+    player.playback = 1;
+    player.animationFrame = null;
+    if (input.ability1) host.castAbility(player, 0);
+    if (input.ability2) host.castAbility(player, 1);
+    if (input.ability3) host.castAbility(player, 2);
+    if (input.ability4) host.castAbility(player, 3);
+    if (input.commonAbility && player.commonAbilityId !== 'regeneracion') {
+      host.castAbility(player, 4);
+    }
+    host.updateCamera(player, input, dt);
+    return;
+  }
 
   // Un dash consume el frame: no se mezcla con el movimiento normal.
   if (host.stepDash(player, input, dt)) return;

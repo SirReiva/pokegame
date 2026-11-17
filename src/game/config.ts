@@ -266,13 +266,6 @@ export const CONFIG = {
      * Evita que el telegraph y el daño se coloquen detrás de un muro.
      */
     aoeSightPadding: 0.25,
-    /** Probabilidad de crítico (1/24 en la generación VII+). */
-    critChance: 1 / 24,
-    /** Multiplicador de daño de un crítico. */
-    critMultiplier: 1.5,
-    /** Rango del factor aleatorio oficial de daño. */
-    randomMin: 0.85,
-    randomMax: 1,
     /**
      * Ayuda de apuntado de proyectiles y haces para jugadores humanos. Se puede
      * activar o desactivar en Opciones. Solo corrige el ángulo cuando el rival

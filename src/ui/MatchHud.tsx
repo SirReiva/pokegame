@@ -15,7 +15,8 @@ import {
   type KillFeedEntry,
   type LobbyPlayer,
   type PlayerMatchStats,
-  type SplitRect
+  type SplitRect,
+  type StatusHudKind
 } from '../game/multiplayer';
 import { skinFor } from '../game/skins';
 import { GAME_MODE_INFO, type GameModeId } from '../game/modes';
@@ -124,6 +125,38 @@ const BUFF_LABEL: Record<BuffStat, string> = {
   defense: 'DEF',
   spAttack: 'ATQ.ESP',
   spDefense: 'DEF.ESP'
+};
+
+/** Icono y color de cada estado de combate en el HUD de detalle. */
+const STATUS_ICON: Record<
+  StatusHudKind,
+  { glyph: string; className: string; border: string }
+> = {
+  dot: {
+    glyph: '●',
+    className: 'text-[#ff9a3c]',
+    border: 'border-[color-mix(in_srgb,#ff9a3c_45%,var(--color-line))]'
+  },
+  mark: {
+    glyph: '◆',
+    className: 'text-[#c084fc]',
+    border: 'border-[color-mix(in_srgb,#c084fc_45%,var(--color-line))]'
+  },
+  antiheal: {
+    glyph: '✚',
+    className: 'text-[#ef4452]',
+    border: 'border-[color-mix(in_srgb,#ef4452_45%,var(--color-line))]'
+  },
+  root: {
+    glyph: '◉',
+    className: 'text-[#6ee7b7]',
+    border: 'border-[color-mix(in_srgb,#6ee7b7_45%,var(--color-line))]'
+  },
+  silence: {
+    glyph: '⊘',
+    className: 'text-[#67e8f9]',
+    border: 'border-[color-mix(in_srgb,#67e8f9_45%,var(--color-line))]'
+  }
 };
 
 const EMPTY_FEED: readonly KillFeedEntry[] = [];
@@ -381,6 +414,28 @@ function sameSlows(
   return true;
 }
 
+function sameStatusEffects(
+  a: PlayerMatchStats['statusEffects'],
+  b: PlayerMatchStats['statusEffects']
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id ||
+      x.kind !== y.kind ||
+      x.stacks !== y.stacks ||
+      x.maxStacks !== y.maxStacks ||
+      Math.round(x.remaining * 10) !== Math.round(y.remaining * 10)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function sameAbilities(
   a: PlayerMatchStats['abilities'],
   b: PlayerMatchStats['abilities']
@@ -478,11 +533,17 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
     Math.round(a.speed * 10) === Math.round(b.speed * 10) &&
     a.gamepad === b.gamepad &&
     a.shieldActive === b.shieldActive &&
+    a.shieldAmount === b.shieldAmount &&
     a.armorRemaining === b.armorRemaining &&
     a.armorMax === b.armorMax &&
+    a.passive?.id === b.passive?.id &&
+    a.passive?.stacks === b.passive?.stacks &&
+    a.passive?.maxStacks === b.passive?.maxStacks &&
+    a.passive?.detail === b.passive?.detail &&
     a.feed === b.feed &&
     sameBuffs(a.buffs, b.buffs) &&
     sameSlows(a.slows, b.slows) &&
+    sameStatusEffects(a.statusEffects, b.statusEffects) &&
     sameAbilities(a.abilities, b.abilities) &&
     sameCommon(a.commonAbility, b.commonAbility) &&
     sameXpBreakdown(a.xpBreakdown, b.xpBreakdown)
@@ -524,6 +585,13 @@ const PlayerHud = memo(function PlayerHud({
   const isDead = playerStats ? !playerStats.alive : false;
   const armorRemaining = playerStats?.armorRemaining ?? 0;
   const armorMax = playerStats?.armorMax ?? 0;
+  const shieldAmount = playerStats?.shieldAmount ?? 0;
+  const shieldPct = playerStats
+    ? Math.max(
+        0,
+        Math.min(100, (shieldAmount / Math.max(1, playerStats.maxHp)) * 100)
+      )
+    : 0;
   const armorPct = playerStats
     ? Math.max(
         0,
@@ -540,6 +608,9 @@ const PlayerHud = memo(function PlayerHud({
   const armorLeftPct = Math.max(0, hpPct - armorVisiblePct);
   const hpTitle = playerStats
     ? `${Math.ceil(playerStats.hp)}/${playerStats.maxHp} PV` +
+      (shieldAmount > 0
+        ? ` · Escudo: ${Math.ceil(shieldAmount)} PV`
+        : '') +
       (armorRemaining > 0
         ? ` · Armadura de casteo: ${Math.ceil(armorRemaining)}/${armorMax} PV; el daño acumulado la rompe`
         : '')
@@ -577,8 +648,39 @@ const PlayerHud = memo(function PlayerHud({
       }
     >
       {playerStats &&
-        (playerStats.buffs.length > 0 || playerStats.slows.length > 0) && (
+        (playerStats.buffs.length > 0 ||
+          playerStats.slows.length > 0 ||
+          playerStats.statusEffects.length > 0) && (
           <div className="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[72%] flex-wrap gap-1">
+            {playerStats.statusEffects.map((status) => {
+              const icon = STATUS_ICON[status.kind];
+              const stackLabel =
+                status.stacks !== undefined && status.maxStacks
+                  ? ` ${status.stacks}/${status.maxStacks}`
+                  : '';
+              return (
+                <span
+                  key={status.id}
+                  className={`flex items-center gap-1 rounded-md border bg-night-850/82 px-2 py-1 font-mono leading-none backdrop-blur-[6px] ${icon.border} ${
+                    compact ? 'text-8.32' : 'text-9.6'
+                  }`}
+                  title={`${status.name}${stackLabel}: ${status.remaining.toFixed(1)} s`}
+                >
+                  <span className={icon.className}>{icon.glyph}</span>
+                  {!compact && (
+                    <span className="text-steel-100">{status.name}</span>
+                  )}
+                  {status.stacks !== undefined && status.maxStacks && (
+                    <span className="text-steel-300">
+                      {status.stacks}/{status.maxStacks}
+                    </span>
+                  )}
+                  <span className="text-steel-500">
+                    {status.remaining.toFixed(1)}s
+                  </span>
+                </span>
+              );
+            })}
             {playerStats.buffs.map((buff, buffIndex) => {
               const delta = Math.round((buff.multiplier - 1) * 100);
               const positive = delta >= 0;
@@ -669,6 +771,14 @@ const PlayerHud = memo(function PlayerHud({
                   style={{ backgroundImage: hpTicksFor(playerStats.maxHp) }}
                   aria-hidden="true"
                 />
+                {/* Escudos de reserva: franja cian translúcida sobre la vida. */}
+                {shieldPct > 0 && (
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-0 border-r border-cyan-100/70 bg-cyan-300/35"
+                    style={{ width: `${shieldPct}%` }}
+                    aria-hidden="true"
+                  />
+                )}
                 {/* Franja metálica de la armadura de casteo: alineada a
                     la derecha con el tramo verde de la vida actual,
                     comparte su altura y se recorta si la armadura
@@ -833,6 +943,39 @@ const PlayerHud = memo(function PlayerHud({
             </div>
 
             <div className="flex items-stretch gap-1">
+              {playerStats.passive && (
+                <div
+                  className={`relative flex shrink-0 items-center gap-1 overflow-hidden rounded-lg border border-[color-mix(in_srgb,var(--team)_45%,var(--color-line))] bg-night-850/82 backdrop-blur-[6px] ${
+                    compact ? 'py-0.5 pr-1 pl-1' : 'py-1 pr-1.5 pl-1'
+                  }`}
+                  title={`${playerStats.passive.name}${playerStats.passive.detail ? ` · ${playerStats.passive.detail}` : ''}: ${playerStats.passive.description}`}
+                >
+                  <span
+                    className={`grid shrink-0 place-items-center rounded-sm border border-white/15 bg-white/8 font-mono font-bold leading-none text-(--team) ${
+                      compact
+                        ? 'h-4 min-w-4 px-0.75 text-7.36'
+                        : 'h-5 min-w-5 px-1 text-8.32'
+                    }`}
+                  >
+                    P
+                  </span>
+                  {!compact && (
+                    <span className="max-w-24 min-w-0 truncate font-mono font-semibold tracking-[-0.01em] text-steel-100 text-9.6">
+                      {playerStats.passive.name}
+                    </span>
+                  )}
+                  {!compact && playerStats.passive.detail && (
+                    <span className="shrink-0 rounded-full bg-white/8 px-1 py-px font-mono font-bold text-6.4 text-steel-300 uppercase leading-none">
+                      {playerStats.passive.detail}
+                    </span>
+                  )}
+                  {playerStats.passive.maxStacks > 0 && (
+                    <span className="shrink-0 rounded-full bg-white/8 px-1 py-px font-mono font-bold text-6.4 text-steel-200 leading-none">
+                      {playerStats.passive.stacks}/{playerStats.passive.maxStacks}
+                    </span>
+                  )}
+                </div>
+              )}
               {playerStats.abilities.map((ability, abilityIndex) => {
                 const ready = ability.cooldown <= 0.001;
                 const pct =

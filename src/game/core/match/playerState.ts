@@ -17,6 +17,7 @@ import type { CastPlan } from '../castPlan';
 import type { EffectHandle, FxHandle, TelegraphHandle } from '../ports/fx';
 import type { MatchPlayerConfig } from './config';
 import type { CombatStats } from '../pokedex';
+import type { PlayerCombatStatus } from '../combat/status';
 import type { TerrainId } from '../terrain';
 import type { TerrainSpeedReason } from '../terrainSpeed';
 import type { AnimationName } from '../types';
@@ -27,6 +28,8 @@ export interface ActiveBuff {
   stat: BuffStat;
   multiplier: number;
   duration: number;
+  /** Origen opcional: los buffs con la misma fuente se renuevan, no se apilan. */
+  source?: string;
 }
 
 /**
@@ -275,12 +278,6 @@ export interface ActiveAoe {
    * apilar una marca por cada tick de un área persistente sobre el mismo rival.
    */
   immuneMarked: Set<number>;
-  /**
-   * Slots que ya cobraron el `+2` de la fórmula en este lanzamiento. El área lo
-   * comparte entre ticks para que el término plano no se multiplique por el
-   * número de golpes.
-   */
-  flatBonusApplied: Set<number>;
 }
 
 export interface MatchPlayerState extends MatchPlayerConfig {
@@ -324,7 +321,7 @@ export interface MatchPlayerState extends MatchPlayerConfig {
 
   /** Punto de reaparición del equipo. */
   spawn: { x: number; z: number };
-  /** Stats finales a nivel 50 (HP, ataque, defensa...). */
+  /** Stats de combate del rediseño (escala 100, PV de referencia 1.000). */
   combat: CombatStats;
   hp: number;
   maxHp: number;
@@ -425,4 +422,6 @@ export interface MatchPlayerState extends MatchPlayerConfig {
    * `null` deja un hueco vacío.
    */
   abilityIds: (string | null)[];
+  /** Estado de combate avanzado: escudos, DoT, marcas, control y pasiva. */
+  status: PlayerCombatStatus;
 }

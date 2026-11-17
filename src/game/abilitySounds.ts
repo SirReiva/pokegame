@@ -119,7 +119,41 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   golpeAlaHoOh: 'abilities/golpeAlaHoOh.mp3',
   pajaroOsado: 'abilities/pajaroOsado.mp3',
   recuperacionHoOh: 'abilities/recuperacionHoOh.mp3',
-  fuegoSagrado: 'abilities/fuegoSagrado.mp3'
+  fuegoSagrado: 'abilities/fuegoSagrado.mp3',
+
+  // Kits del rediseño (reutilizan sonidos existentes hasta tener los propios)
+  semilladora: 'abilities/hojaMagica.mp3',
+  drenadoras: 'abilities/hojaMagica.mp3',
+  raicesEnredadoras: 'abilities/paralizador.mp3',
+  floracion: 'abilities/llueveHojas.mp3',
+  pistolaAgua: 'abilities/rayoBurbuja.mp3',
+  veloDeAgua: 'abilities/proteccion.mp3',
+  rodamiento: 'abilities/rollout.mp3',
+  rodar: 'abilities/rollout.mp3',
+  ondaTruenoCircular: 'abilities/ondaTrueno.mp3',
+  placajeEevee: 'abilities/placaje.mp3',
+  adaptacion: 'abilities/agilidad.mp3',
+  ataqueRapidoEevee: 'abilities/ataqueRapido.mp3',
+  ultimoRecurso: 'abilities/combateCercano.mp3',
+  mimica: 'abilities/psiquico.mp3',
+  electropico: 'abilities/impactrueno.mp3',
+  ondaTruenoZapdos: 'abilities/ondaTrueno.mp3',
+  veloAurora: 'abilities/marea.mp3',
+  chorroAgua: 'abilities/hidrobomba.mp3',
+  auroraBoreal: 'abilities/rayoHielo.mp3',
+  erupcionPrimigenia: 'abilities/terremoto.mp3',
+  colmilloTrueno: 'abilities/chispa.mp3',
+  rayoFulminante: 'abilities/ataqueRapido.mp3',
+  rugidoTormenta: 'abilities/trueno.mp3',
+  cazaRelampago: 'abilities/rayo.mp3',
+  garraVolcanica: 'abilities/aranazo.mp3',
+  embestidaVolcanica: 'abilities/giroFuego.mp3',
+  estallido: 'abilities/anilloIgneo.mp3',
+  caldera: 'abilities/lanzallamas.mp3',
+  mordisco: 'abilities/triturar.mp3',
+  colmilloIgneo: 'abilities/lanzallamas.mp3',
+  enviteIgneo: 'abilities/pajaroOsado.mp3',
+  hidrotormenta: 'abilities/hidrobomba.mp3'
 };
 
 /**

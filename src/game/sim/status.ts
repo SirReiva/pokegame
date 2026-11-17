@@ -10,6 +10,7 @@ import {
   REGENERATION_HP_PER_SECOND
 } from '../abilities';
 import type { MatchPlayerState } from '../matchState';
+import { healingMultiplier } from '../core/combat/status';
 import { XP_REWARDS, XP_RULES, type XpSource } from '../xp';
 
 export interface StatusSystemHost {
@@ -63,7 +64,8 @@ export function stepRegeneration(
     }
 
     player.regenerating = true;
-    player.regenAccumulator += dt * REGENERATION_HP_PER_SECOND;
+    player.regenAccumulator +=
+      dt * REGENERATION_HP_PER_SECOND * healingMultiplier(player.status);
     const whole = Math.floor(player.regenAccumulator);
     if (whole <= 0) continue;
     player.regenAccumulator -= whole;

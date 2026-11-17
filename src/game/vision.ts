@@ -15,51 +15,20 @@
  */
 
 import { CONFIG } from './config';
+import { POKEDEX_PROFILES } from './core/pokedex';
 import type { TerrainId } from './terrain';
 import { terrainTypeRelation, type TerrainRelationReason } from './terrainSpeed';
 import type { Collider } from './world';
 
 /**
- * Rango de visión base de cada especie, en unidades de mundo. Los valores están
- * separados a propósito: las aves y bestias legendarias, Mewtwo, Mew, Greninja,
- * Pikachu, Scyther y Lucario detectan antes por sus sentidos, mientras que
- * Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
- * y no en el manifiesto, porque `pnpm sprites` lo regenera.
+ * Rango de visión base de cada especie, en unidades de mundo. La fuente es
+ * `POKEDEX_PROFILES.vision`; VIS forma parte de las siete estadísticas del
+ * rediseño y no se duplica aquí.
  */
-export const POKEMON_VISION: Record<string, number> = {
-  '0001': 8.8, // Bulbasaur: bajo, pesado, poca altura de ojos
-  '0004': 9.5, // Charmander: la llama de la cola ilumina algo el entorno
-  '0007': 9.2, // Squirtle: vista corta pero constante
-  '0025': 11.0, // Pikachu: el más alerta, sentidos eléctricos
-  '0094': 10.8, // Gengar: ve en la oscuridad y siente el miedo cercano
-  '0100': 9.5, // Voltorb: rueda sin ojos, pero detecta la electricidad cercana
-  '0133': 9.5, // Eevee: olfato y oído finos
-  '0448': 10.5, // Lucario: percibe el aura
-  '0658': 11.5, // Greninja: instinto de ninja, alcance notable
-  '0150': 12.0, // Mewtwo: poder psíquico, alcance excepcional
-  '0151': 11.0, // Mew: sentidos psíquicos y curiosidad infinita
-  '0095': 8.8, // Onix: vive bajo tierra, poca luz y vista corta
-  '0123': 10.8, // Scyther: ojos de depredador y reflejos de mantis
-  '0130': 10.2, // Gyarados: depredador marino, atento a lo que se mueve cerca
-  '0248': 9.6, // Tyranitar: vista de depredador nocturno, pero poca altura de ojos
-  '0144': 11.6, // Articuno: ojo de ave rapaz sobre el hielo
-  '0145': 11.8, // Zapdos: percibe la electricidad del aire a distancia
-  '0146': 11.5, // Moltres: la luz de sus llamas le abre el horizonte
-  '0243': 11.9, // Raikou: percibe las tormentas antes de que lleguen
-  '0244': 11.4, // Entei: su fuego ilumina y atemoriza a distancia
-  '0245': 11.6, // Suicune: vigila y purifica las aguas a su paso
-  '0249': 12.4, // Lugia: guardián de los mares, el que más lejos percibe
-  '0250': 11.9, // Ho-Oh: vista larga desde las alturas
-  '0251': 11.7, // Celebi: siente el bosque y el tiempo a su alrededor
-  '0382': 12.2, // Kyogre: percibe las corrientes y la lluvia a gran distancia
-  '0383': 10.6, // Groudon: siente las vibraciones del suelo, pero su altura le limita
-  '0384': 12.6 // Rayquaza: vigila el cielo desde la estratosfera, el que más lejos ve
-};
-
 export const DEFAULT_VISION = 9.5;
 
 export function visionForPokemon(id: string): number {
-  return POKEMON_VISION[id] ?? DEFAULT_VISION;
+  return POKEDEX_PROFILES[id]?.vision ?? DEFAULT_VISION;
 }
 
 /**

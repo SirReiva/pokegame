@@ -19,6 +19,7 @@ import { segmentBlockedByColliders } from '../combat';
 import { DEG } from '../config';
 import type { CombatFxPort } from '../core/ports/fx';
 import { applyHealFraction } from '../effects';
+import { applyAntiHeal, grantShield } from '../statusEffects';
 import type { MatchPlayerState } from '../matchState';
 import { maxHitRadius } from '../roster';
 import type { World } from '../world';
@@ -170,6 +171,14 @@ function buildAoeContext(
     applyBuff: (target, buff) => applyAoeBuff(host, target, buff, hit.def),
     applyHeal: (target, fraction) =>
       applyAoeHeal(host, target, fraction, hit.def, hit.owner),
+    applyShield: (target, fraction, duration) => {
+      if (!target.isAlly && !target.isSelf) return;
+      grantShield(target.player, fraction, duration, hit.owner.slot);
+    },
+    applyAntiHeal: (target, fraction, duration) => {
+      if (target.isAlly) return;
+      applyAntiHeal(target.player, fraction, duration);
+    },
     revive: (target, fraction) =>
       host.reviveAoeAlly(target, fraction, hit.def, hit.owner),
     isMatchOver: () => host.isMatchOver()
@@ -284,8 +293,7 @@ function applyAoeHit(
     impactZ: options.impactZ,
     sourceX: options.sourceX ?? hit.x,
     sourceZ: options.sourceZ ?? hit.z,
-    immuneMarked: hit.immuneMarked,
-    flatBonusApplied: hit.flatBonusApplied
+    immuneMarked: hit.immuneMarked
   });
 }
 

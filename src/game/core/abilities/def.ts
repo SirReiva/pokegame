@@ -15,6 +15,7 @@ import type {
   AoePrepareMovement
 } from './aoe';
 import type { BuffSpec, SlowSpec } from './specs';
+import type { AntiHealSpec, DotSpec, MarkSpec } from './specs';
 import type { AnimationName } from '../types';
 import type { PokemonType } from '../typeChart';
 import type {
@@ -139,6 +140,12 @@ export interface AbilityDef {
   onEnd?: AoeEvent<AoePlayer, AbilityDef>;
   /** Nº de enemigos extra que puede atravesar un proyectil. */
   pierce: number;
+  /**
+   * Nº de impactos que aplica un golpe melee sobre cada objetivo. La potencia
+   * declarada se reparte entre todos los impactos. Solo lo usa el ejecutor
+   * melee y las variantes de estado de Eevee.
+   */
+  hitCount: number;
   /** Distancia del dash en unidades de mundo. */
   dashDistance: number;
   /** Empuje aplicado al objetivo al impactar, en unidades de mundo. */
@@ -147,6 +154,16 @@ export interface AbilityDef {
   buffs: BuffSpec[];
   /** Ralentización que se aplica a los enemigos golpeados. */
   slow: SlowSpec | null;
+  /** Daño periódico que se aplica a los enemigos golpeados. */
+  dot: DotSpec | null;
+  /** Marcas acumulables que se aplican a los enemigos golpeados. */
+  marks: MarkSpec[];
+  /** Raíz aplicada al enemigo golpeado, en segundos. */
+  root: number;
+  /** Silencio aplicado al enemigo golpeado, en segundos. */
+  silence: number;
+  /** Reducción de curación aplicada al enemigo golpeado. */
+  antiHeal: AntiHealSpec | null;
   /**
    * Curación al lanzador como fracción de su vida máxima: `0.25` = 25 %.
    * `0` desactiva la curación. Se aplica al ejecutar la habilidad salvo que
@@ -166,6 +183,11 @@ export interface AbilityDef {
   selfDamage: number;
   /** Si es `true`, el lanzador gana un escudo esférico y reducción de daño. */
   shield: boolean;
+  /**
+   * Escudo de reserva al lanzador como fracción de sus PV máximos. Se suma con
+   * los demás escudos y respeta el tope global. `0` lo desactiva.
+   */
+  shieldPool: number;
   /** Duración del escudo en segundos. */
   shieldDuration: number;
   /** Fracción de daño reducida mientras el escudo está activo (0-1). */

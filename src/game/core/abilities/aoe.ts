@@ -70,12 +70,6 @@ export interface AoeHitInput<
    * persistentes lo comparten entre ticks para no repetir el aviso.
    */
   immuneMarked?: Set<number>;
-  /**
-   * Slots que ya cobraron el término plano `+2` de la fórmula. Las áreas
-   * persistentes lo comparten entre ticks para cobrarlo una sola vez por
-   * objetivo en lugar de una por tick.
-   */
-  flatBonusApplied?: Set<number>;
 }
 
 /**
@@ -193,7 +187,7 @@ export interface AoeHitOptions {
 
 /**
  * Servicios que el callback puede usar sobre un objetivo. El motor mantiene la
- * inmunidad de tipo, el crítico, el daño real y las estadísticas.
+ * de la habilidad, la efectividad suavizada, el daño real y las estadísticas.
  */
 export interface AoeEffectContext<
   TPlayer extends AoePlayer = AoePlayer,
@@ -233,6 +227,18 @@ export interface AoeEffectContext<
   applyBuff(target: AoeTarget<TPlayer>, buff: BuffSpec): void;
   /** Cura al objetivo una fracción de su vida máxima (`0.25` = 25 %). */
   applyHeal(target: AoeTarget<TPlayer>, fraction: number): void;
+  /** Escudo de reserva a un aliado, como fracción de sus PV máximos. */
+  applyShield(
+    target: AoeTarget<TPlayer>,
+    fraction: number,
+    duration: number
+  ): void;
+  /** Anti-heal a un enemigo. */
+  applyAntiHeal(
+    target: AoeTarget<TPlayer>,
+    fraction: number,
+    duration: number
+  ): void;
   /**
    * Revive a un aliado caído con una fracción de su vida máxima (`0.5` = 50 %)
    * en el punto donde murió. Devuelve `true` si seguía caído.

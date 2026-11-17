@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ABILITIES,
   abilityTotalTime,
+  baseAbilityId,
   commonAnimationFor,
   MOVESETS,
   type AbilityDef,
@@ -63,6 +64,10 @@ import {
 import type { Collider } from '../src/game/core/world';
 import { CAST_EFFECTS } from '../src/game/effects';
 import { combatStatsFor, baseStatsFor } from '../src/game/pokedex';
+import { createCombatStatus } from '../src/game/core/combat/status';
+import { MimicLog, scaleCopiedAbility } from '../src/game/sim/mimic';
+import { adjustEeveeAbility } from '../src/game/sim/stances';
+import { resolveEchoBeam } from '../src/game/sim/echo';
 import type { MatchPlayerConfig } from '../src/game/core/match/config';
 import type {
   ActiveAoe,
@@ -155,6 +160,32 @@ import {
   breakRegen,
   type StatusSystemHost
 } from '../src/game/sim/status';
+import {
+  applyAntiHeal as applyAntiHealSystem,
+  applyDot as applyDotSystem,
+  applyMark as applyMarkSystem,
+  applyRoot as applyRootSystem,
+  applySilence as applySilenceSystem,
+  absorbWithShields,
+  applyBuffStatus,
+  controlDurationMultiplier,
+  stepStatusEffects,
+  takeControlReflection,
+  type StatusEffectHost
+} from '../src/game/statusEffects';
+import {
+  healingMultiplier,
+  resetCombatStatus,
+  type CloneInstance
+} from '../src/game/core/combat/status';
+import {
+  adjustRayquazaCurrent,
+  applyPassiveAbilityCast,
+  applyPassiveAssist,
+  applyPassiveKill,
+  passiveBlocksKnockback,
+  stepPassives
+} from '../src/game/passives';
 import { refreshCombatVisibility } from '../src/game/sim/visibility';
 import {
   BASE_COLLIDER_RADIUS,
@@ -633,6 +664,10 @@ export class HeadlessMatch {
   readonly timeLimitSeconds: number;
 
   hosts: Hosts;
+  /** Host reutilizable de estados avanzados. */
+  private statusHostCache: StatusEffectHost | null = null;
+  /** Últimas habilidades lanzadas, para Mímica de Mew. */
+  private readonly mimicLog = new MimicLog();
   private readonly options: Options;
 
   constructor(
@@ -822,7 +857,8 @@ export class HeadlessMatch {
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
-      abilityIds: [...moveset, commonAbilityId]
+      abilityIds: [...moveset, commonAbilityId],
+      status: createCombatStatus()
     };
   }
 
@@ -832,6 +868,8 @@ export class HeadlessMatch {
     const damage: DamageSystemHost = {
       combatFx: this.fx,
       atmosphere: this.atmosphere,
+      now: () => this.matchElapsed,
+      players: () => this.players,
       buffMultiplier: (player, stat) => this.buffMultiplier(player, stat),
       applySlow: (attacker, target, def, slow, color) =>
         this.applySlow(attacker, target, def, slow, color),
@@ -839,6 +877,28 @@ export class HeadlessMatch {
       spawnArmorFeedback: () => {},
       interruptWithRefund: (target, lethal) =>
         this.interruptWithRefund(target, lethal),
+      applyDot: (attacker, target, spec) =>
+        applyDotSystem(target, spec, attacker),
+      applyMark: (attacker, target, spec) =>
+        applyMarkSystem(target, spec, attacker, this.matchElapsed),
+      applyRoot: (attacker, target, seconds) =>
+        applyRootSystem(
+          target,
+          seconds,
+          attacker,
+          this.matchElapsed,
+          this.players
+        ),
+      applySilence: (attacker, target, seconds) =>
+        applySilenceSystem(
+          target,
+          seconds,
+          attacker,
+          this.matchElapsed,
+          this.players
+        ),
+      applyAntiHeal: (target, fraction, duration) =>
+        applyAntiHealSystem(target, fraction, duration),
       applyKnockback: (target, fromX, fromZ, distance) =>
         this.applyKnockback(target, fromX, fromZ, distance),
       playImpactSound: () => {},
@@ -1003,6 +1063,14 @@ export class HeadlessMatch {
         this.pushKillFeed(killer, victim, abilityName, assists),
       awardKillXp: (killer, victim, assists) =>
         this.awardKillXp(killer, victim, assists),
+      onAssists: (_killer, victim, assists) => {
+        for (const credit of assists) {
+          const assistant = this.players[credit.slot];
+          if (assistant) {
+            applyPassiveAssist(assistant, victim, this.matchElapsed);
+          }
+        }
+      },
       handleModeKnockout: (killer, victim) =>
         this.handleModeKnockout(killer, victim),
       emitStats: () => {}
@@ -1064,9 +1132,10 @@ export class HeadlessMatch {
     const baseDef = ABILITIES[abilityId];
     if (!baseDef) return;
     if (player.cooldowns[slotIndex] > 0.0001) return;
+    if (player.status.silenceTimer > 0) return;
     if (player.damageReductionTimer > 0) return;
 
-    const def =
+    let def =
       slotIndex === 4
         ? {
             ...baseDef,
@@ -1078,12 +1147,39 @@ export class HeadlessMatch {
           }
         : baseDef;
 
+    if (baseAbilityId(abilityId) === 'mimica') {
+      const stored = player.status.copiedAbility;
+      let copyId =
+        stored && stored.until >= this.matchElapsed ? stored.id : null;
+      if (!copyId) {
+        const found = this.mimicLog.find(player, this.matchElapsed);
+        copyId = found?.id ?? null;
+      }
+      const copied = copyId ? ABILITIES[copyId] : null;
+      if (!copied) return;
+      player.status.copiedAbility = null;
+      def = scaleCopiedAbility(copied);
+    }
+
+    def = adjustEeveeAbility(player, def);
+    def = adjustRayquazaCurrent(player, def);
+
+    this.mimicLog.record(
+      baseDef,
+      slotIndex,
+      player,
+      this.matchElapsed,
+      this.players
+    );
+
     breakRegen(player);
     if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null)) {
       player.invulnerableTimer = 0;
     }
 
-    const cooldown = this.cooldownForCast(player, abilityId, def);
+    const cooldownDef =
+      baseAbilityId(abilityId) === 'mimica' ? baseDef : def;
+    const cooldown = this.cooldownForCast(player, abilityId, cooldownDef);
     player.cooldowns[slotIndex] = cooldown;
     player.cooldownTotals[slotIndex] = cooldown;
     if (!def.preserveMomentum) {
@@ -1281,6 +1377,14 @@ export class HeadlessMatch {
     dirZ?: number,
     activeCast?: ActiveCast
   ): void {
+    applyPassiveAbilityCast(
+      player,
+      def,
+      this.matchElapsed,
+      this.players,
+      this.statusEffectHost(),
+      { targetX, targetZ, dirX, dirZ }
+    );
     CAST_EFFECTS({
       player,
       def,
@@ -1468,19 +1572,226 @@ export class HeadlessMatch {
     target: MatchPlayerState,
     def: AbilityDef,
     slow: { multiplier: number; duration: number },
-    _color: readonly [number, number, number]
+    _color: readonly [number, number, number],
+    reflect = true
   ): void {
     if (slow.duration <= 0) return;
+    const duration = reflect
+      ? slow.duration * controlDurationMultiplier(target, this.players)
+      : slow.duration;
+    if (duration <= 0) return;
+
+    if (reflect) {
+      const reflected = takeControlReflection(
+        target,
+        attacker,
+        duration,
+        this.matchElapsed
+      );
+      if (reflected > 0) {
+        this.applySlow(
+          target,
+          attacker,
+          def,
+          {
+            multiplier: slow.multiplier,
+            duration: reflected * controlDurationMultiplier(attacker, this.players)
+          },
+          _color,
+          false
+        );
+      }
+    }
+
     const source = `${attacker.slot}:${def.id}`;
     if (target.slowEffects.some((effect) => effect.source === source)) return;
     target.slowEffects.push({
       source,
       multiplier: slow.multiplier,
-      remaining: slow.duration
+      remaining: duration
     });
     this.refreshSlowMultiplier(target);
     if (attacker.team !== target.team) {
       target.slowContributors.set(attacker.slot, this.matchElapsed);
+    }
+  }
+
+  private statusEffectHost(): StatusEffectHost {
+    if (this.statusHostCache) return this.statusHostCache;
+    const self = this;
+    this.statusHostCache = {
+      isMatchOver: () => self.matchOver,
+      now: () => self.matchElapsed,
+      players: () => self.players,
+      playerBySlot: (slot) => self.players[slot] ?? null,
+      damage: (target, amount, sourceSlot, _sourceTeam, label) =>
+        self.applyStatusDamage(target, amount, sourceSlot, label),
+      heal: (target, amount, sourceSlot, _sourceTeam) =>
+        self.applyStatusHeal(target, amount, sourceSlot),
+      applySlow: (source, target, multiplier, duration) =>
+        self.applyStatusSlow(source, target, multiplier, duration),
+      applyBuff: (target, stat, multiplier, duration, source) => {
+        applyBuffStatus(target, stat, multiplier, duration, source);
+      },
+      fireCloneShot: (clone) => self.fireCloneShot(clone),
+      spawnCloneVisual: () => {},
+      resolveEchoBeam: (echo) =>
+        resolveEchoBeam(echo, {
+          combatFx: self.fx,
+          world: self.world,
+          players: () => self.players,
+          playerBySlot: (slot) => self.players[slot] ?? null,
+          canHit: (attacker, target) => self.canHit(attacker, target),
+          applyAbilityDamage: (attacker, target, def, options) =>
+            self.applyDamage(attacker, target, def, options)
+        })
+    };
+    return this.statusHostCache;
+  }
+
+  private fireCloneShot(clone: CloneInstance): void {
+    const owner = this.players[clone.sourceSlot];
+    if (!owner || !owner.alive || this.matchOver) return;
+    const base = ABILITIES.shurikenAgua;
+    if (!base) return;
+
+    let dirX = clone.dirX;
+    let dirZ = clone.dirZ;
+    let best = clone.range * clone.range;
+    for (const target of this.players) {
+      if (!target.alive || target.team === clone.sourceTeam) continue;
+      const dx = target.x - clone.x;
+      const dz = target.z - clone.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq > best) continue;
+      best = distSq;
+      const length = Math.sqrt(distSq) || 1;
+      dirX = dx / length;
+      dirZ = dz / length;
+    }
+    const length = Math.hypot(dirX, dirZ) || 1;
+    dirX /= length;
+    dirZ /= length;
+
+    const def: AbilityDef = {
+      ...base,
+      id: `${owner.pokemonId}/clonShuriken`,
+      name: 'Clon de Agua',
+      power: clone.power,
+      cooldown: 0,
+      repeatCooldown: null
+    };
+    const visual = this.fx.spawnProjectile(
+      clone.x,
+      clone.z,
+      def.color,
+      def.radius,
+      def.projectileStyle,
+      dirX,
+      dirZ
+    );
+    this.projectiles.push({
+      owner,
+      def,
+      x: clone.x,
+      z: clone.z,
+      vx: dirX * def.projectileSpeed,
+      vz: dirZ * def.projectileSpeed,
+      traveled: 0,
+      pierce: def.pierce,
+      hit: new Set(),
+      visual
+    });
+    this.metrics.projectiles += 1;
+  }
+
+  private applyStatusDamage(
+    target: MatchPlayerState,
+    amount: number,
+    sourceSlot: number,
+    label: string
+  ): void {
+    if (!target.alive || amount <= 0 || this.matchOver) return;
+    amount = absorbWithShields(target, amount);
+    if (amount <= 0) return;
+    const killer = this.players[sourceSlot] ?? target;
+    const before = target.hp;
+    const applied = Math.min(amount, before);
+    target.hp = Math.max(0, before - amount);
+    target.damageTaken += applied;
+    if (killer !== target && killer.team !== target.team) {
+      killer.damageDealt += applied;
+    }
+    breakRegen(target);
+    if (target.hp <= 0) {
+      this.knockOut(target, killer, label);
+    }
+  }
+
+  private applyStatusHeal(
+    target: MatchPlayerState,
+    amount: number,
+    sourceSlot: number
+  ): void {
+    if (!target.alive || amount <= 0) return;
+    const missing = Math.max(0, target.maxHp - target.hp);
+    const healed = Math.min(
+      missing,
+      Math.round(amount * healingMultiplier(target.status))
+    );
+    if (healed <= 0) return;
+    target.hp += healed;
+    target.abilityHealing += healed;
+    const source = this.players[sourceSlot] ?? target;
+    this.recordSupport(source, target, 'heal', healed);
+  }
+
+  private applyStatusSlow(
+    source: MatchPlayerState | null,
+    target: MatchPlayerState,
+    multiplier: number,
+    duration: number,
+    reflect = true
+  ): void {
+    if (multiplier >= 1 || duration <= 0 || !target.alive) return;
+    const effective = reflect
+      ? duration * controlDurationMultiplier(target, this.players)
+      : duration;
+    if (effective <= 0) return;
+
+    if (reflect && source) {
+      const reflected = takeControlReflection(
+        target,
+        source,
+        effective,
+        this.matchElapsed
+      );
+      if (reflected > 0) {
+        this.applyStatusSlow(
+          target,
+          source,
+          multiplier,
+          reflected * controlDurationMultiplier(source, this.players),
+          false
+        );
+      }
+    }
+
+    const key = `status:${source?.slot ?? -1}:${multiplier}`;
+    const existing = target.slowEffects.find((effect) => effect.source === key);
+    if (existing) {
+      existing.multiplier = multiplier;
+      existing.remaining = Math.max(existing.remaining, effective);
+    } else {
+      target.slowEffects.push({
+        source: key,
+        multiplier,
+        remaining: effective
+      });
+    }
+    this.refreshSlowMultiplier(target);
+    if (source && source.team !== target.team) {
+      target.slowContributors.set(source.slot, this.matchElapsed);
     }
   }
 
@@ -1498,6 +1809,7 @@ export class HeadlessMatch {
     distance: number
   ): void {
     if (distance <= 0) return;
+    if (passiveBlocksKnockback(target)) return;
     const dx = target.x - fromX;
     const dz = target.z - fromZ;
     const length = Math.hypot(dx, dz);
@@ -1707,6 +2019,7 @@ export class HeadlessMatch {
     player.damageReductionTimer = 0;
     player.damageReduction = 0;
     player.shieldSpeedMultiplier = 1;
+    resetCombatStatus(player.status);
     breakRegen(player);
     player.animation = 'idle';
     player.playback = 1;
@@ -1786,6 +2099,9 @@ export class HeadlessMatch {
     abilityName: string
   ): void {
     knockOutSystem(this.hosts.knockout, target, killer, abilityName);
+    if (!target.alive && killer !== target) {
+      applyPassiveKill(killer, target, this.matchElapsed);
+    }
   }
 
   private pushKillFeed(
@@ -2094,6 +2410,13 @@ export class HeadlessMatch {
 
     if (!this.matchOver) {
       stepRegeneration(this.players, FIXED_STEP, this.hosts.status);
+      stepStatusEffects(this.players, FIXED_STEP, this.statusEffectHost());
+      stepPassives(
+        this.players,
+        FIXED_STEP,
+        this.matchElapsed,
+        this.statusEffectHost()
+      );
       stepParticipation(
         this.players,
         FIXED_STEP,

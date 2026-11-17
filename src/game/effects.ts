@@ -9,6 +9,7 @@
 import type { AbilityDef } from './abilities';
 import type { CombatFxPort as CombatFx } from './core/ports/fx';
 import type { MatchPlayerState } from './matchState';
+import { healingMultiplier } from './core/combat/status';
 
 export type Effect<Context> = (context: Context) => void;
 
@@ -55,7 +56,10 @@ export function applyHealFraction(
   if (fraction <= 0 || !player.alive) return 0;
 
   const missing = Math.max(0, player.maxHp - player.hp);
-  const amount = Math.min(missing, Math.round(player.maxHp * fraction));
+  const amount = Math.min(
+    missing,
+    Math.round(player.maxHp * fraction * healingMultiplier(player.status))
+  );
   if (amount > 0) {
     player.hp += amount;
     credit.abilityHealing += amount;

@@ -161,6 +161,21 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/0000/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/0000/0001/Normal.png
 
+## Arcanine (#0059)
+
+- CHUNSOFT · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0059
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0059/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0059/credits.txt
+
+### Arcanine · Shiny
+
+- <@!234720295292895232> — PMDCollab_1 · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!544245909639397378> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, Swing, Double, Rotate, Hop, QuickStrike
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0059/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0059/0000/0001/Normal.png
+
+
 ## Mewtwo (#0150)
 
 - CHUNSOFT · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
@@ -448,4 +463,3 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - <@!350050109741858829> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, SpAttack, RearUp, Swing, Double, Rotate, Hop, QuickStrike
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/0002
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/0002/Normal.png
-

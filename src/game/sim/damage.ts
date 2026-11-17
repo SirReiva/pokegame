@@ -7,6 +7,7 @@
  */
 
 import type { AbilityDef, BuffStat, SlowSpec } from '../abilities';
+import type { DotSpec, MarkSpec } from '../core/abilities/specs';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -16,9 +17,15 @@ import {
 import type { CombatFxPort } from '../core/ports/fx';
 import type { HealOnHitToken, MatchPlayerState } from '../matchState';
 import { CONFIG } from '../config';
-import { computeDamage, rollCritical, rollRandomFactor } from '../combat';
+import { computeDamage } from '../combat';
 import { applyHealSelf } from '../effects';
-import { typeEffectiveness } from '../core/typeChart';
+import { combatEffectiveness } from '../core/typeChart';
+import { absorbWithShields } from '../statusEffects';
+import {
+  applyPassiveDamageTaken,
+  applyPassiveDirectHit,
+  applyPassiveIncomingDamage
+} from '../passives';
 import { XP_REWARDS, type XpSource } from '../xp';
 import { breakRegen } from './status';
 
@@ -36,8 +43,6 @@ export interface DamageOptions {
   sourceZ?: number;
   /** Marca de inmunidad compartida por los ticks de un lanzamiento. */
   immuneMarked?: Set<number>;
-  /** Objetivos que ya pagaron el `+2` de la fórmula en este lanzamiento. */
-  flatBonusApplied?: Set<number>;
 }
 
 export interface HitControlOptions {
@@ -57,6 +62,8 @@ export interface HitControlOptions {
 export interface DamageSystemHost {
   readonly combatFx: CombatFxPort;
   readonly atmosphere: AtmosphereId;
+  now(): number;
+  players(): readonly MatchPlayerState[];
   buffMultiplier(player: MatchPlayerState, stat: BuffStat): number;
   applySlow(
     attacker: MatchPlayerState,
@@ -68,6 +75,31 @@ export interface DamageSystemHost {
   activeCastArmor(target: MatchPlayerState): number;
   spawnArmorFeedback(target: MatchPlayerState, broke: boolean): void;
   interruptWithRefund(target: MatchPlayerState, lethal: boolean): void;
+  applyDot(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    spec: DotSpec
+  ): void;
+  applyMark(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    spec: MarkSpec
+  ): void;
+  applyRoot(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    seconds: number
+  ): void;
+  applySilence(
+    attacker: MatchPlayerState,
+    target: MatchPlayerState,
+    seconds: number
+  ): void;
+  applyAntiHeal(
+    target: MatchPlayerState,
+    fraction: number,
+    duration: number
+  ): void;
   applyKnockback(
     target: MatchPlayerState,
     fromX: number,
@@ -177,22 +209,31 @@ export function applyAbilityDamage(
       : options.knockback ?? 0;
   const slow = options.slow === undefined ? def.slow : options.slow;
 
-  // La inmunidad de tipo anula el golpe completo: ni daño, ni estado, ni
-  // impacto, ni control.
-  const effectiveness = typeEffectiveness(def.type, target.types);
-  if (effectiveness === 0) {
-    if (!options.immuneMarked || !options.immuneMarked.has(target.slot)) {
-      host.showImmunePopup(target, attacker);
-      options.immuneMarked?.add(target.slot);
-    }
-    return false;
-  }
-  // El impacto suena para cualquier golpe válido, también los de estado.
+  // La efectividad ya no anula el golpe: la "inmunidad" clásica es una
+  // resistencia extrema (0,85). El impacto suena para cualquier golpe válido,
+  // también los de estado.
+  const effectiveness = combatEffectiveness(def.type, target.types);
   host.playImpactSound(effectiveness);
 
   // La ralentización se aplica aunque la habilidad no haga daño.
   if (slow && target.alive) {
     host.applySlow(attacker, target, def, slow, def.color);
+  }
+
+  // Efectos de estado declarados por la habilidad. Se aplican también a las
+  // habilidades de estado: una marca o un silencio no necesitan daño.
+  if (target.alive) {
+    if (def.dot) host.applyDot(attacker, target, def.dot);
+    for (const mark of def.marks) host.applyMark(attacker, target, mark);
+    if (def.root > 0) host.applyRoot(attacker, target, def.root);
+    if (def.silence > 0) host.applySilence(attacker, target, def.silence);
+    if (def.antiHeal) {
+      host.applyAntiHeal(
+        target,
+        def.antiHeal.fraction,
+        def.antiHeal.duration
+      );
+    }
   }
 
   // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:
@@ -210,16 +251,6 @@ export function applyAbilityDamage(
     return false;
   }
 
-  // El `+2` de la fórmula es por golpe; en áreas persistentes el primero que
-  // alcanza a cada objetivo lo paga y los siguientes lo desactivan.
-  let flatBonus = 2;
-  if (options.flatBonusApplied) {
-    const alreadyApplied = options.flatBonusApplied.has(target.slot);
-    if (!alreadyApplied) options.flatBonusApplied.add(target.slot);
-    flatBonus = alreadyApplied ? 0 : 2;
-  }
-
-  const critical = rollCritical();
   const category = def.category === 'physical' ? 'physical' : 'special';
   const physical = category === 'physical';
   const result = computeDamage({
@@ -228,7 +259,6 @@ export function applyAbilityDamage(
     power,
     attacker: attacker.combat,
     defender: target.combat,
-    attackerTypes: attacker.types,
     defenderTypes: target.types,
     attackMultiplier: host.buffMultiplier(
       attacker,
@@ -237,10 +267,7 @@ export function applyAbilityDamage(
     defenseMultiplier: host.buffMultiplier(
       target,
       physical ? 'defense' : 'spDefense'
-    ),
-    flatBonus,
-    critical,
-    randomFactor: rollRandomFactor()
+    )
   });
 
   const reduction =
@@ -249,10 +276,15 @@ export function applyAbilityDamage(
     atmosphereMoveMultiplier(host.atmosphere, def.type) *
     atmosphereShapeMultiplier(host.atmosphere, def.shape) *
     atmosphereIncomingMultiplier(host.atmosphere, target.types);
-  const finalDamage = Math.max(
-    1,
-    Math.round(result.damage * (1 - reduction) * weatherMultiplier)
+  const incoming = applyPassiveIncomingDamage(
+    target,
+    attacker,
+    Math.max(1, Math.round(result.damage * (1 - reduction) * weatherMultiplier)),
+    def,
+    host.now(),
+    host.players()
   );
+  const finalDamage = absorbWithShields(target, incoming);
   const lethal = finalDamage >= target.hp;
   host.combatFx.spawnImpact(
     options.impactX ?? target.x,
@@ -264,7 +296,7 @@ export function applyAbilityDamage(
   host.showDamagePopup(
     target,
     finalDamage,
-    result.critical,
+    false,
     result.effectiveness,
     lethal,
     attacker
@@ -300,6 +332,27 @@ export function applyAbilityDamage(
     target.hurtTimer = Math.max(target.hurtTimer, control ? 0.35 : 0.2);
   }
   host.vibrateOnDamage(target, appliedDamage);
+  // Los ticks de un área persistente son daño periódico: no generan medidores
+  // de "impactos directos" (Calor, Carga, Filo...).
+  const periodic = def.shape === 'aoe' && def.aoeDamageMode === 'overTime';
+  if (!periodic) {
+    applyPassiveDirectHit(
+      attacker,
+      target,
+      finalDamage,
+      def,
+      host.now(),
+      host.players()
+    );
+  }
+  applyPassiveDamageTaken(
+    target,
+    attacker,
+    finalDamage,
+    def,
+    host.now(),
+    host.players()
+  );
   if (target.hp <= 0) host.knockOut(target, attacker, def.name);
 
   // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida.

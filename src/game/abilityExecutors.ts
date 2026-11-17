@@ -436,7 +436,6 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       tick: 0,
       healToken: deps.healToken,
       immuneMarked: new Set(),
-      flatBonusApplied: new Set(),
       movement: def.aoeMovement,
       originX: centerX,
       originZ: centerZ,

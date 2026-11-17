@@ -369,6 +369,18 @@ export interface AbilityHud {
   duration: number;
 }
 
+/** Pasiva del Pokémon tal y como la pinta el HUD. */
+export interface PassiveHud {
+  id: string;
+  name: string;
+  description: string;
+  /** Acumulaciones actuales del medidor, si la pasiva tiene. */
+  stacks: number;
+  maxStacks: number;
+  /** Detalle corto del estado actual (por ejemplo, la postura de Eevee). */
+  detail?: string | null;
+}
+
 /** Buff activo tal y como lo pinta el HUD. */
 export interface ActiveBuffHud {
   stat: BuffStat;
@@ -402,6 +414,25 @@ export interface CommonAbilityHud {
   /** `true` si el icono pasivo debe ocultarse (KO, visto o vida máxima). */
   hidden: boolean;
   description: string;
+}
+
+export type StatusHudKind =
+  | 'dot'
+  | 'mark'
+  | 'antiheal'
+  | 'root'
+  | 'silence';
+
+/** Estado de combate legible para el HUD de detalle. */
+export interface StatusHud {
+  id: string;
+  name: string;
+  kind: StatusHudKind;
+  /** Segundos restantes. */
+  remaining: number;
+  /** Acumulaciones actuales y máximas en las marcas. */
+  stacks?: number;
+  maxStacks?: number;
 }
 
 export interface PlayerMatchStats {
@@ -480,9 +511,15 @@ export interface PlayerMatchStats {
   buffs: ActiveBuffHud[];
   /** Ralentizaciones activas que afectan al jugador. */
   slows: ActiveSlowHud[];
+  /** Estados de combate con nombre y tiempo restante para el HUD de detalle. */
+  statusEffects: StatusHud[];
   abilities: AbilityHud[];
+  /** Pasiva del Pokémon y sus acumulaciones visibles. */
+  passive: PassiveHud | null;
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;
+  /** Escudos de reserva activos (suma de todas las instancias). */
+  shieldAmount: number;
   /**
    * Armadura de casteo restante; 0 si no hay armadura activa. Los golpes
    * consumen este pozo sin mitigar daño y solo interrumpen el lanzamiento

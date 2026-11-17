@@ -9,7 +9,7 @@
  * estado compartido y las operaciones auxiliares mediante `BotDecisionContext`.
  */
 
-import { ABILITIES, type AbilityDef, type BuffStat } from '../abilities';
+import { ABILITIES, baseAbilityId, type AbilityDef, type BuffStat } from '../abilities';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -19,12 +19,13 @@ import {
 import { aoeAreaFrom, aoeDistance, type AoeArea } from '../aoeGeometry';
 import type { NavPoint } from '../botNav';
 import { computeDamage } from '../combat';
-import { CONFIG, DEG } from '../config';
+import { DEG } from '../config';
 import type { PickupSpawn } from '../items';
 import type { MatchPlayerState } from '../matchState';
+import { passiveFor } from '../passives';
+import { scaleCopiedAbility } from '../sim/mimic';
 import { maxHitRadius } from '../roster';
 import { terrainAt, terrainTeam } from '../terrain';
-import { typeEffectiveness } from '../typeChart';
 import type { Collider } from '../world';
 import { clamp, directionTo } from './math';
 import type {
@@ -618,8 +619,17 @@ export class BotDecision {
     for (let slot = 0; slot < 4; slot++) {
       if (self.cooldowns[slot] > 0.001) continue;
       const id = self.abilityIds[slot];
-      const def = id ? ABILITIES[id] : null;
+      let def = id ? ABILITIES[id] : null;
       if (!def) continue;
+      // Mímica se puntúa como la habilidad copiada: el bot necesita ver su
+      // alcance y su daño reales para decidir si merece el enfriamiento.
+      if (id && baseAbilityId(id) === 'mimica') {
+        const copy = self.status.copiedAbility;
+        if (copy && copy.until > this.state.clock) {
+          const copied = ABILITIES[copy.id];
+          if (copied) def = scaleCopiedAbility(copied);
+        }
+      }
       const support = this.ctx.supportScore(self, players, def, colliders);
       // Las áreas de apoyo se centran en el bot: no necesitan que haya un
       // rival dentro de su alcance para ser útiles.
@@ -692,22 +702,20 @@ export class BotDecision {
       def.knockback > 0 ||
       def.buffs.length > 0 ||
       def.shield ||
-      def.shape === 'dash';
+      def.shape === 'dash' ||
+      def.shape === 'self';
     if (!hasEffect) return -Infinity;
 
-    // Una habilidad inmune no hace daño ni aplica control: nunca es una buena
-    // elección contra ese objetivo.
-    if (def.power > 0 && typeEffectiveness(def.type, target.types) === 0) {
-      return -Infinity;
-    }
-    if (
-      def.power <= 0 &&
-      def.slow !== null &&
-      typeEffectiveness(def.type, target.types) === 0
-    ) {
-      return -Infinity;
+    // Mímica sin copia guardada no gasta el enfriamiento: el bot no debe
+    // elegirla hasta que haya visto una habilidad rival.
+    if (baseAbilityId(def.id) === 'mimica') {
+      const copy = self.status.copiedAbility;
+      if (!copy || copy.until <= this.state.clock) return -Infinity;
     }
 
+    // Ningún tipo anula el daño: la peor efectividad sigue haciendo 1 PV. Una
+    // habilidad con efectividad baja pierde puntuación por su daño esperado,
+    // pero no se descarta de antemano.
     const hitChance = this.hitChance(self, target, def, prediction);
     const expectedDamage = this.expectedDamage(
       self,
@@ -769,6 +777,27 @@ export class BotDecision {
       ) {
         score += FINISH_BONUS;
       }
+    }
+
+    // Pasivas con medidor ofensivo: si está cargado, la siguiente habilidad
+    // aprovecha el trabajo previo. No se premian los medidores defensivos
+    // (placas de Onix, escudo de Squirtle).
+    if (def.power > 0) {
+      const passive = passiveFor(self.pokemonId);
+      if (
+        passive?.castMeter &&
+        passive.maxStacks &&
+        passive.maxStacks > 0
+      ) {
+        const readiness =
+          self.status.passive.stacks / passive.maxStacks;
+        score += readiness * 22;
+      }
+      // Golpear a un rival marcado acerca la detonación; vale algo más que
+      // repartir daño en un objetivo limpio.
+      let markStacks = 0;
+      for (const mark of target.status.marks) markStacks += mark.stacks;
+      if (markStacks > 0) score += Math.min(12, markStacks * 2.5);
     }
 
     if (def.healSelf > 0) {
@@ -898,9 +927,9 @@ export class BotDecision {
   }
 
   /**
-   * Daño final esperado de un golpe, con stats reales, STAB, efectividad,
-   * buffs, escudo, crítico medio y factor aleatorio medio. La probabilidad de
-   * conectar se aplica aparte en `hitChance`.
+   * Daño final esperado de un golpe con la fórmula determinista, los stats
+   * reales, los buffs y la efectividad suavizada. La probabilidad de conectar
+   * se aplica aparte en `hitChance`.
    */
   expectedDamage(
     self: MatchPlayerState,
@@ -912,8 +941,6 @@ export class BotDecision {
     const category: 'physical' | 'special' =
       def.category === 'physical' ? 'physical' : 'special';
     const physical = category === 'physical';
-    const randomFactor =
-      (CONFIG.combat.randomMin + CONFIG.combat.randomMax) / 2;
 
     // El bot apunta hacia la posición prevista, así que el centro del área (o el
     // vértice del cono) cae en esa dirección a `range` del lanzador.
@@ -979,7 +1006,6 @@ export class BotDecision {
       power,
       attacker: self.combat,
       defender: target.combat,
-      attackerTypes: self.types,
       defenderTypes: target.types,
       attackMultiplier: this.ctx.statMultiplier(
         self,
@@ -988,14 +1014,9 @@ export class BotDecision {
       defenseMultiplier: this.ctx.statMultiplier(
         target,
         physical ? 'defense' : 'spDefense'
-      ),
-      randomFactor
+      )
     };
-    const normal = computeDamage({ ...input, critical: false }).damage;
-    const critical = computeDamage({ ...input, critical: true }).damage;
-    const expected =
-      normal * (1 - CONFIG.combat.critChance) +
-      critical * CONFIG.combat.critChance;
+    const expected = computeDamage(input).damage;
     const reduction =
       target.damageReductionTimer > 0 ? target.damageReduction : 0;
     const weatherMultiplier =

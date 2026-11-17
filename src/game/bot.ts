@@ -57,7 +57,7 @@ import {
   terrainAtCell,
   terrainTeam
 } from './terrain';
-import { typeEffectiveness } from './typeChart';
+import { combatEffectiveness } from './typeChart';
 import { isTargetVisible, lineOfSightBlocked, terrainConcealment } from './vision';
 import type { Collider } from './world';
 import type {
@@ -200,7 +200,7 @@ interface SupportProfile {
  * necesita una vía propia para valorarlas y lanzarlas.
  */
 const SUPPORT_PROFILES: Partial<Record<string, SupportProfile>> = {
-  deseo: { revive: true },
+  deseo: { healAllies: true },
   recuperacion: { healAllies: true },
   recuperacionHoOh: { healAllies: true }
 };
@@ -1400,6 +1400,12 @@ export class BotController {
       const protection =
         enemy.invulnerableTimer > 0 ? 1 : 1 - this.damageTakenFactor(enemy, null);
       if (protection > 0) score += protection * MITIGATED_TARGET_PENALTY;
+      // Marcas activas: rematar a un rival marcado completa la detonación y
+      // convierte el daño repartido en una ventana real. No se persigue una
+      // marca que ya está a punto de caducar, pero sí se prioriza el objetivo.
+      let markStacks = 0;
+      for (const mark of enemy.status.marks) markStacks += mark.stacks;
+      if (markStacks > 0) score -= Math.min(12, markStacks * 2.5);
       // Inmune a todo nuestro daño: mucho cuidado, solo se acepta si no hay
       // ningún otro rival visible.
       if (offense === 0) score += IMMUNE_TARGET_PENALTY;
@@ -2133,9 +2139,8 @@ export class BotController {
       if (def.shape === 'aoe' || def.shape === 'self') continue;
       if (def.shape === 'dash' && def.power <= 0) continue;
 
-      // Un golpe inmune no interrumpe: el motor anula el impacto entero.
-      const effectiveness = typeEffectiveness(def.type, source.types);
-      if (effectiveness === 0) continue;
+      // La efectividad ya no anula el impacto: solo modula el daño.
+      const effectiveness = combatEffectiveness(def.type, source.types);
 
       // El golpe no llega en el instante actual: se adelanta el rival al
       // momento del impacto. En proyectiles el tiempo de vuelo depende de la
@@ -2381,7 +2386,6 @@ export class BotController {
       const id = attacker.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
       if (!def || def.power <= 0 || def.category === 'status') continue;
-      if (typeEffectiveness(def.type, defender.types) === 0) continue;
       // El DPS entrante no hereda el adelanto imperfecto de este bot: se asume
       // que el rival apunta bien.
       const prediction = this.predictTarget(
@@ -2684,7 +2688,7 @@ export class BotController {
       const def = id ? ABILITIES[id] : null;
       if (!def || def.power <= 0) continue;
       const multiplier =
-        typeEffectiveness(def.type, defender.types) *
+        combatEffectiveness(def.type, defender.types) *
         atmosphereMoveMultiplier(this.atmosphere, def.type) *
         atmosphereShapeMultiplier(this.atmosphere, def.shape) *
         incoming;
@@ -2693,7 +2697,7 @@ export class BotController {
     if (best < 0) {
       for (const type of attacker.types) {
         const multiplier =
-          typeEffectiveness(type, defender.types) *
+          combatEffectiveness(type, defender.types) *
           atmosphereMoveMultiplier(this.atmosphere, type) *
           incoming;
         best = Math.max(best, multiplier);
@@ -3802,9 +3806,9 @@ export class BotController {
   }
 
   /**
-   * Daño final esperado de un golpe, con stats reales, STAB, efectividad,
-   * buffs, escudo, crítico medio y factor aleatorio medio. La probabilidad de
-   * conectar se aplica aparte en `hitChance`.
+   * Daño final esperado de un golpe con la fórmula determinista, los stats
+   * reales, los buffs y la efectividad suavizada. La probabilidad de conectar
+   * se aplica aparte en `hitChance`.
    */
   private expectedDamage(
     self: MatchPlayerState,
@@ -3882,7 +3886,6 @@ export class BotController {
       // alcanzar a tiempo no cuenta como herramienta.
       if (def.shape === 'aoe' || def.shape === 'self') continue;
       if (def.shape === 'dash' && def.power <= 0) continue;
-      if (typeEffectiveness(def.type, target.types) === 0) continue;
       if (def.category === 'status') return true;
       if (def.power <= 0) continue;
       const damage = this.expectedDamage(self, target, def, prediction);
@@ -3911,7 +3914,6 @@ export class BotController {
       const id = enemy.abilityIds[0];
       const poke = id ? ABILITIES[id] : null;
       if (!poke || poke.power <= 0 || poke.category === 'status') continue;
-      if (typeEffectiveness(poke.type, self.types) === 0) continue;
       // Solo cuenta si el poke puede alcanzar al bot desde donde está.
       const reach =
         poke.shape === 'melee'

@@ -113,25 +113,25 @@ export const ITEM_DEFINITIONS: Record<ItemId, ItemDefinition> = {
   potion: healingItem({
     id: 'potion',
     name: 'Poción',
-    description: 'Restaura 50 PV al Pokémon que la recoge.',
+    description: 'Restaura 150 PV al Pokémon que la recoge.',
     shortLabel: 'P',
     unusedImage: 'items/potion-unused.png',
     usedImage: 'items/potion-used.png',
     cooldownSeconds: 20,
     height: 0.85,
-    healHp: 50,
+    healHp: 150,
     color: '#e63b4f'
   }),
   superPotion: healingItem({
     id: 'superPotion',
     name: 'Poción grande',
-    description: 'Restaura 120 PV al Pokémon que la recoge.',
+    description: 'Restaura 350 PV al Pokémon que la recoge.',
     shortLabel: 'P+',
     unusedImage: 'items/super-potion-unused.png',
     usedImage: 'items/super-potion-used.png',
     cooldownSeconds: 45,
     height: 1.1,
-    healHp: 120,
+    healHp: 350,
     color: '#8a4dff'
   })
 };

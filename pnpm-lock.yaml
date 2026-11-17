@@ -201,7 +201,7 @@ importers:
         specifier: 4.3.5
         version: 4.3.5
       tsx:
-        specifier: ^4.23.15
+        specifier: 4.23.15
         version: 4.23.15
       twlinter:
         specifier: 0.8.0

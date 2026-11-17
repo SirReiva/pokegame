@@ -237,14 +237,27 @@ function drawBar(
     xpHeight
   );
 
+  const barTop = anchor - barHeight;
+
+  // Tira de estados justo encima de la vida. Solo se dibuja si hay algo activo;
+  // cuando desaparece, la limpieza de la zona sucia borra el frame anterior.
+  let statusTop = barTop;
+  if (bar.hasStatusEffects) {
+    const statusWidth = snapSize(layout.statusWidth * pixelsPerWorld);
+    const statusHeight = snapSize(layout.statusHeight * pixelsPerWorld);
+    const statusGap = snap(layout.statusGap * pixelsPerWorld);
+    statusTop = snap(barTop - statusGap - statusHeight);
+    context.drawImage(
+      bar.statusCanvas,
+      snap(centerX - statusWidth / 2),
+      statusTop,
+      statusWidth,
+      statusHeight
+    );
+  }
+
   // Barra de vida: el punto de apoyo es su borde inferior.
-  context.drawImage(
-    bar.barCanvas,
-    left,
-    anchor - barHeight,
-    barWidth,
-    barHeight
-  );
+  context.drawImage(bar.barCanvas, left, barTop, barWidth, barHeight);
 
   // Distintivo de nivel, centrado verticalmente con la barra y a su izquierda.
   const badge = snapSize(layout.badgeSize * pixelsPerWorld);
@@ -266,8 +279,8 @@ function drawBar(
   // frame. El distintivo puede sobresalir por arriba y por la izquierda.
   const minX = hasBadge ? badgeLeft : left;
   const minY = hasBadge
-    ? Math.min(anchor - barHeight, badgeTop)
-    : anchor - barHeight;
+    ? Math.min(statusTop, badgeTop)
+    : statusTop;
   const maxX = left + barWidth;
   const maxY = hasBadge
     ? Math.max(anchor + xpGap + xpHeight, badgeTop + badge)

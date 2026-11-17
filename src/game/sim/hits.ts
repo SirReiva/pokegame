@@ -192,8 +192,21 @@ export function stepMeleeHits(host: HitSystemHost): void {
     if (host.isMatchOver()) break;
     if (clashPairs.has(meleePairKey(hit.attacker, hit.target))) continue;
     if (!meleeHitValid(host, hit)) continue;
-    host.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
-      healToken: hit.healToken
-    });
+    const hitCount = Math.max(1, Math.round(hit.def.hitCount));
+    const power = hit.def.power / hitCount;
+    for (let index = 0; index < hitCount; index++) {
+      if (!meleeHitValid(host, hit)) break;
+      const first = index === 0;
+      const last = index === hitCount - 1;
+      host.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
+        // El daño total se reparte; el control y el empuje se aplican una vez.
+        power,
+        healToken: first ? hit.healToken : undefined,
+        control: first,
+        hitstun: first ? undefined : 0,
+        knockback: last ? hit.def.knockback : 0,
+        slow: first ? undefined : null
+      });
+    }
   }
 }

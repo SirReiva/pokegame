@@ -3,7 +3,7 @@
  * Benchmark de CPU de los módulos puros.
  *
  * No mide GPU ni draw calls: para eso está la metodología de
- * `docs/rendimiento-carga-mapas.md` en Chrome headless. Este script sirve para
+ * `docs/rendimiento.md` en Chrome headless. Este script sirve para
  * detectar regresiones de lógica/asignación en cada refactor sin abrir el juego.
  */
 

@@ -62,6 +62,7 @@ import {
 } from '../multiplayer';
 import type { PickupField } from '../pickups';
 import { baseStatsFor, combatStatsFor } from '../pokedex';
+import { createCombatStatus } from '../core/combat/status';
 import { ActorShadowBatch } from '../render/actorShadows';
 import { createPlayerView, type PlayerView } from '../render/playerView';
 import type { CombatFx } from '../render/fx/CombatFx';
@@ -594,7 +595,8 @@ export function startMatch(
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
-      abilityIds: [...moveset, commonAbilityId]
+      abilityIds: [...moveset, commonAbilityId],
+      status: createCombatStatus()
     };
     host.matchPlayers.push(player);
     host.playerBySlot.set(player.slot, player);

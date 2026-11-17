@@ -1,10 +1,737 @@
-# Propuestas de rendimiento para NewPoke
+# Rendimiento de NewPoke
+
+> Documento único de rendimiento: referencias de CPU y frame, el análisis de la
+> carga de mapas grandes y las propuestas de optimización.
+
+## Contenido
+
+1. [Parte 1: Baseline de rendimiento](#parte-1-baseline-de-rendimiento)
+   - [CPU pura (`pnpm bench`)](#cpu-pura-pnpm-bench)
+   - [Baseline de frame real](#baseline-de-frame-real)
+2. [Parte 2: Carga de mapas grandes](#parte-2-carga-de-mapas-grandes)
+3. [Parte 3: Propuestas de rendimiento](#parte-3-propuestas-de-rendimiento)
+
+---
+
+# Parte 1: Baseline de rendimiento
+
+Fecha de referencia: noviembre de 2026 · build de producción.
+
+## CPU pura (`pnpm bench`)
+
+Node 26, sin GPU, sobre los módulos puros. Sirve para detectar regresiones de
+lógica o asignaciones tras un refactor; **no sustituye** a la medición del
+frame real.
+
+| Benchmark | Iteraciones | Tiempo | Throughput |
+| --- | ---: | ---: | ---: |
+| `decorateDamage` | 2.000.000 | 133,9 ms | 14.931.312 ops/s |
+| `aoeContains` (cono) | 2.000.000 | 253,6 ms | 7.886.687 ops/s |
+| `buildBotHazards` (100 proyectiles + 20 áreas) | 20.000 | 113,1 ms | 176.904 ops/s |
+| `normalizeModeSettings` | 200.000 | 40,8 ms | 4.903.716 ops/s |
+
+Criterio de aceptación: una variación de ±5 % en estos números es ruido; por
+encima de ese margen se investiga antes de mergear.
+
+## Baseline de frame real
+
+Medición con `pnpm build` + `vite preview` + Chrome headless (`--headless=new`,
+`--use-angle=swiftshader`, 1280×720). **Los valores absolutos no representan una
+GPU real**: SwiftShader renderiza por software y exagera el coste. Sirven como
+referencia relativa y para detectar regresiones de CPU/draw calls en el mismo
+entorno.
+
+Comando:
+
+```bash
+pnpm build
+pnpm bench:frame --all --seconds 5
+```
+
+| Mapa | Vistas | FPS | frame ms | p50 | p95 | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| arena | 1 | 2,8 | 361,06 | 366,60 | 383,40 | 383,40 |
+| arena | 4 | 2,5 | 397,22 | 416,60 | 483,40 | 483,40 |
+| arena | 8 | 1,4 | 729,71 | 749,90 | 774,70 | 774,70 |
+| caldera | 1 | 2,9 | 348,08 | 366,60 | 383,40 | 383,40 |
+| caldera | 4 | 2,6 | 385,38 | 416,60 | 500,10 | 500,10 |
+| caldera | 8 | 2,2 | 449,38 | 483,40 | 516,70 | 516,70 |
+| perf-256 | 1 | 2,1 | 473,09 | 483,40 | 583,30 | 583,30 |
+| perf-256 | 4 | 1,4 | 706,64 | 783,30 | 883,40 | 883,40 |
+| perf-256 | 8 | 1,2 | 829,84 | 933,30 | 983,40 | 983,40 |
+
+### Medición con GPU real
+
+Mismo comando, añadiendo `--gpu` para no forzar SwiftShader:
+
+```bash
+pnpm bench:frame --all --seconds 5 --gpu
+```
+
+| Mapa | Vistas | FPS | frame ms | p50 | p95 | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| arena | 1 | 58,0 | 17,23 | 16,70 | 16,80 | 150,00 |
+| arena | 4 | 59,9 | 16,71 | 16,70 | 16,80 | 33,30 |
+| arena | 8 | 60,1 | 16,64 | 16,70 | 16,80 | 17,00 |
+| caldera | 1 | 59,8 | 16,73 | 16,70 | 16,80 | 49,90 |
+| caldera | 4 | 60,0 | 16,66 | 16,70 | 16,80 | 16,90 |
+| caldera | 8 | 60,1 | 16,64 | 16,70 | 16,80 | 16,90 |
+| perf-256 | 1 | 59,2 | 16,88 | 16,70 | 16,80 | 66,50 |
+| perf-256 | 4 | 59,9 | 16,69 | 16,70 | 16,80 | 33,30 |
+| perf-256 | 8 | 60,0 | 16,65 | 16,70 | 16,80 | 16,90 |
+
+Con aceleración por hardware el juego mantiene 60 FPS estables en las 9
+combinaciones; los picos aislados de 33-150 ms son de arranque/compilación de
+shaders, no del estado estacionario. **Esta es la tabla de referencia.**
+
+### Segunda medición con SwiftShader (software)
+
+Mismo entorno y comando:
+
+| Mapa | Vistas | FPS | frame ms | p50 | p95 | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| arena | 1 | 2,9 | 350,03 | 366,60 | 433,50 | 433,50 |
+| arena | 4 | 2,7 | 366,80 | 400,00 | 433,40 | 433,40 |
+| arena | 8 | 1,7 | 596,54 | 666,70 | 700,00 | 700,00 |
+| caldera | 1 | 2,7 | 365,74 | 366,70 | 433,40 | 433,40 |
+| caldera | 4 | 2,5 | 404,05 | 400,00 | 683,50 | 683,50 |
+| caldera | 8 | 2,0 | 505,94 | 483,30 | 916,80 | 916,80 |
+| perf-256 | 1 | 2,1 | 472,30 | 500,10 | 566,70 | 566,70 |
+| perf-256 | 4 | 1,2 | 810,93 | 833,40 | 900,10 | 900,10 |
+| perf-256 | 8 | 1,4 | 737,40 | 833,40 | 910,50 | 910,50 |
+
+La variación entre ejecuciones de SwiftShader es alta (±15-20 %), sobre todo en
+`caldera` y `perf-256`. No se usa esta tabla para declarar mejoras o regresiones
+de GPU; solo confirma que el benchmark sigue funcionando y que el escalado por
+vistas se mantiene.
+
+### Lectura
+
+- El escalado por vistas es el esperado: cada viewport redibuja el mundo.
+- `perf-256` es el mapa más caro, seguido de `caldera` y `arena`.
+- Para una medición válida de GPU hay que repetir el mismo comando en una
+  máquina con aceleración por hardware, sin `--use-angle=swiftshader`, y usar
+  Chrome DevTools para registrar draw calls y frame CPU.
+- Criterio de aceptación de refactor: p95 dentro de ±3 % respecto a esta tabla
+  en el mismo entorno, mismos draw calls y sin tareas largas nuevas.
+
+---
+
+# Parte 2: Carga de mapas grandes
+
+Análisis del bloqueo de la pestaña al cargar una partida en mapas grandes.
+
+## Resumen
+
+El bloqueo no viene de PlayCanvas ni del render 3D, sino de la **generación
+síncrona de la textura del suelo** en el hilo principal. En el mapa de estrés
+`perf-256` (256×256 celdas) se han medido **~20 s** solo en `paintTerrainZone`.
+
+El coste escala con:
+
+```
+píxeles del bounding box de la zona × vértices del polígono × número de zonas
+```
+
+Como todo ocurre en una única tarea síncrona, el navegador no puede repintar la
+pantalla de carga y la pestaña parece colgada.
+
+## Medición
+
+Medido en Chrome headless sobre los mapas reales del proyecto:
+
+| Mapa | Tamaño | Textura | `setActiveMap` | `createGroundCanvas` |
+| --- | --- | --- | --- | --- |
+| arena | 76×76 | 1216 px | 9 ms | ~300 ms |
+| laberinto | 128×128 | 2048 px | 10 ms | ~180 ms |
+| perf-256 | 256×256 | 2828 px | 38 ms | **~20 400 ms** |
+
+Separando el coste de `perf-256`:
+
+| Caso | Tiempo |
+| --- | --- |
+| Sin pintar zonas (`zones: []`) | ~400 ms |
+| Completo | **~20 400 ms** |
+| Completo con textura reducida a 1414 px | ~5000 ms |
+
+Conclusiones:
+
+- **~20 s de los 20.4 s se van en `paintTerrainZone`.**
+- `paintGridTiles` y el resto del canvas cuestan ~400 ms.
+- Reducir la textura ayuda de forma cuadrática, pero no elimina el problema:
+  a 1414 px siguen siendo ~5 s.
+
+## Causa
+
+Cadena de llamadas durante la carga de la partida:
+
+1. `Game.applyMap()` llama a `buildWorld()` (`src/game/game.ts:743`).
+2. `buildWorld()` genera el suelo con `createGroundCanvas(...)` de forma
+   síncrona (`src/game/world.ts:321-331`).
+3. `createGroundCanvas()` pinta la rejilla y después recorre todas las zonas
+   (`src/game/textures.ts:844-847`).
+4. `paintTerrainZone()` recorre el **rectángulo envolvente completo de cada
+   zona en pasos de 4 px** (`src/game/textures.ts:284-298`). Por cada muestra:
+   - llama a `zoneContains()`, que internamente hace `zoneSignedDistance()`;
+   - vuelve a llamar a `zoneSignedDistance()` para el borde.
+5. `zoneSignedDistance()` recorre **todos los vértices del polígono**
+   (`src/game/terrain.ts:649-661`).
+6. Los detalles vuelven a llamar a `zoneContainsInset()`
+   (`src/game/textures.ts:300-312`) y la zona de fuego hace otro barrido
+   completo del bounding box (`src/game/textures.ts:337`).
+
+En `perf-256` esto supone:
+
+- 25 zonas (`TERRAIN_ZONES.length`).
+- 3050 vértices de polígono en total.
+- ~10.2 M de píxeles de bounding boxes.
+- Cientos de millones de operaciones y cientos de miles de `fillRect()`.
+
+Todo dentro de una sola tarea, por lo que la UI no puede actualizarse.
+
+## Soluciones
+
+Ordenadas de mayor a menor impacto.
+
+### 1. Eliminar los tests de polígono por píxel — aplicada
+
+Implementada en `src/game/textures.ts`. Ahora `paintTerrainZone()`:
+
+- rellena la zona con `ctx.fillRect()` sobre el bounding box y deja que
+  `ctx.clip()` recorte la silueta;
+- pinta el borde oscuro con `ctx.stroke()` y `lineWidth = edgeWorld * scale * 2`,
+  recortado a la forma (la mitad interior del trazo es el borde);
+- mantiene el grano de 4 px y los detalles, pero ya no llama a `zoneContains`
+  ni a `zoneSignedDistance` por píxel;
+- conserva el patrón de placas del fuego, sin comprobar pertenencia por píxel.
+
+El `ctx.clip()` ya existía para los detalles; el problema era el bucle manual de
+pertenencia y distancia.
+
+### 2. Aprovechar la rejilla de tiles — aplicada
+
+`paintGridTiles()` ya pinta la paleta base de cada celda, incluidos los
+terrenos decorativos. Por eso `paintTerrainZone()` ya no vuelve a rellenar ni a
+granear la zona completa: solo dibuja el borde y los detalles propios de su
+tipo. Así se evita rasterizar cada zona una segunda vez.
+
+Como efecto secundario positivo, los huecos interiores de una zona (por
+ejemplo, un lago dentro de una región de escarcha) muestran ahora el terreno
+real de la rejilla en lugar de quedar tapados por el relleno de la zona.
+
+### 3. Limitar resolución y trabajo — aplicada
+
+- El presupuesto de téxeles es ahora `CONFIG.performance.groundTexturePixels`
+  (`src/game/config.ts`), aplicado en `groundTextureSize()`
+  (`src/game/textures.ts`). Por defecto 4 M: en `perf-256` la textura pasa de
+  2828 a 2000 px (8 M → 4 M píxeles), mientras que los mapas pequeños no cambian
+  porque ya van topados por su tamaño o por `maxPixelsPerUnit`.
+- Efecto medido: el pintado baja ~20 % (515 → ~460 ms) y la memoria de la
+  textura y su subida a la GPU se reducen a la mitad. No elimina el coste de las
+  zonas, que depende de sus detalles más que de los píxeles.
+- `maxSize` sigue limitado a `min(device.maxTextureSize, 8192)`. Si hiciera
+  falta más margen, bajar `groundTexturePixels` a 2 M deja `perf-256` en
+  1414 px.
+
+### 4. Mover la generación fuera del hilo principal — aplicada (troceada)
+
+La generación se hace con generadores que ceden el control cada
+`GROUND_PAINT_BUDGET_MS` / `BUILD_WORLD_BUDGET_MS` (8 ms) mediante
+`yieldToBrowser()` (`src/game/frameYield.ts`). Se trocea:
+
+- el suelo por filas de la rejilla, zonas decorativas (incluido el barrido del
+  fuego) y tandas de flores (`createGroundCanvasAsync`);
+- la construcción del mundo por secciones, y dentro de las secciones pesadas
+  (follaje instanciado, cristales de hielo, mariposas) cada 64 elementos
+  (`buildWorldAsync`).
+
+`yieldToBrowser()` usa `scheduler.yield()` cuando existe (Chrome) y cae a
+`requestAnimationFrame` en el resto. La tarea más larga pasa de más de un
+segundo a menos de 50 ms y la barra de carga puede mostrar progreso real. Las
+versiones síncrona y asíncrona comparten los mismos pasos (`groundCanvasSteps`,
+`buildWorldSteps`), así que el resultado es idéntico.
+
+El mapa anterior sigue visible hasta que el nuevo está listo: `applyMap()`
+genera el suelo y construye el mundo en una raíz aparte, y solo después destruye
+el mundo anterior y engancha el nuevo. El mundo se construye con su mapa
+explícito (`BuildWorldOptions.map`), sin tocar el estado global: `setActiveMap()`
+se llama al final, cuando ya no queda ningún frame intermedio, así que el terreno
+del mapa nuevo nunca se mezcla con la geometría del anterior. La cámara de menú
+orbita el foco guardado (`menuFocus`) hasta el intercambio.
+
+El mapa nuevo se construye con su mapa explícito aunque haya otro activo, así
+que la base ya está preparada si algún día se quiere cambiar de mapa sin recrear
+el motor. Comprobado en headless: mismos 140 colliders, mismos límites y misma
+altura de agua que usando el estado global.
+
+### 5. Cachear el suelo por mapa — aplicada
+
+`cachedGroundCanvas()` guarda el canvas pintado por `map.id` y tamaño en un
+caché LRU con presupuesto de píxeles (`src/game/textures.ts`). La primera carga
+sigue costando, pero volver a un mapa ya visitado evita el repintado procedural.
+La textura de GPU se recrea porque pertenece al `World` de cada mapa.
+
+### 6. Arreglos secundarios — aplicados
+
+- `regionsForMask()` ya no usa `edges.indexOf()` dentro del encadenado de
+  aristas: cada arista guarda su índice y el encadenado es O(E). Tampoco crea un
+  array de vecinos por celda (`src/game/terrain.ts`).
+- El hielo tiene un tope de instancias por zona
+  (`MAX_ICE_CLUSTERS_PER_ZONE`, `src/game/world.ts`) como el resto de
+  decoraciones.
+- `BotNavGrid` marca el agua profunda y los santuarios en un único barrido de la
+  rejilla (`src/game/botNav.ts`); antes eran dos pasadas y dos consultas de
+  terreno por celda.
+- `warmUpShaders()` ya cede entre lotes de efectos. La construcción de
+  entidades también está troceada con `buildWorldAsync()`; lo que queda síncrono
+  son las operaciones cortas de escena (fog, luz ambiental) y la subida inicial
+  de la textura del suelo a la GPU.
+
+## Resultado tras la optimización
+
+Medición con el mismo benchmark y el mismo Chrome headless:
+
+| Mapa | Antes | Punto 1 | Punto 1 + 2 |
+| --- | --- | --- | --- |
+| arena | ~300 ms | ~87 ms | ~86 ms |
+| laberinto | ~180 ms | ~146 ms | ~138 ms |
+| perf-256 | **~20 400 ms** | ~687 ms | **~614 ms** |
+
+`perf-256` pasa de ~20 s a ~0.6 s, unas 33 veces más rápido. El aspecto del
+suelo se conserva: relleno por celda, grano, borde oscuro y patrones por tipo de
+terreno.
+
+Con el pintado troceado (Chrome headless, `perf-256`, textura de 2828 px):
+
+| Medición | Suelo | Mundo |
+| --- | --- | --- |
+| Versión síncrona | ~515 ms en una tarea | ~1142 ms en una tarea |
+| Versión troceada | ~620 ms en tandas | ~1332 ms en tandas |
+| Tarea más larga | **< 50 ms** | **< 50 ms** (sin `longtask`) |
+| Píxeles distintos | **0** | — |
+
+El coste total sube entre un 17 % y un 20 % por ceder el hilo, pero desaparecen
+los bloqueos de medio segundo a casi dos segundos. La derivación de regiones
+(`mapRegions`) tarda ~44 ms la primera vez y queda cacheada por mapa: el segundo
+cambio al mismo mapa no la recalcula.
+
+Con el presupuesto por defecto (4 M téxeles, 2000 px en `perf-256`) el pintado
+baja a ~460-550 ms y la textura ocupa la mitad. Los mapas pequeños conservan su
+resolución.
+
+### Primer frame del mando nuevo — aplicada
+
+El primer render de un mundo nuevo compila los shaders de todos sus materiales y
+sube sus texturas. Medido en Chrome headless con WebGL por software: **~312 ms**
+el primer render de un mundo pequeño y ~14 ms los siguientes; la textura del
+suelo de 8 M px aporta unos 14 ms de esa primera subida.
+
+Por eso `applyMap()` termina con `app.render()`: el coste se paga mientras la
+pantalla de carga sigue visible, no en el primer frame de la partida si la intro
+ya ha terminado. La subida en sí es una operación de GPU no troceable; baja a la
+mitad con el presupuesto de 4 M.
+
+`warmUpShaders()` cubre también los efectos que no salen de una habilidad:
+calienta el aura, el pulso y la fractura de la armadura de casteo
+(`buildWarmupCalls`), crea una marca de KO vacía en la capa de precarga, porque
+su material (sin niebla, con `emissiveMap`/`opacityMap` y `alphaTest`) es una
+variante que ningún efecto de combate compila, y dibuja un número de daño de
+muestra para estrenar el material del atlas (`useFog = false`, texturado y con
+`depthTest = false`). La recogida de objetos, el respawn y el revivir reutilizan
+`spawnBuff`, que ya estaba en el warmup.
+
+## Cómo reproducir la medición
+
+El benchmark se hizo con una página temporal que:
+
+1. carga el JSON del mapa;
+2. calcula las regiones con `mapRegions(map)` (sin activar el mapa);
+3. calcula el tamaño con `groundTextureSize(map, { maxTexels, maxSize: 8192 })`;
+4. mide `createGroundCanvas(size, { map, zones })` (síncrono) y
+   `createGroundCanvasAsync(size, { map, zones })` (troceado).
+5. crea una app de PlayCanvas con WebGL por software y mide `buildWorld` frente
+   a `buildWorldAsync` con la misma textura de suelo, incluyendo el primer
+   `app.render()` para cuantificar la compilación de shaders y la subida.
+
+Se ejecutó en Chrome headless con CDP para obtener tiempos reales (sin
+`--virtual-time-budget`, que falsea `performance.now`). Para aislar el coste de
+las zonas se repitió la medición con `zones: []`. La tarea más larga se midió con
+`PerformanceObserver` (`entryTypes: ['longtask']`).
+
+## Coste por frame
+
+Con la carga ya resuelta, los cambios que reducen trabajo de cada frame son:
+
+- **Resolución dinámica**: `dynamicResolution` ajusta `device.maxPixelRatio`
+  con histéresis según el FPS. Solo se activa durante una partida jugable y no
+  toca la simulación.
+- **Copias ocultas**: `updateVision()` se resuelve antes de sincronizar las
+  copias del splitscreen, así que las copias que la niebla oculta se saltan
+  posición, animación, vida, XP y billboard. Antes se actualizaban todas.
+- **Marcas de KO**: se busca al jugador con `playerBySlot` en vez de recorrer
+  `matchPlayers` por marca y por vista.
+- **Basura por frame**: se reutilizan los `Vec2`/`Quat`, los conjuntos de
+  visibilidad y los mapas de conocimiento de objetos descritos en el README.
+- **Filtrado anisotrópico** (`CONFIG.performance.anisotropy`, 8 por defecto) en
+  el suelo, la tierra y el agua. Sin él, las líneas finas del terreno (grietas,
+  losetas, guijarros) se ven como un peine vertical en los planos vistos en
+  ángulo y **centellean** al caminar, porque cada frame muestrea un texel
+  distinto. El coste medido es indistinguible (render p50 2,5 → 2,2 ms en una
+  GTX 1060 a 1920×1080). El anillo del jugador pasó a filtrado lineal con
+  mipmaps: con `NEAREST` sus bordes eran un punteado que también parpadeaba.
+
+## Partículas ambientales: 82 emisores → 6 draw calls por vista — aplicada
+
+Una grabación de perfil del navegador durante una partida real mostró que el
+mayor coste de CPU no era el juego, sino los **emisores de partículas del mapa**
+(polvo del desierto, brasas, humo, niebla, polen, chispas…).
+
+Datos de la grabación (Chrome DevTools, servidor de desarrollo, 1 vista y 8
+jugadores, 32 s):
+
+- 1290 frames en 32 s → **~40 fps**; el callback de `requestAnimationFrame`
+  tardaba **14,8 ms de media** (p95 26 ms).
+- De ese tiempo, **16,5 s (94 %)** estaban dentro del tick de PlayCanvas y
+  **~1,2 s (3,7 %)** en código del juego: `game.ts`, `bot.ts`, `botNav.ts`…
+- El mapa tenía **82 emisores ambientales**. Cada `ParticleSystem` de PlayCanvas
+  cuesta una **pasada `ParticleUpdate`** por paso de simulación (ping-pong de
+  texturas en GPU), un **draw call por vista** y el mantenimiento de su emisor en
+  CPU (`addTime`/`finishFrame`), aunque esté fuera de pantalla.
+
+Primero se aplicó un presupuesto por distancia (60/20/8 Hz) que recortó la
+simulación, pero **no los draw calls**: seguía habiendo uno por emisor y vista.
+La solución final (`src/game/batchedParticles.ts`) agrupa las motas **por
+tipo**: una malla y un material por tipo (9 posibles en total; 6 en `caldera`).
+La deriva, el vaivén, el tamaño, el color y el alfa se calculan en el vertex
+shader a partir de un único `uTime`; no hay simulación por emisor ni una pasada
+de GPU por foco. El shader descarta las motas que quedan más allá del final de
+la niebla, así que tampoco se paga su relleno.
+
+Medido con la cámara fija en el spawn de `caldera` (Chrome, 1280×720, build de
+desarrollo; los draw calls no dependen de la instrumentación del motor):
+
+| Vistas | Draw calls con partículas | Sin partículas | Partículas antes | Partículas ahora |
+| --- | --- | --- | --- | --- |
+| 1 | 49 | 43 | 72 | **6** |
+| 4 | 250 | 226 | ~253 | **24** |
+
+El `renderTime` de desarrollo con 4 vistas baja a **5,9 ms** con partículas
+encendidas (4,7 ms con los lotes ocultos); antes, apagar los 82 emisores ahorraba
+253 draw calls y bajaba el `render` de 9,4 a 5,1 ms. El `update` de CPU ya no
+recorre emisores: solo avanza un contador y actualiza la niebla de los materiales.
+
+Decisiones de la implementación:
+
+- La caja de emisión usa el mismo tamaño completo que `emitterExtents` de
+  PlayCanvas, y las posiciones se sortean con un generador determinista sembrado
+  por zona, así que el mapa se ve igual en cada carga.
+- El vaivén sustituye a la turbulencia que aportaban las velocidades aleatorias
+  de PlayCanvas; la vida se reparte con una fase aleatoria por mota (equivalente
+  al `preWarm`).
+- Los tipos aditivos (brasas, polen, chispas, fuegos fatuos) premultiplican el
+  color por el alfa y usan `BLEND_ADDITIVE`, como el shader de partículas del
+  motor; los normales usan alfa recto. La salida se codifica a sRGB igual que
+  los materiales estándar.
+- Un `MeshInstance.drawOrder` por tipo conserva el orden que tenían el humo y
+  la niebla respecto a brasas y chispas.
+
+
+### El servidor de desarrollo no sirve para medir FPS
+
+La misma grabación exageraba el coste del motor porque `pnpm dev` carga la build
+**de desarrollo** de PlayCanvas (`exports.development` del paquete), que añade
+`Debug.call`, marcadores de GPU y los *scopes* de validación de WebGPU
+(`pushErrorScope`/`popErrorScope`) **por cada pasada de render**. La build de
+producción los elimina por completo (se puede comprobar con
+`grep pushErrorScope dist/assets/*.js`).
+
+Medido con la misma escena y resolución:
+
+| | Tick de PlayCanvas (update + render) |
+| --- | --- |
+| Servidor de desarrollo (`pnpm dev`) | ~9,5 ms |
+| Build de producción (`pnpm build`) | ~4,6 ms |
+
+Por eso, para valorar los FPS hay que usar `pnpm build` + `pnpm preview` o la
+app empaquetada; grabar el perfil sobre el servidor de desarrollo mide, en
+buena parte, instrumentación que ningún jugador tiene.
+
+## Splitscreen: coste por vista
+
+El splitscreen no renderiza una escena distinta por jugador, pero sí **redibuja
+el mundo entero con cada cámara** y duplica cada actor visible en cada viewport.
+Con 8 jugadores eso convierte cualquier coste unitario en el peor caso.
+
+Medición con el juego real en `perf-256`, 8 jugadores y Chrome headless con
+WebGL por software (los milisegundos absolutos no son representativos de una
+GPU real; los draw calls y las proporciones sí):
+
+| Vistas | Copias | Draw calls antes | Draw calls ahora | Arranque antes | Arranque ahora |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 50 | **32** | ~1,3 s | ~0,4-1,0 s |
+| 2 | 16 | 103 | **67** | ~0,9 s | ~0,1-0,4 s |
+| 4 | 32 | 210 | **138** | ~3,8 s | ~0,6-1,0 s |
+| 8 | 64 | 413 | **269** | ~4,6 s | **~0,45 s** |
+
+El frame de 8 vistas baja un **35 %** y el arranque síncrono un **90 %**. El
+desglose de draw calls con 8 vistas queda así: **157** del mundo (redibujado por
+cada cámara) + **64** cuerpos + **32** sombras + **16** anillos (dos pasadas de
+los 8 dueños) = **269**. Antes eran 157 + 64 + 32 + 64 anillos + 96 barras = 413;
+las barras ya no aportan draw calls porque se pintan en 2D. Lo aplicado:
+
+- **Anillo de rumbo solo en la copia del dueño** (`game.ts`): antes cada copia
+  creaba textura, dos materiales y un draw call de anillo. Ahorra 56 draw calls
+  y 56 texturas en 8 vistas. Es un cambio visual deliberado: los demás Pokémon
+  ya no muestran su flecha de rumbo; conservan el contorno de equipo y la
+  silueta.
+- **Barras de vida en una capa 2D** (`healthBar.ts`, `healthBarOverlay.ts`):
+  antes cada copia tenía tres quads 3D con su textura, material y canvas. Ahora
+  hay **un canvas por jugador** y un overlay 2D que lo proyecta en cada viewport
+  con `camera.worldToScreen`. Se eliminan ~96 draw calls, 192 materiales y 192
+  texturas en 8 vistas. El dibujo (vida, XP, nivel, armadura) es el mismo código
+  de canvas que antes, así que el aspecto no cambia.
+- **Recursos de anillo compartidos por color de equipo** (`marker.ts`): malla,
+  textura y materiales se cachean por aplicación y color. La caché mantiene una
+  referencia a la malla para que PlayCanvas no la libere al destruir los anillos
+  de una partida.
+- **Geometría de billboard compartida** (`sprite.ts`): las mallas de cada
+  animación solo dependen del sprite, no de la cámara. Antes cada copia creaba
+  una malla por animación; ahora se comparten por aspecto y animación y se
+  liberan con `disposeSpriteAsset`.
+- **Capas de animación perezosas y calentadas por tandas** (`sprite.ts`,
+  `game.ts`): un actor nace solo con la capa que necesita y `prewarmBillboards`
+  crea el resto con un presupuesto de 3 ms por frame, empezando por el `idle` de
+  todas las copias. Así los cuerpos aparecen durante la cuenta atrás y el primer
+  ataque no paga la creación de materiales de golpe.
+
+### Descartado tras medir
+
+- **Billboards instanciados (punto 5)**: solo reduce draw calls si varias copias
+  comparten textura. Cada especie tiene su propia hoja y cada vista puede usar
+  una fila de dirección distinta, así que haría falta un atlas por partida y un
+  shader con UV por instancia. La ganancia máxima serían ~56 draw calls de 269;
+  el coste y el riesgo no compensan frente a compartir geometría y materiales,
+  que ya está hecho.
+- **Render target por vista (punto 6)**: con N vistas el total de píxeles sigue
+  siendo el de la pantalla completa. Renderizar cada vista a una textura no
+  reduce relleno salvo que se baje la resolución de unas vistas y no de otras, y
+  eso ya lo cubre `dynamicResolution` a nivel global. El cuello medido es de draw
+  calls y CPU, no de fill rate.
+- **Multijugador en red (punto 8)**: elimina el problema de raíz, pero no es una
+  optimización: requiere autoridad de simulación, transporte, sincronización y
+  un servidor. Es un proyecto aparte; el trabajo de esta ronda es compatible con
+  él (el mundo ya se construye con un mapa explícito y el render está separado
+  de la simulación por pasos fijos).
+
+## Cactus instanciados: 240 draw calls del mundo — aplicada
+
+La decoración repetida también se puede dibujar con una sola llamada. Los
+cactus del desierto ya usaban instancing en los desiertos grandes, pero los
+calveros pequeños seguían creando un cactus con **cinco primitivas** cada uno.
+En `caldera` hay 48 de esos calveros, así que solo los cactus suponían **240
+draw calls** del mundo: más de la mitad del total de la escena.
+
+Ahora todos los cactus del mapa se acumulan en una única malla instanciada (una
+matriz de mundo por cactus, mismo consumo de azar para que las posiciones no
+cambien). Medido con la cámara fija en el centro del mapa y los bots detenidos
+(Chrome, 1280×720, build de desarrollo; los draw calls no dependen de la
+instrumentación del motor):
+
+| Vistas | Draw calls antes | Draw calls ahora | Forward antes | Forward ahora |
+| --- | --- | --- | --- | --- |
+| 1 | 312 | **202** (−35 %) | 255 | **143** (−44 %) |
+| 4 | 1193 | **650** (−46 %) | 1112 | **566** (−49 %) |
+
+La medición con cámara fija importa: el mapa reparte los respawns al azar y cada
+posición descarta una parte distinta del mundo, así que dos ejecuciones sin
+anclar la cámara pueden diferir en decenas de draw calls.
+
+### Descartado tras medir
+
+- **Instanciar picos y muros**: se probó con lotes por cordillera y por variante
+  de malla. En `caldera` no cambiaba el total y en `perf-256` **empeoraba**
+  (116 picos y 26 muros): el descarte por cámara de cada pieza ya era muy
+  efectivo y un lote con la caja de toda la cordillera se dibuja en cuanto un
+  solo pico asoma. Se mantienen como piezas sueltas. Los cactus, en cambio, se
+  reparten por todo el mapa y casi siempre hay varios en pantalla, así que el
+  lote único sí compensa.
+
+## Emisores de combate: `ParticleSystem` → lotes analíticos — aplicada
+
+Los emisores de las áreas, impactos, haces y melee seguían usando
+`ParticleSystem`. Cada uno costaba una pasada `ParticleUpdate` por frame y hasta
+**32 pasadas de `preWarm`** al crearse o reutilizarse desde el pool, además de
+su material, sus texturas float y un draw call por vista.
+
+`EffectParticleBatch` (`src/game/render/fx/effectParticleBatch.ts`) genera una
+malla de billboards y calcula en el vertex shader la posición, la deriva, el
+tamaño y el color con un único `uTime`. `WorldTrailBatch`
+(`worldTrailBatch.ts`) hace lo mismo para las estelas de proyectiles, pero
+emitiendo en la posición mundial del proyectil para que las motas se queden
+atrás. Entre los dos ya no queda ningún `ParticleSystem` de combate.
+
+Detalle importante: el número de partículas vivas no es `numParticles`, sino
+`lifetime / rate` (PlayCanvas escalona los nacimientos cada `rate` segundos).
+Usar `numParticles` hacía que un Anillo Ígneo pasara de ~1 mota a 130 y se viera
+como una bola de fuego.
+
+Medido con la cámara fija y una vista:
+
+| Efecto | Draw calls antes | Ahora | Pasadas de simulación |
+| --- | ---: | ---: | --- |
+| Haz de Roca | 11 | **5** | 1 → 0 |
+| Haz fantasma | 18 | **7** | 1 → 0 |
+| Haz oscuro | 16 | **6** | 1 → 0 |
+| Anillo Ígneo | 8 | **6** | 1 → 0 |
+
+En las áreas el draw call baja poco (el emisor ya era uno), pero desaparecen la
+simulación por frame y el `preWarm` de cada casteo, que era el pico que se
+notaba al encadenar habilidades.
+
+### Impactos, melee y proyectiles
+
+Los impactos con más elementos también usan lotes para sus aros, motas, gotas y
+jirones. Medido con una vista:
+
+| Efecto | Antes | Ahora |
+| --- | ---: | ---: |
+| Impacto de aura | 11 | **4** |
+| Impacto fantasma | 13 | **6** |
+| Impacto oscuro | 17 | **11** |
+| Impacto de acero | 20 | **12** |
+| Impacto de lucha | 23 | **4** |
+| Impacto de fuego | ~17 | **7** |
+| Impacto eléctrico | 6 | **4** |
+| Impacto shuriken | 13 | **5** |
+| Impacto de mandíbula | 10 | **4** |
+| Melee de Planta | 10 | **2** |
+| Melee de Veneno | 10 | **4** |
+| Melee psíquico | 6 | **2** |
+| Melee de arco | 4 | **2** |
+| Melee de garra | 4 | **2** |
+| Mordida de mandíbula | ~22 | **3** |
+| Proyectil eléctrico | 6 | **3** |
+| Proyectil de hojas | 7 | **2** |
+| Proyectil de fuego | 6 | **3** |
+| Proyectil de veneno | 3 | **2** |
+| Proyectil de roca | 5 | **2** |
+| Proyectil de sombra | 8 | **3** |
+| Proyectil shuriken | 7 | **5** |
+| Área psíquica | 7 | **6** |
+| Área de hielo / Ventisca | 7 | **6** |
+| Área de Excavar | ~56 | **10** |
+
+El proyectil eléctrico reutiliza una única malla de rayo cacheada y dibuja sus
+tres arcos en un lote, así que tampoco genera geometría nueva por casteo.
+
+### Lote con tinte por instancia
+
+`EffectBatch` comparte el material del efecto, así que todas sus instancias
+tienen el mismo color y la misma opacidad. Eso dejaba fuera las capas que mezclan
+tonos en un mismo efecto. `EffectTintBatch`
+(`src/game/render/fx/effectTintBatch.ts`) usa un `ShaderMaterial` propio sin
+iluminación y guarda en el buffer de instancias el **color, el alfa y una
+ventana de desvanecido por instancia**. La animación sigue saliendo del mismo
+banco de `MOTION_*` y de su gemelo WGSL.
+
+Con él se funden:
+
+- las tres esferas del proyectil de fuego (núcleo, halo interior y halo
+  exterior) y sus dos colas de llama texturizada;
+- el núcleo y el halo de los proyectiles de veneno, eléctrico y de hojas;
+- el cuerpo, la estela y los jirones del proyectil de sombra;
+- las cinco ondas psíquicas, los tres o cuatro frentes del arco de golpe y las
+  tres zarpas del melee (estas últimas, además, en una sola malla fundida);
+- el cuerpo, los bultos, las vetas, la espuma, las gotas y la punta del chorro
+  de agua; las lenguas del haz de fuego; las hélices, anillos y plumas de los
+  haces de aire y Planta; y los cristales, anillos y neblina del haz de hielo.
+
+### Haces por lotes
+
+| Haz | Antes | Ahora |
+| --- | ---: | ---: |
+| Chorro de agua | ~50 | **10** |
+| Haz de fuego | 12 | **5** |
+| Haz de aire | ~54 | **5** |
+| Haz de Planta | ~48 | **3** |
+| Haz de hielo | 26 | **5** |
+
+Los haces de aire, Planta y hielo siguen creando su cilindro base con
+`CylinderGeometry` una vez por casteo; el resto de capas ya no instancia
+entidades.
+
+### Áreas con escombros
+
+`Excavar` era el efecto más fragmentado: el cráter, dos anillos, once grietas,
+nueve losas, veinte rocas y once puffs eran entidades independientes. Ahora las
+grietas, losas, rocas, puffs y anillos se dibujan en siete lotes instanciados
+con la animación en el vertex shader. La malla del cráter y su borde siguen
+siendo dos entidades porque usan geometría propia. Las áreas de hielo también
+dibujan sus dos aros de escarcha en un único lote.
+
+En melee, las ondas psíquicas, los arcos de golpe y las zarpas comparten la
+geometría de casteos anteriores mediante `cachedArcBand` y `cachedMesh`: ya no
+se reconstruyen cinco mallas de onda, cuatro de arco y tres de zarpa en cada
+golpe. Las tres zarpas se funden además en una sola malla.
+
+El proyectil de roca se reconstruyó como un único boulder: cuatro fragmentos de
+la misma roca, solapados y con un solo material iluminado, giran en un lote. Su
+estela de polvo nace pegada a la parte trasera y usa una entrada de alfa corta
+para no leerse como un segundo proyectil.
+
+Quedan como entidades sueltas las marcas de área persistentes, la grieta y la
+cresta del haz de roca, y las cuatro piezas del shuriken, que usan mallas y
+materiales distintos.
+
+## Clima del mundo: `ParticleSystem` → lote analítico — aplicada
+
+La capa de clima (`atmosphereVisuals.ts`) era el último `ParticleSystem` del
+juego. La lluvia, la nieve, la arena, el granizo y la niebla se simulaban en una
+pasada de GPU por emisor y se dibujaban con un material propio.
+
+Ahora usan el mismo `BatchedParticles` que las motas ambientales del mapa: un
+lote por tipo de partícula, posición, caída y desvanecido en el vertex shader.
+Una tormenta pasa de dos emisores con simulación por frame a **2 draw calls**
+(lluvia y niebla) sin `preWarm` ni buffers float de simulación. El AABB del lote
+se calcula a partir del recorrido real de las motas, así que la lluvia que cae
+desde y ≈ 9 no se recorta por cámara.
+
+## Prioridad recomendada
+
+1. ~~Reescribir `paintTerrainZone` con relleno/trazo de Canvas (solución 1).~~
+   Hecho.
+2. ~~Usar la rejilla como base de las zonas decorativas (solución 2).~~ Hecho.
+3. ~~Trocear la generación con `await`/`requestAnimationFrame` entre tandas.~~
+   Hecho.
+4. ~~Arreglar `regionsForMask` y capar las instancias de hielo como limpieza
+   preventiva.~~ Hecho.
+5. ~~Bajar el presupuesto de textura solo si hace falta más margen.~~ Hecho:
+   `CONFIG.performance.groundTexturePixels` (4 M por defecto).
+6. ~~Reducir el coste del splitscreen: anillo solo del dueño, barras en 2D,
+   geometría compartida y capas perezosas.~~ Hecho: 413 → 269 draw calls y
+   arranque de ~4,6 s → ~0,45 s con 8 vistas.
+7. ~~Repartir la simulación de las partículas ambientales por distancia.~~
+   Hecho primero con un presupuesto por distancia y después **sustituido por
+   lotes por tipo** (`batchedParticles.ts`): en `caldera`, las partículas pasan
+   de 72 a 6 draw calls por vista y desaparece la simulación por emisor.
+8. ~~Instanciar la decoración repetida que no se descarta bien por cámara.~~
+   Hecho para los cactus del desierto: en `caldera`, 312 → 202 draw calls con
+   una vista y 1193 → 650 con cuatro. Picos y muros se dejaron sueltos porque el
+   instancing medido empeoraba `perf-256`.
+9. **Multijugador en red** si 8 jugadores locales siguen siendo un requisito
+   importante: es la única forma de dejar de multiplicar la escena por vista.
+10. **Medir siempre sobre la build de producción**: el servidor de desarrollo
+    añade la instrumentación de PlayCanvas y duplica el coste del tick.
+
+---
+
+# Parte 3: Propuestas de rendimiento
 
 > Revisión técnica · noviembre de 2026
 >
-> Base de partida: `docs/performance/frame-baseline.md` (60 FPS estables en las 9
-> combinaciones mapa × vistas con GPU real) y las optimizaciones ya aplicadas en
-> `docs/rendimiento-carga-mapas.md`.
+> Base de partida: la tabla de frame real de la Parte 1 (60 FPS estables en las
+> 9 combinaciones mapa × vistas con GPU real) y las optimizaciones ya aplicadas
+> de la Parte 2.
 >
 > APIs comprobadas sobre PlayCanvas 2.24 (`AppStats`, `Texture.releaseSources`,
 > `MeshInstance.setInstancing`) y Vite 8 / Rolldown 1.2 (`output.codeSplitting`).
@@ -47,11 +774,11 @@ qué impacto espero y cómo lo verificaría.
 
 ---
 
-# 1. Memoria y ancho de banda
+## 1. Memoria y ancho de banda
 
-## 1.1 Escala de texturas adaptativa al tamaño real del viewport
+### 1.1 Escala de texturas adaptativa al tamaño real del viewport
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 `CONFIG.sprite.smoothScale = 4` (`src/game/config.ts:106`) fija un objetivo de
 ×4 para todas las hojas. `planTextureScales()` (`src/game/sprite.ts:237-293`)
@@ -60,7 +787,7 @@ solo baja esa escala cuando la suma supera `budgetMB`, que se calcula con
 96 MB en dedicadas (`src/game/spriteBudget.ts:38-54`). El presupuesto es un
 **tope**, no una estimación de lo que realmente se necesita.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Números reales calculados desde el manifiesto con la escala ×4:
 
@@ -76,7 +803,7 @@ móvil eso es mucho, y no aporta nada en 8 vistas: con 8 viewports de ~320×180 
 un sprite de 40 px de arte ocupa ~35–45 px en pantalla. Estamos subiendo detalle
 que el jugador no puede ver.
 
-### Qué haría
+#### Qué haría
 
 1. Calcular la densidad de téxeles necesaria por partida:
 
@@ -97,19 +824,19 @@ que el jugador no puede ver.
 
 3. Mantener el presupuesto como red de seguridad, no como objetivo.
 
-### Impacto
+#### Impacto
 
 3–4× menos VRAM sin pérdida perceptible en splitscreen; en 1 vista se conserva
 ×4. Además reduce el tiempo de subida a GPU y el riesgo de desalojar texturas.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 `app.stats.vram.tex` existe en PlayCanvas 2.24 y expone el contador de VRAM de
 texturas. Añadirlo al HUD/bench y comparar 1/4/8 vistas. Medir también
 `performance.memory.usedJSHeapSize`, porque los canvas temporales también
 cuentan.
 
-### Riesgo
+#### Riesgo
 
 Es un cambio visual: validarlo con `--gpu` real en 1 y 8 vistas. Recomendación:
 aplicarlo automáticamente según `humanConfigs.length` y permitir forzar "Calidad"
@@ -117,14 +844,14 @@ en Opciones.
 
 ---
 
-## 1.2 Mipmaps en las hojas de sprite
+### 1.2 Mipmaps en las hojas de sprite
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 `createSpriteTexture()` crea la textura con `mipmaps: false` y
 `minFilter: filter` (`src/game/sprite.ts:467-480`).
 
-### Por qué cuesta
+#### Por qué cuesta
 
 En splitscreen los sprites se dibujan **minificados** (su huella en pantalla es
 menor que la textura). Sin mips, el hardware muestrea un nivel de detalle fijo:
@@ -132,7 +859,7 @@ aparecen parpadeos al mover la cámara, aliasing en el contorno y se pierde
 localidad de caché de textura (más ancho de banda por frame). Es un problema de
 calidad y de rendimiento de muestreo.
 
-### Qué haría
+#### Qué haría
 
 ```ts
 new pc.Texture(device, {
@@ -148,12 +875,12 @@ PlayCanvas genera los mips de fuentes CPU con filtro box al subir la textura.
 `texture.mipmaps` no se puede cambiar después sin recrear la textura en WebGPU
 (está documentado en los tipos), así que hay que decidirlo al crearla.
 
-### Impacto
+#### Impacto
 
 Más estabilidad visual y menos thrash de textura; +33 % de memoria, que el punto
 1.1 compensa con creces.
 
-### Riesgo
+#### Riesgo
 
 Con `alphaTest = 0.5` y `alphaToCoverage`, los mips promedian alfa y pueden
 erosionar el borde 1 px. Probar el contorno y, si se nota, generar mips con
@@ -162,14 +889,14 @@ cobertura alfa preservada o mantener `mipmaps: false` solo en `nearest`. En
 
 ---
 
-## 1.3 Audio: carga por roster y música fuera del AudioBuffer
+### 1.3 Audio: carga por roster y música fuera del AudioBuffer
 
 > **Estado (noviembre de 2026): implementado.** `configureAudio()` ya no
 > precarga nada; `prepareMatchAudio()` carga solo las rutas del roster y
 > `releaseMatchAudio()` las libera al terminar. La música se reproduce con un
 > `<audio loop>` en streaming. Queda pendiente el reencodeo opcional a Opus.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 `configureAudio()` precarga **todos** los SFX al crear la app
 (`src/game/audio.ts:86-88`) y lanza la música (`loadSound(MATCH_MUSIC_PATH)`).
@@ -178,7 +905,7 @@ PlayCanvas carga cada audio con `fetch` + `decodeAudioData` (verificado en
 `playcanvas.mjs:103845-103885`), y `Sound.buffer` retiene el `AudioBuffer`
 decodificado.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 - `public/audio` son ~20 MB: 73 SFX (12,4 MB) y una música de 7,2 MB a 320 kbps.
 - Los SFX rondan los 5 s a 320 kbps; 73 × 5 s a 44,1 kHz estéreo Float32 son
@@ -189,7 +916,7 @@ decodificado.
   (`Asset.unload()`); al destruir la app se libera, pero en un cambio de mapa con
   `Game` nuevo se vuelve a descargar y decodificar todo.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. `audioRoster.ts` proyecta el roster sobre `MOVESETS`: devuelve las 4
    habilidades de cada especie, el instinto común de cada jugador, `HIT_SOUNDS`
@@ -210,14 +937,14 @@ decodificado.
 5. Queda pendiente el reencodeo opcional a Opus 96–128 kbps para bajar descarga
    (la memoria decodificada depende de la duración, no del bitrate).
 
-### Impacto
+#### Impacto
 
 Se pasa de hasta ~200 MB de PCM residentes a unos 50–55 MB en el peor caso
 (unas 30 habilidades únicas de 8 especies, más impactos e instintos) y la música
 deja de ocupar ~67 MB. La carga del mapa ya no compite por red y memoria con 73
 MP3, y cambiar de roster no acumula buffers.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 - Tests: `src/game/__tests__/audioRoster.test.ts` cubre la selección de rutas,
   la deduplicación y las especies sin moveset.
@@ -231,16 +958,16 @@ MP3, y cambiar de roster no acumula buffers.
 
 ---
 
-## 1.4 Caché HTTP real para manifiesto y mapas
+### 1.4 Caché HTTP real para manifiesto y mapas
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 - `loadManifest()` en `src/session/SessionProvider.tsx:56-58` y el fallback de
   `src/game/game.ts:1252-1254` piden
   `sprites/manifest.json?v=${Date.now()}`.
 - `fetchJson()` en `src/game/map.ts:47` usa `cache: 'no-store'`.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 `Date.now()` crea una URL distinta en cada carga: el navegador **no puede
 reutilizar** la respuesta ni responder 304, aunque el archivo no haya cambiado.
@@ -248,7 +975,7 @@ En GitHub Pages o en Wails eso significa volver a descargar 3,5 MB de manifiesto
 y hasta 560 KB de mapa en cada recarga o cambio de mapa. `no-store` hace lo mismo
 con el índice de mapas y los JSON de mapa.
 
-### Qué haría
+#### Qué haría
 
 1. Generar en build un nombre con hash (`manifest.<hash>.json`,
    `maps/arena.<hash>.json`) y un `index.json` que los referencie; usar `fetch`
@@ -267,22 +994,22 @@ con el índice de mapas y los JSON de mapa.
    excepciones, o arrays planos de enteros. `JSON.parse` de 3,5 MB son ~8 ms en
    Node y probablemente 15–25 ms en Chrome, además de la memoria de objetos.
 
-### Impacto
+#### Impacto
 
 Recargas mucho más rápidas, menos datos y menos pico de memoria de objetos. El
 punto 4 elimina trabajo de parseo proporcional al roster, no al catálogo
 completo.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 DevTools → Network: la segunda carga debe ser "disk cache"/304, no 200. Medir el
 tiempo de `bootStatus === 'loading'` a `'ready'` antes y después.
 
 ---
 
-## 1.5 Camino de subida de texturas: menos canvas intermedios y liberar fuentes
+### 1.5 Camino de subida de texturas: menos canvas intermedios y liberar fuentes
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 Una hoja puede pasar por varios canvas completos:
 
@@ -298,13 +1025,13 @@ Además, `loadSpriteAsset()` carga todas las hojas de una especie en paralelo
 especies a la vez con `Promise.all`. Los `ImageBitmap` no se cierran
 explícitamente.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Para una hoja de 4096² cada canvas intermedio son ~67 MB de RAM temporal; con 8
 especies en paralelo el pico puede superar fácilmente el GB, provocar GC y jank
 durante la pantalla de carga. En Wails/WebView es especialmente sensible.
 
-### Qué haría
+#### Qué haría
 
 1. Combinar tight + upscale + flip en **una sola pasada** de `drawImage` sobre un
    canvas scratch reutilizado.
@@ -323,21 +1050,21 @@ durante la pantalla de carga. En Wails/WebView es especialmente sensible.
 5. Cachear `detectSpriteBudget()`: hoy `readRendererString()` crea un canvas
    WebGL temporal y lo pierde en cada partida.
 
-### Impacto
+#### Impacto
 
 Menos pico de RAM, menos GC y menos bloqueo de carga, con el mismo resultado
 visual.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 DevTools Performance durante la carga: "JS heap", "GC" y tareas largas.
 `app.stats.vram.tex` y el tiempo de `loadSpriteAsset` por especie.
 
 ---
 
-# 2. CPU por frame y draw calls
+## 2. CPU por frame y draw calls
 
-## 2.1 Amortizar visibilidad de actores y conocimiento de objetos
+### 2.1 Amortizar visibilidad de actores y conocimiento de objetos
 
 > **Estado (noviembre de 2026): implementado.** `VisibilityCadence`
 > (`src/game/sim/visibilityCadence.ts`) recalcula la visibilidad de actores a
@@ -347,7 +1074,7 @@ DevTools Performance durante la carga: "JS heap", "GC" y tareas largas.
 > `Int8Array` por equipo. Quedan contadores en `app.stats.user` y un benchmark
 > sintético en `bench-core`.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 - `refreshCombatVisibility()` se ejecutaba al final de **cada paso fijo de 60 Hz**
   (`src/game/game.ts`). Es O(n²): recorría observadores × objetivos y hacía una
@@ -359,14 +1086,14 @@ DevTools Performance durante la carga: "JS heap", "GC" y tareas largas.
   visible. La visibilidad de cada copia de viewport repetía además la misma LOS
   que el equipo ya había resuelto.
 
-### Por qué costaba
+#### Por qué costaba
 
 La línea de visión usa una rejilla espacial (`SightIndex`), pero sigue recorriendo
 celdas y colliders. Los objetos del mapa no se mueven: recalcular su visibilidad
 60 veces por segundo es trabajo repetido. Además, las claves string y los
 closures generaban basura constante.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. `VisibilityCadence` compara cada paso una foto de posiciones y estado
    (vida, daño recibido, `hidden`, casteo, equipo, visión, ocultación y cadáver).
@@ -392,7 +1119,7 @@ closures generaban basura constante.
    `pickupKnowledgeMs` en `app.stats.user`, y `bench-core.mjs` incluye
    `refreshCombatVisibility (8)`.
 
-### Impacto
+#### Impacto
 
 El coste O(n²) pasa de 60 a 20 cálculos por segundo (3× menos) y desaparece
 cuando la partida está quieta; el conocimiento de objetos baja de 60 a 7,5 Hz
@@ -401,7 +1128,7 @@ allocations de strings/closures por frame. No cambia el gameplay porque
 `enemiesSeeing` solo alimenta el HUD y la regeneración (que exige 2 s sin ser
 visto) y los bots ya toleraban la latencia de su decisión.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 - Tests: `src/game/__tests__/visibilityCadence.test.ts` cubre el intervalo de 3
   pasos, el épsilon de movimiento, los eventos que fuerzan cálculo y el reinicio
@@ -417,7 +1144,7 @@ visto) y los bots ya toleraban la latencia de su decisión.
 
 ---
 
-## 2.2 Draw calls del splitscreen: contornos, siluetas y sombras
+### 2.2 Draw calls del splitscreen: contornos, siluetas y sombras
 
 > **Estado (noviembre de 2026): implementado.** El contorno de equipo pasó al
 > material del sprite (`alphaTestPS` + `emissivePS`, GLSL y WGSL), las sombras de
@@ -425,7 +1152,7 @@ visto) y los bots ya toleraban la latencia de su decisión.
 > silueta se omite en viewports diminutos (`spriteDetail.ts`). El contorno se
 > mantiene en todos los tamaños: es información de equipo, no decoración.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 Cada copia creaba un `render` con 2–3 `MeshInstance`:
 
@@ -438,7 +1165,7 @@ sombra de contacto, y los dueños un anillo. Con 8 vistas eran 64 copias, 64
 sombras y 16 anillos: cada copia visible costaba hasta 4 draw calls (sprite,
 silueta, contorno y sombra) más el anillo del dueño.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. **Sombras instanciadas por vista** (`src/game/render/actorShadows.ts`). Cada
    viewport tiene un `ActorShadowBatch` con un plano unitario, el material
@@ -468,7 +1195,7 @@ silueta, contorno y sombra) más el anillo del dueño.
    texturas (`viewportHeightPx` en `multiplayer.ts`), así que ambas cuentas no se
    desincronizan.
 
-### Impacto
+#### Impacto
 
 Cada copia visible pasa de hasta 4 draw calls a 1 (el sprite, con su contorno
 incluido); la sombra se comparte entre todas las copias de la vista. En el bench
@@ -482,7 +1209,7 @@ El coste nuevo es de 8 muestras de textura por fragmento de sprite con contorno;
 los sprites ocupan una fracción pequeña de cada viewport, y el bench no muestra
 regresión de frame time.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 - Tests: `src/game/__tests__/spriteDetail.test.ts` cubre el reparto de filas, el
   tope de DPR, el umbral de detalle y el grosor del contorno.
@@ -496,16 +1223,16 @@ regresión de frame time.
 
 ---
 
-## 2.3 Quitar `backdrop-blur` del HUD durante la partida
+### 2.3 Quitar `backdrop-blur` del HUD durante la partida
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 El HUD de partida usa `backdrop-blur` en muchos elementos: `MatchHud.tsx` (kill
 feed, paneles de habilidades, cabecera), `src/screens/PlayScreen.tsx:78` (FPS) y
 `MatchDialogs.tsx` al pausar. En ese momento debajo hay un canvas WebGL vivo y,
 en partida, además un canvas 2D de barras (`HealthBarOverlay`).
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Un `backdrop-filter` obliga al compositor a crear una superficie de render aparte,
 **leer el fondo ya compuesto** (canvas WebGL + canvas de barras), aplicar el
@@ -514,7 +1241,7 @@ docena de superficies offscreen que se recalculan cuando cambia cualquier cosa
 detrás (es decir, cada frame). En 8 vistas el compositor ya está haciendo un
 trabajo considerable.
 
-### Qué haría
+#### Qué haría
 
 1. En partida, sustituir `backdrop-blur-*` por fondos semitransparentes opacos
    (`bg-night-850/85`), que se leen igual.
@@ -523,13 +1250,13 @@ trabajo considerable.
 3. Si se quiere conservar el efecto, activarlo solo cuando el FPS supera 55 y
    desactivarlo con `dynamicResolution`; o un preset "Rendimiento" que lo quite.
 
-### Impacto
+#### Impacto
 
 Cada elemento con blur deja de crear una superficie de composición. En equipos
 integrados y en WebView suele ser uno de los mayores ahorros fuera del propio
 motor.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 Chrome DevTools → Rendering → "Layer borders" y "Paint flashing"; grabar un
 perfil con y sin blur en 8 vistas. El bench actual **no monta el HUD de React**,
@@ -538,7 +1265,7 @@ pantalla real o un test E2E.
 
 ---
 
-## 2.4 Evitar `material.update()` innecesarios en efectos y números de daño
+### 2.4 Evitar `material.update()` innecesarios en efectos y números de daño
 
 > **Estado (noviembre de 2026): implementado.** `updateMaterialIfChanged()`
 > (`src/game/render/fx/materialUpdates.ts`) guarda en un `WeakMap` la última
@@ -550,7 +1277,7 @@ pantalla real o un test E2E.
 > pendiente mover la animación a shaders por estilo y el presupuesto de efectos
 > por vista.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 - `fxRuntime.update()` llamaba `material.update()` por cada material de cada
   marca de área y por cada material de cada efecto activo, aunque el efecto solo
@@ -564,7 +1291,7 @@ pantalla real o un test E2E.
 - Hay efectos con varios materiales (hasta 5–8 en un área compleja) y hasta 64
   números activos a la vez.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 `material.update()` no es un setter: convierte las propiedades modificadas al
 uniform buffer, recalcula los transforms de texturas (`_mapTransforms`) y sube
@@ -573,7 +1300,7 @@ material cuando el valor es idéntico es trabajo de CPU y ancho de banda de
 uniformes que no cambia un solo píxel. Con varios materiales por efecto y varias
 vistas, el coste se multiplica en los picos de combate.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. `updateMaterialIfChanged(material)` compara `opacity`, `emissive.r/g/b` y
    `emissiveIntensity` contra la última foto y solo entonces llama a `update()`.
@@ -591,14 +1318,14 @@ vistas, el coste se multiplica en los picos de combate.
    `update()`, que sí lo hacen los cambios de opacidad, tinte e intensidad y que
    cada material lleva su propio seguimiento.
 
-### Impacto
+#### Impacto
 
 Menos subidas de uniform buffer en combates con muchas áreas simultáneas, sin
 cambios visuales. Los materiales estáticos de un efecto (aros, halos, piezas que
 solo rotan) dejan de pagar `update()` cada frame, y los números de daño ahorran
 la mitad de sus actualizaciones.
 
-### Qué queda pendiente
+#### Qué queda pendiente
 
 - Mover la animación de opacidad de los efectos puramente temporales a un shader
   con `uEffectTime`, para actualizar un material por estilo en vez de uno por
@@ -607,7 +1334,7 @@ la mitad de sus actualizaciones.
 - Presupuesto de efectos simultáneos por vista, descartando o simplificando los
   que caen en viewports pequeños.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 Contar efectos/materiales activos en `app.stats.user` junto a
 `app.stats.cpuUpdateTime` en un escenario de estrés (8 bots spameando áreas), y
@@ -616,16 +1343,16 @@ decisión; la medición real queda para el HUD de rendimiento (3.4).
 
 ---
 
-## 2.5 Presets de calidad automáticos por tier de GPU
+### 2.5 Presets de calidad automáticos por tier de GPU
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 `src/game/graphicsSettings.ts` solo guarda el backend (`auto`/`webgpu`/`webgl2`).
 El resto de parámetros son constantes en `CONFIG`: `antialias: true` siempre
 (`src/game/appBootstrap.ts:37`), `smoothScale: 4`, `alphaToCoverage: true`,
 `mipmaps: false`, densidad de efectos fija.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Un equipo integrado y un portátil con GPU dedicada reciben exactamente la misma
 configuración, salvo el `maxPixelRatio` que se limita a 1,2 cuando hay más de 4
@@ -634,7 +1361,7 @@ humanos (`src/game/app/matchSession.ts:399-401`) y la resolución dinámica
 fiable en `src/game/spriteBudget.ts` (`software`/`integrated`/`discrete`), pero no
 se usa para nada más.
 
-### Qué haría
+#### Qué haría
 
 Un preset `quality: 'performance' | 'balanced' | 'quality'`:
 
@@ -650,19 +1377,19 @@ Auto-seleccionar por `GpuTier` y por número de vistas, con override en Opciones
 Persistirlo junto al backend. La UI ya tiene la pantalla de Opciones, así que no
 hay coste de diseño.
 
-### Impacto
+#### Impacto
 
 Evita que un equipo `software` o `integrated` sufra una configuración pensada para
 una dedicada, y da al usuario una palanca clara.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 Ejecutar el bench en los 9 escenarios con cada preset, con `--gpu` y SwiftShader;
 comparar FPS, draw calls y memoria.
 
 ---
 
-## 2.6 Micro-GC en simulación
+### 2.6 Micro-GC en simulación
 
 > **Estado (noviembre de 2026): implementado.** `visibleEnemies` se vacía con
 > `length = 0` en vez de crear un array por paso; `buildBotHazards()` acepta un
@@ -678,7 +1405,7 @@ comparar FPS, draw calls y memoria.
 > no crea claves string ni `Set`, los números de daño salen de un pool y las
 > colas de golpes y casteos alternan dos buffers.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 Aunque el bucle principal está muy limpio, quedaban allocations por paso:
 
@@ -696,7 +1423,7 @@ Aunque el bucle principal está muy limpio, quedaban allocations por paso:
   cada muestra del trayecto; `hazardArea()` creaba un área por peligro y
   `navHazards()` un array y un objeto por disco de cono en cada consulta.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 A 60 Hz con 7 bots son cientos de objetos pequeños por segundo: el array y los
 peligros de cada paso, la lista de enemigos visibles de cada bot y las cuatro
@@ -707,7 +1434,7 @@ retirada. No es el cuello de botella, pero alimenta el GC y produce picos de
 frame en partidas largas, sobre todo cuando coinciden con ráfagas de proyectiles
 y regeneración.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. `this.visibleEnemies.length = 0` en `updateTarget()` y en
    `resetCombatState()`. Los consumidores (`decision.ts`, las búsquedas de
@@ -767,7 +1494,7 @@ y regeneración.
     daño también se reciclan. Con esto el bucle de render no asigna objetos de
     estado por frame salvo los que crea el propio motor.
 
-### Impacto
+#### Impacto
 
 Bajo en ms, pero constante: desaparecen el array de enemigos por bot, el array
 y los objetos de peligros, el registro de vistas y tres de las cuatro consultas
@@ -784,7 +1511,7 @@ render solo en puntos de collider, y un dash corto multiplicaba esa cifra por
 cada tramo de 0,15 u. Ahora esas rutas no asignan nada; un dash completo reutiliza
 el mismo objeto y la misma tupla de terreno en todos sus tramos.
 
-### Qué queda pendiente
+#### Qué queda pendiente
 
 - Los `Vec2` pequeños que devuelven helpers de decisión (`pickHazardEscape()`,
   `aoeEvadeDirection()`), fuera del camino caliente y sin impacto medible.
@@ -797,7 +1524,7 @@ el mismo objeto y la misma tupla de terreno en todos sus tramos.
 - Confirmar con el HUD de rendimiento (3.4) que el GC baja en partidas reales de
   8 vistas; el cambio no altera ningún cálculo de gameplay.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 Los tests de `hazards.test.ts` comprueban identidad de array y de objetos,
 recorte del array visible, conservación del pool y cambio de `kind` sin datos
@@ -810,7 +1537,7 @@ proyectiles: el número de objetos por paso debe caer sin mover
 
 ---
 
-## 2.7 Dirty flags en la IA
+### 2.7 Dirty flags en la IA
 
 > **Estado (noviembre de 2026): implementado.** La IA ya no paga tres trabajos
 > que se repetían en cada paso aunque su entrada no hubiera cambiado: las
@@ -821,7 +1548,7 @@ proyectiles: el número de objetos por paso debe caer sin mover
 > (`src/game/bot.ts`). Cubierto por `src/game/ai/__tests__/matchups.test.ts` y
 > `src/game/ai/__tests__/movementCache.test.ts`.
 
-### Qué pasaba antes
+#### Qué pasaba antes
 
 `BotController.update()` ejecuta varias fases por paso: pizarra de equipo,
 movimiento de aliados, rastro, objetivo, amenazas y peligros ya lanzados.
@@ -840,7 +1567,7 @@ Algunas de ellas repetían trabajo cuyo resultado no podía cambiar:
   devolver el snapshot idle. Nadie consumía el resultado: `drive()` no se llama
   en esos pasos.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Ninguna de las tres es el cuello de botella, pero las tres son trabajo puro de
 CPU que se repite a 60 Hz por bot. Con 7 bots y 3 rivales visibles, la ventaja de
@@ -849,7 +1576,7 @@ miles de lecturas de rejilla por segundo durante los desplazamientos largos; y
 las fases de amenaza se pagan enteras durante cada casteo con `startup` largo o
 cada aturdimiento, que es justo cuando hay más efectos en pantalla.
 
-### Qué se cambió
+#### Qué se cambió
 
 1. `MatchupCache` guarda por plaza la ventaja ofensiva y defensiva junto con
    clima, identidad del atacante y del rival y **referencias** a sus arrays de
@@ -869,7 +1596,7 @@ cada aturdimiento, que es justo cuando hay más efectos en pantalla.
    leer. En el primer paso que el bot vuelve a actuar se recalculan antes de
    decidir y mover.
 
-### Impacto
+#### Impacto
 
 Se elimina casi todo el coste de ventaja de tipo en pasos repetidos, la
 comprobación de línea recta pasa de una vez por paso a una vez por tramo recto
@@ -879,7 +1606,7 @@ función pura de entradas que se comparan, la recta reutilizada es un subconjunt
 validado del mismo segmento y las fases omitidas solo las lee `drive()`, que no
 se ejecuta mientras el bot está bloqueado.
 
-### Qué queda pendiente
+#### Qué queda pendiente
 
 - `canHitPrediction()` sigue haciendo una comprobación de colliders por paso y
   por objetivo visible en `drive()`. Se podría cachear con una tolerancia de
@@ -889,7 +1616,7 @@ se ejecuta mientras el bot está bloqueado.
   duplicados, pero el estado es pequeño y el ahorro no compensa el cambio de
   contrato.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 - Tests: `matchups.test.ts` comprueba reutilización, invalidación por clima,
   rival, tipos, habilidades y `clear()`; `movementCache.test.ts` cuenta las
@@ -902,18 +1629,18 @@ se ejecuta mientras el bot está bloqueado.
 
 ---
 
-# 3. Medición e infraestructura
+## 3. Medición e infraestructura
 
-## 3.1 Ampliar el benchmark para medir lo que de verdad importa
+### 3.1 Ampliar el benchmark para medir lo que de verdad importa
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 `src/performance/bench.ts:87-114` solo mide intervalos de `requestAnimationFrame`
 (FPS, p50, p95, max). `scripts/bench-frame.mjs:222-229` imprime esa tabla. No se
 registran draw calls, tiempo de CPU del motor, compilación de shaders, tareas
-largas ni memoria, aunque `docs/performance/baseline.md` los pide como criterio.
+largas ni memoria, aunque la Parte 1 los pide como criterio.
 
-### Qué haría
+#### Qué haría
 
 1. En `measure()`, leer las métricas de `AppStats` (existen en release según los
    tipos de 2.24):
@@ -928,20 +1655,20 @@ largas ni memoria, aunque `docs/performance/baseline.md` los pide como criterio.
    workflow.
 4. Añadir escenarios con HUD real (Playwright) para capturar el coste de
    composición, que el bench actual no ve.
-5. Comparar contra `docs/performance/frame-baseline.md` en CI con umbrales relativos
+5. Comparar contra la tabla de frame real de la Parte 1 en CI con umbrales relativos
    (por ejemplo p95 +5 %, draw calls +2 %, ninguna tarea larga nueva). SwiftShader
    sirve para tendencias; la tabla de GPU real sigue siendo la referencia manual.
 
-### Impacto
+#### Impacto
 
 Convierte "creo que esto es más rápido" en una decisión medible y evita
 regresiones al tocar efectos, texturas o UI.
 
 ---
 
-## 3.2 Pre-bake del suelo y caché que sobreviva a la partida
+### 3.2 Pre-bake del suelo y caché que sobreviva a la partida
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 El suelo de un mapa se pinta proceduralmente en `createGroundCanvasAsync` y se
 cachea en un LRU (`src/game/textures.ts:1236-1297`). Pero `Game.dispose()` llama
@@ -950,12 +1677,12 @@ cachea en un LRU (`src/game/textures.ts:1236-1297`). Pero `Game.dispose()` llama
 vacía justo cuando podría reutilizarse. El documento dice "volver a un mapa ya
 visitado evita el repintado", pero en el flujo real de la app eso no ocurre.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 `perf-256` tarda ~460–620 ms en pintar el suelo y ~1,3 s en construir el mundo,
 troceado. Repetirlo en cada carga de mapa es tiempo de CPU y jank evitable.
 
-### Qué haría
+#### Qué haría
 
 1. **Pre-bake en build** para los mapas incluidos: un script que use las mismas
    funciones puras (`mapRegions`, `groundTextureSize`,
@@ -973,33 +1700,33 @@ troceado. Repetirlo en cada carga de mapa es tiempo de CPU y jank evitable.
    pre-horneado.
 5. Cachear el PNG/WebP y los JSON en Cache Storage.
 
-### Impacto
+#### Impacto
 
 Elimina ~0,5 s de CPU por mapa visitado en el caso normal y evita repetir la
 generación al volver atrás. Reduce tareas largas de carga.
 
-### Cómo verificarlo
+#### Cómo verificarlo
 
 Medir `applyMapRuntime` y el tiempo de `createGroundCanvasAsync` en consola;
 `PerformanceObserver` de longtasks con y sin pre-bake.
 
 ---
 
-## 3.3 Bundle y caché de chunks
+### 3.3 Bundle y caché de chunks
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 `dist/assets/game-*.js` pesa 1,8 MB (incluye PlayCanvas y todo el código de
 juego) y `main-*.js` 342 KB + 109 KB de CSS. No hay `manualChunks` ni
 `codeSplitting` ni precarga del chunk de `/play`.
 
-### Por qué cuesta
+#### Por qué cuesta
 
 Cada deploy cambia el hash del chunk de 1,8 MB, así que el navegador lo vuelve a
 descargar entero aunque solo haya cambiado una línea de UI. PlayCanvas es la mayor
 parte y cambia poco.
 
-### Qué haría
+#### Qué haría
 
 1. Separar en chunks estables: `playcanvas`, `react`/`react-dom` y el código de
    juego. En Vite 8 el bundler es **Rolldown**: `manualChunks` está deprecado y ya
@@ -1033,23 +1760,23 @@ parte y cambia poco.
 4. No partir en exceso: el objetivo es que `playcanvas` tenga hash estable, no
    llenar la red de requests.
 
-### Impacto
+#### Impacto
 
 Segundas visitas y actualizaciones mucho más baratas; el usuario descarga el motor
 una vez y luego solo el delta.
 
 ---
 
-## 3.4 HUD de rendimiento interno
+### 3.4 HUD de rendimiento interno
 
-### Qué pasa hoy
+#### Qué pasa hoy
 
 Solo hay un badge de FPS alimentado por `PlayerMatchStats`
 (`src/screens/PlayScreen.tsx:59-87`), que se emite dos veces por segundo. No hay
 forma de ver draw calls, tiempo de update/render, VRAM o número de efectos sin
 abrir DevTools.
 
-### Qué haría
+#### Qué haría
 
 Un overlay opcional (tecla de debug o query `?perf`) que muestre:
 
@@ -1058,7 +1785,7 @@ Un overlay opcional (tecla de debug o query `?perf`) que muestre:
 - `app.stats.vram.tex` y número de materiales/efectos activos.
 - Por vista: píxeles de viewport, copias visibles, efectos visibles.
 
-### Impacto
+#### Impacto
 
 Es la herramienta que permite validar cada uno de los cambios anteriores en la app
 real, no solo en el bench sintético. También sirve para que los jugadores reporten
@@ -1066,7 +1793,7 @@ problemas con datos.
 
 ---
 
-# Orden de implementación recomendado
+## Orden de implementación recomendado
 
 1. **Caché HTTP y `clearGroundCanvasCache`** (bajo riesgo, efecto inmediato en
    recargas y cambios de mapa).
@@ -1083,7 +1810,7 @@ problemas con datos.
 7. **Bench con `AppStats` + longtasks + CI**.
 8. **Pre-bake de suelos y `codeSplitting`**.
 
-# Criterios de aceptación
+## Criterios de aceptación
 
 - p95 de frame dentro de ±5 % en GPU real.
 - Draw calls iguales o menores que la baseline (cámara y seed fijos).
@@ -1094,7 +1821,7 @@ problemas con datos.
 
 ---
 
-## Notas
+### Notas
 
 - Las cifras de VRAM y audio son estimaciones calculadas a partir del manifiesto
   y de los archivos de `public/audio` (bitrate, duración y canales). Sirven para

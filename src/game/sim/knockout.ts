@@ -33,6 +33,12 @@ export interface KnockoutHost {
     victim: MatchPlayerState,
     assists: readonly AssistCredit[]
   ): void;
+  /** Pasivas que reaccionan a una asistencia confirmada. */
+  onAssists(
+    killer: MatchPlayerState,
+    victim: MatchPlayerState,
+    assists: readonly AssistCredit[]
+  ): void;
   /** Marcador, XP de objetivo y cierre de partida, si el modo lo decide. */
   handleModeKnockout(killer: MatchPlayerState, victim: MatchPlayerState): void;
   emitStats(): void;
@@ -88,6 +94,7 @@ export function knockOut(
   // limpia las aportaciones de esta vida. El mismo reparto alimenta el feed y
   // la XP, así nunca se descuadran.
   const assists = host.collectAssists(killer, target);
+  host.onAssists(killer, target, assists);
   host.pushKillFeed(killer, target, abilityName, assists);
 
   if (killer.team !== target.team) {

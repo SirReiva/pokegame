@@ -45,6 +45,7 @@ const ROSTER = [
   { id: '0658', name: 'Greninja', types: ['Water', 'Dark'], accent: '#3f6f9f' },
   { id: '0150', name: 'Mewtwo', types: ['Psychic'], accent: '#f95587' },
   { id: '0151', name: 'Mew', types: ['Psychic'], accent: '#f7a8c4' },
+  { id: '0059', name: 'Arcanine', types: ['Fire'], accent: '#ee8130' },
   { id: '0095', name: 'Onix', types: ['Rock', 'Ground'], accent: '#b6a136' },
   { id: '0123', name: 'Scyther', types: ['Bug', 'Flying'], accent: '#a6b91a' },
   { id: '0130', name: 'Gyarados', types: ['Water', 'Flying'], accent: '#4c8fd6', actions: ['Hop'] },
@@ -97,6 +98,30 @@ const OPTIONAL_ACTIONS = new Set([
   'Hop'
 ]);
 const force = process.argv.includes('--force');
+
+/**
+ * `--only 0059,0001` importa solo esas especies y fusiona el resultado con el
+ * manifiesto existente. Así se puede añadir un Pokémon sin volver a descargar
+ * ni reescribir el resto del roster.
+ */
+const onlyIndex = process.argv.indexOf('--only');
+const onlyIds =
+  onlyIndex >= 0 && process.argv[onlyIndex + 1]
+    ? new Set(
+        process.argv[onlyIndex + 1]
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      )
+    : null;
+const rosterToImport = onlyIds
+  ? ROSTER.filter((pokemon) => onlyIds.has(pokemon.id))
+  : ROSTER;
+if (onlyIds && rosterToImport.length === 0) {
+  throw new Error(
+    `--only no coincide con el roster: ${[...onlyIds].join(', ')}`
+  );
+}
 
 function slug(value) {
   return value.toLowerCase();
@@ -685,19 +710,49 @@ async function importPokemon(pokemon) {
 }
 
 async function main() {
-  console.log(`Importando ${ROSTER.length} Pokémon desde PMD Sprite Collab...`);
+  console.log(
+    `Importando ${rosterToImport.length} Pokémon desde PMD Sprite Collab...`
+  );
   await mkdir(OUT_DIR, { recursive: true });
 
-  const entries = [];
+  const manifestPath = path.join(OUT_DIR, 'manifest.json');
+  const creditsPath = path.join(OUT_DIR, 'CREDITS.md');
+  let existingManifest = null;
+  let existingCredits = '';
+  if (onlyIds) {
+    existingManifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    existingCredits = await readFile(creditsPath, 'utf8').catch(() => '');
+  }
+
+  const imported = [];
   const creditSections = [];
 
-  for (const pokemon of ROSTER) {
+  for (const pokemon of rosterToImport) {
     console.log(`\n${pokemon.name} (#${pokemon.id})`);
     const result = await importPokemon(pokemon);
-    entries.push(result.entry);
+    imported.push(result.entry);
     creditSections.push(
       creditMarkdown(pokemon, result.credits, result.skinCredits)
     );
+  }
+
+  // Fusión: el orden de `ROSTER` manda y las especies no importadas se
+  // conservan tal cual estaban en el manifiesto.
+  let entries = imported;
+  if (existingManifest) {
+    const importedById = new Map(imported.map((entry) => [entry.id, entry]));
+    const existingById = new Map(
+      existingManifest.pokemon.map((entry) => [entry.id, entry])
+    );
+    entries = [];
+    for (const pokemon of ROSTER) {
+      const entry = importedById.get(pokemon.id) ?? existingById.get(pokemon.id);
+      if (entry) entries.push(entry);
+      importedById.delete(pokemon.id);
+      existingById.delete(pokemon.id);
+    }
+    // Cualquier entrada antigua que ya no esté en `ROSTER` se conserva.
+    entries.push(...existingById.values());
   }
 
   const manifest = {
@@ -717,7 +772,7 @@ async function main() {
     'utf8'
   );
 
-  const creditsMarkdown = [
+  let creditsMarkdown = [
     '# Créditos de sprites',
     '',
     'Los sprites de este directorio proceden de **PMD Sprite Collab**:',
@@ -735,10 +790,26 @@ async function main() {
     ...creditSections
   ].join('\n');
 
-  await writeFile(path.join(OUT_DIR, 'CREDITS.md'), `${creditsMarkdown}\n`, 'utf8');
+  if (onlyIds && existingCredits) {
+    // Inserta las secciones nuevas antes de Mewtwo para respetar el orden del
+    // roster; si no existe esa cabecera, las añade al final.
+    let merged = existingCredits.trimEnd();
+    for (const section of creditSections) {
+      const heading = section.split('\n')[0];
+      if (merged.includes(heading)) continue;
+      const at = merged.indexOf('\n## Mewtwo ');
+      merged =
+        at >= 0
+          ? `${merged.slice(0, at + 1)}${section}\n\n${merged.slice(at + 1)}`
+          : `${merged}\n\n${section}`;
+    }
+    creditsMarkdown = merged;
+  }
 
-  console.log(`\nManifiesto: ${path.relative(ROOT, path.join(OUT_DIR, 'manifest.json'))}`);
-  console.log(`Créditos:   ${path.relative(ROOT, path.join(OUT_DIR, 'CREDITS.md'))}`);
+  await writeFile(creditsPath, `${creditsMarkdown}\n`, 'utf8');
+
+  console.log(`\nManifiesto: ${path.relative(ROOT, manifestPath)}`);
+  console.log(`Créditos:   ${path.relative(ROOT, creditsPath)}`);
 }
 
 main()

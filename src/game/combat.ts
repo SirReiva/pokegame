@@ -1,23 +1,18 @@
 /**
- * Reglas puras de combate: fórmula de daño, críticos y geometría de impactos.
- * No depende de PlayCanvas, así que se puede probar o reutilizar
- * sin levantar el motor.
+ * Reglas puras de combate: fórmula de daño y geometría de impactos.
+ * No depende de PlayCanvas, así que se puede probar o reutilizar sin levantar
+ * el motor.
+ *
+ * El combate es determinista: no hay críticos, ni factor aleatorio, ni STAB.
+ * Una habilidad hace siempre el mismo daño contra el mismo objetivo.
  */
 
 import { CONFIG } from './config';
-import { COMBAT_LEVEL, type CombatStats } from './pokedex';
-import { isStab, typeEffectiveness } from './typeChart';
+import type { CombatStats } from './pokedex';
+import { combatEffectiveness } from './typeChart';
 
 /** KO necesarios para ganar la partida por equipo. */
 export const KO_TARGET = CONFIG.combat.koTarget;
-
-/** Probabilidad de crítico de la generación VII en adelante. */
-const CRIT_CHANCE = CONFIG.combat.critChance;
-/** Multiplicador de daño de un crítico. */
-const CRIT_MULTIPLIER = CONFIG.combat.critMultiplier;
-/** Factor aleatorio oficial del daño: entre 0,85 y 1,00. */
-const RANDOM_MIN = CONFIG.combat.randomMin;
-const RANDOM_MAX = CONFIG.combat.randomMax;
 
 export interface DamageInput {
   moveType: string;
@@ -25,140 +20,68 @@ export interface DamageInput {
   power: number;
   attacker: CombatStats;
   defender: CombatStats;
-  attackerTypes: readonly string[];
   defenderTypes: readonly string[];
   /** Multiplicadores temporales de ataque (buffs). */
   attackMultiplier?: number;
   /** Multiplicadores temporales de defensa (buffs). */
   defenseMultiplier?: number;
-  /**
-   * Término plano de la fórmula oficial. Vale 2 por defecto; los ticks de un
-   * área persistente lo desactivan salvo en el primero que alcanza a cada
-   * objetivo, para que el `+2` se cobre una vez por lanzamiento y no por tick.
-   */
-  flatBonus?: number;
-  critical: boolean;
-  randomFactor: number;
 }
 
 export interface DamageResult {
   damage: number;
   effectiveness: number;
-  stab: boolean;
-  critical: boolean;
 }
 
 /**
- * Contexto que reciben los decoradores de daño. Cada decorador transforma el
- * resultado del anterior, así que el orden de la cadena es parte de la regla.
- */
-export interface DamageModifierContext {
-  critical: boolean;
-  randomFactor: number;
-  stab: boolean;
-  effectiveness: number;
-}
-
-/**
- * Decorador de daño: recibe el daño acumulado y devuelve el siguiente. Todos
- * redondean con `floor`, igual que la fórmula oficial, para que el orden no
- * cambie el resultado.
- */
-export type DamageModifier = (
-  damage: number,
-  context: DamageModifierContext
-) => number;
-
-/**
- * Cadena de modificadores en el orden oficial:
- * crítico → aleatorio → STAB → efectividad.
- */
-export const DAMAGE_MODIFIERS: readonly DamageModifier[] = [
-  (damage, context) =>
-    context.critical ? Math.floor(damage * CRIT_MULTIPLIER) : damage,
-  (damage, context) => Math.floor(damage * context.randomFactor),
-  (damage, context) => (context.stab ? Math.floor(damage * 1.5) : damage),
-  (damage, context) => Math.floor(damage * context.effectiveness)
-];
-
-/** Aplica la cadena de decoradores sobre el daño base. */
-export function decorateDamage(
-  base: number,
-  context: DamageModifierContext,
-  modifiers: readonly DamageModifier[] = DAMAGE_MODIFIERS
-): number {
-  return modifiers.reduce(
-    (damage, modifier) => modifier(damage, context),
-    base
-  );
-}
-
-/**
- * Fórmula oficial de daño (nivel `COMBAT_LEVEL`, 50 en la demo):
+ * Fórmula del rediseño:
  *
  * ```
- * base = floor(floor((2 × nivel / 5 + 2) × potencia × ataque / defensa) / 50) + 2
- * daño = base × crítico × aleatorio × STAB × efectividad
+ * D = B × (1 + A/100) × 100/(100 + DEF) × E
  * ```
  *
- * El divisor `/ 50` es una constante de la fórmula oficial y no depende del
- * nivel; el nivel solo entra en `2 × nivel / 5 + 2`, que se lee de
- * `COMBAT_LEVEL` en `pokedex.ts` para que stats y daño no se desincronicen.
- * La efectividad se aplica con `floor` después de cada modificador, como en el
- * juego. Un movimiento inmune hace 0; cualquier otro golpe válido hace al
- * menos 1 de daño.
+ * - `B`: poder base de la habilidad.
+ * - `A`: AF o AE del atacante, ya con sus multiplicadores.
+ * - `DEF`: DF o DE del objetivo, ya con sus multiplicadores.
+ * - `E`: efectividad suavizada (0,85-1,15).
  *
- * El término plano `+2` se puede sobrescribir con `flatBonus`: las áreas
- * persistentes lo ponen a 0 en los ticks posteriores al primero que alcanza a
- * cada objetivo, para no cobrarlo una vez por tick.
+ * Con `A = 100` y `DEF = 100`, `D ≈ B`: los poderes de las fichas equivalen
+ * casi a daño final contra un objetivo medio. Cualquier golpe válido hace al
+ * menos 1 PV, aunque la efectividad sea la peor posible.
  */
 export function computeDamage(input: DamageInput): DamageResult {
+  const effectiveness = combatEffectiveness(
+    input.moveType,
+    input.defenderTypes
+  );
+  if (input.power <= 0) return { damage: 0, effectiveness };
+
   const attackStat =
-    input.category === 'physical' ? input.attacker.attack : input.attacker.spAttack;
+    input.category === 'physical'
+      ? input.attacker.attack
+      : input.attacker.spAttack;
   const defenseStat =
-    input.category === 'physical' ? input.defender.defense : input.defender.spDefense;
-  const attack = Math.max(1, Math.floor(attackStat * (input.attackMultiplier ?? 1)));
-  const defense = Math.max(1, Math.floor(defenseStat * (input.defenseMultiplier ?? 1)));
+    input.category === 'physical'
+      ? input.defender.defense
+      : input.defender.spDefense;
+  const attack = Math.max(
+    0,
+    attackStat * (input.attackMultiplier ?? 1)
+  );
+  const defense = Math.max(
+    0,
+    defenseStat * (input.defenseMultiplier ?? 1)
+  );
 
-  const levelFactor = Math.floor((2 * COMBAT_LEVEL) / 5 + 2);
-  const flatBonus = input.flatBonus ?? 2;
-  const base =
-    Math.floor(
-      Math.floor((levelFactor * input.power * attack) / defense) / 50
-    ) + flatBonus;
-
-  const effectiveness = typeEffectiveness(input.moveType, input.defenderTypes);
-  if (effectiveness === 0) {
-    return {
-      damage: 0,
-      effectiveness,
-      stab: isStab(input.moveType, input.attackerTypes),
-      critical: input.critical
-    };
-  }
-
-  const stab = isStab(input.moveType, input.attackerTypes);
-  const damage = decorateDamage(base, {
-    critical: input.critical,
-    randomFactor: input.randomFactor,
-    stab,
-    effectiveness
-  });
+  const raw =
+    input.power *
+    (1 + attack / 100) *
+    (100 / (100 + defense)) *
+    effectiveness;
 
   return {
-    damage: Math.max(1, damage),
-    effectiveness,
-    stab,
-    critical: input.critical
+    damage: Math.max(1, Math.round(raw)),
+    effectiveness
   };
-}
-
-export function rollCritical(): boolean {
-  return Math.random() < CRIT_CHANCE;
-}
-
-export function rollRandomFactor(): number {
-  return RANDOM_MIN + Math.random() * (RANDOM_MAX - RANDOM_MIN);
 }
 
 /** Punto del segmento A-B más cercano a P en el plano XZ. */

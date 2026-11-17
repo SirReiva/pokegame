@@ -4,6 +4,10 @@ Demo jugable en navegador que mezcla un **mapa 3D** con **Pokémon dibujados com
 
 El objetivo no es un juego completo, sino validar la técnica: motor 3D imperativo con PlayCanvas, UI en React y un pipeline de assets reproducible.
 
+## Documentación
+
+El índice de arquitectura, rendimiento, sistemas y fichas está en [`docs/README.md`](docs/README.md). El diseño de combate canónico vive en [`docs/diseno-combate/`](docs/diseno-combate/README.md).
+
 ## Stack
 
 - **React 19** + **TypeScript 7** + **Vite**: HUD, menús y pantallas.
@@ -211,7 +215,7 @@ Las estadísticas de daño cuentan **vida realmente descontada**: si un golpe le
 
 Los golpes aplican **0,15 s de hitstun** y algunas habilidades empujan al objetivo (Placaje, 0,6 u). Si dos golpes melee rivales conectan en el mismo frame, se resuelve un **choque**: ninguno recibe daño, ambos reciben 0,25 s de stun y retroceden 1 u. Así dos Placajes simultáneos no se intercambian gratis y se evita el stun-lock con el enfriamiento corto de Placaje.
 
-El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Los **instintos comunes** viven en `COMMON_ABILITY_OPTIONS` y `COMMON_ABILITIES`, se eligen por Pokémon en `LobbyPlayer.commonAbilityId` y no forman parte de `MOVESETS`. Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo, y durante la caída el sprite se desatura a escala de grises (uniform `uDesaturate` del material, ver `src/game/spriteOutline.ts`) hasta desaparecer. El punto del KO queda marcado en el suelo con el retrato de la especie, visible solo para el equipo del Pokémon caído, y la marca desaparece al reaparecer.
+El catálogo de habilidades está dividido en `src/game/abilities/` (`base.ts`, `common.ts` y `roster/`), con `src/game/abilities.ts` como índice. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Los **instintos comunes** viven en `COMMON_ABILITY_OPTIONS` y `COMMON_ABILITIES`, se eligen por Pokémon en `LobbyPlayer.commonAbilityId` y no forman parte de `MOVESETS`. Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo, y durante la caída el sprite se desatura a escala de grises (uniform `uDesaturate` del material, ver `src/game/spriteOutline.ts`) hasta desaparecer. El punto del KO queda marcado en el suelo con el retrato de la especie, visible solo para el equipo del Pokémon caído, y la marca desaparece al reaparecer.
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,35 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,13 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
@@ -229,7 +233,7 @@ El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque 
 
 **Greninja** es un ninja de golpe y fuga: `Shuriken de Agua` (básica a distancia: proyectil de 9 u y 45 de potencia, animación `Shoot` y `projectileStyle: 'shuriken'`, golpe único), `Tajo Umbrío` (melee de 2,1 u y 70 de potencia, animación `Attack` e `impactStyle: 'dark'`), `Sombra Vil` (dash de 4,8 u y 50 de potencia con `QuickStrike`, para entrar o salir golpeando) y `Pulso Umbrío` (definitiva: haz de 9,5 u y 95 de potencia, `Charge` → `Shoot` y `beamStyle: 'dark'`). Es uno de los más rápidos del roster (7,4 u/s) y su visión de 11,5 le permite iniciar desde fuera del alcance de la mayoría.
 
-**Voltorb** es un kamikaze eléctrico: `Chispa` (básica melee de 2 u y 65 de potencia con animación `Attack`), `Rollout` (dash de 5 u y 80 de potencia con `Twirl`, para arrollar y recolocarse), `Onda Trueno` (proyectil de estado de 9 u que no hace daño y ralentiza un 45 % durante 2,5 s) y `Explosión` (definitiva autocentrada de 4,2 u y 175 de potencia, `Charge` durante 0,6 s, 18 s de enfriamiento y **35 % de autodaño**). El autodaño nunca le quita la última vida: si el golpe lo dejaría a 0, se queda con 1 PV. Con 115 PV y 8,2 u/s es el Pokémon más rápido, pero también uno de los más frágiles.
+**Voltorb** es un kamikaze eléctrico: `Rodamiento` (básica melee de 2 u con animación `Twirl`), `Rodar` (dash de 4,5 u que atraviesa enemigos), `Onda Trueno` (descarga circular autocentrada de 3 u que ralentiza y alimenta la pasiva) y `Explosión` (definitiva autocentrada de 4,2 u y 170 de potencia, `Charge` durante 0,6 s, 16 s de enfriamiento y **20 % de autodaño**). Su pasiva, `Núcleo Resonante`, deja una carga con cada golpe directo y detona una descarga de 40 al acumular dos. El autodaño nunca le quita la última vida: si el golpe lo dejaría a 0, se queda con 1 PV. Con 1.000 PV y 8,2 u/s es uno de los Pokémon más rápidos, pero también de los más frágiles.
 
 **Gengar** es un mago de ráfaga: `Lengüetazo` (básica melee de 2 u y 45 de potencia con `Shoot`), `Bola Sombra` (proyectil de 8,5 u y 70 de potencia con `Shoot`), `Bomba Lodo` (área retardada a 6,5 u: charco de 2,4 u durante 2,5 s, 25 de daño por segundo y ralentización del 25 %) y `Come Sueños` (definitiva: haz Fantasma de 8 u y 90 de potencia que cura el 15 % de su vida máxima **solo si impacta en al menos un enemigo**, 11 s de enfriamiento). Es frágil y pega desde media distancia; `Bomba Lodo` castiga zonas y `Come Sueños` le da algo de sustain a cambio de un enfriamiento largo y de tener que acertar la línea.
 
@@ -263,7 +267,7 @@ Las básicas melee pueden declarar una rampa de enfriamiento al repetirse: `.rep
 
 El combate está separado por responsabilidades para que `game.ts` solo orqueste:
 
-- **Builder** (`abilities.ts`): cada habilidad se declara con `ability(...).power(...).cooldown(...).build()`; `registerAbility` la valida y la mete en `ABILITIES`. Los valores por defecto siguen viviendo en `DEFAULT_ABILITY`.
+- **Builder** (`abilities/base.ts`): cada habilidad se declara con `ability(...).power(...).cooldown(...).build()`; `registerAbility` la valida y la mete en `ABILITIES`. Los valores por defecto siguen viviendo en `DEFAULT_ABILITY`, y los módulos de `abilities/roster/` solo declaran contenido.
 - **Strategy + Registry** (`abilityExecutors.ts`): `ABILITY_EXECUTORS[shape]` resuelve `melee`, `projectile`, `beam`, `aoe`, `dash` y `self`. Añadir una forma nueva es registrar una estrategia, no añadir otro `case` a `executeAbility`.
 - **Compose** (`effects.ts`): `CAST_EFFECTS` encadena buffs y curación al lanzar. Las habilidades con `healOnHit` omiten esa curación y la reciben al impactar. `compose(...)` permite añadir pasos sin tocar el orden de los existentes.
 - **Decorator** (`combat.ts`): `DAMAGE_MODIFIERS` aplica crítico → aleatorio → STAB → efectividad en cadena; cada decorador redondea con `floor` y conserva la fórmula oficial.

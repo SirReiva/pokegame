@@ -17,7 +17,7 @@
  */
 
 import * as pc from 'playcanvas';
-import type { AbilityDef } from './abilities';
+import { baseAbilityId, type AbilityDef } from './abilities';
 import { ABILITY_CAST_SOUNDS, HIT_SOUNDS } from './abilitySounds';
 import { sfxPathsForRoster, type AudioRosterEntry } from './audioRoster';
 import { getAudioSettings, subscribeAudioSettings } from './audioSettings';
@@ -259,7 +259,7 @@ function playSound(path: string, volume: number, minIntervalMs: number): void {
 
 /** Sonido de lanzamiento de la habilidad (tras el windup, si lo tiene). */
 export function playAbilityCast(def: AbilityDef): void {
-  const path = ABILITY_CAST_SOUNDS[def.id];
+  const path = ABILITY_CAST_SOUNDS[baseAbilityId(def.id)];
   if (!path) return;
   playSound(path, CAST_VOLUME, 0);
 }

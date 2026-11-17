@@ -54,6 +54,7 @@ export interface RuntimeState {
   readonly fogMasks: ReadonlyMap<Team, FogMask>;
   readonly fogViews: readonly FogView[];
   readonly simulationStep: number;
+  readonly matchElapsed: number;
   readonly atmosphereVision: number;
   readonly atmosphere: AtmosphereId;
   readonly combatFx: CombatFxPort;
@@ -98,6 +99,11 @@ export interface RuntimeState {
   activeCastArmor: DamageSystemHost['activeCastArmor'];
   spawnArmorFeedback: DamageSystemHost['spawnArmorFeedback'];
   interruptWithRefund: DamageSystemHost['interruptWithRefund'];
+  applyDot: DamageSystemHost['applyDot'];
+  applyMark: DamageSystemHost['applyMark'];
+  applyRoot: DamageSystemHost['applyRoot'];
+  applySilence: DamageSystemHost['applySilence'];
+  applyAntiHeal: DamageSystemHost['applyAntiHeal'];
   showImmunePopup: DamageSystemHost['showImmunePopup'];
   showDamagePopup: DamageSystemHost['showDamagePopup'];
   showHealPopup: DamageSystemHost['showHealPopup'];
@@ -110,6 +116,7 @@ export interface RuntimeState {
   collectAssists: KnockoutHost['collectAssists'];
   pushKillFeed: KnockoutHost['pushKillFeed'];
   awardKillXp: KnockoutHost['awardKillXp'];
+  onAssists: KnockoutHost['onAssists'];
   handleModeKnockout: KnockoutHost['handleModeKnockout'];
   viewOf: VisionViewHost['viewOf'];
   refreshCombatVisibility: VisionViewHost['refreshCombatVisibility'];
@@ -227,11 +234,18 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       get atmosphere() {
         return state.atmosphere;
       },
+      players: () => state.matchPlayers,
       buffMultiplier: state.buffMultiplier,
       applySlow: state.applySlow,
+      now: () => state.matchElapsed,
       activeCastArmor: state.activeCastArmor,
       spawnArmorFeedback: state.spawnArmorFeedback,
       interruptWithRefund: state.interruptWithRefund,
+      applyDot: state.applyDot,
+      applyMark: state.applyMark,
+      applyRoot: state.applyRoot,
+      applySilence: state.applySilence,
+      applyAntiHeal: state.applyAntiHeal,
       applyKnockback: state.applyKnockback,
       playImpactSound: state.playImpactSound,
       showImmunePopup: state.showImmunePopup,
@@ -252,6 +266,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       collectAssists: state.collectAssists,
       pushKillFeed: state.pushKillFeed,
       awardKillXp: state.awardKillXp,
+      onAssists: state.onAssists,
       handleModeKnockout: state.handleModeKnockout,
       emitStats: state.emitStats
     },
