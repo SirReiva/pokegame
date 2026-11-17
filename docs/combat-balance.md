@@ -692,7 +692,8 @@ documentarla o aplicar los modificadores al dash.
 
 También hay tipos sin terreno propio (`Psychic`, `Fighting`, `Steel`, `Dark`,
 `Dragon`, `Flying`), así que Mewtwo, Mew, Lucario, Lugia, Ho-Oh y Celebi nunca
-reciben el bonus `home` de 1,18× de velocidad/ocultación (`terrain.ts`).
+reciben el bonus `home` de 1,10× de velocidad y 1,5× de ocultación
+(`terrain.ts`).
 
 ### 3.10. Todos los dashes se detienen en cualquier jugador (medio, diseño)
 
@@ -1277,7 +1278,7 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
   legendario con más iniciativa, compensado por 180 PV y 110 de Defensa.
 - Charmander tampoco tiene dash y es frágil (114 PV, 63 Def).
 - No hay ningún terreno Psíquico en `TERRAINS` (`src/game/terrain.ts:35-51`), así
-  que Mewtwo y Mew nunca reciben el bonus «home» de 1,18× de velocidad; es una
+  que Mewtwo y Mew nunca reciben el bonus «home» de 1,10× de velocidad; es una
   desventaja menor que no compensa su poder.
 
 ### 4.8. Explosión de Voltorb: el caso concreto

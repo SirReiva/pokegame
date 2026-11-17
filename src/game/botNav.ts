@@ -557,7 +557,9 @@ export class BotNavGrid {
       const speed = terrainSpeedEffect(terrain, types).multiplier;
       const concealment = terrainConcealment(terrain, types).value;
       cost = Math.max(1, 1 / Math.max(0.5, speed));
-      if (speed < 0.9) cost += 0.18;
+      // El escalón hostil es ahora ×0,95: el extra de coste se ajusta a esa
+      // diferencia para seguir prefiriendo una ruta cómoda sin exagerarla.
+      if (speed < 1) cost += 0.05;
       cost += (1 - concealment) * (options.preferConcealment ? 0.28 : 0.06);
     }
 

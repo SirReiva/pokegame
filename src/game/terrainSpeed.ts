@@ -4,9 +4,9 @@
  * La relación se resuelve con la tabla de tipos de Pokémon, usando el tipo del
  * terreno como "atacante" y los tipos del Pokémon como "defensor":
  *
- * - Terreno propio (el Pokémon comparte el tipo del terreno): ×1,18.
- * - Terreno hostil (el tipo del terreno es súper eficaz contra el Pokémon): ×0,82.
- * - Terreno cómodo (lo resiste o es inmune a él): ×1,08.
+ * - Terreno propio (el Pokémon comparte el tipo del terreno): ×1,10.
+ * - Terreno hostil (el tipo del terreno es súper eficaz contra el Pokémon): ×0,95.
+ * - Terreno cómodo (lo resiste o es inmune a él): ×1,05.
  * - Resto de combinaciones: ×1.
  *
  * Así la hierba alta favorece a Scyther, la arena frena a Pikachu, la ciénaga
@@ -36,9 +36,9 @@ export type {
 } from './core/terrainSpeed';
 
 export const TERRAIN_SPEED_FACTOR: Record<TerrainRelationReason, number> = {
-  home: 1.18,
-  hostile: 0.82,
-  comfortable: 1.08,
+  home: 1.1,
+  hostile: 0.95,
+  comfortable: 1.05,
   neutral: 1
 };
 
