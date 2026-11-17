@@ -159,7 +159,7 @@ hasta ver el efecto de los cuatro primeros.
 | Rayquaza | 72 % | `Furia Dragón` 85 → 78; `Ascenso Draco` 130 → 115 y enfriamiento 16 → 17 s | Dos golpes de área/beam de largo alcance y un dash de 5,5 u; es el mejor kit de iniciación y castigo. |
 | Greninja | 65 % | `Shuriken de Agua` 42 → 38 (o enfriamiento 0,65 → 0,75 s); `Pulso Umbrío` 85 → 78 y 10 → 11 s | La mejor cadencia a distancia del roster; el dash de 4,8 u le permite elegir todos los intercambios. |
 | Moltres | 64 % | `Tajo Aéreo` 65 → 58 y 3,5 → 4 s; `Ataque Celeste` 115 → 105 y 15 → 16 s | Proyectil de 8,5 u cada 3,5 s más un área de 115 con startup de 0,8 s. |
-| Kyogre | 61 % | `Pulso Primigenio` 160 → 145 y 16 → 17 s; `Remolino Marino` 34 → 30 y 8 → 9 s | 175 PV, 160 de Def. Especial y un área de 160 en dos pulsos; el hurtbox de 0,60 no compensa tanto. |
+| Kyogre | 61 % | `Pulso Primigenio` 160 → 145 y 16 → 17 s; `Remolino Marino` 34 → 30 y 8 → 9 s | 175 PV, 160 de Def. Especial y un área de 160 en dos pulsos; el hurtbox de 0,64 no compensa tanto. |
 
 ### P2 — Buffs (winrate ≤ 35 %)
 

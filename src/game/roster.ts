@@ -70,22 +70,22 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0658': 0.42, // Greninja: esbelto y muy rápido
   '0150': 0.44, // Mewtwo: alto pero estrecho; la cola no cuenta
   '0151': 0.36, // Mew: flota y su cuerpo real es pequeño
-  '0095': 0.58, // Onix: enorme; el arte incluye cola y anillos
+  '0095': 0.62, // Onix: enorme; el arte incluye cola y anillos
   '0123': 0.42, // Scyther: alas finas, manda el cuerpo
-  '0130': 0.56, // Gyarados: cuerpo largo y ancho; la cola no cuenta
-  '0248': 0.52, // Tyranitar: mole compacta y pesada
-  '0144': 0.56, // Articuno: cuerpo grande; las puntas de las alas no cuentan
-  '0145': 0.52, // Zapdos: envergadura más estrecha que Articuno
-  '0146': 0.56, // Moltres: alas amplias y cuerpo central grande
-  '0243': 0.52, // Raikou: bestia alargada
-  '0244': 0.50, // Entei: cuadrúpedo ancho y voluminoso
-  '0245': 0.50, // Suicune: cuadrúpedo grande pero esbelto
-  '0249': 0.58, // Lugia: planeador enorme
-  '0250': 0.58, // Ho-Oh: alas y cola largas; círculo sobre el torso
+  '0130': 0.60, // Gyarados: cuerpo largo y ancho; la cola no cuenta
+  '0248': 0.56, // Tyranitar: mole compacta y pesada
+  '0144': 0.60, // Articuno: cuerpo grande; las puntas de las alas no cuentan
+  '0145': 0.56, // Zapdos: envergadura más estrecha que Articuno
+  '0146': 0.60, // Moltres: alas amplias y cuerpo central grande
+  '0243': 0.56, // Raikou: bestia alargada
+  '0244': 0.54, // Entei: cuadrúpedo ancho y voluminoso
+  '0245': 0.54, // Suicune: cuadrúpedo grande pero esbelto
+  '0249': 0.62, // Lugia: planeador enorme
+  '0250': 0.62, // Ho-Oh: alas y cola largas; círculo sobre el torso
   '0251': 0.34, // Celebi: pequeño y flotante
-  '0382': 0.60, // Kyogre: cuerpo enorme, aunque la aleta caudal no cuenta
-  '0383': 0.56, // Groudon: coloso bajo y ancho
-  '0384': 0.58 // Rayquaza: serpiente alada; el círculo cubre el torso
+  '0382': 0.64, // Kyogre: cuerpo enorme, aunque la aleta caudal no cuenta
+  '0383': 0.60, // Groudon: coloso bajo y ancho
+  '0384': 0.62 // Rayquaza: serpiente alada; el círculo cubre el torso
 };
 
 /** Radio de respaldo si una especie no tiene entrada en la tabla. */

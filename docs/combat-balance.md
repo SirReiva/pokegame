@@ -391,8 +391,8 @@ stats legendarios sean intrínsecamente más fuertes antes de mirar habilidades.
 ### Hurtbox por especie
 
 Desde `3bae0e9` cada especie tiene un radio de impacto propio
-(`POKEMON_HIT_RADIUS`, `src/game/roster.ts:58-83`), de 0,34 u (Voltorb, Celebi)
-a 0,58 u (Onix, Lugia, Ho-Oh), con 0,42 u de referencia. Se usa para los
+(`POKEMON_HIT_RADIUS`, `src/game/roster.ts:61-89`), de 0,34 u (Voltorb, Celebi)
+a 0,64 u (Kyogre), con 0,42 u de referencia. Se usa para los
 proyectiles, el barrido de dash y las comprobaciones de rango de los bots. Las
 melee, los haces y las áreas dibujan su telegrafía con el radio máximo
 (`range`/`radius` + `MAX_HIT_RADIUS`) y comprueban el solape con el hurtbox del
@@ -723,8 +723,8 @@ o documentar `dashBlocksOnEnemies` y unificar la distancia.
 `Ciclón` (`abilities.ts:2291-2318`) declara `range 2`, `radius 2` y un
 `aoeMovement` que avanza `progress * 10` durante 2,5 s. El centro nace 2 u por
 delante del lanzador y, en el último tick (t ≈ 2,02 s), está a ~10,1 u; con el
-radio de 2 u, el mayor hurtbox del roster (0,60 u) y el del objetivo (hasta
-0,58 u), el daño alcanza ~**13,2 u**. El aro visual llega a ~14,6 u al final,
+radio de 2 u, el mayor hurtbox del roster (0,64 u) y el del objetivo (hasta
+0,64 u), el daño alcanza ~**13,4 u**. El aro visual llega a ~14,6 u al final,
 aunque ya no hace tick.
 
 Sigue abierto el movimiento: `executeAoe` recorta el centro inicial con
@@ -879,7 +879,7 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
   que las incluyen; su recogida automática se describe en §1.
 - **Hurtbox**: la matriz mide daño suponiendo que todas las habilidades conectan;
   no mide facilidad de impacto. Desde `3bae0e9` cada especie tiene un
-  `hitRadius` de 0,34-0,60 u, así que las especies grandes son más
+  `hitRadius` de 0,34-0,64 u, así que las especies grandes son más
   fáciles de golpear y las pequeñas más difíciles. Las tablas de §4.3-§4.5 son
   una cota de daño, no un ranking efectivo de combate.
 - **Simulación con bots (desde 2026-11-16)**: `pnpm balance` mide el combate
@@ -901,28 +901,28 @@ Se compilaron `abilities.ts`, `pokedex.ts`, `combat.ts`, `typeChart.ts` y
 | Voltorb | 115 | 50 | 70 | 75 | 75 | 120 | 0,34 | sí |
 | Lucario | 145 | 130 | 90 | 135 | 90 | 110 | 0,42 | sí |
 | Greninja | 147 | 115 | 87 | 123 | 91 | 142 | 0,42 | sí |
-| Gyarados | 170 | 145 | 99 | 80 | 120 | 101 | 0,56 | sí |
-| Tyranitar | 175 | 154 | 130 | 115 | 120 | 81 | 0,52 | sí |
-| Groudon | 175 | 170 | 160 | 120 | 110 | 110 | 0,56 | sí |
+| Gyarados | 170 | 145 | 99 | 80 | 120 | 101 | 0,60 | sí |
+| Tyranitar | 175 | 154 | 130 | 115 | 120 | 81 | 0,56 | sí |
+| Groudon | 175 | 170 | 160 | 120 | 110 | 110 | 0,60 | sí |
 | Mewtwo | 181 | 130 | 110 | 174 | 110 | 150 | 0,44 | sí |
 | Mew | 175 | 120 | 120 | 120 | 120 | 120 | 0,36 | sí |
 | Scyther | 145 | 130 | 100 | 75 | 100 | 125 | 0,42 | sí |
-| Articuno | 165 | 105 | 120 | 115 | 145 | 105 | 0,56 | sí |
-| Moltres | 165 | 120 | 110 | 145 | 105 | 110 | 0,56 | sí |
+| Articuno | 165 | 105 | 120 | 115 | 145 | 105 | 0,60 | sí |
+| Moltres | 165 | 120 | 110 | 145 | 105 | 110 | 0,60 | sí |
 | Eevee | 130 | 75 | 70 | 65 | 85 | 75 | 0,36 | **NO** |
-| Onix | 110 | 65 | 180 | 50 | 65 | 90 | 0,58 | sí |
-| Zapdos | 165 | 110 | 105 | 145 | 110 | 120 | 0,52 | sí |
-| Raikou | 165 | 105 | 95 | 135 | 120 | 135 | 0,52 | **NO** |
-| Entei | 190 | 135 | 105 | 110 | 95 | 120 | 0,50 | **NO** |
-| Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,50 | sí |
-| Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,58 | sí |
-| Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,58 | sí |
+| Onix | 110 | 65 | 180 | 50 | 65 | 90 | 0,62 | sí |
+| Zapdos | 165 | 110 | 105 | 145 | 110 | 120 | 0,56 | sí |
+| Raikou | 165 | 105 | 95 | 135 | 120 | 135 | 0,56 | **NO** |
+| Entei | 190 | 135 | 105 | 110 | 95 | 120 | 0,54 | **NO** |
+| Suicune | 175 | 95 | 135 | 110 | 135 | 105 | 0,54 | sí |
+| Lugia | 181 | 110 | 150 | 110 | 174 | 130 | 0,62 | sí |
+| Ho-Oh | 181 | 150 | 110 | 130 | 174 | 110 | 0,62 | sí |
 | Celebi | 175 | 120 | 120 | 120 | 120 | 120 | 0,34 | sí |
-| Kyogre | 175 | 120 | 110 | 170 | 160 | 110 | 0,60 | sí |
-| Rayquaza | 180 | 170 | 110 | 170 | 110 | 115 | 0,58 | sí |
+| Kyogre | 175 | 120 | 110 | 170 | 160 | 110 | 0,64 | sí |
+| Rayquaza | 180 | 170 | 110 | 170 | 110 | 115 | 0,62 | sí |
 
-**Hurtbox (`3bae0e9`)**: el radio va de 0,34 u (Voltorb, Celebi) a 0,60 u
-(Kyogre). Gyarados entra con 0,56 u, Groudon con 0,56 u y Rayquaza con 0,58 u. Se
+**Hurtbox (`3bae0e9`)**: el radio va de 0,34 u (Voltorb, Celebi) a 0,64 u
+(Kyogre). Gyarados entra con 0,60 u, Groudon con 0,60 u y Rayquaza con 0,62 u. Se
 usa en todas las formas de golpe, así que un cuerpo grande recibe antes y uno
 pequeño puede esquivar por el borde. Esta columna no interviene en las tablas de
 daño de §4.3-§4.5: son una cota de daño suponiendo que todas las habilidades
@@ -1262,8 +1262,8 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
 > están en `roster.ts`, `vision.ts` y `abilities.ts`.
 
 - El alcance de la tabla es el nominal de la habilidad. Contra un objetivo real
-  se suma su `hitRadius` (0,34-0,60 u): un melee de 2,2 u alcanza a 2,54-2,80 u
-  de centro a centro, y un Kyogre (0,60) recibe antes que un Voltorb (0,34). La
+  se suma su `hitRadius` (0,34-0,64 u): un melee de 2,2 u alcanza a 2,54-2,84 u
+  de centro a centro, y un Kyogre (0,64) recibe antes que un Voltorb (0,34). La
   facilidad de impacto es la contrapartida del daño de la matriz de §4.5.
 - Los personajes con más alcance también tienen más visión; la mayoría combina
   además buena velocidad, con Tyranitar y Groudon como excepción lenta. La
@@ -1273,7 +1273,7 @@ La tabla de velocidades (`src/game/roster.ts`) y la de visión
   (4,6). Bulbasaur sigue teniendo la visión más baja del grupo, no tiene dash y
   su definitiva tarda 0,75 s; es el caso más desfavorecido.
 - **Kyogre** y **Rayquaza** coronan la visión (12,2 y 12,6 u), pero Kyogre paga
-  el hurtbox más grande del roster (0,60 u) y la velocidad de un coloso (5,9).
+  el hurtbox más grande del roster (0,64 u) y la velocidad de un coloso (5,9).
   Rayquaza combina 7,6 de velocidad, 12,6 de visión y un dash de 5,5 u: es el
   legendario con más iniciativa, compensado por 180 PV y 110 de Defensa.
 - Charmander tampoco tiene dash y es frágil (114 PV, 63 Def).
@@ -1540,8 +1540,8 @@ así que se pueden añadir tests baratos:
   no desde el lanzador. Un dash que golpea lateralmente y termina más allá del
   objetivo debe empujarlo en la dirección del dash, no hacia el origen.
 - **Hurtbox y telegrafías**: con un melee de alcance 2,2 u el arco se dibuja a
-  2,2 + 0,58 = 2,78 u y golpea a un Bulbasaur (0,42 u) mientras el borde del arco
-  toque su hurtbox, es decir, hasta 3,2 u de centro a centro; ningún cuerpo que
+  2,2 + 0,64 = 2,84 u y golpea a un Bulbasaur (0,42 u) mientras el borde del arco
+  toque su hurtbox, es decir, hasta 3,26 u de centro a centro; ningún cuerpo que
   roce el aviso queda sin golpe. Lo mismo para el carril del haz y el aro del
   área. Los proyectiles y el barrido de dash conservan el hurtbox por especie. Un
   bot debe iniciar el melee contra un Groudon desde más lejos que contra un
