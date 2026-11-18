@@ -43,7 +43,7 @@ Requiere Node 18+ (los importadores usan `fetch` y `zlib`).
 
 ## Publicación web (GitHub Pages)
 
-El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**. Se dispara con cada push a `master`, pero solo despliega si cambió la versión de `package.json`:
+El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**. Solo se dispara cuando un push a `master` toca `package.json`, y solo compila si la versión cambió:
 
 ```bash
 pnpm version patch --no-git-tag-version   # o edita "version" a mano
@@ -51,7 +51,11 @@ git commit -am "chore: bump version to v0.28.5"
 git push
 ```
 
-El job `check` compara la versión nueva con la última publicada (leyendo el `package.json` del último run exitoso), y si no cambió se salta el build. Para republicar la misma versión —por ejemplo, tras cambiar algo sin subir el número— lanza el workflow a mano con `gh workflow run deploy-pages.yml` o desde la pestaña **Actions**.
+El job `check` compara la versión nueva con la última publicada (leyendo el `package.json` del último run exitoso); si no cambió, el build ni se ejecuta. Un commit de código, docs o assets no arranca el workflow. Para republicar la misma versión —por ejemplo, si Pages quedó roto— lanza el workflow a mano con `force`:
+
+```bash
+gh workflow run deploy-pages.yml -f force=true
+```
 
 ## Versión de escritorio (Wails)
 

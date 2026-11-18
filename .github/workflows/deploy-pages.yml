@@ -1,13 +1,24 @@
 name: Deploy to GitHub Pages
 
-# Se despliega cuando cambia la versión de package.json en master. El job `check`
-# compara la versión actual con la última versión publicada en Pages (leyendo el
-# package.json del último run exitoso de este workflow), así que un push normal
-# sin bump de versión no vuelve a publicar. workflow_dispatch fuerza el despliegue.
+# Se despliega cuando cambia la versión de package.json en master. El trigger
+# filtra por package.json, así que un commit de código o docs ni arranca el
+# workflow. Además, el job `check` compara la versión actual con la última
+# publicada en Pages (leyendo el package.json del último run exitoso) y salta el
+# build si no cambió. workflow_dispatch sigue la misma regla salvo force=true.
 on:
   push:
     branches: [master]
+    # El workspace solo se publica cuando cambia package.json: un commit de
+    # código, docs o assets ni siquiera arranca este workflow.
+    paths:
+      - package.json
+      - .github/workflows/deploy-pages.yml
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Desplegar aunque la versión no haya cambiado"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -60,11 +71,12 @@ jobs:
         id: decide
         env:
           EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force }}
           CURRENT: ${{ steps.current.outputs.version }}
           LAST: ${{ steps.last.outputs.version }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = "workflow_dispatch" ]; then
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$FORCE" = "true" ]; then
             echo "Despliegue manual forzado de la versión $CURRENT."
             deploy=true
           elif [ -z "$LAST" ]; then
