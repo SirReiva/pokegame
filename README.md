@@ -41,6 +41,18 @@ Los volúmenes general, de efectos y de música se ajustan en **Opciones → Aud
 
 Requiere Node 18+ (los importadores usan `fetch` y `zlib`).
 
+## Publicación web (GitHub Pages)
+
+El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**. Se dispara con cada push a `master`, pero solo despliega si cambió la versión de `package.json`:
+
+```bash
+pnpm version patch --no-git-tag-version   # o edita "version" a mano
+git commit -am "chore: bump version to v0.28.5"
+git push
+```
+
+El job `check` compara la versión nueva con la última publicada (leyendo el `package.json` del último run exitoso), y si no cambió se salta el build. Para republicar la misma versión —por ejemplo, tras cambiar algo sin subir el número— lanza el workflow a mano con `gh workflow run deploy-pages.yml` o desde la pestaña **Actions**.
+
 ## Versión de escritorio (Wails)
 
 El mismo frontend se puede empaquetar como app nativa con [Wails v3](https://wails.io). El binario lleva dentro el contenido de `dist/` (incluidos los sprites, mapas y objetos de `public/`) y usa el WebView del sistema, así que no necesita un navegador ni un servidor. La versión web sigue funcionando exactamente igual.

@@ -1,35 +1,92 @@
 name: Deploy to GitHub Pages
 
+# Se despliega cuando cambia la versión de package.json en master. El job `check`
+# compara la versión actual con la última versión publicada en Pages (leyendo el
+# package.json del último run exitoso de este workflow), así que un push normal
+# sin bump de versión no vuelve a publicar. workflow_dispatch fuerza el despliegue.
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      version_bump:
-        description: "Tipo de subida de version"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-        default: patch
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
   pages: write
   id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Si se cancela a mitad, el deploy puede quedar a medias; mejor encolar.
+  cancel-in-progress: false
 
 jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+      version: ${{ steps.current.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read package version
+        id: current
+        run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve last deployed version
+        id: last
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          sha=$(gh run list --workflow deploy-pages.yml --branch "$BRANCH" \
+            --status success --limit 1 --json headSha --jq '.[0].headSha // ""' || true)
+
+          # Se trae solo ese commit para no clonar toda la historia en cada push.
+          version=""
+          if [ -n "$sha" ] && git fetch --depth=1 --quiet origin "$sha"; then
+            version=$(git show "$sha:package.json" 2>/dev/null \
+              | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Última versión desplegada: ${version:-<ninguna>}"
+
+      - name: Decide deploy
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          CURRENT: ${{ steps.current.outputs.version }}
+          LAST: ${{ steps.last.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "Despliegue manual forzado de la versión $CURRENT."
+            deploy=true
+          elif [ -z "$LAST" ]; then
+            echo "No hay despliegue previo registrado; se publica $CURRENT."
+            deploy=true
+          elif [ "$CURRENT" != "$LAST" ]; then
+            echo "La versión cambió ($LAST -> $CURRENT); se publica."
+            deploy=true
+          else
+            echo "La versión sigue en $CURRENT; no se publica."
+            deploy=false
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
   build:
+    name: Build
+    needs: check
+    if: needs.check.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -42,16 +99,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Bump version and commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pnpm version ${{ inputs.version_bump }} --no-git-tag-version
-          VERSION=$(node -p "require('./package.json').version")
-          git add package.json pnpm-lock.yaml
-          git commit -m "chore: bump version to v$VERSION"
-          git push origin HEAD:${{ github.event.repository.default_branch }}
 
       - name: Build
         run: pnpm build
@@ -67,7 +114,9 @@ jobs:
           path: dist
 
   deploy:
-    needs: build
+    name: Deploy
+    needs: [check, build]
+    if: needs.check.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
