@@ -935,8 +935,6 @@ const root = new pc.Entity('fire-burst');
       localSpace: false,
       preWarm: false
     });
-    const burstLight = ctx.createFireLight(root, 0, 0.55, 0, 1.1, 4);
-
     const core = ctx.createEntity(ctx.sphereMesh, [coreMaterial], root);
     core.setLocalPosition(0, 0.62, 0);
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
@@ -1028,8 +1026,6 @@ const root = new pc.Entity('fire-burst');
 
       flameMaterial.opacity = 0.5 * (1 - t) * (0.85 + Math.random() * 0.15);
       hotMaterial.opacity = 0.55 * (1 - t) * (0.85 + Math.random() * 0.15);
-      burstLight.light!.intensity =
-        1.1 * (1 - t) * (0.65 + Math.random() * 0.35);
 
       const ringScale = (0.5 + t * 1.15) * boost;
       ring.setLocalScale(ringScale, 1, ringScale);

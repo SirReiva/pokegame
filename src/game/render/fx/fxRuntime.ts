@@ -808,28 +808,6 @@ constructor(
     }
   }
 
-  /** Luz omni corta y cálida: tiñe el suelo y los sprites alrededor del fuego. */
-  public createFireLight(
-    parent: pc.Entity,
-    x: number,
-    y: number,
-    z: number,
-    intensity: number,
-    range: number
-  ): pc.Entity {
-    const entity = new pc.Entity('fire-light');
-    entity.addComponent('light', {
-      type: 'omni',
-      color: new pc.Color(1, 0.45, 0.12),
-      intensity,
-      range,
-      castShadows: false
-    });
-    entity.setLocalPosition(x, y, z);
-    parent.addChild(entity);
-    return entity;
-  }
-
   /** Devuelve una malla compartida y la crea solo la primera vez. */
   public cachedMesh(key: string, create: () => pc.Mesh): pc.Mesh {
     const cached = this.meshCache.get(key);

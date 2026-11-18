@@ -45,15 +45,6 @@ const life = Math.max(0.2, duration);
       numParticles: shortBurst ? 80 : 130,
       localSpace: false
     });
-    const aoeLight = ctx.createFireLight(
-      root,
-      0,
-      1,
-      0,
-      1.8,
-      radius * 2.4
-    );
-
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.14, 0);
     glow.setLocalScale(radius * 1.15, radius * 0.22, radius * 1.15);
@@ -174,8 +165,6 @@ const life = Math.max(0.2, duration);
         0.4 * envelope * (0.85 + Math.random() * 0.15);
       hotMaterial.opacity =
         0.44 * envelope * (0.85 + Math.random() * 0.15);
-      aoeLight.light!.intensity =
-        1.4 * envelope * (0.7 + Math.random() * 0.3);
     };
     ctx.addEffect(root, materials, life, animate);
     animate(0, 0);
@@ -222,8 +211,6 @@ const life = Math.max(0.2, duration);
       numParticles: 110,
       localSpace: false
     });
-    const light = ctx.createFireLight(root, 0, 1, 0, 1.4, radius * 2.3);
-
     const flameInstances: EffectBatchInstance[] = [];
     const hotFlameInstances: EffectBatchInstance[] = [];
 
@@ -298,7 +285,6 @@ const life = Math.max(0.2, duration);
       const pulse = 0.5 + Math.sin(time * 8) * 0.2;
 
       glowMaterial.opacity = (0.08 + pulse * 0.05) * envelope;
-      light.light!.intensity = 1.4 * envelope * (0.7 + Math.random() * 0.3);
 
       flameBatch.setTime(time);
       hotFlameBatch.setTime(time);
@@ -480,8 +466,7 @@ const life = Math.max(0.2, duration);
       })
     );
 
-    // Resplandor en la boca con pulso y fundido en GPU. Las dos luces siguen
-    // en CPU porque son luces reales de escena, no geometría del efecto.
+    // Resplandor en la boca con pulso y fundido en GPU.
     batches.push(
       new EffectBatch({
         app: ctx.app,
@@ -503,37 +488,13 @@ const life = Math.max(0.2, duration);
       })
     );
 
-    const light = ctx.createFireLight(
-      root,
-      0,
-      jetY,
-      reach * 0.35,
-      1.8,
-      reach * 1.2
-    );
-    const tipLight = ctx.createFireLight(
-      root,
-      0,
-      jetY,
-      reach * 0.82,
-      0.9,
-      reach * 0.7
-    );
-
     let time = 0;
     const animate = (_t: number, dt: number): void => {
       time += dt;
-      const fadeIn = Math.min(1, time / 0.12);
-      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.3));
-      const envelope = Math.min(fadeIn, fadeOut);
-      const flicker =
-        0.85 + Math.sin(time * 17) * 0.1 + Math.sin(time * 31) * 0.05;
 
-      // La geometría y los fundidos viven en el vertex shader; solo las luces
-      // de escena necesitan intensidad por frame.
+      // La geometría y los fundidos viven en el vertex shader; no hay luces
+      // de escena que actualizar.
       for (const batch of batches) batch.setTime(time);
-      light.light!.intensity = 1.8 * envelope * flicker;
-      tipLight.light!.intensity = 0.9 * envelope * flicker;
     };
 
     const anchors = coneAnchors(x, z, dirX, dirZ, reach, half);
@@ -626,14 +587,6 @@ const life = Math.max(0.2, duration);
       numParticles: 140,
       localSpace: false
     });
-    const aoeLight = ctx.createFireLight(
-      root,
-      0,
-      1,
-      0,
-      1.7,
-      radius * 2.6
-    );
 
     const glow = ctx.createEntity(ctx.sphereMesh, [glowMaterial], root);
     glow.setLocalPosition(0, 0.14, 0);
@@ -805,8 +758,6 @@ const life = Math.max(0.2, duration);
         0.46 * envelope * (0.85 + Math.random() * 0.15);
       windMaterial.opacity = 0.3 * envelope;
       emberMaterial.opacity = 0.78 * envelope;
-      aoeLight.light!.intensity =
-        1.5 * envelope * (0.7 + Math.random() * 0.3);
     };
     ctx.addEffect(root, materials, life, animate);
     animate(0, 0);

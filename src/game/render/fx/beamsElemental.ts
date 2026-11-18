@@ -320,15 +320,6 @@ const dx = x2 - x1;
       stretch: 0.55,
       localSpace: true
     });
-    const beamLight = ctx.createFireLight(
-      root,
-      0,
-      0.8,
-      length / 2,
-      1.3,
-      6.5
-    );
-
     const reveal = 0.18;
     const lengthHalf = length / 2;
     const lateralHalf = width * 6;
@@ -468,8 +459,6 @@ const dx = x2 - x1;
 
       coreMaterial.opacity = 0.4 * fade * (0.85 + Math.random() * 0.15);
       hotMaterial.opacity = (0.34 + Math.random() * 0.18) * fade;
-      beamLight.light!.intensity =
-        1.3 * fade * (0.68 + Math.random() * 0.32);
     };
     ctx.addEffect(root, materials, 0.45, animate);
     animate(0, 0);

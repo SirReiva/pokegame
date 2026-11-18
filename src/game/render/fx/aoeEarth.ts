@@ -482,8 +482,6 @@ const life = Math.max(0.3, duration);
       ctx.dustTexture
     );
 
-    const light = ctx.createFireLight(root, 0, 0.7, 0, 1.1, radius * 2.1);
-
     let time = 0;
     const animate = (_t: number, dt: number): void => {
       time += dt;
@@ -500,7 +498,6 @@ const life = Math.max(0.3, duration);
       pitDeep.setLocalScale(deepScale, 1, deepScale);
 
       magmaMaterial.opacity = (0.5 + pulse * 0.3) * envelope;
-      light.light!.intensity = 1.1 * envelope * (0.65 + Math.random() * 0.35);
 
       for (const batch of branchBatches) batch.setTime(time);
       for (const batch of slabBatches) batch.setTime(time);
