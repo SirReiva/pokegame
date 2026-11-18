@@ -55,7 +55,8 @@ export interface AoeMovementContext<
   /**
    * Dirección horizontal del lanzamiento (desde el lanzador hacia el centro),
    * normalizada. Si el área nació sobre el lanzador, es su dirección de
-   * apuntado.
+   * apuntado. En `aoeMovement` es siempre la dirección original, aunque la
+   * función devuelva otra para girar el cono.
    */
   dirX: number;
   dirZ: number;
@@ -72,6 +73,13 @@ export interface AoeMovementContext<
  * Función que recoloca el centro de un área `overtime` en cada frame. Debe
  * devolver el centro en coordenadas de mundo; el motor mueve con él el daño de
  * cada tick, el aro del equipo y el efecto visual.
+ *
+ * En los conos también puede devolver `dirX`/`dirZ` para girar el eje del
+ * abanico. El motor normaliza la dirección, la usa en la geometría del tick y
+ * rota la telegrafía y el efecto visual alrededor del vértice. El giro se
+ * interpola a `aoeTurnRate` grados por segundo, así que un cambio de apuntado
+ * se ve como un desplazamiento y no como un salto. Los círculos ignoran esos
+ * campos.
  */
 export type AoeMovement<
   TPlayer extends { x: number; z: number } = { x: number; z: number },
@@ -79,6 +87,9 @@ export type AoeMovement<
 > = (context: AoeMovementContext<TPlayer, TDef>) => {
   x: number;
   z: number;
+  /** Dirección horizontal del cono tras el movimiento; opcional. */
+  dirX?: number;
+  dirZ?: number;
 };
 
 /**

@@ -295,6 +295,8 @@ const rawLength = Math.hypot(dirX, dirZ);
     const anchors = coneAnchors(x, z, nx, nz, reach, half);
     ctx.applyVisibility(root, anchors, false, owner);
     ctx.telegraphs.add(record);
+    let currentDirX = nx;
+    let currentDirZ = nz;
     return {
       destroy: () => ctx.disposeTelegraph(record),
       setCenter: (nextX, nextZ) => {
@@ -303,7 +305,30 @@ const rawLength = Math.hypot(dirX, dirZ);
           record.entity.getPosition().y,
           nextZ
         );
-        record.anchors = coneAnchors(nextX, nextZ, nx, nz, reach, half);
+        record.anchors = coneAnchors(
+          nextX,
+          nextZ,
+          currentDirX,
+          currentDirZ,
+          reach,
+          half
+        );
+      },
+      setDirection: (nextDirX, nextDirZ) => {
+        const length = Math.hypot(nextDirX, nextDirZ);
+        if (length < 0.0001) return;
+        currentDirX = nextDirX / length;
+        currentDirZ = nextDirZ / length;
+        const nextYaw = Math.atan2(currentDirX, currentDirZ);
+        record.entity.setEulerAngles(0, nextYaw / DEG, 0);
+        record.anchors = coneAnchors(
+          record.entity.getPosition().x,
+          record.entity.getPosition().z,
+          currentDirX,
+          currentDirZ,
+          reach,
+          half
+        );
       }
     };
 }

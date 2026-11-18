@@ -423,7 +423,9 @@ atraviesa obstáculos y los bots conservan su error de apuntado por dificultad.
   avanza `radius` hacia delante con `halfAngle` de semiángulo. `instant` o
   `overTime`; `radialDamage` interpola del 100 % en el centro a
   `radialMinDamage` en el borde. `aoePrepareMovement` mueve el aviso durante el
-  startup y `aoeMovement` mueve el área persistente en cada frame.
+  startup y `aoeMovement` mueve el área persistente en cada frame; en los conos
+  `aoeMovement` también puede devolver `dirX`/`dirZ` para girar el abanico y
+  `aoeTurnRate` interpola ese giro en grados por segundo.
 - **dash**: se reparte en pasos y comprueba colliders por tramo. Hoy también
   choca con cualquier jugador vivo (aliado o rival); su golpe solo cuenta por
   delante del origen y revalida el tramo al resolverse, pero queda el cabo de

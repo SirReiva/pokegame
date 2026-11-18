@@ -337,6 +337,23 @@ Las áreas con ticks pueden mover su centro durante la duración con `aoeMovemen
   }))
 ```
 
+En los **conos**, `aoeMovement` también puede devolver `dirX`/`dirZ` para girar el abanico alrededor de su vértice. El motor normaliza la dirección, la usa en la geometría de cada tick, en la IA y en la rotación del efecto y la telegrafía. El giro es progresivo: `aoeTurnRate` fija los grados por segundo con los que el eje se acerca a la dirección objetivo (`0` lo aplica de golpe). `Fuego Sagrado` lo usa para seguir el apuntado del jugador con un límite de ±15° respecto al eje de lanzamiento y 60°/s de giro:
+
+```ts
+.aoeMovement(({ caster, originX, originZ, dirX, dirZ }) => {
+  const base = Math.atan2(dirX, dirZ);
+  const aim = caster.aimYaw ?? caster.facing ?? base;
+  const turn = Math.max(-15 * DEG, Math.min(15 * DEG, aim - base));
+  return {
+    x: originX,
+    z: originZ,
+    dirX: Math.sin(base + turn),
+    dirZ: Math.cos(base + turn)
+  };
+})
+.aoeTurnRate(60)
+```
+
 Sin `aoeMovement` el centro queda fijo donde se lanzó, como hasta ahora.
 
 Las áreas pueden escuchar tres eventos de su ciclo de vida con `onStart`, `onCast` y `onEnd`. Reciben el mismo contexto que `resolve` (objetivos dentro del área y servicios para golpear, empujar, ralentizar, curar o revivir) más `combatFx`, y se ejecutan en este orden: `onStart` al empezar el lanzamiento (antes del `startup`), `onCast` al aparecer el área (antes del primer golpe o tick) y `onEnd` al terminar —cuando se agota `aoeDuration` o, en las áreas de un solo golpe, cuando acaba su duración visual—. El `power` del contexto es la potencia bruta de la habilidad, sin el escalado por tick. Los eventos también pueden ocultar al lanzador con `setCasterHidden(true)` y volver a mostrarlo con `setCasterHidden(false)`: `Excavar` lo usa para esconderse y volverse invulnerable durante 2 s en `onStart`, ganar un 50 % de velocidad, seguir el aviso con `aoePrepareMovement` y reaparecer en `onCast` con su erupción de tierra; la invulnerabilidad se retira en ese mismo `onCast`.

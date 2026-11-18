@@ -5,6 +5,7 @@ import { EffectBatch, MOTION_FIRE_WHIRL_FLAMES, MOTION_FLAME_JET, MOTION_HEAT_BL
 import type { EffectBatchInstance } from '../../effectBatch';
 import type { AoeFxHandle } from '../../core/ports/fx';
 import { coneAnchors, createFlameConeMesh, createWindBladeMesh } from './fxGeometry';
+import type { FxAnchors } from './fxGeometry';
 
 /**
    * Área de fuego: resplandor central y lenguas de fuego texturizadas que
@@ -542,18 +543,36 @@ const life = Math.max(0.2, duration);
     );
     const created = ctx.effects.slice(firstEffect);
     animate(0, 0);
+    let centerX = x;
+    let centerZ = z;
+    let currentDirX = dirX;
+    let currentDirZ = dirZ;
+    const updateAnchors = (): FxAnchors => {
+      const nextAnchors = coneAnchors(
+        centerX,
+        centerZ,
+        currentDirX,
+        currentDirZ,
+        reach,
+        half
+      );
+      for (const effect of created) effect.anchors = nextAnchors;
+      return nextAnchors;
+    };
     return {
       setCenter: (nextX, nextZ) => {
+        centerX = nextX;
+        centerZ = nextZ;
         root.setPosition(nextX, root.getPosition().y, nextZ);
-        const nextAnchors = coneAnchors(
-          nextX,
-          nextZ,
-          dirX,
-          dirZ,
-          reach,
-          half
-        );
-        for (const effect of created) effect.anchors = nextAnchors;
+        updateAnchors();
+      },
+      setDirection: (nextDirX, nextDirZ) => {
+        const length = Math.hypot(nextDirX, nextDirZ);
+        if (length < 0.0001) return;
+        currentDirX = nextDirX / length;
+        currentDirZ = nextDirZ / length;
+        root.setEulerAngles(0, Math.atan2(currentDirX, currentDirZ) / DEG, 0);
+        updateAnchors();
       },
       destroy: () => {
         for (const effect of created) ctx.disposeEffect(effect);

@@ -8,20 +8,12 @@
 import type { AoeHitInput } from '../aoeEffect';
 import type { AoeAbilityDef } from '../abilities';
 import type { ActiveAoe, MatchPlayerState } from '../matchState';
+import {
+  resolveAoeMovement,
+  type PendingAoeEnd
+} from './aoeResolution';
 
-/** `onEnd` de un área instantánea que espera a terminar su duración visual. */
-export interface PendingAoeEnd {
-  caster: MatchPlayerState;
-  def: AoeAbilityDef;
-  x: number;
-  z: number;
-  dirX: number;
-  dirZ: number;
-  /** Segundos que faltan para disparar el evento. */
-  remaining: number;
-  /** Tiempo transcurrido desde que apareció el área. */
-  elapsed: number;
-}
+export type { PendingAoeEnd } from './aoeResolution';
 
 export interface AoeSystemHost {
   readonly activeAoes: ActiveAoe[];
@@ -59,22 +51,9 @@ export function stepActiveAoes(host: AoeSystemHost, dt: number): void {
     // Las áreas móviles recalculan su centro antes del tick para que el daño de
     // este frame y el aro visual se resuelvan en la misma posición. En el frame
     // en que el área caduca ya no se mueve: su efecto visual puede haberse
-    // retirado antes.
-    if (aoe.movement && aoe.elapsed < aoe.duration) {
-      const next = aoe.movement({
-        caster: aoe.owner,
-        def: aoe.def,
-        originX: aoe.originX,
-        originZ: aoe.originZ,
-        dirX: aoe.dirX,
-        dirZ: aoe.dirZ,
-        duration: aoe.duration,
-        elapsed: aoe.elapsed
-      });
-      aoe.x = next.x;
-      aoe.z = next.z;
-      aoe.moveVisual?.(aoe.x, aoe.z);
-    }
+    // retirado antes. La dirección también se interpola aquí, antes de reunir
+    // los objetivos, para que el giro sea suave y la geometría coincida.
+    resolveAoeMovement(aoe, dt);
     aoe.tickTimer -= dt;
     // `overtime-target` avanza un temporizador por objetivo; los demás modos
     // mantienen el tick global del área.

@@ -312,8 +312,22 @@ export interface ActiveAoe {
   /** Dirección horizontal unitaria del lanzamiento. */
   dirX: number;
   dirZ: number;
-  /** Recoloca el aro del equipo y el efecto visual al mover el centro. */
-  moveVisual?: (x: number, z: number) => void;
+  /**
+   * Dirección del lanzamiento original. `aoeMovement` recibe siempre esta como
+   * referencia para poder girar el cono de forma relativa.
+   */
+  originDirX: number;
+  originDirZ: number;
+  /**
+   * Recoloca el aro del equipo y el efecto visual al mover el centro. En los
+   * conos también recibe la dirección actual para rotarlos.
+   */
+  moveVisual?: (
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number
+  ) => void;
   /** Curación por impacto del lanzamiento; `undefined` si no la tiene. */
   healToken?: HealOnHitToken;
   /**

@@ -19,7 +19,6 @@ import { segmentBlockedByColliders } from '../combat';
 import { DEG } from '../config';
 import type { ActiveAoe, MatchPlayerState } from '../matchState';
 import { maxHitRadius } from '../roster';
-import type { PendingAoeEnd } from './aoes';
 import {
   buildResolveContext,
   resolveAbility,
@@ -29,6 +28,20 @@ import {
 type PlayerAoeTarget = AoeTarget<MatchPlayerState>;
 type PlayerAoeFallenAlly = AoeFallenAlly<MatchPlayerState>;
 type PlayerAoeHitInput = AoeHitInput<MatchPlayerState, AoeAbilityDef>;
+
+/** `onEnd` de un área instantánea que espera a terminar su duración visual. */
+export interface PendingAoeEnd {
+  caster: MatchPlayerState;
+  def: AoeAbilityDef;
+  x: number;
+  z: number;
+  dirX: number;
+  dirZ: number;
+  /** Segundos que faltan para disparar el evento. */
+  remaining: number;
+  /** Tiempo transcurrido desde que apareció el área. */
+  elapsed: number;
+}
 
 /** Host de resolución de área: añade la cola de `onEnd` diferidos. */
 export interface AoeResolutionHost extends AbilityResolveHost {
@@ -49,6 +62,57 @@ function radialDamageMultiplier(
   const t = Math.min(1, Math.max(0, distance / Math.max(0.001, radius)));
   const min = Math.min(1, Math.max(0, def.radialMinDamage));
   return 1 - (1 - min) * t;
+}
+
+/** Diferencia angular normalizada al intervalo (-π, π]. */
+function shortestAngle(angle: number): number {
+  return (
+    (((angle + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) -
+    Math.PI
+  );
+}
+
+/**
+ * Mueve y gira un área persistente antes de resolver su tick.
+ *
+ * El centro se aplica de inmediato. La dirección que devuelve `aoeMovement` es
+ * el objetivo: el área gira hacia ella como máximo `aoeTurnRate` grados por
+ * segundo, de modo que un cambio de apuntado se ve como un desplazamiento y no
+ * como un salto. Con `aoeTurnRate: 0` el giro es instantáneo.
+ */
+export function resolveAoeMovement(aoe: ActiveAoe, dt: number): void {
+  if (!aoe.movement || aoe.elapsed >= aoe.duration) return;
+  const next = aoe.movement({
+    caster: aoe.owner,
+    def: aoe.def,
+    originX: aoe.originX,
+    originZ: aoe.originZ,
+    dirX: aoe.originDirX,
+    dirZ: aoe.originDirZ,
+    duration: aoe.duration,
+    elapsed: aoe.elapsed
+  });
+  aoe.x = next.x;
+  aoe.z = next.z;
+  if (next.dirX !== undefined && next.dirZ !== undefined) {
+    const length = Math.hypot(next.dirX, next.dirZ);
+    if (length > 0.0001) {
+      const target = Math.atan2(next.dirX / length, next.dirZ / length);
+      const current = Math.atan2(aoe.dirX, aoe.dirZ);
+      const delta = shortestAngle(target - current);
+      const maxStep = Math.max(0, aoe.def.aoeTurnRate) * DEG * dt;
+      const turn =
+        maxStep > 0
+          ? Math.max(-maxStep, Math.min(maxStep, delta))
+          : delta;
+      if (turn !== 0) {
+        const angle = current + turn;
+        aoe.dirX = Math.sin(angle);
+        aoe.dirZ = Math.cos(angle);
+      }
+    }
+  }
+  aoe.moveVisual?.(aoe.x, aoe.z, aoe.dirX, aoe.dirZ);
 }
 
 /**

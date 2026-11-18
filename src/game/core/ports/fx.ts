@@ -29,6 +29,11 @@ export interface FxHandle {
 export interface AoeFxHandle extends FxHandle {
   /** Recoloca el centro del área sin reiniciar su animación. */
   setCenter(x: number, z: number): void;
+  /**
+   * Gira un área con forma de cono alrededor de su vértice. Solo lo implementan
+   * los conos; los círculos lo omiten.
+   */
+  setDirection?(dirX: number, dirZ: number): void;
 }
 
 /** Marca de área activa; se puede cancelar antes de que termine el retardo. */
@@ -39,6 +44,8 @@ export interface TelegraphHandle {
    * marcas de área; los carriles de haz no se desplazan.
    */
   setCenter?(x: number, z: number): void;
+  /** Gira una marca de cono alrededor de su vértice. */
+  setDirection?(dirX: number, dirZ: number): void;
   /** Recolorea el aro sin recrear la malla ni sus materiales. */
   setColor?(color: readonly [number, number, number]): void;
 }

@@ -48,7 +48,7 @@ import type {
 import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
-import { CONFIG } from './config';
+import { CONFIG, DEG } from './config';
 import {
   defaultAoeResolve,
   defaultBeamResolve,
@@ -137,6 +137,17 @@ export const DEFAULT_PROPS: AbilityProps = {
   healOnHit: false
 };
 
+/** Diferencia angular normalizada al intervalo (-π, π]. */
+function shortestAngle(angle: number): number {
+  return (
+    (((angle + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) -
+    Math.PI
+  );
+}
+
+/** Grados que el cono de Fuego Sagrado puede separarse de su eje de lanzamiento. */
+const SACRED_FLAME_MAX_TURN_DEG = 15;
+
 /** Campos comunes por defecto; las factorías añaden los de cada forma. */
 const BASE_DEFAULTS = {
   cooldown: 1,
@@ -183,6 +194,7 @@ const SHAPE_DEFAULTS: Record<AbilityShape, Record<string, unknown>> = {
     radialMinDamage: 0,
     aoeDuration: 2.5,
     aoeTickInterval: 0.5,
+    aoeTurnRate: 0,
     aoeStyle: 'ring'
   },
   dash: { radius: 0.9, dashDistance: 0, dashBlocksOnEnemies: false },
@@ -295,6 +307,11 @@ interface AoeFields {
   ): this;
   /** Recoloca el centro de un área con ticks en cada frame. */
   aoeMovement(movement: AoeMovement<AoePlayer, AnyAbilityDef>): this;
+  /**
+   * Grados por segundo con los que el cono gira hacia la dirección que devuelve
+   * `aoeMovement`. `0` la aplica de golpe.
+   */
+  aoeTurnRate(degreesPerSecond: number): this;
 }
 
 interface DashFields {
@@ -580,6 +597,11 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
 
   aoeMovement(movement: AoeMovement<AoePlayer, AnyAbilityDef>): this {
     this.draft.aoeMovement = movement;
+    return this;
+  }
+
+  aoeTurnRate(degreesPerSecond: number): this {
+    this.draft.aoeTurnRate = Math.max(0, degreesPerSecond);
     return this;
   }
 
@@ -2404,11 +2426,39 @@ registerAbility(
     .armor(60)
     .animation('shoot')
     .area('sacredFlame', 'overtime-global', 1.5, 0.5)
+    // El vértice queda donde nació el cono, pero el eje sigue el apuntado del
+    // jugador sin separarse más de 15° del lanzamiento original. Así se puede
+    // barrer ligeramente la llama durante la canalización sin girar el cono
+    // entero hacia atrás.
+    .aoeMovement(({ caster, originX, originZ, dirX, dirZ }) => {
+      const base = Math.atan2(dirX, dirZ);
+      const aim = caster.aimYaw ?? caster.facing;
+      if (aim === undefined) {
+        return { x: originX, z: originZ };
+      }
+      const turn = Math.max(
+        -SACRED_FLAME_MAX_TURN_DEG * DEG,
+        Math.min(
+          SACRED_FLAME_MAX_TURN_DEG * DEG,
+          shortestAngle(aim - base)
+        )
+      );
+      const angle = base + turn;
+      return {
+        x: originX,
+        z: originZ,
+        dirX: Math.sin(angle),
+        dirZ: Math.cos(angle)
+      };
+    })
+    // El eje no salta al objetivo: gira 60°/s hacia él, así el barrido se lee
+    // como un desplazamiento y se detiene suavemente en el límite de 15°.
+    .aoeTurnRate(60)
     .slow(0.65, 1.5)
     .impact('fire')
     .color(255, 168, 56)
     .description(
-      'Definitiva: exhala un cono de fuego sagrado de 25° desde 1 u por delante de Ho-Oh. Avanza 7,5 u y permanece 1,5 s: hace 50 de daño por segundo (75 en total) y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+      'Definitiva: exhala un cono de fuego sagrado de 25° desde 1 u por delante de Ho-Oh. Avanza 7,5 u y permanece 1,5 s: hace 50 de daño por segundo (75 en total) y ralentiza un 35 % durante 1,5 s a quien siga dentro. Mientras dura, el eje del cono gira progresivamente hacia tu apuntado, hasta 15° a cada lado del lanzamiento.'
     )
 );
 

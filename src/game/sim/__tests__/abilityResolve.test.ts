@@ -16,6 +16,7 @@ import {
   type AbilityResolveHost
 } from '../abilityResolve.ts';
 import { tickAoeTargets, type AoeResolutionHost } from '../aoeResolution.ts';
+import { stepActiveAoes, type AoeSystemHost } from '../aoes.ts';
 import type { AbilityResolveContext } from '../../core/abilities/resolve.ts';
 import type { AnyAbilityDef, AoePlayer } from '../../abilities.ts';
 import { CONFIG } from '../../config.ts';
@@ -190,7 +191,9 @@ test('overtime-target alinea el tick al entrar y lo reinicia al salir', () => {
     originX: 0,
     originZ: 0,
     dirX: 0,
-    dirZ: 1
+    dirZ: 1,
+    originDirX: 0,
+    originDirZ: 1
   };
 
   const host = {
@@ -305,4 +308,144 @@ test('las áreas de apoyo declaran su perfil de bot', () => {
   assert.equal(ABILITIES['recuperacion'].bot?.healAllies, true);
   assert.equal(ABILITIES['recuperacionHoOh'].bot?.healAllies, true);
   assert.equal(ABILITIES['deseo'].bot?.revive, true);
+});
+
+test('el cono de Fuego Sagrado gira con el apuntado y se limita a ±15°', () => {
+  const def = ABILITIES['fuegoSagrado'];
+  assert.equal(def.shape, 'aoe');
+  if (def.shape !== 'aoe' || !def.aoeMovement) {
+    assert.fail('Fuego Sagrado debe declarar aoeMovement');
+  }
+
+  const move = (aimYaw: number) =>
+    def.aoeMovement!({
+      caster: { x: 0, z: 0, facing: 0, aimYaw },
+      def,
+      originX: 0,
+      originZ: 1,
+      dirX: 0,
+      dirZ: 1,
+      duration: def.aoeDuration,
+      elapsed: 0.5
+    });
+
+  const small = move(Math.PI / 36); // 5°
+  assert.ok(Math.abs((small.dirX ?? 0) - Math.sin(Math.PI / 36)) < 1e-6);
+  assert.ok(Math.abs((small.dirZ ?? 0) - Math.cos(Math.PI / 36)) < 1e-6);
+
+  const clamped = move(Math.PI / 2); // 90° de apuntado
+  assert.ok(Math.abs((clamped.dirX ?? 0) - Math.sin(15 * Math.PI / 180)) < 1e-6);
+  assert.ok(Math.abs((clamped.dirZ ?? 0) - Math.cos(15 * Math.PI / 180)) < 1e-6);
+  // El vértice no se mueve: solo cambia el eje del abanico.
+  assert.equal(clamped.x, 0);
+  assert.equal(clamped.z, 1);
+});
+
+test('stepActiveAoes aplica la dirección devuelta por aoeMovement', () => {
+  const owner = player(0, 0, 0, 'red');
+  const def = aoeAbility('prueba-giro', 'Prueba', 'Normal', 'special', defaultAoeResolve)
+    .area('ring', 'overtime-global', 2, 1)
+    .range(0)
+    .radius(2)
+    .aoeMovement(() => ({ x: 0, z: 0, dirX: 3, dirZ: 0 }))
+    .build();
+  const seen: Array<{ x: number; z: number; dirX: number; dirZ: number }> = [];
+  const aoe: ActiveAoe = {
+    owner,
+    def,
+    x: 0,
+    z: 0,
+    radius: 2,
+    shape: 'cone',
+    halfAngle: 30 * (Math.PI / 180),
+    elapsed: 0,
+    duration: 2,
+    tickInterval: 1,
+    tickTimer: 0,
+    tick: 0,
+    flatBonusApplied: new Set(),
+    movement: def.aoeMovement,
+    originX: 0,
+    originZ: 0,
+    dirX: 0,
+    dirZ: 1,
+    originDirX: 0,
+    originDirZ: 1,
+    moveVisual: (x, z, dirX, dirZ) => seen.push({ x, z, dirX, dirZ })
+  };
+  const host = {
+    activeAoes: [aoe],
+    pendingAoeEnds: [],
+    isMatchOver: () => false,
+    resolveAoeHit: () => {},
+    tickAoeTargets: () => {},
+    emitAoeEvent: () => {}
+  } as unknown as AoeSystemHost;
+
+  stepActiveAoes(host, 0.1);
+
+  // La dirección se normaliza antes de llegar a la geometría y a las vistas.
+  assert.ok(Math.abs(aoe.dirX - 1) < 1e-9);
+  assert.ok(Math.abs(aoe.dirZ) < 1e-9);
+  const seenDir = seen.at(-1);
+  assert.ok(seenDir);
+  assert.equal(seenDir.x, 0);
+  assert.equal(seenDir.z, 0);
+  assert.ok(Math.abs(seenDir.dirX - 1) < 1e-9);
+  assert.ok(Math.abs(seenDir.dirZ) < 1e-9);
+});
+
+test('aoeTurnRate interpola el giro en vez de saltar al objetivo', () => {
+  const owner = player(0, 0, 0, 'red');
+  const def = aoeAbility(
+    'prueba-giro-suave',
+    'Prueba',
+    'Normal',
+    'special',
+    defaultAoeResolve
+  )
+    .area('ring', 'overtime-global', 2, 1)
+    .range(0)
+    .radius(2)
+    .aoeMovement(() => ({ x: 0, z: 0, dirX: 1, dirZ: 0 }))
+    .aoeTurnRate(90)
+    .build();
+  const aoe: ActiveAoe = {
+    owner,
+    def,
+    x: 0,
+    z: 0,
+    radius: 2,
+    shape: 'cone',
+    halfAngle: 30 * (Math.PI / 180),
+    elapsed: 0,
+    duration: 2,
+    tickInterval: 1,
+    tickTimer: 0,
+    tick: 0,
+    flatBonusApplied: new Set(),
+    movement: def.aoeMovement,
+    originX: 0,
+    originZ: 0,
+    dirX: 0,
+    dirZ: 1,
+    originDirX: 0,
+    originDirZ: 1
+  };
+  const host = {
+    activeAoes: [aoe],
+    pendingAoeEnds: [],
+    isMatchOver: () => false,
+    resolveAoeHit: () => {},
+    tickAoeTargets: () => {},
+    emitAoeEvent: () => {}
+  } as unknown as AoeSystemHost;
+
+  const degrees = () => (Math.atan2(aoe.dirX, aoe.dirZ) * 180) / Math.PI;
+
+  // 90°/s durante 0,5 s: avanza 45°, no salta a los 90° del objetivo.
+  stepActiveAoes(host, 0.5);
+  assert.ok(Math.abs(degrees() - 45) < 1e-6);
+  stepActiveAoes(host, 0.5);
+  assert.ok(Math.abs(degrees() - 90) < 1e-6);
 });

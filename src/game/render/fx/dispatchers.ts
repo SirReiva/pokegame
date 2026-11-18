@@ -160,8 +160,8 @@ const life = Math.max(0.2, duration);
     }
     // El efecto del estilo se centra en la mitad del cono con un radio que
     // cabe dentro del abanico; la telegrafía sigue marcando el borde real.
-    const centerX = x + nx * reach * 0.5;
-    const centerZ = z + nz * reach * 0.5;
+    const effectCenterX = x + nx * reach * 0.5;
+    const effectCenterZ = z + nz * reach * 0.5;
     // Radio del círculo inscrito en el cono a media longitud: el efecto del
     // estilo se queda dentro del abanico sin tapar la telegrafía.
     const effectRadius = Math.max(
@@ -172,22 +172,61 @@ const life = Math.max(0.2, duration);
     const factory = AOE_FACTORIES[style] ?? AOE_FACTORIES.ring;
     const firstEffect = ctx.effects.length;
     ctx.withAnchors(anchors, () =>
-      factory(ctx, centerX, centerZ, effectRadius, color, life)
+      factory(ctx, effectCenterX, effectCenterZ, effectRadius, color, life)
     );
     const created = ctx.effects.slice(firstEffect);
     const bases = created.map((effect) => {
       const position = effect.entity.getPosition();
-      return { effect, x: position.x, z: position.z };
+      return {
+        effect,
+        x: position.x,
+        z: position.z,
+        yaw: effect.entity.getEulerAngles().y * DEG
+      };
     });
+    let vertexX = x;
+    let vertexZ = z;
+    let currentDirX = nx;
+    let currentDirZ = nz;
+    // Coloca el conjunto relativo al vértice actual. `setCenter` mueve y
+    // `setDirection` gira; ambas operaciones comparten el mismo cálculo para no
+    // desincronizar las posiciones de los efectos con la dirección del cono.
+    const place = (): void => {
+      const delta = Math.atan2(currentDirX, currentDirZ) - Math.atan2(nx, nz);
+      const cos = Math.cos(delta);
+      const sin = Math.sin(delta);
+      for (const base of bases) {
+        const offsetX = base.x - x;
+        const offsetZ = base.z - z;
+        const position = base.effect.entity.getPosition();
+        base.effect.entity.setPosition(
+          vertexX + offsetX * cos + offsetZ * sin,
+          position.y,
+          vertexZ + offsetZ * cos - offsetX * sin
+        );
+        base.effect.entity.setEulerAngles(0, (base.yaw + delta) / DEG, 0);
+        base.effect.anchors = coneAnchors(
+          vertexX,
+          vertexZ,
+          currentDirX,
+          currentDirZ,
+          reach,
+          half
+        );
+      }
+    };
     return {
       setCenter: (nextX, nextZ) => {
-        const dx = nextX - x;
-        const dz = nextZ - z;
-        for (const base of bases) {
-          const position = base.effect.entity.getPosition();
-          base.effect.entity.setPosition(base.x + dx, position.y, base.z + dz);
-          base.effect.anchors = coneAnchors(nextX, nextZ, nx, nz, reach, half);
-        }
+        vertexX = nextX;
+        vertexZ = nextZ;
+        place();
+      },
+      setDirection: (nextDirX, nextDirZ) => {
+        const length = Math.hypot(nextDirX, nextDirZ);
+        if (length < 0.0001) return;
+        currentDirX = nextDirX / length;
+        currentDirZ = nextDirZ / length;
+        place();
       },
       destroy: () => {
         for (const effect of created) ctx.disposeEffect(effect);

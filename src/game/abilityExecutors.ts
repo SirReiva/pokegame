@@ -446,9 +446,13 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
       originZ: centerZ,
       dirX,
       dirZ,
-      moveVisual: (x, z) => {
+      originDirX: dirX,
+      originDirZ: dirZ,
+      moveVisual: (x, z, nextDirX, nextDirZ) => {
         areaFx.setCenter(x, z);
         marker?.setCenter?.(x, z);
+        areaFx.setDirection?.(nextDirX, nextDirZ);
+        marker?.setDirection?.(nextDirX, nextDirZ);
       }
     });
     return;

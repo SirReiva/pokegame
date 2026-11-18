@@ -282,6 +282,12 @@ export interface AoeAbilityDef<
   aoeDuration: number;
   /** Intervalo entre ticks, en segundos. */
   aoeTickInterval: number;
+  /**
+   * Velocidad angular máxima, en grados por segundo, con la que un cono gira
+   * hacia la dirección devuelta por `aoeMovement`. `0` aplica el cambio de
+   * golpe, sin transición.
+   */
+  aoeTurnRate: number;
   /** Aspecto visual del área. */
   aoeStyle: AoeStyle;
   /**

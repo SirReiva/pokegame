@@ -19,6 +19,10 @@ import type { AoeDamageMode, AoeShape } from './styles';
 export interface AoePlayer {
   x: number;
   z: number;
+  /** Rumbo del cuerpo en radianes, si el motor lo conoce. */
+  facing?: number;
+  /** Apuntado del stick derecho en radianes; `null`/`undefined` si no hay. */
+  aimYaw?: number | null;
 }
 
 /** Seguimiento de la curación por impacto de un mismo lanzamiento. */
