@@ -22,6 +22,7 @@ import { BotNavGrid } from '../botNav';
 import { CameraRig } from '../camera';
 import { CONFIG } from '../config';
 import type { TelegraphHandle } from '../core/ports/fx';
+import type { PokemonType } from '../core/typeChart';
 import { DamageNumbers } from '../damageNumbers';
 import { DeathMarker } from '../deathMarker';
 import { FogMask, FogView } from '../fog';
@@ -100,6 +101,8 @@ export interface PendingPopup {
   effectiveness: number;
   heal: boolean;
   lethal: boolean;
+  /** Tipo del estado si el número es un tick de daño en el tiempo. */
+  dotType: PokemonType | null;
 }
 
 /**

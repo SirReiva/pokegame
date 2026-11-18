@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MatchPlayerState } from '../../matchState';
+import type { PokemonType } from '../../core/typeChart';
 import {
   applyDamageOverTime,
   stepDamageOverTime,
@@ -34,7 +35,7 @@ function makePlayer(
 }
 
 function makeHost() {
-  const popups: number[] = [];
+  const popups: Array<{ amount: number; dotType?: PokemonType | null }> = [];
   const knockouts: {
     target: MatchPlayerState;
     killer: MatchPlayerState;
@@ -50,8 +51,16 @@ function makeHost() {
     interruptWithRefund() {},
     applyKnockback() {},
     playImpactSound() {},
-    showDamagePopup: (_target: MatchPlayerState, amount: number) => {
-      popups.push(amount);
+    showDamagePopup: (
+      _target: MatchPlayerState,
+      amount: number,
+      _critical?: boolean,
+      _effectiveness?: number,
+      _lethal?: boolean,
+      _source?: MatchPlayerState | null,
+      dotType?: PokemonType | null
+    ) => {
+      popups.push({ amount, dotType });
     },
     showHealPopup() {},
     awardCombatXp() {},
@@ -142,7 +151,8 @@ test('Protección reduce cada tick de daño en el tiempo', () => {
   );
   stepDamageOverTime([target], 1, host, () => false);
 
-  assert.equal(popups[0], 4);
+  assert.equal(popups[0].amount, 4);
+  assert.equal(popups[0].dotType, 'Poison');
   assert.equal(target.hp, 96);
   assert.equal(target.dots.length, 0);
 });

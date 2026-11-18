@@ -26,7 +26,7 @@ import type {
 } from '../matchState';
 import { computeDamage, rollCritical, rollRandomFactor } from '../combat';
 import { applyHealSelf } from '../effects';
-import { typeEffectiveness } from '../core/typeChart';
+import { typeEffectiveness, type PokemonType } from '../core/typeChart';
 import { XP_REWARDS, type XpSource } from '../xp';
 import { breakRegen } from './status';
 
@@ -89,7 +89,9 @@ export interface DamageSystemHost {
     critical: boolean,
     effectiveness: number,
     lethal: boolean,
-    source: MatchPlayerState
+    source: MatchPlayerState,
+    /** Tipo del estado en un tick de daño en el tiempo; null en daño directo. */
+    dotType?: PokemonType | null
   ): void;
   showHealPopup(
     target: MatchPlayerState,
@@ -176,7 +178,7 @@ function applyDamageOverTimeTick(
   const lethal = finalDamage >= target.hp;
   const appliedDamage = Math.min(finalDamage, target.hp);
 
-  host.showDamagePopup(target, finalDamage, false, 1, lethal, dot.source);
+  host.showDamagePopup(target, finalDamage, false, 1, lethal, dot.source, dot.type);
   target.hp = Math.max(0, target.hp - finalDamage);
   target.damageTaken += appliedDamage;
   if (dot.source.team !== target.team) {

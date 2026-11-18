@@ -10,6 +10,7 @@
 
 import * as pc from 'playcanvas';
 import { DEG } from './config';
+import type { PokemonType } from './core/typeChart';
 import { updateMaterialIfChanged } from './render/fx/materialUpdates';
 import { setTextureSource } from './textures';
 
@@ -29,6 +30,11 @@ export interface DamageNumberOptions {
   heal?: boolean;
   /** `true` añade una calavera al número: el golpe ha dejado al objetivo a 0 PV. */
   lethal?: boolean;
+  /**
+   * Tipo del daño en el tiempo que produjo el tick. Solo se usa para añadir el
+   * icono del estado (🔥 quemadura, 🧪 veneno); el daño directo lo deja a null.
+   */
+  dotType?: PokemonType | null;
   views: DamageNumberView[];
 }
 
@@ -58,10 +64,18 @@ const ATLAS_PAD = 28;
 const ATLAS_CELL_HEIGHT = 104;
 const ATLAS_MAX_WIDTH = 1024;
 
-/** Calavera que marca un golpe mortal. */
+/** Iconos de estado y calavera de golpe mortal. */
 const SKULL = '💀';
+const BURN = '🔥';
+const POISON = '🧪';
+const DOT_ICONS: Partial<Record<PokemonType, string>> = {
+  Fire: BURN,
+  Poison: POISON
+};
 /** Glifos que forman parte del atlas. */
-const GLYPHS = `0123456789+!${SKULL} `;
+const GLYPHS = `0123456789+!${SKULL}${BURN}${POISON} `;
+/** Los emojis se dibujan con su fuente y sin contorno, como la calavera. */
+const EMOJI_GLYPHS: ReadonlySet<string> = new Set([SKULL, BURN, POISON]);
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** Estrategias de etiqueta: curación, crítico y daño normal. */
@@ -87,7 +101,9 @@ function labelFor(options: DamageNumberOptions): string {
   const base = options.critical
     ? LABELS.critical(options.amount)
     : LABELS.normal(options.amount);
-  return options.lethal ? `${base} ${SKULL}` : base;
+  const dotIcon = options.dotType ? DOT_ICONS[options.dotType] : undefined;
+  const withDot = dotIcon ? `${base} ${dotIcon}` : base;
+  return options.lethal ? `${withDot} ${SKULL}` : withDot;
 }
 
 function fillFor(
@@ -190,7 +206,7 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   let rowY = 0;
   let atlasWidth = 0;
   for (const char of GLYPHS) {
-    const emoji = char === SKULL;
+    const emoji = EMOJI_GLYPHS.has(char);
     measure.font = emoji ? emojiFont : numberFont;
     const advance = Math.max(2, Math.ceil(measure.measureText(char).width));
     const width = advance + ATLAS_PAD * 2;
@@ -217,7 +233,7 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   context.miterLimit = 2;
   for (const glyph of glyphs.values()) {
     if (glyph.char === ' ') continue;
-    const emoji = glyph.char === SKULL;
+    const emoji = EMOJI_GLYPHS.has(glyph.char);
     const centerY = glyph.y + ATLAS_CELL_HEIGHT / 2;
     const x = glyph.x + glyph.pad;
     context.font = emoji ? emojiFont : numberFont;

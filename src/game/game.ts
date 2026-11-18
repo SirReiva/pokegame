@@ -62,6 +62,7 @@ import {
 } from './combat';
 import { CombatFx } from './combatFx';
 import type { TelegraphHandle, TelegraphOwner } from './core/ports/fx';
+import type { PokemonType } from './core/typeChart';
 import {
   assistXpFor,
   collectKillAssists,
@@ -315,7 +316,8 @@ function createPendingPopup(target: MatchPlayerState): PendingPopup {
     critical: false,
     effectiveness: 1,
     heal: false,
-    lethal: false
+    lethal: false,
+    dotType: null
   };
 }
 
@@ -645,6 +647,7 @@ export class Game {
     effectiveness: 1,
     heal: false,
     lethal: false,
+    dotType: null,
     views: this.damageNumberViews
   };
   /**
@@ -978,8 +981,16 @@ export class Game {
       activeCastArmor: (target) => self.activeCastArmor(target),
       spawnArmorFeedback: (target, broke) => self.spawnArmorFeedback(target, broke),
       interruptWithRefund: (target, lethal) => self.interruptWithRefund(target, lethal),
-      showDamagePopup: (target, amount, critical, effectiveness, lethal, source) =>
-        self.showDamagePopup(target, amount, critical, effectiveness, lethal, source),
+      showDamagePopup: (target, amount, critical, effectiveness, lethal, source, dotType) =>
+        self.showDamagePopup(
+          target,
+          amount,
+          critical,
+          effectiveness,
+          lethal,
+          source,
+          dotType
+        ),
       showHealPopup: (target, amount, source) => self.showHealPopup(target, amount, source),
       awardCombatXp: (attacker, target, applied, raw, final) =>
         self.awardCombatXp(attacker, target, applied, raw, final),
@@ -3447,7 +3458,8 @@ export class Game {
     critical: boolean,
     effectiveness: number,
     lethal: boolean,
-    source: MatchPlayerState | null
+    source: MatchPlayerState | null,
+    dotType: PokemonType | null = null
   ): void {
     this.enqueuePopup(
       target,
@@ -3456,7 +3468,8 @@ export class Game {
       'damage',
       critical,
       effectiveness,
-      lethal
+      lethal,
+      dotType
     );
   }
 
@@ -3519,7 +3532,8 @@ export class Game {
     kind: 'damage' | 'heal',
     critical = false,
     effectiveness = 1,
-    lethal = false
+    lethal = false,
+    dotType: PokemonType | null = null
   ): void {
     const popup =
       (this.pendingPopups.length >= MAX_PENDING_POPUPS
@@ -3534,6 +3548,7 @@ export class Game {
     popup.effectiveness = effectiveness;
     popup.heal = kind === 'heal';
     popup.lethal = lethal;
+    popup.dotType = dotType;
     this.pendingPopups.push(popup);
   }
 
@@ -3604,6 +3619,7 @@ export class Game {
     options.effectiveness = popup.effectiveness;
     options.heal = popup.heal;
     options.lethal = popup.lethal;
+    options.dotType = popup.dotType;
     this.damageNumbers.spawn(options);
   }
 
