@@ -31,8 +31,9 @@ export interface DamageNumberOptions {
   /** `true` añade una calavera al número: el golpe ha dejado al objetivo a 0 PV. */
   lethal?: boolean;
   /**
-   * Tipo del daño en el tiempo que produjo el tick. Solo se usa para añadir el
-   * icono del estado (🔥 quemadura, 🧪 veneno); el daño directo lo deja a null.
+   * Tipo del daño en el tiempo que produjo el tick. Solo se usa para teñir el
+   * número (naranja la quemadura, morado el veneno); el daño directo lo deja a
+   * null y conserva su color normal.
    */
   dotType?: PokemonType | null;
   views: DamageNumberView[];
@@ -64,18 +65,10 @@ const ATLAS_PAD = 28;
 const ATLAS_CELL_HEIGHT = 104;
 const ATLAS_MAX_WIDTH = 1024;
 
-/** Iconos de estado y calavera de golpe mortal. */
+/** Calavera que marca un golpe mortal. */
 const SKULL = '💀';
-const BURN = '🔥';
-const POISON = '🧪';
-const DOT_ICONS: Partial<Record<PokemonType, string>> = {
-  Fire: BURN,
-  Poison: POISON
-};
 /** Glifos que forman parte del atlas. */
-const GLYPHS = `0123456789+!${SKULL}${BURN}${POISON} `;
-/** Los emojis se dibujan con su fuente y sin contorno, como la calavera. */
-const EMOJI_GLYPHS: ReadonlySet<string> = new Set([SKULL, BURN, POISON]);
+const GLYPHS = `0123456789+!${SKULL} `;
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** Estrategias de etiqueta: curación, crítico y daño normal. */
@@ -89,8 +82,15 @@ const LABELS: Record<
 };
 
 /** Estrategias de color de relleno del número. */
-const FILL_COLORS: Record<'heal' | 'weak' | 'critical' | 'normal', string> = {
+const FILL_COLORS: Record<
+  'heal' | 'burn' | 'poison' | 'weak' | 'critical' | 'normal',
+  string
+> = {
   heal: '#6dff8e',
+  // El tick de estado mantiene su color propio aunque el objetivo sea débil al
+  // tipo: lo que distingue el número es el estado que lo produjo.
+  burn: '#ff8a2a',
+  poison: '#b45cff',
   weak: '#d46a75',
   critical: '#ff2d55',
   normal: '#ff4d5a'
@@ -101,23 +101,19 @@ function labelFor(options: DamageNumberOptions): string {
   const base = options.critical
     ? LABELS.critical(options.amount)
     : LABELS.normal(options.amount);
-  const dotIcon = options.dotType ? DOT_ICONS[options.dotType] : undefined;
-  const withDot = dotIcon ? `${base} ${dotIcon}` : base;
-  return options.lethal ? `${withDot} ${SKULL}` : withDot;
+  return options.lethal ? `${base} ${SKULL}` : base;
 }
 
 function fillFor(
   critical: boolean,
   effectiveness: number,
-  heal: boolean
+  heal: boolean,
+  dotType: PokemonType | null
 ): string {
-  const key = heal
-    ? 'heal'
-    : effectiveness < 1
-      ? 'weak'
-      : critical
-        ? 'critical'
-        : 'normal';
+  if (heal) return FILL_COLORS.heal;
+  if (dotType === 'Fire') return FILL_COLORS.burn;
+  if (dotType === 'Poison') return FILL_COLORS.poison;
+  const key = effectiveness < 1 ? 'weak' : critical ? 'critical' : 'normal';
   return FILL_COLORS[key];
 }
 
@@ -206,7 +202,7 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   let rowY = 0;
   let atlasWidth = 0;
   for (const char of GLYPHS) {
-    const emoji = EMOJI_GLYPHS.has(char);
+    const emoji = char === SKULL;
     measure.font = emoji ? emojiFont : numberFont;
     const advance = Math.max(2, Math.ceil(measure.measureText(char).width));
     const width = advance + ATLAS_PAD * 2;
@@ -233,7 +229,7 @@ function createDamageAtlas(device: pc.GraphicsDevice): DamageAtlas {
   context.miterLimit = 2;
   for (const glyph of glyphs.values()) {
     if (glyph.char === ' ') continue;
-    const emoji = EMOJI_GLYPHS.has(glyph.char);
+    const emoji = glyph.char === SKULL;
     const centerY = glyph.y + ATLAS_CELL_HEIGHT / 2;
     const x = glyph.x + glyph.pad;
     context.font = emoji ? emojiFont : numberFont;
@@ -494,7 +490,12 @@ export class DamageNumbers {
     if (glyphs.length === 0) return;
 
     const tint = tintFor(
-      fillFor(options.critical, options.effectiveness, options.heal ?? false)
+      fillFor(
+        options.critical,
+        options.effectiveness,
+        options.heal ?? false,
+        options.dotType ?? null
+      )
     );
 
     for (const view of options.views) {
