@@ -46,9 +46,39 @@ const aoe = (
     def: {
       props: { power, slow, dot },
       bot: customDamage ? { customDamage: true } : undefined,
-      aoeDamageMode: 'once'
+      aoeDamageMode: 'once',
+      radius: 3,
+      aoeCircles: []
     },
     targetTimers: new Map([[1, { tickTimer: 0.25 }]])
+  }) as unknown as ActiveAoe;
+
+/** Área de dos círculos separados, para comprobar la geometría del patrón. */
+const patternAoe = () =>
+  ({
+    x: 1,
+    z: 2,
+    radius: 1,
+    elapsed: 0,
+    duration: 2,
+    shape: 'circle',
+    dirX: 0,
+    dirZ: 1,
+    originX: 1,
+    originZ: 2,
+    originDirX: 0,
+    originDirZ: 1,
+    halfAngle: 0,
+    owner: { team: 'blue' },
+    def: {
+      props: { power: 10, slow: null, dot: null },
+      aoeDamageMode: 'once',
+      radius: 1,
+      aoeCircles: [
+        { offsetX: 0, offsetZ: 1, radius: 1 },
+        { offsetX: 0, offsetZ: -1, radius: 1 }
+      ]
+    }
   }) as unknown as ActiveAoe;
 
 test('buildBotHazards ignora efectos sin daño ni ralentización', () => {
@@ -148,4 +178,40 @@ test('copia el modo y los temporizadores por objetivo del área', () => {
 
   assert.equal(area.mode, 'once');
   assert.equal(area.targetTimers?.get(1)?.tickTimer, 0.25);
+});
+
+test('resuelve los círculos del patrón y reutiliza el array', () => {
+  const buffer = createBotHazardBuffer();
+  const [hazard] = buildBotHazards([], [patternAoe()], buffer);
+
+  assert.equal(hazard.circles?.length, 2);
+  assert.deepEqual(hazard.circles?.[0], { x: 1, z: 3, radius: 1 });
+  assert.deepEqual(hazard.circles?.[1], { x: 1, z: 1, radius: 1 });
+
+  // El buffer del peligro se reescribe en el siguiente paso, sin asignar otro.
+  const circles = hazard.circles;
+  buildBotHazards([], [patternAoe()], buffer);
+  assert.equal(hazard.circles, circles);
+});
+
+test('el barrido añade las posiciones futuras de aoeMovement', () => {
+  const buffer = createBotHazardBuffer();
+  const area = patternAoe();
+  area.elapsed = 0;
+  (area.def as { aoeMovement?: unknown }).aoeMovement = (ctx: {
+    originX: number;
+    originZ: number;
+    dirZ: number;
+    elapsed: number;
+  }) => ({
+    x: ctx.originX,
+    z: ctx.originZ + ctx.dirZ * ctx.elapsed
+  });
+
+  const [hazard] = buildBotHazards([], [area], buffer);
+
+  // 2 círculos actuales + 3 muestras (0,15/0,30/0,45 s) × 2 círculos.
+  assert.equal(hazard.circles?.length, 8);
+  // La primera muestra avanza 0,15 u: el círculo delantero pasa de z=3 a 3,15.
+  assert.ok(Math.abs((hazard.circles?.[2]?.z ?? 0) - 3.15) < 1e-9);
 });

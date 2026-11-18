@@ -17,6 +17,7 @@ import type {
   SelfAbilityDef
 } from './abilities';
 import type { AoeHitInput } from './aoeEffect';
+import { spawnGroupedAoe, spawnGroupedAoeTelegraph } from './aoeGroupFx';
 import { CONFIG, DEG } from './config';
 import {
   raycastColliderDistance,
@@ -365,6 +366,9 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   const duration = Math.max(0.1, def.aoeDuration);
   const shape = def.aoeShape;
   const halfAngle = shape === 'cone' ? def.halfAngle * DEG : 0;
+  // Un área con `aoeCircles` se dibuja como la unión de sus círculos: un
+  // efecto y una marca por círculo, agrupados en un solo handle.
+  const grouped = shape === 'circle' && def.aoeCircles.length > 0;
   // Las áreas sin preparación no pasan por la marca de `castAbility`: el aro
   // del equipo se crea aquí junto al efecto para que el límite del área se vea
   // durante toda la habilidad, no solo durante el impacto. Las áreas con
@@ -385,15 +389,28 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
             duration,
             { slot: player.slot, team: player.team }
           )
-        : deps.combatFx.spawnAoeTelegraph(
-            centerX,
-            centerZ,
-            def.radius + maxHitRadius(),
-            TEAM_INFO[player.team].accent,
-            0,
-            duration,
-            { slot: player.slot, team: player.team }
-          )
+        : grouped
+          ? spawnGroupedAoeTelegraph(
+              deps.combatFx,
+              def,
+              centerX,
+              centerZ,
+              dirX,
+              dirZ,
+              TEAM_INFO[player.team].accent,
+              0,
+              duration,
+              { slot: player.slot, team: player.team }
+            )
+          : deps.combatFx.spawnAoeTelegraph(
+              centerX,
+              centerZ,
+              def.radius + maxHitRadius(),
+              TEAM_INFO[player.team].accent,
+              0,
+              duration,
+              { slot: player.slot, team: player.team }
+            )
       : null);
   // El aro y el efecto dibujan el radio máximo de golpe (área + el mayor
   // hurtbox) y la comprobación usa el mismo valor: todo el interior del aro es
@@ -411,14 +428,26 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
           def.aoeStyle,
           duration
         )
-      : deps.combatFx.spawnAoe(
-          centerX,
-          centerZ,
-          def.radius + maxHitRadius(),
-          def.color,
-          def.aoeStyle,
-          duration
-        );
+      : grouped
+        ? spawnGroupedAoe(
+            deps.combatFx,
+            def,
+            centerX,
+            centerZ,
+            dirX,
+            dirZ,
+            def.color,
+            def.aoeStyle,
+            duration
+          )
+        : deps.combatFx.spawnAoe(
+            centerX,
+            centerZ,
+            def.radius + maxHitRadius(),
+            def.color,
+            def.aoeStyle,
+            duration
+          );
   // El área ya está dibujada en su centro definitivo: los eventos ven la
   // posición y los objetivos reales del primer golpe.
   deps.emitAoeEvent('cast', player, def, centerX, centerZ, dirX, dirZ, 0);

@@ -6,6 +6,7 @@
  */
 
 import type { AoeAbilityDef } from '../abilities';
+import type { AoeCircle } from '../aoeGeometry';
 import type { AtmosphereId } from '../atmosphere';
 import type { Team } from '../core/team';
 import type { MatchPlayerState } from '../matchState';
@@ -92,6 +93,12 @@ export interface BotHazard {
   dirZ?: number;
   /** Semiángulo del cono en radianes. */
   halfAngle?: number;
+  /**
+   * Círculos de un área circular compuesta, ya resueltos en coordenadas de
+   * mundo. El array y sus objetos se reutilizan entre pasos. Si falta, el
+   * peligro es un único círculo de radio `radius`.
+   */
+  circles?: AoeCircle[];
   vx?: number;
   vz?: number;
   /** Segundos que el peligro seguirá activo. */

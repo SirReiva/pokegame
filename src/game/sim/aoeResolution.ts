@@ -14,11 +14,10 @@ import type {
   AoeHitInput,
   AoeTarget
 } from '../core/abilities/aoe';
-import { aoeAreaFrom, aoeContains, aoeDistance } from '../aoeGeometry';
+import { aoeAreaFrom, aoeContains, aoeDistance, aoeHitPadding, aoeRadialFalloff } from '../aoeGeometry';
 import { segmentBlockedByColliders } from '../combat';
 import { DEG } from '../config';
 import type { ActiveAoe, MatchPlayerState } from '../matchState';
-import { maxHitRadius } from '../roster';
 import {
   buildResolveContext,
   resolveAbility,
@@ -55,11 +54,10 @@ interface BuiltTargets {
 
 function radialDamageMultiplier(
   def: AoeAbilityDef,
-  distance: number,
-  radius: number
+  falloff: number
 ): number {
   if (!def.radialDamage) return 1;
-  const t = Math.min(1, Math.max(0, distance / Math.max(0.001, radius)));
+  const t = Math.min(1, Math.max(0, falloff));
   const min = Math.min(1, Math.max(0, def.radialMinDamage));
   return 1 - (1 - min) * t;
 }
@@ -128,7 +126,9 @@ function buildAoeTargets(
   // El círculo usa `radius` alrededor del centro; el cono usa la misma prueba
   // de sector que el melee desde ese centro hacia delante.
   const area = aoeAreaFrom(hit.def, hit.x, hit.z, hit.dirX, hit.dirZ);
-  const hitPadding = maxHitRadius();
+  // Los patrones de círculos usan su radio exacto; el resto de áreas suman el
+  // mayor hurtbox para que el aro marque el límite real de golpe.
+  const hitPadding = aoeHitPadding(hit.def);
   for (const player of host.matchPlayers) {
     if (!player.alive) {
       // Los aliados caídos siguen en el punto del KO hasta reaparecer.
@@ -156,8 +156,7 @@ function buildAoeTargets(
     const distance = aoeDistance(area, player.x, player.z);
     const radialMultiplier = radialDamageMultiplier(
       hit.def,
-      distance,
-      hit.radius
+      aoeRadialFalloff(area, player.x, player.z)
     );
     targets.push({
       player,

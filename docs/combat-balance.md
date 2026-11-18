@@ -322,9 +322,9 @@ su kit ofensivo es Psíquico y ambos son Siniestro (inmune a Psíquico). No hay
 movimientos de cobertura, así que la inmunidad es total.
 
 También queda un fallo en **Ciclón** (§3.17): el centro del área atraviesa
-muros y rocas sin comprobación. Con 4 s de cooldown y 2 u de radio, el daño
-llega a ~13,2 u (el aro visual, a ~14,6 u), por encima de la visión de Lugia
-(12,4 u).
+muros y rocas sin comprobación. Con 4 s de cooldown y tres vórtices separados de
+hasta 2,6 u de radio, el daño llega a ~13,3 u (el aro visual, a ~12,7 u), por
+encima de la visión de Lugia (12,4 u).
 
 ---
 
@@ -419,13 +419,17 @@ si un rival visible cae dentro de un cono estrecho alrededor de `facing` y hay
 línea de visión, corrige parte del error angular. No alarga el alcance, no
 atraviesa obstáculos y los bots conservan su error de apuntado por dificultad.
 - **aoe**: área centrada a `range` del lanzador. `aoeShape: 'circle'` usa
-  `radius` alrededor del centro; `aoeShape: 'cone'` nace en ese mismo centro y
-  avanza `radius` hacia delante con `halfAngle` de semiángulo. `instant` o
-  `overTime`; `radialDamage` interpola del 100 % en el centro a
-  `radialMinDamage` en el borde. `aoePrepareMovement` mueve el aviso durante el
-  startup y `aoeMovement` mueve el área persistente en cada frame; en los conos
-  `aoeMovement` también puede devolver `dirX`/`dirZ` para girar el abanico y
-  `aoeTurnRate` interpola ese giro en grados por segundo.
+  `radius` alrededor del centro; `aoeCircles` la convierte en un patrón de
+  círculos con desplazamiento relativo que gira con el lanzamiento (la unión
+  golpea, el hueco no) y `aoeCircleFx` elige entre un efecto por círculo o uno
+  agrupado. Los círculos se dibujan a su radio exacto y cada uno tiene su propia
+  caída radial. `aoeShape: 'cone'` nace en ese mismo centro y avanza `radius`
+  hacia delante con `halfAngle` de semiángulo. `instant` o `overTime`;
+  `radialDamage` interpola del 100 % en el centro a `radialMinDamage` en el
+  borde. `aoePrepareMovement` mueve el aviso durante el startup y `aoeMovement`
+  mueve el área persistente en cada frame; en los conos `aoeMovement` también
+  puede devolver `dirX`/`dirZ` para girar el abanico y `aoeTurnRate` interpola
+  ese giro en grados por segundo.
 - **dash**: se reparte en pasos y comprueba colliders por tramo. Hoy también
   choca con cualquier jugador vivo (aliado o rival); su golpe solo cuenta por
   delante del origen y revalida el tramo al resolverse, pero queda el cabo de
@@ -725,12 +729,13 @@ o documentar `dashBlocksOnEnemies` y unificar la distancia.
 
 ### 3.17. Ciclón: el área atraviesa obstáculos (medio)
 
-`Ciclón` (`abilities.ts:2291-2318`) declara `range 2`, `radius 2` y un
-`aoeMovement` que avanza `progress * 10` durante 2,5 s. El centro nace 2 u por
-delante del lanzador y, en el último tick (t ≈ 2,02 s), está a ~10,1 u; con el
-radio de 2 u, el mayor hurtbox del roster (0,64 u) y el del objetivo (hasta
-0,64 u), el daño alcanza ~**13,4 u**. El aro visual llega a ~14,6 u al final,
-aunque ya no hace tick.
+`Ciclón` (`abilities.ts:2291-2318`) declara `range 2`, un patrón de tres
+círculos separados de hasta 2,6 u de radio y un `aoeMovement` que avanza
+`progress * 10` durante 2,5 s mientras el patrón gira sobre su centro. El centro
+nace 2 u por delante del lanzador y, en el último tick (t ≈ 2,02 s), está a
+~10,1 u; con el radio de 2,6 u y el hurtbox del objetivo (hasta 0,64 u), el daño
+alcanza ~**13,3 u**. El aro visual llega a ~12,7 u al final, aunque ya no hace
+tick.
 
 Sigue abierto el movimiento: `executeAoe` recorta el centro inicial con
 `raycastColliderDistance` (`abilityExecutors.ts:337-357`), pero
@@ -742,10 +747,10 @@ cruzado un muro puede golpear al otro lado. Tampoco se recorta contra
 `world.bounds`: en un mapa pequeño el centro puede salir del mapa y seguir
 haciendo ticks.
 
-**Impacto**: con 4 s de cooldown, 2 u de radio y ~112,5 de daño nominal, Lugia
-queda en ~191 % de vida media y 16/19 KOs en la foto de §4.3.1. Además, el
-alcance de daño (~13,2 u) supera la visión de Lugia (12,4 u), así que puede
-golpear desde fuera de la vista.
+**Impacto**: con 4 s de cooldown, tres vórtices separados de hasta 2,6 u de
+radio y ~112,5 de daño nominal, Lugia queda en ~191 % de vida media y 16/19 KOs
+en la foto de §4.3.1. Además, el alcance de daño (~13,3 u) supera la visión de
+Lugia (12,4 u), así que puede golpear desde fuera de la vista.
 
 **Arreglo**: recortar el centro contra colliders y límites en cada frame, o
 hacer que el área se detenga al chocar. Lo mismo debe aplicarse a cualquier

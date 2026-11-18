@@ -10,7 +10,8 @@
  * - `projectile`: proyectil que avanza en la dirección en la que mira.
  * - `beam`: haz instantáneo en la dirección en la que mira.
  * - `aoe`: área sobre el suelo centrada delante del Pokémon. Puede ser un
- *   círculo (`aoeShape: 'circle'`) o un cono (`aoeShape: 'cone'`).
+ *   círculo (`aoeShape: 'circle'`), un patrón de varios círculos
+ *   (`aoeCircles`) o un cono (`aoeShape: 'cone'`).
  * - `dash`: desplazamiento en la dirección en la que mira; puede dañar al paso.
  * - `self`: habilidad centrada en el lanzador (buffs, escudos, curación...).
  *
@@ -37,6 +38,7 @@ import type {
   AbilityResolve,
   AnyAbilityDef,
   AoeAbilityDef,
+  AoeCircleSpec,
   BeamAbilityDef,
   BuffSpec,
   DashAbilityDef,
@@ -91,6 +93,7 @@ export type {
   AbilityTarget,
   AnyAbilityDef,
   AoeAbilityDef,
+  AoeCircleSpec,
   BeamAbilityDef,
   BuffSpec,
   DamageOverTimeSpec,
@@ -189,6 +192,8 @@ const SHAPE_DEFAULTS: Record<AbilityShape, Record<string, unknown>> = {
     radius: 2,
     halfAngle: 45,
     aoeShape: 'circle',
+    aoeCircles: [] as AoeCircleSpec[],
+    aoeCircleFx: 'each',
     aoeDamageMode: 'once',
     radialDamage: false,
     radialMinDamage: 0,
@@ -293,6 +298,16 @@ interface AoeFields {
   ): this;
   /** Geometría del área: círculo o cono. */
   aoeShape(shape: AoeShape): this;
+  /**
+   * Sustituye el círculo único por un patrón de círculos. Los desplazamientos
+   * son relativos al centro del área y giran con la dirección del lanzamiento.
+   */
+  aoeCircles(circles: readonly AoeCircleSpec[]): this;
+  /**
+   * Elige si el patrón dibuja un efecto por círculo (`'each'`) o uno solo que
+   * cubre el conjunto (`'grouped'`).
+   */
+  aoeCircleFx(mode: 'each' | 'grouped'): this;
   /** Activa el daño radial con el multiplicador del borde. */
   radial(minDamage: number): this;
   /** Evento al empezar el lanzamiento, antes del `startup`. */
@@ -564,6 +579,16 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
 
   aoeShape(shape: AoeShape): this {
     this.draft.aoeShape = shape;
+    return this;
+  }
+
+  aoeCircles(circles: readonly AoeCircleSpec[]): this {
+    this.draft.aoeCircles = circles.map((circle) => ({ ...circle }));
+    return this;
+  }
+
+  aoeCircleFx(mode: 'each' | 'grouped'): this {
+    this.draft.aoeCircleFx = mode;
     return this;
   }
 
@@ -1863,6 +1888,13 @@ registerAbility(
     .cooldown(15)
     .range(6)
     .radius(3.6)
+    // Rayo ramificado: tres impactos separados que no se solapan. El principal
+    // cae en el punto marcado y los otros dos abren un abanico hacia delante.
+    .aoeCircles([
+      { offsetX: 0, offsetZ: 0, radius: 2 },
+      { offsetX: 3.676, offsetZ: 2.122, radius: 2 },
+      { offsetX: -3.676, offsetZ: 2.122, radius: 2 }
+    ])
     .area('thunder', 'once', 0.95)
     .radial(0.4)
     .slow(0.65, 2)
@@ -1875,7 +1907,7 @@ registerAbility(
     .impact('electric')
     .color(255, 238, 88)
     .description(
-      'Definitiva: marca un punto a 6 u y, tras 0,85 s, cae un rayo de 3,6 u. 145 de potencia, el 100 % en el centro y el 40 % en el borde, empuja 1 u y ralentiza un 35 % durante 2 s.'
+      'Definitiva: marca un punto a 6 u y, tras 0,85 s, cae un rayo ramificado en tres impactos separados de 2 u: el principal en el punto marcado y dos ramas en abanico hacia delante. 145 de potencia, el 100 % en el centro de cada impacto y el 40 % en su borde, empuja 1 u y ralentiza un 35 % durante 2 s.'
     )
 );
 
@@ -2301,16 +2333,30 @@ registerAbility(
     .aoeMovement(({ originX, originZ, dirX, dirZ, elapsed, duration }) => {
       // Avanza hacia el frente a velocidad constante (sin frenar al final)
       // mientras se balancea lateralmente en forma de senoide (dos ciclos).
+      // El patrón además gira sobre su centro: los tres vórtices orbitan
+      // mientras el conjunto avanza.
       const progress = Math.min(1, elapsed / duration);
       const travel = progress * 10;
       const sway = Math.sin(progress * Math.PI * 4) * 0.6;
+      const base = Math.atan2(dirX, dirZ);
+      const spin = base + elapsed * 2;
       return {
         x: originX + dirX * travel - dirZ * sway,
-        z: originZ + dirZ * travel + dirX * sway
+        z: originZ + dirZ * travel + dirX * sway,
+        dirX: Math.sin(spin),
+        dirZ: Math.cos(spin)
       };
     })
     .range(2)
     .radius(2)
+    // Tres vórtices separados (sin solaparse) que giran alrededor de un ojo
+    // central mientras el conjunto avanza. Cada círculo dibuja su propio
+    // huracán completo.
+    .aoeCircles([
+      { offsetX: 0, offsetZ: 1.45, radius: 1.15 },
+      { offsetX: 1.256, offsetZ: -0.725, radius: 1.15 },
+      { offsetX: -1.256, offsetZ: -0.725, radius: 1.15 }
+    ])
     .startup(0.3, { animation: 'charge' })
     .armor(25)
     .recovery(0.55)
@@ -2320,7 +2366,7 @@ registerAbility(
     .impact('air')
     .color(198, 224, 255)
     .description(
-      'Golpe de ala que desata un ciclón de 2 u de radio que avanza 10 u hacia delante a velocidad constante, con un vaivén senoidal de 0,6 u: 45 de daño por segundo durante 2,5 s y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
+      'Golpe de ala que desata un ciclón de tres vórtices separados que giran alrededor de un ojo central mientras el conjunto avanza 10 u hacia delante con un vaivén senoidal de 0,6 u: 45 de daño por segundo durante 2,5 s y ralentiza un 35 % durante 1,5 s a quien siga dentro.'
     )
 );
 

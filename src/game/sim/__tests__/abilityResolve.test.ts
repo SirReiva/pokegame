@@ -5,7 +5,8 @@ import {
   aoeAbility,
   meleeAbility,
   projectileAbility,
-  type AbilityHitInput
+  type AbilityHitInput,
+  type AoeAbilityDef
 } from '../../abilities.ts';
 import {
   defaultAoeResolve,
@@ -17,6 +18,7 @@ import {
 } from '../abilityResolve.ts';
 import { tickAoeTargets, type AoeResolutionHost } from '../aoeResolution.ts';
 import { stepActiveAoes, type AoeSystemHost } from '../aoes.ts';
+import { aoeAreaFrom, aoeContains } from '../../aoeGeometry.ts';
 import type { AbilityResolveContext } from '../../core/abilities/resolve.ts';
 import type { AnyAbilityDef, AoePlayer } from '../../abilities.ts';
 import { CONFIG } from '../../config.ts';
@@ -448,4 +450,143 @@ test('aoeTurnRate interpola el giro en vez de saltar al objetivo', () => {
   assert.ok(Math.abs(degrees() - 45) < 1e-6);
   stepActiveAoes(host, 0.5);
   assert.ok(Math.abs(degrees() - 90) < 1e-6);
+});
+
+test('un área con varios círculos golpea la unión y respeta el hueco', () => {
+  const owner = player(0, 0, 0, 'red');
+  const left = player(1, -4, 0);
+  const middle = player(2, 0, 0);
+  const right = player(3, 4, 0);
+  const hits: number[] = [];
+  const def = aoeAbility(
+    'prueba-multi',
+    'Prueba',
+    'Normal',
+    'special',
+    ({ targets }) => {
+      for (const target of targets) {
+        hits.push((target.player as unknown as MatchPlayerState).slot);
+      }
+    }
+  )
+    .area('ring', 'overtime-global', 1, 0.5)
+    .range(0)
+    .radius(1)
+    .aoeCircles([
+      { offsetX: -4, offsetZ: 0 },
+      { offsetX: 4, offsetZ: 0 }
+    ])
+    .build();
+  const aoe: ActiveAoe = {
+    owner,
+    def,
+    x: 0,
+    z: 0,
+    radius: 1,
+    shape: 'circle',
+    halfAngle: 0,
+    elapsed: 0,
+    duration: 1,
+    tickInterval: 0.5,
+    tickTimer: 0,
+    tick: 0,
+    flatBonusApplied: new Set(),
+    originX: 0,
+    originZ: 0,
+    dirX: 0,
+    dirZ: 1,
+    originDirX: 0,
+    originDirZ: 1
+  };
+  const host = {
+    matchPlayers: [owner, left, middle, right],
+    world,
+    isMatchOver: () => false,
+    canHit: (attacker: MatchPlayerState, target: MatchPlayerState) =>
+      target !== attacker && target.alive && target.team !== attacker.team,
+    applyAbilityDamage: () => true,
+    interruptWithRefund: () => {},
+    applyKnockback: () => {},
+    applySlow: () => {},
+    reviveAoeAlly: () => false,
+    showHealPopup: () => {},
+    awardXp: () => {},
+    pendingAoeEnds: []
+  } as unknown as AoeResolutionHost;
+
+  tickAoeTargets(host, aoe, 0.1);
+
+  // Los dos discos laterales golpean; el centro del patrón queda vacío.
+  assert.deepEqual(hits.sort(), [1, 3]);
+});
+
+/** Los círculos de un patrón no deben solaparse entre sí. */
+function assertCirclesSeparated(def: AoeAbilityDef): void {
+  for (let a = 0; a < def.aoeCircles.length; a++) {
+    for (let b = a + 1; b < def.aoeCircles.length; b++) {
+      const first = def.aoeCircles[a];
+      const second = def.aoeCircles[b];
+      const distance = Math.hypot(
+        first.offsetX - second.offsetX,
+        first.offsetZ - second.offsetZ
+      );
+      assert.ok(
+        distance > (first.radius ?? def.radius) + (second.radius ?? def.radius),
+        `${def.id}: los círculos ${a} y ${b} se solapan`
+      );
+    }
+  }
+}
+
+test('Ciclón separa sus vórtices y los gira mientras avanza', () => {
+  const def = ABILITIES.ciclon;
+  assert.equal(def.shape, 'aoe');
+  if (def.shape !== 'aoe') return;
+
+  // Los tres discos del patrón no se solapan entre sí.
+  const circles = def.aoeCircles;
+  assert.equal(circles.length, 3);
+  assertCirclesSeparated(def);
+
+  // El hueco central queda como ojo: no lo cubre ningún vórtice.
+  const eye = aoeAreaFrom(def, 0, 0, 0, 1);
+  assert.equal(aoeContains(eye, 0, 0, 0), false);
+  assert.equal(
+    aoeContains(eye, circles[0].offsetX, circles[0].offsetZ, 0),
+    true
+  );
+
+  // El movimiento devuelve una dirección distinta en cada instante: el patrón
+  // orbita mientras el centro avanza.
+  const context = {
+    caster: player(0, 0, 0, 'red'),
+    def,
+    originX: 0,
+    originZ: 0,
+    dirX: 0,
+    dirZ: 1,
+    duration: 2.5,
+    elapsed: 0.5
+  };
+  assert.ok(def.aoeMovement);
+  const first = def.aoeMovement(context);
+  const second = def.aoeMovement({ ...context, elapsed: 1 });
+  assert.ok(first.dirX !== undefined && first.dirZ !== undefined);
+  assert.ok(second.dirX !== undefined && second.dirZ !== undefined);
+  // 2 rad/s: entre 0,5 s y 1 s el eje gira 1 rad.
+  const angleOf = (value: { dirX?: number; dirZ?: number }) =>
+    Math.atan2(value.dirX ?? 0, value.dirZ ?? 1);
+  assert.ok(Math.abs(angleOf(second) - angleOf(first) - 1) < 1e-9);
+});
+
+test('Trueno separa sus tres impactos y cubre el punto marcado', () => {
+  const def = ABILITIES.trueno;
+  assert.equal(def.shape, 'aoe');
+  if (def.shape !== 'aoe') return;
+  assert.equal(def.aoeCircles.length, 3);
+  assertCirclesSeparated(def);
+  // El impacto principal está centrado en el punto marcado, así que apuntar al
+  // rival sigue golpeándolo al 100 %.
+  const area = aoeAreaFrom(def, 0, 0, 0, 1);
+  assert.equal(aoeContains(area, 0, 0, 0.42), true);
 });

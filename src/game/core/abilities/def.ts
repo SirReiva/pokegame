@@ -256,6 +256,21 @@ export interface BeamAbilityDef<
   beamStyle: BeamStyle;
 }
 
+/**
+ * Círculo de un área compuesta.
+ *
+ * `offsetX`/`offsetZ` son el desplazamiento respecto al centro del área:
+ * `offsetX` hacia la derecha y `offsetZ` hacia delante. El motor los rota con
+ * la dirección del lanzamiento, así que un patrón (línea, abanico, cruz) gira
+ * junto con el área.
+ */
+export interface AoeCircleSpec {
+  offsetX: number;
+  offsetZ: number;
+  /** Radio del círculo; si se omite se usa el `radius` del área. */
+  radius?: number;
+}
+
 /** Área en el suelo, instantánea o con ticks. */
 export interface AoeAbilityDef<
   P extends AbilityProps = AbilityProps
@@ -267,6 +282,18 @@ export interface AoeAbilityDef<
   radius: number;
   /** Geometría del área. */
   aoeShape: AoeShape;
+  /**
+   * Círculos que componen un área circular. Vacío (o ausente) equivale a un
+   * único círculo de radio `radius` centrado en el área. Solo se usa con
+   * `aoeShape: 'circle'`.
+   */
+  aoeCircles: AoeCircleSpec[];
+  /**
+   * Cómo se dibuja el patrón de `aoeCircles`: `'each'` crea un efecto por
+   * círculo y `'grouped'` dibuja un único efecto centrado que cubre todo el
+   * patrón. `'grouped'` conviene con estilos caros (por ejemplo, el ciclón).
+   */
+  aoeCircleFx: 'each' | 'grouped';
   /** Semiángulo del cono, en grados. Solo se usa con `aoeShape: 'cone'`. */
   halfAngle: number;
   /** Golpe único, ticks globales o ticks por objetivo. */

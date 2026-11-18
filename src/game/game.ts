@@ -17,6 +17,8 @@ import {
 import { assistAimDirection, type AimAssistTarget } from './aimAssist';
 import { isAimAssistEnabled } from './aimAssistSettings';
 import type { AoeFallenAlly } from './aoeEffect';
+import { spawnGroupedAoeTelegraph, aoeGroupRadius } from './aoeGroupFx';
+import { aoeCirclesFrom } from './aoeGeometry';
 import { Actor } from './actor';
 import {
   clearMatch as clearMatchSession,
@@ -1773,16 +1775,25 @@ export class Game {
             }
           );
         } else {
-          push(`aoe:${def.aoeStyle}:${length.toFixed(3)}:${colorKey}`, () =>
-            this.combatFx.spawnAoe(
-              x,
-              z,
-              length,
-              def.color,
-              def.aoeStyle,
-              Math.max(0.1, def.aoeDuration)
-            )
-          );
+          const circles =
+            def.aoeCircles.length === 0
+              ? [{ x, z, radius }]
+              : def.aoeCircleFx === 'grouped'
+                ? [{ x, z, radius: aoeGroupRadius(def, x, z, 0, 1) }]
+                : aoeCirclesFrom(def, x, z, 0, 1);
+          circles.forEach((circle, index) => {
+            const length = Math.max(0.08, circle.radius) + padding;
+            push(`aoe:${def.aoeStyle}:${length.toFixed(3)}:${colorKey}:${index}`, () =>
+              this.combatFx.spawnAoe(
+                x,
+                z,
+                length,
+                def.color,
+                def.aoeStyle,
+                Math.max(0.1, def.aoeDuration)
+              )
+            );
+          });
         }
       } else if (def.shape === 'melee') {
         push(
@@ -2912,15 +2923,28 @@ export class Game {
               Math.max(0.1, def.aoeDuration),
               owner
             )
-          : this.combatFx.spawnAoeTelegraph(
-              targetX,
-              targetZ,
-              def.radius + maxHitRadius(),
-              teamAccent,
-              def.startup,
-              Math.max(0.1, def.aoeDuration),
-              owner
-            )
+          : def.aoeShape === 'circle' && def.aoeCircles.length > 0
+            ? spawnGroupedAoeTelegraph(
+                this.combatFx,
+                def,
+                targetX,
+                targetZ,
+                dirX,
+                dirZ,
+                teamAccent,
+                def.startup,
+                Math.max(0.1, def.aoeDuration),
+                owner
+              )
+            : this.combatFx.spawnAoeTelegraph(
+                targetX,
+                targetZ,
+                def.radius + maxHitRadius(),
+                teamAccent,
+                def.startup,
+                Math.max(0.1, def.aoeDuration),
+                owner
+              )
         : null;
     const lane =
       def.startup > 0 && def.shape === 'beam'

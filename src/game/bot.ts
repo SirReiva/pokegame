@@ -34,6 +34,7 @@ import {
   aoeAreaFrom,
   aoeContains,
   aoeDistance,
+  aoeHitPadding,
   type AoeArea
 } from './aoeGeometry';
 import { BotNavGrid, type NavHazard, type NavPoint } from './botNav';
@@ -334,7 +335,8 @@ export class BotController {
     radius: 0,
     dirX: 0,
     dirZ: 1,
-    halfAngle: 0
+    halfAngle: 0,
+    circles: []
   };
   /** Observador y objetivo compartidos por las pruebas de cobertura. */
   private readonly sightObserver = { x: 0, z: 0, visionRange: 0 };
@@ -1534,7 +1536,7 @@ export class BotController {
       // La geometría debe coincidir con `resolveAoeHit`: el cuerpo del rival
       // cuenta desde el borde del radio o del cono, no desde su centro.
       if (
-        !aoeContains(area, self.x, self.z, selfRadius, maxHitRadius())
+        !aoeContains(area, self.x, self.z, selfRadius, aoeHitPadding(def))
       ) {
         return null;
       }
@@ -1769,7 +1771,19 @@ export class BotController {
     z: number
   ): number {
     if (area.shape === 'circle') {
-      return Math.max(0, area.radius - aoeDistance(area, x, z));
+      // La unión de círculos se escapa por el borde más cercano: se toma el
+      // círculo con mayor penetración (el que obliga a recorrer más distancia).
+      if (area.circles.length === 0) {
+        return Math.max(0, area.radius - aoeDistance(area, x, z));
+      }
+      let depth = 0;
+      for (const circle of area.circles) {
+        depth = Math.max(
+          depth,
+          circle.radius - Math.hypot(x - circle.x, z - circle.z)
+        );
+      }
+      return Math.max(0, depth);
     }
     const toX = x - area.x;
     const toZ = z - area.z;
@@ -1791,11 +1805,30 @@ export class BotController {
     const toX = self.x - area.x;
     const toZ = self.z - area.z;
     if (area.shape === 'circle') {
-      const length = Math.hypot(toX, toZ);
+      // El patrón puede tener varios círculos: se huye del centro más cercano.
+      let originX = area.x;
+      let originZ = area.z;
+      if (area.circles.length > 0) {
+        let best = Infinity;
+        for (const circle of area.circles) {
+          const distance = Math.hypot(
+            self.x - circle.x,
+            self.z - circle.z
+          );
+          if (distance < best) {
+            best = distance;
+            originX = circle.x;
+            originZ = circle.z;
+          }
+        }
+      }
+      const awayX = self.x - originX;
+      const awayZ = self.z - originZ;
+      const length = Math.hypot(awayX, awayZ);
       if (length < 0.15) {
         return { x: -area.dirX, z: -area.dirZ };
       }
-      return { x: toX / length, z: toZ / length };
+      return { x: awayX / length, z: awayZ / length };
     }
 
     const along = toX * area.dirX + toZ * area.dirZ;
@@ -1826,6 +1859,7 @@ export class BotController {
     area.dirX = hazard.dirX ?? 0;
     area.dirZ = hazard.dirZ ?? 1;
     area.halfAngle = hazard.halfAngle ?? 0;
+    area.circles = hazard.circles ?? [];
     return area;
   }
 
@@ -1998,18 +2032,23 @@ export class BotController {
       if ((hazard.remaining ?? Infinity) <= 0) continue;
       const area = this.hazardArea(hazard);
       if (area.shape === 'circle') {
-        const distance = pointSegmentDistance(
-          area.x,
-          area.z,
-          self.x,
-          self.z,
-          point.x,
-          point.z
-        );
-        if (
-          distance <= hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN
-        ) {
-          return true;
+        // Un patrón puede tener varios lóbulos: se comprueba el trayecto
+        // contra cada círculo, no contra un único disco en el centro.
+        const circles =
+          area.circles.length > 0
+            ? area.circles
+            : [{ x: area.x, z: area.z, radius: area.radius }];
+        const padding = self.hitRadius + HAZARD_AOE_MARGIN;
+        for (const circle of circles) {
+          const distance = pointSegmentDistance(
+            circle.x,
+            circle.z,
+            self.x,
+            self.z,
+            point.x,
+            point.z
+          );
+          if (distance <= circle.radius + padding) return true;
         }
         continue;
       }
@@ -2056,12 +2095,19 @@ export class BotController {
       const padding = self.hitRadius + HAZARD_AOE_MARGIN;
       const area = this.hazardArea(hazard);
       if (area.shape === 'circle') {
-        const navHazard = this.acquireNavHazard(count);
-        navHazard.x = area.x;
-        navHazard.z = area.z;
-        navHazard.radius = area.radius + padding;
-        hazards[count] = navHazard;
-        count += 1;
+        // Cada círculo del patrón es un disco que la ruta debe rodear.
+        const circles =
+          area.circles.length > 0
+            ? area.circles
+            : [{ x: area.x, z: area.z, radius: area.radius }];
+        for (const circle of circles) {
+          const navHazard = this.acquireNavHazard(count);
+          navHazard.x = circle.x;
+          navHazard.z = circle.z;
+          navHazard.radius = circle.radius + padding;
+          hazards[count] = navHazard;
+          count += 1;
+        }
         continue;
       }
       // La navegación solo entiende círculos: un cono se aproxima con varios
@@ -4144,7 +4190,13 @@ export class BotController {
         case 'aoe': {
           if (
             !aoeArea ||
-            !aoeContains(aoeArea, enemy.x, enemy.z, enemy.hitRadius, maxHitRadius())
+            !aoeContains(
+              aoeArea,
+              enemy.x,
+              enemy.z,
+              enemy.hitRadius,
+              aoeHitPadding(def)
+            )
           ) {
             break;
           }
@@ -4333,7 +4385,7 @@ export class BotController {
             prediction.x,
             prediction.z,
             targetRadius,
-            maxHitRadius()
+            aoeHitPadding(def)
           )
         ) {
           return false;

@@ -13,8 +13,57 @@
 
 import type { ActiveAoe, Projectile } from '../matchState';
 import type { AnyAbilityDef } from '../abilities';
+import { writeAoeCircles, type AoeCircle } from '../aoeGeometry';
 import { maxHitRadius } from '../roster';
 import type { BotHazard } from './types';
+
+/**
+ * Adelantos que se añaden al barrido de un área móvil. Los bots ven la unión
+ * de la posición actual y estas muestras futuras, así que empiezan a apartarse
+ * del camino antes de que el área llegue.
+ */
+const FUTURE_SAMPLES = [0.15, 0.3, 0.45] as const;
+
+/**
+ * Círculos actuales del área más las posiciones futuras de `aoeMovement`.
+ *
+ * El array se reutiliza entre pasos; las muestras solo se calculan para áreas
+ * circulares con movimiento (los conos se resuelven con su sector).
+ */
+function sweepAoeCircles(aoe: ActiveAoe, out: AoeCircle[]): AoeCircle[] {
+  const perSample = Math.max(1, aoe.def.aoeCircles.length);
+  writeAoeCircles(aoe.def, aoe.x, aoe.z, aoe.dirX, aoe.dirZ, out);
+  const movement = aoe.def.aoeMovement;
+  if (!movement) return out;
+
+  let count = perSample;
+  const remaining = Math.max(0, aoe.duration - aoe.elapsed);
+  for (const ahead of FUTURE_SAMPLES) {
+    if (ahead > remaining) break;
+    const next = movement({
+      caster: aoe.owner,
+      def: aoe.def,
+      originX: aoe.originX,
+      originZ: aoe.originZ,
+      dirX: aoe.originDirX,
+      dirZ: aoe.originDirZ,
+      duration: aoe.duration,
+      elapsed: aoe.elapsed + ahead
+    });
+    writeAoeCircles(
+      aoe.def,
+      next.x,
+      next.z,
+      next.dirX ?? aoe.dirX,
+      next.dirZ ?? aoe.dirZ,
+      out,
+      count
+    );
+    count += perSample;
+  }
+  out.length = count;
+  return out;
+}
 
 /** `true` si el efecto puede dañar o ralentizar aunque no tenga `power`. */
 function isHazardous(def: AnyAbilityDef): boolean {
@@ -85,6 +134,10 @@ export function buildBotHazards(
     hazard.dirX = aoe.dirX;
     hazard.dirZ = aoe.dirZ;
     hazard.halfAngle = aoe.halfAngle;
+    hazard.circles =
+      aoe.shape === 'circle'
+        ? sweepAoeCircles(aoe, hazard.circles ?? (hazard.circles = []))
+        : undefined;
     hazard.remaining = Math.max(0, aoe.duration - aoe.elapsed);
     hazard.ownerTeam = aoe.owner.team;
     hazard.mode = aoe.def.aoeDamageMode;

@@ -21,7 +21,7 @@ import {
   atmosphereShapeMultiplier,
   type AtmosphereId
 } from '../atmosphere';
-import { aoeAreaFrom, aoeDistance, type AoeArea } from '../aoeGeometry';
+import { aoeAreaFrom, aoeRadialFalloff, type AoeArea } from '../aoeGeometry';
 import type { NavPoint } from '../botNav';
 import { computeDamage } from '../combat';
 import { CONFIG, DEG } from '../config';
@@ -998,8 +998,7 @@ export class BotDecision {
       // relevante es la que separa al rival del centro del círculo o del
       // vértice del cono.
       if (def.radialDamage) {
-        const offset = aoeDistance(area, prediction.x, prediction.z);
-        const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
+        const t = aoeRadialFalloff(area, prediction.x, prediction.z);
         power *= 1 - (1 - def.radialMinDamage) * t;
       }
       // En las áreas con ticks, `power` es daño por segundo. No se asume que el
@@ -1115,7 +1114,16 @@ export class BotDecision {
           lateralTolerance =
             aimDistance * Math.tan(def.halfAngle * DEG) + targetRadius;
         } else {
-          lateralTolerance = def.radius + maxHitRadius() + targetRadius;
+          // En un patrón, el error de apuntado tolerable lo marca el lóbulo
+          // más grande, no el radio de colocación del área.
+          let coverage = def.radius;
+          if (def.aoeCircles.length > 0) {
+            coverage = 0;
+            for (const circle of def.aoeCircles) {
+              coverage = Math.max(coverage, circle.radius ?? def.radius);
+            }
+          }
+          lateralTolerance = coverage + maxHitRadius() + targetRadius;
           aimDistance = def.range > 0.1 ? def.range : 0.5;
         }
         break;
