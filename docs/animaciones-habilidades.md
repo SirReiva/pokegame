@@ -107,7 +107,14 @@ frames o mantener una pose antes que salirse del rango.
 ## 4. API de `AbilityDef`
 
 ```ts
-ability('bolaSombra', 'Bola Sombra', 'Ghost', 'special', 'projectile')
+projectileAbility(
+  'bolaSombra',
+  'Bola Sombra',
+  'Ghost',
+  'special',
+  defaultProjectileResolve
+)
+  .power(80)           // entra en `props`
   .startup(0)          // sale en el acto
   .active(0)
   .recovery(0.45)      // bloqueo después del disparo

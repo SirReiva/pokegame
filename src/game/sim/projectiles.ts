@@ -6,7 +6,11 @@
  * de combate; este módulo solo contiene la geometría y el orden de resolución.
  */
 
-import type { AbilityDamageOptions } from '../abilityExecutors';
+import type {
+  AbilityHitInput,
+  AbilityTarget,
+  AnyAbilityDef
+} from '../abilities';
 import type { CombatFxPort } from '../core/ports/fx';
 import type { MatchPlayerState, Projectile } from '../matchState';
 import type { World } from '../world';
@@ -24,12 +28,8 @@ export interface ProjectileSystemHost {
   readonly combatFx: CombatFxPort;
   isMatchOver(): boolean;
   canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean;
-  applyAbilityDamage(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: Projectile['def'],
-    options?: AbilityDamageOptions
-  ): boolean;
+  /** Ejecuta la resolución de la habilidad con los impactos del tramo. */
+  resolveAbility(input: AbilityHitInput<MatchPlayerState, AnyAbilityDef>): void;
   removeProjectile(projectile: Projectile): void;
   playImpactSound(): void;
 }
@@ -211,24 +211,53 @@ export function stepProjectiles(host: ProjectileSystemHost, dt: number): void {
     hits.sort((a, b) => a.distance - b.distance);
 
     let removed = false;
-    for (const hit of hits) {
-      if (host.isMatchOver()) break;
-      projectile.hit.add(hit.target);
-      host.applyAbilityDamage(projectile.owner, hit.target, projectile.def, {
-        healToken: projectile.healToken,
-        impactX: hit.impactX,
-        impactZ: hit.impactZ,
-        // El empuje nace donde entra el proyectil, no donde esté ahora el
-        // tirador: si se movió durante el vuelo, la dirección no cambia.
-        sourceX: hit.impactX,
-        sourceZ: hit.impactZ
+    // Un proyectil con `pierce` atraviesa como máximo `pierce + 1` cuerpos.
+    const maxHits = projectile.pierce + 1;
+    const applied = hits.slice(0, maxHits);
+    if (applied.length > 0 && !host.isMatchOver()) {
+      const def = projectile.def;
+      const targets: AbilityTarget<MatchPlayerState>[] = applied.map((hit) => {
+        projectile.hit.add(hit.target);
+        return {
+          player: hit.target,
+          distance: hit.distance,
+          radialMultiplier: 1,
+          damagePower: def.props.power,
+          isAlly: hit.target.team === projectile.owner.team,
+          isEnemy: hit.target.team !== projectile.owner.team,
+          isSelf: hit.target === projectile.owner,
+          lineOfSight: true,
+          hittable: true,
+          impactX: hit.impactX,
+          impactZ: hit.impactZ,
+          // El empuje nace donde entra el proyectil, no donde esté ahora el
+          // tirador: si se movió durante el vuelo, la dirección no cambia.
+          sourceX: hit.impactX,
+          sourceZ: hit.impactZ
+        };
       });
-      if (projectile.pierce > 0) {
-        projectile.pierce -= 1;
-      } else {
+      const speed = Math.hypot(projectile.vx, projectile.vz);
+      host.resolveAbility({
+        owner: projectile.owner,
+        def,
+        x: projectile.x,
+        z: projectile.z,
+        radius: def.radius,
+        shape: 'circle',
+        dirX: speed > 0.0001 ? projectile.vx / speed : 1,
+        dirZ: speed > 0.0001 ? projectile.vz / speed : 0,
+        halfAngle: 0,
+        mode: 'once',
+        tick: 0,
+        elapsed: 0,
+        power: def.props.power,
+        targets,
+        healToken: projectile.healToken
+      });
+      projectile.pierce = Math.max(0, projectile.pierce - (applied.length - 1));
+      if (applied.length >= maxHits) {
         host.removeProjectile(projectile);
         removed = true;
-        break;
       }
     }
     if (removed || host.isMatchOver()) continue;

@@ -97,11 +97,20 @@ export type AoeStyle =
 
 /**
  * Reparto del daño de un área:
- * - `instant`: un único golpe al completar la preparación.
- * - `overTime`: el área permanece `aoeDuration` segundos y golpea cada
- *   `aoeTickInterval` a los enemigos que sigan dentro.
+ * - `once`: un único golpe al completar la preparación.
+ * - `overtime-global`: el área permanece `aoeDuration` segundos y golpea cada
+ *   `aoeTickInterval` a todos los que estén dentro en ese instante. Los ticks
+ *   están alineados al área, así que entrar tarde no recupera los anteriores.
+ * - `overtime-target`: cada objetivo lleva su propio temporizador desde que
+ *   entra; el primer tick cae al entrar y al salir se descarta su estado. El
+ *   daño total depende del tiempo expuesto, no de una fase global.
  */
-export type AoeDamageMode = 'instant' | 'overTime';
+export type AoeDamageMode = 'once' | 'overtime-global' | 'overtime-target';
+
+/** `true` en los modos que reparten ticks mientras el área permanece. */
+export function isOvertimeMode(mode: AoeDamageMode): boolean {
+  return mode === 'overtime-global' || mode === 'overtime-target';
+}
 
 /**
  * Cómo se reproduce la animación de carga durante el `startup`:

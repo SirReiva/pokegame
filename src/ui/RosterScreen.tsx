@@ -497,7 +497,7 @@ function PlayerPanel({
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 font-mono text-8.32 tracking-wider uppercase text-steel-550">
                             <span>{CATEGORY_LABEL[ability.category]}</span>
-                            {ability.power > 0 && <span>Pot. {ability.power}</span>}
+                            {ability.props.power > 0 && <span>Pot. {ability.props.power}</span>}
                             <span>{ability.cooldown.toFixed(1)} s</span>
                           </div>
                           <p className="mt-0.5 text-9.6 leading-[1.35] text-steel-450">

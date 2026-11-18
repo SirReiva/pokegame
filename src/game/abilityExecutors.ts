@@ -9,9 +9,12 @@
 
 import type {
   AbilityDef,
+  AbilityHitInput,
   AbilityShape,
-  DamageOverTimeSpec,
-  SlowSpec
+  AbilityTarget,
+  AoeAbilityDef,
+  AnyAbilityDef,
+  SelfAbilityDef
 } from './abilities';
 import type { AoeHitInput } from './aoeEffect';
 import { CONFIG, DEG } from './config';
@@ -20,6 +23,7 @@ import {
   sectorOverlapsCircle,
   segmentBlockedByColliders
 } from './combat';
+import { isOvertimeMode } from './core/abilities/styles';
 import type { CombatFxPort as CombatFx, TelegraphHandle } from './core/ports/fx';
 import type {
   ActiveAoe,
@@ -34,36 +38,6 @@ import { TEAM_INFO } from './multiplayer';
 import { maxHitRadius } from './roster';
 import type { World } from './world';
 
-export interface AbilityDamageOptions {
-  power?: number;
-  /** Control estándar: cancelar dash/preparación + hitstun + empuje. */
-  control?: boolean;
-  /** Cancela dash y preparación. Por defecto, el valor de `control`. */
-  cancel?: boolean;
-  /** Segundos de hitstun. Por defecto, `def.hitstun` si `control`, o 0 si no. */
-  hitstun?: number;
-  /**
-   * Distancia de empuje. `null` lo desactiva. Por defecto, `def.knockback` si
-   * `control`, o 0 si no.
-   */
-  knockback?: number | null;
-  /** Ralentización. `null` la desactiva. Por defecto, `def.slow`. */
-  slow?: SlowSpec | null;
-  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.dot`. */
-  dot?: DamageOverTimeSpec | null;
-  /** Token compartido del lanzamiento para curar como máximo una vez. */
-  healToken?: HealOnHitToken;
-  /** Punto donde dibujar el impacto si no coincide con el centro del objetivo. */
-  impactX?: number;
-  impactZ?: number;
-  /**
-   * Origen del empuje. Un proyectil empuja desde su punto de entrada y un área
-   * desde su centro; sin él se usa la posición actual del atacante.
-   */
-  sourceX?: number;
-  sourceZ?: number;
-}
-
 /**
  * Servicios del motor que necesitan los ejecutores. Se pasan explícitamente
  * para que las estrategias no dependan de la clase `Game` ni de sus campos
@@ -73,20 +47,10 @@ export interface AbilityExecutorDeps {
   readonly combatFx: CombatFx;
   readonly world: World;
   readonly matchPlayers: MatchPlayerState[];
-  spawnShield(player: MatchPlayerState, def: AbilityDef): void;
+  spawnShield(player: MatchPlayerState, def: SelfAbilityDef): void;
   canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean;
-  /**
-   * Aplica daño y devuelve `true` solo si el golpe quitó vida de verdad
-   * (acertó, no era inmune y tenía potencia). Los efectos que dependen del
-   * impacto, como `healOnHit`, usan ese valor en lugar de contar cualquier
-   * intento como acierto.
-   */
-  applyAbilityDamage(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: AbilityDef,
-    options?: AbilityDamageOptions
-  ): boolean;
+  /** Ejecuta la resolución de la habilidad con los objetivos ya reunidos. */
+  resolveAbility(input: AbilityHitInput<MatchPlayerState, AnyAbilityDef>): void;
   /** Tramo de dash resuelto; el objeto devuelto es compartido (copiar x/z). */
   dashPosition(
     player: MatchPlayerState,
@@ -120,15 +84,15 @@ export interface AbilityExecutorDeps {
    */
   readonly aimAssist?: (
     player: MatchPlayerState,
-    def: AbilityDef,
+    def: AnyAbilityDef,
     dirX: number,
     dirZ: number
   ) => { dirX: number; dirZ: number } | null;
   /**
    * Resuelve el golpe de un área: reúne a todos los Pokémon dentro del radio y
-   * delega en el `aoeEffect` de la habilidad (o en el efecto por defecto).
+   * delega en la resolución de la habilidad.
    */
-  resolveAoeHit(hit: AoeHitInput<MatchPlayerState, AbilityDef>): void;
+  resolveAoeHit(hit: AoeHitInput<MatchPlayerState, AoeAbilityDef>): void;
   /**
    * Dispara un evento del ciclo de vida del área. El ejecutor lo usa para
    * avisar de `onCast` justo cuando el área aparece.
@@ -136,7 +100,7 @@ export interface AbilityExecutorDeps {
   emitAoeEvent(
     phase: 'start' | 'cast' | 'end',
     player: MatchPlayerState,
-    def: AbilityDef,
+    def: AoeAbilityDef,
     x: number,
     z: number,
     dirX: number,
@@ -160,6 +124,7 @@ export type AbilityExecutor = (
 ) => void;
 
 const executeMelee: AbilityExecutor = (player, def, deps) => {
+  if (def.shape !== 'melee') return;
   // El cuerpo gira hacia el apuntado antes de dibujar el arco y resolver el
   // golpe, igual que hacen los proyectiles al salir.
   const yaw = attackYaw(player);
@@ -219,6 +184,7 @@ const executeMelee: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeProjectile: AbilityExecutor = (player, def, deps) => {
+  if (def.shape !== 'projectile') return;
   const yaw = attackYaw(player);
   let dirX = Math.sin(yaw);
   let dirZ = Math.cos(yaw);
@@ -258,6 +224,7 @@ const executeProjectile: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
+  if (def.shape !== 'beam') return;
   const yaw = attackYaw(player);
   let dirX = Math.sin(yaw);
   let dirZ = Math.cos(yaw);
@@ -313,6 +280,7 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     Math.max(0.08, def.radius),
     def.beamStyle
   );
+  const targets: AbilityTarget<MatchPlayerState>[] = [];
   for (const target of deps.matchPlayers) {
     if (!deps.canHit(player, target)) continue;
     // Comprobación en el marco del haz: el objetivo debe estar delante del
@@ -336,15 +304,42 @@ const executeBeam: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     ) {
       continue;
     }
-    // La curación de Come Sueños la resuelve `applyAbilityDamage` solo si el
-    // golpe quita vida de verdad, y como mucho una vez por lanzamiento.
-    deps.applyAbilityDamage(player, target, def, {
-      healToken: deps.healToken
+    // La resolución por defecto aplica el golpe solo si quita vida de verdad y
+    // comparte el token de `healOnHit` del lanzamiento.
+    targets.push({
+      player: target,
+      distance: along,
+      radialMultiplier: 1,
+      damagePower: def.props.power,
+      isAlly: target.team === player.team,
+      isEnemy: target.team !== player.team,
+      isSelf: target === player,
+      lineOfSight: true,
+      hittable: deps.canHit(player, target)
     });
   }
+  if (targets.length === 0) return;
+  deps.resolveAbility({
+    owner: player,
+    def,
+    x: player.x,
+    z: player.z,
+    radius: def.radius,
+    shape: 'circle',
+    dirX,
+    dirZ,
+    halfAngle: 0,
+    mode: 'once',
+    tick: 0,
+    elapsed: 0,
+    power: def.props.power,
+    targets,
+    healToken: deps.healToken
+  });
 };
 
 const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
+  if (def.shape !== 'aoe') return;
   // En las áreas con preparación se conserva la dirección del lanzamiento; el
   // jugador pudo girar durante un `windup` móvil y el centro ya estaba fijado.
   const yaw = attackYaw(player);
@@ -427,7 +422,7 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
   // El área ya está dibujada en su centro definitivo: los eventos ven la
   // posición y los objetivos reales del primer golpe.
   deps.emitAoeEvent('cast', player, def, centerX, centerZ, dirX, dirZ, 0);
-  if (def.aoeDamageMode === 'overTime') {
+  if (isOvertimeMode(def.aoeDamageMode)) {
     const tickInterval = Math.max(0.05, Math.min(def.aoeTickInterval, duration));
     deps.addActiveAoe({
       owner: player,
@@ -470,10 +465,10 @@ const executeAoe: AbilityExecutor = (player, def, deps, targetX, targetZ) => {
     dirX,
     dirZ,
     halfAngle,
-    mode: 'instant',
+    mode: 'once',
     tick: 0,
     elapsed: 0,
-    power: def.power,
+    power: def.props.power,
     healToken: deps.healToken
   });
 };
@@ -505,6 +500,7 @@ function dashEnemyLimit(
 }
 
 const executeDash: AbilityExecutor = (player, def, deps) => {
+  if (def.shape !== 'dash') return;
   // La dirección se fija al empezar el casteo. Durante la preparación el
   // jugador puede seguir girando (y el frame del lanzamiento mueve antes de
   // resolver el efecto), pero el dash debe salir hacia donde apuntaba la
@@ -556,15 +552,14 @@ const executeDash: AbilityExecutor = (player, def, deps) => {
 };
 
 const executeSelf: AbilityExecutor = (player, def, deps) => {
+  if (def.shape !== 'self') return;
   if (def.shield) {
     player.damageReductionTimer = def.shieldDuration;
     player.damageReduction = Math.min(0.65, Math.max(0, def.damageReduction));
     player.shieldSpeedMultiplier = Math.max(0.1, def.shieldSpeedMultiplier);
     deps.spawnShield(player, def);
-    return;
-  }
-  // Recuperación ya tiene su propio estallido de curación.
-  if (def.healSelf <= 0) {
+  } else if (def.healSelf <= 0) {
+    // Recuperación ya tiene su propio estallido de curación.
     deps.combatFx.spawnBuff(
       player.x,
       player.z,
@@ -572,6 +567,38 @@ const executeSelf: AbilityExecutor = (player, def, deps) => {
       Math.max(0.8, def.radius)
     );
   }
+  // Una resolución propia puede añadir efectos sobre el lanzador. La lista
+  // lleva al propio lanzador para que `applyBuff`, `applyHeal` o `applyHit`
+  // tengan un objetivo válido.
+  deps.resolveAbility({
+    owner: player,
+    def,
+    x: player.x,
+    z: player.z,
+    radius: def.radius,
+    shape: 'circle',
+    dirX: Math.sin(player.facing),
+    dirZ: Math.cos(player.facing),
+    halfAngle: 0,
+    mode: 'once',
+    tick: 0,
+    elapsed: 0,
+    power: def.props.power,
+    targets: [
+      {
+        player,
+        distance: 0,
+        radialMultiplier: 1,
+        damagePower: def.props.power,
+        isAlly: true,
+        isEnemy: false,
+        isSelf: true,
+        lineOfSight: true,
+        hittable: false
+      }
+    ],
+    healToken: deps.healToken
+  });
 };
 
 /** Registro de estrategias por forma de habilidad. */

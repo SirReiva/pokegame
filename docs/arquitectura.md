@@ -14,7 +14,11 @@
 
 El proyecto no parte de cero. Ya hay decisiones que conviene conservar:
 
-- `abilityExecutors.ts` es un **Strategy + Registry** por forma de habilidad.
+- `abilityExecutors.ts` es un **Strategy + Registry** por forma de habilidad; la
+  aplicación de efectos vive en la `resolve` obligatoria de cada definición
+  (`abilityResolve.ts`), con una función por defecto por forma.
+- `abilities.ts` es un catálogo **data-driven** con una unión discriminada por
+  `shape` y factorías por forma; añadir una habilidad no toca el motor.
 - `modes.ts` es un **Strategy** por modo de juego; `Game` solo reparte eventos.
 - `abilities.ts` es un catálogo **data-driven**; añadir una habilidad no toca el
   motor.
@@ -50,7 +54,7 @@ módulos a nivel de tipos**:
 ```
 world ↔ vision ↔ castPlan ↔ camera ↔ sprite ↔ terrainSpeed ↔ modes ↔
 multiplayer ↔ textures ↔ marker ↔ actor ↔ matchState ↔ items ↔ terrain ↔
-combatFx ↔ aoeEffect ↔ abilities
+combatFx ↔ abilityResolve ↔ abilities
 ```
 
 La causa principal es que `matchState.ts` —el estado de la simulación— importa
@@ -774,7 +778,7 @@ Primera pasada aplicada:
   `core/vision.ts`, `core/world.ts` y `core/match/config.ts`, con puentes en las
   rutas originales. `items.ts` ya no importa `MatchPlayerState`; el catálogo usa
   un `ItemPlayer` estructural. El ciclo de tipos bajó de 17 a 3 módulos
-  (`matchState ↔ aoeEffect ↔ abilities`).
+  (`matchState ↔ abilityResolve ↔ abilities`).
 - **Tipos de IA separados:** `ai/types.ts`, `ai/tuning.ts`,
   `ai/blackboard.ts`, `ai/math.ts`, `ai/movement.ts` y `ai/decision.ts`;
   `bot.ts` los importa y re-exporta. `BotMovement` encapsula pathfinding,

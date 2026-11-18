@@ -20,7 +20,12 @@ import {
   segmentBlockedByColliders
 } from '../combat';
 import type { World } from '../world';
-import type { AbilityDamageOptions } from '../abilityExecutors';
+import type {
+  AbilityHitInput,
+  AbilityTarget,
+  AnyAbilityDef,
+  HealOnHitToken
+} from '../abilities';
 
 export interface HitSystemHost {
   /** Devuelve los golpes pendientes y deja la cola vacía. */
@@ -41,12 +46,8 @@ export interface HitSystemHost {
     dirZ: number,
     reach: number
   ): boolean;
-  applyAbilityDamage(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: PendingMeleeHit['def'],
-    options?: AbilityDamageOptions
-  ): boolean;
+  /** Ejecuta la resolución de la habilidad para un golpe concreto. */
+  resolveAbility(input: AbilityHitInput<MatchPlayerState, AnyAbilityDef>): void;
   applyKnockback(
     target: MatchPlayerState,
     fromX: number,
@@ -54,6 +55,51 @@ export interface HitSystemHost {
     distance: number
   ): void;
   cancelCast(player: MatchPlayerState): void;
+}
+
+/** Objetivo único de un golpe ya validado por el sistema. */
+function singleTarget(
+  attacker: MatchPlayerState,
+  target: MatchPlayerState,
+  def: AnyAbilityDef,
+  options: {
+    distance?: number;
+    sourceX?: number;
+    sourceZ?: number;
+    lineOfSight?: boolean;
+    healToken?: HealOnHitToken;
+  } = {}
+): AbilityHitInput<MatchPlayerState, AnyAbilityDef> {
+  const abilityTarget: AbilityTarget<MatchPlayerState> = {
+    player: target,
+    distance: options.distance ?? 0,
+    radialMultiplier: 1,
+    damagePower: def.props.power,
+    isAlly: target.team === attacker.team,
+    isEnemy: target.team !== attacker.team,
+    isSelf: target === attacker,
+    lineOfSight: options.lineOfSight ?? true,
+    hittable: true,
+    sourceX: options.sourceX,
+    sourceZ: options.sourceZ
+  };
+  return {
+    owner: attacker,
+    def,
+    x: attacker.x,
+    z: attacker.z,
+    radius: 0,
+    shape: 'circle',
+    dirX: Math.sin(attackYaw(attacker)),
+    dirZ: Math.cos(attackYaw(attacker)),
+    halfAngle: 0,
+    mode: 'once',
+    tick: 0,
+    elapsed: 0,
+    power: def.props.power,
+    targets: [abilityTarget],
+    healToken: options.healToken
+  };
 }
 
 /**
@@ -85,11 +131,14 @@ export function stepInstantHits(host: HitSystemHost): void {
     }
     // El empuje de un golpe de dash sigue la dirección del desplazamiento, no
     // la posición final del lanzador.
-    host.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
-      healToken: hit.healToken,
-      sourceX: hit.target.x - hit.dirX,
-      sourceZ: hit.target.z - hit.dirZ
-    });
+    host.resolveAbility(
+      singleTarget(hit.attacker, hit.target, hit.def, {
+        distance: hit.reach,
+        sourceX: hit.target.x - hit.dirX,
+        sourceZ: hit.target.z - hit.dirZ,
+        healToken: hit.healToken
+      })
+    );
   }
 }
 
@@ -193,8 +242,10 @@ export function stepMeleeHits(host: HitSystemHost): void {
     if (host.isMatchOver()) break;
     if (clashPairs.has(meleePairKey(hit.attacker, hit.target))) continue;
     if (!meleeHitValid(host, hit)) continue;
-    host.applyAbilityDamage(hit.attacker, hit.target, hit.def, {
-      healToken: hit.healToken
-    });
+    host.resolveAbility(
+      singleTarget(hit.attacker, hit.target, hit.def, {
+        healToken: hit.healToken
+      })
+    );
   }
 }

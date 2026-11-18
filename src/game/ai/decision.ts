@@ -9,7 +9,12 @@
  * estado compartido y las operaciones auxiliares mediante `BotDecisionContext`.
  */
 
-import { ABILITIES, type AbilityDef, type BuffStat } from '../abilities';
+import {
+  ABILITIES,
+  type AbilityDef,
+  type BuffStat,
+  type DamageOverTimeSpec
+} from '../abilities';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -20,6 +25,7 @@ import { aoeAreaFrom, aoeDistance, type AoeArea } from '../aoeGeometry';
 import type { NavPoint } from '../botNav';
 import { computeDamage } from '../combat';
 import { CONFIG, DEG } from '../config';
+import { isOvertimeMode } from '../core/abilities/styles';
 import type { PickupSpawn } from '../items';
 import type { MatchPlayerState } from '../matchState';
 import { maxHitRadius } from '../roster';
@@ -56,6 +62,37 @@ const LETHAL_BONUS = 60;
 const FINISH_BONUS = 18;
 /** Fracción de vida del rival por debajo de la cual se valora rematarlo. */
 const FINISH_HP_FRACTION = 0.18;
+/**
+ * Puntos extra por cada segundo de hitstun por encima del global. Si todas las
+ * habilidades usan el valor por defecto, el término vale 0 y no altera la
+ * rotación; solo premia a las que declaran un stun más largo.
+ */
+const HITSTUN_SCORE_PER_SECOND = 120;
+/**
+ * Puntuación conservadora para resoluciones propias que declaran daño o
+ * control sin exponer una magnitud en `props`. Solo se aplica cuando la
+ * habilidad lo marca con `.bot({ customDamage / customControl })`.
+ */
+const CUSTOM_DAMAGE_SCORE = 25;
+const CUSTOM_CONTROL_SCORE = 18;
+
+/**
+ * Daño esperado de un `dot` completo: daño fijo por tick × número de ticks.
+ * Protección lo reduce; la efectividad de tipo y el crítico no lo afectan.
+ */
+function expectedDotDamage(
+  target: MatchPlayerState,
+  dot: DamageOverTimeSpec | null | undefined
+): number {
+  if (!dot || dot.damage <= 0 || dot.duration <= 0) return 0;
+  const interval =
+    dot.interval !== undefined && dot.interval > 0 ? dot.interval : 1;
+  const ticks = Math.max(1, Math.ceil(dot.duration / interval));
+  const reduction =
+    target.damageReductionTimer > 0 ? target.damageReduction : 0;
+  return Math.max(1, Math.round(dot.damage * ticks * (1 - reduction)));
+}
+
 /** Bonus por interrumpir una curación o reanimación enemiga. */
 const SUPPORT_DENY_BONUS = 35;
 /** Puntuación mínima para gastar una habilidad. */
@@ -236,7 +273,7 @@ export interface BotDecisionContext {
   ): number;
   armorCastBonus(self: MatchPlayerState, def: AbilityDef): number;
   repeatCooldownExtra(self: MatchPlayerState, slot: number): number;
-  isSupportRecovery(defId: string): boolean;
+  isSupportRecovery(def: AbilityDef): boolean;
 
   aoeEscapeDistance(area: AoeArea, x: number, z: number): number;
   effectiveSpeed(player: MatchPlayerState): number;
@@ -680,12 +717,15 @@ export class BotDecision {
   ): number {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const hasEffect =
-      def.power > 0 ||
+      def.props.power > 0 ||
+      def.props.dot !== null ||
       def.healSelf > 0 ||
-      def.slow !== null ||
-      def.knockback > 0 ||
+      def.props.slow !== null ||
+      def.props.knockback > 0 ||
       def.buffs.length > 0 ||
-      def.shield ||
+      def.bot?.customDamage === true ||
+      def.bot?.customControl === true ||
+      (def.shape === 'self' && def.shield) ||
       def.shape === 'dash';
     if (!hasEffect) return -Infinity;
 
@@ -705,7 +745,12 @@ export class BotDecision {
       expectedDamage
     );
 
-    const offensive = def.power > 0 || def.slow !== null;
+    const offensive =
+      def.props.power > 0 ||
+      def.props.dot !== null ||
+      def.props.slow !== null ||
+      def.bot?.customDamage === true ||
+      def.bot?.customControl === true;
     // La gracia de reaparición se ve como estado, pero no su tiempo restante:
     // mientras esté activa no se gasta una habilidad ofensiva en ese rival.
     if (offensive && target.invulnerableTimer > 0) return -Infinity;
@@ -718,30 +763,63 @@ export class BotDecision {
     );
     let score = 0;
 
-    if (def.power > 0) {
+    if (
+      def.props.power > 0 ||
+      def.props.dot !== null ||
+      def.bot?.customDamage === true ||
+      def.bot?.customControl === true
+    ) {
       const bigAbility =
-        slot === 3 || def.power >= this.ctx.bigAbilityPower;
+        slot === 3 || def.props.power >= this.ctx.bigAbilityPower;
+      const dealsDamage =
+        def.props.power > 0 ||
+        def.props.dot !== null ||
+        def.bot?.customDamage === true;
       // Si un compañero ya ha comprometido daño suficiente para tumbarlo, no
       // se gasta otra definitiva en el mismo objetivo.
       if (
         bigAbility &&
+        dealsDamage &&
         this.ctx.committedDamageOn(self, target) >= target.hp
       ) {
         return -Infinity;
       }
       const mitigation = 1 - this.ctx.damageTakenFactor(target, def);
       // El escudo ya rebaja el daño esperado, pero una habilidad grande cuyo
-      // golpe entra muy reducido no compensa su cooldown.
+      // golpe entra muy reducido no compensa su cooldown. El DoT es fijo y no
+      // pasa por la efectividad de tipo, así que no se veta por mitigación.
       if (
+        def.props.power > 0 &&
         mitigation >= BIG_ABILITY_MITIGATION_THRESHOLD &&
         bigAbility
       ) {
         return -Infinity;
       }
       score += expectedHit * cooldownWeight;
+      // Una resolución propia sin magnitud declarada recibe una estimación
+      // conservadora para que no se descarte por tener `props.power: 0`.
+      if (
+        def.bot?.customDamage === true &&
+        def.props.power <= 0 &&
+        def.props.dot === null
+      ) {
+        score += CUSTOM_DAMAGE_SCORE * hitChance;
+      }
+      if (def.bot?.customControl === true && !armorAbsorbed) {
+        score += CUSTOM_CONTROL_SCORE * hitChance;
+      }
       // Un impacto también aplica hitstun y cancela dash/preparaciones, salvo
       // que la armadura del casteo lo absorba.
-      if (!armorAbsorbed) score += 8 * hitChance;
+      if (!armorAbsorbed) {
+        score += 8 * hitChance;
+        const extraHitstun = Math.max(
+          0,
+          def.props.hitstun - CONFIG.combat.hitstunSeconds
+        );
+        if (extraHitstun > 0) {
+          score += extraHitstun * HITSTUN_SCORE_PER_SECOND * hitChance;
+        }
+      }
       if (expectedHit >= target.hp) {
         score += LETHAL_BONUS;
       } else if (
@@ -755,24 +833,24 @@ export class BotDecision {
     if (def.healSelf > 0) {
       let healScore = 70 + (1 - hpFraction) * 130;
       // `healOnHit` solo cura si el golpe conecta.
-      if (def.healOnHit) healScore *= hitChance;
+      if (def.props.healOnHit) healScore *= hitChance;
       score += healScore;
       // No gastar la curación a vida casi llena, salvo que también cure a
       // aliados heridos: entonces el lanzamiento sí aporta.
       if (hpFraction > 0.8 && support <= 0) score -= 220;
     }
-    if (def.shield) score += 55 + (1 - hpFraction) * 70;
+    if (def.shape === 'self' && def.shield) score += 55 + (1 - hpFraction) * 70;
     if (def.buffs.length > 0) {
       score += this.ctx.buffValue(self, def, hpFraction);
     }
-    if (def.slow) {
-      const slowStrength = clamp(1 - def.slow.multiplier, 0, 1);
-      const durationFactor = clamp(def.slow.duration / 2.5, 0.4, 1.5);
+    if (def.props.slow) {
+      const slowStrength = clamp(1 - def.props.slow.multiplier, 0, 1);
+      const durationFactor = clamp(def.props.slow.duration / 2.5, 0.4, 1.5);
       score +=
         (15 + slowStrength * 70) * durationFactor * hitChance;
     }
-    if (def.knockback > 0 && !armorAbsorbed) {
-      score += Math.min(20, def.knockback * 12) * hitChance;
+    if (def.props.knockback > 0 && !armorAbsorbed) {
+      score += Math.min(20, def.props.knockback * 12) * hitChance;
     }
 
     switch (def.shape) {
@@ -785,7 +863,7 @@ export class BotDecision {
         break;
       case 'dash':
         score += 10;
-        if (def.power === 0) score += 35; // reposicionamiento / huida
+        if (def.props.power === 0) score += 35; // reposicionamiento / huida
         break;
       case 'aoe':
         score += 12;
@@ -843,7 +921,7 @@ export class BotDecision {
         // ataque: esos PV (o ese aliado) vuelven a la pelea si se completa.
         if (
           pending.def.healSelf > 0 ||
-          this.ctx.isSupportRecovery(pending.def.id)
+          this.ctx.isSupportRecovery(pending.def)
         ) {
           score += SUPPORT_DENY_BONUS;
         }
@@ -889,7 +967,7 @@ export class BotDecision {
     def: AbilityDef,
     prediction: TargetPrediction
   ): number {
-    if (def.power <= 0 || def.category === 'status') return 0;
+    if (def.props.power <= 0 && def.props.dot === null) return 0;
     const category: 'physical' | 'special' =
       def.category === 'physical' ? 'physical' : 'special';
     const physical = category === 'physical';
@@ -898,95 +976,103 @@ export class BotDecision {
 
     // El bot apunta hacia la posición prevista, así que el centro del área (o el
     // vértice del cono) cae en esa dirección a `range` del lanzador.
-    const aimX = prediction.x - self.x;
-    const aimZ = prediction.z - self.z;
-    const aimLength = Math.hypot(aimX, aimZ);
-    const aimDirX =
-      aimLength > 0.0001 ? aimX / aimLength : Math.sin(self.facing);
-    const aimDirZ =
-      aimLength > 0.0001 ? aimZ / aimLength : Math.cos(self.facing);
-    const centerReach = def.range > 0.1 ? def.range : 0;
-    const area = aoeAreaFrom(
-      def,
-      self.x + aimDirX * centerReach,
-      self.z + aimDirZ * centerReach,
-      aimDirX,
-      aimDirZ
-    );
+    let power = def.props.power;
+    if (def.shape === 'aoe') {
+      const aimX = prediction.x - self.x;
+      const aimZ = prediction.z - self.z;
+      const aimLength = Math.hypot(aimX, aimZ);
+      const aimDirX =
+        aimLength > 0.0001 ? aimX / aimLength : Math.sin(self.facing);
+      const aimDirZ =
+        aimLength > 0.0001 ? aimZ / aimLength : Math.cos(self.facing);
+      const centerReach = def.range > 0.1 ? def.range : 0;
+      const area = aoeAreaFrom(
+        def,
+        self.x + aimDirX * centerReach,
+        self.z + aimDirZ * centerReach,
+        aimDirX,
+        aimDirZ
+      );
 
-    // Las áreas con daño radial pegan menos en el borde. La distancia relevante
-    // es la que separa al rival del centro del círculo o del vértice del cono.
-    let power = def.power;
-    if (def.shape === 'aoe' && def.radialDamage) {
-      const offset = aoeDistance(area, prediction.x, prediction.z);
-      const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
-      power *= 1 - (1 - def.radialMinDamage) * t;
+      // Las áreas con daño radial pegan menos en el borde. La distancia
+      // relevante es la que separa al rival del centro del círculo o del
+      // vértice del cono.
+      if (def.radialDamage) {
+        const offset = aoeDistance(area, prediction.x, prediction.z);
+        const t = clamp(offset / Math.max(0.1, def.radius), 0, 1);
+        power *= 1 - (1 - def.radialMinDamage) * t;
+      }
+      // En las áreas con ticks, `power` es daño por segundo. No se asume que el
+      // rival se quede toda la duración: se estiman los ticks que llegará a
+      // recibir según lo cerca que esté del borde y lo rápido que pueda salir.
+      if (isOvertimeMode(def.aoeDamageMode) && def.aoeDuration > 0) {
+        const tickInterval = Math.max(0.1, def.aoeTickInterval);
+        const maxTicks = Math.max(
+          1,
+          Math.floor(def.aoeDuration / tickInterval)
+        );
+        const escapeDistance = this.ctx.aoeEscapeDistance(
+          area,
+          prediction.x,
+          prediction.z
+        );
+        const escapeTime =
+          escapeDistance / Math.max(1, this.ctx.effectiveSpeed(target));
+        const expectedTime = Math.min(
+          def.aoeDuration,
+          escapeTime + tickInterval
+        );
+        // El primer tick global cae al aparecer; en `overtime-target` cae al
+        // entrar cada objetivo, así que la estimación cuenta esa entrada.
+        const ticks =
+          def.aoeDamageMode === 'overtime-target'
+            ? 1 + Math.floor(expectedTime / tickInterval)
+            : Math.ceil(expectedTime / tickInterval);
+        power *= Math.max(1, Math.min(maxTicks, ticks)) * tickInterval;
+      }
     }
-    // En las áreas `overTime`, `power` es daño por segundo. No se asume que el
-    // rival se quede toda la duración: se estiman los ticks que llegará a
-    // recibir según lo cerca que esté del borde y lo rápido que pueda salir.
-    if (
-      def.shape === 'aoe' &&
-      def.aoeDamageMode === 'overTime' &&
-      def.aoeDuration > 0
-    ) {
-      const tickInterval = Math.max(0.1, def.aoeTickInterval);
-      const maxTicks = Math.max(
-        1,
-        Math.floor(def.aoeDuration / tickInterval)
-      );
-      const escapeDistance = this.ctx.aoeEscapeDistance(
-        area,
-        prediction.x,
-        prediction.z
-      );
-      const escapeTime =
-        escapeDistance / Math.max(1, this.ctx.effectiveSpeed(target));
-      const expectedTime = Math.min(
-        def.aoeDuration,
-        escapeTime + tickInterval
-      );
-      const ticks = Math.max(
-        1,
-        Math.min(maxTicks, Math.ceil(expectedTime / tickInterval))
-      );
-      power *= ticks * tickInterval;
-    }
-    if (power <= 0) return 0;
+    // El DoT es daño fijo por tick: no pasa por STAB, crítico ni efectividad.
+    // Protección sí lo reduce, igual que en `applyDamageOverTimeTick`.
+    const dotDamage = expectedDotDamage(target, def.props.dot);
+    if (power <= 0 && dotDamage <= 0) return 0;
 
-    const input = {
-      moveType: def.type,
-      category,
-      power,
-      attacker: self.combat,
-      defender: target.combat,
-      attackerTypes: self.types,
-      defenderTypes: target.types,
-      attackMultiplier: this.ctx.statMultiplier(
-        self,
-        physical ? 'attack' : 'spAttack'
-      ),
-      defenseMultiplier: this.ctx.statMultiplier(
-        target,
-        physical ? 'defense' : 'spDefense'
-      ),
-      randomFactor
-    };
-    const normal = computeDamage({ ...input, critical: false }).damage;
-    const critical = computeDamage({ ...input, critical: true }).damage;
-    const expected =
-      normal * (1 - CONFIG.combat.critChance) +
-      critical * CONFIG.combat.critChance;
-    const reduction =
-      target.damageReductionTimer > 0 ? target.damageReduction : 0;
-    const weatherMultiplier =
-      atmosphereMoveMultiplier(this.state.atmosphere, def.type) *
-      atmosphereShapeMultiplier(this.state.atmosphere, def.shape) *
-      atmosphereIncomingMultiplier(this.state.atmosphere, target.types);
-    return Math.max(
-      1,
-      Math.round(expected * (1 - reduction) * weatherMultiplier)
-    );
+    let directDamage = 0;
+    if (power > 0) {
+      const input = {
+        moveType: def.type,
+        category,
+        power,
+        attacker: self.combat,
+        defender: target.combat,
+        attackerTypes: self.types,
+        defenderTypes: target.types,
+        attackMultiplier: this.ctx.statMultiplier(
+          self,
+          physical ? 'attack' : 'spAttack'
+        ),
+        defenseMultiplier: this.ctx.statMultiplier(
+          target,
+          physical ? 'defense' : 'spDefense'
+        ),
+        randomFactor
+      };
+      const normal = computeDamage({ ...input, critical: false }).damage;
+      const critical = computeDamage({ ...input, critical: true }).damage;
+      const expected =
+        normal * (1 - CONFIG.combat.critChance) +
+        critical * CONFIG.combat.critChance;
+      const reduction =
+        target.damageReductionTimer > 0 ? target.damageReduction : 0;
+      const weatherMultiplier =
+        atmosphereMoveMultiplier(this.state.atmosphere, def.type) *
+        atmosphereShapeMultiplier(this.state.atmosphere, def.shape) *
+        atmosphereIncomingMultiplier(this.state.atmosphere, target.types);
+      directDamage = Math.max(
+        1,
+        Math.round(expected * (1 - reduction) * weatherMultiplier)
+      );
+    }
+    return directDamage + dotDamage;
   }
 
   /**

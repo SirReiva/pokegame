@@ -12,8 +12,19 @@
  */
 
 import type { ActiveAoe, Projectile } from '../matchState';
+import type { AnyAbilityDef } from '../abilities';
 import { maxHitRadius } from '../roster';
 import type { BotHazard } from './types';
+
+/** `true` si el efecto puede dañar o ralentizar aunque no tenga `power`. */
+function isHazardous(def: AnyAbilityDef): boolean {
+  return (
+    def.props.power > 0 ||
+    def.props.slow !== null ||
+    def.props.dot !== null ||
+    def.bot?.customDamage === true
+  );
+}
 
 export interface BotHazardBuffer {
   /** Peligros del paso actual; los consumidores lo tratan como solo lectura. */
@@ -37,7 +48,7 @@ export function buildBotHazards(
   const { hazards, pool } = buffer;
   let count = 0;
   for (const projectile of projectiles) {
-    if (projectile.def.power <= 0 && projectile.def.slow === null) continue;
+    if (!isHazardous(projectile.def)) continue;
     // `Math.sqrt` en vez de `Math.hypot`: mismas magnitudes (velocidades de
     // juego) con menos coste en un bucle que recorre todos los proyectiles por
     // paso.
@@ -56,9 +67,11 @@ export function buildBotHazards(
     hazard.vz = projectile.vz;
     hazard.remaining = speed > 0.0001 ? remainingDistance / speed : 0;
     hazard.ownerTeam = projectile.owner.team;
+    hazard.mode = undefined;
+    hazard.targetTimers = undefined;
   }
   for (const aoe of activeAoes) {
-    if (aoe.def.power <= 0 && aoe.def.slow === null) continue;
+    if (!isHazardous(aoe.def)) continue;
     const hazard = acquireHazard(pool, count);
     hazards[count] = hazard;
     count += 1;
@@ -74,6 +87,8 @@ export function buildBotHazards(
     hazard.halfAngle = aoe.halfAngle;
     hazard.remaining = Math.max(0, aoe.duration - aoe.elapsed);
     hazard.ownerTeam = aoe.owner.team;
+    hazard.mode = aoe.def.aoeDamageMode;
+    hazard.targetTimers = aoe.targetTimers;
   }
   // Se recorta la vista pero no el pool: los peligros que sobran se reutilizan
   // en el siguiente paso. Los campos de otro `kind` quedan obsoletos a

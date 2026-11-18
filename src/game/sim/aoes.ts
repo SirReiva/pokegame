@@ -6,13 +6,13 @@
  */
 
 import type { AoeHitInput } from '../aoeEffect';
-import type { AbilityDef } from '../abilities';
+import type { AoeAbilityDef } from '../abilities';
 import type { ActiveAoe, MatchPlayerState } from '../matchState';
 
 /** `onEnd` de un área instantánea que espera a terminar su duración visual. */
 export interface PendingAoeEnd {
   caster: MatchPlayerState;
-  def: AbilityDef;
+  def: AoeAbilityDef;
   x: number;
   z: number;
   dirX: number;
@@ -27,11 +27,13 @@ export interface AoeSystemHost {
   readonly activeAoes: ActiveAoe[];
   readonly pendingAoeEnds: PendingAoeEnd[];
   isMatchOver(): boolean;
-  resolveAoeHit(hit: AoeHitInput<MatchPlayerState, AbilityDef>): void;
+  resolveAoeHit(hit: AoeHitInput<MatchPlayerState, AoeAbilityDef>): void;
+  /** Avanza los ticks propios de cada objetivo en `overtime-target`. */
+  tickAoeTargets(aoe: ActiveAoe, dt: number): void;
   emitAoeEvent(
     phase: 'start' | 'cast' | 'end',
     player: MatchPlayerState,
-    def: AbilityDef,
+    def: AoeAbilityDef,
     x: number,
     z: number,
     dirX: number,
@@ -74,16 +76,22 @@ export function stepActiveAoes(host: AoeSystemHost, dt: number): void {
       aoe.moveVisual?.(aoe.x, aoe.z);
     }
     aoe.tickTimer -= dt;
-    // El primer tick cae al aparecer el área (tickTimer empieza en 0).
-    let guard = 0;
-    while (
-      aoe.tickTimer <= 0 &&
-      aoe.elapsed < aoe.duration &&
-      guard < 8
-    ) {
-      guard += 1;
-      tickAoe(host, aoe);
-      aoe.tickTimer += aoe.tickInterval;
+    // `overtime-target` avanza un temporizador por objetivo; los demás modos
+    // mantienen el tick global del área.
+    if (aoe.def.aoeDamageMode === 'overtime-target') {
+      host.tickAoeTargets(aoe, dt);
+    } else {
+      // El primer tick cae al aparecer el área (tickTimer empieza en 0).
+      let guard = 0;
+      while (
+        aoe.tickTimer <= 0 &&
+        aoe.elapsed < aoe.duration &&
+        guard < 8
+      ) {
+        guard += 1;
+        tickAoe(host, aoe);
+        aoe.tickTimer += aoe.tickInterval;
+      }
     }
     if (aoe.elapsed >= aoe.duration) {
       host.emitAoeEvent(
@@ -127,13 +135,13 @@ export function stepPendingAoeEnds(host: AoeSystemHost, dt: number): void {
 }
 
 function tickAoe(host: AoeSystemHost, aoe: ActiveAoe): void {
-  const basePower = aoe.def.power * aoe.tickInterval;
+  const basePower = aoe.def.props.power * aoe.tickInterval;
   // `flatBonusApplied` viaja con el tick para que `applyAbilityDamage` cobre el
   // `+2` de la fórmula una sola vez por objetivo y lanzamiento. El callback de
   // la habilidad decide qué se aplica en cada tick. El efecto por defecto
   // conserva el comportamiento histórico: si no hay daño ni slow, el tick no
   // hace nada, pero un callback propio puede seguir repartiendo buffs o debuffs.
-  const hit: AoeHitInput<MatchPlayerState, AbilityDef> = {
+  const hit: AoeHitInput<MatchPlayerState, AoeAbilityDef> = {
     owner: aoe.owner,
     def: aoe.def,
     x: aoe.x,
@@ -143,7 +151,7 @@ function tickAoe(host: AoeSystemHost, aoe: ActiveAoe): void {
     dirX: aoe.dirX,
     dirZ: aoe.dirZ,
     halfAngle: aoe.halfAngle,
-    mode: 'overTime',
+    mode: aoe.def.aoeDamageMode,
     tick: aoe.tick,
     elapsed: aoe.elapsed,
     power: basePower,

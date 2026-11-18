@@ -7,6 +7,7 @@ import {
   commonAnimationFor,
   type AbilityDef,
   type BuffStat,
+  type SelfAbilityDef,
   type SlowSpec
 } from './abilities';
 import {
@@ -93,8 +94,12 @@ import {
 } from './app/runtimeHosts';
 import {
   emitAoeEvent as emitAoeEventSystem,
-  resolveAoeHit as resolveAoeHitSystem
+  resolveAoeHit as resolveAoeHitSystem,
+  tickAoeTargets as tickAoeTargetsSystem
 } from './sim/aoeResolution';
+import {
+  resolveAbility as resolveAbilitySystem
+} from './sim/abilityResolve';
 import { stepAtmosphere } from './sim/atmosphere';
 import {
   applyAbilityDamage as applyAbilityDamageSystem,
@@ -904,6 +909,10 @@ export class Game {
       canHit: (attacker, target) => self.canHit(attacker, target),
       applyAbilityDamage: (attacker, target, def, options) =>
         applyAbilityDamageSystem(self.hosts.damage, attacker, target, def, options),
+      resolveAbility: (input) =>
+        resolveAbilitySystem(self.hosts.aoeResolution, input),
+      tickAoeTargets: (aoe, dt) =>
+        tickAoeTargetsSystem(self.hosts.aoeResolution, aoe, dt),
       removeProjectile: (projectile) => self.removeProjectile(projectile),
       playImpactSound: (effectiveness = 1) => playAbilityImpact(effectiveness),
       resolveAoeHit: (hit) => resolveAoeHitSystem(self.hosts.aoeResolution, hit),
@@ -2818,7 +2827,7 @@ export class Game {
     // Atacar desde la protección de spawn la retira: la invulnerabilidad
     // defensiva no debe servir para lanzar gratis una rotación ofensiva. Los
     // buffs y dash de estado (Protección, Impulso, Agilidad) no la rompen.
-    if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null || def.dot !== null)) {
+    if (player.invulnerableTimer > 0 && (def.props.power > 0 || def.props.slow !== null || def.props.dot !== null)) {
       player.invulnerableTimer = 0;
     }
     const cooldown = this.cooldownForCast(player, abilityId, def);
@@ -2876,7 +2885,9 @@ export class Game {
                 this.world.colliders
               )
             )
-          : def.range;
+          : def.shape === 'melee' || def.shape === 'projectile'
+            ? def.range
+            : 0;
     const targetX = player.x + dirX * reach;
     const targetZ = player.z + dirZ * reach;
     const teamAccent = TEAM_INFO[player.team].accent;
@@ -3086,7 +3097,7 @@ export class Game {
 
     // Un solo token por lanzamiento: si la forma golpea a varios rivales o
     // tiene varios ticks, `healOnHit` cura una única vez, no por impacto.
-    const healToken: HealOnHitToken | undefined = def.healOnHit
+    const healToken: HealOnHitToken | undefined = def.props.healOnHit
       ? { healed: false }
       : undefined;
 
@@ -3096,8 +3107,8 @@ export class Game {
       matchPlayers: this.matchPlayers,
       spawnShield: (source, ability) => this.spawnProtectionShield(source, ability),
       canHit: (attacker, target) => this.canHit(attacker, target),
-      applyAbilityDamage: (attacker, target, ability, options) =>
-        applyAbilityDamageSystem(this.hosts.damage, attacker, target, ability, options),
+      resolveAbility: (input) =>
+        resolveAbilitySystem(this.hosts.aoeResolution, input),
       dashPosition: (source, x, z, dirX, dirZ, distance) =>
         this.dashPosition(source, x, z, dirX, dirZ, distance),
       addProjectile: (projectile) => this.projectiles.push(projectile),
@@ -3201,7 +3212,7 @@ export class Game {
   /** Genera el escudo esférico de Protección con el accent del Pokémon. */
   private spawnProtectionShield(
     player: MatchPlayerState,
-    def: AbilityDef
+    def: SelfAbilityDef
   ): void {
     const asset = this.assetFor(player.pokemonId, player.skinId);
     const idle = asset?.skin.animations.idle;

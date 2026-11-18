@@ -24,20 +24,39 @@
  */
 
 import type {
-  AoeEffect,
   AoeEvent,
   AoeMovement,
   AoePlayer,
   AoePrepareMovement
 } from './core/abilities/aoe';
 import type {
+  AbilityBotProfile,
   AbilityDef,
-  RepeatCooldownSpec
+  AbilityExtra,
+  AbilityProps,
+  AbilityResolve,
+  AnyAbilityDef,
+  AoeAbilityDef,
+  BeamAbilityDef,
+  BuffSpec,
+  DashAbilityDef,
+  MeleeAbilityDef,
+  ProjectileAbilityDef,
+  RepeatCooldownSpec,
+  SelfAbilityDef
 } from './core/abilities/def';
 import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
 import { CONFIG } from './config';
+import {
+  defaultAoeResolve,
+  defaultBeamResolve,
+  defaultDashResolve,
+  defaultMeleeResolve,
+  defaultProjectileResolve,
+  defaultSelfResolve
+} from './abilityResolve';
 
 import type {
   AbilityShape,
@@ -54,19 +73,35 @@ import type {
 } from './core/abilities/styles';
 
 export type {
-  AoeEffect,
   AoeEvent,
   AoeMovement,
   AoePlayer,
   AoePrepareMovement
 } from './core/abilities/aoe';
 export type {
+  AbilityBotProfile,
   AbilityDef,
+  AbilityExtra,
+  AbilityFallenAlly,
+  AbilityHitInput,
+  AbilityHitOptions,
+  AbilityProps,
+  AbilityResolve,
+  AbilityResolveContext,
+  AbilityTarget,
+  AnyAbilityDef,
+  AoeAbilityDef,
+  BeamAbilityDef,
   BuffSpec,
   DamageOverTimeSpec,
+  DashAbilityDef,
+  MeleeAbilityDef,
+  ProjectileAbilityDef,
   RepeatCooldownSpec,
+  SelfAbilityDef,
   SlowSpec
 } from './core/abilities/def';
+export type { HealOnHitToken } from './core/abilities/aoe';
 export type { PokemonType } from './core/typeChart';
 export type {
   AbilityShape,
@@ -93,57 +128,71 @@ export const ABILITY_SLOT_LABEL: Record<AbilitySlot, string> = {
 
 export type AbilityId = string;
 
-export const DEFAULT_ABILITY: Omit<
-  AbilityDef,
-  'id' | 'name' | 'type' | 'category' | 'shape'
-> = {
+export const DEFAULT_PROPS: AbilityProps = {
   power: 0,
-  cooldown: 1,
-  repeatCooldown: null,
-  range: 1.5,
-  radius: 0.5,
-  halfAngle: 45,
-  projectileSpeed: 12,
-  projectileStyle: 'orb',
-  impactStyle: 'hit',
-  beamStyle: 'electric',
-  aoeStyle: 'ring',
-  aoeShape: 'circle',
-  aoeDamageMode: 'instant',
-  radialDamage: false,
-  radialMinDamage: 0,
-  aoeDuration: 2.5,
-  aoeTickInterval: 0.5,
-  pierce: 0,
-  dashDistance: 0,
-  knockback: 0,
   hitstun: CONFIG.combat.hitstunSeconds,
-  buffs: [],
+  knockback: 0,
   slow: null,
   dot: null,
+  healOnHit: false
+};
+
+/** Campos comunes por defecto; las factorías añaden los de cada forma. */
+const BASE_DEFAULTS = {
+  cooldown: 1,
+  repeatCooldown: null,
+  buffs: [] as BuffSpec[],
   healSelf: 0,
-  healOnHit: false,
   selfDamage: 0,
-  shield: false,
-  shieldDuration: 0,
-  damageReduction: 0,
-  shieldSpeedMultiplier: 1,
-  dashBlocksOnEnemies: false,
-  preserveMomentum: false,
-  color: [255, 255, 255],
+  impactStyle: 'hit' as ImpactStyle,
+  color: [255, 255, 255] as [number, number, number],
   startup: 0,
   active: 0,
   recovery: 0.45,
-  startupAnimation: null,
-  startupAnimationMode: 'once',
+  startupAnimation: null as AnimationName | null,
+  startupAnimationMode: 'once' as StartupAnimationMode,
   startupAnimationSpeed: 1,
-  animation: null,
+  animation: null as AnimationName | null,
   moveWhileStartup: false,
   blockMovementDuringCast: false,
   armorPool: 0,
-  armorWindow: 'startup',
+  armorWindow: 'startup' as 'startup' | 'cast',
   blockMovementUntilEndAnimation: false,
+  preserveMomentum: false,
   description: ''
+};
+
+/** Valores propios de cada forma. */
+const SHAPE_DEFAULTS: Record<AbilityShape, Record<string, unknown>> = {
+  melee: { range: 1.5, radius: 0.5, halfAngle: 45 },
+  projectile: {
+    range: 8,
+    radius: 0.5,
+    projectileSpeed: 12,
+    pierce: 0,
+    projectileStyle: 'orb'
+  },
+  beam: { range: 8, radius: 0.5, beamStyle: 'electric' },
+  aoe: {
+    range: 4,
+    radius: 2,
+    halfAngle: 45,
+    aoeShape: 'circle',
+    aoeDamageMode: 'once',
+    radialDamage: false,
+    radialMinDamage: 0,
+    aoeDuration: 2.5,
+    aoeTickInterval: 0.5,
+    aoeStyle: 'ring'
+  },
+  dash: { radius: 0.9, dashDistance: 0, dashBlocksOnEnemies: false },
+  self: {
+    radius: 1,
+    shield: false,
+    shieldDuration: 0,
+    damageReduction: 0,
+    shieldSpeedMultiplier: 1
+  }
 };
 
 /**
@@ -163,48 +212,277 @@ export function abilityTotalTime(def: AbilityDef): number {
 }
 
 /**
- * Registra una habilidad rellenando los valores que no se indiquen.
- * Pensado para que cada definición sea corta y legible.
- */
-export function defineAbility(
-  def: Pick<AbilityDef, 'id' | 'name' | 'type' | 'category' | 'shape'> &
-    Partial<AbilityDef>
-): AbilityDef {
-  return { ...DEFAULT_ABILITY, ...def };
-}
-
-/**
  * Catálogo de habilidades. Se irá rellenando una a una.
  *
  * Pikachu usa Placaje como básica cuerpo a cuerpo, Ataque Rápido para entrar
  * o salir, Rayo como haz de daño y Impactrueno como proyectil de presión. Los
  * números se pueden ajustar sin tocar el motor: solo afectan a esta definición.
  */
-export const ABILITIES: Record<AbilityId, AbilityDef> = {};
+export const ABILITIES: Record<AbilityId, AnyAbilityDef> = {};
+
+/** Definición concreta de una forma y sus props. */
+type DefFor<S extends AbilityShape, P extends AbilityProps> =
+  S extends 'melee'
+    ? MeleeAbilityDef<P>
+    : S extends 'projectile'
+      ? ProjectileAbilityDef<P>
+      : S extends 'beam'
+        ? BeamAbilityDef<P>
+        : S extends 'aoe'
+          ? AoeAbilityDef<P>
+          : S extends 'dash'
+            ? DashAbilityDef<P>
+            : S extends 'self'
+              ? SelfAbilityDef<P>
+              : never;
+
+interface MeleeFields {
+  /** Alcance del arco, en unidades de mundo. */
+  range(value: number): this;
+  /** Radio del VFX de curación; no cambia el hitbox. */
+  radius(value: number): this;
+  /** Semiángulo del arco, en grados. */
+  halfAngle(value: number): this;
+}
+
+interface ProjectileFields {
+  /** Distancia máxima de vuelo. */
+  range(value: number): this;
+  /** Radio de detección y grosor visual. */
+  radius(value: number): this;
+  /** Aspecto y velocidad del proyectil. */
+  projectile(style: ProjectileStyle, speed: number): this;
+  /** Enemigos extra que puede atravesar. */
+  pierce(value: number): this;
+}
+
+interface BeamFields {
+  /** Longitud del haz. */
+  range(value: number): this;
+  /** Semiancho del haz. */
+  radius(value: number): this;
+  /** Aspecto visual del haz. */
+  beam(style: BeamStyle): this;
+}
+
+interface AoeFields {
+  /** Distancia desde el lanzador hasta el centro. */
+  range(value: number): this;
+  /** Radio del círculo o longitud del cono. */
+  radius(value: number): this;
+  /** Semiángulo del cono, en grados. */
+  halfAngle(value: number): this;
+  /** Configura estilo, modo de reparto y duración del área. */
+  area(
+    style: AoeStyle,
+    mode: AoeDamageMode,
+    duration: number,
+    tickInterval?: number
+  ): this;
+  /** Geometría del área: círculo o cono. */
+  aoeShape(shape: AoeShape): this;
+  /** Activa el daño radial con el multiplicador del borde. */
+  radial(minDamage: number): this;
+  /** Evento al empezar el lanzamiento, antes del `startup`. */
+  onStart(event: AoeEvent<AoePlayer, AnyAbilityDef>): this;
+  /** Evento al aparecer el área, antes del primer golpe o tick. */
+  onCast(event: AoeEvent<AoePlayer, AnyAbilityDef>): this;
+  /** Evento al terminar el área. */
+  onEnd(event: AoeEvent<AoePlayer, AnyAbilityDef>): this;
+  /** Recoloca el centro y la marca durante el `startup`. */
+  aoePrepareMovement(
+    movement: AoePrepareMovement<AoePlayer, AnyAbilityDef>
+  ): this;
+  /** Recoloca el centro de un área con ticks en cada frame. */
+  aoeMovement(movement: AoeMovement<AoePlayer, AnyAbilityDef>): this;
+}
+
+interface DashFields {
+  /** Ancho del barrido; se usa `max(0.5, radius)`. */
+  radius(value: number): this;
+  /** Distancia del dash, en unidades de mundo. */
+  dash(distance: number): this;
+  /** El dash se detiene al chocar con enemigos. */
+  dashBlocksOnEnemies(): this;
+}
+
+interface SelfFields {
+  /** Radio del VFX de buff o curación. */
+  radius(value: number): this;
+  /** Escudo esférico con reducción y multiplicador de velocidad. */
+  shield(duration: number, reduction: number, speedMultiplier?: number): this;
+}
+
+type ShapeBuilderFields<S extends AbilityShape> = S extends 'melee'
+  ? MeleeFields
+  : S extends 'projectile'
+    ? ProjectileFields
+    : S extends 'beam'
+      ? BeamFields
+      : S extends 'aoe'
+        ? AoeFields
+        : S extends 'dash'
+          ? DashFields
+          : S extends 'self'
+            ? SelfFields
+            : never;
+
+/** Métodos comunes a todas las formas. */
+export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
+  /** Potencia base del golpe. */
+  power(value: number): this;
+  /** Segundos de hitstun al impactar. */
+  hitstun(value: number): this;
+  /** Empuje al impactar, en unidades de mundo. */
+  knockback(value: number): this;
+  /** Ralentización aplicada a los golpeados. */
+  slow(multiplier: number, duration: number): this;
+  /** Daño en el tiempo aplicado a los golpeados. */
+  dot(
+    type: PokemonType,
+    damage: number,
+    duration: number,
+    interval?: number
+  ): this;
+  /** La curación de `heal` solo se aplica si la habilidad impacta. */
+  healOnHit(): this;
+  /** Añade props propias de la habilidad al bloque común. */
+  props<E extends Record<string, unknown>>(extra: E): AbilityBuilderFor<S, P & E>;
+  /** Perfil declarativo para la IA cuando `resolve` hace algo no deducible. */
+  bot(profile: AbilityBotProfile): this;
+  /** Escape hatch para ajustes puntuales del motor. */
+  extra(extra: AbilityExtra): this;
+  /** Resolución obligatoria de la habilidad. */
+  resolve(fn: AbilityResolve<AoePlayer, DefFor<S, P>>): this;
+  /** Enfriamiento en segundos. */
+  cooldown(value: number): this;
+  /** Rampa de enfriamiento al repetir la habilidad. */
+  repeatCooldown(spec: RepeatCooldownSpec): this;
+  /** Aspecto visual del impacto. */
+  impact(style: ImpactStyle): this;
+  /** Buff aplicado al lanzador. */
+  buff(stat: BuffStat, multiplier: number, duration: number): this;
+  /** Curación al lanzador como fracción de su vida máxima. */
+  heal(fraction: number): this;
+  /** Autodaño no letal como fracción de la vida máxima. */
+  selfDamage(fraction: number): this;
+  /** Color del efecto, en 0-255. */
+  color(r: number, g: number, b: number): this;
+  /** Tiempo desde la pulsación hasta el efecto. */
+  startup(
+    seconds: number,
+    options?: {
+      mode?: StartupAnimationMode;
+      speed?: number;
+      move?: boolean;
+      animation?: AnimationName;
+    }
+  ): this;
+  /** Ventana de daño o desplazamiento que empieza con el efecto. */
+  active(seconds: number): this;
+  /** Tiempo desde el fin del efecto hasta volver a estar libre. */
+  recovery(seconds: number): this;
+  /** Clava al lanzador durante todo el casteo. */
+  blockMovementDuringCast(): this;
+  /** Armadura de casteo. */
+  armor(pool: number, options?: { window?: 'startup' | 'cast' }): this;
+  /** Bloquea hasta terminar la animación de lanzamiento. */
+  blockMovementUntilEndAnimation(): this;
+  /** Conserva la inercia al lanzar. */
+  preserveMomentum(): this;
+  /** Animación de lanzamiento; `null` la desactiva. */
+  animation(name: AnimationName | null): this;
+  /** Texto corto para el HUD. */
+  description(text: string): this;
+  /** Construye la definición; solo compila si se ha declarado `resolve`. */
+  build(): DefFor<S, P>;
+}
+
+/** Builder público de una forma concreta. */
+export type AbilityBuilderFor<
+  S extends AbilityShape,
+  P extends AbilityProps = AbilityProps
+> = CommonBuilder<S, P> & ShapeBuilderFields<S>;
 
 /**
- * Builder fluido de habilidades.
- *
- * Cada definición declara solo lo que se diferencia del valor por defecto; el
- * resto lo rellena `defineAbility`. Los métodos devuelven `this`, así que una
- * habilidad se lee de arriba abajo sin objetos anidados.
+ * Implementación única de los builders. Las factorías la exponen con el tipo
+ * de su forma, así que desde fuera solo se ven los métodos aplicables.
  */
-type AbilitySeed = Pick<
-  AbilityDef,
-  'id' | 'name' | 'type' | 'category' | 'shape'
->;
-
-export class AbilityBuilder {
-  private readonly draft: AbilitySeed & Partial<AbilityDef>;
+class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
+  private readonly draft: Record<string, unknown>;
   /** Distingue una ventana de armadura explícita de la inferida. */
   private armorWindowExplicit = false;
 
-  constructor(seed: AbilitySeed) {
-    this.draft = { ...seed };
+  constructor(seed: {
+    id: string;
+    name: string;
+    type: PokemonType;
+    category: DamageCategory;
+    shape: S;
+  }) {
+    this.draft = {
+      ...BASE_DEFAULTS,
+      ...SHAPE_DEFAULTS[seed.shape],
+      ...seed,
+      props: { ...DEFAULT_PROPS },
+      buffs: []
+    };
   }
 
   power(value: number): this {
-    this.draft.power = value;
+    this.draftProps().power = value;
+    return this;
+  }
+
+  hitstun(value: number): this {
+    this.draftProps().hitstun = value;
+    return this;
+  }
+
+  knockback(value: number): this {
+    this.draftProps().knockback = value;
+    return this;
+  }
+
+  slow(multiplier: number, duration: number): this {
+    this.draftProps().slow = { multiplier, duration };
+    return this;
+  }
+
+  dot(
+    type: PokemonType,
+    damage: number,
+    duration: number,
+    interval = 1
+  ): this {
+    this.draftProps().dot = { type, damage, duration, interval };
+    return this;
+  }
+
+  healOnHit(): this {
+    this.draftProps().healOnHit = true;
+    return this;
+  }
+
+  props<E extends Record<string, unknown>>(
+    extra: E
+  ): AbilityBuilderFor<S, P & E> {
+    Object.assign(this.draftProps(), extra);
+    return this as unknown as AbilityBuilderFor<S, P & E>;
+  }
+
+  bot(profile: AbilityBotProfile): this {
+    this.draft.bot = { ...profile };
+    return this;
+  }
+
+  extra(extra: AbilityExtra): this {
+    this.draft.extra = extra;
+    return this;
+  }
+
+  resolve(fn: AbilityResolve<AoePlayer, DefFor<S, P>>): this {
+    this.draft.resolve = fn;
     return this;
   }
 
@@ -213,11 +491,6 @@ export class AbilityBuilder {
     return this;
   }
 
-  /**
-   * Aumenta el cooldown al repetir la misma habilidad de forma consecutiva.
-   * `step` y `max` son fracciones del cooldown base; `resetAfter` son los
-   * segundos sin volver a usarla que reinician la racha.
-   */
   repeatCooldown(spec: RepeatCooldownSpec): this {
     this.draft.repeatCooldown = { ...spec };
     return this;
@@ -238,10 +511,14 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** Configura un proyectil con su velocidad y su aspecto visual. */
   projectile(style: ProjectileStyle, speed: number): this {
     this.draft.projectileStyle = style;
     this.draft.projectileSpeed = speed;
+    return this;
+  }
+
+  pierce(value: number): this {
+    this.draft.pierce = value;
     return this;
   }
 
@@ -255,7 +532,6 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** Configura un área con su estilo, modo de daño y duración. */
   area(
     style: AoeStyle,
     mode: AoeDamageMode,
@@ -269,72 +545,41 @@ export class AbilityBuilder {
     return this;
   }
 
-  /**
-   * Cambia la geometría del área. `cone` usa `radius` como longitud desde el
-   * centro del lanzamiento y `halfAngle` como apertura; `circle` es el valor
-   * por defecto.
-   */
   aoeShape(shape: AoeShape): this {
     this.draft.aoeShape = shape;
     return this;
   }
 
-  /**
-   * Define la aplicación de efectos propia del área. Sin este callback se usa
-   * el comportamiento estándar (daño a rivales + `slow` + control instantáneo).
-   */
-  aoeEffect(effect: AoeEffect<AoePlayer, AbilityDef>): this {
-    this.draft.aoeEffect = effect;
-    return this;
-  }
-
-  /** Evento al empezar el lanzamiento del área. */
-  onStart(event: AoeEvent<AoePlayer, AbilityDef>): this {
-    this.draft.onStart = event;
-    return this;
-  }
-
-  /** Evento al aparecer el área, antes del primer golpe o tick. */
-  onCast(event: AoeEvent<AoePlayer, AbilityDef>): this {
-    this.draft.onCast = event;
-    return this;
-  }
-
-  /** Evento al terminar el área. */
-  onEnd(event: AoeEvent<AoePlayer, AbilityDef>): this {
-    this.draft.onEnd = event;
-    return this;
-  }
-
-  /**
-   * Función que recoloca el centro y la marca del área durante la preparación.
-   * Se evalúa cada frame del `startup`; al disparar el efecto manda
-   * `aoeMovement`.
-   */
-  aoePrepareMovement(movement: AoePrepareMovement<AoePlayer, AbilityDef>): this {
-    this.draft.aoePrepareMovement = movement;
-    return this;
-  }
-
-  /**
-   * Función que mueve el centro de un área `overTime` durante su duración.
-   * Recibe el tiempo transcurrido y devuelve el centro en el mundo; el daño,
-   * el aro y el efecto visual siguen ese centro.
-   */
-  aoeMovement(movement: AoeMovement<AoePlayer, AbilityDef>): this {
-    this.draft.aoeMovement = movement;
-    return this;
-  }
-
-  /** Activa el daño radial con el multiplicador del borde. */
   radial(minDamage: number): this {
     this.draft.radialDamage = true;
     this.draft.radialMinDamage = minDamage;
     return this;
   }
 
-  pierce(value: number): this {
-    this.draft.pierce = value;
+  onStart(event: AoeEvent<AoePlayer, AnyAbilityDef>): this {
+    this.draft.onStart = event;
+    return this;
+  }
+
+  onCast(event: AoeEvent<AoePlayer, AnyAbilityDef>): this {
+    this.draft.onCast = event;
+    return this;
+  }
+
+  onEnd(event: AoeEvent<AoePlayer, AnyAbilityDef>): this {
+    this.draft.onEnd = event;
+    return this;
+  }
+
+  aoePrepareMovement(
+    movement: AoePrepareMovement<AoePlayer, AnyAbilityDef>
+  ): this {
+    this.draft.aoePrepareMovement = movement;
+    return this;
+  }
+
+  aoeMovement(movement: AoeMovement<AoePlayer, AnyAbilityDef>): this {
+    this.draft.aoeMovement = movement;
     return this;
   }
 
@@ -343,16 +588,11 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** El dash deja de atravesar enemigos: se detiene en el primero que encuentra. */
   dashBlocksOnEnemies(): this {
     this.draft.dashBlocksOnEnemies = true;
     return this;
   }
 
-  /**
-   * Escudo esférico con reducción de daño durante `duration` segundos.
-   * `speedMultiplier` se aplica a la velocidad normal mientras está activo.
-   */
   shield(
     duration: number,
     reduction: number,
@@ -365,45 +605,11 @@ export class AbilityBuilder {
     return this;
   }
 
-  knockback(value: number): this {
-    this.draft.knockback = value;
-    return this;
-  }
-
-  /**
-   * Segundos de hitstun que aplica el golpe. Por defecto, el global
-   * (`CONFIG.combat.hitstunSeconds`) y solo cuenta si el golpe lleva control.
-   */
-  hitstun(seconds: number): this {
-    this.draft.hitstun = seconds;
-    return this;
-  }
-
   buff(stat: BuffStat, multiplier: number, duration: number): this {
     this.draft.buffs = [
-      ...(this.draft.buffs ?? []),
+      ...(this.draft.buffs as BuffSpec[]),
       { stat, multiplier, duration }
     ];
-    return this;
-  }
-
-  slow(multiplier: number, duration: number): this {
-    this.draft.slow = { multiplier, duration };
-    return this;
-  }
-
-  /**
-   * Añade daño en el tiempo con su propio tipo. Quemadura y veneno comparten
-   * esta mecánica: solo cambia el tipo. `damage` es el daño fijo por tick y
-   * `duration` la duración total en segundos.
-   */
-  dot(
-    type: PokemonType,
-    damage: number,
-    duration: number,
-    interval = 1
-  ): this {
-    this.draft.dot = { type, damage, duration, interval };
     return this;
   }
 
@@ -412,13 +618,6 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** La curación de `heal` solo se aplica si la habilidad impacta. */
-  healOnHit(): this {
-    this.draft.healOnHit = true;
-    return this;
-  }
-
-  /** Autodaño no letal como fracción de la vida máxima del lanzador. */
   selfDamage(fraction: number): this {
     this.draft.selfDamage = fraction;
     return this;
@@ -429,7 +628,6 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** Tiempo desde el inicio del casteo hasta que ocurre el efecto. */
   startup(
     seconds: number,
     options: {
@@ -453,38 +651,22 @@ export class AbilityBuilder {
     return this;
   }
 
-  /** Ventana de daño/desplazamiento que empieza con el efecto. */
   active(seconds: number): this {
     this.draft.active = seconds;
     return this;
   }
 
-  /** Tiempo desde el fin del efecto hasta volver a estar libre. */
   recovery(seconds: number): this {
     this.draft.recovery = seconds;
     return this;
   }
 
-  /**
-   * Bloquea el movimiento durante todo el casteo, recuperación incluida.
-   * Tiene prioridad sobre `move: true` de `startup`.
-   */
   blockMovementDuringCast(): this {
     this.draft.blockMovementDuringCast = true;
     return this;
   }
 
-  /**
-   * Armadura de casteo: los golpes restan su daño a un pozo de `pool` PV sin
-   * mitigarlo; mientras quede armadura no cancelan la preparación ni aplican
-   * hitstun o empuje. Cuando el daño acumulado agota el pozo, el casteo se
-   * rompe. Por defecto cubre solo el startup; en canalizaciones cubre todo el
-   * casteo. Un `force` del motor (estados, control explícito) la ignora.
-   */
-  armor(
-    pool: number,
-    options: { window?: 'startup' | 'cast' } = {}
-  ): this {
+  armor(pool: number, options: { window?: 'startup' | 'cast' } = {}): this {
     this.draft.armorPool = pool;
     if (options.window !== undefined) {
       this.draft.armorWindow = options.window;
@@ -493,29 +675,16 @@ export class AbilityBuilder {
     return this;
   }
 
-  /**
-   * Bloquea el movimiento hasta que termina de reproducirse la animación de
-   * lanzamiento. Después se puede mover durante la recuperación restante.
-   * Tiene prioridad sobre `move: true` de `startup`.
-   */
   blockMovementUntilEndAnimation(): this {
     this.draft.blockMovementUntilEndAnimation = true;
     return this;
   }
 
-  /**
-   * Lanzar la habilidad no detiene el movimiento actual. Pensado para
-   * instantes que se usan en carrera, como Protección.
-   */
   preserveMomentum(): this {
     this.draft.preserveMomentum = true;
     return this;
   }
 
-  /**
-   * Animación de lanzamiento. Omitirla (o pasar `null`) deja la habilidad sin
-   * animación propia: el Pokémon mantiene su reposo o su caminar.
-   */
   animation(name: AnimationName | null): this {
     this.draft.animation = name;
     return this;
@@ -526,29 +695,112 @@ export class AbilityBuilder {
     return this;
   }
 
-  build(): AbilityDef {
+  build(): DefFor<S, P> {
+    if (typeof this.draft.resolve !== 'function') {
+      throw new Error(
+        `La habilidad "${String(this.draft.id)}" no declara una resolución.`
+      );
+    }
     // Las canalizaciones no pueden esquivar: su armadura cubre todo el casteo
     // salvo que la habilidad indique otra ventana explícitamente.
     if (!this.armorWindowExplicit && this.draft.blockMovementDuringCast) {
       this.draft.armorWindow = 'cast';
     }
-    return defineAbility(this.draft);
+    return {
+      ...this.draft,
+      props: { ...DEFAULT_PROPS, ...this.draftProps() },
+      buffs: [...(this.draft.buffs as BuffSpec[])]
+    } as unknown as DefFor<S, P>;
+  }
+
+  private draftProps(): Record<string, unknown> {
+    return this.draft.props as Record<string, unknown>;
   }
 }
 
-/** Punto de entrada del builder. */
-export function ability(
+function createBuilder<S extends AbilityShape, P extends AbilityProps>(
+  shape: S,
   id: string,
   name: string,
   type: PokemonType,
   category: DamageCategory,
-  shape: AbilityShape
-): AbilityBuilder {
-  return new AbilityBuilder({ id, name, type, category, shape });
+  resolve: AbilityResolve<AoePlayer, DefFor<S, P>>
+): AbilityBuilderFor<S, P> {
+  const builder = new AbilityBuilder<S, P>({ id, name, type, category, shape });
+  builder.resolve(resolve);
+  return builder as unknown as AbilityBuilderFor<S, P>;
+}
+
+/** Básica o habilidad cuerpo a cuerpo en arco. */
+export function meleeAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, MeleeAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'melee', AbilityProps & E> {
+  return createBuilder('melee', id, name, type, category, resolve);
+}
+
+/** Proyectil que avanza hasta agotar su alcance. */
+export function projectileAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, ProjectileAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'projectile', AbilityProps & E> {
+  return createBuilder('projectile', id, name, type, category, resolve);
+}
+
+/** Haz instantáneo en línea recta. */
+export function beamAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, BeamAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'beam', AbilityProps & E> {
+  return createBuilder('beam', id, name, type, category, resolve);
+}
+
+/** Área en el suelo, instantánea o con ticks. */
+export function aoeAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, AoeAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'aoe', AbilityProps & E> {
+  return createBuilder('aoe', id, name, type, category, resolve);
+}
+
+/** Desplazamiento que puede golpear al paso. */
+export function dashAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, DashAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'dash', AbilityProps & E> {
+  return createBuilder('dash', id, name, type, category, resolve);
+}
+
+/** Habilidad centrada en el lanzador. */
+export function selfAbility<E extends Record<string, unknown> = {}>(
+  id: string,
+  name: string,
+  type: PokemonType,
+  category: DamageCategory,
+  resolve: AbilityResolve<AoePlayer, SelfAbilityDef<AbilityProps & E>>
+): AbilityBuilderFor<'self', AbilityProps & E> {
+  return createBuilder('self', id, name, type, category, resolve);
 }
 
 /** Construye la habilidad y la registra en el catálogo. */
-export function registerAbility(builder: AbilityBuilder): AbilityDef {
+export function registerAbility(builder: {
+  build(): AnyAbilityDef;
+}): AnyAbilityDef {
   const def = builder.build();
   ABILITIES[def.id] = def;
   return def;
@@ -647,7 +899,7 @@ export function commonAnimationFor(
 
 export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
   proteccion: registerAbility(
-    ability('proteccion', 'Protección', 'Normal', 'status', 'self')
+    selfAbility('proteccion', 'Protección', 'Normal', 'status', defaultSelfResolve)
       .cooldown(8)
       .radius(1)
       .recovery(0.15)
@@ -660,7 +912,7 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
       )
   ),
   impulso: registerAbility(
-    ability('impulso', 'Impulso', 'Normal', 'status', 'dash')
+    dashAbility('impulso', 'Impulso', 'Normal', 'status', defaultDashResolve)
       .cooldown(3)
       .dash(2.2)
       .dashBlocksOnEnemies()
@@ -680,7 +932,7 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('impactrueno', 'Impactrueno', 'Electric', 'special', 'projectile')
+  projectileAbility('impactrueno', 'Impactrueno', 'Electric', 'special', defaultProjectileResolve)
     .power(70)
     .cooldown(0.9)
     .range(8)
@@ -697,10 +949,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ataqueRapido', 'Ataque Rápido', 'Normal', 'physical', 'dash')
+  dashAbility('ataqueRapido', 'Ataque Rápido', 'Normal', 'physical', defaultDashResolve)
     .power(60)
     .cooldown(4)
-    .range(0)
     .radius(0.9)
     .dash(4.5)
     .knockback(0.4)
@@ -711,7 +962,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rayo', 'Rayo', 'Electric', 'special', 'beam')
+  beamAbility('rayo', 'Rayo', 'Electric', 'special', defaultBeamResolve)
     .power(130)
     .cooldown(8)
     .range(11)
@@ -727,7 +978,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('placaje', 'Placaje', 'Normal', 'physical', 'melee')
+  meleeAbility('placaje', 'Placaje', 'Normal', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.25)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -747,7 +998,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('chispa', 'Chispa', 'Electric', 'physical', 'melee')
+  meleeAbility('chispa', 'Chispa', 'Electric', 'physical', defaultMeleeResolve)
     .power(80)
     .cooldown(0.6)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -765,10 +1016,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rollout', 'Rollout', 'Normal', 'physical', 'dash')
+  dashAbility('rollout', 'Rollout', 'Normal', 'physical', defaultDashResolve)
     .power(100)
     .cooldown(6)
-    .range(0)
     .radius(0.95)
     .dash(5)
     .knockback(0.6)
@@ -782,7 +1032,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ondaTrueno', 'Onda Trueno', 'Electric', 'status', 'projectile')
+  projectileAbility('ondaTrueno', 'Onda Trueno', 'Electric', 'status', defaultProjectileResolve)
     .power(0)
     .cooldown(5)
     .range(9)
@@ -799,12 +1049,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('explosion', 'Explosión', 'Electric', 'special', 'aoe')
+  aoeAbility('explosion', 'Explosión', 'Electric', 'special', defaultAoeResolve)
     .power(200)
     .cooldown(18)
     .range(0)
     .radius(4.2)
-    .area('explosion', 'instant', 0.85)
+    .area('explosion', 'once', 0.85)
     .startup(0.6, { animation: 'charge' })
     .armor(40)
     .recovery(0.5)
@@ -823,7 +1073,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', 'melee')
+  meleeAbility('lenguetazo', 'Lengüetazo', 'Ghost', 'physical', defaultMeleeResolve)
     .power(42)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -841,7 +1091,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('bolaSombra', 'Bola Sombra', 'Ghost', 'special', 'projectile')
+  projectileAbility('bolaSombra', 'Bola Sombra', 'Ghost', 'special', defaultProjectileResolve)
     .power(62)
     .cooldown(6)
     .range(8.5)
@@ -857,12 +1107,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('bombaLodo', 'Bomba Lodo', 'Poison', 'special', 'aoe')
+  aoeAbility('bombaLodo', 'Bomba Lodo', 'Poison', 'special', defaultAoeResolve)
     .power(20)
     .cooldown(9)
     .range(6.5)
     .radius(2.4)
-    .area('poison', 'overTime', 2.5, 0.5)
+    .area('poison', 'overtime-global', 2.5, 0.5)
     .slow(0.75, 1.5)
     .dot('Poison', 5, 3)
     .startup(0.35, { animation: 'shoot', move: true })
@@ -877,7 +1127,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('comeSuenos', 'Come Sueños', 'Ghost', 'special', 'beam')
+  beamAbility('comeSuenos', 'Come Sueños', 'Ghost', 'special', defaultBeamResolve)
     .power(80)
     .cooldown(11)
     .range(8)
@@ -899,7 +1149,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('aranazo', 'Arañazo', 'Normal', 'physical', 'melee')
+  meleeAbility('aranazo', 'Arañazo', 'Normal', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.3)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -915,7 +1165,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('giroFuego', 'Giro Fuego', 'Fire', 'special', 'aoe')
+  aoeAbility('giroFuego', 'Giro Fuego', 'Fire', 'special', defaultAoeResolve)
     .power(40)
     .cooldown(6)
     // Sin desplazamiento: el remolino nace sobre Charmander y lo acompaña.
@@ -924,7 +1174,7 @@ registerAbility(
     .startup(0.5, { move: true })
     .armor(25)
     .recovery(0.45)
-    .area('whirl', 'overTime', 2.4, 0.4)
+    .area('whirl', 'overtime-global', 2.4, 0.4)
     // El remolino nace pegado a Charmander y lo sigue tanto durante la
     // preparación como mientras dura el área.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
@@ -938,7 +1188,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('lanzallamas', 'Lanzallamas', 'Fire', 'special', 'beam')
+  beamAbility('lanzallamas', 'Lanzallamas', 'Fire', 'special', defaultBeamResolve)
     .power(100)
     .cooldown(6.5)
     .range(9.5)
@@ -956,7 +1206,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', 'aoe')
+  aoeAbility('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', defaultAoeResolve)
     .power(130)
     .cooldown(14)
     .range(4.2)
@@ -965,7 +1215,7 @@ registerAbility(
     .armor(40)
     .recovery(0.7)
     .animation('charge')
-    .area('fire', 'instant', 0.5)
+    .area('fire', 'once', 0.5)
     .impact('fire')
     .color(255, 92, 30)
     .description(
@@ -978,7 +1228,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', 'melee')
+  meleeAbility('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', defaultMeleeResolve)
     .power(100)
     .cooldown(5)
     .range(2.6)
@@ -994,7 +1244,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('paralizador', 'Paralizador', 'Grass', 'status', 'melee')
+  meleeAbility('paralizador', 'Paralizador', 'Grass', 'status', defaultMeleeResolve)
     .power(0)
     .cooldown(7)
     .range(3)
@@ -1012,7 +1262,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('llueveHojas', 'Lluevehojas', 'Grass', 'special', 'aoe')
+  aoeAbility('llueveHojas', 'Lluevehojas', 'Grass', 'special', defaultAoeResolve)
     .power(160)
     .cooldown(14)
     .range(4.2)
@@ -1021,7 +1271,7 @@ registerAbility(
     .armor(40)
     .recovery(0.7)
     .animation('shake')
-    .area('grass', 'instant', 1.1)
+    .area('grass', 'once', 1.1)
     .impact('grass')
     .color(112, 204, 72)
     .description(
@@ -1034,10 +1284,9 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('acuaJet', 'Acua Jet', 'Water', 'physical', 'dash')
+  dashAbility('acuaJet', 'Acua Jet', 'Water', 'physical', defaultDashResolve)
     .power(65)
     .cooldown(5)
-    .range(0)
     .radius(0.85)
     .dash(4.2)
     .knockback(0.3)
@@ -1050,7 +1299,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', 'projectile')
+  projectileAbility('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', defaultProjectileResolve)
     .power(80)
     .cooldown(3)
     .range(8)
@@ -1068,7 +1317,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('hidrobomba', 'Hidrobomba', 'Water', 'special', 'beam')
+  beamAbility('hidrobomba', 'Hidrobomba', 'Water', 'special', defaultBeamResolve)
     .power(140)
     .cooldown(9)
     .range(8.5)
@@ -1089,7 +1338,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('garraMetal', 'Garra Metal', 'Steel', 'physical', 'melee')
+  meleeAbility('garraMetal', 'Garra Metal', 'Steel', 'physical', defaultMeleeResolve)
     .power(45)
     .cooldown(0.5)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1107,10 +1356,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('velocidadExtrema', 'Velocidad Extrema', 'Normal', 'physical', 'dash')
+  dashAbility('velocidadExtrema', 'Velocidad Extrema', 'Normal', 'physical', defaultDashResolve)
     .power(55)
     .cooldown(6)
-    .range(0)
     .radius(0.9)
     .dash(5.2)
     .knockback(0.6)
@@ -1124,7 +1372,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('esferaAura', 'Esfera Aura', 'Fighting', 'special', 'projectile')
+  projectileAbility('esferaAura', 'Esfera Aura', 'Fighting', 'special', defaultProjectileResolve)
     .power(60)
     .cooldown(5)
     .range(10)
@@ -1141,7 +1389,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('combateCercano', 'Combate Cercano', 'Fighting', 'physical', 'melee')
+  meleeAbility('combateCercano', 'Combate Cercano', 'Fighting', 'physical', defaultMeleeResolve)
     .power(125)
     .cooldown(13)
     .range(2.4)
@@ -1163,7 +1411,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('shurikenAgua', 'Shuriken de Agua', 'Water', 'special', 'projectile')
+  projectileAbility('shurikenAgua', 'Shuriken de Agua', 'Water', 'special', defaultProjectileResolve)
     .power(42)
     .cooldown(0.65)
     .range(9)
@@ -1179,7 +1427,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('tajoUmbro', 'Tajo Umbrío', 'Dark', 'physical', 'melee')
+  meleeAbility('tajoUmbro', 'Tajo Umbrío', 'Dark', 'physical', defaultMeleeResolve)
     .power(65)
     .cooldown(1.4)
     .range(2.1)
@@ -1196,10 +1444,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('sombraVil', 'Sombra Vil', 'Dark', 'physical', 'dash')
+  dashAbility('sombraVil', 'Sombra Vil', 'Dark', 'physical', defaultDashResolve)
     .power(50)
     .cooldown(7)
-    .range(0)
     .radius(0.85)
     .dash(4.8)
     .knockback(0.5)
@@ -1213,7 +1460,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('pulsoUmbro', 'Pulso Umbrío', 'Dark', 'special', 'beam')
+  beamAbility('pulsoUmbro', 'Pulso Umbrío', 'Dark', 'special', defaultBeamResolve)
     .power(85)
     .cooldown(10)
     .range(9.5)
@@ -1234,7 +1481,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('telequinesis', 'Telequinesis', 'Psychic', 'special', 'melee')
+  meleeAbility('telequinesis', 'Telequinesis', 'Psychic', 'special', defaultMeleeResolve)
     .power(45)
     .cooldown(0.6)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1253,10 +1500,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('teletransporte', 'Teletransporte', 'Psychic', 'status', 'dash')
+  dashAbility('teletransporte', 'Teletransporte', 'Psychic', 'status', defaultDashResolve)
     .power(0)
     .cooldown(6)
-    .range(0)
     .radius(0.85)
     .dash(5)
     .active(0.24).recovery(0)
@@ -1269,7 +1515,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('psiquico', 'Psíquico', 'Psychic', 'special', 'beam')
+  beamAbility('psiquico', 'Psíquico', 'Psychic', 'special', defaultBeamResolve)
     .power(80)
     .cooldown(7)
     .range(10)
@@ -1285,7 +1531,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('psicoataque', 'Psicoataque', 'Psychic', 'special', 'aoe')
+  aoeAbility('psicoataque', 'Psicoataque', 'Psychic', 'special', defaultAoeResolve)
     .power(100)
     .cooldown(15)
     .range(4.5)
@@ -1293,7 +1539,7 @@ registerAbility(
     .startup(0.8, { animation: 'charge' })
     .armor(40)
     .recovery(0.7)
-    .area('psychic', 'instant', 0.85)
+    .area('psychic', 'once', 0.85)
     .radial(0.35)
     .impact('psychic')
     .color(198, 96, 255)
@@ -1307,7 +1553,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('psicogolpe', 'Golpe Psíquico', 'Psychic', 'special', 'melee')
+  meleeAbility('psicogolpe', 'Golpe Psíquico', 'Psychic', 'special', defaultMeleeResolve)
     .power(45)
     .cooldown(0.3)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1326,10 +1572,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('agilidad', 'Agilidad', 'Psychic', 'status', 'dash')
+  dashAbility('agilidad', 'Agilidad', 'Psychic', 'status', defaultDashResolve)
     .power(0)
     .cooldown(8)
-    .range(0)
     .radius(0.85)
     .dash(4.4)
     .active(0.26).recovery(0)
@@ -1343,7 +1588,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('premonicion', 'Premonición', 'Psychic', 'special', 'aoe')
+  aoeAbility('premonicion', 'Premonición', 'Psychic', 'special', defaultAoeResolve)
     .power(85)
     .cooldown(10)
     .range(6)
@@ -1351,7 +1596,7 @@ registerAbility(
     .startup(0.9, { move: true })
     .armor(40)
     .recovery(0.55)
-    .area('psychic', 'instant', 0.8)
+    .area('psychic', 'once', 0.8)
     .radial(0.5)
     .impact('psychic')
     .slow(0.7, 2)
@@ -1362,7 +1607,8 @@ registerAbility(
 );
 
 registerAbility(
-  ability('recuperacion', 'Recuperación', 'Psychic', 'status', 'aoe')
+  aoeAbility('recuperacion', 'Recuperación', 'Psychic', 'status', defaultAoeResolve)
+    .bot({ healAllies: true })
     .power(0)
     .cooldown(14)
     .range(0)
@@ -1372,8 +1618,8 @@ registerAbility(
     .armor(40)
     .animation('twirl')
     .heal(0.35)
-    .area('recovery', 'instant', 0.75)
-    .aoeEffect(({ targets, applyHeal }) => {
+    .area('recovery', 'once', 0.75)
+    .resolve(({ targets, applyHeal }) => {
       // El lanzador ya se cura con `healSelf`; el área reparte el 25 % entre
       // los aliados que estén dentro del radio.
       for (const target of targets) {
@@ -1392,7 +1638,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('ataqueAereo', 'Ataque Aéreo', 'Flying', 'physical', 'melee')
+  meleeAbility('ataqueAereo', 'Ataque Aéreo', 'Flying', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.55)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1410,7 +1656,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('tajoAereo', 'Tajo Aéreo', 'Flying', 'special', 'projectile')
+  projectileAbility('tajoAereo', 'Tajo Aéreo', 'Flying', 'special', defaultProjectileResolve)
     .power(65)
     .cooldown(3.5)
     .range(8.5)
@@ -1426,12 +1672,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', 'aoe')
+  aoeAbility('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', defaultAoeResolve)
     .power(60)
     .cooldown(8)
     .range(4.2)
     .radius(2.9)
-    .area('heat', 'instant', 0.9)
+    .area('heat', 'once', 0.9)
     .radial(0.4)
     .slow(0.82, 1.5)
     .startup(0.3, { animation: 'shoot', move: true })
@@ -1446,12 +1692,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', 'aoe')
+  aoeAbility('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', defaultAoeResolve)
     .power(115)
     .cooldown(15)
     .range(6)
     .radius(3.1)
-    .area('air', 'instant', 0.9)
+    .area('air', 'once', 0.9)
     .radial(0.35)
     .knockback(0.9)
     .startup(0.8, { animation: 'charge' })
@@ -1470,7 +1716,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('golpeAla', 'Golpe Ala', 'Flying', 'physical', 'melee')
+  meleeAbility('golpeAla', 'Golpe Ala', 'Flying', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.55)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1488,7 +1734,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rayoHielo', 'Rayo Hielo', 'Ice', 'special', 'beam')
+  beamAbility('rayoHielo', 'Rayo Hielo', 'Ice', 'special', defaultBeamResolve)
     .power(90)
     .cooldown(7)
     .range(9.5)
@@ -1506,12 +1752,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('vientoGelido', 'Viento Gélido', 'Ice', 'special', 'aoe')
+  aoeAbility('vientoGelido', 'Viento Gélido', 'Ice', 'special', defaultAoeResolve)
     .power(55)
     .cooldown(8)
     .range(4.5)
     .radius(2.8)
-    .area('ice', 'instant', 0.9)
+    .area('ice', 'once', 0.9)
     .radial(0.5)
     .slow(0.65, 2.5)
     .startup(0.3, { animation: 'shoot', move: true })
@@ -1526,12 +1772,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ventisca', 'Ventisca', 'Ice', 'special', 'aoe')
+  aoeAbility('ventisca', 'Ventisca', 'Ice', 'special', defaultAoeResolve)
     .power(100)
     .cooldown(15)
     .range(5.5)
     .radius(3.3)
-    .area('blizzard', 'instant', 1.1)
+    .area('blizzard', 'once', 1.1)
     .radial(0.35)
     .slow(0.75, 2)
     .startup(0.75, { animation: 'charge' })
@@ -1552,7 +1798,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('picoTaladro', 'Pico Taladro', 'Flying', 'physical', 'melee')
+  meleeAbility('picoTaladro', 'Pico Taladro', 'Flying', 'physical', defaultMeleeResolve)
     .power(60)
     .cooldown(0.6)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1570,12 +1816,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('descarga', 'Descarga', 'Electric', 'special', 'aoe')
+  aoeAbility('descarga', 'Descarga', 'Electric', 'special', defaultAoeResolve)
     .power(75)
     .cooldown(8)
     .range(0)
     .radius(3.2)
-    .area('explosion', 'instant', 0.8)
+    .area('explosion', 'once', 0.8)
     .radial(0.6)
     .slow(0.7, 1.5)
     .startup(0.3, { animation: 'charge', move: true })
@@ -1590,12 +1836,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('trueno', 'Trueno', 'Electric', 'special', 'aoe')
+  aoeAbility('trueno', 'Trueno', 'Electric', 'special', defaultAoeResolve)
     .power(145)
     .cooldown(15)
     .range(6)
     .radius(3.6)
-    .area('thunder', 'instant', 0.95)
+    .area('thunder', 'once', 0.95)
     .radial(0.4)
     .slow(0.65, 2)
     .knockback(1)
@@ -1616,7 +1862,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('golpeFuria', 'Golpe Furia', 'Bug', 'physical', 'melee')
+  meleeAbility('golpeFuria', 'Golpe Furia', 'Bug', 'physical', defaultMeleeResolve)
     .power(45)
     .cooldown(0.4)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1634,10 +1880,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('corteAereo', 'Corte Aéreo', 'Flying', 'physical', 'dash')
+  dashAbility('corteAereo', 'Corte Aéreo', 'Flying', 'physical', defaultDashResolve)
     .power(60)
     .cooldown(6.5)
-    .range(0)
     .radius(0.9)
     .dash(5)
     .knockback(0.6)
@@ -1651,7 +1896,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('danzaEspada', 'Danza Espada', 'Normal', 'status', 'self')
+  selfAbility('danzaEspada', 'Danza Espada', 'Normal', 'status', defaultSelfResolve)
     .power(0)
     .cooldown(12)
     .radius(1.2)
@@ -1666,7 +1911,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('tijeraX', 'Tijera X', 'Bug', 'physical', 'melee')
+  meleeAbility('tijeraX', 'Tijera X', 'Bug', 'physical', defaultMeleeResolve)
     .power(130)
     .cooldown(14)
     .range(2.7)
@@ -1688,7 +1933,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('triturar', 'Triturar', 'Dark', 'physical', 'melee')
+  meleeAbility('triturar', 'Triturar', 'Dark', 'physical', defaultMeleeResolve)
     .power(50)
     .cooldown(0.85)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1706,7 +1951,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('avalancha', 'Avalancha', 'Rock', 'physical', 'projectile')
+  projectileAbility('avalancha', 'Avalancha', 'Rock', 'physical', defaultProjectileResolve)
     .power(55)
     .cooldown(5)
     .range(8.5)
@@ -1724,12 +1969,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('terremoto', 'Terremoto', 'Ground', 'physical', 'aoe')
+  aoeAbility('terremoto', 'Terremoto', 'Ground', 'physical', defaultAoeResolve)
     .power(18)
     .cooldown(9)
     .range(0)
     .radius(3.4)
-    .area('ground', 'overTime', 2.5, 0.5)
+    .area('ground', 'overtime-global', 2.5, 0.5)
     .startup(0.45, { animation: 'hop' })
     .armor(25)
     .recovery(0.7)
@@ -1742,7 +1987,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rocaAfilada', 'Roca Afilada', 'Rock', 'physical', 'beam')
+  beamAbility('rocaAfilada', 'Roca Afilada', 'Rock', 'physical', defaultBeamResolve)
     .power(90)
     .cooldown(12)
     .range(9)
@@ -1765,7 +2010,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('cuchillada', 'Cuchillada', 'Normal', 'physical', 'melee')
+  meleeAbility('cuchillada', 'Cuchillada', 'Normal', 'physical', defaultMeleeResolve)
     .power(45)
     .cooldown(0.6)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1783,12 +2028,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('filoAbismo', 'Filo del Abismo', 'Ground', 'physical', 'aoe')
+  aoeAbility('filoAbismo', 'Filo del Abismo', 'Ground', 'physical', defaultAoeResolve)
     .power(100)
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
-    .area('ground', 'instant', 0.9)
+    .area('ground', 'once', 0.9)
     .radial(0.35)
     .knockback(0.6)
     .startup(0.7, { animation: 'charge' })
@@ -1807,7 +2052,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('atadura', 'Atadura', 'Rock', 'physical', 'melee')
+  meleeAbility('atadura', 'Atadura', 'Rock', 'physical', defaultMeleeResolve)
     .power(65)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -1825,7 +2070,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', 'projectile')
+  projectileAbility('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', defaultProjectileResolve)
     .power(85)
     .cooldown(4.5)
     .range(8)
@@ -1843,7 +2088,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('excavar', 'Excavar', 'Ground', 'physical', 'aoe')
+  aoeAbility('excavar', 'Excavar', 'Ground', 'physical', defaultAoeResolve)
     .power(85)
     .cooldown(6)
     .range(0)
@@ -1855,7 +2100,7 @@ registerAbility(
     .startup(2, {  move: true })
     .recovery(0.4)
     .animation('attack')
-    .area('burrow', 'instant', 0.75)
+    .area('burrow', 'once', 0.75)
     .knockback(1.2)
     .onStart(
       ({
@@ -1884,12 +2129,12 @@ registerAbility(
 );
 
 registerAbility(
-  ability('fisura', 'Fisura', 'Ground', 'physical', 'aoe')
+  aoeAbility('fisura', 'Fisura', 'Ground', 'physical', defaultAoeResolve)
     .power(155)
     .cooldown(14)
     .range(2.5)
     .radius(3.4)
-    .area('fissure', 'instant', 0.75)
+    .area('fissure', 'once', 0.75)
     .radial(0.35)
     .knockback(0.9)
     .startup(0.6, { animation: 'charge' })
@@ -1908,7 +2153,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('hojaMagica', 'Hoja Mágica', 'Grass', 'special', 'projectile')
+  projectileAbility('hojaMagica', 'Hoja Mágica', 'Grass', 'special', defaultProjectileResolve)
     .power(45)
     // Las hojas guiadas persiguen el objetivo hasta el final.
     .cooldown(0.8)
@@ -1925,7 +2170,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('rayoSolar', 'Rayo Solar', 'Grass', 'special', 'beam')
+  beamAbility('rayoSolar', 'Rayo Solar', 'Grass', 'special', defaultBeamResolve)
     .power(85)
     .cooldown(8)
     .range(9.5)
@@ -1942,7 +2187,8 @@ registerAbility(
 );
 
 registerAbility(
-  ability('deseo', 'Deseo', 'Psychic', 'status', 'aoe')
+  aoeAbility('deseo', 'Deseo', 'Psychic', 'status', defaultAoeResolve)
+    .bot({ revive: true })
     .power(0)
     .cooldown(13)
     .range(0)
@@ -1953,8 +2199,8 @@ registerAbility(
     .armor(55)
     .recovery(0.65)
     .animation('twirl')
-    .area('recovery', 'instant', 0.8)
-    .aoeEffect(({ fallenAllies, revive }) => {
+    .area('recovery', 'once', 0.8)
+    .resolve(({ fallenAllies, revive }) => {
       // La onda no cura: devuelve al combate a los aliados caídos cuyo
       // marcador de KO esté dentro del radio, con la mitad de su vida.
       for (const ally of fallenAllies) revive(ally, 0.5);
@@ -1966,7 +2212,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', 'aoe')
+  aoeAbility('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', defaultAoeResolve)
     .power(105)
     .cooldown(15)
     .range(5.5)
@@ -1977,7 +2223,7 @@ registerAbility(
     // El área es instantánea al terminar la carga; no hay clip de lanzamiento
     // después del impacto.
     .animation(null)
-    .area('psychic', 'instant', 0.9)
+    .area('psychic', 'once', 0.9)
     .radial(0.35)
     .slow(0.65, 2)
     .impact('psychic')
@@ -1992,7 +2238,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('ondaMental', 'Onda Mental', 'Psychic', 'special', 'projectile')
+  projectileAbility('ondaMental', 'Onda Mental', 'Psychic', 'special', defaultProjectileResolve)
     .power(50)
     .cooldown(0.8)
     .range(8.5)
@@ -2008,7 +2254,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('marea', 'Marea', 'Water', 'special', 'aoe')
+  aoeAbility('marea', 'Marea', 'Water', 'special', defaultAoeResolve)
     .power(30)
     .cooldown(9)
     .range(4.5)
@@ -2017,7 +2263,7 @@ registerAbility(
     .armor(20)
     .recovery(0.5)
     .animation('shoot')
-    .area('water', 'overTime', 2.5, 0.5)
+    .area('water', 'overtime-global', 2.5, 0.5)
     .slow(0.7, 1.2)
     .impact('water')
     .color(96, 178, 240)
@@ -2027,7 +2273,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ciclon', 'Ciclón', 'Flying', 'special', 'aoe')
+  aoeAbility('ciclon', 'Ciclón', 'Flying', 'special', defaultAoeResolve)
     .power(45)
     .cooldown(4)
     .aoeMovement(({ originX, originZ, dirX, dirZ, elapsed, duration }) => {
@@ -2047,7 +2293,7 @@ registerAbility(
     .armor(25)
     .recovery(0.55)
     .animation('shoot')
-    .area('cyclone', 'overTime', 2.5)
+    .area('cyclone', 'overtime-global', 2.5)
     .slow(0.65, 1.5)
     .impact('air')
     .color(198, 224, 255)
@@ -2057,7 +2303,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('aerochorro', 'Aerochorro', 'Flying', 'special', 'beam')
+  beamAbility('aerochorro', 'Aerochorro', 'Flying', 'special', defaultBeamResolve)
     .power(120)
     .cooldown(16)
     .range(11)
@@ -2080,7 +2326,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('golpeAlaHoOh', 'Golpe Ala', 'Flying', 'physical', 'melee')
+  meleeAbility('golpeAlaHoOh', 'Golpe Ala', 'Flying', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.55)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -2098,10 +2344,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('pajaroOsado', 'Pájaro Osado', 'Flying', 'physical', 'dash')
+  dashAbility('pajaroOsado', 'Pájaro Osado', 'Flying', 'physical', defaultDashResolve)
     .power(100)
     .cooldown(6)
-    .range(0)
     .radius(1)
     .dash(6)
     .knockback(1.2)
@@ -2117,7 +2362,8 @@ registerAbility(
 );
 
 registerAbility(
-  ability('recuperacionHoOh', 'Recuperación', 'Fire', 'status', 'aoe')
+  aoeAbility('recuperacionHoOh', 'Recuperación', 'Fire', 'status', defaultAoeResolve)
+    .bot({ healAllies: true })
     .power(0)
     .cooldown(13)
     .range(0)
@@ -2127,8 +2373,8 @@ registerAbility(
     .recovery(0.65)
     .animation(null)
     .heal(0.3)
-    .area('recovery', 'instant', 0.75)
-    .aoeEffect(({ targets, applyHeal }) => {
+    .area('recovery', 'once', 0.75)
+    .resolve(({ targets, applyHeal }) => {
       // Ho-Oh se cura con `healSelf`; la onda dorada reparte el 15 % restante
       // entre los aliados que estén dentro del radio.
       for (const target of targets) {
@@ -2143,7 +2389,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('fuegoSagrado', 'Fuego Sagrado', 'Fire', 'physical', 'aoe')
+  aoeAbility('fuegoSagrado', 'Fuego Sagrado', 'Fire', 'physical', defaultAoeResolve)
     .power(50)
     .cooldown(3)
     // El vértice nace 1 u por delante de Ho-Oh y el cono avanza 7,5 u con una
@@ -2157,7 +2403,7 @@ registerAbility(
     .blockMovementDuringCast()
     .armor(60)
     .animation('shoot')
-    .area('sacredFlame', 'overTime', 1.5, 0.5)
+    .area('sacredFlame', 'overtime-global', 1.5, 0.5)
     .slow(0.65, 1.5)
     .impact('fire')
     .color(255, 168, 56)
@@ -2171,7 +2417,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('acuaCola', 'Acua Cola', 'Water', 'physical', 'melee')
+  meleeAbility('acuaCola', 'Acua Cola', 'Water', 'physical', defaultMeleeResolve)
     .power(55)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -2189,10 +2435,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('cascada', 'Cascada', 'Water', 'physical', 'dash')
+  dashAbility('cascada', 'Cascada', 'Water', 'physical', defaultDashResolve)
     .power(70)
     .cooldown(5.5)
-    .range(0)
     .radius(0.9)
     .dash(4.6)
     .knockback(0.9)
@@ -2207,7 +2452,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('triturarGyarados', 'Triturar', 'Dark', 'physical', 'melee')
+  meleeAbility('triturarGyarados', 'Triturar', 'Dark', 'physical', defaultMeleeResolve)
     .power(85)
     .cooldown(6)
     .range(2.2)
@@ -2225,7 +2470,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('dragoaliento', 'Dragoaliento', 'Dragon', 'physical', 'beam')
+  beamAbility('dragoaliento', 'Dragoaliento', 'Dragon', 'physical', defaultBeamResolve)
     .power(150)
     .cooldown(15)
     .range(10)
@@ -2248,7 +2493,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('golpeCuerpo', 'Golpe Cuerpo', 'Normal', 'physical', 'melee')
+  meleeAbility('golpeCuerpo', 'Golpe Cuerpo', 'Normal', 'physical', defaultMeleeResolve)
     .power(80)
     .cooldown(0.8)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -2266,7 +2511,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('chorroAgua', 'Chorro de Agua', 'Water', 'special', 'projectile')
+  projectileAbility('chorroAgua', 'Chorro de Agua', 'Water', 'special', defaultProjectileResolve)
     .power(68)
     .cooldown(1.5)
     .range(8.5)
@@ -2282,7 +2527,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('frioPolar', 'Frío Polar', 'Ice', 'special', 'aoe')
+  aoeAbility('frioPolar', 'Frío Polar', 'Ice', 'special', defaultAoeResolve)
     .power(140)
     .cooldown(8)
     // El vértice nace 0,75 u por delante de Suicune y el cono avanza 7 u con
@@ -2291,7 +2536,7 @@ registerAbility(
     .radius(7)
     .halfAngle(30)
     .aoeShape('cone')
-    .area('sheerCold', 'instant', 0.5)
+    .area('sheerCold', 'once', 0.5)
     .blockMovementDuringCast()
     .radial(0.4)
     .slow(0.45, 2.5)
@@ -2319,7 +2564,7 @@ registerAbility(
 const PRIMORDIAL_PULSE_FIRST_SHARE = 0.375;
 
 registerAbility(
-  ability('rafagaMarina', 'Ráfaga Marina', 'Water', 'special', 'projectile')
+  projectileAbility('rafagaMarina', 'Ráfaga Marina', 'Water', 'special', defaultProjectileResolve)
     .power(46)
     .cooldown(0.85)
     .range(8.5)
@@ -2335,7 +2580,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('remolinoMarino', 'Remolino Marino', 'Water', 'special', 'aoe')
+  aoeAbility('remolinoMarino', 'Remolino Marino', 'Water', 'special', defaultAoeResolve)
     .power(34)
     .cooldown(8)
     .range(5)
@@ -2344,7 +2589,7 @@ registerAbility(
     .armor(25)
     .recovery(0.5)
     .animation('shoot')
-    .area('cyclone', 'overTime', 2.5, 0.5)
+    .area('cyclone', 'overtime-global', 2.5, 0.5)
     .slow(0.7, 1.5)
     .impact('water')
     .color(80, 170, 255)
@@ -2354,7 +2599,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('aguasCurativas', 'Aguas Curativas', 'Water', 'status', 'aoe')
+  aoeAbility('aguasCurativas', 'Aguas Curativas', 'Water', 'status', defaultAoeResolve)
     .power(0)
     .cooldown(12)
     .range(0)
@@ -2364,8 +2609,8 @@ registerAbility(
     .recovery(0.6)
     .animation(null)
     .heal(0.25)
-    .area('recovery', 'instant', 0.75)
-    .aoeEffect(({ targets, applyHeal }) => {
+    .area('recovery', 'once', 0.75)
+    .resolve(({ targets, applyHeal }) => {
       // Kyogre se cura con `healSelf`; la marea reparte el 15 % restante
       // entre los aliados que estén dentro del radio.
       for (const target of targets) {
@@ -2380,7 +2625,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('pulsoPrimigenio', 'Pulso Primigenio', 'Water', 'special', 'aoe')
+  aoeAbility('pulsoPrimigenio', 'Pulso Primigenio', 'Water', 'special', defaultAoeResolve)
     // En un área `overTime` el motor lee `power` como daño por segundo: 160
     // durante 1 s son 160 totales. El callback reparte 60 + 100 a partir de
     // este valor y de la duración.
@@ -2393,20 +2638,20 @@ registerAbility(
     .recovery(0.6)
     .animation(null)
     // Dos ticks: el primero cae al aparecer el área y el segundo a los 0,5 s.
-    .area('primordialPulse', 'overTime', 1, 0.5)
+    .area('primordialPulse', 'overtime-global', 1, 0.5)
     .radial(0.4)
     .impact('water')
     .color(64, 150, 240)
-    .aoeEffect(({ def, targets, tick, applyHit, applyHeal }) => {
+    .resolve(({ def, targets, tick, applyHit, applyHeal }) => {
       const first = tick === 0;
-      // El motor cobra `def.power` por segundo en áreas `overTime`; la duración
+      // El motor cobra `def.props.power` por segundo en áreas `overTime`; la duración
       // da el total del lanzamiento y el número de ticks reparte el segundo
       // pulso. Con power 160 y 1 s salen 60 + 100.
       const ticks = Math.max(
         1,
         Math.ceil(def.aoeDuration / def.aoeTickInterval)
       );
-      const totalPower = def.power * def.aoeDuration;
+      const totalPower = def.props.power * def.aoeDuration;
       const firstShare = ticks === 1 ? 1 : PRIMORDIAL_PULSE_FIRST_SHARE;
       const power = first
         ? totalPower * firstShare
@@ -2439,7 +2684,7 @@ registerAbility(
 /* ------------------------------------------------------------------------- */
 
 registerAbility(
-  ability('garraDraco', 'Garra Dragón', 'Dragon', 'physical', 'melee')
+  meleeAbility('garraDraco', 'Garra Dragón', 'Dragon', 'physical', defaultMeleeResolve)
     .power(50)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
@@ -2457,10 +2702,9 @@ registerAbility(
 );
 
 registerAbility(
-  ability('vueloDraco', 'Vuelo Dragón', 'Flying', 'physical', 'dash')
+  dashAbility('vueloDraco', 'Vuelo Dragón', 'Flying', 'physical', defaultDashResolve)
     .power(70)
     .cooldown(6)
-    .range(0)
     .radius(0.95)
     .dash(5.5)
     .knockback(0.9)
@@ -2475,7 +2719,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('furiaDraco', 'Furia Dragón', 'Dragon', 'special', 'beam')
+  beamAbility('furiaDraco', 'Furia Dragón', 'Dragon', 'special', defaultBeamResolve)
     .power(85)
     .cooldown(9)
     .range(9.5)
@@ -2494,7 +2738,7 @@ registerAbility(
 );
 
 registerAbility(
-  ability('ascensoDraco', 'Ascenso Draco', 'Flying', 'physical', 'aoe')
+  aoeAbility('ascensoDraco', 'Ascenso Draco', 'Flying', 'physical', defaultAoeResolve)
     .power(130)
     .cooldown(16)
     .range(0)
@@ -2505,7 +2749,7 @@ registerAbility(
     .startup(1, { animation: 'charge', move: true })
     .recovery(0.55)
     .animation('attack')
-    .area('air', 'instant', 0.9)
+    .area('air', 'once', 0.9)
     .radial(0.35)
     .knockback(1.1)
     .slow(0.65, 2)

@@ -89,7 +89,7 @@ export function stepDash(
   const dashBaseReach = Math.max(0.5, dash.def.radius);
   // Impulso no hace daño ni aplica control: es solo desplazamiento. Los demás
   // dash conservan su golpe al paso.
-  const dashCanHit = dash.def.power > 0 || dash.def.slow !== null;
+  const dashCanHit = dash.def.props.power > 0 || dash.def.props.slow !== null;
   for (const target of dashCanHit ? host.matchPlayers : []) {
     if (dash.hit.has(target) || !host.canHit(player, target)) continue;
     const dashReach = dashBaseReach + target.hitRadius;

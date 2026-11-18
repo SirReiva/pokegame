@@ -53,7 +53,7 @@ export function stepActiveCast(
 
   // Las áreas que declaran `aoePrepareMovement` recalculan su centro durante la
   // preparación: el aviso del suelo sigue el punto que devuelve la función.
-  if (!cast.fired && cast.def.aoePrepareMovement && cast.def.shape === 'aoe') {
+  if (!cast.fired && cast.def.shape === 'aoe' && cast.def.aoePrepareMovement) {
     const next = cast.def.aoePrepareMovement({
       caster: player,
       def: cast.def,

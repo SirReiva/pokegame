@@ -37,7 +37,7 @@ export interface DamageOptions {
   hitstun?: number;
   knockback?: number | null;
   slow?: SlowSpec | null;
-  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.dot`. */
+  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.props.dot`. */
   dot?: DamageOverTimeSpec | null;
   healToken?: HealOnHitToken;
   impactX?: number;
@@ -290,19 +290,19 @@ export function applyAbilityDamage(
   def: AbilityDef,
   options: DamageOptions = {}
 ): boolean {
-  const power = options.power ?? def.power;
+  const power = options.power ?? def.props.power;
   const damaging = power > 0 && def.category !== 'status';
   const control = options.control ?? true;
   const cancel = options.cancel ?? control;
   const hitstun =
-    options.hitstun ?? (control ? def.hitstun : 0);
+    options.hitstun ?? (control ? def.props.hitstun : 0);
   const knockback =
     options.knockback === undefined
       ? control
-        ? def.knockback
+        ? def.props.knockback
         : 0
       : options.knockback ?? 0;
-  const slow = options.slow === undefined ? def.slow : options.slow;
+  const slow = options.slow === undefined ? def.props.slow : options.slow;
 
   // La efectividad solo escala el daño: ningún tipo anula ya el golpe
   // completo, así que el estado y el control se aplican igual.
@@ -316,7 +316,7 @@ export function applyAbilityDamage(
   }
 
   // El daño en el tiempo también se aplica en habilidades de estado puras.
-  const dot = options.dot === undefined ? def.dot : options.dot;
+  const dot = options.dot === undefined ? def.props.dot : options.dot;
   if (dot && target.alive) {
     applyDamageOverTime(host, target, attacker, dot, def.name, def.color);
   }
@@ -429,7 +429,7 @@ export function applyAbilityDamage(
   if (target.hp <= 0) host.knockOut(target, attacker, def.name);
 
   // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida.
-  if (def.healOnHit && options.healToken && !options.healToken.healed) {
+  if (def.props.healOnHit && options.healToken && !options.healToken.healed) {
     options.healToken.healed = true;
     applyHealSelf(attacker, def, host.combatFx, (healed, amount) => {
       host.showHealPopup(healed, amount, attacker);

@@ -1,18 +1,10 @@
 /**
- * Efecto por defecto de las habilidades de área.
+ * Re-exporta los contratos de área y la resolución por defecto.
  *
- * Los contratos de los callbacks viven en `core/abilities/aoe.ts` para que el
- * núcleo no dependa de esta capa. Aquí queda solo el comportamiento histórico:
- * daña a los rivales alcanzables, aplica el `slow` de la habilidad y deja el
- * control únicamente en las áreas instantáneas.
- *
- * Se re-exportan los tipos para no romper los imports existentes de la capa
- * `game`.
+ * Los tipos generales viven en `core/abilities/resolve.ts` y los de área en
+ * `core/abilities/aoe.ts`; las resoluciones por defecto de todas las formas
+ * viven en `abilityResolve.ts`.
  */
-
-import type { AoeEffect } from './core/abilities/aoe';
-import type { AbilityDef } from './abilities';
-import type { MatchPlayerState } from './matchState';
 
 export type {
   AoeEffect,
@@ -28,26 +20,3 @@ export type {
   AoePrepareMovement,
   AoeTarget
 } from './core/abilities/aoe';
-
-/**
- * Comportamiento histórico de las áreas: daña a los rivales alcanzables,
- * aplica el `slow` de la habilidad y deja el control solo en las instantáneas.
- */
-export const defaultAoeEffect: AoeEffect<MatchPlayerState, AbilityDef> = (context) => {
-  // Un área persistente sin daño, slow ni DoT no tiene nada que hacer en ese
-  // tick. Se mantiene la comprobación aquí (y no en el motor) para que un
-  // callback propio pueda seguir aplicando buffs aunque la potencia sea 0.
-  if (
-    context.mode === 'overTime' &&
-    context.power <= 0 &&
-    !context.def.slow &&
-    !context.def.dot
-  ) {
-    return;
-  }
-  for (const target of context.targets) {
-    if (context.mode === 'overTime' && context.isMatchOver()) break;
-    if (!target.hittable || !target.lineOfSight) continue;
-    context.applyHit(target, { control: context.mode === 'instant' });
-  }
-};

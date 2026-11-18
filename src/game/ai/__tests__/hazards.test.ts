@@ -5,7 +5,12 @@ import { maxHitRadius } from '../../roster.ts';
 import type { SlowSpec } from '../../abilities.ts';
 import type { ActiveAoe, Projectile } from '../../matchState.ts';
 
-const projectile = (power: number, slow: SlowSpec | null = null) =>
+const projectile = (
+  power: number,
+  slow: SlowSpec | null = null,
+  dot = null as { type: string; damage: number; duration: number } | null,
+  customDamage = false
+) =>
   ({
     x: 3,
     z: 4,
@@ -13,10 +18,20 @@ const projectile = (power: number, slow: SlowSpec | null = null) =>
     vz: 8,
     traveled: 2,
     owner: { team: 'red' },
-    def: { power, slow, range: 12, radius: 0.4 }
+    def: {
+      props: { power, slow, dot },
+      bot: customDamage ? { customDamage: true } : undefined,
+      range: 12,
+      radius: 0.4
+    }
   }) as unknown as Projectile;
 
-const aoe = (power: number, slow: SlowSpec | null = null) =>
+const aoe = (
+  power: number,
+  slow: SlowSpec | null = null,
+  dot = null as { type: string; damage: number; duration: number } | null,
+  customDamage = false
+) =>
   ({
     x: 1,
     z: 2,
@@ -28,7 +43,12 @@ const aoe = (power: number, slow: SlowSpec | null = null) =>
     dirZ: 1,
     halfAngle: 0,
     owner: { team: 'blue' },
-    def: { power, slow }
+    def: {
+      props: { power, slow, dot },
+      bot: customDamage ? { customDamage: true } : undefined,
+      aoeDamageMode: 'once'
+    },
+    targetTimers: new Map([[1, { tickTimer: 0.25 }]])
   }) as unknown as ActiveAoe;
 
 test('buildBotHazards ignora efectos sin daño ni ralentización', () => {
@@ -106,4 +126,26 @@ test('sin buffer cada llamada crea su propio array', () => {
 
   assert.notEqual(first, second);
   assert.notEqual(first[0], second[0]);
+});
+
+test('incluye DoT sin potencia y daño declarado como custom', () => {
+  const hazards = buildBotHazards(
+    [
+      projectile(0, null, { type: 'Fire', damage: 5, duration: 3 }),
+      projectile(0, null, null, true)
+    ],
+    [aoe(0, null, { type: 'Poison', damage: 4, duration: 2 })]
+  );
+
+  assert.equal(hazards.length, 3);
+  assert.equal(hazards[0].kind, 'projectile');
+  assert.equal(hazards[1].kind, 'projectile');
+  assert.equal(hazards[2].kind, 'aoe');
+});
+
+test('copia el modo y los temporizadores por objetivo del área', () => {
+  const [area] = buildBotHazards([], [aoe(40)]);
+
+  assert.equal(area.mode, 'once');
+  assert.equal(area.targetTimers?.get(1)?.tickTimer, 0.25);
 });

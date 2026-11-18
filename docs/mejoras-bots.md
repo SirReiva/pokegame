@@ -163,17 +163,17 @@ visibles del equipo.
 
 ```ts
 const hasEffect =
-  def.power > 0 ||
+  def.props.power > 0 ||
   def.healSelf > 0 ||
-  def.slow !== null ||
+  def.props.slow !== null ||
   def.buffs.length > 0 ||
-  def.shield ||
+  (def.shape === 'self' && def.shield) ||
   def.shape === 'dash';
 if (!hasEffect) return -Infinity;
 ```
 
 `Deseo` es un área de soporte que revive aliados caídos y solo tiene
-`aoeEffect` (`src/game/abilities.ts`), así que la IA lo ignoraba siempre.
+`resolve` (`src/game/abilities.ts`), así que la IA lo ignoraba siempre.
 `Recuperación` sí se usaba por su `healSelf`, pero no se valoraba la curación
 que repartía a los aliados. Ahora ambas se puntúan por el beneficio real que
 aportan a los aliados dentro de su radio.
@@ -324,7 +324,7 @@ porque antes podían comer daño evitable que un humano esquivaría sin pensar.
 
 ### Problema
 
-`scoreAbility` (`src/game/bot.ts`) usa `def.power` y el multiplicador de tipo,
+`scoreAbility` (`src/game/bot.ts`) usa `def.props.power` y el multiplicador de tipo,
 pero ignora:
 
 - ataque/defensa reales,
@@ -356,7 +356,7 @@ Calcular un daño esperado por habilidad y puntuar:
 const expected = computeDamage({
   moveType: def.type,
   category: def.category,
-  power: def.power,
+  power: def.props.power,
   attacker: self.combat,
   defender: target.combat,
   attackerTypes: self.types,

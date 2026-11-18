@@ -94,7 +94,7 @@ export const healSelf: Effect<CastEffectContext> = ({
   combatFx,
   showHealPopup
 }) => {
-  if (def.healOnHit) return;
+  if (def.props.healOnHit) return;
   applyHealSelf(player, def, combatFx, showHealPopup);
 };
 

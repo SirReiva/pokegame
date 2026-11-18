@@ -1,80 +1,47 @@
 /**
- * Resolución de áreas: contexto de objetivos, callbacks de `aoeEffect`,
- * eventos de ciclo de vida y golpes estándar.
+ * Resolución de áreas: geometría, objetivos, ticks por objetivo y eventos de
+ * ciclo de vida. La aplicación de efectos vive en `abilityResolve.ts`; aquí
+ * solo se reúnen los objetivos y se llama a la resolución de la habilidad.
  */
 
-import type { AbilityDef, BuffSpec, SlowSpec } from '../abilities';
 import type {
-  AoeEffect,
-  AoeEffectContext,
+  AoeAbilityDef,
+  AnyAbilityDef
+} from '../abilities';
+import type {
   AoeEventContext,
   AoeFallenAlly,
   AoeHitInput,
-  AoeHitOptions,
   AoeTarget
 } from '../core/abilities/aoe';
-import { defaultAoeEffect } from '../aoeEffect';
 import { aoeAreaFrom, aoeContains, aoeDistance } from '../aoeGeometry';
 import { segmentBlockedByColliders } from '../combat';
 import { DEG } from '../config';
-import type { CombatFxPort } from '../core/ports/fx';
-import { applyHealFraction } from '../effects';
-import type { MatchPlayerState } from '../matchState';
+import type { ActiveAoe, MatchPlayerState } from '../matchState';
 import { maxHitRadius } from '../roster';
-import type { World } from '../world';
-import type { XpSource } from '../xp';
-import { XP_REWARDS } from '../xp';
 import type { PendingAoeEnd } from './aoes';
-import type { DamageOptions } from './damage';
+import {
+  buildResolveContext,
+  resolveAbility,
+  type AbilityResolveHost
+} from './abilityResolve';
 
 type PlayerAoeTarget = AoeTarget<MatchPlayerState>;
 type PlayerAoeFallenAlly = AoeFallenAlly<MatchPlayerState>;
-type PlayerAoeHitInput = AoeHitInput<MatchPlayerState, AbilityDef>;
-type PlayerAoeEffectContext = AoeEffectContext<MatchPlayerState, AbilityDef>;
+type PlayerAoeHitInput = AoeHitInput<MatchPlayerState, AoeAbilityDef>;
 
-export interface AoeResolutionHost {
-  readonly combatFx: CombatFxPort;
-  readonly matchPlayers: readonly MatchPlayerState[];
-  readonly world: World;
+/** Host de resolución de área: añade la cola de `onEnd` diferidos. */
+export interface AoeResolutionHost extends AbilityResolveHost {
   readonly pendingAoeEnds: PendingAoeEnd[];
-  isMatchOver(): boolean;
-  canHit(attacker: MatchPlayerState, target: MatchPlayerState): boolean;
-  applyAbilityDamage(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: AbilityDef,
-    options?: DamageOptions
-  ): boolean;
-  interruptWithRefund(target: MatchPlayerState, lethal: boolean): void;
-  applyKnockback(
-    target: MatchPlayerState,
-    fromX: number,
-    fromZ: number,
-    distance: number
-  ): void;
-  applySlow(
-    attacker: MatchPlayerState,
-    target: MatchPlayerState,
-    def: AbilityDef,
-    slow: SlowSpec,
-    color: readonly [number, number, number]
-  ): void;
-  reviveAoeAlly(
-    target: PlayerAoeFallenAlly,
-    fraction: number,
-    def: AbilityDef,
-    caster: MatchPlayerState
-  ): boolean;
-  showHealPopup(
-    target: MatchPlayerState,
-    amount: number,
-    source: MatchPlayerState
-  ): void;
-  awardXp(player: MatchPlayerState, source: XpSource, amount: number): void;
+}
+
+interface BuiltTargets {
+  targets: PlayerAoeTarget[];
+  fallenAllies: PlayerAoeFallenAlly[];
 }
 
 function radialDamageMultiplier(
-  def: AbilityDef,
+  def: AoeAbilityDef,
   distance: number,
   radius: number
 ): number {
@@ -84,10 +51,14 @@ function radialDamageMultiplier(
   return 1 - (1 - min) * t;
 }
 
-function buildAoeContext(
+/**
+ * Reúne los Pokémon vivos dentro del área y los aliados caídos cuyo marcador
+ * de KO también está dentro.
+ */
+function buildAoeTargets(
   host: AoeResolutionHost,
   hit: PlayerAoeHitInput
-): PlayerAoeEffectContext {
+): BuiltTargets {
   const targets: PlayerAoeTarget[] = [];
   const fallenAllies: PlayerAoeFallenAlly[] = [];
   // El círculo usa `radius` alrededor del centro; el cono usa la misma prueba
@@ -142,50 +113,107 @@ function buildAoeContext(
       hittable: host.canHit(hit.owner, player)
     });
   }
-
-  return {
-    caster: hit.owner,
-    def: hit.def,
-    x: hit.x,
-    z: hit.z,
-    radius: hit.radius,
-    shape: hit.shape,
-    mode: hit.mode,
-    tick: hit.tick,
-    elapsed: hit.elapsed,
-    power: hit.power,
-    targets,
-    fallenAllies,
-    applyHit: (target, options) => applyAoeHit(host, hit, target, options),
-    applyHitstun: (target, seconds, cancel = false) => {
-      if (cancel) host.interruptWithRefund(target.player, false);
-      if (seconds > 0) {
-        target.player.stunTimer = Math.max(target.player.stunTimer, seconds);
-      }
-    },
-    applyKnockback: (target, distance) =>
-      host.applyKnockback(target.player, hit.x, hit.z, distance),
-    applySlow: (target, slow) =>
-      host.applySlow(hit.owner, target.player, hit.def, slow, hit.def.color),
-    applyBuff: (target, buff) => applyAoeBuff(host, target, buff, hit.def),
-    applyHeal: (target, fraction) =>
-      applyAoeHeal(host, target, fraction, hit.def, hit.owner),
-    revive: (target, fraction) =>
-      host.reviveAoeAlly(target, fraction, hit.def, hit.owner),
-    isMatchOver: () => host.isMatchOver()
-  };
+  return { targets, fallenAllies };
 }
 
-/** Resuelve un golpe o tick del área con el `aoeEffect` de la habilidad. */
+/**
+ * Resuelve un golpe o tick del área. La resolución recibe la lista completa de
+ * objetivos y aliados caídos, aunque el evento sea de un solo tick.
+ */
 export function resolveAoeHit(
   host: AoeResolutionHost,
   hit: PlayerAoeHitInput
 ): void {
-  const effect = (hit.def.aoeEffect ?? defaultAoeEffect) as AoeEffect<
-    MatchPlayerState,
-    AbilityDef
-  >;
-  effect(buildAoeContext(host, hit));
+  const built = buildAoeTargets(host, hit);
+  resolveAbility(host, { ...hit, ...built });
+}
+
+/**
+ * Avanza los ticks por objetivo de un área `overtime-target`.
+ *
+ * Cada objetivo lleva su propio temporizador desde que entra: el primer tick
+ * cae al entrar y al salir se descarta su estado. El contexto recibe el
+ * `elapsed` global del área y el `elapsed`/`tick` propios del objetivo.
+ */
+export function tickAoeTargets(
+  host: AoeResolutionHost,
+  aoe: ActiveAoe,
+  dt: number
+): void {
+  if (aoe.elapsed >= aoe.duration) return;
+  const tickPower = aoe.def.props.power * aoe.tickInterval;
+  const built = buildAoeTargets(host, {
+    owner: aoe.owner,
+    def: aoe.def,
+    x: aoe.x,
+    z: aoe.z,
+    radius: aoe.radius,
+    shape: aoe.shape,
+    dirX: aoe.dirX,
+    dirZ: aoe.dirZ,
+    halfAngle: aoe.halfAngle,
+    mode: aoe.def.aoeDamageMode,
+    tick: 0,
+    elapsed: aoe.elapsed,
+    power: tickPower,
+    healToken: aoe.healToken,
+    flatBonusApplied: aoe.flatBonusApplied
+  });
+  const timers =
+    aoe.targetTimers ??
+    (aoe.targetTimers = new Map<
+      number,
+      { elapsed: number; tickTimer: number; tick: number }
+    >());
+  const inside = new Set<number>();
+
+  for (const target of built.targets) {
+    const slot = target.player.slot;
+    inside.add(slot);
+    let timer = timers.get(slot);
+    if (!timer) {
+      timer = { elapsed: 0, tickTimer: 0, tick: 0 };
+      timers.set(slot, timer);
+    }
+    timer.elapsed += dt;
+    timer.tickTimer -= dt;
+    let guard = 0;
+    while (
+      timer.tickTimer <= 0 &&
+      timer.elapsed < aoe.duration &&
+      guard < 8
+    ) {
+      guard += 1;
+      resolveAbility(host, {
+        owner: aoe.owner,
+        def: aoe.def,
+        x: aoe.x,
+        z: aoe.z,
+        radius: aoe.radius,
+        shape: aoe.shape,
+        dirX: aoe.dirX,
+        dirZ: aoe.dirZ,
+        halfAngle: aoe.halfAngle,
+        mode: aoe.def.aoeDamageMode,
+        tick: timer.tick,
+        elapsed: aoe.elapsed,
+        power: tickPower,
+        targets: [
+          { ...target, elapsed: timer.elapsed, tick: timer.tick }
+        ],
+        fallenAllies: [],
+        healToken: aoe.healToken,
+        flatBonusApplied: aoe.flatBonusApplied
+      });
+      timer.tickTimer += aoe.tickInterval;
+      timer.tick += 1;
+    }
+  }
+
+  // Al salir del área se descarta el estado: volver a entrar empieza de cero.
+  for (const slot of timers.keys()) {
+    if (!inside.has(slot)) timers.delete(slot);
+  }
 }
 
 /**
@@ -195,16 +223,16 @@ export function emitAoeEvent(
   host: AoeResolutionHost,
   phase: 'start' | 'cast' | 'end',
   caster: MatchPlayerState,
-  def: AbilityDef,
+  def: AoeAbilityDef,
   x: number,
   z: number,
   dirX: number,
   dirZ: number,
   elapsed: number
 ): void {
-  // Las áreas instantáneas no tienen `ActiveAoe` que se retire: su `onEnd` se
-  // programa para cuando termine la duración visual del estallido.
-  if (phase === 'cast' && def.aoeDamageMode === 'instant' && def.onEnd) {
+  // Las áreas de un solo golpe no tienen `ActiveAoe` que se retire: su `onEnd`
+  // se programa para cuando termine la duración visual del estallido.
+  if (phase === 'cast' && def.aoeDamageMode === 'once' && def.onEnd) {
     host.pendingAoeEnds.push({
       caster,
       def,
@@ -223,7 +251,7 @@ export function emitAoeEvent(
         ? def.onCast
         : def.onEnd;
   if (!event) return;
-  const hit: PlayerAoeHitInput = {
+  const built = buildAoeTargets(host, {
     owner: caster,
     def,
     x,
@@ -236,10 +264,26 @@ export function emitAoeEvent(
     mode: def.aoeDamageMode,
     tick: 0,
     elapsed,
-    power: def.power
-  };
-  const context: AoeEventContext<MatchPlayerState, AbilityDef> = {
-    ...buildAoeContext(host, hit),
+    power: def.props.power
+  });
+  const base = buildResolveContext(host, {
+    owner: caster,
+    def,
+    x,
+    z,
+    radius: def.radius,
+    shape: def.aoeShape,
+    dirX,
+    dirZ,
+    halfAngle: def.halfAngle * DEG,
+    mode: def.aoeDamageMode,
+    tick: 0,
+    elapsed,
+    power: def.props.power,
+    ...built
+  });
+  const context: AoeEventContext<MatchPlayerState, AnyAbilityDef> = {
+    ...base,
     combatFx: host.combatFx,
     setCasterHidden: (hidden) => {
       caster.hidden = hidden;
@@ -262,62 +306,4 @@ export function emitAoeEvent(
     }
   };
   event(context);
-}
-
-/** Ejecuta el golpe estándar de un área contra un objetivo concreto. */
-function applyAoeHit(
-  host: AoeResolutionHost,
-  hit: PlayerAoeHitInput,
-  target: PlayerAoeTarget,
-  options: AoeHitOptions = {}
-): boolean {
-  return host.applyAbilityDamage(hit.owner, target.player, hit.def, {
-    power: options.power ?? target.damagePower,
-    control: options.control ?? hit.mode === 'instant',
-    cancel: options.cancel,
-    hitstun: options.hitstun,
-    knockback: options.knockback,
-    slow: options.slow,
-    healToken: options.healToken ?? hit.healToken,
-    impactX: options.impactX,
-    impactZ: options.impactZ,
-    sourceX: options.sourceX ?? hit.x,
-    sourceZ: options.sourceZ ?? hit.z,
-    flatBonusApplied: hit.flatBonusApplied
-  });
-}
-
-/** Buff/debuff temporal aplicado a un objetivo por un callback de área. */
-function applyAoeBuff(
-  host: AoeResolutionHost,
-  target: PlayerAoeTarget,
-  buff: BuffSpec,
-  def: AbilityDef
-): void {
-  target.player.buffs.push({ ...buff, duration: buff.duration });
-  host.combatFx.spawnBuff(target.player.x, target.player.z, def.color, 0.95);
-}
-
-/** Cura a un objetivo del área una fracción de su vida máxima. */
-function applyAoeHeal(
-  host: AoeResolutionHost,
-  target: PlayerAoeTarget,
-  fraction: number,
-  def: AbilityDef,
-  caster: MatchPlayerState
-): void {
-  const healed = applyHealFraction(
-    target.player,
-    fraction,
-    def,
-    host.combatFx,
-    (healedPlayer, amount) => {
-      host.showHealPopup(healedPlayer, amount, caster);
-    },
-    // La estadística y la XP de curación son para quien lanza la habilidad.
-    caster
-  );
-  if (healed > 0) {
-    host.awardXp(caster, 'healing', healed * XP_REWARDS.healingPerHp);
-  }
 }

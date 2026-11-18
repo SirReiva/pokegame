@@ -144,8 +144,10 @@ import {
 import {
   emitAoeEvent,
   resolveAoeHit,
+  tickAoeTargets,
   type AoeResolutionHost
 } from '../src/game/sim/aoeResolution';
+import { resolveAbility } from '../src/game/sim/abilityResolve';
 import {
   stepAtmosphere,
   type AtmosphereSystemHost
@@ -882,6 +884,8 @@ export class HeadlessMatch {
       pendingAoeEnds: this.pendingAoeEnds,
       isMatchOver: () => this.matchOver,
       resolveAoeHit: (hit) => resolveAoeHit(aoeResolution, hit),
+      tickAoeTargets: (activeAoe, dt) =>
+        tickAoeTargets(aoeResolution, activeAoe, dt),
       emitAoeEvent: (phase, player, def, x, z, dirX, dirZ, elapsed) =>
         emitAoeEvent(
           aoeResolution,
@@ -944,8 +948,7 @@ export class HeadlessMatch {
       canHit: (attacker, target) => this.canHit(attacker, target),
       dashSweepHits: (target, ax, az, bx, bz, dirX, dirZ, reach) =>
         this.dashSweepHits(target, ax, az, bx, bz, dirX, dirZ, reach),
-      applyAbilityDamage: (attacker, target, def, options) =>
-        this.applyDamage(attacker, target, def, options),
+      resolveAbility: (input) => resolveAbility(aoeResolution, input),
       applyKnockback: (target, fromX, fromZ, distance) =>
         this.applyKnockback(target, fromX, fromZ, distance),
       cancelCast: (player) => this.cancelCast(player)
@@ -958,8 +961,7 @@ export class HeadlessMatch {
       combatFx: this.fx,
       isMatchOver: () => this.matchOver,
       canHit: (attacker, target) => this.canHit(attacker, target),
-      applyAbilityDamage: (attacker, target, def, options) =>
-        this.applyDamage(attacker, target, def, options),
+      resolveAbility: (input) => resolveAbility(aoeResolution, input),
       removeProjectile: (projectileToRemove) =>
         this.removeProjectile(projectileToRemove),
       playImpactSound: () => {}
@@ -1080,7 +1082,7 @@ export class HeadlessMatch {
         : baseDef;
 
     breakRegen(player);
-    if (player.invulnerableTimer > 0 && (def.power > 0 || def.slow !== null)) {
+    if (player.invulnerableTimer > 0 && (def.props.power > 0 || def.props.slow !== null)) {
       player.invulnerableTimer = 0;
     }
 
@@ -1119,7 +1121,9 @@ export class HeadlessMatch {
                 this.world.colliders
               )
             )
-          : def.range;
+          : def.shape === 'melee' || def.shape === 'projectile'
+            ? def.range
+            : 0;
     const targetX = player.x + dirX * reach;
     const targetZ = player.z + dirZ * reach;
     const teamAccent = TEAM_INFO[player.team].accent;
@@ -1297,7 +1301,7 @@ export class HeadlessMatch {
 
     // Un solo token por lanzamiento: si la forma golpea a varios rivales o
     // tiene varios ticks, `healOnHit` cura una única vez.
-    const healToken = def.healOnHit ? { healed: false } : undefined;
+    const healToken = def.props.healOnHit ? { healed: false } : undefined;
 
     const deps: AbilityExecutorDeps = {
       combatFx: this.fx,
@@ -1305,8 +1309,8 @@ export class HeadlessMatch {
       matchPlayers: this.players,
       spawnShield: () => {},
       canHit: (attacker, target) => this.canHit(attacker, target),
-      applyAbilityDamage: (attacker, target, ability, options) =>
-        this.applyDamage(attacker, target, ability, options),
+      resolveAbility: (input) =>
+        resolveAbility(this.hosts.aoeResolution, input),
       dashPosition: (source, x, z, sourceDirX, sourceDirZ, distance) =>
         this.dashPosition(source, x, z, sourceDirX, sourceDirZ, distance),
       addProjectile: (projectileToAdd) => {

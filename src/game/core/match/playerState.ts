@@ -11,7 +11,13 @@ import type {
 } from '../abilities/aoe';
 
 export type { HealOnHitToken } from '../abilities/aoe';
-import type { AbilityDef } from '../abilities/def';
+import type {
+  AbilityDef,
+  AoeAbilityDef,
+  DashAbilityDef,
+  MeleeAbilityDef,
+  ProjectileAbilityDef
+} from '../abilities/def';
 import type { AoeShape, BuffStat } from '../abilities/styles';
 import type { CastPlan } from '../castPlan';
 import type { EffectHandle, FxHandle, TelegraphHandle } from '../ports/fx';
@@ -100,7 +106,7 @@ export interface KillFarmRecord {
 
 export interface Projectile {
   owner: MatchPlayerState;
-  def: AbilityDef;
+  def: ProjectileAbilityDef;
   x: number;
   z: number;
   vx: number;
@@ -116,7 +122,7 @@ export interface Projectile {
 export interface PendingMeleeHit {
   attacker: MatchPlayerState;
   target: MatchPlayerState;
-  def: AbilityDef;
+  def: MeleeAbilityDef;
   healToken?: HealOnHitToken;
 }
 
@@ -153,7 +159,7 @@ export interface QueuedCast {
 export interface PendingInstantHit {
   attacker: MatchPlayerState;
   target: MatchPlayerState;
-  def: AbilityDef;
+  def: DashAbilityDef;
   healToken?: HealOnHitToken;
   /** Tramo del dash que produjo el golpe (`ax/az` -> `bx/bz`). */
   ax: number;
@@ -168,7 +174,7 @@ export interface PendingInstantHit {
 }
 
 export interface PlayerDash {
-  def: AbilityDef;
+  def: DashAbilityDef;
   elapsed: number;
   duration: number;
   dirX: number;
@@ -256,7 +262,7 @@ export interface ActiveCast {
 /** Área persistente que aplica daño periódico mientras el rival siga dentro. */
 export interface ActiveAoe {
   owner: MatchPlayerState;
-  def: AbilityDef;
+  def: AoeAbilityDef;
   /**
    * Casteo que creó el área. Las canalizaciones con
    * `blockMovementDuringCast` se cortan por completo al ser interrumpidas:
@@ -281,10 +287,25 @@ export interface ActiveAoe {
   /** Índice del próximo golpe: 0 para el primer tick. */
   tick: number;
   /**
+   * Estado de ticks por objetivo en `overtime-target`. La clave es el slot del
+   * jugador; al salir del área se descarta y una reentrada empieza de cero.
+   */
+  targetTimers?: Map<
+    number,
+    {
+      /** Segundos expuesto al área desde que entró. */
+      elapsed: number;
+      /** Segundos restantes hasta su próximo tick. */
+      tickTimer: number;
+      /** Índice de su próximo tick: 0 para el primero. */
+      tick: number;
+    }
+  >;
+  /**
    * Función opcional que recoloca el centro en cada frame durante la duración.
    * Solo existe en las áreas `overTime` que declaran `aoeMovement`.
    */
-  movement?: AoeMovement<AoePlayer, AbilityDef>;
+  movement?: AoeMovement<AoePlayer, AoeAbilityDef>;
   /** Centro donde apareció el área; base para `movement`. */
   originX: number;
   originZ: number;

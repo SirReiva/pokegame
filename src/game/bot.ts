@@ -44,6 +44,7 @@ import {
   segmentBlockedByColliders
 } from './combat';
 import { CONFIG, DEG } from './config';
+import { isOvertimeMode } from './core/abilities/styles';
 import { IDLE_INPUT, type DeviceInputSnapshot } from './input';
 import { ITEM_DEFINITIONS, type PickupSpawn } from './items';
 import { PICKUP_AVAILABLE, PICKUP_UNKNOWN } from './pickupKnowledge';
@@ -180,23 +181,11 @@ const SUPPORT_REVIVE_DANGER_RADIUS = 5;
 /** Penalización por cada unidad de rival dentro de ese radio. */
 const SUPPORT_REVIVE_DANGER_PENALTY = 30;
 
-interface SupportProfile {
-  /** Devuelve al combate a los aliados caídos dentro del área. */
-  revive?: boolean;
-  /** Reparte curación entre los aliados vivos dentro del área. */
-  healAllies?: boolean;
-}
-
 /**
- * Áreas cuyo `aoeEffect` beneficia a los aliados. Son habilidades con
- * `power: 0` que el filtro de efectos ofensivos descarta, así que el bot
- * necesita una vía propia para valorarlas y lanzarlas.
+ * Áreas cuyo `resolve` beneficia a los aliados. La habilidad lo declara con
+ * `.bot({ healAllies: true })` o `.bot({ revive: true })`; así una resolución
+ * propia no queda opaca para la IA.
  */
-const SUPPORT_PROFILES: Partial<Record<string, SupportProfile>> = {
-  deseo: { revive: true },
-  recuperacion: { healAllies: true },
-  recuperacionHoOh: { healAllies: true }
-};
 
 /** Mínimo de tiempo que dura una huida, aunque la base esté cerca. */
 const RETREAT_MIN_SECONDS = 2.5;
@@ -793,10 +782,8 @@ export class BotController {
       armorCastBonus: (self, def) => this.armorCastBonus(self, def),
       repeatCooldownExtra: (self, slot) =>
         this.repeatCooldownExtra(self, slot),
-      isSupportRecovery: (defId) => {
-        const profile = SUPPORT_PROFILES[defId];
-        return profile?.revive === true || profile?.healAllies === true;
-      },
+      isSupportRecovery: (def) =>
+        def.bot?.healAllies === true || def.bot?.revive === true,
       aoeEscapeDistance: (area, x, z) =>
         this.aoeEscapeDistance(area, x, z),
       effectiveSpeed: (player) => this.effectiveSpeed(player),
@@ -1518,7 +1505,16 @@ export class BotController {
     const remaining = pending.effectAt - pending.elapsed;
     if (remaining <= 0.02) return null;
     const def = pending.def;
-    if (def.power <= 0 && def.slow === null && def.selfDamage <= 0) return null;
+    if (
+      def.props.power <= 0 &&
+      def.props.slow === null &&
+      def.props.dot === null &&
+      def.selfDamage <= 0 &&
+      def.bot?.customDamage !== true &&
+      def.bot?.customControl !== true
+    ) {
+      return null;
+    }
 
     const selfRadius = self.hitRadius;
     const toSelfX = self.x - enemy.x;
@@ -1569,12 +1565,20 @@ export class BotController {
       const evade = this.aoeEvadeDirection(area, self);
       const dangerRadius = area.radius + maxHitRadius();
       const fromCenter = aoeDistance(area, self.x, self.z);
+      // En un área con ticks, la amenaza es la potencia total expuesta, no el
+      // daño por segundo. Se limita la exposición para no disparar la prioridad
+      // de áreas muy largas.
+      const exposure = isOvertimeMode(def.aoeDamageMode)
+        ? Math.min(def.aoeDuration, 3)
+        : 1;
       return {
         source: enemy,
         remaining,
         evade,
         severity:
-          def.power + 20 + (1 - fromCenter / Math.max(0.001, dangerRadius)) * 30
+          def.props.power * exposure +
+          20 +
+          (1 - fromCenter / Math.max(0.001, dangerRadius)) * 30
       };
     }
 
@@ -1623,7 +1627,7 @@ export class BotController {
         source: enemy,
         remaining,
         evade: { x: evadeX / length, z: evadeZ / length },
-        severity: def.power + 15
+        severity: def.props.power + 15
       };
     }
 
@@ -1668,7 +1672,7 @@ export class BotController {
         source: enemy,
         remaining,
         evade: { x: evadeX / length, z: evadeZ / length },
-        severity: def.power + 18 + (1 - toSweep / dashReach) * 22
+        severity: def.props.power + 18 + (1 - toSweep / dashReach) * 22
       };
     }
 
@@ -1747,7 +1751,7 @@ export class BotController {
         source: enemy,
         remaining,
         evade: { x: evadeX / length, z: evadeZ / length },
-        severity: def.power + (1 - perpendicular / width) * 18
+        severity: def.props.power + (1 - perpendicular / width) * 18
       };
     }
 
@@ -1937,9 +1941,22 @@ export class BotController {
     const dangerRadius =
       hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN;
     const direction = this.aoeEvadeDirection(area, self);
+    // En `overtime-target` el próximo tick es propio de cada objetivo. Si está
+    // lejos, la huida puede compartir prioridad con otras amenazas; si es
+    // inminente, sube por delante de ellas.
+    const nextTick =
+      hazard.mode === 'overtime-target'
+        ? hazard.targetTimers?.get(self.slot)?.tickTimer
+        : undefined;
+    const tickPressure =
+      nextTick === undefined
+        ? 1
+        : 1 - clamp(nextTick / 0.6, 0, 1);
     return {
       direction: this.pickHazardEscape(self, direction, colliders),
-      severity: 140 + (1 - distance / Math.max(0.001, dangerRadius)) * 80
+      severity:
+        (140 + (1 - distance / Math.max(0.001, dangerRadius)) * 80) *
+        (0.85 + 0.15 * tickPressure)
     };
   }
 
@@ -2100,7 +2117,7 @@ export class BotController {
       const def = id ? ABILITIES[id] : null;
       if (!def) continue;
       if (def.shape === 'aoe' || def.shape === 'self') continue;
-      if (def.shape === 'dash' && def.power <= 0) continue;
+      if (def.shape === 'dash' && def.props.power <= 0) continue;
 
       // El golpe no llega en el instante actual: se adelanta el rival al
       // momento del impacto. En proyectiles el tiempo de vuelo depende de la
@@ -2187,7 +2204,7 @@ export class BotController {
       // El retardo manda, pero dentro del mismo frame vale más la habilidad
       // con más potencia efectiva.
       const weightedPower =
-        def.power * typeEffectiveness(def.type, source.types);
+        def.props.power * typeEffectiveness(def.type, source.types);
       if (
         bestPlan === null ||
         delay < bestDelay - INTERRUPT_DELAY_TOLERANCE ||
@@ -2309,7 +2326,7 @@ export class BotController {
       if (this.abilityCooldown(player, slot) > 0.5) continue;
       const id = player.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
-      if (!def || def.healSelf <= 0 || def.healOnHit) continue;
+      if (!def || def.healSelf <= 0 || def.props.healOnHit) continue;
       reserve = Math.max(
         reserve,
         Math.min(missing, player.maxHp * def.healSelf) * 0.8
@@ -2346,7 +2363,13 @@ export class BotController {
     for (let slot = 0; slot < 4; slot++) {
       const id = attacker.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
-      if (!def || def.power <= 0 || def.category === 'status') continue;
+      if (
+        !def ||
+        def.shape === 'self' ||
+        (def.props.power <= 0 && def.props.dot === null)
+      ) {
+        continue;
+      }
       // El DPS entrante no hereda el adelanto imperfecto de este bot: se asume
       // que el rival apunta bien.
       const prediction = this.predictTarget(
@@ -2646,7 +2669,7 @@ export class BotController {
     for (let slot = 0; slot < 4; slot++) {
       const id = attacker.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
-      if (!def || def.power <= 0) continue;
+      if (!def || def.props.power <= 0) continue;
       const multiplier =
         typeEffectiveness(def.type, defender.types) *
         atmosphereMoveMultiplier(this.atmosphere, def.type) *
@@ -3536,7 +3559,7 @@ export class BotController {
    * nada.
    */
   private isReliableHeal(def: AbilityDef): boolean {
-    return def.healSelf > 0 && !def.healOnHit;
+    return def.healSelf > 0 && !def.props.healOnHit;
   }
 
   private findHealSlot(self: MatchPlayerState): number | null {
@@ -3586,7 +3609,8 @@ export class BotController {
     def: AbilityDef,
     colliders: readonly Collider[]
   ): void {
-    const profile = SUPPORT_PROFILES[def.id];
+    const profile = def.bot;
+    if (def.shape !== 'aoe') return;
     if (!profile?.revive || def.range > 0.1) return;
     const reach = def.radius + maxHitRadius();
     const team = this.squad[self.team];
@@ -3617,8 +3641,9 @@ export class BotController {
     def: AbilityDef,
     colliders: readonly Collider[]
   ): number {
-    const profile = SUPPORT_PROFILES[def.id];
+    const profile = def.bot;
     // Las áreas de apoyo conocidas nacen en la posición del lanzador.
+    if (def.shape !== 'aoe') return 0;
     if (!profile || def.range > 0.1) return 0;
 
     const reach = def.radius + maxHitRadius();
@@ -3708,7 +3733,10 @@ export class BotController {
   private isSupportSlot(self: MatchPlayerState, slot: number): boolean {
     const id = self.abilityIds[slot];
     const def = id ? ABILITIES[id] : null;
-    return def !== null && Object.hasOwn(SUPPORT_PROFILES, def.id);
+    return (
+      def !== null &&
+      (def.bot?.healAllies === true || def.bot?.revive === true)
+    );
   }
 
   /** Daño letal que otros aliados ya han comprometido sobre el objetivo. */
@@ -3750,8 +3778,8 @@ export class BotController {
     const team = this.squad[self.team];
     const id = self.abilityIds[slot];
     const def = id ? ABILITIES[id] : null;
-    if (!def || def.power <= 0) return;
-    if (slot !== 3 && def.power < BIG_ABILITY_POWER) return;
+    if (!def || def.props.power <= 0) return;
+    if (slot !== 3 && def.props.power < BIG_ABILITY_POWER) return;
 
     const prediction = this.predictTarget(self, target, def);
     const hitChance = this.hitChance(self, target, def, prediction);
@@ -3845,9 +3873,9 @@ export class BotController {
       // Mismo filtro de formas que `findInterruptSlot`: lo que no puede
       // alcanzar a tiempo no cuenta como herramienta.
       if (def.shape === 'aoe' || def.shape === 'self') continue;
-      if (def.shape === 'dash' && def.power <= 0) continue;
+      if (def.shape === 'dash' && def.props.power <= 0) continue;
       if (def.category === 'status') return true;
-      if (def.power <= 0) continue;
+      if (def.props.power <= 0) continue;
       const damage = this.expectedDamage(self, target, def, prediction);
       if (damage >= target.hp) return true;
       if (damage >= armor) return true;
@@ -3873,14 +3901,16 @@ export class BotController {
       if (this.abilityCooldown(enemy, 0) > 0.5) continue;
       const id = enemy.abilityIds[0];
       const poke = id ? ABILITIES[id] : null;
-      if (!poke || poke.power <= 0 || poke.category === 'status') continue;
+      if (!poke || poke.props.power <= 0 || poke.category === 'status') continue;
       // Solo cuenta si el poke puede alcanzar al bot desde donde está.
       const reach =
         poke.shape === 'melee'
           ? poke.range + maxHitRadius() + self.hitRadius
           : poke.shape === 'dash'
             ? poke.dashDistance + Math.max(0.5, poke.radius) + self.hitRadius
-            : poke.range + self.hitRadius;
+            : poke.shape === 'self'
+              ? 0
+              : poke.range + self.hitRadius;
       if (distance > reach) continue;
       const prediction = this.predictTarget(enemy, self, poke);
       pressure += this.expectedDamage(enemy, self, poke, prediction);
@@ -3953,7 +3983,7 @@ export class BotController {
     prediction: TargetPrediction,
     colliders: readonly Collider[]
   ): number {
-    if (def.power <= 0 || def.shape === 'self') return 0;
+    if (def.props.power <= 0 || def.shape === 'self') return 0;
     const direction = directionTo(self, prediction);
     if (direction.x === 0 && direction.z === 0) return 0;
     const facing = Math.atan2(direction.x, direction.z);
@@ -4658,9 +4688,24 @@ export class BotController {
 
     const consider = (def: AbilityDef | null, ready: boolean): void => {
       if (!def || !ready) return;
-      if (def.power <= 0 && def.slow === null) return;
+      if (def.shape === 'self') return;
+      if (
+        def.props.power <= 0 &&
+        def.props.slow === null &&
+        def.props.dot === null &&
+        def.bot?.customDamage !== true
+      ) {
+        return;
+      }
       anyReady = true;
-      if (def.power >= BIG_ABILITY_POWER || def.slow !== null) keyReady = true;
+      if (
+        def.props.power >= BIG_ABILITY_POWER ||
+        def.props.slow !== null ||
+        def.props.dot !== null ||
+        def.bot?.customDamage === true
+      ) {
+        keyReady = true;
+      }
       if (def.shape === 'melee') {
         // El alcance real del melee suma el hurtbox mayor del roster; se usa
         // como cota conservadora para no quedarse dentro del cono.
@@ -4738,7 +4783,9 @@ export class BotController {
           ? ability.dashDistance
           : ability.shape === 'aoe'
             ? ability.range + ability.radius
-            : ability.range;
+            : ability.shape === 'self'
+              ? 0
+              : ability.range;
       longest = Math.max(longest, reach);
     }
     return clamp(longest * 0.6, 1.4, 6.5);

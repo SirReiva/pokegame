@@ -797,8 +797,8 @@ arena con y sin Protección y que compruebe que Regeneración se detiene.
 ### 3.21. Las áreas de curación atraviesan muros (medio)
 
 `buildAoeContext` calcula `lineOfSight` para cada objetivo
-(`game.ts:4168-4175`) y `AoeTarget` lo expone (`aoeEffect.ts:124-130`). El
-`defaultAoeEffect` lo respeta para el daño (`aoeEffect.ts:257-260`) y
+(`game.ts:4168-4175`) y `AbilityTarget` lo expone (`core/abilities/resolve.ts:32-75`). El
+`defaultAoeResolve` lo respeta para el daño (`abilityResolve.ts:48-61`) y
 `reviveAoeAlly` lo comprueba para `Deseo` (`game.ts:3285-3295`), pero los
 callbacks de curación no lo miran:
 

@@ -222,7 +222,7 @@ y así los hosts siguen siendo estables.
 | Host | Sistema | Responsabilidad |
 | --- | --- | --- |
 | `projectile` | `sim/projectiles` | Avance, colisión e impacto de proyectiles. |
-| `aoe` | `sim/aoes` | Áreas `overTime` y `onEnd` diferidos. |
+| `aoe` | `sim/aoes` | Áreas `overtime-*` y `onEnd` diferidos. |
 | `hit` | `sim/hits` | Golpes instantáneos, dash y melé diferidos. |
 | `player` | `sim/player` | Movimiento, timers, cámara, respawn y casteo. |
 | `status` | `sim/status` | Regeneración y goteo de participación. |
@@ -296,7 +296,7 @@ flowchart TD
   s6 --> s7["stepInstantHits · golpes instantáneos y de dash"]
   s7 --> s8["stepMeleeHits · melé diferida"]
   s8 --> s9["stepProjectiles · avance e impactos"]
-  s9 --> s10["stepActiveAoes · ticks de áreas overTime"]
+  s9 --> s10["stepActiveAoes · ticks de áreas overtime-*"]
   s10 --> s11["stepPendingAoeEnds · onEnd diferido"]
   s11 --> s12["pickups.collect()"]
   s12 --> s13["refreshCombatVisibility · foto final para render y siguiente paso"]
@@ -394,8 +394,9 @@ flowchart LR
 
 - `abilities.ts` es un catálogo **data-driven**: añadir una habilidad no toca el
   motor.
-- `abilityExecutors.ts` es un **Strategy + Registry** por forma; añadir una
-  forma nueva es registrar una función.
+- `abilityExecutors.ts` es un **Strategy + Registry** por forma; la resolución
+  de efectos vive en `abilityResolve.ts` y cada `AbilityDef` declara su
+  `resolve` (con default por forma).
 - `modes.ts` es un **Strategy** por modo (`tdm`, `koth`): `Game` solo reparte
   eventos y aplica el resultado.
 

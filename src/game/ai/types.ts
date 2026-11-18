@@ -5,7 +5,7 @@
  * No contienen lógica ni dependen de PlayCanvas.
  */
 
-import type { AbilityDef } from '../abilities';
+import type { AoeAbilityDef } from '../abilities';
 import type { AtmosphereId } from '../atmosphere';
 import type { Team } from '../core/team';
 import type { MatchPlayerState } from '../matchState';
@@ -86,7 +86,7 @@ export interface BotHazard {
   /** Radio propio del peligro; el bot suma después su propio `hitRadius`. */
   radius: number;
   /** Geometría del área: `circle` o `cone`. */
-  shape?: AbilityDef['aoeShape'];
+  shape?: AoeAbilityDef['aoeShape'];
   /** Dirección unitaria del cono. */
   dirX?: number;
   dirZ?: number;
@@ -96,6 +96,13 @@ export interface BotHazard {
   vz?: number;
   /** Segundos que el peligro seguirá activo. */
   remaining?: number;
+  /** Modo de reparto del área (`once` o `overtime-*`). */
+  mode?: AoeAbilityDef['aoeDamageMode'];
+  /**
+   * Temporizadores por objetivo de un área `overtime-target`, indexados por
+   * slot. El bot consulta el suyo para saber cuánto falta para el próximo tick.
+   */
+  targetTimers?: ReadonlyMap<number, { tickTimer: number }>;
   ownerTeam: MatchPlayerState['team'];
 }
 

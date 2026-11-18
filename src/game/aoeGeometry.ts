@@ -13,7 +13,7 @@
  * tres vistas de la geometría no se desincronicen.
  */
 
-import type { AoeShape, AbilityDef } from './abilities';
+import type { AoeAbilityDef, AoeShape } from './abilities';
 import { sectorOverlapsCircle } from './combat';
 import { DEG } from './config';
 
@@ -44,7 +44,7 @@ function normalize(
 
 /** Construye la geometría de un área a partir de la definición y su centro. */
 export function aoeAreaFrom(
-  def: AbilityDef,
+  def: AoeAbilityDef,
   x: number,
   z: number,
   dirX: number,

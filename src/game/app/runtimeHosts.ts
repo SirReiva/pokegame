@@ -11,6 +11,7 @@ import type { AbilityDef, BuffStat, SlowSpec } from '../abilities';
 import type { AtmosphereId } from '../atmosphere';
 import type { AoeFallenAlly } from '../aoeEffect';
 import type { AoeHitInput } from '../aoeEffect';
+import type { AbilityHitInput, AnyAbilityDef } from '../abilities';
 import type { CombatFxPort } from '../core/ports/fx';
 import type { Team } from '../core/team';
 import type { FogMask, FogView } from '../fog';
@@ -66,9 +67,13 @@ export interface RuntimeState {
   applyAbilityDamage: (
     attacker: MatchPlayerState,
     target: MatchPlayerState,
-    def: AbilityDef,
+    def: AnyAbilityDef,
     options?: DamageOptions
   ) => boolean;
+  resolveAbility: (
+    input: AbilityHitInput<MatchPlayerState, AnyAbilityDef>
+  ) => void;
+  tickAoeTargets: (aoe: ActiveAoe, dt: number) => void;
   removeProjectile: ProjectileSystemHost['removeProjectile'];
   playImpactSound: (effectiveness?: number) => void;
   resolveAoeHit: AoeSystemHost['resolveAoeHit'];
@@ -147,7 +152,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       combatFx: state.combatFx,
       isMatchOver: state.isMatchOver,
       canHit: state.canHit,
-      applyAbilityDamage: state.applyAbilityDamage,
+      resolveAbility: state.resolveAbility,
       removeProjectile: state.removeProjectile,
       playImpactSound: state.playImpactSound
     },
@@ -160,6 +165,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       },
       isMatchOver: state.isMatchOver,
       resolveAoeHit: state.resolveAoeHit,
+      tickAoeTargets: state.tickAoeTargets,
       emitAoeEvent: state.emitAoeEvent
     },
     hit: {
@@ -172,7 +178,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       isMatchOver: state.isMatchOver,
       canHit: state.canHit,
       dashSweepHits: state.dashSweepHits,
-      applyAbilityDamage: state.applyAbilityDamage,
+      resolveAbility: state.resolveAbility,
       applyKnockback: state.applyKnockback,
       cancelCast: state.cancelCast
     },
