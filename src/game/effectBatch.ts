@@ -1316,43 +1316,41 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
-/** Grietas de `Falla`: cada losa emerge con su propio retardo. */
+/**
+ * Grietas de `Fisura`: se abren desde el centro y se afinan hacia la punta. El
+ * pivote está en el extremo interior de la caja, así cada tramo crece hacia
+ * fuera en lugar de estirarse simétricamente.
+ */
 export const MOTION_FISSURE_BRANCHES = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
-  float local = clamp((uEffectTime - a0.x) / 0.14, 0.0, 1.0);
-  float pop = 1.0 - pow(1.0 - local, 3.0);
-  float sink = uEffectRadius * 0.02 * pop;
-  mat4 result = base;
-  result[3].y -= sink;
-  result = result * effectScale(vec3(0.5 + pop * 0.5, 1.0, 1.0));
-  result = result * effectEuler(
-    a0.y * pop * EFFECT_DEG,
-    0.0,
-    a0.y * 0.35 * pop * EFFECT_DEG
-  );
-  return result;
+  float local = clamp((uEffectTime - a0.x) / 0.16, 0.0, 1.0);
+  float open = 1.0 - pow(1.0 - local, 2.0);
+  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.16));
+  float scale = max(0.001, open * fadeOut);
+  return base * effectScale(vec3(0.3 + scale * 0.7, 1.0, scale));
 }
 
 vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
-  return vertexPosition;
+  // z = 0 en el extremo interior y z = 1 en la punta.
+  float z = vertexPosition.z + 0.5;
+  float taper = 1.0 - z * 0.72;
+  return vec3(vertexPosition.x * taper, vertexPosition.y, z);
 }
 `;
 
-/** Losas del suelo que saltan en `Falla`. */
+/** Losas del suelo que saltan y vuelven a posarse en `Fisura`. */
 export const MOTION_FISSURE_SLABS = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
-  float local = clamp((uEffectTime - a0.x) / 0.16, 0.0, 1.0);
+  float local = clamp((uEffectTime - a0.x) / 0.18, 0.0, 1.0);
   float pop = 1.0 - pow(1.0 - local, 3.0);
-  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.2));
-  float scale = max(0.001, pop * fadeOut);
+  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.16));
+  float scale = max(0.001, (0.35 + pop * 0.65) * fadeOut);
+  float lift = sin(local * EFFECT_PI);
+  float tilt = a0.y * lift * EFFECT_DEG;
   mat4 result = base;
-  result[3].y += uEffectRadius * 0.025 * pop;
+  result[3].y += uEffectRadius * 0.018 * lift;
   result = result * effectScale(vec3(scale, scale, scale));
-  result = result * effectEuler(
-    a0.y * pop * EFFECT_DEG,
-    0.0,
-    a0.y * 0.4 * pop * EFFECT_DEG
-  );
+  result = result * effectEuler(tilt, 0.0, tilt * 0.45);
   return result;
 }
 
@@ -1361,24 +1359,22 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
-/** Estalagmitas de `Falla`. */
+/** Estalagmitas de `Fisura`: brotan del fondo y se afilan al crecer. */
 export const MOTION_FISSURE_SPIKES = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
-  float local = clamp((uEffectTime - a0.z) / 0.12, 0.0, 1.0);
+  float local = clamp((uEffectTime - a0.z) / 0.15, 0.0, 1.0);
   float pop = 1.0 - pow(1.0 - local, 3.0);
-  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.2));
-  float height = a0.x * pop * fadeOut;
-  if (height <= 0.001) {
-    return effectTRS(base[3].xyz, vec3(0.001), effectRotY(0.0));
-  }
-  float width = max(0.001, a0.y * pop * fadeOut);
+  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.16));
+  float height = max(0.001, a0.x * pop * fadeOut);
+  float width = max(0.001, a0.y * (0.55 + pop * 0.45) * fadeOut);
   mat4 result = base;
-  result[3].y += height * (pop - 0.5);
+  // El cono está centrado: subirlo media altura deja la base en el fondo.
+  result[3].y += height * 0.5;
   result = result * effectScale(vec3(width, height, width));
   result = result * effectEuler(
     a0.w * pop * EFFECT_DEG,
     0.0,
-    a0.w * 0.35 * pop * EFFECT_DEG
+    a0.w * 0.3 * pop * EFFECT_DEG
   );
   return result;
 }
@@ -1388,23 +1384,25 @@ vec3 effectLocalPosition(vec3 vertexPosition, vec4 a0, vec4 a1) {
 }
 `;
 
-/** Piedras que salen despedidas en `Falla`. */
+/** Piedras que salen despedidas del fondo en `Fisura`. */
 export const MOTION_FISSURE_PEBBLES = `
 mat4 effectModel(mat4 base, vec4 a0, vec4 a1) {
-  float local = clamp((uEffectTime - a0.w) / 0.4, 0.0, 1.0);
+  float local = clamp((uEffectTime - a0.w) / 0.45, 0.0, 1.0);
   if (local <= 0.0) {
     return effectTRS(vec3(0.0), vec3(0.001), effectRotY(0.0));
   }
-  float distance = a0.y * local;
-  float y = a1.x * 0.4 + sin(local * EFFECT_PI) * a0.z;
-  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.2));
-  float scale = a1.x * (1.0 - local * 0.55) * fadeOut;
-  float pitch = local * 260.0 * EFFECT_DEG;
+  float ease = 1.0 - pow(1.0 - local, 2.0);
+  float distance = a0.y * ease;
+  float y = -0.015 + sin(local * EFFECT_PI) * a0.z;
+  float fadeOut = min(1.0, max(0.0, (uEffectLife - uEffectTime) / 0.16));
+  float fadeIn = min(1.0, local * 6.0);
+  float scale = a1.x * (1.0 - local * 0.35) * fadeOut * fadeIn;
+  float pitch = local * 320.0 * EFFECT_DEG;
   float yaw = a0.x * EFFECT_DEG;
   float roll = local * a1.y * EFFECT_DEG;
   return effectTRS(
     vec3(sin(a0.x) * distance, y, cos(a0.x) * distance),
-    vec3(max(0.001, scale), max(0.001, scale * 0.8), max(0.001, scale * 0.9)),
+    vec3(max(0.001, scale), max(0.001, scale * 0.82), max(0.001, scale * 0.9)),
     effectEuler(pitch, yaw, roll)
   );
 }

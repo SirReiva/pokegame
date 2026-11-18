@@ -1135,6 +1135,216 @@ export function createCycloneArmMesh(device: pc.GraphicsDevice, seed: number): p
   return mesh;
 }
 
+/**
+ * Ángulos (radianes) de las grietas principales de `Fisura`. El cráter baja la
+ * cresta en estas direcciones y `spawnFissureAoe` continúa cada grieta hacia
+ * fuera, de modo que el borde y las ramas forman una sola red de fracturas.
+ */
+export const FISSURE_CRACK_ANGLES: readonly number[] = [
+  0.38, 1.66, 2.88, 4.1, 5.34
+];
+
+/**
+ * Cráter unitario de `Fisura`: falda exterior, cresta irregular, pared en
+ * pendiente y fondo hundido. El color va por vértice (tierra clara en el borde,
+ * marrón en la pared y casi negro con rescoldos en el fondo) y el sombreado está
+ * horneado, así que el volumen se lee aunque el material no reciba luces. Se
+ * escala en XZ con el radio del área; las alturas ya van en unidades de mundo.
+ */
+export function createFissureCraterMesh(
+  device: pc.GraphicsDevice,
+  segments = 64
+): pc.Mesh {
+  type Vec3 = [number, number, number];
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const rim: Vec3 = [134, 110, 76];
+  const lip: Vec3 = [96, 74, 50];
+  const wall: Vec3 = [58, 41, 28];
+  const floor: Vec3 = [28, 19, 14];
+  const magma: Vec3 = [126, 48, 16];
+
+  const clamp255 = (value: number): number =>
+    Math.max(0, Math.min(255, Math.round(value)));
+  // `setColors32` guarda el color tal cual y el shader lo trata como lineal:
+  // convertir el sRGB de autor a lineal evita que el cráter salga lavado.
+  const toLinear = (value: number): number => {
+    const c = clamp255(value) / 255;
+    const linear =
+      c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    return Math.round(linear * 255);
+  };
+  const mix = (a: Vec3, b: Vec3, t: number): Vec3 => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t
+  ];
+  // Borde roto: tres ondas de distinta frecuencia desplazan el radio.
+  const jagged = (angle: number): number =>
+    1 +
+    0.05 * Math.sin(angle * 7 + 0.8) +
+    0.028 * Math.sin(angle * 13 + 2.4) +
+    0.016 * Math.sin(angle * 23 + 4.1);
+  // Muescas por donde las grietas principales cruzan la cresta.
+  const notch = (angle: number): number => {
+    let deepest = 0;
+    for (const crack of FISSURE_CRACK_ANGLES) {
+      const delta = Math.atan2(
+        Math.sin(angle - crack),
+        Math.cos(angle - crack)
+      );
+      deepest = Math.max(deepest, Math.exp(-(delta * delta) / 0.018));
+    }
+    return deepest;
+  };
+  const crestY = (angle: number): number =>
+    0.018 * Math.sin(angle * 4 + 1.1) +
+    0.01 * Math.sin(angle * 9 + 0.3) -
+    0.11 * notch(angle);
+
+  interface Ring {
+    radius: number;
+    y: number;
+    color: Vec3;
+    crest: boolean;
+  }
+  const rings: Ring[] = [
+    { radius: 1.04, y: -0.022, color: rim, crest: true },
+    { radius: 0.985, y: 0.22, color: rim, crest: true },
+    { radius: 0.9, y: 0.1, color: lip, crest: false },
+    { radius: 0.72, y: -0.012, color: wall, crest: false },
+    { radius: 0.34, y: -0.018, color: floor, crest: false }
+  ];
+
+  const stride = segments + 1;
+  for (const ring of rings) {
+    for (let side = 0; side <= segments; side++) {
+      const angle = (side / segments) * Math.PI * 2;
+      const radius = ring.radius * jagged(angle);
+      const y = ring.crest ? ring.y + crestY(angle) : ring.y;
+      positions.push(Math.sin(angle) * radius, y, Math.cos(angle) * radius);
+      normals.push(0, 1, 0);
+      // Sombreado por ángulo: el lado opuesto a la luz del mundo queda oscuro.
+      const light = 0.84 + 0.16 * Math.cos(angle - 0.85);
+      const heat = Math.pow(Math.max(0, 1 - ring.radius / 0.8), 2) * 0.5;
+      const color = mix(ring.color, magma, heat);
+      colors.push(
+        toLinear(color[0] * light),
+        toLinear(color[1] * light),
+        toLinear(color[2] * light),
+        255
+      );
+    }
+  }
+
+  for (let ring = 0; ring < rings.length - 1; ring++) {
+    for (let side = 0; side < segments; side++) {
+      const a = ring * stride + side;
+      const b = a + 1;
+      const c = a + stride;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  // Centro del fondo: cierra el embudo y conserva el rescoldo del magma.
+  const center = positions.length / 3;
+  positions.push(0, -0.024, 0);
+  normals.push(0, 1, 0);
+  const centerColor = mix(floor, magma, 0.35);
+  colors.push(
+    toLinear(centerColor[0] * 0.9),
+    toLinear(centerColor[1] * 0.9),
+    toLinear(centerColor[2] * 0.9),
+    255
+  );
+  const last = (rings.length - 1) * stride;
+  for (let side = 0; side < segments; side++) {
+    indices.push(last + side, center, last + side + 1);
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setColors32(colors);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Charco de magma unitario (radio 0,5) de `Fisura`: degradado radial de blanco
+ * cálido en el centro a naranja y casi negro en el borde. Con mezcla aditiva el
+ * borde oscuro se funde sin textura ni alfa por vértice, así que todo el
+ * resplandor del fondo se dibuja en una sola malla y un solo draw call.
+ */
+export function createFissureMagmaMesh(
+  device: pc.GraphicsDevice,
+  segments = 40
+): pc.Mesh {
+  type Vec3 = [number, number, number];
+  const rings: Array<{ radius: number; color: Vec3 }> = [
+    { radius: 0.1, color: [255, 232, 176] },
+    { radius: 0.2, color: [255, 150, 58] },
+    { radius: 0.32, color: [220, 80, 20] },
+    { radius: 0.42, color: [110, 26, 8] },
+    { radius: 0.5, color: [10, 2, 1] }
+  ];
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  // El color aditivo se guarda ya en la escala del shader (0-255 lineales):
+  // convertirlo a sRGB apagaría el resplandor del magma.
+  const pushColor = (color: Vec3): void => {
+    colors.push(color[0], color[1], color[2], 255);
+  };
+
+  const center = positions.length / 3;
+  positions.push(0, 0, 0);
+  normals.push(0, 1, 0);
+  pushColor([255, 244, 208]);
+
+  const ringStarts: number[] = [];
+  for (const ring of rings) {
+    ringStarts.push(positions.length / 3);
+    for (let side = 0; side <= segments; side++) {
+      const angle = (side / segments) * Math.PI * 2;
+      const radius =
+        ring.radius *
+        (1 + 0.04 * Math.sin(angle * 5 + 0.7) + 0.02 * Math.sin(angle * 9));
+      positions.push(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+      normals.push(0, 1, 0);
+      pushColor(ring.color);
+    }
+  }
+
+  for (let side = 0; side < segments; side++) {
+    indices.push(center, ringStarts[0] + side, ringStarts[0] + side + 1);
+  }
+  for (let ring = 0; ring < rings.length - 1; ring++) {
+    for (let side = 0; side < segments; side++) {
+      const a = ringStarts[ring] + side;
+      const b = a + 1;
+      const c = ringStarts[ring + 1] + side;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setColors32(colors);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
 /** Disco horizontal unitario (radio 0,5) en el plano XZ. */
 export function createDiscMesh(device: pc.GraphicsDevice, segments = 48): pc.Mesh {
   const positions: number[] = [0, 0, 0];

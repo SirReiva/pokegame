@@ -3,7 +3,7 @@ import * as pc from 'playcanvas';
 import { DEG } from '../../config';
 import { EffectBatch, MOTION_BURROW_CRACKS, MOTION_BURROW_PUFFS, MOTION_BURROW_ROCKS, MOTION_BURROW_SLABS, MOTION_BURROW_WAVES, MOTION_FISSURE_BRANCHES, MOTION_FISSURE_PEBBLES, MOTION_FISSURE_SLABS, MOTION_FISSURE_SPIKES, MOTION_GROUND_CRACKS, MOTION_GROUND_PUFFS, MOTION_GROUND_ROCKS } from '../../effectBatch';
 import type { EffectBatchInstance } from '../../effectBatch';
-import { areaAnchors } from './fxGeometry';
+import { areaAnchors, createFissureCraterMesh, createFissureMagmaMesh, FISSURE_CRACK_ANGLES } from './fxGeometry';
 
 /**
    * Área de tierra: disco agrietado y una lluvia de rocas pequeñas que cae en
@@ -175,144 +175,171 @@ const life = Math.max(0.3, duration);
     animate(0, 0);
 }
 
+/** Altura local de la superficie del cráter en una fracción de su radio. */
+function fissureSurfaceY(t: number): number {
+  if (t >= 0.9) return 0.1 + Math.min(1, (t - 0.9) / 0.085) * 0.12;
+  if (t >= 0.72) return -0.012 + ((t - 0.72) / 0.18) * 0.112;
+  return -0.018;
+}
+
 /**
-   * Área de fisura: el suelo se parte desde el centro y se hunde. Varias ramas
-   * de grieta se abren hacia el borde con magma en el fondo, seguidas de
-   * estalagmitas, polvo y esquirlas. Es el visual de Fisura; a diferencia de
-   * Terremoto, no cae ninguna roca del cielo.
-   */
+ * Área de fisura: el suelo se abre en un cráter con borde irregular y fondo
+ * hundido. Las grietas nacen del magma y continúan fuera del cráter, y del
+ * fondo brotan estalagmitas, losas y esquirlas. Es el visual de Fisura; a
+ * diferencia de Terremoto, no cae ninguna roca del cielo.
+ */
 export function spawnFissureAoe(ctx: FxRuntime, x: number,
     z: number,
     radius: number,
     _color: readonly [number, number, number],
     duration: number): void {
-const life = Math.max(0.3, duration);
+    const life = Math.max(0.3, duration);
     const root = new pc.Entity('fissure-aoe');
     root.setPosition(x, 0.03, z);
     ctx.app.root.addChild(root);
 
-    const pitMaterial = ctx.createWaterMaterial([34, 27, 22], 0.62);
-    const pitDeepMaterial = ctx.createWaterMaterial([18, 14, 12], 0.55);
-    const magmaMaterial = ctx.createMaterial([255, 166, 62], 0.8);
+    // El cráter es opaco: escribe profundidad y se dibuja antes que las capas
+    // transparentes, así las losas y estalagmitas quedan realmente dentro de él
+    // y la grieta no depende del orden de las transparencias.
+    const craterMaterial = ctx.createVertexColorMaterial(1);
+    craterMaterial.blendType = pc.BLEND_NONE;
+    craterMaterial.depthWrite = true;
+    craterMaterial.update();
+    const poolMaterial = ctx.createVertexColorMaterial(
+      0.85,
+      pc.BLEND_ADDITIVEALPHA
+    );
+    const magmaMaterial = ctx.createMaterial([255, 166, 62], 0.85);
+    const lipLight = ctx.createRockMaterial([124, 100, 70], 1);
+    const lipDark = ctx.createRockMaterial([82, 64, 44], 1);
     const slabLight = ctx.createRockMaterial([116, 98, 74], 1);
     const slabDark = ctx.createRockMaterial([74, 61, 46], 1);
-    const dustMaterial = ctx.createWaterMaterial([190, 170, 138], 0.32);
-    const pebbleLight = ctx.createRockMaterial([176, 156, 122], 1);
-    const pebbleDark = ctx.createRockMaterial([110, 92, 70], 1);
-    // Cada familia de instancias necesita su propio material: el chunk de
-    // animación es distinto para grietas, losas, estalagmitas y piedras.
-    const branchLight = ctx.createRockMaterial([116, 98, 74], 1);
-    const branchDark = ctx.createRockMaterial([74, 61, 46], 1);
     const spikeLight = ctx.createRockMaterial([116, 98, 74], 1);
     const spikeDark = ctx.createRockMaterial([74, 61, 46], 1);
+    const pebbleLight = ctx.createRockMaterial([176, 156, 122], 1);
+    const pebbleDark = ctx.createRockMaterial([110, 92, 70], 1);
+    const dustMaterial = ctx.createWaterMaterial([190, 170, 138], 0.32);
     const materials = [
-      pitMaterial,
-      pitDeepMaterial,
+      craterMaterial,
+      poolMaterial,
       magmaMaterial,
+      lipLight,
+      lipDark,
       slabLight,
       slabDark,
-      dustMaterial,
+      spikeLight,
+      spikeDark,
       pebbleLight,
       pebbleDark,
-      branchLight,
-      branchDark,
-      spikeLight,
-      spikeDark
+      dustMaterial
     ];
 
-    const pit = ctx.createEntity(ctx.discMesh, [pitMaterial], root);
-    pit.setLocalPosition(0, 0.005, 0);
-    pit.setLocalScale(radius * 2, 1, radius * 2);
+    const crater = ctx.createEntity(
+      ctx.cachedMesh('fissure-crater', () => createFissureCraterMesh(ctx.device)),
+      [craterMaterial],
+      root
+    );
+    crater.setLocalScale(radius * 0.3, 1, radius * 0.3);
 
-    const pitDeep = ctx.createEntity(ctx.discMesh, [pitDeepMaterial], root);
-    pitDeep.setLocalPosition(0, 0.006, 0);
-    pitDeep.setLocalScale(radius * 1.15, 1, radius * 1.15);
+    const magmaPool = ctx.createEntity(
+      ctx.cachedMesh('fissure-magma', () => createFissureMagmaMesh(ctx.device)),
+      [poolMaterial],
+      root
+    );
+    magmaPool.setLocalPosition(0, -0.012, 0);
 
-    const branchLightInstances: EffectBatchInstance[] = [];
-    const branchDarkInstances: EffectBatchInstance[] = [];
-    const branchGlowInstances: EffectBatchInstance[] = [];
-    let branchCount = 0;
-    const addBranch = (
+    // Grietas: cajas finas con el pivote en el extremo interior. El shader las
+    // afina hacia la punta y las abre hacia fuera, así se leen como cortes y no
+    // como tablones apoyados en el suelo.
+    const lipLightInstances: EffectBatchInstance[] = [];
+    const lipDarkInstances: EffectBatchInstance[] = [];
+    const glowInstances: EffectBatchInstance[] = [];
+    let crackIndex = 0;
+    const addCrack = (
       angle: number,
-      distance: number,
+      inner: number,
       length: number,
       width: number,
+      y: number,
       delay: number
     ): void => {
-      const tilt = (Math.random() - 0.5) * 16;
-      const x = Math.sin(angle) * distance;
-      const z = Math.cos(angle) * distance;
       const instance: EffectBatchInstance = {
-        x,
-        y: 0.05,
-        z,
+        x: Math.sin(angle) * inner,
+        y,
+        z: Math.cos(angle) * inner,
         sx: width,
-        sy: 0.035,
+        sy: 0.012,
         sz: length,
         ry: angle / DEG,
-        anim0: [delay, tilt, 0, 0]
+        anim0: [delay, 0, 0, 0]
       };
-      if (branchCount % 4 === 0) branchLightInstances.push(instance);
-      else branchDarkInstances.push(instance);
-      branchGlowInstances.push({
-        x,
-        y: 0.078,
-        z,
-        sx: width * 0.38,
-        sy: 0.012,
-        sz: length * 0.8,
-        ry: angle / DEG,
-        anim0: [delay, tilt, 0, 0]
+      if (crackIndex % 3 === 0) lipDarkInstances.push(instance);
+      else lipLightInstances.push(instance);
+      glowInstances.push({
+        ...instance,
+        sx: width * 0.34,
+        sy: 0.008,
+        y: y + 0.006
       });
-      branchCount++;
+      crackIndex++;
     };
 
-    const mainBranches = 5;
-    for (let branch = 0; branch < mainBranches; branch++) {
-      const baseAngle =
-        (branch / mainBranches) * Math.PI * 2 + Math.random() * 0.55;
-      const segments = 3 + (branch % 2);
-      for (let index = 0; index < segments; index++) {
-        const t = (index + 0.5) / segments;
-        const angle = baseAngle + (Math.random() - 0.5) * 0.5;
-        addBranch(
+    for (const baseAngle of FISSURE_CRACK_ANGLES) {
+      // Grieta interior: dos tramos con un quiebro para que no sea una estrella.
+      let angle = baseAngle + (Math.random() - 0.5) * 0.14;
+      let inner = radius * 0.04;
+      for (let part = 0; part < 2; part++) {
+        const length = radius * (0.26 + Math.random() * 0.08);
+        addCrack(
           angle,
-          radius * t * (0.82 + Math.random() * 0.14),
-          radius * (0.24 + Math.random() * 0.16),
-          radius * (0.035 + Math.random() * 0.035),
-          t * 0.2 + Math.random() * 0.02
+          inner,
+          length,
+          radius * (0.028 + Math.random() * 0.012),
+          -0.013,
+          0.02 + part * 0.03 + Math.random() * 0.03
         );
+        inner += length * 0.9;
+        angle += (Math.random() - 0.5) * 0.18;
       }
-      // Bifurcación corta para que la grieta no parezca una estrella regular.
-      if (branch % 2 === 0) {
-        addBranch(
-          baseAngle + 0.5 + Math.random() * 0.4,
-          radius * (0.36 + Math.random() * 0.22),
-          radius * (0.18 + Math.random() * 0.12),
-          radius * (0.024 + Math.random() * 0.024),
-          0.14 + Math.random() * 0.08
-        );
-      }
+      // Grieta exterior: cruza la cresta y se bifurca en el terreno.
+      const outerAngle = baseAngle + (Math.random() - 0.5) * 0.12;
+      addCrack(
+        outerAngle,
+        radius * 1.0,
+        radius * (0.2 + Math.random() * 0.1),
+        radius * (0.022 + Math.random() * 0.01),
+        -0.018,
+        0.04 + Math.random() * 0.04
+      );
+      addCrack(
+        outerAngle + 0.3 + Math.random() * 0.2,
+        radius * 1.04,
+        radius * (0.12 + Math.random() * 0.08),
+        radius * (0.014 + Math.random() * 0.008),
+        -0.018,
+        0.08 + Math.random() * 0.04
+      );
     }
 
     const slabLightInstances: EffectBatchInstance[] = [];
     const slabDarkInstances: EffectBatchInstance[] = [];
-    for (let index = 0; index < 7; index++) {
+    for (let index = 0; index < 8; index++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = radius * (0.28 + Math.random() * 0.5);
-      const width = radius * (0.12 + Math.random() * 0.08);
-      const length = radius * (0.16 + Math.random() * 0.1);
+      // Todas las losas nacen en el fondo plano: sobre la pared o la cresta
+      // quedarían medio enterradas por la pendiente irregular del cráter.
+      const band = 0.15 + Math.random() * 0.5;
+      const distance = radius * band;
       const instance: EffectBatchInstance = {
         x: Math.sin(angle) * distance,
-        y: 0.05,
+        y: fissureSurfaceY(band) + 0.012,
         z: Math.cos(angle) * distance,
-        sx: width,
-        sy: 0.07,
-        sz: length,
+        sx: radius * (0.1 + Math.random() * 0.07),
+        sy: 0.05,
+        sz: radius * (0.14 + Math.random() * 0.08),
         ry: angle / DEG,
         anim0: [
-          0.03 + Math.random() * 0.12,
-          (8 + Math.random() * 10) * (index % 2 === 0 ? 1 : -1),
+          0.05 + Math.random() * 0.1,
+          (3 + Math.random() * 5) * (index % 2 === 0 ? 1 : -1),
           0,
           0
         ]
@@ -323,20 +350,20 @@ const life = Math.max(0.3, duration);
 
     const spikeLightInstances: EffectBatchInstance[] = [];
     const spikeDarkInstances: EffectBatchInstance[] = [];
-    for (let index = 0; index < 8; index++) {
+    for (let index = 0; index < 7; index++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = radius * (0.12 + Math.sqrt(Math.random()) * 0.62);
-      const height = radius * (0.18 + Math.random() * 0.2);
-      const width = radius * (0.045 + Math.random() * 0.035);
+      const band = 0.25 + Math.random() * 0.62;
+      const distance = radius * band;
       const instance: EffectBatchInstance = {
         x: Math.sin(angle) * distance,
+        y: fissureSurfaceY(band) - 0.012,
         z: Math.cos(angle) * distance,
         ry: Math.random() * 360,
         anim0: [
-          height,
-          width,
-          0.06 + Math.random() * 0.16,
-          (Math.random() - 0.5) * 22
+          radius * (0.2 + Math.random() * 0.14),
+          radius * (0.07 + Math.random() * 0.04),
+          0.06 + Math.random() * 0.12,
+          (Math.random() - 0.5) * 10
         ]
       };
       if (index % 3 === 0) spikeDarkInstances.push(instance);
@@ -345,15 +372,15 @@ const life = Math.max(0.3, duration);
 
     const pebbleLightInstances: EffectBatchInstance[] = [];
     const pebbleDarkInstances: EffectBatchInstance[] = [];
-    for (let index = 0; index < 18; index++) {
+    for (let index = 0; index < 16; index++) {
       const angle = Math.random() * Math.PI * 2;
-      const size = radius * (0.018 + Math.random() * 0.022);
+      const size = radius * (0.016 + Math.random() * 0.02);
       const instance: EffectBatchInstance = {
         anim0: [
           angle,
-          radius * (0.2 + Math.random() * 0.8),
-          radius * (0.12 + Math.random() * 0.22),
-          0.04 + Math.random() * 0.12
+          radius * (0.35 + Math.random() * 0.7),
+          radius * (0.14 + Math.random() * 0.16),
+          0.05 + Math.random() * 0.1
         ],
         anim1: [size, (Math.random() - 0.5) * 540, 0, 0]
       };
@@ -366,8 +393,8 @@ const life = Math.max(0.3, duration);
         app: ctx.app,
         parent: root,
         mesh: ctx.boxMesh,
-        material: branchLight,
-        instances: branchLightInstances,
+        material: lipLight,
+        instances: lipLightInstances,
         motion: MOTION_FISSURE_BRANCHES,
         radius,
         life
@@ -376,8 +403,8 @@ const life = Math.max(0.3, duration);
         app: ctx.app,
         parent: root,
         mesh: ctx.boxMesh,
-        material: branchDark,
-        instances: branchDarkInstances,
+        material: lipDark,
+        instances: lipDarkInstances,
         motion: MOTION_FISSURE_BRANCHES,
         radius,
         life
@@ -387,7 +414,7 @@ const life = Math.max(0.3, duration);
         parent: root,
         mesh: ctx.boxMesh,
         material: magmaMaterial,
-        instances: branchGlowInstances,
+        instances: glowInstances,
         motion: MOTION_FISSURE_BRANCHES,
         radius,
         life
@@ -485,34 +512,38 @@ const life = Math.max(0.3, duration);
     let time = 0;
     const animate = (_t: number, dt: number): void => {
       time += dt;
-      const fadeIn = Math.min(1, time / 0.06);
-      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.2));
+      const fadeIn = Math.min(1, time / 0.05);
+      const fadeOut = Math.min(1, Math.max(0, (life - time) / 0.16));
       const envelope = Math.min(fadeIn, fadeOut);
-      const pulse = 0.5 + Math.sin(time * 28) * 0.22;
+      const open = 1 - Math.pow(1 - Math.min(1, time / 0.13), 3);
+      const pulse = 0.5 + Math.sin(time * 26) * 0.28;
 
-      pitMaterial.opacity = 0.58 * envelope;
-      pitDeepMaterial.opacity = 0.5 * envelope;
-      const pitScale = radius * 2 * (0.9 + Math.min(1, time / 0.14) * 0.1);
-      pit.setLocalScale(pitScale, 1, pitScale);
-      const deepScale = radius * 1.15 * (0.86 + Math.min(1, time / 0.16) * 0.14);
-      pitDeep.setLocalScale(deepScale, 1, deepScale);
+      // El cráter se abre desde el centro y, al final, se hunde bajo el suelo:
+      // la tierra se cierra sobre la grieta en lugar de desvanecerse.
+      const close = Math.min(1, Math.max(0, (time - (life - 0.18)) / 0.18));
+      root.setPosition(x, 0.03 - close * 0.32, z);
+      const craterScale = radius * (0.28 + open * 0.72);
+      crater.setLocalScale(craterScale, 1, craterScale);
 
-      magmaMaterial.opacity = (0.5 + pulse * 0.3) * envelope;
+      const poolScale = radius * 0.7 * (0.94 + pulse * 0.06);
+      magmaPool.setLocalScale(poolScale, 1, poolScale);
+      poolMaterial.opacity = (0.6 + pulse * 0.3) * envelope;
 
       for (const batch of branchBatches) batch.setTime(time);
       for (const batch of slabBatches) batch.setTime(time);
       for (const batch of spikeBatches) batch.setTime(time);
       for (const batch of pebbleBatches) batch.setTime(time);
 
+      magmaMaterial.opacity = (0.6 + pulse * 0.3) * envelope;
+      lipLight.opacity = 0.92 * envelope;
+      lipDark.opacity = 0.82 * envelope;
       slabLight.opacity = 0.92 * envelope;
       slabDark.opacity = 0.82 * envelope;
-      dustMaterial.opacity = 0.3 * envelope;
-      pebbleLight.opacity = 0.9 * envelope;
-      pebbleDark.opacity = 0.78 * envelope;
-      branchLight.opacity = 0.92 * envelope;
-      branchDark.opacity = 0.82 * envelope;
       spikeLight.opacity = 0.92 * envelope;
       spikeDark.opacity = 0.82 * envelope;
+      pebbleLight.opacity = 0.9 * envelope;
+      pebbleDark.opacity = 0.78 * envelope;
+      dustMaterial.opacity = 0.3 * envelope;
     };
     ctx.addEffect(root, materials, life, animate, areaAnchors(x, z, radius));
     animate(0, 0);

@@ -634,43 +634,43 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 }
 `;
 
-/** Grietas de `Falla`: cada losa emerge con su propio retardo. */
+/** Grietas de `Fisura`: se abren desde el centro y se afinan hacia la punta. */
 export const MOTION_FISSURE_BRANCHES_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
-  let local = clamp((uniform.uEffectTime - a0.x) / 0.14, 0.0, 1.0);
-  let pop = 1.0 - pow(1.0 - local, 3.0);
-  let sink = uniform.uEffectRadius * 0.02 * pop;
-  var result = base;
-  result[3].y = result[3].y - sink;
-  result = result * effectScale(vec3f(0.5 + pop * 0.5, 1.0, 1.0));
-  result = result * effectEuler(
-    a0.y * pop * EFFECT_DEG,
-    0.0,
-    a0.y * 0.35 * pop * EFFECT_DEG
+  let local = clamp((uniform.uEffectTime - a0.x) / 0.16, 0.0, 1.0);
+  let open = 1.0 - pow(1.0 - local, 2.0);
+  let fadeOut = min(
+    1.0,
+    max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.16)
   );
-  return result;
+  let scale = max(0.001, open * fadeOut);
+  return base * effectScale(vec3f(0.3 + scale * 0.7, 1.0, scale));
 }
 
 fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
-  return vertexPosition;
+  // z = 0 en el extremo interior y z = 1 en la punta.
+  let z = vertexPosition.z + 0.5;
+  let taper = 1.0 - z * 0.72;
+  return vec3f(vertexPosition.x * taper, vertexPosition.y, z);
 }
 `;
 
-/** Losas del suelo que saltan en `Falla`. */
+/** Losas del suelo que saltan y vuelven a posarse en `Fisura`. */
 export const MOTION_FISSURE_SLABS_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
-  let local = clamp((uniform.uEffectTime - a0.x) / 0.16, 0.0, 1.0);
+  let local = clamp((uniform.uEffectTime - a0.x) / 0.18, 0.0, 1.0);
   let pop = 1.0 - pow(1.0 - local, 3.0);
-  let fadeOut = min(1.0, max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.2));
-  let scale = max(0.001, pop * fadeOut);
-  var result = base;
-  result[3].y = result[3].y + uniform.uEffectRadius * 0.025 * pop;
-  result = result * effectScale(vec3f(scale, scale, scale));
-  result = result * effectEuler(
-    a0.y * pop * EFFECT_DEG,
-    0.0,
-    a0.y * 0.4 * pop * EFFECT_DEG
+  let fadeOut = min(
+    1.0,
+    max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.16)
   );
+  let scale = max(0.001, (0.35 + pop * 0.65) * fadeOut);
+  let lift = sin(local * EFFECT_PI);
+  let tilt = a0.y * lift * EFFECT_DEG;
+  var result = base;
+  result[3].y = result[3].y + uniform.uEffectRadius * 0.018 * lift;
+  result = result * effectScale(vec3f(scale, scale, scale));
+  result = result * effectEuler(tilt, 0.0, tilt * 0.45);
   return result;
 }
 
@@ -679,24 +679,25 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 }
 `;
 
-/** Estalagmitas de `Falla`. */
+/** Estalagmitas de `Fisura`: brotan del fondo y se afilan al crecer. */
 export const MOTION_FISSURE_SPIKES_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
-  let local = clamp((uniform.uEffectTime - a0.z) / 0.12, 0.0, 1.0);
+  let local = clamp((uniform.uEffectTime - a0.z) / 0.15, 0.0, 1.0);
   let pop = 1.0 - pow(1.0 - local, 3.0);
-  let fadeOut = min(1.0, max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.2));
-  let height = a0.x * pop * fadeOut;
-  if (height <= 0.001) {
-    return effectTRS(base[3].xyz, vec3f(0.001), effectRotY(0.0));
-  }
-  let width = max(0.001, a0.y * pop * fadeOut);
+  let fadeOut = min(
+    1.0,
+    max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.16)
+  );
+  let height = max(0.001, a0.x * pop * fadeOut);
+  let width = max(0.001, a0.y * (0.55 + pop * 0.45) * fadeOut);
   var result = base;
-  result[3].y = result[3].y + height * (pop - 0.5);
+  // El cono está centrado: subirlo media altura deja la base en el fondo.
+  result[3].y = result[3].y + height * 0.5;
   result = result * effectScale(vec3f(width, height, width));
   result = result * effectEuler(
     a0.w * pop * EFFECT_DEG,
     0.0,
-    a0.w * 0.35 * pop * EFFECT_DEG
+    a0.w * 0.3 * pop * EFFECT_DEG
   );
   return result;
 }
@@ -706,23 +707,28 @@ fn effectLocalPosition(vertexPosition: vec3f, a0: vec4f, a1: vec4f) -> vec3f {
 }
 `;
 
-/** Piedras que salen despedidas en `Falla`. */
+/** Piedras que salen despedidas del fondo en `Fisura`. */
 export const MOTION_FISSURE_PEBBLES_WGSL = `
 fn effectModel(base: mat4x4f, a0: vec4f, a1: vec4f) -> mat4x4f {
-  let local = clamp((uniform.uEffectTime - a0.w) / 0.4, 0.0, 1.0);
+  let local = clamp((uniform.uEffectTime - a0.w) / 0.45, 0.0, 1.0);
   if (local <= 0.0) {
     return effectTRS(vec3f(0.0), vec3f(0.001), effectRotY(0.0));
   }
-  let distance = a0.y * local;
-  let y = a1.x * 0.4 + sin(local * EFFECT_PI) * a0.z;
-  let fadeOut = min(1.0, max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.2));
-  let scale = a1.x * (1.0 - local * 0.55) * fadeOut;
-  let pitch = local * 260.0 * EFFECT_DEG;
+  let ease = 1.0 - pow(1.0 - local, 2.0);
+  let distance = a0.y * ease;
+  let y = -0.015 + sin(local * EFFECT_PI) * a0.z;
+  let fadeOut = min(
+    1.0,
+    max(0.0, (uniform.uEffectLife - uniform.uEffectTime) / 0.16)
+  );
+  let fadeIn = min(1.0, local * 6.0);
+  let scale = a1.x * (1.0 - local * 0.35) * fadeOut * fadeIn;
+  let pitch = local * 320.0 * EFFECT_DEG;
   let yaw = a0.x * EFFECT_DEG;
   let roll = local * a1.y * EFFECT_DEG;
   return effectTRS(
     vec3f(sin(a0.x) * distance, y, cos(a0.x) * distance),
-    vec3f(max(0.001, scale), max(0.001, scale * 0.8), max(0.001, scale * 0.9)),
+    vec3f(max(0.001, scale), max(0.001, scale * 0.82), max(0.001, scale * 0.9)),
     effectEuler(pitch, yaw, roll)
   );
 }
