@@ -2191,7 +2191,7 @@ registerAbility(
     .area('fissure', 'once', 0.75)
     .radial(0.35)
     .knockback(0.9)
-    .startup(0.6, { animation: 'charge' })
+    .startup(0.6, { animation: 'hop' })
     .armor(40)
     .recovery(0.6)
     .animation(null)
