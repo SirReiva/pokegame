@@ -31,6 +31,7 @@
     "sim": "node --import tsx scripts/sim-headless.ts",
     "balance": "node --import tsx scripts/balance-report.ts",
     "balance:teams": "node --import tsx scripts/balance-teams.ts",
+    "balance:teams:parallel": "node --import tsx scripts/balance-teams-parallel.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -46,6 +47,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
     "oxlint": "1.93.0",
+    "piscina": "^5.3.2",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "twlinter": "0.8.0",

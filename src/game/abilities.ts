@@ -980,8 +980,8 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
 
 registerAbility(
   projectileAbility('impactrueno', 'Impactrueno', 'Electric', 'special', defaultProjectileResolve)
-    .power(70)
-    .cooldown(0.9)
+    .power(78)
+    .cooldown(0.82)
     .range(8)
     .radius(0.26)
     .projectile('electric', 18)
@@ -1010,8 +1010,8 @@ registerAbility(
 
 registerAbility(
   beamAbility('rayo', 'Rayo', 'Electric', 'special', defaultBeamResolve)
-    .power(130)
-    .cooldown(8)
+    .power(140)
+    .cooldown(7)
     .range(11)
     .radius(0.35)
     .impact('electric')
@@ -1046,8 +1046,8 @@ registerAbility(
 
 registerAbility(
   meleeAbility('chispa', 'Chispa', 'Electric', 'physical', defaultMeleeResolve)
-    .power(80)
-    .cooldown(0.6)
+    .power(96)
+    .cooldown(0.52)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
     .radius(0.7)
@@ -1064,8 +1064,8 @@ registerAbility(
 
 registerAbility(
   dashAbility('rollout', 'Rollout', 'Normal', 'physical', defaultDashResolve)
-    .power(100)
-    .cooldown(6)
+    .power(115)
+    .cooldown(4.5)
     .radius(0.95)
     .dash(5)
     .knockback(0.6)
@@ -1081,7 +1081,7 @@ registerAbility(
 registerAbility(
   projectileAbility('ondaTrueno', 'Onda Trueno', 'Electric', 'status', defaultProjectileResolve)
     .power(0)
-    .cooldown(5)
+    .cooldown(4)
     .range(9)
     .radius(0.3)
     .projectile('electric', 16)
@@ -1097,8 +1097,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('explosion', 'Explosión', 'Electric', 'special', defaultAoeResolve)
-    .power(200)
-    .cooldown(18)
+    .power(230)
+    .cooldown(13)
     .range(0)
     .radius(4.2)
     .area('explosion', 'once', 0.85)
@@ -1236,8 +1236,8 @@ registerAbility(
 
 registerAbility(
   beamAbility('lanzallamas', 'Lanzallamas', 'Fire', 'special', defaultBeamResolve)
-    .power(100)
-    .cooldown(6.5)
+    .power(112)
+    .cooldown(5.8)
     .range(9.5)
     .radius(0.4)
     .startup(0.35)
@@ -1254,8 +1254,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('anilloIgneo', 'Anillo Ígneo', 'Fire', 'special', defaultAoeResolve)
-    .power(130)
-    .cooldown(14)
+    .power(145)
+    .cooldown(12)
     .range(4.2)
     .radius(3.1)
     .startup(0.75)
@@ -1276,8 +1276,8 @@ registerAbility(
 
 registerAbility(
   meleeAbility('hojaAfilada', 'Hoja Afilada', 'Grass', 'special', defaultMeleeResolve)
-    .power(100)
-    .cooldown(5)
+    .power(125)
+    .cooldown(3.8)
     .range(2.6)
     .radius(0.8)
     .halfAngle(50)
@@ -1293,7 +1293,7 @@ registerAbility(
 registerAbility(
   meleeAbility('paralizador', 'Paralizador', 'Grass', 'status', defaultMeleeResolve)
     .power(0)
-    .cooldown(7)
+    .cooldown(5)
     .range(3)
     .radius(0.9)
     .halfAngle(60)
@@ -1310,8 +1310,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('llueveHojas', 'Lluevehojas', 'Grass', 'special', defaultAoeResolve)
-    .power(160)
-    .cooldown(14)
+    .power(190)
+    .cooldown(11)
     .range(4.2)
     .radius(3.2)
     .startup(0.75)
@@ -1347,8 +1347,8 @@ registerAbility(
 
 registerAbility(
   projectileAbility('rayoBurbuja', 'Rayo Burbuja', 'Water', 'special', defaultProjectileResolve)
-    .power(80)
-    .cooldown(3)
+    .power(88)
+    .cooldown(2.7)
     .range(8)
     .radius(0.24)
     .projectile('water', 13)
@@ -1365,8 +1365,8 @@ registerAbility(
 
 registerAbility(
   beamAbility('hidrobomba', 'Hidrobomba', 'Water', 'special', defaultBeamResolve)
-    .power(140)
-    .cooldown(9)
+    .power(150)
+    .cooldown(8)
     .range(8.5)
     .radius(0.42)
     .beam('water')
@@ -1386,7 +1386,7 @@ registerAbility(
 
 registerAbility(
   meleeAbility('garraMetal', 'Garra Metal', 'Steel', 'physical', defaultMeleeResolve)
-    .power(45)
+    .power(52)
     .cooldown(0.5)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
@@ -1420,8 +1420,8 @@ registerAbility(
 
 registerAbility(
   projectileAbility('esferaAura', 'Esfera Aura', 'Fighting', 'special', defaultProjectileResolve)
-    .power(60)
-    .cooldown(5)
+    .power(68)
+    .cooldown(4.3)
     .range(10)
     .radius(0.32)
     .projectile('aura', 15)
@@ -1437,8 +1437,8 @@ registerAbility(
 
 registerAbility(
   meleeAbility('combateCercano', 'Combate Cercano', 'Fighting', 'physical', defaultMeleeResolve)
-    .power(125)
-    .cooldown(13)
+    .power(138)
+    .cooldown(11.5)
     .range(2.4)
     .radius(1)
     .halfAngle(65)
@@ -1782,7 +1782,7 @@ registerAbility(
 
 registerAbility(
   beamAbility('rayoHielo', 'Rayo Hielo', 'Ice', 'special', defaultBeamResolve)
-    .power(90)
+    .power(82)
     .cooldown(7)
     .range(9.5)
     .radius(0.4)
@@ -2107,7 +2107,7 @@ registerAbility(
 
 registerAbility(
   meleeAbility('atadura', 'Atadura', 'Rock', 'physical', defaultMeleeResolve)
-    .power(65)
+    .power(78)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.8)
@@ -2125,8 +2125,8 @@ registerAbility(
 
 registerAbility(
   projectileAbility('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', defaultProjectileResolve)
-    .power(85)
-    .cooldown(4.5)
+    .power(105)
+    .cooldown(3.5)
     .range(8)
     .radius(0.32)
     .projectile('rock', 13)
@@ -2143,8 +2143,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('excavar', 'Excavar', 'Ground', 'physical', defaultAoeResolve)
-    .power(85)
-    .cooldown(6)
+    .power(95)
+    .cooldown(5.5)
     .range(0)
     .radius(1.2)
     // El aviso sigue al lanzador mientras se mueve bajo tierra: al emerger,
@@ -2184,8 +2184,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('fisura', 'Fisura', 'Ground', 'physical', defaultAoeResolve)
-    .power(155)
-    .cooldown(14)
+    .power(180)
+    .cooldown(11)
     .range(2.5)
     .radius(3.4)
     .area('fissure', 'once', 0.75)
@@ -2208,9 +2208,9 @@ registerAbility(
 
 registerAbility(
   projectileAbility('hojaMagica', 'Hoja Mágica', 'Grass', 'special', defaultProjectileResolve)
-    .power(45)
+    .power(52)
     // Las hojas guiadas persiguen el objetivo hasta el final.
-    .cooldown(0.8)
+    .cooldown(0.7)
     .range(8)
     .radius(0.26)
     .projectile('grass', 14)
@@ -2225,8 +2225,8 @@ registerAbility(
 
 registerAbility(
   beamAbility('rayoSolar', 'Rayo Solar', 'Grass', 'special', defaultBeamResolve)
-    .power(85)
-    .cooldown(8)
+    .power(100)
+    .cooldown(7)
     .range(9.5)
     .radius(0.48)
     .startup(0.65, { animation: 'charge' })
@@ -2244,7 +2244,7 @@ registerAbility(
   aoeAbility('deseo', 'Deseo', 'Psychic', 'status', defaultAoeResolve)
     .bot({ revive: true })
     .power(0)
-    .cooldown(13)
+    .cooldown(11)
     .range(0)
     .radius(3.2)
     // Deseo es una concentración larga: la carga en bucle evita que el
@@ -2267,8 +2267,8 @@ registerAbility(
 
 registerAbility(
   aoeAbility('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', defaultAoeResolve)
-    .power(105)
-    .cooldown(15)
+    .power(120)
+    .cooldown(13)
     .range(5.5)
     .radius(2.8)
     .startup(1, { animation: 'charge' })
@@ -2567,7 +2567,7 @@ registerAbility(
 
 registerAbility(
   beamAbility('dragoaliento', 'Dragoaliento', 'Dragon', 'physical', defaultBeamResolve)
-    .power(150)
+    .power(140)
     .cooldown(15)
     .range(10)
     .radius(0.55)
@@ -2590,7 +2590,7 @@ registerAbility(
 
 registerAbility(
   meleeAbility('golpeCuerpo', 'Golpe Cuerpo', 'Normal', 'physical', defaultMeleeResolve)
-    .power(80)
+    .power(76)
     .cooldown(0.8)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.2)
@@ -2624,7 +2624,7 @@ registerAbility(
 
 registerAbility(
   aoeAbility('frioPolar', 'Frío Polar', 'Ice', 'special', defaultAoeResolve)
-    .power(140)
+    .power(115)
     .cooldown(8)
     // El vértice nace 0,75 u por delante de Suicune y el cono avanza 7 u con
     // una apertura total de 60° (30° a cada lado del eje).
@@ -2661,7 +2661,7 @@ const PRIMORDIAL_PULSE_FIRST_SHARE = 0.375;
 
 registerAbility(
   projectileAbility('rafagaMarina', 'Ráfaga Marina', 'Water', 'special', defaultProjectileResolve)
-    .power(46)
+    .power(38)
     .cooldown(0.85)
     .range(8.5)
     .radius(0.24)
@@ -2704,7 +2704,7 @@ registerAbility(
     .armor(40)
     .recovery(0.6)
     .animation(null)
-    .heal(0.25)
+    .heal(0.1)
     .area('recovery', 'once', 0.75)
     .resolve(({ targets, applyHeal }) => {
       // Kyogre se cura con `healSelf`; la marea reparte el 15 % restante
@@ -2722,10 +2722,9 @@ registerAbility(
 
 registerAbility(
   aoeAbility('pulsoPrimigenio', 'Pulso Primigenio', 'Water', 'special', defaultAoeResolve)
-    // En un área `overTime` el motor lee `power` como daño por segundo: 160
-    // durante 1 s son 160 totales. El callback reparte 60 + 100 a partir de
-    // este valor y de la duración.
-    .power(160)
+    // En un área `overTime` el motor lee `power` como daño por segundo: 120
+    // durante 1 s son 120 totales. El callback reparte el total entre pulsos.
+    .power(120)
     .cooldown(16)
     .range(5)
     .radius(3.4)
@@ -2816,7 +2815,7 @@ registerAbility(
 
 registerAbility(
   beamAbility('furiaDraco', 'Furia Dragón', 'Dragon', 'special', defaultBeamResolve)
-    .power(85)
+    .power(80)
     .cooldown(9)
     .range(9.5)
     .radius(0.5)
@@ -2835,7 +2834,7 @@ registerAbility(
 
 registerAbility(
   aoeAbility('ascensoDraco', 'Ascenso Draco', 'Flying', 'physical', defaultAoeResolve)
-    .power(130)
+    .power(120)
     .cooldown(16)
     .range(0)
     .radius(3.2)
@@ -2875,6 +2874,85 @@ registerAbility(
     )
 );
 
+/* ------------------------------------------------------------------------- */
+/* Básicas elementales de los starters (fase 2)                              */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Estas cuatro habilidades existen como recambio de la básica Normal. No se
+ * asignan en `MOVESETS` por defecto: el paquete de balance las mete en el
+ * primer slot de su especie. Así no se muta el tipo de `placaje`/`aranazo`,
+ * que comparten otras especies.
+ */
+
+registerAbility(
+  meleeAbility('latigoCepa', 'Látigo Cepa', 'Grass', 'special', defaultMeleeResolve)
+    .power(55)
+    .cooldown(0.25)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(2.0)
+    .radius(0.7)
+    .halfAngle(50)
+    .knockback(0.3)
+    .active(0.175)
+    .recovery(0)
+    .animation('attack')
+    .impact('grass')
+    .color(88, 190, 96)
+    .description('Látigo vegetal de corto alcance. Básica de Planta de Bulbasaur.')
+);
+
+registerAbility(
+  meleeAbility('ascuas', 'Ascuas', 'Fire', 'special', defaultMeleeResolve)
+    .power(65)
+    .cooldown(0.25)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(1.9)
+    .radius(0.65)
+    .halfAngle(45)
+    .knockback(0.25)
+    .active(0.15)
+    .recovery(0)
+    .animation('strike')
+    .impact('fire')
+    .color(246, 146, 58)
+    .description('Chispa de fuego de corto alcance. Básica de Fuego de Charmander.')
+);
+
+registerAbility(
+  meleeAbility('pistolaAgua', 'Pistola Agua', 'Water', 'special', defaultMeleeResolve)
+    .power(65)
+    .cooldown(0.25)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(1.9)
+    .radius(0.65)
+    .halfAngle(45)
+    .knockback(0.2)
+    .active(0.15)
+    .recovery(0)
+    .animation('strike')
+    .impact('water')
+    .color(104, 196, 255)
+    .description('Chorro de agua de corto alcance. Básica de Agua de Squirtle.')
+);
+
+registerAbility(
+  meleeAbility('chispazo', 'Chispazo', 'Electric', 'special', defaultMeleeResolve)
+    .power(55)
+    .cooldown(0.25)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(1.9)
+    .radius(0.65)
+    .halfAngle(45)
+    .knockback(0.2)
+    .active(0.15)
+    .recovery(0)
+    .animation('attack')
+    .impact('electric')
+    .color(247, 208, 44)
+    .description('Descarga eléctrica de corto alcance. Básica Eléctrica de Pikachu.')
+);
+
 /**
  * Moveset por id de Pokédex: [básica, habilidad 1, habilidad 2, habilidad 3].
  * `null` deja el hueco vacío y el HUD lo muestra como «Sin asignar».
@@ -2884,12 +2962,12 @@ export const MOVESETS: Record<
   [AbilityId | null, AbilityId | null, AbilityId | null, AbilityId | null]
 > = {};
 
-MOVESETS['0025'] = ['placaje', 'ataqueRapido', 'impactrueno', 'rayo'];
+MOVESETS['0025'] = ['chispazo', 'ataqueRapido', 'impactrueno', 'rayo'];
 MOVESETS['0100'] = ['chispa', 'rollout', 'ondaTrueno', 'explosion'];
 MOVESETS['0094'] = ['lenguetazo', 'bolaSombra', 'bombaLodo', 'comeSuenos'];
-MOVESETS['0001'] = ['placaje', 'paralizador', 'hojaAfilada', 'llueveHojas'];
-MOVESETS['0004'] = ['aranazo', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
-MOVESETS['0007'] = ['placaje', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];
+MOVESETS['0001'] = ['latigoCepa', 'paralizador', 'hojaAfilada', 'llueveHojas'];
+MOVESETS['0004'] = ['ascuas', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
+MOVESETS['0007'] = ['pistolaAgua', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];
 MOVESETS['0448'] = [
   'garraMetal',
   'velocidadExtrema',
