@@ -21,7 +21,7 @@ test('añade las cuatro habilidades del moveset y el instinto elegido', () => {
     { pokemonId: '0025', commonAbilityId: 'proteccion' }
   ]);
   for (const path of [
-    'abilities/placaje.mp3',
+    'abilities/chispa.mp3',
     'abilities/ataqueRapido.mp3',
     'abilities/impactrueno.mp3',
     'abilities/rayo.mp3'

@@ -30,7 +30,9 @@ export const MELEE_ARC_OPACITY: Partial<Record<ImpactStyle, number>> = {
   ghost: 0.12,
   air: 0.16,
   rock: 0.14,
-  ground: 0.18
+  ground: 0.18,
+  // Los zarcillos 3D son los protagonistas: el cono queda como guía tenue.
+  vine: 0.16
 };
 
 /**

@@ -87,7 +87,10 @@ export const IMPACT_FACTORIES: Record<ImpactStyle, ImpactFactory> = {
   air: (ctx, x, z, color, effectiveness) => spawnAirBurst(ctx, x, z, color, effectiveness),
   ice: (ctx, x, z, color, effectiveness) => spawnIceBurst(ctx, x, z, color, effectiveness),
   rock: (ctx, x, z, color, effectiveness) => spawnRockBurst(ctx, x, z, color, effectiveness),
-  ground: (ctx, x, z, color, effectiveness) => spawnGroundBurst(ctx, x, z, color, effectiveness)
+  ground: (ctx, x, z, color, effectiveness) => spawnGroundBurst(ctx, x, z, color, effectiveness),
+  // El Látigo Cepa comparte el estallido vegetal: el zarcillo 3D lo dibuja el
+  // efecto melee y el golpe remata con hojas y motas verdes.
+  vine: (ctx, x, z, color, effectiveness) => spawnGrassBurst(ctx, x, z, color, effectiveness)
 };
 
 export const BEAM_FACTORIES: Record<BeamStyle, BeamFactory> = {

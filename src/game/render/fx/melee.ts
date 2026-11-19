@@ -8,6 +8,7 @@ import { EffectTintBatch } from './effectTintBatch';
 import type { TintEffectInstance } from './effectTintBatch';
 import { MELEE_ARC_OPACITY, createArcMesh, createSlashStreakSetMesh } from './fxGeometry';
 import type { SlashStreakSpec } from './fxGeometry';
+import { spawnVineWhip } from './vineWhip';
 
 /**
    * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
@@ -37,6 +38,12 @@ export function spawnMelee(ctx: FxRuntime, x: number,
           spawnJawBite(ctx, centerX, centerZ, yaw, range * 0.56, 1);
         }
       );
+    }
+
+    // El Látigo Cepa sustituye el abanico plano por dos zarcillos 3D. El arco
+    // se mantiene como guía tenue del alcance (ver `MELEE_ARC_OPACITY.vine`).
+    if (style === 'vine') {
+      spawnVineWhip(ctx, x, z, yaw, range, halfAngleDeg, color);
     }
 
     const mesh = createArcMesh(

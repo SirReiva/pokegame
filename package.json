@@ -48,6 +48,7 @@
     "@vitejs/plugin-react": "6.3.0",
     "oxlint": "1.93.0",
     "piscina": "^5.3.2",
+    "scriptc": "^0.4.14",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "twlinter": "0.8.0",

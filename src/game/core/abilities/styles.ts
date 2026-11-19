@@ -55,7 +55,8 @@ export type ImpactStyle =
   | 'air'
   | 'ice'
   | 'rock'
-  | 'ground';
+  | 'ground'
+  | 'vine';
 
 /** Aspecto visual de un haz. */
 export type BeamStyle =

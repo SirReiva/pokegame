@@ -14,6 +14,7 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
 
   // Pikachu
   placaje: 'abilities/placaje.mp3',
+  chispazo: 'abilities/chispa.mp3',
   ataqueRapido: 'abilities/ataqueRapido.mp3',
   rayo: 'abilities/rayo.mp3',
   impactrueno: 'abilities/impactrueno.mp3',

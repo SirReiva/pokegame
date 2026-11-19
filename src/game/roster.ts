@@ -15,27 +15,27 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0004': 6.2, // Charmander: el starter más ágil, con paso ligero
   '0007': 5.6, // Squirtle: algo más lento que Charmander, pero constante
   '0025': 7.2, // Pikachu: muy rápido por sus sentidos eléctricos
-  '0094': 7.6, // Gengar: flota y se desliza, rápido y escurridizo
+  '0094': 7.4, // Gengar: flota y se desliza, rápido y escurridizo
   '0100': 8.2, // Voltorb: rueda y detona, el más rápido del roster
   '0133': 6.1, // Eevee: ágil y equilibrado
   '0448': 6.8, // Lucario: zancada larga, casi tan rápido como Pikachu
   '0658': 7.4, // Greninja: un ninja acuático, el más rápido hasta ahora
   '0150': 7.8, // Mewtwo: levita y se impulsa con poder psíquico, el más rápido
-  '0151': 7.0, // Mew: pequeño y flotante, casi tan rápido como Greninja
-  '0095': 5.4, // Onix: una serpiente de piedra enorme, avanza pesada
+  '0151': 6.9, // Mew: pequeño y flotante, casi tan rápido como Greninja
+  '0095': 5.6, // Onix: una serpiente de piedra enorme, avanza pesada
   '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
   '0130': 6.0, // Gyarados: serpiente marina enorme; se desliza con impulso
   '0248': 4.5, // Tyranitar: mole de roca y piel dura, avanza con paso implacable
   '0144': 6.8, // Articuno: planea con calma gélida, sin prisa pero sin pausa
   '0145': 7.6, // Zapdos: alas de tormenta, el ave legendaria más veloz
-  '0146': 7.0, // Moltres: vuelo ardiente y constante
+  '0146': 6.9, // Moltres: vuelo ardiente y constante
   '0243': 7.7, // Raikou: corre como un rayo, el más veloz de las bestias
   '0244': 7.2, // Entei: zancada poderosa de león volcánico
-  '0245': 6.8, // Suicune: se desliza ligero, con la elegancia del agua
+  '0245': 6.6, // Suicune: se desliza ligero, con la elegancia del agua
   '0249': 7.5, // Lugia: guardián de los mares, se impulsa con poder psíquico
   '0250': 6.7, // Ho-Oh: envergadura inmensa, arranque pausado
-  '0251': 7.3, // Celebi: viaja en el tiempo con un vuelo juguetón
-  '0382': 5.7, // Kyogre: coloso marino, flota con impulso lento y constante
+  '0251': 7.4, // Celebi: viaja en el tiempo con un vuelo juguetón
+  '0382': 5.5, // Kyogre: coloso marino, flota con impulso lento y constante
   '0383': 5.6, // Groudon: coloso de tierra, avanza con peso sísmico
   '0384': 7.3 // Rayquaza: serpiente del cielo, se desliza veloz por el aire
 };
@@ -79,11 +79,11 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0146': 0.60, // Moltres: alas amplias y cuerpo central grande
   '0243': 0.56, // Raikou: bestia alargada
   '0244': 0.54, // Entei: cuadrúpedo ancho y voluminoso
-  '0245': 0.56, // Suicune: cuadrúpedo grande pero esbelto
+  '0245': 0.58, // Suicune: cuadrúpedo grande pero esbelto
   '0249': 0.62, // Lugia: planeador enorme
   '0250': 0.64, // Ho-Oh: alas y cola largas; círculo sobre el torso
   '0251': 0.34, // Celebi: pequeño y flotante
-  '0382': 0.66, // Kyogre: cuerpo enorme, aunque la aleta caudal no cuenta
+  '0382': 0.62, // Kyogre: cuerpo enorme, aunque la aleta caudal no cuenta
   '0383': 0.60, // Groudon: coloso bajo y ancho
   '0384': 0.64 // Rayquaza: serpiente alada; el círculo cubre el torso
 };

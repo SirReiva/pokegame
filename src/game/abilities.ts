@@ -1010,7 +1010,7 @@ registerAbility(
 
 registerAbility(
   beamAbility('rayo', 'Rayo', 'Electric', 'special', defaultBeamResolve)
-    .power(140)
+    .power(150)
     .cooldown(7)
     .range(11)
     .radius(0.35)
@@ -1020,7 +1020,7 @@ registerAbility(
     .animation('shock')
     .color(255, 238, 88)
     .description(
-      'Definitiva: haz eléctrico instantáneo de 130 de potencia en la dirección en la que mira Pikachu.'
+      'Definitiva: haz eléctrico instantáneo de 150 de potencia en la dirección en la que mira Pikachu.'
     )
 );
 
@@ -1046,7 +1046,7 @@ registerAbility(
 
 registerAbility(
   meleeAbility('chispa', 'Chispa', 'Electric', 'physical', defaultMeleeResolve)
-    .power(96)
+    .power(102)
     .cooldown(0.52)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2)
@@ -1108,10 +1108,10 @@ registerAbility(
     .animation(null)
     .impact('electric')
     .knockback(1.2)
-    .selfDamage(0.35)
+    .selfDamage(0.27)
     .color(247, 208, 44)
     .description(
-      'Definitiva: carga 0,6 s y detona un área de 4,2 u centrada en Voltorb. Se lleva el 35 % de su vida máxima, sin llegar nunca a 0.'
+      'Definitiva: carga 0,6 s y detona un área de 4,2 u centrada en Voltorb. Se lleva el 27 % de su vida máxima, sin llegar nunca a 0.'
     )
 );
 
@@ -1139,7 +1139,7 @@ registerAbility(
 
 registerAbility(
   projectileAbility('bolaSombra', 'Bola Sombra', 'Ghost', 'special', defaultProjectileResolve)
-    .power(62)
+    .power(56)
     .cooldown(6)
     .range(8.5)
     .radius(0.3)
@@ -1175,7 +1175,7 @@ registerAbility(
 
 registerAbility(
   beamAbility('comeSuenos', 'Come Sueños', 'Ghost', 'special', defaultBeamResolve)
-    .power(80)
+    .power(74)
     .cooldown(11)
     .range(8)
     .radius(0.42)
@@ -1187,7 +1187,7 @@ registerAbility(
     .healOnHit()
     .color(160, 120, 235)
     .description(
-      'Definitiva: haz fantasma de 8 u y 80 de potencia que cura el 15 % de la vida máxima de Gengar si impacta en al menos un enemigo.'
+      'Definitiva: haz fantasma de 8 u y 74 de potencia que cura el 15 % de la vida máxima de Gengar si impacta en al menos un enemigo.'
     )
 );
 
@@ -1322,7 +1322,7 @@ registerAbility(
     .impact('grass')
     .color(112, 204, 72)
     .description(
-      'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 160 de potencia.'
+      'Definitiva: torbellino bajo y ancho de hojas. Golpea una vez con 190 de potencia.'
     )
 );
 
@@ -1636,7 +1636,7 @@ registerAbility(
 
 registerAbility(
   aoeAbility('premonicion', 'Premonición', 'Psychic', 'special', defaultAoeResolve)
-    .power(85)
+    .power(80)
     .cooldown(10)
     .range(6)
     .radius(2.4)
@@ -1659,24 +1659,24 @@ registerAbility(
     .power(0)
     .cooldown(14)
     .range(0)
-    .radius(3.5)
+    .radius(3.2)
     .recovery(0.75)
     .startup(0.75)
     .armor(40)
     .animation('twirl')
-    .heal(0.35)
+    .heal(0.27)
     .area('recovery', 'once', 0.75)
     .resolve(({ targets, applyHeal }) => {
-      // El lanzador ya se cura con `healSelf`; el área reparte el 25 % entre
+      // El lanzador ya se cura con `healSelf`; el área reparte el 20 % entre
       // los aliados que estén dentro del radio.
       for (const target of targets) {
         if (!target.isAlly || target.isSelf) continue;
-        applyHeal(target, 0.25);
+        applyHeal(target, 0.2);
       }
     })
     .color(255, 170, 230)
     .description(
-      'Se concentra 0,75 s y libera una onda curativa de 3,5 u: recupera el 35 % de su vida máxima y el 25 % de la de sus aliados en el área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
+      'Se concentra 0,75 s y libera una onda curativa de 3,2 u: recupera el 27 % de su vida máxima y el 20 % de la de sus aliados en el área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
     )
 );
 
@@ -1720,7 +1720,7 @@ registerAbility(
 
 registerAbility(
   aoeAbility('ondaIgnea', 'Onda Ígnea', 'Fire', 'special', defaultAoeResolve)
-    .power(60)
+    .power(55)
     .cooldown(8)
     .range(4.2)
     .radius(2.9)
@@ -1734,13 +1734,13 @@ registerAbility(
     .impact('air')
     .color(255, 150, 60)
     .description(
-      'Onda de aire abrasador de 2,9 u: 60 de potencia, 40 % en el borde y 18 % de ralentización durante 1,5 s.'
+      'Onda de aire abrasador de 2,9 u: 55 de potencia, 40 % en el borde y 18 % de ralentización durante 1,5 s.'
     )
 );
 
 registerAbility(
   aoeAbility('ataqueCeleste', 'Ataque Celeste', 'Flying', 'physical', defaultAoeResolve)
-    .power(115)
+    .power(105)
     .cooldown(15)
     .range(6)
     .radius(3.1)
@@ -2107,7 +2107,7 @@ registerAbility(
 
 registerAbility(
   meleeAbility('atadura', 'Atadura', 'Rock', 'physical', defaultMeleeResolve)
-    .power(78)
+    .power(84)
     .cooldown(0.7)
     .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
     .range(2.8)
@@ -2125,7 +2125,7 @@ registerAbility(
 
 registerAbility(
   projectileAbility('lanzarrocas', 'Lanzarrocas', 'Rock', 'physical', defaultProjectileResolve)
-    .power(105)
+    .power(112)
     .cooldown(3.5)
     .range(8)
     .radius(0.32)
@@ -2225,18 +2225,18 @@ registerAbility(
 
 registerAbility(
   beamAbility('rayoSolar', 'Rayo Solar', 'Grass', 'special', defaultBeamResolve)
-    .power(100)
+    .power(105)
     .cooldown(7)
     .range(9.5)
     .radius(0.48)
-    .startup(0.65, { animation: 'charge' })
+    .startup(0.55, { animation: 'charge' })
     .recovery(0.55)
     .animation('shoot')
     .beam('grass')
     .impact('grass')
     .color(150, 224, 96)
     .description(
-      'Se carga 0,65 s con la luz del sol y dispara un haz de 9,5 u que atraviesa a todos los rivales en línea. 85 de potencia.'
+      'Se carga 0,55 s con la luz del sol y dispara un haz de 9,5 u que atraviesa a todos los rivales en línea. 105 de potencia.'
     )
 );
 
@@ -2246,10 +2246,10 @@ registerAbility(
     .power(0)
     .cooldown(11)
     .range(0)
-    .radius(3.2)
+    .radius(3.6)
     // Deseo es una concentración larga: la carga en bucle evita que el
     // personaje se quede congelado en la primera pose del twirl.
-    .startup(1.2, { mode: 'loop', animation: 'charge' })
+    .startup(1.05, { mode: 'loop', animation: 'charge' })
     .armor(55)
     .recovery(0.65)
     .animation('twirl')
@@ -2261,17 +2261,17 @@ registerAbility(
     })
     .color(156, 224, 112)
     .description(
-      'Pide un deseo: se concentra 1,2 s y libera una onda de 3,2 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
+      'Pide un deseo: se concentra 1,05 s y libera una onda de 3,6 u que revive con el 50 % de su vida máxima a los aliados caídos cuyos marcadores estén dentro del área. Si el daño acumulado agota su armadura durante la concentración, se cancela.'
     )
 );
 
 registerAbility(
   aoeAbility('futuroSiniestro', 'Futuro Siniestro', 'Psychic', 'special', defaultAoeResolve)
-    .power(120)
+    .power(125)
     .cooldown(13)
     .range(5.5)
     .radius(2.8)
-    .startup(1, { animation: 'charge' })
+    .startup(0.85, { animation: 'charge' })
     .armor(50)
     .recovery(0.7)
     // El área es instantánea al terminar la carga; no hay clip de lanzamiento
@@ -2283,7 +2283,7 @@ registerAbility(
     .impact('psychic')
     .color(190, 140, 255)
     .description(
-      'Definitiva: marca un punto a 5,5 u y, tras 1 s, cae una explosión psíquica de 2,8 u. 105 de potencia, el 100 % en el centro y el 35 % en el borde, y ralentiza un 35 % durante 2 s.'
+      'Definitiva: marca un punto a 5,5 u y, tras 0,85 s, cae una explosión psíquica de 2,8 u. 125 de potencia, el 100 % en el centro y el 35 % en el borde, y ralentiza un 35 % durante 2 s.'
     )
 );
 
@@ -2580,7 +2580,7 @@ registerAbility(
     .animation('shoot')
     .color(128, 96, 230)
     .description(
-      'Definitiva: exhala un dragoaliento en línea de 10 u que atraviesa a todos los rivales. 150 de potencia y ralentiza un 45 % durante 2,5 s: su parálisis. Se carga 0,55 s con 40 de armadura.'
+      'Definitiva: exhala un dragoaliento en línea de 10 u que atraviesa a todos los rivales. 140 de potencia y ralentiza un 45 % durante 2,5 s: su parálisis. Se carga 0,55 s con 40 de armadura.'
     )
 );
 
@@ -2608,7 +2608,7 @@ registerAbility(
 
 registerAbility(
   projectileAbility('chorroAgua', 'Chorro de Agua', 'Water', 'special', defaultProjectileResolve)
-    .power(68)
+    .power(63)
     .cooldown(1.5)
     .range(8.5)
     .radius(0.22)
@@ -2618,13 +2618,13 @@ registerAbility(
     .animation('shoot')
     .color(96, 176, 255)
     .description(
-      'Dispara un chorro compacto de agua a 8,5 u con 68 de potencia. Ataque básico a distancia de Suicune.'
+      'Dispara un chorro compacto de agua a 8,5 u con 63 de potencia. Ataque básico a distancia de Suicune.'
     )
 );
 
 registerAbility(
   aoeAbility('frioPolar', 'Frío Polar', 'Ice', 'special', defaultAoeResolve)
-    .power(115)
+    .power(108)
     .cooldown(8)
     // El vértice nace 0,75 u por delante de Suicune y el cono avanza 7 u con
     // una apertura total de 60° (30° a cada lado del eje).
@@ -2643,7 +2643,7 @@ registerAbility(
     .impact('ice')
     .color(200, 240, 255)
     .description(
-      'Definitiva: canaliza el aire polar durante 1,3 s sin poder moverse (0,85 s de carga y 0,45 s de recuperación) y exhala un cono de 60° que nace 0,75 u por delante de Suicune y avanza 7 u. El golpe ocurre al terminar la carga: 140 de potencia (el 40 % en el borde) y 55 % de ralentización durante 2,5 s. La carga tiene 50 de armadura, el cono se disipa en 0,5 s y el enfriamiento es de 8 s. Si el daño agota la armadura durante la canalización, se cancela.'
+      'Definitiva: canaliza el aire polar durante 1,3 s sin poder moverse (0,85 s de carga y 0,45 s de recuperación) y exhala un cono de 60° que nace 0,75 u por delante de Suicune y avanza 7 u. El golpe ocurre al terminar la carga: 108 de potencia (el 40 % en el borde) y 55 % de ralentización durante 2,5 s. La carga tiene 50 de armadura, el cono se disipa en 0,5 s y el enfriamiento es de 8 s. Si el daño agota la armadura durante la canalización, se cancela.'
     )
 );
 
@@ -2677,7 +2677,7 @@ registerAbility(
 
 registerAbility(
   aoeAbility('remolinoMarino', 'Remolino Marino', 'Water', 'special', defaultAoeResolve)
-    .power(34)
+    .power(27)
     .cooldown(8)
     .range(5)
     .radius(3)
@@ -2690,7 +2690,7 @@ registerAbility(
     .impact('water')
     .color(80, 170, 255)
     .description(
-      'Abre un remolino de 3 u a 5 u de distancia que gira durante 2,5 s: 34 de daño por segundo (85 en total) y ralentiza un 30 % durante 1,5 s a quien siga dentro. Su herramienta para cortar pasillos.'
+      'Abre un remolino de 3 u a 5 u de distancia que gira durante 2,5 s: 27 de daño por segundo (67 en total) y ralentiza un 30 % durante 1,5 s a quien siga dentro. Su herramienta para cortar pasillos.'
     )
 );
 
@@ -2722,9 +2722,9 @@ registerAbility(
 
 registerAbility(
   aoeAbility('pulsoPrimigenio', 'Pulso Primigenio', 'Water', 'special', defaultAoeResolve)
-    // En un área `overTime` el motor lee `power` como daño por segundo: 120
-    // durante 1 s son 120 totales. El callback reparte el total entre pulsos.
-    .power(120)
+    // En un área `overTime` el motor lee `power` como daño por segundo: 106
+    // durante 1 s son 106 totales. El callback reparte el total entre pulsos.
+    .power(106)
     .cooldown(16)
     .range(5)
     .radius(3.4)
@@ -2741,7 +2741,7 @@ registerAbility(
       const first = tick === 0;
       // El motor cobra `def.props.power` por segundo en áreas `overTime`; la duración
       // da el total del lanzamiento y el número de ticks reparte el segundo
-      // pulso. Con power 160 y 1 s salen 60 + 100.
+      // pulso. Con power 106 y 1 s salen 40 + 66.
       const ticks = Math.max(
         1,
         Math.ceil(def.aoeDuration / def.aoeTickInterval)
@@ -2828,7 +2828,7 @@ registerAbility(
     .slow(0.7, 1.5)
     .color(128, 96, 230)
     .description(
-      'Carga 0,55 s y exhala un haz dracónico de 9,5 u que atraviesa a todos los rivales en línea. 85 de potencia y 30 % de ralentización durante 1,5 s.'
+      'Carga 0,55 s y exhala un haz dracónico de 9,5 u que atraviesa a todos los rivales en línea. 80 de potencia y 30 % de ralentización durante 1,5 s.'
     )
 );
 
@@ -2870,7 +2870,7 @@ registerAbility(
     .impact('air')
     .color(96, 200, 120)
     .description(
-      'Definitiva: se eleva durante 1 s invulnerable y un 40 % más rápido, y cae en picado sobre su posición con una onda de 3,2 u. 130 de potencia, el 100 % en el centro y el 35 % en el borde, empuja 1,1 u y ralentiza un 35 % durante 2 s.'
+      'Definitiva: se eleva durante 1 s invulnerable y un 40 % más rápido, y cae en picado sobre su posición con una onda de 3,2 u. 120 de potencia, el 100 % en el centro y el 35 % en el borde, empuja 1,1 u y ralentiza un 35 % durante 2 s.'
     )
 );
 
@@ -2897,7 +2897,7 @@ registerAbility(
     .active(0.175)
     .recovery(0)
     .animation('attack')
-    .impact('grass')
+    .impact('vine')
     .color(88, 190, 96)
     .description('Látigo vegetal de corto alcance. Básica de Planta de Bulbasaur.')
 );
