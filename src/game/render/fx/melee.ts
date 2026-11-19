@@ -10,22 +10,160 @@ import { MELEE_ARC_OPACITY, createArcMesh, createSlashStreakSetMesh } from './fx
 import type { SlashStreakSpec } from './fxGeometry';
 import { spawnVineWhip } from './vineWhip';
 
+type Rgb = readonly [number, number, number];
+
+/** Datos comunes a todas las variantes del arco melee. */
+interface MeleeSpawn {
+  ctx: FxRuntime;
+  x: number;
+  z: number;
+  yaw: number;
+  range: number;
+  halfAngle: number;
+  halfAngleDeg: number;
+  color: Rgb;
+}
+
+/** Contexto de una variante que ya puede colgar geometría del arco base. */
+interface MeleeBase extends MeleeSpawn {
+  entity: pc.Entity;
+  material: pc.StandardMaterial;
+  materials: pc.StandardMaterial[];
+}
+
+/** Actualización por frame que devuelve una variante. */
+type MeleeStyleUpdate = (time: number, t: number, dt: number) => void;
+
 /**
-   * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
-   * `markerColor` tiñe solo la guía del área (el cono); el resto del efecto
-   * conserva el color de la habilidad.
-   */
-export function spawnMelee(ctx: FxRuntime, x: number,
-    z: number,
-    yaw: number,
-    range: number,
-    halfAngleDeg: number,
-    color: readonly [number, number, number],
-    style: ImpactStyle = 'hit',
-    markerColor?: readonly [number, number, number]): void {
-// La mordida materializa una mandíbula 3D en el centro del cono, pero
-    // mantiene el arco melee como guía del área de golpe.
-    if (style === 'jaw') {
+ * Estrategia de un estilo melee. El arco base es común; cada entrada solo
+ * declara lo que cambia: duración, color de la guía, escalado y capas extra.
+ */
+interface MeleeStyleFx {
+  duration?: number;
+  arcColor?: Rgb;
+  scaleArc?: boolean;
+  /** Efectos que deben crearse antes que el arco base (mandíbula, cepas). */
+  before?(spawn: MeleeSpawn): void;
+  /** Capas que cuelgan del arco base; devuelve su animación por frame. */
+  build?(base: MeleeBase): MeleeStyleUpdate | void;
+}
+
+const MELEE_DEFAULT_DURATION = 0.28;
+
+interface ClawSpec {
+  inner: number;
+  outer: number;
+}
+
+interface ClawStyleConfig {
+  duration: number;
+  tint: Rgb;
+  claws: readonly ClawSpec[];
+  liftStart: number;
+  liftEnd: number;
+  bow: number;
+}
+
+/** Garras: una sola malla y un material que se enciende y se apaga en bloque. */
+function clawStyle(config: ClawStyleConfig): MeleeStyleFx {
+  return {
+    duration: config.duration,
+    scaleArc: false,
+    build({ ctx, entity, materials, range, halfAngle }) {
+      const span = halfAngle * 1.9;
+      const start = -span * 0.5;
+      const materialForClaws = ctx.createMaterial(config.tint, 0);
+      materialForClaws.blendType = pc.BLEND_NORMAL;
+      materialForClaws.opacity = 0;
+      materialForClaws.update();
+      materials.push(materialForClaws);
+
+      // Las garras comparten material y se funden en una sola malla: el
+      // zarpazo completo cuesta una entidad en vez de una por filo. La
+      // geometría se cachea por estilo y alcance.
+      const specs: SlashStreakSpec[] = config.claws.map((claw, index) => ({
+        innerRadius: range * claw.inner,
+        outerRadius: range * claw.outer,
+        halfThickness: range * 0.07,
+        angleStart: start,
+        angleSweep: span,
+        segments: 32,
+        liftStart: config.liftStart,
+        liftEnd: config.liftEnd,
+        bow: config.bow,
+        phase: index * 1.9
+      }));
+      const clawMesh = ctx.cachedMesh(
+        `slash-streak-set:${range.toFixed(3)}:${span.toFixed(3)}:${config.liftStart}:${config.liftEnd}:${config.bow}:${config.claws.map((claw) => `${claw.inner}-${claw.outer}`).join('|')}`,
+        () => createSlashStreakSetMesh(ctx.device, specs)
+      );
+      ctx.createEntity(clawMesh, [materialForClaws], entity);
+
+      return (_time, t) => {
+        const now = t * config.duration;
+        const appear = Math.min(1, Math.max(0, now / 0.05));
+        const fadeOut =
+          1 - Math.min(1, Math.max(0, (now - 0.2) / (config.duration - 0.2)));
+        materialForClaws.opacity = appear * Math.max(0, fadeOut);
+      };
+    }
+  };
+}
+
+interface AttackArcConfig {
+  duration: number;
+  frontCount: number;
+  travel: number;
+  delayStep: number;
+  alphaStep: number;
+}
+
+/** Frentes curvos que recorren el cono hasta su borde. */
+function attackArcStyle(config: AttackArcConfig): MeleeStyleFx {
+  return {
+    duration: config.duration,
+    scaleArc: false,
+    build({ ctx, entity, color, range, halfAngle }) {
+      const instances: TintEffectInstance[] = [];
+      for (let index = 0; index < config.frontCount; index++) {
+        const delay = index * config.delayStep;
+        instances.push({
+          color,
+          alpha: 1 - index * config.alphaStep,
+          fade: [
+            delay,
+            config.travel * 0.18,
+            config.travel * 0.18,
+            config.travel * 0.82
+          ],
+          anim0: [delay, config.travel, 0.28, 0.12 + index * 0.035]
+        });
+      }
+      const batch = new EffectTintBatch({
+        app: ctx.app,
+        parent: entity,
+        mesh: ctx.cachedArcBand(0.84, 1, halfAngle, 26),
+        instances,
+        motion: MOTION_TINT_MELEE_ARCS,
+        radius: range,
+        life: config.duration,
+        boundsHalf: [range + 1, 1, range + 1]
+      });
+      return (time) => batch.setTime(time);
+    }
+  };
+}
+
+/**
+ * Estrategias por estilo. Los estilos sin entrada usan solo el arco base.
+ * El registro sustituye la cadena de `if` y la lista negra de escalado.
+ */
+const MELEE_STYLE_FX: Partial<Record<ImpactStyle, MeleeStyleFx>> = {
+  jaw: {
+    arcColor: [255, 255, 255],
+    before({ ctx, x, z, yaw, range }) {
+      // La mordida materializa una mandíbula 3D en el centro del cono, pero
+      // mantiene el arco melee como guía del área de golpe.
       const forward = range * 0.3;
       const centerX = x + Math.sin(yaw) * forward;
       const centerZ = z + Math.cos(yaw) * forward;
@@ -39,34 +177,18 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         }
       );
     }
+  },
 
-    // El Látigo Cepa sustituye el abanico plano por dos zarcillos 3D. El arco
-    // se mantiene como guía tenue del alcance (ver `MELEE_ARC_OPACITY.vine`).
-    if (style === 'vine') {
+  vine: {
+    before({ ctx, x, z, yaw, range, halfAngleDeg, color }) {
+      // El Látigo Cepa sustituye el abanico plano por dos zarcillos 3D. El arco
+      // se mantiene como guía tenue del alcance (ver `MELEE_ARC_OPACITY.vine`).
       spawnVineWhip(ctx, x, z, yaw, range, halfAngleDeg, color);
     }
+  },
 
-    const mesh = createArcMesh(
-      ctx.device,
-      range,
-      Math.max(8, halfAngleDeg) * DEG,
-      18
-    );
-    // La mordida mantiene el cono como guía, pero en blanco como los colmillos.
-    // Si llega el color del equipo, manda sobre ambos: la guía del área debe
-    // identificar al lanzador.
-    const arcColor: readonly [number, number, number] =
-      markerColor ?? (style === 'jaw' ? [255, 255, 255] : color);
-    const material = ctx.createMaterial(arcColor, 0.85);
-    const entity = ctx.createEntity(mesh, [material]);
-    entity.setPosition(x, 0.35, z);
-    entity.setEulerAngles(0, yaw / DEG, 0);
-
-    const materials = [material];
-    const halfAngle = Math.max(8, halfAngleDeg) * DEG;
-    let effectDuration = 0.28;
-    let leafBatch: EffectBatch | null = null;
-    if (style === 'grass') {
+  grass: {
+    build({ ctx, entity, materials, color, range, halfAngle }) {
       // Hojas que salen despedidas dentro del arco para dar cuerpo al latigazo.
       const leafMaterial = ctx.createLeafMaterial(color, 0.95);
       materials.push(leafMaterial);
@@ -89,27 +211,29 @@ export function spawnMelee(ctx: FxRuntime, x: number,
           ]
         });
       }
-      leafBatch = new EffectBatch({
+      const leafBatch = new EffectBatch({
         app: ctx.app,
         parent: entity,
         mesh: ctx.leafMesh,
         material: leafMaterial,
         instances: leafInstances,
         motion: MOTION_MELEE_LEAVES,
-        life: effectDuration
+        life: MELEE_DEFAULT_DURATION
       });
+      return (time) => leafBatch.setTime(time);
     }
+  },
 
-    let waveBatch: EffectTintBatch | null = null;
-    if (style === 'psychic') {
+  psychic: {
+    duration: 0.75,
+    scaleArc: false,
+    build({ ctx, entity, color, range, halfAngle }) {
       // Onda sonora psíquica: frentes curvos que nacen en el lanzador y
       // recorren el cono hasta su borde. Cada frente se deforma en Y como una
       // cinta ondulada. Se usan dos tonos del color de la habilidad y mezcla
       // normal: con aditivo el violeta se lavaba a blanco sobre terrenos claros.
       // Las cinco ondas se dibujan en un único lote con tinte y alfa por
       // instancia.
-      effectDuration = 0.75;
-      material.opacity = 0.14;
       const highlightTint: [number, number, number] = [
         Math.round(color[0] + (255 - color[0]) * 0.32),
         Math.round(color[1] + (255 - color[1]) * 0.32),
@@ -128,145 +252,103 @@ export function spawnMelee(ctx: FxRuntime, x: number,
           anim1: [0.14 + index * 0.012, index * 1.7, 4 + (index % 3), 0]
         });
       }
-      waveBatch = new EffectTintBatch({
+      const waveBatch = new EffectTintBatch({
         app: ctx.app,
         parent: entity,
         mesh: ctx.cachedArcBand(0.94, 1, halfAngle, 30),
         instances: waveInstances,
         motion: MOTION_TINT_MELEE_WAVES,
         radius: range,
-        life: effectDuration,
+        life: 0.75,
         boundsHalf: [range + 1, 1, range + 1]
       });
+      return (time) => waveBatch.setTime(time);
     }
+  },
 
-    let clawMaterial: pc.StandardMaterial | null = null;
-    if (
-      style === 'slash' ||
-      style === 'steel' ||
-      style === 'dark' ||
-      style === 'ghost'
-    ) {
-      // Tres zarpas blancas paralelas tumbadas sobre el cono: cubren su
-      // superficie desde el lanzador hasta el borde y comparten apertura, así
-      // que se leen como un único tajo de tres filos dentro del área de golpe.
-      // Cada zarpa es una sola cinta continua que se enciende de golpe con un
-      // pequeño retardo respecto a la anterior. Antes se partía en diez tramos
-      // con un material por tramo y se encendían de uno en uno: en los frames
-      // intermedios solo se veían trozos sueltos y el zarpazo parecía roto o
-      // flotando. La Garra Metal usa dos filos de acero, el Tajo Umbrío dos
-      // violetas y el Lengüetazo tres trazos fantasmales.
-      const steel = style === 'steel';
-      const dark = style === 'dark';
-      const ghost = style === 'ghost';
-      effectDuration = steel ? 0.3 : dark ? 0.32 : ghost ? 0.34 : 0.38;
-      material.opacity = steel ? 0.08 : dark ? 0.09 : ghost ? 0.08 : 0.1;
-      const span = halfAngle * 1.9;
-      const start = -span * 0.5;
-      const clawTint: [number, number, number] = steel
-        ? [214, 232, 255]
-        : dark
-          ? [210, 180, 255]
-          : ghost
-            ? [206, 178, 255]
-            : [255, 255, 255];
-      const claws: {
-        inner: number;
-        outer: number;
-        delay: number;
-        peak: number;
-      }[] =
-        steel || dark
-          ? [
-              { inner: 0.66, outer: 0.99, delay: 0, peak: 1 },
-              { inner: 0.2, outer: 0.58, delay: 0.04, peak: 0.9 }
-            ]
-          : [
-              { inner: 0.74, outer: 0.99, delay: 0, peak: 1 },
-              { inner: 0.42, outer: 0.68, delay: 0.03, peak: 0.95 },
-              { inner: 0.1, outer: 0.36, delay: 0.06, peak: 0.9 }
-            ];
-      // La zarpa fantasma se mantiene pegada al cono: a media altura de un
-      // cuerpo pequeño parecía flotar sobre el suelo, sobre todo con la cámara
-      // inclinada.
-      const liftStart = ghost ? 0.04 : 0.1;
-      const liftEnd = ghost ? 0.09 : 0.2;
-      const bow = ghost ? 0.02 : 0.04;
-      const materialForClaws = ctx.createMaterial(clawTint, 0);
-      materialForClaws.blendType = pc.BLEND_NORMAL;
-      materialForClaws.opacity = 0;
-      materialForClaws.update();
-      materials.push(materialForClaws);
-      clawMaterial = materialForClaws;
+  slash: clawStyle({
+    duration: 0.38,
+    tint: [255, 255, 255],
+    claws: [
+      { inner: 0.74, outer: 0.99 },
+      { inner: 0.42, outer: 0.68 },
+      { inner: 0.1, outer: 0.36 }
+    ],
+    liftStart: 0.1,
+    liftEnd: 0.2,
+    bow: 0.04
+  }),
 
-      // Las garras comparten material y se funden en una sola malla: el
-      // zarpazo completo cuesta una entidad en vez de una por filo. La
-      // geometría se cachea por estilo y alcance.
-      const specs: SlashStreakSpec[] = claws.map((claw, index) => ({
-        innerRadius: range * claw.inner,
-        outerRadius: range * claw.outer,
-        halfThickness: range * 0.07,
-        angleStart: start,
-        angleSweep: span,
-        segments: 32,
-        liftStart,
-        liftEnd,
-        bow,
-        phase: index * 1.9
-      }));
-      const clawMesh = ctx.cachedMesh(
-        `slash-streak-set:${range.toFixed(3)}:${span.toFixed(3)}:${liftStart}:${liftEnd}:${bow}:${claws.map((claw) => `${claw.inner}-${claw.outer}`).join('|')}`,
-        () => createSlashStreakSetMesh(ctx.device, specs)
-      );
-      ctx.createEntity(clawMesh, [materialForClaws], entity);
-    }
+  steel: clawStyle({
+    duration: 0.3,
+    tint: [214, 232, 255],
+    claws: [
+      { inner: 0.66, outer: 0.99 },
+      { inner: 0.2, outer: 0.58 }
+    ],
+    liftStart: 0.1,
+    liftEnd: 0.2,
+    bow: 0.04
+  }),
 
-    let attackArcBatch: EffectTintBatch | null = null;
-    if (style === 'arc' || style === 'fighting' || style === 'air') {
-      // Arco de ataque: tres frentes curvos que salen del lanzador y recorren
-      // el cono hasta su borde, marcando la dirección y el alcance del golpe.
-      // La geometría es estática (radio 1) y solo se escala, así el trazo es
-      // barato y se ve desde cualquier cámara. Combate Cercano añade un cuarto
-      // frente y los acelera para que se lea como una ráfaga. Ataque Aéreo usa
-      // los mismos frentes con el blanco cálido del viento.
-      const fighting = style === 'fighting';
-      effectDuration = fighting ? 0.4 : 0.34;
-      material.opacity = 0.16;
-      const frontCount = fighting ? 4 : 3;
-      const travel = fighting ? 0.17 : 0.2;
-      const arcInstances: TintEffectInstance[] = [];
-      for (let index = 0; index < frontCount; index++) {
-        const delay = index * (fighting ? 0.035 : 0.05);
-        arcInstances.push({
-          color,
-          alpha: 1 - index * (fighting ? 0.14 : 0.15),
-          fade: [delay, travel * 0.18, travel * 0.18, travel * 0.82],
-          anim0: [delay, travel, 0.28, 0.12 + index * 0.035]
-        });
-      }
-      attackArcBatch = new EffectTintBatch({
-        app: ctx.app,
-        parent: entity,
-        mesh: ctx.cachedArcBand(0.84, 1, halfAngle, 26),
-        instances: arcInstances,
-        motion: MOTION_TINT_MELEE_ARCS,
-        radius: range,
-        life: effectDuration,
-        boundsHalf: [range + 1, 1, range + 1]
-      });
-    }
+  dark: clawStyle({
+    duration: 0.32,
+    tint: [210, 180, 255],
+    claws: [
+      { inner: 0.66, outer: 0.99 },
+      { inner: 0.2, outer: 0.58 }
+    ],
+    liftStart: 0.1,
+    liftEnd: 0.2,
+    bow: 0.04
+  }),
 
-    let cloudMaterial: pc.StandardMaterial | null = null;
-    let cloudHotMaterial: pc.StandardMaterial | null = null;
-    let cloudBatch: EffectBatch | null = null;
-    let cloudHotBatch: EffectBatch | null = null;
-    let sporeBatch: EffectBatch | null = null;
-    if (style === 'spore') {
+  ghost: clawStyle({
+    duration: 0.34,
+    tint: [206, 178, 255],
+    claws: [
+      { inner: 0.74, outer: 0.99 },
+      { inner: 0.42, outer: 0.68 },
+      { inner: 0.1, outer: 0.36 }
+    ],
+    // La zarpa fantasma se mantiene pegada al cono: a media altura de un
+    // cuerpo pequeño parecía flotar sobre el suelo, sobre todo con la cámara
+    // inclinada.
+    liftStart: 0.04,
+    liftEnd: 0.09,
+    bow: 0.02
+  }),
+
+  arc: attackArcStyle({
+    duration: 0.34,
+    frontCount: 3,
+    travel: 0.2,
+    delayStep: 0.05,
+    alphaStep: 0.15
+  }),
+
+  fighting: attackArcStyle({
+    duration: 0.4,
+    frontCount: 4,
+    travel: 0.17,
+    delayStep: 0.035,
+    alphaStep: 0.14
+  }),
+
+  air: attackArcStyle({
+    duration: 0.34,
+    frontCount: 3,
+    travel: 0.2,
+    delayStep: 0.05,
+    alphaStep: 0.15
+  }),
+
+  spore: {
+    duration: 1,
+    build({ ctx, entity, materials, range, halfAngle }) {
       // Rocío en abanico: cada partícula nace en el vértice del cono y viaja
       // hacia un ángulo distinto del borde, cubriendo toda la abertura. El
       // enjambre entero se resuelve en un solo lote instanciado.
-      effectDuration = 1;
-      material.opacity = 0.28;
       const sporeMaterial = ctx.createSporeMaterial([92, 158, 70], 0.92);
       materials.push(sporeMaterial);
       const sporeInstances: EffectBatchInstance[] = [];
@@ -292,7 +374,7 @@ export function spawnMelee(ctx: FxRuntime, x: number,
           ]
         });
       }
-      sporeBatch = new EffectBatch({
+      const sporeBatch = new EffectBatch({
         app: ctx.app,
         parent: entity,
         mesh: ctx.leafMesh,
@@ -300,13 +382,17 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         instances: sporeInstances,
         motion: MOTION_SPORE_SWARM
       });
+      return (time) => sporeBatch.setTime(time);
     }
-    if (style === 'poison') {
+  },
+
+  poison: {
+    duration: 0.62,
+    build({ ctx, entity, materials, color, range, halfAngle }) {
       // Nube violeta: puffs esféricos que avanzan por el cono y motas aditivas
       // que se dispersan hacia delante y hacia arriba.
-      effectDuration = 0.62;
-      cloudMaterial = ctx.createMaterial([146, 78, 186], 0.26);
-      cloudHotMaterial = ctx.createMaterial([214, 168, 236], 0.2);
+      const cloudMaterial = ctx.createMaterial([146, 78, 186], 0.26);
+      const cloudHotMaterial = ctx.createMaterial([214, 168, 236], 0.2);
       materials.push(cloudMaterial, cloudHotMaterial);
 
       ctx.spawnSporeParticles(
@@ -350,64 +436,94 @@ export function spawnMelee(ctx: FxRuntime, x: number,
         if (index % 3 === 0) cloudHotInstances.push(instance);
         else cloudInstances.push(instance);
       }
-      cloudBatch = new EffectBatch({
+      const cloudBatch = new EffectBatch({
         app: ctx.app,
         parent: entity,
         mesh: ctx.sphereMesh,
         material: cloudMaterial,
         instances: cloudInstances,
         motion: MOTION_MELEE_PUFFS,
-        life: effectDuration
+        life: 0.62
       });
-      cloudHotBatch = new EffectBatch({
+      const cloudHotBatch = new EffectBatch({
         app: ctx.app,
         parent: entity,
         mesh: ctx.sphereMesh,
         material: cloudHotMaterial,
         instances: cloudHotInstances,
         motion: MOTION_MELEE_PUFFS,
-        life: effectDuration
+        life: 0.62
       });
+
+      return (time, t) => {
+        cloudMaterial.opacity = 0.26 * (1 - t);
+        cloudHotMaterial.opacity = 0.2 * (1 - t);
+        cloudBatch.setTime(time);
+        cloudHotBatch.setTime(time);
+      };
     }
+  }
+};
+
+/**
+   * Arco de golpe cuerpo a cuerpo, orientado hacia el `facing` del actor.
+   * `markerColor` tiñe solo la guía del área (el cono); el resto del efecto
+   * conserva el color de la habilidad.
+   */
+export function spawnMelee(ctx: FxRuntime, x: number,
+    z: number,
+    yaw: number,
+    range: number,
+    halfAngleDeg: number,
+    color: readonly [number, number, number],
+    style: ImpactStyle = 'hit',
+    markerColor?: readonly [number, number, number]): void {
+    const halfAngle = Math.max(8, halfAngleDeg) * DEG;
+    const styleFx = MELEE_STYLE_FX[style];
+    const spawn: MeleeSpawn = {
+      ctx,
+      x,
+      z,
+      yaw,
+      range,
+      halfAngle,
+      halfAngleDeg,
+      color
+    };
+    // Mandíbula y cepas se crean antes que la guía, como hasta ahora.
+    styleFx?.before?.(spawn);
+
+    const mesh = createArcMesh(ctx.device, range, halfAngle, 18);
+    // Si llega el color del equipo, manda sobre el color del estilo: la guía
+    // del área debe identificar al lanzador.
+    const arcColor: Rgb = markerColor ?? styleFx?.arcColor ?? color;
+    const arcOpacity = MELEE_ARC_OPACITY[style] ?? 0.85;
+    const material = ctx.createMaterial(arcColor, arcOpacity);
+    const entity = ctx.createEntity(mesh, [material]);
+    entity.setPosition(x, 0.35, z);
+    entity.setEulerAngles(0, yaw / DEG, 0);
+
+    const materials = [material];
+    const updateStyle = styleFx?.build?.({
+      ...spawn,
+      entity,
+      material,
+      materials
+    });
+    const effectDuration = styleFx?.duration ?? MELEE_DEFAULT_DURATION;
+    const scaleArc = styleFx?.scaleArc ?? true;
 
     // La malla del arco es exclusiva de este efecto: al destruir la entidad,
     // su MeshInstance la libera y PlayCanvas se encarga de destruirla.
-    const arcOpacity = MELEE_ARC_OPACITY[style] ?? 0.85;
     let time = 0;
     ctx.addEffect(entity, materials, effectDuration, (t, dt) => {
       time += dt;
       material.opacity = arcOpacity * (1 - t);
-      if (
-        style !== 'psychic' &&
-        style !== 'slash' &&
-        style !== 'steel' &&
-        style !== 'arc' &&
-        style !== 'fighting' &&
-        style !== 'dark' &&
-        style !== 'ghost' &&
-        style !== 'air'
-      ) {
+      if (scaleArc) {
         const scale = 0.92 + 0.12 * t;
         entity.setLocalScale(scale, 1, scale);
       }
-      attackArcBatch?.setTime(time);
-      const now = t * effectDuration;
-      if (clawMaterial) {
-        // Encendido rápido y continuo de la zarpa completa, con el desfase
-        // mínimo del primer filo.
-        const appear = Math.min(1, Math.max(0, now / 0.05));
-        const fadeOut =
-          1 - Math.min(1, Math.max(0, (now - 0.2) / (effectDuration - 0.2)));
-        clawMaterial.opacity = appear * Math.max(0, fadeOut);
-      }
-      leafBatch?.setTime(time);
-      sporeBatch?.setTime(time);
-      waveBatch?.setTime(time);
-
-      if (cloudMaterial) cloudMaterial.opacity = 0.26 * (1 - t);
-      if (cloudHotMaterial) cloudHotMaterial.opacity = 0.2 * (1 - t);
-      cloudBatch?.setTime(time);
-      cloudHotBatch?.setTime(time);
+      updateStyle?.(time, t, dt);
     }, [
       [x, z],
       [x + Math.sin(yaw) * range, z + Math.cos(yaw) * range]
