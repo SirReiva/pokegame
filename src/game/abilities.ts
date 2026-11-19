@@ -2150,24 +2150,18 @@ registerAbility(
     // la erupción nace exactamente donde está.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la carga.
-    .startup(2, {  move: 1.2 })
+    .startup(2, {  move: 1.5 })
     .recovery(0.4)
     .animation('attack')
     .area('burrow', 'once', 0.75)
     .knockback(1.2)
     .onStart(
       ({
-        targets,
-        applyBuff,
         setCasterHidden,
         setCasterInvulnerable
       }) => {
         setCasterHidden(true);
         setCasterInvulnerable(true);
-        const self = targets.find((target) => target.isSelf);
-        if (self) {
-          applyBuff(self, { stat: 'speed', multiplier: 1.5, duration: 2 });
-        }
       }
     )
     .onCast(({ setCasterHidden, setCasterInvulnerable }) => {
