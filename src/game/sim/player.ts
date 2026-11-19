@@ -29,7 +29,7 @@ export interface PlayerSystemHost {
     player: MatchPlayerState,
     input: DeviceInputSnapshot,
     dt: number
-  ): boolean;
+  ): number | null;
   stepDash(
     player: MatchPlayerState,
     input: DeviceInputSnapshot,
@@ -149,7 +149,10 @@ export function stepPlayer(
   }
 
   // Un casteo bloquea movimiento y otras habilidades mientras se reproduce.
-  if (host.stepActiveCast(player, input, dt)) return;
+  // El multiplicador devuelto escala la velocidad o la anula (`0`).
+  const castSpeed = host.stepActiveCast(player, input, dt);
+  if (castSpeed === 0) return;
+  const castSpeedMultiplier = castSpeed ?? 1;
 
   // Un dash consume el frame: no se mezcla con el movimiento normal.
   if (host.stepDash(player, input, dt)) return;
@@ -182,7 +185,8 @@ export function stepPlayer(
     atmosphereSpeedMultiplier(host.atmosphere, player.types) *
     host.buffMultiplier(player, 'speed') *
     player.slowMultiplier *
-    shieldSpeed;
+    shieldSpeed *
+    castSpeedMultiplier;
 
   const targetSpeed = maxSpeed * Math.min(1, magnitude);
   const currentSpeed = Math.hypot(player.vx, player.vz);
@@ -248,7 +252,10 @@ export function stepPlayer(
   player.z = resolved.z;
 
   const speed = Math.hypot(player.vx, player.vz);
-  if (speed > CONFIG.player.minFacingSpeed) {
+  // Durante un casteo el lanzador conserva el rumbo fijado al lanzar: moverse
+  // para apuntar con el stick o desplazarse no debe girar la animación de la
+  // habilidad.
+  if (player.activeCast === null && speed > CONFIG.player.minFacingSpeed) {
     const targetFacing = Math.atan2(player.vx, player.vz);
     player.facing = angleLerp(
       player.facing,
@@ -257,39 +264,25 @@ export function stepPlayer(
     );
   }
 
-  // Prioridad de animación: daño > ataque > andar > reposo. Durante un windup
-  // móvil, andar tiene prioridad sobre el ataque para no deslizar.
+  // Prioridad de animación: daño > ataque > andar > reposo. Mientras hay un
+  // casteo con animación, el plan de presentación manda aunque el Pokémon se
+  // mueva: no se sustituye por caminar.
   if (player.hurtTimer > 0) {
     player.animation = 'hurt';
     player.playback = 1;
     player.animationFrame = null;
-  } else if (player.animationFrame !== null) {
-    // El plan de casteo manda. Si el startup permite moverse y el Pokémon anda,
-    // el caminar tiene prioridad para no deslizar.
-    const cast = player.activeCast;
-    if (
-      cast?.def.moveWhileStartup &&
-      cast.elapsed < cast.def.startup &&
-      speed > CONFIG.player.minFacingSpeed
-    ) {
+  } else if (player.animationFrame === null) {
+    if (speed > CONFIG.player.minFacingSpeed) {
       player.animation = 'walk';
       player.playback = clamp(
         speed / CONFIG.sprite.walkRateRefSpeed,
         CONFIG.sprite.walkRateMin,
         CONFIG.sprite.walkRateMax
       );
-      player.animationFrame = null;
+    } else {
+      player.animation = 'idle';
+      player.playback = 1;
     }
-  } else if (speed > CONFIG.player.minFacingSpeed) {
-    player.animation = 'walk';
-    player.playback = clamp(
-      speed / CONFIG.sprite.walkRateRefSpeed,
-      CONFIG.sprite.walkRateMin,
-      CONFIG.sprite.walkRateMax
-    );
-  } else {
-    player.animation = 'idle';
-    player.playback = 1;
   }
 
   const terrain = terrainAt(player.x, player.z);

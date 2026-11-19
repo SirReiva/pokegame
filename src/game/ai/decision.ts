@@ -22,6 +22,7 @@ import {
   type AtmosphereId
 } from '../atmosphere';
 import { aoeAreaFrom, aoeRadialFalloff, type AoeArea } from '../aoeGeometry';
+import { castMovementMultiplier } from '../core/abilities/movement';
 import type { NavPoint } from '../botNav';
 import { computeDamage } from '../combat';
 import { CONFIG, DEG } from '../config';
@@ -933,9 +934,12 @@ export class BotDecision {
           score += 10;
         }
         if (
-          !pending.def.moveWhileStartup ||
-          pending.def.blockMovementDuringCast ||
-          pending.def.blockMovementUntilEndAnimation
+          castMovementMultiplier({
+            def: pending.def,
+            elapsed: pending.elapsed,
+            activeEnd: pending.plan.activeEnd,
+            animationEndAt: pending.plan.animationEndAt
+          }) <= 0
         ) {
           score += 8;
         }

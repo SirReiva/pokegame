@@ -22,6 +22,10 @@
 
 import { ABILITIES, type AbilityDef, type BuffStat } from './abilities';
 import {
+  castMovementMultiplier,
+  hasCastMovementOption
+} from './core/abilities/movement';
+import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
   atmosphereResidual,
@@ -830,22 +834,28 @@ export class BotController {
 
     // Un dash, hitstun o una preparación que clava al lanzador consumen el
     // frame: el snapshot idle evita pulsar habilidades que el motor rechaza.
-    // Las preparaciones con `moveWhileStartup` sí llegan a `drive`, que deja
+    // Las preparaciones que permiten moverse sí llegan a `drive`, que deja
     // mover al bot pero no dispara otra habilidad mientras canaliza.
     //
     // `threat` y `hazardEvasion` solo los consume `drive` (y `decide`, que
     // tampoco se ejecuta aquí), así que en un paso bloqueado no hace falta
     // recalcular su geometría: se refrescan en el primer paso que vuelva a
     // actuar, antes de usarlos. El resto del estado sí se mantiene al día.
+    const cast = self.activeCast;
+    const castBlocksBot =
+      cast !== null &&
+      (!hasCastMovementOption(cast.def) ||
+        castMovementMultiplier({
+          def: cast.def,
+          elapsed: cast.elapsed,
+          activeEnd: cast.plan.activeEnd,
+          animationEndAt: cast.plan.animationEndAt
+        }) <= 0);
     if (
       self.dash !== null ||
       self.stunTimer > 0 ||
       self.hurtTimer > 0 ||
-      (self.activeCast !== null &&
-        (!self.activeCast.def.moveWhileStartup ||
-          self.activeCast.def.blockMovementDuringCast ||
-          (self.activeCast.def.blockMovementUntilEndAnimation &&
-            self.activeCast.elapsed < self.activeCast.plan.animationEndAt)))
+      castBlocksBot
     ) {
       return { ...IDLE_INPUT };
     }
@@ -1390,9 +1400,12 @@ export class BotController {
           // que no todos los bots detecten o aprovechen cada windup.
           score -= this.tuning.punishBonus;
           if (
-            !pending.def.moveWhileStartup ||
-            pending.def.blockMovementDuringCast ||
-            pending.def.blockMovementUntilEndAnimation
+            castMovementMultiplier({
+              def: pending.def,
+              elapsed: pending.elapsed,
+              activeEnd: pending.plan.activeEnd,
+              animationEndAt: pending.plan.animationEndAt
+            }) <= 0
           ) {
             score -= 1.5;
           }

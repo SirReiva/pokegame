@@ -8,6 +8,7 @@
 
 import type { AbilityDef } from '../abilities';
 import type { TelegraphHandle } from '../core/ports/fx';
+import { castMovementMultiplier } from '../core/abilities/movement';
 import type {
   ActiveCast,
   MatchPlayerState
@@ -44,10 +45,10 @@ export function stepActiveCast(
   player: MatchPlayerState,
   input: DeviceInputSnapshot,
   dt: number
-): boolean {
-  if (host.isMatchOver()) return true;
+): number | null {
+  if (host.isMatchOver()) return 0;
   const cast = player.activeCast;
-  if (!cast) return false;
+  if (!cast) return null;
 
   cast.elapsed += dt;
 
@@ -107,29 +108,25 @@ export function stepActiveCast(
       cast.armorFx = null;
       player.activeCast = null;
       player.animationFrame = null;
-      return false;
+      return null;
     }
   }
 
-  // Movimiento: bloqueado durante el startup (salvo `moveWhileStartup`) y
-  // durante la ventana activa de las melee. `blockMovementDuringCast` clava al
-  // lanzador durante todo el casteo, recuperación incluida.
-  const animationLocked =
-    cast.def.blockMovementUntilEndAnimation &&
-    cast.def.shape !== 'dash' &&
-    cast.elapsed < cast.plan.animationEndAt;
-  const castLocked =
-    cast.def.blockMovementDuringCast ||
-    animationLocked ||
-    (cast.elapsed < cast.def.startup && !cast.def.moveWhileStartup) ||
-    (cast.def.shape === 'melee' && cast.elapsed < cast.plan.activeEnd);
-  if (castLocked) {
+  // Movimiento: el multiplicador depende de la fase y de los overrides de la
+  // habilidad. `0` clava al lanzador; un número intermedio lo mueve más despacio.
+  const movement = castMovementMultiplier({
+    def: cast.def,
+    elapsed: cast.elapsed,
+    activeEnd: cast.plan.activeEnd,
+    animationEndAt: cast.plan.animationEndAt
+  });
+  if (movement <= 0) {
     player.vx = 0;
     player.vz = 0;
     host.updateCamera(player, input, dt);
-    return true;
+    return 0;
   }
-  return false;
+  return movement;
 }
 
 /**

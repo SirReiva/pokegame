@@ -338,9 +338,9 @@ test('el cono de Fuego Sagrado gira con el apuntado y se limita a ±15°', () =>
   const clamped = move(Math.PI / 2); // 90° de apuntado
   assert.ok(Math.abs((clamped.dirX ?? 0) - Math.sin(15 * Math.PI / 180)) < 1e-6);
   assert.ok(Math.abs((clamped.dirZ ?? 0) - Math.cos(15 * Math.PI / 180)) < 1e-6);
-  // El vértice no se mueve: solo cambia el eje del abanico.
+  // El vértice sigue al lanzador: solo cambia el eje del abanico.
   assert.equal(clamped.x, 0);
-  assert.equal(clamped.z, 1);
+  assert.equal(clamped.z, 0);
 });
 
 test('stepActiveAoes aplica la dirección devuelta por aoeMovement', () => {

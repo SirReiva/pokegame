@@ -265,7 +265,7 @@ export interface ActiveAoe {
   def: AoeAbilityDef;
   /**
    * Casteo que creó el área. Las canalizaciones con
-   * `blockMovementDuringCast` se cortan por completo al ser interrumpidas:
+   * `movementDuringCast` bloqueado se cortan por completo al ser interrumpidas:
    * el área deja de hacer ticks y su efecto 3D se retira.
    */
   cast?: ActiveCast;

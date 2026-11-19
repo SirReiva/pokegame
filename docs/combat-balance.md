@@ -406,8 +406,8 @@ con `CONFIG.player.perPokemonHitbox = false`.
 ### Formas y reglas
 
 - **melee**: cono con `range` y `halfAngle`. El `ActiveCast` bloquea el
-  movimiento durante el startup y la ventana activa (salvo `moveWhileStartup`) y
-  también impide lanzar otra habilidad hasta terminar el `recovery`.
+  movimiento durante el startup y la ventana activa (salvo que `moveWhileStartup`
+  lo permita) y también impide lanzar otra habilidad hasta terminar el `recovery`.
 - **projectile**: avanza a `projectileSpeed`, se detiene en colliders y a
   `range`.
 - **beam**: instantáneo o con startup; se corta en el primer collider y

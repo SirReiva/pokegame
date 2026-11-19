@@ -47,6 +47,7 @@ import type {
   RepeatCooldownSpec,
   SelfAbilityDef
 } from './core/abilities/def';
+import { isChannelingCast } from './core/abilities/movement';
 import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
@@ -168,10 +169,8 @@ const BASE_DEFAULTS = {
   startupAnimationSpeed: 1,
   animation: null as AnimationName | null,
   moveWhileStartup: false,
-  blockMovementDuringCast: false,
   armorPool: 0,
   armorWindow: 'startup' as 'startup' | 'cast',
-  blockMovementUntilEndAnimation: false,
   preserveMomentum: false,
   description: ''
 };
@@ -406,7 +405,7 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
     options?: {
       mode?: StartupAnimationMode;
       speed?: number;
-      move?: boolean;
+      move?: boolean | number;
       animation?: AnimationName;
     }
   ): this;
@@ -414,12 +413,12 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   active(seconds: number): this;
   /** Tiempo desde el fin del efecto hasta volver a estar libre. */
   recovery(seconds: number): this;
-  /** Clava al lanzador durante todo el casteo. */
-  blockMovementDuringCast(): this;
+  /** Movimiento durante todo el casteo. */
+  movementDuringCast(value?: boolean | number): this;
   /** Armadura de casteo. */
   armor(pool: number, options?: { window?: 'startup' | 'cast' }): this;
-  /** Bloquea hasta terminar la animación de lanzamiento. */
-  blockMovementUntilEndAnimation(): this;
+  /** Movimiento hasta terminar la animación de lanzamiento. */
+  movementUntilEndAnimation(value?: boolean | number): this;
   /** Conserva la inercia al lanzar. */
   preserveMomentum(): this;
   /** Animación de lanzamiento; `null` la desactiva. */
@@ -680,7 +679,7 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
     options: {
       mode?: StartupAnimationMode;
       speed?: number;
-      move?: boolean;
+      move?: boolean | number;
       animation?: AnimationName;
     } = {}
   ): this {
@@ -708,8 +707,8 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
     return this;
   }
 
-  blockMovementDuringCast(): this {
-    this.draft.blockMovementDuringCast = true;
+  movementDuringCast(value: boolean | number = true): this {
+    this.draft.movementDuringCast = value;
     return this;
   }
 
@@ -722,8 +721,8 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
     return this;
   }
 
-  blockMovementUntilEndAnimation(): this {
-    this.draft.blockMovementUntilEndAnimation = true;
+  movementUntilEndAnimation(value: boolean | number = true): this {
+    this.draft.movementUntilEndAnimation = value;
     return this;
   }
 
@@ -750,7 +749,7 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
     }
     // Las canalizaciones no pueden esquivar: su armadura cubre todo el casteo
     // salvo que la habilidad indique otra ventana explícitamente.
-    if (!this.armorWindowExplicit && this.draft.blockMovementDuringCast) {
+    if (!this.armorWindowExplicit && isChannelingCast(this.draft)) {
       this.draft.armorWindow = 'cast';
     }
     return {
@@ -2151,7 +2150,7 @@ registerAbility(
     // la erupción nace exactamente donde está.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la carga.
-    .startup(2, {  move: true })
+    .startup(2, {  move: 1.2 })
     .recovery(0.4)
     .animation('attack')
     .area('burrow', 'once', 0.75)
@@ -2468,7 +2467,7 @@ registerAbility(
     .aoeShape('cone')
     .startup(0.4, { animation: 'charge' })
     .recovery(1.5)
-    .blockMovementDuringCast()
+    .movementDuringCast(0.25)
     .armor(60)
     .animation('shoot')
     .area('sacredFlame', 'overtime-global', 1.5, 0.5)
@@ -2491,8 +2490,8 @@ registerAbility(
       );
       const angle = base + turn;
       return {
-        x: originX,
-        z: originZ,
+        x: caster.x,
+        z: caster.z,
         dirX: Math.sin(angle),
         dirZ: Math.cos(angle)
       };
@@ -2633,7 +2632,7 @@ registerAbility(
     .halfAngle(30)
     .aoeShape('cone')
     .area('sheerCold', 'once', 0.5)
-    .blockMovementDuringCast()
+    .movementDuringCast(false)
     .radial(0.4)
     .slow(0.45, 2.5)
     .startup(0.85, { animation: 'charge' })

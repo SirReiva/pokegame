@@ -164,18 +164,21 @@ interface AbilityBase<P extends AbilityProps> {
    */
   animation: AnimationName | null;
   /**
-   * Permite moverse durante el `startup`. El efecto sigue fijado en el centro
-   * calculado al empezar el lanzamiento, así que el Pokémon puede salir de la
-   * zona mientras la marca sigue en el suelo. Sin efecto si `startup` es 0.
+   * Movimiento durante el `startup`: `false` bloquea, `true` usa la velocidad
+   * normal y un número es un multiplicador de velocidad (`0` bloquea). Por
+   * defecto es `false`. El efecto sigue fijado en el centro calculado al
+   * empezar el lanzamiento, así que el Pokémon puede salir de la zona mientras
+   * la marca sigue en el suelo. Sin efecto si `startup` es 0.
    */
-  moveWhileStartup: boolean;
+  moveWhileStartup: boolean | number;
   /**
-   * Clava al lanzador durante todo el casteo (`startup + active + recovery`),
-   * no solo durante el `startup`. Tiene prioridad sobre `moveWhileStartup`.
-   * Pensado para áreas canalizadas que deben impedir moverse hasta que termine
-   * la animación de lanzamiento.
+   * Movimiento durante todo el casteo (`startup + active + recovery`), no solo
+   * durante el `startup`. Mismos valores que `moveWhileStartup`: `false`/`0`
+   * clava al lanzador, `true` permite velocidad normal y un número multiplica
+   * la velocidad. Sin declararlo no altera las reglas por fase. Clavar al
+   * lanzador durante todo el casteo lo convierte en una canalización.
    */
-  blockMovementDuringCast: boolean;
+  movementDuringCast?: boolean | number;
   /**
    * PV de armadura del casteo: cada golpe resta su daño a este pozo sin
    * mitigarlo y, mientras quede, no cancela el casteo ni aplica hitstun o
@@ -190,12 +193,14 @@ interface AbilityBase<P extends AbilityProps> {
    */
   armorWindow: 'startup' | 'cast';
   /**
-   * Clava al lanzador desde el inicio del casteo hasta que termina de
-   * reproducirse la animación de lanzamiento, aunque `moveWhileStartup` sea
-   * `true`. Después, la recuperación restante ya permite moverse. Si no hay
-   * animación, bloquea hasta el final del casteo.
+   * Movimiento desde el inicio del casteo hasta que termina de reproducirse la
+   * animación de lanzamiento. Mismos valores que `moveWhileStartup`:
+   * `false`/`0` bloquea, `true` permite velocidad normal y un número multiplica
+   * la velocidad. Sin declararlo no altera las reglas por fase. Después de la
+   * animación, la recuperación restante vuelve a las reglas normales. Si no hay
+   * animación, la ventana llega hasta el final del casteo.
    */
-  blockMovementUntilEndAnimation: boolean;
+  movementUntilEndAnimation?: boolean | number;
   /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el

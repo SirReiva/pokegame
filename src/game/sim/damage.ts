@@ -19,6 +19,7 @@ import {
   type AtmosphereId
 } from '../atmosphere';
 import type { CombatFxPort } from '../core/ports/fx';
+import { isChannelingCast } from '../core/abilities/movement';
 import type {
   ActiveDamageOverTime,
   HealOnHitToken,
@@ -245,9 +246,9 @@ function applyHitControl(
   options: HitControlOptions
 ): boolean {
   const cast = target.activeCast;
-  // `blockMovementDuringCast` convierte el casteo en una canalización: el
+  // `movementDuringCast` bloqueado convierte el casteo en una canalización: el
   // lanzador queda clavado y cualquier impacto la corta.
-  const channeling = cast?.def.blockMovementDuringCast === true;
+  const channeling = cast ? isChannelingCast(cast.def) : false;
   const armor = host.activeCastArmor(target);
   const armorActive = armor > 0;
   const wouldInterrupt = options.cancel || channeling;

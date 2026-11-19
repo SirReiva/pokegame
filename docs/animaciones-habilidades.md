@@ -22,14 +22,20 @@ Toda habilidad se describe con tres tiempos en `AbilityDef`:
 El casteo completo dura `startup + active + recovery`. Durante ese tiempo no se
 puede lanzar otra habilidad. El movimiento se bloquea:
 
-- durante el `startup`, salvo que `moveWhileStartup` sea `true`;
+- durante el `startup`, salvo que `moveWhileStartup` permita moverse;
 - durante la ventana `active` de las melee;
 - durante todo el casteo (`startup + active + recovery`) si
-  `blockMovementDuringCast` es `true`, aunque `moveWhileStartup` también lo sea;
+  `movementDuringCast` se declara como `false` o `0`, aunque `moveWhileStartup`
+  también permita moverse;
 - hasta que termina de reproducirse la animación de lanzamiento si
-  `blockMovementUntilEndAnimation` es `true`; después la recuperación restante
-  ya permite moverse;
+  `movementUntilEndAnimation` se declara como `false` o `0`; después la
+  recuperación restante ya permite moverse;
 - en un dash, lo controla el propio desplazamiento.
+
+`moveWhileStartup`, `movementDuringCast` y `movementUntilEndAnimation` aceptan
+`boolean | number`: `true` usa la velocidad normal, `false` bloquea y un número
+es un multiplicador de velocidad (`0` bloquea). Los dos últimos solo intervienen
+cuando se declaran; sin declararlos se mantienen las reglas por fase.
 
 ## 2. Marcadores del sprite
 
@@ -126,22 +132,25 @@ Builder:
 - `startup(seconds, { mode, speed, move, animation })`
   - `mode: 'once'` (por defecto): ancla el `HitFrame` del clip de carga al efecto.
   - `mode: 'loop'`: repite la carga a `speed` hasta el efecto.
-  - `move: true` → `moveWhileStartup`.
+  - `move: true` → `moveWhileStartup`. También acepta un número como
+    multiplicador de velocidad; `false` o `0` bloquea.
   - `animation: 'charge'` → animación de carga distinta de la de lanzamiento.
 - `active(seconds)`
 - `recovery(seconds)`
-- `blockMovementDuringCast()` → `blockMovementDuringCast`. Clava al lanzador
-  durante todo el casteo, recuperación incluida, y tiene prioridad sobre
-  `move: true`. Útil para áreas canalizadas.
-- `blockMovementUntilEndAnimation()` → `blockMovementUntilEndAnimation`. Clava
-  al lanzador desde el inicio del casteo hasta que termina de reproducirse la
-  animación de lanzamiento; después la recuperación restante ya permite moverse.
-  Tiene prioridad sobre `move: true`. Si no hay animación, bloquea hasta el final
-  del casteo.
+- `movementDuringCast(value)` → `movementDuringCast`. Controla el movimiento
+  durante todo el casteo, recuperación incluida. `false` o `0` clava al
+  lanzador y tiene prioridad sobre `move: true`; `true` usa la velocidad normal
+  y un número multiplica la velocidad. Útil para áreas canalizadas.
+- `movementUntilEndAnimation(value)` → `movementUntilEndAnimation`. Controla el
+  movimiento desde el inicio del casteo hasta que termina de reproducirse la
+  animación de lanzamiento; después la recuperación restante vuelve a las reglas
+  normales. `false` o `0` bloquea hasta ese instante, `true` usa la velocidad
+  normal y un número multiplica la velocidad. Si no hay animación, la ventana
+  dura hasta el final del casteo.
 
-El builder solo expone la API nueva: `startup`, `active` y `recovery`. Los
-métodos `cast()` y `windup()` se eliminaron para que ninguna definición nueva
-pueda recuperar la semántica antigua.
+El builder solo expone la API nueva de tiempos: `startup`, `active` y
+`recovery`. Los métodos `cast()` y `windup()` se eliminaron para que ninguna
+definición nueva pueda recuperar la semántica antigua.
 
 ## 5. Migración desde el sistema anterior
 
@@ -157,6 +166,8 @@ pueda recuperar la semántica antigua.
 | `windupAnimationMode` | `startupAnimationMode` |
 | `windupAnimationSpeed` | `startupAnimationSpeed` |
 | `moveWhileWindup` | `moveWhileStartup` |
+| `blockMovementDuringCast` | `movementDuringCast` (`false`/`0` bloquea) |
+| `blockMovementUntilEndAnimation` | `movementUntilEndAnimation` (`false`/`0` bloquea) |
 
 El catálogo completo se migró con el mismo reparto para conservar el timing de
 combate actual.
@@ -208,15 +219,15 @@ resta su daño final a un pozo sin mitigarlo y, mientras quede, no cancela el
 casteo ni aplica hitstun, empuje o `hurtTimer`. Cuando el daño acumulado agota
 el pozo, el casteo se rompe. Los estados, el control explícito (`force`) y los
 golpes letales la ignoran. La ventana es el `startup`, salvo en las
-canalizaciones con `blockMovementDuringCast`, donde se infiere `'cast'` y cubre
-todo el casteo. La armadura también dibuja un pulso al absorber y una fractura
-cuando se rompe. Además, ambas barras de vida (la flotante de PlayCanvas y la
+canalizaciones con `movementDuringCast` bloqueado, donde se infiere `'cast'` y
+cubre todo el casteo. La armadura también dibuja un pulso al absorber y una
+fractura cuando se rompe. Además, ambas barras de vida (la flotante de PlayCanvas y la
 del HUD) muestran una franja metálica alineada a la derecha con el tramo verde
 de la vida actual y con su misma altura; su ancho es la armadura restante
 respecto a la vida máxima y se recorta contra el borde izquierdo si lo supera.
 En el HUD el tooltip incluye el valor restante y el máximo.
 
-Las habilidades con `blockMovementDuringCast` son canalizaciones: cuando el
+Las habilidades con `movementDuringCast` bloqueado son canalizaciones: cuando el
 daño acumulado agota su armadura la cortan, incluso los ticks de un área persistente.
 Esos ticks no aplican hitstun ni empuje, pero sí interrumpen al lanzador que está
 clavado. Si el efecto 3D ya había salido, también se acorta: el área persistente

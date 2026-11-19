@@ -102,6 +102,7 @@ import {
   hitRadiusForPokemon,
   speedForPokemon
 } from '../src/game/roster';
+import { isChannelingCast } from '../src/game/core/abilities/movement';
 import {
   stepActiveCast,
   armHitFrame,
@@ -1416,7 +1417,7 @@ export class HeadlessMatch {
     const cast = player.activeCast;
     if (!cast) return;
     cast.canceled = true;
-    if (cast.def.blockMovementDuringCast) this.cutCastAoes(cast);
+    if (isChannelingCast(cast.def)) this.cutCastAoes(cast);
     cast.marker?.destroy();
     cast.lane?.destroy();
     cast.armorFx?.destroy();
