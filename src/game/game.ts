@@ -203,9 +203,11 @@ import { detectSpriteBudget } from './spriteBudget';
 import { spriteDensityScale } from './spriteDensity';
 import { clearGroundCanvasCache } from './textures';
 import {
+  XP_FEED_SOURCES,
   XP_REWARDS,
   XP_RULES,
   xpStatus,
+  type XpFeedEntry,
   type XpSource
 } from './xp';
 import {
@@ -328,6 +330,10 @@ const NO_TYPES: readonly string[] = [];
 const KILL_FEED_TTL_SECONDS = 6;
 /** Tope de entradas del feed; al llenarse se descarta la más antigua. */
 const KILL_FEED_MAX_ENTRIES = 4;
+/** La feed de XP caduca igual que la de KOs. */
+const XP_FEED_TTL_SECONDS = KILL_FEED_TTL_SECONDS;
+/** Entradas visibles de la feed personal de XP. */
+const XP_FEED_MAX_ENTRIES = 3;
 /** Tiempo que se mantiene el cartel de salida después de la cuenta atrás. */
 const MATCH_COUNTDOWN_GO_SECONDS = 0.8;
 /**
@@ -615,6 +621,8 @@ export class Game {
   /** Últimos KOs globales; cada vista pinta su propio feed con esta lista. */
   private killFeed: KillFeedEntry[] = [];
   private killFeedSeq = 0;
+  /** Secuencia de la feed personal de XP; se reinicia con cada partida. */
+  private xpFeedSeq = 0;
   /** Tiempo de simulación de la partida, usado para caducar el feed. */
   private matchElapsed = 0;
   private matchOver = false;
@@ -1161,6 +1169,12 @@ export class Game {
       },
       set killFeedSeq(value) {
         self.killFeedSeq = value;
+      },
+      get xpFeedSeq() {
+        return self.xpFeedSeq;
+      },
+      set xpFeedSeq(value) {
+        self.xpFeedSeq = value;
       },
       get projectiles() {
         return self.projectiles;
@@ -3664,6 +3678,16 @@ export class Game {
     this.killFeed = [entry, ...this.killFeed].slice(0, KILL_FEED_MAX_ENTRIES);
   }
 
+  /** Retira de la feed personal los eventos de XP ya caducados. */
+  private pruneXpFeeds(): void {
+    const oldestVisible = this.matchElapsed - XP_FEED_TTL_SECONDS;
+    for (const player of this.matchPlayers) {
+      if (player.xpFeed.length === 0) continue;
+      const fresh = player.xpFeed.filter((entry) => entry.at >= oldestVisible);
+      if (fresh.length !== player.xpFeed.length) player.xpFeed = fresh;
+    }
+  }
+
   /** Retira del feed los KOs que ya superaron su tiempo de vida. */
   private pruneKillFeed(): void {
     if (this.killFeed.length === 0) return;
@@ -3684,6 +3708,19 @@ export class Game {
     if (!Number.isFinite(amount) || amount <= 0) return;
     player.xp += amount;
     player.xpBreakdown[source] += amount;
+    // Feed personal del HUD: solo bajas, asistencias y captura del punto.
+    // Se conservan los últimos eventos y el array se reemplaza para que el
+    // snapshot de estadísticas detecte el cambio. Los bots no tienen vista
+    // propia, así que no gastan memoria en la feed.
+    if (!player.isBot && XP_FEED_SOURCES.has(source)) {
+      const entry: XpFeedEntry = {
+        id: ++this.xpFeedSeq,
+        at: this.matchElapsed,
+        source,
+        amount
+      };
+      player.xpFeed = [entry, ...player.xpFeed].slice(0, XP_FEED_MAX_ENTRIES);
+    }
     // La participación se calcula a partir del tiempo y no debe renovar el
     // contador de actividad que la habilita.
     if (source !== 'participation' && source !== 'result') {
@@ -3866,6 +3903,7 @@ export class Game {
 
   private emitMatchStats(): void {
     this.pruneKillFeed();
+    this.pruneXpFeeds();
     const stats = buildMatchStats({
       players: this.matchPlayers,
       views: this.views,

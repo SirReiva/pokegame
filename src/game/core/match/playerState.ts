@@ -28,7 +28,7 @@ import type { TerrainSpeedReason } from '../terrainSpeed';
 import type { PokemonType } from '../typeChart';
 import type { AnimationName } from '../types';
 import type { Concealment } from '../vision';
-import type { XpBreakdown } from '../xp';
+import type { XpBreakdown, XpFeedEntry } from '../xp';
 
 export interface ActiveBuff {
   stat: BuffStat;
@@ -440,6 +440,8 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   xp: number;
   /** Desglose de la XP por fuente, para el HUD y el marcador final. */
   xpBreakdown: XpBreakdown;
+  /** Últimos eventos de XP, el más reciente primero (máximo 3). */
+  xpFeed: XpFeedEntry[];
   /** Bajas seguidas sin morir; alimenta el shutdown y el multiplicador. */
   killStreak: number;
   /** Instantes de las últimas bajas, para detectar multibajas. */

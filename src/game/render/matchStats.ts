@@ -109,6 +109,7 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
       xpToNext: xp.toNext,
       xpProgress: xp.progress,
       xpBreakdown: { ...player.xpBreakdown },
+      xpFeed: player.xpFeed,
       buffs: player.buffs.map((buff) => ({
         stat: buff.stat,
         multiplier: buff.multiplier,

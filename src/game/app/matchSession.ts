@@ -151,6 +151,8 @@ export interface MatchSessionHost {
   teamScores: Record<Team, number>;
   killFeed: KillFeedEntry[];
   killFeedSeq: number;
+  /** Secuencia de la feed de XP; se reinicia con cada partida. */
+  xpFeedSeq: number;
 
   // --- Colecciones de simulación que se vacían en `clearMatch` ---
   projectiles: Projectile[];
@@ -278,6 +280,7 @@ export function clearMatch(host: MatchSessionHost): void {
   host.teamScores = createTeamRecord(() => 0);
   host.killFeed = [];
   host.killFeedSeq = 0;
+  host.xpFeedSeq = 0;
   host.matchElapsed = 0;
   host.simAccumulator = 0;
   host.inputBuffer.clear();
@@ -580,6 +583,7 @@ export function startMatch(
       pickupHealing: 0,
       xp: 0,
       xpBreakdown: emptyXpBreakdown(),
+      xpFeed: [],
       killStreak: 0,
       recentKills: [],
       damageContributors: new Map(),

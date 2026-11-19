@@ -22,7 +22,7 @@ import { GAME_MODE_INFO, type GameModeId } from '../game/modes';
 import type { PokemonEntry, PokemonSkin, SpriteManifest } from '../game/types';
 import type { Team } from '../game/terrain';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
-import { XP_SOURCE_LABELS } from '../game/xp';
+import { XP_SOURCE_LABELS, type XpFeedEntry } from '../game/xp';
 import { PokemonPortrait } from './PokemonPortrait';
 import { TypeBadge } from './TypeBadge';
 import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT_LABELS, typeStyle } from './typeInfo';
@@ -89,6 +89,12 @@ function formatCount(value: number): string {
   return COUNT_FORMAT.format(Math.round(value));
 }
 
+/** Cantidad de XP: entera si es grande y con decimales si es un goteo. */
+function formatXpAmount(value: number): string {
+  if (value >= 10) return formatCount(value);
+  return value.toFixed(value >= 1 ? 1 : 2).replace('.', ',');
+}
+
 /** Reloj de partida en formato m:ss. */
 function formatClock(seconds: number): string {
   if (!Number.isFinite(seconds)) return '∞';
@@ -133,6 +139,13 @@ const DOT_LABEL: Record<string, string> = {
 };
 
 const EMPTY_FEED: readonly KillFeedEntry[] = [];
+const EMPTY_XP_FEED: readonly XpFeedEntry[] = [];
+
+/**
+ * Escala de presentación de la feed de XP. La XP real del motor no cambia;
+ * solo las cantidades que aparecen en el HUD se muestran ×100.
+ */
+const XP_FEED_DISPLAY_SCALE = 100;
 
 /**
  * Feed de KOs de una vista. Cada jugador recibe la misma lista global de la
@@ -236,6 +249,51 @@ const KillFeed = memo(function KillFeed({
                 {entry.victimName}
               </span>{' '}
               <span className="text-steel-450">({victimPokemon})</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+});
+
+/**
+ * Feed personal de XP de una vista. Muestra como máximo las tres últimas
+ * ganancias del jugador, alineadas a la izquierda justo encima del panel
+ * inferior. El motor solo envía bajas, multibajas, asistencias y capturas
+ * del punto.
+ */
+const XpFeed = memo(function XpFeed({
+  entries,
+  compact
+}: {
+  entries: readonly XpFeedEntry[];
+  compact: boolean;
+}) {
+  // Igual que el feed de KOs, pero con tres huecos en vez de cuatro.
+  const visible = entries.slice(0, 3);
+  if (visible.length === 0) return null;
+
+  return (
+    <ol
+      className="absolute bottom-full left-1/2 mb-1 flex max-w-[72%] -translate-x-1/2 flex-col items-center gap-1"
+      aria-label="Últimas ganancias de experiencia"
+    >
+      {visible.map((entry) => {
+        const amount = formatXpAmount(entry.amount * XP_FEED_DISPLAY_SCALE);
+        return (
+          <li
+            key={entry.id}
+            className={`flex items-center gap-1.5 rounded-lg border border-line bg-night-850/80 px-2.5 py-1 leading-none shadow-[0_6px_16px_rgb(0_0_0/0.3)] backdrop-blur-[5px] animate-fade-in ${
+              compact ? 'text-9.6' : 'text-11.2'
+            }`}
+            title={`${XP_SOURCE_LABELS[entry.source]} · ${amount} XP`}
+          >
+            <span className="font-mono font-bold tabular-nums text-(--team)">
+              +{amount} XP
+            </span>
+            <span className="truncate font-mono tracking-[0.04em] text-steel-300 uppercase">
+              {XP_SOURCE_LABELS[entry.source]}
             </span>
           </li>
         );
@@ -504,6 +562,7 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
     a.armorRemaining === b.armorRemaining &&
     a.armorMax === b.armorMax &&
     a.feed === b.feed &&
+    a.xpFeed === b.xpFeed &&
     sameBuffs(a.buffs, b.buffs) &&
     sameSlows(a.slows, b.slows) &&
     sameDots(a.dots, b.dots) &&
@@ -679,6 +738,10 @@ const PlayerHud = memo(function PlayerHud({
             : 'inset-x-2 bottom-2 gap-1.25 px-2 py-1.5'
         }`}
       >
+        <XpFeed
+          entries={playerStats?.xpFeed ?? EMPTY_XP_FEED}
+          compact={compact}
+        />
         {/* Fila 1: identidad y vida. */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <PlayerIdentity

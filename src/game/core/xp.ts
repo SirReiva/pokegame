@@ -52,6 +52,27 @@ export type XpSource =
 
 export type XpBreakdown = Record<XpSource, number>;
 
+/**
+ * Fuentes que aparecen en la feed personal de XP: bajas, multibajas,
+ * asistencias y la captura del punto de KOTH. El resto de fuentes sigue
+ * sumando al nivel y al desglose, pero no se muestra en la feed.
+ */
+export const XP_FEED_SOURCES: ReadonlySet<XpSource> = new Set([
+  'ko',
+  'assist',
+  'zoneCapture'
+]);
+
+/** Evento reciente de XP para la feed personal del HUD. */
+export interface XpFeedEntry {
+  /** Identificador creciente para animar solo las entradas nuevas. */
+  id: number;
+  /** Momento de la partida (s) en el que se concedió la XP. */
+  at: number;
+  source: XpSource;
+  amount: number;
+}
+
 export const XP_SOURCE_LABELS: Record<XpSource, string> = {
   ko: 'KOs',
   assist: 'Asistencias',

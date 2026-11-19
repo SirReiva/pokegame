@@ -808,6 +808,7 @@ export class HeadlessMatch {
       pickupHealing: 0,
       xp: 0,
       xpBreakdown: emptyXpBreakdown(),
+      xpFeed: [],
       killStreak: 0,
       recentKills: [],
       damageContributors: new Map(),

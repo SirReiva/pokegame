@@ -25,7 +25,7 @@ import type {
 import { respawnsForTeam, type Team, type TerrainId } from './terrain';
 import type { TerrainRelationReason, TerrainSpeedReason } from './terrainSpeed';
 import type { AnimationName, DirectionName } from './types';
-import type { XpBreakdown, XpRank } from './xp';
+import type { XpBreakdown, XpFeedEntry, XpRank } from './xp';
 
 /** 1 teclado + 7 mandos, u 8 mandos. */
 export const MAX_PLAYERS = 8;
@@ -467,6 +467,8 @@ export interface PlayerMatchStats {
   xpProgress: number;
   /** Desglose de la XP por fuente. */
   xpBreakdown: XpBreakdown;
+  /** Últimos eventos de XP del jugador, el más reciente primero. */
+  xpFeed: XpFeedEntry[];
   /** Buffs de estadísticas activos. */
   buffs: ActiveBuffHud[];
   /** Ralentizaciones activas que afectan al jugador. */
