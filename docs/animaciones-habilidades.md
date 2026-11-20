@@ -212,7 +212,9 @@ real, así que el clip termina cuando termina el dash.
 
 Un golpe de control, un choque de melee, un KO o un respawn cancelan el
 `ActiveCast`: se destruyen las marcas de área/haz y se limpia el frame manual.
-El casteo nunca deja bloqueos residuales.
+Si el efecto ya había salido, también se retira: las áreas persistentes dejan de
+hacer ticks y su efecto 3D se destruye en el acto, tanto en canalizaciones como
+en casteos normales. El casteo nunca deja bloqueos residuales.
 
 Las habilidades con `armorPool > 0` tienen **armadura de casteo**: cada golpe
 resta su daño final a un pozo sin mitigarlo y, mientras quede, no cancela el
@@ -230,8 +232,9 @@ En el HUD el tooltip incluye el valor restante y el máximo.
 Las habilidades con `movementDuringCast` bloqueado son canalizaciones: cuando el
 daño acumulado agota su armadura la cortan, incluso los ticks de un área persistente.
 Esos ticks no aplican hitstun ni empuje, pero sí interrumpen al lanzador que está
-clavado. Si el efecto 3D ya había salido, también se acorta: el área persistente
-deja de hacer ticks y se retira en el acto.
+clavado. Si el efecto 3D ya había salido, esa interrupción lo retira igual que
+cualquier otra cancelación: el área persistente deja de hacer ticks y desaparece
+en el acto.
 
 Si el efecto ya estaba en `queuedCasts` cuando llega la cancelación, el casteo
 se marca como `canceled` y la fase de resolución lo descarta. Así un cambio

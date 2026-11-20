@@ -19,7 +19,6 @@ import { isAimAssistEnabled } from './aimAssistSettings';
 import type { AoeFallenAlly } from './aoeEffect';
 import { spawnGroupedAoeTelegraph, aoeGroupRadius } from './aoeGroupFx';
 import { aoeCirclesFrom } from './aoeGeometry';
-import { isChannelingCast } from './core/abilities/movement';
 import { Actor } from './actor';
 import {
   clearMatch as clearMatchSession,
@@ -2771,9 +2770,9 @@ export class Game {
     // Marca el casteo como cancelado antes de soltarlo: si su efecto ya estaba
     // en `queuedCasts`, la fase de resolución lo descartará.
     cast.canceled = true;
-    // Una canalización cortada también acorta su efecto: el área persistente
-    // deja de hacer ticks y su efecto 3D se retira en el acto.
-    if (isChannelingCast(cast.def)) this.cutCastAoes(cast);
+    // Un casteo cortado acorta también su efecto: el área persistente deja de
+    // hacer ticks y su efecto 3D se retira en el acto, sea canalización o no.
+    this.cutCastAoes(cast);
     cast.marker?.destroy();
     cast.lane?.destroy();
     cast.armorFx?.destroy();
