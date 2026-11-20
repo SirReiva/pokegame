@@ -3,7 +3,11 @@
  * estadísticas de cada Pokémon.
  */
 
-import { useSyncExternalStore, type CSSProperties } from 'react';
+import {
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode
+} from 'react';
 import { commonAbilityOption } from '../../game/abilities';
 import {
   TEAM_INFO,
@@ -34,6 +38,49 @@ function formatDamage(value: number): string {
 /** Marcador del modo: los puntos de zona se muestran sin decimales. */
 function formatScore(value: number): string {
   return Math.floor(value).toLocaleString('es-ES');
+}
+
+/** Cifra del marcador con su etiqueta pequeña debajo. */
+function ScoreStat({
+  value,
+  label,
+  title,
+  valueClassName
+}: {
+  value: ReactNode;
+  label: string;
+  title?: string;
+  valueClassName: string;
+}) {
+  return (
+    <span className="flex flex-col items-end leading-none" title={title}>
+      <strong className={`text-13.6 ${valueClassName}`}>{value}</strong>
+      <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Columna del marcador con dos estadísticas apiladas. Todas las columnas de un
+ * mismo grupo comparten ancho fijo para que las cifras queden alineadas entre
+ * Pokémon y con la fila de totales.
+ */
+function ScoreStatColumn({
+  children,
+  className = ''
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`flex shrink-0 flex-col items-end justify-center gap-1 font-mono tabular-nums ${className}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 interface PauseDialogProps {
@@ -452,73 +499,55 @@ function MatchScoreboard({
                         </span>
                       )}
                     </span>
-                    <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
-                      <span
-                        className="flex flex-col items-end leading-none"
-                        title={`${row.kills} KO · ${row.assists} asistencias`}
-                      >
-                        <strong className="text-13.6 text-steel-150">
-                          {row.kills}
-                          <span className="text-9.6 text-steel-500">
-                            /{row.assists}
-                          </span>
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          KO / Asist.
-                        </span>
-                      </span>
-                      <span className="flex flex-col items-end leading-none">
-                        <strong className="text-13.6 text-steel-300">
-                          {row.deaths}
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          Muertes
-                        </span>
-                      </span>
-                      <span
-                        className="flex flex-col items-end leading-none"
-                        title="Daño hecho a rivales"
-                      >
-                        <strong className="text-13.6 text-accent-soft">
-                          {formatDamage(row.damageDealt)}
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          Daño
-                        </span>
-                      </span>
-                      <span
-                        className="flex flex-col items-end leading-none"
-                        title="Daño recibido de rivales y autodaño"
-                      >
-                        <strong className="text-13.6 text-danger-100">
-                          {formatDamage(row.damageTaken)}
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          Recibido
-                        </span>
-                      </span>
-                      <span
-                        className="flex flex-col items-end leading-none"
-                        title="PV curados con habilidades propias y Regeneración"
-                      >
-                        <strong className="text-13.6 text-success">
-                          {formatDamage(row.abilityHealing)}
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          Cur. hab.
-                        </span>
-                      </span>
-                      <span
-                        className="flex flex-col items-end leading-none"
-                        title="PV curados con objetos recogibles"
-                      >
-                        <strong className="text-13.6 text-success">
-                          {formatDamage(row.pickupHealing)}
-                        </strong>
-                        <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                          Cur. obj.
-                        </span>
-                      </span>
+                    <span className="flex shrink-0 items-stretch gap-1.5">
+                      <ScoreStatColumn className="w-18">
+                        <ScoreStat
+                          value={
+                            <>
+                              {row.kills}
+                              <span className="text-9.6 text-steel-500">
+                                /{row.assists}
+                              </span>
+                            </>
+                          }
+                          label="KO / Asist."
+                          title={`${row.kills} KO · ${row.assists} asistencias`}
+                          valueClassName="text-steel-150"
+                        />
+                        <ScoreStat
+                          value={row.deaths}
+                          label="Muertes"
+                          valueClassName="text-steel-300"
+                        />
+                      </ScoreStatColumn>
+                      <ScoreStatColumn className="w-18 border-l border-line/45 pl-2">
+                        <ScoreStat
+                          value={formatDamage(row.damageDealt)}
+                          label="Daño"
+                          title="Daño hecho a rivales"
+                          valueClassName="text-accent-soft"
+                        />
+                        <ScoreStat
+                          value={formatDamage(row.damageTaken)}
+                          label="Recibido"
+                          title="Daño recibido de rivales y autodaño"
+                          valueClassName="text-danger-100"
+                        />
+                      </ScoreStatColumn>
+                      <ScoreStatColumn className="w-18 border-l border-line/45 pl-2">
+                        <ScoreStat
+                          value={formatDamage(row.abilityHealing)}
+                          label="Cur. hab."
+                          title="PV curados con habilidades propias y Regeneración"
+                          valueClassName="text-success"
+                        />
+                        <ScoreStat
+                          value={formatDamage(row.pickupHealing)}
+                          label="Cur. obj."
+                          title="PV curados con objetos recogibles"
+                          valueClassName="text-success"
+                        />
+                      </ScoreStatColumn>
                     </span>
                   </li>
                 );
@@ -540,73 +569,55 @@ function MatchScoreboard({
                     {rows.length} Pokémon
                   </span>
                 </span>
-                <span className="flex shrink-0 items-baseline gap-2 font-mono tabular-nums">
-                  <span
-                    className="flex flex-col items-end leading-none"
-                    title={`${totals.kills} KO · ${totals.assists} asistencias`}
-                  >
-                    <strong className="text-13.6 text-(--team)">
-                      {totals.kills}
-                      <span className="text-9.6 text-steel-500">
-                        /{totals.assists}
-                      </span>
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      KO / Asist.
-                    </span>
-                  </span>
-                  <span className="flex flex-col items-end leading-none">
-                    <strong className="text-13.6 text-steel-300">
-                      {totals.deaths}
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      Muertes
-                    </span>
-                  </span>
-                  <span
-                    className="flex flex-col items-end leading-none"
-                    title="Daño hecho a rivales"
-                  >
-                    <strong className="text-13.6 text-accent-soft">
-                      {formatDamage(totals.damageDealt)}
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      Daño
-                    </span>
-                  </span>
-                  <span
-                    className="flex flex-col items-end leading-none"
-                    title="Daño recibido de rivales y autodaño"
-                  >
-                    <strong className="text-13.6 text-danger-100">
-                      {formatDamage(totals.damageTaken)}
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      Recibido
-                    </span>
-                  </span>
-                  <span
-                    className="flex flex-col items-end leading-none"
-                    title="PV curados con habilidades propias y Regeneración"
-                  >
-                    <strong className="text-13.6 text-success">
-                      {formatDamage(totals.abilityHealing)}
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      Cur. hab.
-                    </span>
-                  </span>
-                  <span
-                    className="flex flex-col items-end leading-none"
-                    title="PV curados con objetos recogibles"
-                  >
-                    <strong className="text-13.6 text-success">
-                      {formatDamage(totals.pickupHealing)}
-                    </strong>
-                    <span className="text-7.36 tracking-[0.08em] text-steel-500 uppercase">
-                      Cur. obj.
-                    </span>
-                  </span>
+                <span className="flex shrink-0 items-stretch gap-1.5">
+                  <ScoreStatColumn className="w-18">
+                    <ScoreStat
+                      value={
+                        <>
+                          {totals.kills}
+                          <span className="text-9.6 text-steel-500">
+                            /{totals.assists}
+                          </span>
+                        </>
+                      }
+                      label="KO / Asist."
+                      title={`${totals.kills} KO · ${totals.assists} asistencias`}
+                      valueClassName="text-(--team)"
+                    />
+                    <ScoreStat
+                      value={totals.deaths}
+                      label="Muertes"
+                      valueClassName="text-steel-300"
+                    />
+                  </ScoreStatColumn>
+                  <ScoreStatColumn className="w-18 border-l border-line/45 pl-2">
+                    <ScoreStat
+                      value={formatDamage(totals.damageDealt)}
+                      label="Daño"
+                      title="Daño hecho a rivales"
+                      valueClassName="text-accent-soft"
+                    />
+                    <ScoreStat
+                      value={formatDamage(totals.damageTaken)}
+                      label="Recibido"
+                      title="Daño recibido de rivales y autodaño"
+                      valueClassName="text-danger-100"
+                    />
+                  </ScoreStatColumn>
+                  <ScoreStatColumn className="w-18 border-l border-line/45 pl-2">
+                    <ScoreStat
+                      value={formatDamage(totals.abilityHealing)}
+                      label="Cur. hab."
+                      title="PV curados con habilidades propias y Regeneración"
+                      valueClassName="text-success"
+                    />
+                    <ScoreStat
+                      value={formatDamage(totals.pickupHealing)}
+                      label="Cur. obj."
+                      title="PV curados con objetos recogibles"
+                      valueClassName="text-success"
+                    />
+                  </ScoreStatColumn>
                 </span>
               </footer>
             )}
