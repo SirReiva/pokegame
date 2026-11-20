@@ -312,15 +312,23 @@ function renderMapPreview(map) {
       // editor: son piezas únicas de huella cuadrada.
       const center = points[0];
       const half = bandWidth / 2;
-      canvas.fillStyle = 'rgba(48, 20, 16, 0.58)';
-      canvas.fillRect(center.x - half, center.y - half, bandWidth, bandWidth);
-      canvas.strokeStyle = '#ff8a30';
-      canvas.lineWidth = Math.max(1, bandWidth * 0.08);
-      canvas.strokeRect(center.x - half, center.y - half, bandWidth, bandWidth);
-      canvas.fillStyle = '#ff5c12';
-      canvas.beginPath();
-      canvas.arc(center.x, center.y, Math.max(2, bandWidth * 0.2), 0, Math.PI * 2);
-      canvas.fill();
+      const left = center.x - half;
+      const top = center.y - half;
+      fillRect(canvas, left, top, bandWidth, bandWidth, hexToRgb('#301410'), 0.58);
+      const border = Math.max(1, bandWidth * 0.08);
+      const edge = hexToRgb('#ff8a30');
+      fillRect(canvas, left, top, bandWidth, border, edge, 0.9);
+      fillRect(canvas, left, top + bandWidth - border, bandWidth, border, edge, 0.9);
+      fillRect(canvas, left, top, border, bandWidth, edge, 0.9);
+      fillRect(canvas, left + bandWidth - border, top, border, bandWidth, edge, 0.9);
+      drawDisc(
+        canvas,
+        center.x,
+        center.y,
+        Math.max(2, bandWidth * 0.2),
+        hexToRgb('#ff5c12'),
+        0.9
+      );
       continue;
     }
     const isWall = range.kind === 'wall';
