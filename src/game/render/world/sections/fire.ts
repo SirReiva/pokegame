@@ -234,7 +234,7 @@ export function* buildFire(ctx: WorldBuildContext): Generator<number, void, void
   };
 
   const basaltMeshes = [0, 1, 2, 3].map((variant) =>
-    buildBasaltCluster(0x6b17 + variant * 2311, 3 + (variant % 2))
+    buildBasaltCluster(0x6b17 + variant * 2311, 1 + (variant % 2))
   );
 
   const basaltVents: Array<Array<[number, number]>> = [];
@@ -246,7 +246,7 @@ export function* buildFire(ctx: WorldBuildContext): Generator<number, void, void
     // Antes eran 5 racimos fijos por zona: suficiente en una colada pequeña,
     // invisible en un mapa volcánico entero. La densidad escala con el área y
     // los racimos se dibujan instanciados (4 draw calls por zona).
-    const count = Math.max(5, Math.min(2000, Math.round(zoneArea(zone) * 0.01)));
+    const count = Math.max(1, Math.min(2000, Math.round(zoneArea(zone) * 0.01)));
     const variants = basaltMeshes.length;
     const counts = new Array<number>(variants).fill(0);
     for (let i = 0; i < count; i++) counts[(i + zoneIndex) % variants]++;
@@ -350,7 +350,7 @@ export function* buildFire(ctx: WorldBuildContext): Generator<number, void, void
       'embers',
       [fireX, 0.22, fireZ],
       zoneEmitterExtents(zone, 1.55, 0.35),
-      44,
+      1,
       0x71a3 + zoneIndex * 6131
     );
 

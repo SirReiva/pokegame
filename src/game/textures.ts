@@ -384,10 +384,10 @@ function* paintTerrainZoneSteps(
   };
 
   const paintFirePlates = function* (): Generator<number, void, void> {
-    // Basalto volcánico: placas oscuras separadas por una red de grietas.
-    // El naranja y el amarillo no van en el suelo; viven en las coronas de
-    // las rocas 3D. Aquí solo hay basalto, surcos negros y vetas frías.
-    const plateCount = 9;
+    // Basalto volcánico: una placa oscura. El naranja y el amarillo no van en
+    // el suelo; viven en las coronas de las rocas 3D. Aquí solo hay basalto y
+    // vetas frías.
+    const plateCount = 1;
     const plates: Array<{ x: number; y: number; color: string }> = [];
     for (let i = 0; i < plateCount; i++) {
       const angle = random() * Math.PI * 2;
