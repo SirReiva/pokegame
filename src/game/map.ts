@@ -12,6 +12,7 @@ import {
   isTeamId,
   isTerrainId,
   type GameMap,
+  type BarrierKind,
   type MapObjective,
   type MountainRange,
   type RespawnPoint,
@@ -209,9 +210,23 @@ function parseMountains(raw: unknown): MountainRange[] {
       throw new Error(`El separador ${index + 1} no es un objeto`);
     }
     const value = entry as Record<string, unknown>;
+    const kind = value.kind;
+    if (kind !== undefined && kind !== 'mountain' && kind !== 'wall' && kind !== 'volcano') {
+      throw new Error(
+        `El separador ${index + 1} tiene un "kind" desconocido: "${String(kind)}". ` +
+          'Disponibles: mountain, wall, volcano'
+      );
+    }
+    const parsedKind: BarrierKind =
+      kind === 'wall' ? 'wall' : kind === 'volcano' ? 'volcano' : 'mountain';
     const points = value.points;
-    if (!Array.isArray(points) || points.length < 2) {
-      throw new Error(`El separador ${index + 1} necesita al menos dos puntos`);
+    const minPoints = parsedKind === 'volcano' ? 1 : 2;
+    if (!Array.isArray(points) || points.length < minPoints) {
+      throw new Error(
+        parsedKind === 'volcano'
+          ? `El volcán ${index + 1} necesita un punto central`
+          : `El separador ${index + 1} necesita al menos dos puntos`
+      );
     }
     const parsedPoints = points.map((point, pointIndex): [number, number] => {
       if (!Array.isArray(point) || point.length < 2) {
@@ -224,15 +239,8 @@ function parseMountains(raw: unknown): MountainRange[] {
         number(point[1], `mountains[${index}].points[${pointIndex}][1]`)
       ];
     });
-    const kind = value.kind;
-    if (kind !== undefined && kind !== 'mountain' && kind !== 'wall') {
-      throw new Error(
-        `El separador ${index + 1} tiene un "kind" desconocido: "${String(kind)}". ` +
-          'Disponibles: mountain, wall'
-      );
-    }
     return {
-      kind: kind === 'wall' ? 'wall' : 'mountain',
+      kind: parsedKind,
       width: number(value.width, `mountains[${index}].width`),
       points: parsedPoints
     };

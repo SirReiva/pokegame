@@ -117,6 +117,22 @@ export function findMountainLine(pointer: PointerCellFloat): number | null {
   let best: number | null = null;
   let bestDistance = Infinity;
   pointer.map.mountains.forEach((range, rangeIndex) => {
+    if (range.kind === 'volcano') {
+      const center = range.points[0];
+      if (!center) return;
+      const point = worldToCellFloat(pointer.map, center[0], center[1]);
+      const half = range.width / pointer.map.meta.tileSize / 2;
+      // Distancia a la huella cuadrada: cero en el interior y el hueco hasta
+      // el borde fuera, para que el clic seleccione el cuadrado completo.
+      const dx = Math.max(0, Math.abs(pointer.col - point.col) - half);
+      const dy = Math.max(0, Math.abs(pointer.row - point.row) - half);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= 0.25 && distance < bestDistance) {
+        bestDistance = distance;
+        best = rangeIndex;
+      }
+      return;
+    }
     if (range.points.length < 2) return;
     const limit = Math.max(0.5, range.width / pointer.map.meta.tileSize / 2) + 0.25;
     for (let index = 1; index < range.points.length; index++) {

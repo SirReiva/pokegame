@@ -166,6 +166,7 @@ import {
   resolveTeamTerrain,
   setActiveMap,
   terrainAt,
+  volcanoColliders,
   type GameMap,
   type Team
 } from '../src/game/terrain';
@@ -399,6 +400,11 @@ function buildMapColliders(map: GameMap): Collider[] {
     });
   }
   for (const range of map.mountains) {
+    if (range.kind === 'volcano') {
+      // Mismo oclusor circular con radio de visión que usa el juego.
+      colliders.push(...volcanoColliders(range));
+      continue;
+    }
     const samples = sampleRange(range.points, 0.8);
     for (let index = 1; index < samples.length; index++) {
       const a = samples[index - 1];

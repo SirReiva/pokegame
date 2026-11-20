@@ -11,6 +11,7 @@
 import type { PickupSpawn } from './items';
 import type { Team } from './core/team';
 import type { TerrainId } from './core/terrain';
+import type { Collider } from './core/world';
 
 /** Equipos admitidos. Cada mapa activa entre dos y cuatro de ellos. */
 export type { Team } from './core/team';
@@ -91,8 +92,12 @@ export interface BaseZone {
 /** Punto de aparición de un equipo. También marca el centro de su base. */
 export interface RespawnPoint extends BaseZone {}
 
-/** Aspecto de un separador. La colisión y la visión son idénticas en ambos. */
-export type BarrierKind = 'mountain' | 'wall';
+/**
+ * Aspecto de un separador. La colisión y la visión son idénticas en los tres.
+ * El volcán es una pieza única de huella cuadrada: `points` guarda su centro y
+ * `width` el lado del cuadrado (y el diámetro de la base del cono).
+ */
+export type BarrierKind = 'mountain' | 'wall' | 'volcano';
 
 export interface MountainRange {
   /**
@@ -100,8 +105,12 @@ export interface MountainRange {
    * borradores antiguos sigan funcionando sin cambios.
    */
   kind?: BarrierKind;
-  /** Ancho total de la cresta; el jugador no puede cruzarla. */
+  /**
+   * Ancho total de la cresta; el jugador no puede cruzarla. En un volcán es el
+   * lado de su huella cuadrada.
+   */
   width: number;
+  /** Trazado de la cresta o, en un volcán, un único punto central. */
   points: Array<[number, number]>;
 }
 
@@ -186,7 +195,7 @@ let flatTerrain: Uint8Array = new Uint8Array(0);
 export const BASES: BaseZone[] = [];
 /** Equipos que participan en el mapa activo (2-4). */
 export const ACTIVE_TEAMS: Team[] = [...TEAM_IDS];
-/** Separadores del mapa activo (cordilleras y muros). */
+/** Separadores del mapa activo (cordilleras, muros y volcanes). */
 export const MOUNTAINS: MountainRange[] = [];
 /** Regiones de terrenos decorativos, para colocar props y pintar detalles. */
 export const TERRAIN_ZONES: TerrainZone[] = [];
@@ -407,18 +416,54 @@ export function cellAt(x: number, z: number): { row: number; col: number } | nul
 /** Radio del collider circular que sella el centro de cada base. */
 export const BASE_COLLIDER_RADIUS = 0.85;
 
-/** Verdadero si el punto cae dentro del trazado suavizado de un separador. */
+/**
+ * Verdadero si el punto cae dentro del trazado suavizado de un separador. Los
+ * volcanes son cuadrados centrados en su único punto.
+ */
 export function mountainRangeContains(
   range: MountainRange,
   x: number,
   z: number
 ): boolean {
+  if (range.kind === 'volcano') {
+    const center = range.points[0];
+    if (!center) return false;
+    const half = range.width / 2;
+    return Math.abs(x - center[0]) <= half && Math.abs(z - center[1]) <= half;
+  }
   return distanceToPath(x, z, range.points) <= range.width / 2;
 }
 
 /** Verdadero si la posición cae dentro de un separador intransitable. */
 export function onMountain(x: number, z: number): boolean {
   return MOUNTAINS.some((range) => mountainRangeContains(range, x, z));
+}
+
+/**
+ * Colliders de un volcán. La base del cono es un círculo inscrito en la huella
+ * cuadrada, y la visión usa exactamente ese mismo radio: el volcán tapa la
+ * línea de visión en todo su volumen, igual que una cordillera.
+ *
+ * El radio de visión **no** puede ser mayor que el físico. La resolución de
+ * movimiento deja al actor a `radius + CONFIG.player.radius` del centro (0,42
+ * más), y `blocksSight` ignora un círculo cuando el observador cae dentro de su
+ * `sightRadius` (regla pensada para no cegar a quien está bajo la copa de un
+ * árbol). Con `width * 0.65`, un jugador pegado al volcán quedaba dentro del
+ * oclusor y veía a través de él; con `width / 2` siempre está fuera.
+ */
+export function volcanoColliders(range: MountainRange): Collider[] {
+  const center = range.points[0];
+  if (!center) return [];
+  const [x, z] = center;
+  return [
+    {
+      type: 'circle',
+      x,
+      z,
+      radius: range.width / 2,
+      sightRadius: range.width / 2
+    }
+  ];
 }
 
 /** Igual que `onMountain`, pero para un mapa que aún no está activo. */

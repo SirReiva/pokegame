@@ -199,6 +199,17 @@ function* buildWorldSteps(
           Math.sin(time * 6.3 + ember.phase * 1.7) * 0.035;
       }
 
+      // El cráter de los volcanes respira con la misma cadencia cálida, pero
+      // algo más intensa: es una erupción, no una costra de lava.
+      for (const volcano of ctx.volcanoLights!) {
+        const light = volcano.entity.light;
+        if (!light) continue;
+        light.intensity =
+          0.92 +
+          Math.sin(time * 2.2 + volcano.phase) * 0.12 +
+          Math.sin(time * 5.7 + volcano.phase * 1.4) * 0.06;
+      }
+
       // La luz del bosque umbrío respira más despacio: un pulso largo con un
       // temblor corto, como una llama fría que se aviva y se apaga.
       for (const glow of ctx.ghostLights!) {
@@ -305,6 +316,8 @@ function* buildWorldSteps(
       detailTextures.bark.destroy();
       detailTextures.mountainRock.destroy();
       detailTextures.wallStone.destroy();
+      detailTextures.volcanoRock.destroy();
+      detailTextures.volcanoGlow.destroy();
       for (const texture of detailTextures.leaves) texture.destroy();
       ctx.cactusMesh!.destroy();
       for (const mesh of ctx.grassClusterMeshes!) mesh.destroy();
@@ -317,6 +330,7 @@ function* buildWorldSteps(
       for (const mesh of ctx.ghostTreeMeshes!) mesh.destroy();
       for (const mesh of ctx.mountainPeakMeshes!) mesh.destroy();
       for (const mesh of ctx.wallSegmentMeshes!) mesh.destroy();
+      for (const mesh of ctx.volcanoMeshes!) mesh.destroy();
       ctx.butterflyBodyMesh!.destroy();
       ctx.butterflyWingRight!.destroy();
       ctx.butterflyWingLeft!.destroy();

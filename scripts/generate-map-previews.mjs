@@ -307,6 +307,22 @@ function renderMapPreview(map) {
       3,
       (worldWidth / (map.cols * map.tileSize)) * width
     );
+    if (range.kind === 'volcano') {
+      // Los volcanes se ven como un cuadrado con su cráter, igual que en el
+      // editor: son piezas únicas de huella cuadrada.
+      const center = points[0];
+      const half = bandWidth / 2;
+      canvas.fillStyle = 'rgba(48, 20, 16, 0.58)';
+      canvas.fillRect(center.x - half, center.y - half, bandWidth, bandWidth);
+      canvas.strokeStyle = '#ff8a30';
+      canvas.lineWidth = Math.max(1, bandWidth * 0.08);
+      canvas.strokeRect(center.x - half, center.y - half, bandWidth, bandWidth);
+      canvas.fillStyle = '#ff5c12';
+      canvas.beginPath();
+      canvas.arc(center.x, center.y, Math.max(2, bandWidth * 0.2), 0, Math.PI * 2);
+      canvas.fill();
+      continue;
+    }
     const isWall = range.kind === 'wall';
     strokePolyline(
       canvas,

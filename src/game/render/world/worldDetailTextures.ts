@@ -13,6 +13,7 @@ import {
   createMountainRockCanvas,
   createRainCanvas,
   createSkyCanvas,
+  createVolcanoCanvases,
   createWallStoneCanvas,
   textureFromCanvas
 } from '../../textures';
@@ -24,6 +25,8 @@ export interface WorldDetailTextures {
   leaves: pc.Texture[];
   mountainRock: pc.Texture;
   wallStone: pc.Texture;
+  volcanoRock: pc.Texture;
+  volcanoGlow: pc.Texture;
 }
 
 export function* createWorldDetailTextures(
@@ -83,12 +86,31 @@ export function* createWorldDetailTextures(
     mipmaps: true
   });
 
+  // Basalto y lava del volcán: dos tiles gemelos (difuso y emisivo) con las
+  // mismas vetas, generados a baja resolución para conservar el pixel art.
+  yield 1;
+  const volcanoCanvases = createVolcanoCanvases();
+  const volcanoRockTexture = textureFromCanvas(device, volcanoCanvases.rock, {
+    ...pixelOptions,
+    name: 'volcano-rock',
+    repeat: true,
+    flipY: true
+  });
+  const volcanoGlowTexture = textureFromCanvas(device, volcanoCanvases.glow, {
+    ...pixelOptions,
+    name: 'volcano-glow',
+    repeat: true,
+    flipY: true
+  });
+
   return {
     sky: skyTexture,
     rain: rainTexture,
     bark: barkTexture,
     leaves: leafTextures,
     mountainRock: mountainRockTexture,
-    wallStone: wallStoneTexture
+    wallStone: wallStoneTexture,
+    volcanoRock: volcanoRockTexture,
+    volcanoGlow: volcanoGlowTexture
   };
 }

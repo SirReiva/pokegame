@@ -693,7 +693,8 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
       if (
         range.kind !== undefined &&
         range.kind !== "mountain" &&
-        range.kind !== "wall"
+        range.kind !== "wall" &&
+        range.kind !== "volcano"
       ) {
         issues.push(`El separador ${index + 1} tiene un tipo desconocido.`);
       }
@@ -702,8 +703,13 @@ const VALIDATION_RULES: readonly MapValidationRule[] = [
           `El ancho del separador ${index + 1} debe ser mayor que cero.`,
         );
       }
-      if (range.points.length < 2) {
-        issues.push(`El separador ${index + 1} necesita al menos dos puntos.`);
+      const minPoints = range.kind === "volcano" ? 1 : 2;
+      if (range.points.length < minPoints) {
+        issues.push(
+          range.kind === "volcano"
+            ? `El volcán ${index + 1} necesita su punto central.`
+            : `El separador ${index + 1} necesita al menos dos puntos.`,
+        );
       }
       if (
         range.points.some(

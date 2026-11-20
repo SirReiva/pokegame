@@ -78,6 +78,7 @@ export interface WorldBuildContext {
   cactusMesh?: pc.Mesh;
   mountainPeakMeshes?: pc.Mesh[];
   wallSegmentMeshes?: pc.Mesh[];
+  volcanoMeshes?: pc.Mesh[];
   iceClusterMeshes?: pc.Mesh[];
   basaltMeshes?: pc.Mesh[];
   grassClusterMeshes?: pc.Mesh[];
@@ -89,6 +90,7 @@ export interface WorldBuildContext {
 
   // --- Animación por frame --------------------------------------------------
   emberLights?: Array<{ entity: pc.Entity; phase: number }>;
+  volcanoLights?: Array<{ entity: pc.Entity; phase: number }>;
   ghostLights?: Array<{ entity: pc.Entity; phase: number }>;
   ghostTrees?: Array<{
     entity: pc.Entity;

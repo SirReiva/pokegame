@@ -78,7 +78,9 @@ export const DEFAULT_MOUNTAIN_WIDTH = 2.2;
 
 /** Etiqueta visible de un tipo de separador. */
 export function barrierLabel(kind: BarrierKind | undefined): string {
-  return kind === 'wall' ? 'Muro' : 'Cordillera';
+  if (kind === 'wall') return 'Muro';
+  if (kind === 'volcano') return 'Volcán';
+  return 'Cordillera';
 }
 
 export const TOOLS: Array<{ id: Tool; label: string; key: string; title: string }> = [
@@ -90,7 +92,7 @@ export const TOOLS: Array<{ id: Tool; label: string; key: string; title: string 
     id: 'mountain',
     label: 'Separador',
     key: 'M',
-    title: 'Cordilleras y muros: haz clic para añadir puntos; doble clic o Enter para cerrar'
+    title: 'Cordilleras, muros y volcanes: haz clic para añadir puntos; doble clic o Enter para cerrar'
   },
   {
     id: 'pickup',

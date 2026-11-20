@@ -37,6 +37,7 @@ import {
 } from '../game/terrain';
 import { btnClass } from './buttonStyles';
 import { drawEditorCanvas } from './editor/editorCanvas';
+import type { VolcanoDraft } from './editor/editorCanvas';
 import {
   cellFromPointer as cellFromPointerAt,
   findMountainLine as findMountainLineAt,
@@ -108,6 +109,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   const [barrierKind, setBarrierKind] = useState<BarrierKind>('mountain');
   const [selectedMountain, setSelectedMountain] = useState<number | null>(null);
   const [draftPoints, setDraftPoints] = useState<Array<[number, number]>>([]);
+  const [volcanoDraft, setVolcanoDraft] = useState<VolcanoDraft | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridAreaRef = useRef<HTMLDivElement | null>(null);
@@ -126,8 +128,25 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     pointIndex: number;
     moved: boolean;
   } | null>(null);
+  const volcanoAnchorRef = useRef<{
+    x: number;
+    z: number;
+    row: number;
+    col: number;
+  } | null>(null);
+  const volcanoDraftRef = useRef<VolcanoDraft | null>(null);
 
   const map = state.map;
+
+  const setVolcanoDraftNow = (draft: VolcanoDraft | null) => {
+    volcanoDraftRef.current = draft;
+    setVolcanoDraft(draft);
+  };
+
+  const clearVolcanoDrag = () => {
+    volcanoAnchorRef.current = null;
+    setVolcanoDraftNow(null);
+  };
 
   const commit = (next: EditorState) => {
     stateRef.current = next;
@@ -136,7 +155,10 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
 
   /** Cambia de herramienta y descarta el trazado de cordillera a medias. */
   const changeTool = (next: Tool) => {
-    if (next !== 'mountain') setDraftPoints([]);
+    if (next !== 'mountain') {
+      setDraftPoints([]);
+      clearVolcanoDrag();
+    }
     setTool(next);
   };
 
@@ -382,6 +404,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     setMountainWidth(range.width);
     setBarrierKind(range.kind ?? 'mountain');
     setDraftPoints([]);
+    clearVolcanoDrag();
     setTool('mountain');
   };
 
@@ -391,10 +414,36 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
    */
   const changeBarrierKind = (kind: BarrierKind) => {
     setBarrierKind(kind);
+    setDraftPoints([]);
+    clearVolcanoDrag();
     if (selectedMountain === null) return;
     mutateMountains((mountains) => {
       const range = mountains[selectedMountain];
       if (!range || (range.kind ?? 'mountain') === kind) return false;
+      if (kind === 'volcano') {
+        // Un volcán solo necesita un punto: se usa el centro del trazado.
+        const points = range.points;
+        if (points.length > 0) {
+          let x = 0;
+          let z = 0;
+          for (const point of points) {
+            x += point[0];
+            z += point[1];
+          }
+          range.points = [[x / points.length, z / points.length]];
+        }
+      } else if (range.kind === 'volcano' && range.points.length < 2) {
+        // Al volver a cordillera o muro hace falta un trazado: se abre el
+        // centro en un tramo corto del ancho del volcán.
+        const center = range.points[0];
+        if (center) {
+          const offset = range.width / 2;
+          range.points = [
+            [center[0] - offset, center[1]],
+            [center[0] + offset, center[1]]
+          ];
+        }
+      }
       range.kind = kind;
       return true;
     }, true);
@@ -404,11 +453,13 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     setTool('mountain');
     setSelectedMountain(null);
     setDraftPoints([]);
+    clearVolcanoDrag();
   };
 
   const finishDraft = () => {
     const current = stateRef.current.map;
     if (!current) return;
+    if (barrierKind === 'volcano') return;
     if (!(mountainWidth > 0)) {
       setToast('El ancho del separador debe ser mayor que cero.');
       return;
@@ -475,7 +526,9 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         const pointHit = findMountainPoint(event);
         if (pointHit) {
           const range = current.mountains[pointHit.rangeIndex];
-          if (range && range.points.length <= 2) {
+          if (range?.kind === 'volcano') {
+            setToast('El volcán necesita su centro; usa la × de la lista para quitarlo.');
+          } else if (range && range.points.length <= 2) {
             setToast('Un separador necesita al menos dos puntos.');
           } else if (range) {
             const mountains = cloneMountains(current.mountains);
@@ -527,6 +580,18 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         cell.col
       );
       setSelectedMountain(null);
+      if (barrierKind === 'volcano') {
+        // Se muestra la huella cuadrada desde el primer clic; al arrastrar se
+        // ajusta el cuadrado y al soltar se crea el volcán.
+        volcanoAnchorRef.current = {
+          x: point.x,
+          z: point.z,
+          row: cell.row,
+          col: cell.col
+        };
+        setVolcanoDraftNow({ x: point.x, z: point.z, size: mountainWidth });
+        return;
+      }
       setDraftPoints([[point.x, point.z]]);
       return;
     }
@@ -555,6 +620,46 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
         ? previous
         : cell
     );
+
+    const volcanoAnchor = volcanoAnchorRef.current;
+    if (volcanoAnchor) {
+      if (!cell) return;
+      const current = stateRef.current.map;
+      if (!current) return;
+      // Mientras el puntero siga en la celda inicial se mantiene la huella del
+      // campo «Ancho»; al salir, el arrastre define un cuadrado de esquina a
+      // esquina y el campo se actualiza con el lado resultante.
+      if (cell.row === volcanoAnchor.row && cell.col === volcanoAnchor.col) {
+        setVolcanoDraftNow({
+          x: volcanoAnchor.x,
+          z: volcanoAnchor.z,
+          size: mountainWidth
+        });
+        return;
+      }
+      const point = cellCenter(
+        current.cols,
+        current.rows,
+        current.meta.tileSize,
+        cell.row,
+        cell.col
+      );
+      const left = Math.min(volcanoAnchor.x, point.x);
+      const right = Math.max(volcanoAnchor.x, point.x);
+      const top = Math.min(volcanoAnchor.z, point.z);
+      const bottom = Math.max(volcanoAnchor.z, point.z);
+      const side = Math.max(
+        right - left,
+        bottom - top,
+        current.meta.tileSize * 0.5
+      );
+      setVolcanoDraftNow({
+        x: (left + right) / 2,
+        z: (top + bottom) / 2,
+        size: side
+      });
+      return;
+    }
 
     const mountainDrag = mountainDragRef.current;
     if (mountainDrag) {
@@ -608,6 +713,33 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (volcanoAnchorRef.current) {
+      const draft = volcanoDraftRef.current;
+      volcanoAnchorRef.current = null;
+      setVolcanoDraftNow(null);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      const current = stateRef.current.map;
+      if (!current || !draft || !(draft.size > 0)) return;
+      // Lado con una décima de precisión, para que el campo «Ancho» no muestre
+      // decimales interminables al soltar el arrastre.
+      const size = Math.max(0.2, Math.round(draft.size * 10) / 10);
+      const mountains = [
+        ...cloneMountains(current.mountains),
+        {
+          kind: 'volcano' as const,
+          width: size,
+          points: [[draft.x, draft.z] as [number, number]]
+        }
+      ];
+      updateMap({ ...current, mountains }, true);
+      setSelectedMountain(mountains.length - 1);
+      setMountainWidth(size);
+      setToast('Volcán añadido. Arrastra su centro para moverlo.');
+      return;
+    }
+
     if (mountainDragRef.current) {
       mountainDragRef.current = null;
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -638,7 +770,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
   };
 
   const onDoubleClick = (event: ReactMouseEvent<HTMLCanvasElement>) => {
-    if (tool !== 'mountain') return;
+    if (tool !== 'mountain' || barrierKind === 'volcano') return;
     if (draftPoints.length >= 2) {
       event.preventDefault();
       finishDraft();
@@ -956,6 +1088,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
       tool,
       selectedMountain,
       draftPoints,
+      volcanoDraft,
       mountainWidth,
       barrierKind
     });
@@ -968,6 +1101,7 @@ export function MapEditorScreen({ maps, onExit }: MapEditorScreenProps) {
     tool,
     selectedMountain,
     draftPoints,
+    volcanoDraft,
     mountainWidth,
     barrierKind
   ]);

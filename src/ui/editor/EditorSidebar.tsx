@@ -192,6 +192,13 @@ export function EditorPropertiesPanel({
     map && selectedMountain !== null ? map.mountains[selectedMountain] : undefined;
   const selectedKind = selectedRange ? (selectedRange.kind ?? 'mountain') : barrierKind;
   const mountainWidthValue = selectedRange?.width ?? mountainWidth;
+  const widthLabel = selectedRange
+    ? selectedKind === 'volcano'
+      ? `Lado del volcán ${selectedMountain! + 1}`
+      : `Ancho del ${selectedKind === 'wall' ? 'muro' : 'cordillera'} ${selectedMountain! + 1}`
+    : selectedKind === 'volcano'
+      ? 'Lado del nuevo volcán'
+      : 'Ancho del nuevo separador';
 
   return (
     <aside className="flex w-71.5 flex-none flex-col gap-5 overflow-y-auto border-l border-line bg-night-800/80 p-4 max-[980px]:w-full max-[980px]:border-l-0 max-[980px]:border-t">
@@ -456,9 +463,11 @@ export function EditorPropertiesPanel({
                       {label} {index + 1}
                     </span>
                     <span className="block font-mono text-9.6 text-steel-450">
-                      {range.points.length}{' '}
-                      {range.points.length === 1 ? 'punto' : 'puntos'} · ancho{' '}
-                      {Math.round(range.width * 10) / 10}
+                      {range.kind === 'volcano'
+                        ? `lado ${Math.round(range.width * 10) / 10}`
+                        : `${range.points.length} ${
+                            range.points.length === 1 ? 'punto' : 'puntos'
+                          } · ancho ${Math.round(range.width * 10) / 10}`}
                     </span>
                   </button>
                   <button
@@ -487,33 +496,41 @@ export function EditorPropertiesPanel({
               : 'Tipo del nuevo separador'}
           </span>
           <div className="flex gap-1.5">
-            {(['mountain', 'wall'] as const).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={`${btnClass(selectedKind === kind ? 'primary' : 'ghost', 'tiny')} flex-1`}
-                onClick={() => changeBarrierKind(kind)}
-                disabled={!map}
-                title={
-                  kind === 'wall'
-                    ? 'Muro de piedra con almenas: misma colisión y visión'
-                    : 'Cordillera de picos: misma colisión y visión'
+            {(
+              [
+                {
+                  kind: 'mountain',
+                  label: 'Cordillera',
+                  title: 'Cordillera de picos: misma colisión y visión'
+                },
+                {
+                  kind: 'wall',
+                  label: 'Muro',
+                  title: 'Muro de piedra con almenas: misma colisión y visión'
+                },
+                {
+                  kind: 'volcano',
+                  label: 'Volcán',
+                  title: 'Cono truncado de lava sobre una huella cuadrada: misma colisión y visión'
                 }
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.kind}
+                type="button"
+                className={`${btnClass(selectedKind === option.kind ? 'primary' : 'ghost', 'tiny')} flex-1`}
+                onClick={() => changeBarrierKind(option.kind)}
+                disabled={!map}
+                title={option.title}
               >
-                {kind === 'wall' ? 'Muro' : 'Cordillera'}
+                {option.label}
               </button>
             ))}
           </div>
         </div>
 
         <label className={`${fieldClass} mt-2`}>
-          <span>
-            {selectedMountain !== null
-              ? `Ancho del ${selectedKind === 'wall' ? 'muro' : 'cordillera'} ${
-                  selectedMountain + 1
-                }`
-              : 'Ancho del nuevo separador'}
-          </span>
+          <span>{widthLabel}</span>
           <input
             className={inputClass}
             type="number"
@@ -532,7 +549,7 @@ export function EditorPropertiesPanel({
             onClick={startMountainDraft}
             disabled={!map}
           >
-            Dibujar separador
+            {barrierKind === 'volcano' ? 'Colocar volcán' : 'Dibujar separador'}
           </button>
           {selectedMountain !== null && (
             <button
@@ -570,9 +587,19 @@ export function EditorPropertiesPanel({
         )}
 
         <p className="mt-2 text-10.88/normal text-muted">
-          Elige arriba si el trazado es cordillera o muro. Haz clic para añadir puntos y doble
-          clic o <KeyPill>Enter</KeyPill> para cerrar. Arrastra un punto para moverlo; doble
-          clic sobre la línea añade uno y el clic derecho sobre un punto lo quita.
+          {barrierKind === 'volcano' ? (
+            <>
+              El volcán ocupa siempre una huella cuadrada. Haz clic para colocarlo con el lado
+              actual o arrastra sobre la rejilla para definir el cuadrado; después puedes moverlo
+              arrastrando su centro.
+            </>
+          ) : (
+            <>
+              Elige arriba si el trazado es cordillera o muro. Haz clic para añadir puntos y doble
+              clic o <KeyPill>Enter</KeyPill> para cerrar. Arrastra un punto para moverlo; doble
+              clic sobre la línea añade uno y el clic derecho sobre un punto lo quita.
+            </>
+          )}
         </p>
       </section>
 

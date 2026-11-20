@@ -15,7 +15,17 @@ import { teamColor } from './editorModel';
 
 const MOUNTAIN_COLOR = 'rgba(216, 199, 170, 0.9)';
 const WALL_COLOR = 'rgba(184, 196, 210, 0.92)';
+const VOLCANO_COLOR = 'rgba(255, 138, 48, 0.95)';
+const VOLCANO_FILL = 'rgba(48, 20, 16, 0.58)';
+const VOLCANO_CRATER = 'rgba(255, 92, 18, 0.92)';
 const MOUNTAIN_SELECTED_COLOR = '#7ac74c';
+
+/** Hueco cuadrado del volcán en píxeles del canvas. */
+export interface VolcanoDraft {
+  x: number;
+  z: number;
+  size: number;
+}
 
 export interface EditorCanvasState {
   canvas: HTMLCanvasElement;
@@ -25,6 +35,7 @@ export interface EditorCanvasState {
   tool: Tool;
   selectedMountain: number | null;
   draftPoints: Array<[number, number]>;
+  volcanoDraft: VolcanoDraft | null;
   mountainWidth: number;
   barrierKind: BarrierKind;
   rect: EditorRect | null;
@@ -39,6 +50,7 @@ export function drawEditorCanvas({
   tool,
   selectedMountain,
   draftPoints,
+  volcanoDraft,
   mountainWidth,
   barrierKind,
   rect,
@@ -104,10 +116,45 @@ export function drawEditorCanvas({
     }
   };
 
+  /** Huella cuadrada de un volcán: base oscura, borde naranja y cráter. */
+  const drawVolcanoSquare = (
+    centerX: number,
+    centerY: number,
+    side: number,
+    selected: boolean,
+    dashed = false
+  ) => {
+    const half = side / 2;
+    context.save();
+    if (dashed) context.setLineDash([Math.max(4, side * 0.18), Math.max(3, side * 0.12)]);
+    context.fillStyle = VOLCANO_FILL;
+    context.fillRect(centerX - half, centerY - half, side, side);
+    context.lineWidth = Math.max(1, Math.min(2.5, cellSize * 0.16));
+    context.strokeStyle = selected ? MOUNTAIN_SELECTED_COLOR : VOLCANO_COLOR;
+    context.strokeRect(centerX - half, centerY - half, side, side);
+    context.setLineDash([]);
+    // El cráter se lee como un punto de lava dentro de la huella.
+    const crater = Math.max(2, side * 0.2);
+    context.beginPath();
+    context.arc(centerX, centerY, crater, 0, Math.PI * 2);
+    context.fillStyle = VOLCANO_CRATER;
+    context.fill();
+    context.lineWidth = Math.max(1, crater * 0.32);
+    context.strokeStyle = 'rgba(52, 18, 10, 0.95)';
+    context.stroke();
+    context.restore();
+  };
+
   const showMountainHandles = tool === 'mountain';
   map.mountains.forEach((range, index) => {
     if (range.points.length === 0) return;
     const selected = showMountainHandles && selectedMountain === index;
+    if (range.kind === 'volcano') {
+      const [x, z] = range.points[0];
+      const point = toCanvas(x, z);
+      drawVolcanoSquare(point.x, point.y, (range.width / map.meta.tileSize) * cellSize, selected);
+      return;
+    }
     const isWall = range.kind === 'wall';
     const bandWidth = Math.max(3, (range.width / map.meta.tileSize) * cellSize);
     context.save();
@@ -206,7 +253,9 @@ export function drawEditorCanvas({
           ? MOUNTAIN_SELECTED_COLOR
           : range.kind === 'wall'
             ? 'rgba(214, 223, 234, 0.9)'
-            : 'rgba(235, 226, 209, 0.88)';
+            : range.kind === 'volcano'
+              ? VOLCANO_COLOR
+              : 'rgba(235, 226, 209, 0.88)';
         context.fill();
         context.lineWidth = Math.max(1, radius * 0.35);
         context.strokeStyle = 'rgba(8, 16, 26, 0.9)';
@@ -215,7 +264,7 @@ export function drawEditorCanvas({
     });
   }
 
-  if (showMountainHandles && draftPoints.length > 0) {
+  if (showMountainHandles && draftPoints.length > 0 && barrierKind !== 'volcano') {
     const preview = hover
       ? toCanvas(
           (hover.col + 0.5) * map.meta.tileSize - halfX,
@@ -257,6 +306,17 @@ export function drawEditorCanvas({
       context.stroke();
     });
     context.restore();
+  }
+
+  if (showMountainHandles && volcanoDraft) {
+    const point = toCanvas(volcanoDraft.x, volcanoDraft.z);
+    drawVolcanoSquare(
+      point.x,
+      point.y,
+      (volcanoDraft.size / map.meta.tileSize) * cellSize,
+      true,
+      true
+    );
   }
 
   if (rect) {

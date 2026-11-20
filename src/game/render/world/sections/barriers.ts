@@ -1,11 +1,11 @@
 /** Sección del generador de mundo. */
 
 import * as pc from 'playcanvas';
-import { randomPointInZone, zoneArea } from '../../../terrain';
+import { randomPointInZone, volcanoColliders, zoneArea } from '../../../terrain';
 import type { WorldBuildContext } from '../context';
 import { random } from '../random';
 import { MOUNTAIN_HEIGHT_SCALE, WALL_HEIGHT } from '../tuning';
-import { standard } from '../worldParts';
+import { hex, standard } from '../worldParts';
 
 export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, void> {
   const {
@@ -19,11 +19,14 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
     materials,
     worldRoot,
     barrierMeshInstances,
-    instancedFoliageBuffers
+    instancedFoliageBuffers,
+    particles
   } = ctx;
   const {
     mountainRock: mountainRockTexture,
-    wallStone: wallStoneTexture
+    wallStone: wallStoneTexture,
+    volcanoRock: volcanoRockTexture,
+    volcanoGlow: volcanoGlowTexture
   } = ctx.detailTextures;
   yield 1;
   // --- Separadores: cordilleras ---------------------------------------------
@@ -327,6 +330,192 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
     buildWallSegment(0x5c21 + variant * 3571)
   );
 
+  yield 1;
+  // --- Volcanes -------------------------------------------------------------
+  // Cono truncado de huella cuadrada. La base mide exactamente el ancho del
+  // separador y la altura crece con él, así que el volcán nunca se estira como
+  // una cordillera. La roca y las vetas salen del tile de basalto; el mapa de
+  // emisión solo enciende las vetas y el cráter.
+  const volcanoMaterial = standard({
+    diffuse: '#ffffff',
+    diffuseMap: volcanoRockTexture,
+    tiling: [2, 1],
+    specular: '#1d0f0a',
+    gloss: 0.1,
+    cull: pc.CULLFACE_NONE
+  });
+  volcanoMaterial.diffuseVertexColor = true;
+  volcanoMaterial.emissive = new pc.Color(1, 1, 1);
+  volcanoMaterial.emissiveMap = volcanoGlowTexture;
+  volcanoMaterial.emissiveMapTiling = new pc.Vec2(2, 1);
+  volcanoMaterial.emissiveIntensity = 1.15;
+  volcanoMaterial.update();
+  materials.push(volcanoMaterial);
+
+  const VOLCANO_DARK: [number, number, number] = [0.5, 0.48, 0.48];
+  const VOLCANO_LIGHT: [number, number, number] = [1, 0.86, 0.76];
+
+  const buildVolcano = (seed: number): pc.Mesh => {
+    const rand = random(seed);
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    const sides = 12 + Math.floor(rand() * 5);
+    const bands = 4;
+    const topRadius = 0.17 + rand() * 0.05;
+    const baseRadius = 0.5;
+    const phase = rand() * Math.PI * 2;
+
+    const push = (
+      x: number,
+      y: number,
+      z: number,
+      nx: number,
+      ny: number,
+      nz: number,
+      color: [number, number, number],
+      u: number,
+      v: number
+    ) => {
+      positions.push(x, y, z);
+      normals.push(nx, ny, nz);
+      colors.push(color[0], color[1], color[2], 1);
+      uvs.push(u, v);
+    };
+
+    const shade = (t: number): [number, number, number] => {
+      const jitter = (rand() - 0.5) * 0.08;
+      const s = Math.min(1, Math.max(0, t + jitter));
+      return [
+        VOLCANO_DARK[0] + (VOLCANO_LIGHT[0] - VOLCANO_DARK[0]) * s,
+        VOLCANO_DARK[1] + (VOLCANO_LIGHT[1] - VOLCANO_DARK[1]) * s,
+        VOLCANO_DARK[2] + (VOLCANO_LIGHT[2] - VOLCANO_DARK[2]) * s
+      ];
+    };
+
+    // Anillos del cono: la base es ancha y el radio se cierra hacia la punta
+    // truncada. Las ondulaciones son pequeñas para que la silueta siga siendo
+    // un cono, no una sierra.
+    const rings: Array<Array<[number, number, number]>> = [];
+    for (let band = 0; band <= bands; band++) {
+      const t = band / bands;
+      const radius = topRadius + (baseRadius - topRadius) * Math.pow(1 - t, 0.8);
+      const ring: Array<[number, number, number]> = [];
+      for (let s = 0; s < sides; s++) {
+        const angle = phase + (s / sides) * Math.PI * 2;
+        const wobble = band === 0 ? 0.92 + rand() * 0.08 : 0.9 + rand() * 0.14;
+        ring.push([
+          Math.cos(angle) * radius * wobble,
+          t,
+          Math.sin(angle) * radius * wobble
+        ]);
+      }
+      rings.push(ring);
+    }
+
+    for (let band = 0; band < bands; band++) {
+      for (let s = 0; s < sides; s++) {
+        const next = (s + 1) % sides;
+        const a = rings[band][s];
+        const b = rings[band][next];
+        const c = rings[band + 1][next];
+        const d = rings[band + 1][s];
+
+        const ux = b[0] - a[0];
+        const uy = b[1] - a[1];
+        const uz = b[2] - a[2];
+        const vx = d[0] - a[0];
+        const vy = d[1] - a[1];
+        const vz = d[2] - a[2];
+        let nx = uy * vz - uz * vy;
+        let ny = uz * vx - ux * vz;
+        let nz = ux * vy - uy * vx;
+        const cx = (a[0] + b[0] + c[0] + d[0]) / 4;
+        const cz = (a[2] + b[2] + c[2] + d[2]) / 4;
+        if (nx * cx + nz * cz < 0) {
+          nx = -nx;
+          ny = -ny;
+          nz = -nz;
+        }
+        const normalLength = Math.hypot(nx, ny, nz) || 1;
+        nx /= normalLength;
+        ny /= normalLength;
+        nz /= normalLength;
+
+        const start = positions.length / 3;
+        const u0 = s / sides;
+        const u1 = (s + 1) / sides;
+        const v0 = (band / bands) * 0.999;
+        const v1 = ((band + 1) / bands) * 0.999;
+        push(a[0], a[1], a[2], nx, ny, nz, shade(band / bands), u0, v0);
+        push(b[0], b[1], b[2], nx, ny, nz, shade(band / bands), u1, v0);
+        push(c[0], c[1], c[2], nx, ny, nz, shade((band + 1) / bands), u1, v1);
+        push(d[0], d[1], d[2], nx, ny, nz, shade((band + 1) / bands), u0, v1);
+        indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+      }
+    }
+
+    // Punta truncada: un anillo interior ligeramente hundido y una tapa plana.
+    // Todas las UVs de esta zona apuntan a la banda de lava del tile, de modo
+    // que el cráter se lee incandescente desde la cámara.
+    const topRing = rings[bands];
+    const innerRadius = topRadius * (0.52 + rand() * 0.1);
+    const innerRing: Array<[number, number, number]> = [];
+    for (let s = 0; s < sides; s++) {
+      const angle = phase + (s / sides) * Math.PI * 2;
+      innerRing.push([
+        Math.cos(angle) * innerRadius,
+        0.962 + rand() * 0.012,
+        Math.sin(angle) * innerRadius
+      ]);
+    }
+    const craterColor: [number, number, number] = [1, 0.78, 0.5];
+    for (let s = 0; s < sides; s++) {
+      const next = (s + 1) % sides;
+      const a = topRing[s];
+      const b = topRing[next];
+      const c = innerRing[next];
+      const d = innerRing[s];
+      const start = positions.length / 3;
+      const u0 = s / sides;
+      const u1 = (s + 1) / sides;
+      push(a[0], a[1], a[2], 0, 1, 0, craterColor, u0, 0.992);
+      push(b[0], b[1], b[2], 0, 1, 0, craterColor, u1, 0.992);
+      push(c[0], c[1], c[2], 0, 1, 0, craterColor, u1, 0.998);
+      push(d[0], d[1], d[2], 0, 1, 0, craterColor, u0, 0.998);
+      indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+    }
+    const center: [number, number, number] = [0, 0.945, 0];
+    for (let s = 0; s < sides; s++) {
+      const next = (s + 1) % sides;
+      const a = innerRing[s];
+      const b = innerRing[next];
+      const start = positions.length / 3;
+      push(center[0], center[1], center[2], 0, 1, 0, craterColor, 0.5, 0.996);
+      push(a[0], a[1], a[2], 0, 1, 0, craterColor, s / sides, 0.998);
+      push(b[0], b[1], b[2], 0, 1, 0, craterColor, (s + 1) / sides, 0.998);
+      indices.push(start, start + 1, start + 2);
+    }
+
+    const mesh = new pc.Mesh(device);
+    mesh.setPositions(positions);
+    mesh.setNormals(normals);
+    mesh.setColors(colors);
+    mesh.setUvs(0, uvs);
+    mesh.setIndices(indices);
+    mesh.update();
+    return mesh;
+  };
+
+  const volcanoMeshes = [0, 1, 2, 3].map((variant) =>
+    buildVolcano(0x9f3d + variant * 5231)
+  );
+
+  const volcanoLights: Array<{ entity: pc.Entity; phase: number }> = [];
+
   /** Muestrea el trazado suavizado de una cresta (igual que `terrain.ts`). */
   const sampleRange = (
     points: Array<[number, number]>,
@@ -368,6 +557,73 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
 
   mountains.forEach((range, rangeIndex) => {
     const rand = random(0x7d31 + rangeIndex * 7919);
+
+    if (range.kind === 'volcano') {
+      const center = range.points[0];
+      if (!center) return;
+      const [x, z] = center;
+      const width = Math.max(0.2, range.width);
+      const height = width * (0.82 + rand() * 0.14);
+
+      // Un solo cono por volcán: nunca se estira con el trazado. La huella es
+      // el cuadrado de lado `width`, y la base circular del cono queda inscrita
+      // en él.
+      const volcano = new pc.Entity(`volcano-${rangeIndex}`);
+      volcano.setLocalPosition(x, 0.02, z);
+      volcano.setLocalEulerAngles(0, rand() * 360, 0);
+      volcano.setLocalScale(width, height, width);
+      volcano.addComponent('render');
+      volcano.render!.castShadows = true;
+      volcano.render!.receiveShadows = true;
+      const mesh = volcanoMeshes[rangeIndex % volcanoMeshes.length];
+      const instance = new pc.MeshInstance(mesh, volcanoMaterial);
+      instance.castShadows = true;
+      instance.receiveShadows = true;
+      volcano.render!.meshInstances = [instance];
+      barrierMeshInstances.push(instance);
+      worldRoot.addChild(volcano);
+      created.push(volcano);
+
+      // Visión y colisión como una cordillera: el círculo de la base tapa la
+      // línea de visión en todo el volumen del cono y la niebla proyecta su
+      // cuña detrás. El radio de visión es el de la base, no el de una cresta:
+      // si fuera mayor, un jugador pegado quedaría dentro del oclusor y vería
+      // a través (ver `volcanoColliders`).
+      colliders.push(...volcanoColliders(range));
+
+      // Erupción: chispas que brotan del cráter y una columna corta de humo.
+      // El foco luminoso tiñe la falda y parpadea en el bucle de `world.ts`.
+      const seed = 0x4c11 + rangeIndex * 6197;
+      particles.emit(
+        'embers',
+        [x, height * 0.95, z],
+        new pc.Vec3(width * 0.3, width * 0.55, width * 0.3),
+        Math.max(14, Math.round(width * 16)),
+        seed
+      );
+      particles.emit(
+        'fireSmoke',
+        [x, height * 0.98, z],
+        new pc.Vec3(width * 0.28, width * 0.35, width * 0.28),
+        Math.max(5, Math.round(width * 4)),
+        seed + 1
+      );
+
+      const glow = new pc.Entity(`volcano-glow-${rangeIndex}`);
+      glow.addComponent('light', {
+        type: 'omni',
+        color: hex('#ff5a1a'),
+        intensity: 0.9,
+        range: width * 2.4,
+        castShadows: false
+      });
+      glow.setPosition(x, height * 0.9, z);
+      worldRoot.addChild(glow);
+      created.push(glow);
+      volcanoLights.push({ entity: glow, phase: rangeIndex * 2.3 + x * 0.2 });
+      return;
+    }
+
     const samples = sampleRange(range.points, 0.8);
 
     // Colliders de segmento: sellan toda la cresta para que no se pueda cruzar.
@@ -625,6 +881,8 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   }
   ctx.mountainPeakMeshes = mountainPeakMeshes;
   ctx.wallSegmentMeshes = wallSegmentMeshes;
+  ctx.volcanoMeshes = volcanoMeshes;
+  ctx.volcanoLights = volcanoLights;
   ctx.cactusMesh = cactusMesh;
   ctx.desertZones = desertZones;
 }
