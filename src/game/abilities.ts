@@ -2462,7 +2462,7 @@ registerAbility(
     .startup(0.4, { animation: 'charge' })
     .recovery(1.5)
     .movementDuringCast(0.25)
-    .armor(60)
+    .armor(60, { window:'cast' })
     .animation('shoot')
     .area('sacredFlame', 'overtime-global', 1.5, 0.5)
     // El vértice queda donde nació el cono, pero el eje sigue el apuntado del
