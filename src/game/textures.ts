@@ -2609,12 +2609,12 @@ export function createMountainRockCanvas(width = 64, height = 128): HTMLCanvasEl
 }
 
 /**
- * Roca volcánica y su mapa de emisión. Es un tile pixel art de basalto casi
- * negro atravesado por vetas de lava que caen desde el cráter (la banda
- * superior del canvas, que en la malla queda en la punta truncada). El mapa de
- * emisión repite exactamente las mismas vetas sobre negro, de modo que la lava
- * brilla sin teñir la roca. Envuelve en horizontal para que la textura no deje
- * costura alrededor del cono.
+ * Roca y lava del volcán. El tile imita un cono de arcilla volcánica: surcos
+ * verticales anchos que caen desde el cráter (la banda superior del canvas, que
+ * en la malla queda en la punta truncada), crestas más claras, grietas oscuras
+ * y un labio carbonizado con lava incandescente. El mapa de emisión repite solo
+ * la lava del cráter y unas fisuras cortas, de modo que la roca no brilla.
+ * Envuelve en horizontal para que la textura no deje costura alrededor del cono.
  */
 export function createVolcanoCanvases(
   width = 64,
@@ -2624,9 +2624,21 @@ export function createVolcanoCanvases(
   const glowCtx = canvas2d(width, height);
   const random = mulberry32(0x6a1f);
 
-  const rock = ["#0e0b0d", "#171114", "#21171a", "#2c1e1f", "#3a2726", "#4a322e"];
-  const lava = ["#ff3d05", "#ff6a10", "#ff8c1e", "#ffb43c", "#ffe27a"];
-  const crack = "#080607";
+  // Arcilla volcánica: del casi negro de las grietas al ocre rojizo de las
+  // crestas. La malla multiplica el tile por un color por vértice que oscurece
+  // la base y calienta la punta, así que aquí basta con modelar el relieve.
+  const rock = [
+    "#1a0b08",
+    "#2a120c",
+    "#3d1a10",
+    "#542416",
+    "#6b2f1b",
+    "#834022",
+    "#9c5129",
+    "#b46431",
+  ];
+  const ember = ["#ff4208", "#ff7014", "#ff9a24", "#ffc154", "#ffe6a0"];
+  const charred = "#140b09";
 
   const plot = (
     ctx: CanvasRenderingContext2D,
@@ -2643,152 +2655,136 @@ export function createVolcanoCanvases(
     );
   };
 
-  // Polígono con bordes de píxel duros y repetido a los dos lados para que las
-  // facetas crucen el borde del tile sin costura vertical.
-  const fillPolygon = (
-    points: Array<[number, number]>,
-    color: string,
-  ) => {
-    const ys = points.map(([, y]) => y);
-    const yStart = Math.max(0, Math.floor(Math.min(...ys)));
-    const yEnd = Math.min(height - 1, Math.ceil(Math.max(...ys)));
-    for (const offset of [-width, 0, width]) {
-      for (let y = yStart; y <= yEnd; y++) {
-        const scan = y + 0.5;
-        const crossings: number[] = [];
-        for (let i = 0; i < points.length; i++) {
-          const [x1, y1] = points[i];
-          const [x2, y2] = points[(i + 1) % points.length];
-          if ((y1 <= scan && y2 > scan) || (y2 <= scan && y1 > scan)) {
-            crossings.push(x1 + ((scan - y1) / (y2 - y1)) * (x2 - x1));
-          }
-        }
-        crossings.sort((a, b) => a - b);
-        for (let i = 0; i + 1 < crossings.length; i += 2) {
-          const left = Math.max(0, Math.ceil(crossings[i] + offset));
-          const right = Math.min(
-            width - 1,
-            Math.floor(crossings[i + 1] + offset),
-          );
-          if (right >= left) {
-            rockCtx.fillStyle = color;
-            rockCtx.fillRect(left, y, right - left + 1, 1);
-          }
-        }
-      }
-    }
-  };
-
-  // Fondo de roca y brillo apagado: el emisivo solo enciende la lava.
-  rockCtx.fillStyle = rock[2];
+  rockCtx.fillStyle = rock[4];
   rockCtx.fillRect(0, 0, width, height);
   glowCtx.fillStyle = "#000000";
   glowCtx.fillRect(0, 0, width, height);
 
-  // Facetas angulosas: más oscuras en la base y con un tono cobrizo cerca del
-  // cráter, para que la silueta del cono se lea incluso sin la lava.
-  for (let i = 0; i < 82; i++) {
-    const x = random() * width;
-    const y = random() * height;
-    const w = 10 + random() * 28;
-    const h = 9 + random() * 22;
-    const lean = (random() - 0.5) * w;
-    const level = 1 - y / height;
-    const shade = Math.max(
-      0,
-      Math.min(
-        rock.length - 1,
-        Math.round(level * (rock.length - 1) + (random() - 0.5) * 2.2),
-      ),
-    );
-    fillPolygon(
-      [
-        [x - w / 2, y + h / 2],
-        [x + w / 2, y + h / 2],
-        [x + lean, y - h / 2],
-      ],
-      rock[shade],
-    );
-  }
-
-  // Grietas secas: líneas negras finas que separan las placas de basalto.
-  for (let i = 0; i < 16; i++) {
-    let x = Math.floor(random() * width);
-    let y = Math.floor(random() * height);
-    const length = 14 + Math.floor(random() * 38);
-    for (let k = 0; k < length; k++) {
-      plot(rockCtx, x, y, crack);
-      x += random() < 0.6 ? 1 : -1;
-      if (random() < 0.55) y += 1;
-    }
-  }
-
-  // Vetas de lava: nacen en el cráter y bajan serpenteando por la ladera. Se
-  // dibujan en los dos canvases; el emisivo recibe además un halo tenue para
-  // que el resplandor sangre un píxel sobre la roca.
-  const veins = 13;
-  for (let i = 0; i < veins; i++) {
-    let x = random() * width;
-    let y = 1 + random() * Math.max(2, height * 0.1);
-    const length = height * (0.34 + random() * 0.58);
-    const phase = random() * Math.PI * 2;
-    const lean = (random() - 0.5) * 0.75;
-    const core = 2 + Math.floor(random() * 3);
-    for (let step = 0; step < length; step++) {
-      const t = step / length;
-      const color = lava[Math.max(0, core - Math.floor(t * 2))];
-      plot(rockCtx, x, y, color);
-      plot(glowCtx, x, y, color);
-      if (random() < 0.52) {
-        plot(rockCtx, x + 1, y, lava[2]);
-        plot(glowCtx, x + 1, y, lava[2]);
-      }
-      if (random() < 0.24) {
-        plot(glowCtx, x - 1, y, "#3d0d02");
-        plot(glowCtx, x + 2, y, "#3d0d02");
-      }
-      // Ramas cortas que se separan y se apagan a medio camino.
-      if (random() < 0.018) {
-        let bx = x;
-        let by = y;
-        const branch = 6 + Math.floor(random() * 16);
-        for (let b = 0; b < branch; b++) {
-          plot(rockCtx, bx, by, lava[3]);
-          plot(glowCtx, bx, by, lava[3]);
-          bx += random() < 0.5 ? 1 : 0;
-          by += 0.7 + random() * 0.6;
-        }
-      }
-      x += Math.sin(step * 0.19 + phase) * 0.7 + lean * 0.4;
-      y += 0.55 + random() * 0.65;
-    }
-  }
-
-  // Cráter: banda superior de lava solidificada con costras oscuras. La malla
-  // mapea la tapa truncada a esta franja, así que el volcán termina en un
-  // anillo incandescente.
-  const craterHeight = Math.max(4, Math.round(height * 0.055));
-  for (let y = 0; y < craterHeight; y++) {
+  // Ladera de arcilla: base media con grano y un tono algo más cálido cerca del
+  // cráter. Después se hunden los surcos encima.
+  for (let y = 0; y < height; y++) {
+    const t = y / Math.max(1, height - 1); // 0 = cráter, 1 = base
+    const body = t < 0.3 ? 6 : 5;
     for (let x = 0; x < width; x++) {
       const roll = random();
-      const color =
-        roll < 0.16
-          ? crack
-          : roll < 0.46
-            ? lava[1]
-            : roll < 0.78
-              ? lava[2]
-              : lava[3];
-      plot(rockCtx, x, y, color);
-      plot(glowCtx, x, y, color === crack ? "#000000" : color);
+      const shade = roll < 0.1 ? body - 1 : roll > 0.92 ? body + 1 : body;
+      plot(
+        rockCtx,
+        x,
+        y,
+        rock[Math.max(1, Math.min(rock.length - 1, shade))],
+      );
     }
   }
 
-  // Grano fino de la roca, sin tocar las vetas más brillantes.
-  for (let i = 0; i < 340; i++) {
-    const x = Math.floor(random() * width);
-    const y = Math.floor(random() * height);
-    plot(rockCtx, x, y, rock[Math.floor(random() * rock.length)]);
+  // Surcos verticales: el rasgo que define la referencia. Cada uno nace en el
+  // cráter estrecho y se ensancha hacia la base, serpentea un poco y deja una
+  // cresta iluminada a un lado. Los hay profundos (casi negros) y someros.
+  const craterHeight = Math.max(5, Math.round(height * 0.07));
+  for (let g = 0; g < 9; g++) {
+    const baseX = ((g + random() * 0.8) / 9) * width;
+    const phase = random() * Math.PI * 2;
+    const wobble = 1 + random() * 2;
+    const topWidth = 1 + Math.floor(random() * 2);
+    const baseWidth = 3 + Math.floor(random() * 4);
+    const deep = random() < 0.4;
+    const highlight = 5 + Math.floor(random() * 2);
+    const highlightSide = random() < 0.5 ? -1 : 1;
+    for (let y = craterHeight; y < height; y++) {
+      const t = (y - craterHeight) / Math.max(1, height - craterHeight);
+      const center =
+        baseX + Math.sin(y * 0.055 + phase) * wobble + (random() - 0.5) * 0.4;
+      const grooveWidth = topWidth + (baseWidth - topWidth) * t;
+      const left = center - grooveWidth / 2;
+      const right = center + grooveWidth / 2;
+      for (let x = Math.floor(left) - 1; x <= Math.ceil(right) + 1; x++) {
+        const distance = x < left ? left - x : x > right ? x - right : 0;
+        // Núcleo oscuro y borde de transición, con dientes de sierra.
+        const shade =
+          distance < 0.5
+            ? deep
+              ? 0
+              : 1
+            : distance < 1.5
+              ? 2
+              : 3;
+        if (distance > 1.5 && random() < 0.35) continue;
+        plot(rockCtx, x, y, rock[shade]);
+      }
+      // Cresta clara junto al surco, casi continua pero con algún hueco.
+      if (random() < 0.85) {
+        const ridgeX = center + highlightSide * (grooveWidth / 2 + 1.5);
+        plot(rockCtx, ridgeX, y, rock[highlight]);
+      }
+    }
+  }
+
+  // Grietas de erosión: pocas líneas negras quebradas y más finas.
+  for (let i = 0; i < 5; i++) {
+    let x = Math.floor(random() * width);
+    let y = craterHeight + 2 + Math.floor(random() * height * 0.12);
+    const length = height * (0.14 + random() * 0.3);
+    for (let step = 0; step < length; step++) {
+      plot(rockCtx, x, y, rock[0]);
+      x += random() < 0.7 ? 0 : random() < 0.5 ? 1 : -1;
+      y += 0.65 + random() * 0.7;
+    }
+  }
+
+  // Motas de roca suelta, todas por debajo de la franja del cráter.
+  for (let i = 0; i < 70; i++) {
+    const x = random() * width;
+    const y = craterHeight + 2 + random() * (height - craterHeight - 2);
+    plot(rockCtx, x, y, rock[1 + Math.floor(random() * 3)]);
+  }
+
+  // Cráter: lago de lava con costras y un labio carbonizado. La tapa truncada
+  // de la malla usa las primeras filas del tile, así que el interior del
+  // cráter queda encendido y el borde se funde con la ladera.
+  for (let y = 0; y < craterHeight; y++) {
+    const depth = y / Math.max(1, craterHeight - 1); // 0 = fondo, 1 = labio
+    for (let x = 0; x < width; x++) {
+      if (y === craterHeight - 1) {
+        plot(rockCtx, x, y, charred);
+        continue;
+      }
+      // Cuanto más cerca del labio, más costra fría.
+      const crust = 0.18 + depth * 0.55;
+      const roll = random();
+      const color =
+        roll < crust
+          ? charred
+          : roll < 0.52
+            ? ember[0]
+            : roll < 0.76
+              ? ember[1]
+              : roll < 0.92
+                ? ember[2]
+                : ember[3];
+      plot(rockCtx, x, y, color);
+      if (color !== charred) plot(glowCtx, x, y, color);
+    }
+  }
+
+  // Halo tenue bajo el labio: la lava sangra un píxel sobre la roca.
+  for (let x = 0; x < width; x++) {
+    if (random() < 0.55) plot(glowCtx, x, craterHeight, "#2a0802");
+  }
+
+  // Fisuras cortas y encendidas que salen del cráter y se apagan enseguida.
+  for (let i = 0; i < 4; i++) {
+    let x = Math.floor(random() * width);
+    let y = craterHeight + 1 + Math.floor(random() * 3);
+    const length = 5 + Math.floor(random() * 14);
+    for (let step = 0; step < length; step++) {
+      const fade = 1 - step / length;
+      const color =
+        fade > 0.66 ? ember[1] : fade > 0.33 ? ember[0] : "#7a1f06";
+      plot(rockCtx, x, y, color);
+      plot(glowCtx, x, y, color);
+      if (random() < 0.6) x += random() < 0.5 ? 1 : -1;
+      y += 0.8 + random() * 0.4;
+    }
   }
 
   return { rock: rockCtx.canvas, glow: glowCtx.canvas };

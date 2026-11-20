@@ -334,8 +334,8 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   // --- Volcanes -------------------------------------------------------------
   // Cono truncado de huella cuadrada. La base mide exactamente el ancho del
   // separador y la altura crece con él, así que el volcán nunca se estira como
-  // una cordillera. La roca y las vetas salen del tile de basalto; el mapa de
-  // emisión solo enciende las vetas y el cráter.
+  // una cordillera. La roca y el cráter salen del tile; el mapa de emisión solo
+  // enciende la lava y las fisuras cercanas al cráter.
   const volcanoMaterial = standard({
     diffuse: '#ffffff',
     diffuseMap: volcanoRockTexture,
@@ -352,8 +352,8 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   volcanoMaterial.update();
   materials.push(volcanoMaterial);
 
-  const VOLCANO_DARK: [number, number, number] = [0.5, 0.48, 0.48];
-  const VOLCANO_LIGHT: [number, number, number] = [1, 0.86, 0.76];
+  const VOLCANO_DARK: [number, number, number] = [0.5, 0.42, 0.38];
+  const VOLCANO_LIGHT: [number, number, number] = [1, 0.86, 0.72];
 
   const buildVolcano = (seed: number): pc.Mesh => {
     const rand = random(seed);
@@ -563,7 +563,9 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
       if (!center) return;
       const [x, z] = center;
       const width = Math.max(0.2, range.width);
-      const height = width * (0.82 + rand() * 0.14);
+      // 15 % más bajo que antes: un cono achaparrado, más cercano a un volcán
+      // de isla que a una aguja.
+      const height = width * (0.82 + rand() * 0.14) * 0.85;
 
       // Un solo cono por volcán: nunca se estira con el trazado. La huella es
       // el cuadrado de lado `width`, y la base circular del cono queda inscrita

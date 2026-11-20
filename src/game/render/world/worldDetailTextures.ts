@@ -86,8 +86,9 @@ export function* createWorldDetailTextures(
     mipmaps: true
   });
 
-  // Basalto y lava del volcán: dos tiles gemelos (difuso y emisivo) con las
-  // mismas vetas, generados a baja resolución para conservar el pixel art.
+  // Roca y lava del volcán: dos tiles gemelos (difuso y emisivo) con los
+  // surcos de arcilla y el cráter encendido, generados a baja resolución para
+  // conservar el pixel art.
   yield 1;
   const volcanoCanvases = createVolcanoCanvases();
   const volcanoRockTexture = textureFromCanvas(device, volcanoCanvases.rock, {
