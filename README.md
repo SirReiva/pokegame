@@ -355,6 +355,8 @@ Las áreas con ticks pueden mover su centro durante la duración con `aoeMovemen
 
 En los **conos**, `aoeMovement` también puede devolver `dirX`/`dirZ` para girar el abanico alrededor de su vértice. El motor normaliza la dirección, la usa en la geometría de cada tick, en la IA y en la rotación del efecto y la telegrafía. El giro es progresivo: `aoeTurnRate` fija los grados por segundo con los que el eje se acerca a la dirección objetivo (`0` lo aplica de golpe). `Fuego Sagrado` lo usa para seguir el apuntado del jugador con un límite de ±15° respecto al eje de lanzamiento y 60°/s de giro:
 
+Para esquivar, la IA no usa solo la geometría actual: `buildBotHazards` añade muestras futuras de `aoeMovement` (0,15/0,30/0,45 s). En las áreas circulares desplaza los círculos; en los conos desplaza el vértice y gira el eje respetando `aoeTurnRate`. Así los bots empiezan a apartarse antes de que el área llegue o de que el abanico termine de girar.
+
 ```ts
 .aoeMovement(({ caster, originX, originZ, dirX, dirZ }) => {
   const base = Math.atan2(dirX, dirZ);

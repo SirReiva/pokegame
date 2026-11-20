@@ -303,6 +303,8 @@ Con eso, el bot puede:
 - no quedarse quieto regenerando dentro de una zona de peligro,
 - no mantener la posición de combate dentro de un charco.
 
+El barrido de `aoeMovement` se muestrea hacia el futuro (0,15/0,30/0,45 s): en las áreas circulares se desplazan sus círculos y en los conos se desplaza el vértice y se gira el eje respetando `aoeTurnRate`. Así el bot empieza a apartarse antes de que el área llegue o de que el abanico termine de girar.
+
 ### Prioridad
 
 Fue probablemente la mejora que más hizo que los bots parecieran más listos,

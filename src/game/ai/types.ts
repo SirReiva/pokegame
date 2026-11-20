@@ -6,7 +6,7 @@
  */
 
 import type { AoeAbilityDef } from '../abilities';
-import type { AoeCircle } from '../aoeGeometry';
+import type { AoeCircle, AoeSector } from '../aoeGeometry';
 import type { AtmosphereId } from '../atmosphere';
 import type { Team } from '../core/team';
 import type { MatchPlayerState } from '../matchState';
@@ -99,6 +99,13 @@ export interface BotHazard {
    * peligro es un único círculo de radio `radius`.
    */
   circles?: AoeCircle[];
+  /**
+   * Sectores de un cono móvil: el actual y las muestras futuras de
+   * `aoeMovement`. El array y sus objetos se reutilizan entre pasos. Si falta,
+   * el cono es el sector formado por `x/z`, `radius`, `dirX/dirZ` y
+   * `halfAngle`.
+   */
+  sectors?: AoeSector[];
   vx?: number;
   vz?: number;
   /** Segundos que el peligro seguirá activo. */

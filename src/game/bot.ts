@@ -39,7 +39,8 @@ import {
   aoeContains,
   aoeDistance,
   aoeHitPadding,
-  type AoeArea
+  type AoeArea,
+  type AoeCircle
 } from './aoeGeometry';
 import { BotNavGrid, type NavHazard, type NavPoint } from './botNav';
 import {
@@ -174,6 +175,8 @@ const HAZARD_AOE_MARGIN = 0.18;
 const HAZARD_ESCAPE_STEP = 1.4;
 /** Por debajo de esta velocidad un proyectil se trata como estático. */
 const HAZARD_MIN_PROJECTILE_SPEED = 0.05;
+/** Lista vacía compartida para no asignar un array por consulta de área. */
+const NO_CIRCLES: readonly AoeCircle[] = [];
 
 /** Puntuación de revivir a un aliado caído con un área de apoyo. */
 const SUPPORT_REVIVE_SCORE = 180;
@@ -1872,7 +1875,30 @@ export class BotController {
     area.dirX = hazard.dirX ?? 0;
     area.dirZ = hazard.dirZ ?? 1;
     area.halfAngle = hazard.halfAngle ?? 0;
-    area.circles = hazard.circles ?? [];
+    area.circles = hazard.circles ?? NO_CIRCLES;
+    return area;
+  }
+
+  /**
+   * Geometría de una muestra concreta de un cono móvil. Sin `sectors` devuelve
+   * el sector actual. El objeto también es compartido: úsalo antes de volver a
+   * pedir otra muestra.
+   */
+  private hazardAreaAt(
+    hazard: BotHazard,
+    index: number
+  ): Readonly<AoeArea> {
+    const sector = hazard.sectors?.[index];
+    if (!sector) return this.hazardArea(hazard);
+    const area = this.hazardAreaScratch;
+    area.shape = 'cone';
+    area.x = sector.x;
+    area.z = sector.z;
+    area.radius = sector.radius;
+    area.dirX = sector.dirX;
+    area.dirZ = sector.dirZ;
+    area.halfAngle = sector.halfAngle;
+    area.circles = NO_CIRCLES;
     return area;
   }
 
@@ -1969,25 +1995,40 @@ export class BotController {
       };
     }
 
-    const area = this.hazardArea(hazard);
-    if (
-      !aoeContains(area, self.x, self.z, self.hitRadius, HAZARD_AOE_MARGIN)
-    ) {
-      return null;
-    }
+    // Un cono móvil se ve como la unión de su sector actual y las muestras
+    // futuras. Se elige el sector del que cuesta más salir: es la parte de la
+    // unión que más amenaza al bot.
+    const sectors = hazard.sectors?.length ?? 1;
+    let best: { distance: number; escape: number; direction: Vec2 } | null =
+      null;
+    for (let index = 0; index < sectors; index++) {
+      const area = this.hazardAreaAt(hazard, index);
+      if (
+        !aoeContains(area, self.x, self.z, self.hitRadius, HAZARD_AOE_MARGIN)
+      ) {
+        continue;
+      }
 
-    // Las áreas tampoco atraviesan un muro: si el centro del círculo o el
-    // vértice del cono no tiene línea hasta el bot, sus ticks no le alcanzan.
-    if (
-      segmentBlockedByColliders(area.x, area.z, self.x, self.z, colliders)
-    ) {
-      return null;
-    }
+      // Las áreas tampoco atraviesan un muro: si el centro del círculo o el
+      // vértice del cono no tiene línea hasta el bot, sus ticks no le alcanzan.
+      if (
+        segmentBlockedByColliders(area.x, area.z, self.x, self.z, colliders)
+      ) {
+        continue;
+      }
 
-    const distance = aoeDistance(area, self.x, self.z);
+      const escape = this.aoeEscapeDistance(area, self.x, self.z);
+      if (best !== null && escape <= best.escape) continue;
+      best = {
+        distance: aoeDistance(area, self.x, self.z),
+        escape,
+        direction: this.aoeEvadeDirection(area, self)
+      };
+    }
+    if (!best) return null;
+
     const dangerRadius =
       hazard.radius + self.hitRadius + HAZARD_AOE_MARGIN;
-    const direction = this.aoeEvadeDirection(area, self);
     // En `overtime-target` el próximo tick es propio de cada objetivo. Si está
     // lejos, la huida puede compartir prioridad con otras amenazas; si es
     // inminente, sube por delante de ellas.
@@ -2000,9 +2041,9 @@ export class BotController {
         ? 1
         : 1 - clamp(nextTick / 0.6, 0, 1);
     return {
-      direction: this.pickHazardEscape(self, direction, colliders),
+      direction: this.pickHazardEscape(self, best.direction, colliders),
       severity:
-        (140 + (1 - distance / Math.max(0.001, dangerRadius)) * 80) *
+        (140 + (1 - best.distance / Math.max(0.001, dangerRadius)) * 80) *
         (0.85 + 0.15 * tickPressure)
     };
   }
@@ -2066,23 +2107,28 @@ export class BotController {
         continue;
       }
       // Un cono no es convexo respecto al trayecto: se muestrea el segmento
-      // para no atravesar el abanico por un punto intermedio.
+      // para no atravesar el abanico por un punto intermedio. En conos móviles
+      // también cuentan las muestras futuras de `aoeMovement`.
       const length = Math.hypot(point.x - self.x, point.z - self.z);
       const steps = Math.max(1, Math.ceil(length / 0.5));
-      for (let step = 0; step <= steps; step++) {
-        const t = step / steps;
-        const sampleX = self.x + (point.x - self.x) * t;
-        const sampleZ = self.z + (point.z - self.z) * t;
-        if (
-          aoeContains(
-            area,
-            sampleX,
-            sampleZ,
-            self.hitRadius,
-            HAZARD_AOE_MARGIN
-          )
-        ) {
-          return true;
+      const sectors = hazard.sectors?.length ?? 1;
+      for (let index = 0; index < sectors; index++) {
+        const cone = this.hazardAreaAt(hazard, index);
+        for (let step = 0; step <= steps; step++) {
+          const t = step / steps;
+          const sampleX = self.x + (point.x - self.x) * t;
+          const sampleZ = self.z + (point.z - self.z) * t;
+          if (
+            aoeContains(
+              cone,
+              sampleX,
+              sampleZ,
+              self.hitRadius,
+              HAZARD_AOE_MARGIN
+            )
+          ) {
+            return true;
+          }
         }
       }
     }
@@ -2125,16 +2171,21 @@ export class BotController {
       }
       // La navegación solo entiende círculos: un cono se aproxima con varios
       // discos a lo largo de su eje, más anchos cuanto más lejos del vértice.
+      // En conos móviles se aproximan también las muestras futuras.
       const segments = 4;
-      for (let index = 0; index < segments; index++) {
-        const t = (index + 0.5) / segments;
-        const width = area.radius * t * Math.tan(area.halfAngle);
-        const navHazard = this.acquireNavHazard(count);
-        navHazard.x = area.x + area.dirX * area.radius * t;
-        navHazard.z = area.z + area.dirZ * area.radius * t;
-        navHazard.radius = Math.max(0.35, width) + padding;
-        hazards[count] = navHazard;
-        count += 1;
+      const sectors = hazard.sectors?.length ?? 1;
+      for (let sectorIndex = 0; sectorIndex < sectors; sectorIndex++) {
+        const cone = this.hazardAreaAt(hazard, sectorIndex);
+        for (let index = 0; index < segments; index++) {
+          const t = (index + 0.5) / segments;
+          const width = cone.radius * t * Math.tan(cone.halfAngle);
+          const navHazard = this.acquireNavHazard(count);
+          navHazard.x = cone.x + cone.dirX * cone.radius * t;
+          navHazard.z = cone.z + cone.dirZ * cone.radius * t;
+          navHazard.radius = Math.max(0.35, width) + padding;
+          hazards[count] = navHazard;
+          count += 1;
+        }
       }
     }
     hazards.length = count;

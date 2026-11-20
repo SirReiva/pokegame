@@ -81,6 +81,33 @@ const patternAoe = () =>
     }
   }) as unknown as ActiveAoe;
 
+/** Cono móvil, para comprobar el barrido de posición y de dirección. */
+const coneAoe = () =>
+  ({
+    x: 1,
+    z: 2,
+    radius: 7,
+    elapsed: 0,
+    duration: 2,
+    shape: 'cone',
+    dirX: 0,
+    dirZ: 1,
+    originX: 1,
+    originZ: 2,
+    originDirX: 0,
+    originDirZ: 1,
+    halfAngle: (12.5 * Math.PI) / 180,
+    owner: { team: 'blue' },
+    def: {
+      props: { power: 10, slow: null, dot: null },
+      aoeDamageMode: 'overtime-global',
+      radius: 7,
+      halfAngle: 12.5,
+      aoeCircles: [],
+      aoeTurnRate: 60
+    }
+  }) as unknown as ActiveAoe;
+
 test('buildBotHazards ignora efectos sin daño ni ralentización', () => {
   assert.deepEqual(buildBotHazards([projectile(0)], [aoe(0)]), []);
 });
@@ -214,4 +241,69 @@ test('el barrido añade las posiciones futuras de aoeMovement', () => {
   assert.equal(hazard.circles?.length, 8);
   // La primera muestra avanza 0,15 u: el círculo delantero pasa de z=3 a 3,15.
   assert.ok(Math.abs((hazard.circles?.[2]?.z ?? 0) - 3.15) < 1e-9);
+});
+
+test('el barrido de un cono añade sectores futuros y respeta aoeTurnRate', () => {
+  const buffer = createBotHazardBuffer();
+  const area = coneAoe();
+  (area.def as { aoeMovement?: unknown }).aoeMovement = (ctx: {
+    originX: number;
+    originZ: number;
+    dirZ: number;
+    elapsed: number;
+  }) => ({
+    x: ctx.originX,
+    z: ctx.originZ + ctx.dirZ * ctx.elapsed,
+    // Quiere girar 90° de golpe; `aoeTurnRate` lo frena a 60°/s.
+    dirX: 1,
+    dirZ: 0
+  });
+
+  const [hazard] = buildBotHazards([], [area], buffer);
+
+  assert.equal(hazard.sectors?.length, 4);
+  // Sector actual.
+  assert.equal(hazard.sectors?.[0]?.x, 1);
+  assert.equal(hazard.sectors?.[0]?.z, 2);
+  assert.equal(hazard.sectors?.[0]?.dirX, 0);
+  assert.equal(hazard.sectors?.[0]?.dirZ, 1);
+  assert.equal(hazard.sectors?.[0]?.radius, 7 + maxHitRadius());
+
+  // Primera muestra: avanza 0,15 u y gira como máximo 9°.
+  const first = hazard.sectors?.[1];
+  assert.ok(first);
+  assert.ok(Math.abs(first.x - 1) < 1e-9);
+  assert.ok(Math.abs(first.z - 2.15) < 1e-9);
+  assert.ok(
+    Math.abs(Math.atan2(first.dirX, first.dirZ) - (9 * Math.PI) / 180) < 1e-9
+  );
+
+  // Tercera muestra: 0,45 s → 27°.
+  const last = hazard.sectors?.[3];
+  assert.ok(last);
+  assert.ok(
+    Math.abs(Math.atan2(last.dirX, last.dirZ) - (27 * Math.PI) / 180) < 1e-9
+  );
+});
+
+test('el barrido de cono solo añade muestras que caben en la duración', () => {
+  const area = coneAoe();
+  area.elapsed = 1.8;
+  (area.def as { aoeMovement?: unknown }).aoeMovement = () => ({
+    x: 1,
+    z: 2,
+    dirX: 0,
+    dirZ: 1
+  });
+
+  const [hazard] = buildBotHazards([], [area]);
+  // Quedan 0,2 s: solo cabe la muestra de 0,15 s.
+  assert.equal(hazard.sectors?.length, 2);
+});
+
+test('un cono sin movimiento conserva un único sector', () => {
+  const [hazard] = buildBotHazards([], [coneAoe()]);
+  assert.equal(hazard.sectors?.length, 1);
+  assert.equal(hazard.sectors?.[0]?.x, 1);
+  assert.equal(hazard.sectors?.[0]?.z, 2);
 });

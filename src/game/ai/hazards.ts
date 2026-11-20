@@ -13,22 +13,28 @@
 
 import type { ActiveAoe, Projectile } from '../matchState';
 import type { AnyAbilityDef } from '../abilities';
-import { writeAoeCircles, type AoeCircle } from '../aoeGeometry';
+import {
+  writeAoeCircles,
+  type AoeCircle,
+  type AoeSector
+} from '../aoeGeometry';
+import { DEG } from '../config';
 import { maxHitRadius } from '../roster';
 import type { BotHazard } from './types';
 
 /**
  * Adelantos que se añaden al barrido de un área móvil. Los bots ven la unión
  * de la posición actual y estas muestras futuras, así que empiezan a apartarse
- * del camino antes de que el área llegue.
+ * del camino antes de que el área llegue. En los conos la muestra incluye
+ * también el giro, limitado por `aoeTurnRate`.
  */
 const FUTURE_SAMPLES = [0.15, 0.3, 0.45] as const;
 
 /**
  * Círculos actuales del área más las posiciones futuras de `aoeMovement`.
  *
- * El array se reutiliza entre pasos; las muestras solo se calculan para áreas
- * circulares con movimiento (los conos se resuelven con su sector).
+ * El array se reutiliza entre pasos. Solo se usa con áreas circulares; los
+ * conos tienen su propia unión de sectores en `sweepAoeSectors`.
  */
 function sweepAoeCircles(aoe: ActiveAoe, out: AoeCircle[]): AoeCircle[] {
   const perSample = Math.max(1, aoe.def.aoeCircles.length);
@@ -60,6 +66,95 @@ function sweepAoeCircles(aoe: ActiveAoe, out: AoeCircle[]): AoeCircle[] {
       count
     );
     count += perSample;
+  }
+  out.length = count;
+  return out;
+}
+
+/** Diferencia angular normalizada al intervalo (-π, π]. */
+function shortestAngle(angle: number): number {
+  return (
+    (((angle + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) -
+    Math.PI
+  );
+}
+
+/**
+ * Sectores actuales de un cono más las posiciones y direcciones futuras de
+ * `aoeMovement`. El giro de cada muestra respeta `aoeTurnRate`: el cono no salta
+ * al ángulo objetivo, igual que en la simulación.
+ *
+ * El array se reutiliza entre pasos. Sin movimiento devuelve solo el sector
+ * actual.
+ */
+function sweepAoeSectors(
+  aoe: ActiveAoe,
+  radius: number,
+  out: AoeSector[]
+): AoeSector[] {
+  let count = 0;
+  const addSector = (
+    x: number,
+    z: number,
+    dirX: number,
+    dirZ: number
+  ): void => {
+    const sector =
+      out[count] ??
+      (out[count] = {
+        x: 0,
+        z: 0,
+        radius: 0,
+        dirX: 0,
+        dirZ: 1,
+        halfAngle: 0
+      });
+    sector.x = x;
+    sector.z = z;
+    sector.radius = radius;
+    sector.dirX = dirX;
+    sector.dirZ = dirZ;
+    sector.halfAngle = aoe.halfAngle;
+    count += 1;
+  };
+
+  addSector(aoe.x, aoe.z, aoe.dirX, aoe.dirZ);
+  const movement = aoe.def.aoeMovement;
+  if (!movement) {
+    out.length = count;
+    return out;
+  }
+
+  const remaining = Math.max(0, aoe.duration - aoe.elapsed);
+  const turnRate = Math.max(0, aoe.def.aoeTurnRate) * DEG;
+  let angle = Math.atan2(aoe.dirX, aoe.dirZ);
+  let previous = 0;
+  for (const ahead of FUTURE_SAMPLES) {
+    if (ahead > remaining) break;
+    const next = movement({
+      caster: aoe.owner,
+      def: aoe.def,
+      originX: aoe.originX,
+      originZ: aoe.originZ,
+      dirX: aoe.originDirX,
+      dirZ: aoe.originDirZ,
+      duration: aoe.duration,
+      elapsed: aoe.elapsed + ahead
+    });
+    if (next.dirX !== undefined && next.dirZ !== undefined) {
+      const length = Math.hypot(next.dirX, next.dirZ);
+      if (length > 0.0001) {
+        const target = Math.atan2(next.dirX / length, next.dirZ / length);
+        const delta = shortestAngle(target - angle);
+        const maxStep = turnRate * (ahead - previous);
+        angle +=
+          maxStep > 0
+            ? Math.max(-maxStep, Math.min(maxStep, delta))
+            : delta;
+      }
+    }
+    addSector(next.x, next.z, Math.sin(angle), Math.cos(angle));
+    previous = ahead;
   }
   out.length = count;
   return out;
@@ -137,6 +232,14 @@ export function buildBotHazards(
     hazard.circles =
       aoe.shape === 'circle'
         ? sweepAoeCircles(aoe, hazard.circles ?? (hazard.circles = []))
+        : undefined;
+    hazard.sectors =
+      aoe.shape === 'cone'
+        ? sweepAoeSectors(
+            aoe,
+            hazard.radius,
+            hazard.sectors ?? (hazard.sectors = [])
+          )
         : undefined;
     hazard.remaining = Math.max(0, aoe.duration - aoe.elapsed);
     hazard.ownerTeam = aoe.owner.team;

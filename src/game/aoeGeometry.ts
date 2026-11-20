@@ -31,6 +31,24 @@ export interface AoeCircle {
   radius: number;
 }
 
+/**
+ * Sector de un cono ya resuelto en coordenadas de mundo. Se usa para representar
+ * la unión del cono actual y sus posiciones futuras cuando el área se mueve o
+ * gira (`aoeMovement`).
+ */
+export interface AoeSector {
+  /** Vértice del cono. */
+  x: number;
+  z: number;
+  /** Alcance del cono desde el vértice. */
+  radius: number;
+  /** Dirección unitaria del eje. */
+  dirX: number;
+  dirZ: number;
+  /** Semiángulo del cono en radianes. */
+  halfAngle: number;
+}
+
 /** Área ya resuelta en coordenadas de mundo. */
 export interface AoeArea {
   shape: AoeShape;
