@@ -45,7 +45,10 @@ function mapsUrl(file: string): string {
 }
 
 async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { cache: 'no-store' });
+  // `no-cache` revalida con el servidor en vez de descargar siempre el archivo:
+  // los mapas son estáticos y con ETag la respuesta es un 304 barato. `no-store`
+  // obligaba a bajar otra vez hasta 1 MB del mapa de estrés en cada carga.
+  const response = await fetch(url, { cache: 'no-cache' });
   if (!response.ok) {
     throw new Error(`No se pudo cargar ${url} (HTTP ${response.status})`);
   }

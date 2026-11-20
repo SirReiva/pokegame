@@ -97,6 +97,26 @@ export const CONFIG = {
       manyViewsThreshold: 4,
     },
   },
+  terrainTexture: {
+    /**
+     * Endereza las juntas entre terrenos distintos: cada esquina convexa de la
+     * rejilla se sustituye por un chaflán recto para que los bordes diagonales
+     * se lean como líneas continuas. Con `false` se conserva el borde ortogonal
+     * original. Solo afecta al dibujo de la textura del suelo.
+     */
+    straightJoints: true as boolean,
+    /**
+     * Tamaño del chaflán, como fracción del lado menor de la celda (rango
+     * 0-0,5). Más alto = cortes más largos y un borde más recto; más bajo =
+     * esquinas más sutiles. `0` desactiva los chaflanes.
+     */
+    jointChamfer: 0.5,
+    /**
+     * Contorno oscuro alrededor de los calveros decorativos. Desactivado, el
+     * terreno se lee solo por su color y su detalle superficial.
+     */
+    zoneBorders: false as boolean,
+  },
   sprite: {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,

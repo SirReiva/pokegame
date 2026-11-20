@@ -1,4 +1,5 @@
 import * as pc from "playcanvas";
+import { CONFIG } from "./config";
 import { yieldToBrowser } from "./frameYield";
 import { TEAM_INFO } from "./multiplayer";
 import {
@@ -440,11 +441,11 @@ function* paintTerrainZoneSteps(
   const radius = (Math.max(bounds.width, bounds.depth) / 2) * scale;
   const seed = centerX * 1.31 + centerZ * 1.77;
   const shape: ZoneShape = zone;
-  const edgeWorld = Math.min(
+  const edgeMargin = Math.min(
     0.42,
     Math.max(0.16, Math.max(bounds.width, bounds.depth) * 0.07),
   );
-  const detailInset = edgeWorld * 0.75;
+  const detailInset = edgeMargin * 0.75;
 
   const traceShape = () => {
     ctx.beginPath();
@@ -473,18 +474,6 @@ function* paintTerrainZoneSteps(
       }
       ctx.closePath();
     }
-  };
-
-  /**
-   * Borde oscuro: medio trazo de `edgeWorld` dentro de la silueta. Antes se
-   * resolvía consultando la distancia firmada de cada píxel al polígono; con
-   * el clip puesto basta con trazar el contorno una sola vez.
-   */
-  const strokeBorder = () => {
-    traceShape();
-    ctx.strokeStyle = palette.dark;
-    ctx.lineWidth = Math.max(1, edgeWorld * scale * 2);
-    ctx.stroke();
   };
 
   const paintFirePlates = function* (): Generator<number, void, void> {
@@ -696,10 +685,9 @@ function* paintTerrainZoneSteps(
   ctx.clip();
 
   // La base de la zona ya la pinta `paintGridTiles` celda a celda. Aquí solo
-  // se añade el borde y la decoración propia del terreno.
+  // se añade la decoración propia del terreno, sin contorno oscuro.
   if (zone.terrain === "fire") yield* paintFirePlates();
   if (zone.terrain === "park") yield* paintParkPanels();
-  strokeBorder();
   yield 1;
 
   switch (zone.terrain) {
@@ -904,6 +892,13 @@ function* paintTerrainZoneSteps(
     }
     default:
       break;
+  }
+
+  if (CONFIG.terrainTexture.zoneBorders) {
+    traceShape();
+    ctx.strokeStyle = palette.dark;
+    ctx.lineWidth = Math.max(1, edgeMargin * scale * 2);
+    ctx.stroke();
   }
   yield 1;
 
@@ -1129,6 +1124,131 @@ function paintGridTileRow(
   }
 }
 
+/** Terreno de una celda al pintar; fuera del mapa cuenta como el propio borde. */
+function paintTerrainAt(
+  map: GameMap,
+  row: number,
+  col: number,
+  fallback: TerrainId,
+): TerrainId {
+  if (row < 0 || row >= map.tiles.length) return fallback;
+  return map.tiles[row]?.[col] ?? fallback;
+}
+
+/**
+ * Achaflana una esquina convexa con una línea recta. El triángulo del pico se
+ * rellena con la base y el grano del terreno vecino, sin copiar píxeles de la
+ * imagen: unas pocas muestras de ruido bastan para que no se lea como una cuña
+ * plana. El resto de la celda no se toca; como las dos celdas comparten el
+ * mismo corte, la unión es continua.
+ */
+function chamferJointCorner(
+  ctx: CanvasRenderingContext2D,
+  cornerX: number,
+  cornerY: number,
+  inwardX: number,
+  inwardY: number,
+  neighborPalette: (typeof TERRAIN_PALETTES)[TerrainId],
+  size: number,
+  style: GridStyle,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(cornerX, cornerY);
+  ctx.lineTo(cornerX + inwardX * size, cornerY);
+  ctx.lineTo(cornerX, cornerY + inwardY * size);
+  ctx.closePath();
+  ctx.fillStyle = neighborPalette.base;
+  ctx.fill();
+
+  // El triángulo hereda el mismo grano que el resto del suelo: sin esto se
+  // leería como una cuña plana sobre un terreno con textura. Solo se muestrea
+  // dentro del triángulo, así que el coste es una fracción de una celda.
+  const { step, grainStrength } = style;
+  const minX = Math.floor(Math.min(cornerX, cornerX + inwardX * size));
+  const maxX = Math.ceil(Math.max(cornerX, cornerX + inwardX * size));
+  const minY = Math.floor(Math.min(cornerY, cornerY + inwardY * size));
+  const maxY = Math.ceil(Math.max(cornerY, cornerY + inwardY * size));
+  for (let py = minY; py <= maxY; py += step) {
+    for (let px = minX; px <= maxX; px += step) {
+      const dx = (px - cornerX) * inwardX;
+      const dy = (py - cornerY) * inwardY;
+      if (dx < 0 || dy < 0 || dx + dy > size) continue;
+      const gx = Math.floor(px / step) + 1;
+      const gy = Math.floor(py / step) + 1;
+      if (blockNoise(gx, gy) < 0.62) continue;
+      const tone = blockNoise(gx + 1013, gy - 811);
+      ctx.fillStyle =
+        tone < 0.45
+          ? neighborPalette.light
+          : tone < 0.5
+            ? neighborPalette.dark
+            : neighborPalette.accent2;
+      ctx.globalAlpha =
+        (0.14 + blockNoise(gx - 733, gy + 457) * 0.22) * grainStrength;
+      ctx.fillRect(px, py, step, step);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * Endereza las juntas entre terrenos distintos sustituyendo cada pico convexo
+ * por un chaflán recto. Solo actúa en esquinas: un borde recto o el interior de
+ * una región no cambian. Se ejecuta después de las zonas decorativas para que
+ * el corte también recorte sus detalles.
+ */
+function* paintChamferedTerrainJoints(
+  ctx: CanvasRenderingContext2D,
+  map: GameMap,
+  style: GridStyle,
+): Generator<number, void, void> {
+  const { straightJoints, jointChamfer } = CONFIG.terrainTexture;
+  const chamfer = Math.min(0.5, Math.max(0, jointChamfer));
+  if (!straightJoints || chamfer <= 0) return;
+  const { cols, cellPxX, cellPxY } = style;
+  const rows = map.tiles.length;
+  const baseSize = Math.min(cellPxX, cellPxY) * chamfer;
+  if (baseSize < 1) return;
+
+  for (let row = 0; row < rows; row++) {
+    const y0 = Math.round(row * cellPxY);
+    const y1 = Math.round((row + 1) * cellPxY);
+    for (let col = 0; col < cols; col++) {
+      const terrain = map.tiles[row]?.[col] ?? "jungle";
+      const x0 = Math.round(col * cellPxX);
+      const x1 = Math.round((col + 1) * cellPxX);
+      const north = paintTerrainAt(map, row - 1, col, terrain);
+      const south = paintTerrainAt(map, row + 1, col, terrain);
+      const west = paintTerrainAt(map, row, col - 1, terrain);
+      const east = paintTerrainAt(map, row, col + 1, terrain);
+      const diagonalNW = paintTerrainAt(map, row - 1, col - 1, terrain);
+      const diagonalNE = paintTerrainAt(map, row - 1, col + 1, terrain);
+      const diagonalSW = paintTerrainAt(map, row + 1, col - 1, terrain);
+      const diagonalSE = paintTerrainAt(map, row + 1, col + 1, terrain);
+
+      // Solo se achaflana una esquina de unión limpia entre dos terrenos: la
+      // celda es la única de su tipo en el cuadro 2x2 y las otras tres son del
+      // terreno vecino. En cruces de tres o más terrenos, dameros o uniones en
+      // T se deja la esquina recta para no generar triángulos sueltos.
+      const cornerNW = north !== terrain && north === west && diagonalNW === north;
+      const cornerNE = north !== terrain && north === east && diagonalNE === north;
+      const cornerSW = south !== terrain && south === west && diagonalSW === south;
+      const cornerSE = south !== terrain && south === east && diagonalSE === south;
+      // Media celda como máximo: los cortes no se solapan ni se comen islas de
+      // una celda, y el borde conserva el aspecto que ya tenía.
+      const size = baseSize;
+      const northPalette = TERRAIN_PALETTES[north] ?? TERRAIN_PALETTES[terrain];
+      const southPalette = TERRAIN_PALETTES[south] ?? TERRAIN_PALETTES[terrain];
+
+      if (cornerNW) chamferJointCorner(ctx, x0, y0, 1, 1, northPalette, size, style);
+      if (cornerNE) chamferJointCorner(ctx, x1, y0, -1, 1, northPalette, size, style);
+      if (cornerSW) chamferJointCorner(ctx, x0, y1, 1, -1, southPalette, size, style);
+      if (cornerSE) chamferJointCorner(ctx, x1, y1, -1, -1, southPalette, size, style);
+    }
+    yield 1;
+  }
+}
+
 /** Plataforma de piedra de cada respawn, con el anillo y el emblema del equipo. */
 function paintBases(
   ctx: CanvasRenderingContext2D,
@@ -1235,8 +1355,13 @@ function groundPaintStepCount(options: GroundPaintOptions): number {
   // Estimación para la barra de carga: cada zona cede varias veces (fuego y
   // parque, sobre todo). No hace falta exactitud; el progreso se limita a 0.99
   // hasta que el pintado termina de verdad.
+  const jointRows =
+    CONFIG.terrainTexture.straightJoints && CONFIG.terrainTexture.jointChamfer > 0
+      ? options.map.tiles.length
+      : 0;
   return (
     options.map.tiles.length +
+    jointRows +
     options.zones.length * 8 +
     1 +
     Math.ceil(GROUND_FLOWER_CLUSTERS / GROUND_FLOWER_CHUNK)
@@ -1283,6 +1408,10 @@ function* groundCanvasSteps(
   for (const zone of zones) {
     yield* paintTerrainZoneSteps(ctx, zone, toPxX, toPxY, scale);
   }
+
+  // Juntas achaflanadas: se aplican sobre el suelo y las zonas ya pintados para
+  // que el corte también recorte sus detalles.
+  yield* paintChamferedTerrainJoints(ctx, map, style);
 
   paintBases(ctx, map, toPxX, toPxY, scale);
   yield 1;

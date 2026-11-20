@@ -1505,8 +1505,12 @@ export class Game {
       let manifest = this.options.manifest ?? null;
       if (!manifest) {
         this.emitLoad(76, 'Leyendo el manifiesto de sprites');
+        // En desarrollo se refresca en cada carga para ver los sprites recién
+        // importados; en producción basta con la versión de la build, así que
+        // el manifiesto de 3,6 MB se puede cachear entre visitas.
+        const manifestVersion = import.meta.env.DEV ? Date.now() : __APP_VERSION__;
         const response = await fetch(
-          `${import.meta.env.BASE_URL}sprites/manifest.json?v=${Date.now()}`
+          `${import.meta.env.BASE_URL}sprites/manifest.json?v=${manifestVersion}`
         );
         if (!response.ok) {
           throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
