@@ -309,9 +309,114 @@ const TERRAIN_PALETTES: Record<TerrainId, TerrainPalette> = {
   },
 };
 
+interface FireFeatureGrid {
+  size: number;
+  firstGX: number;
+  firstGY: number;
+  cols: number;
+  rows: number;
+  xs: Float32Array;
+  ys: Float32Array;
+  ids: Int32Array;
+}
+
+interface FireEdgeSample {
+  edge: number;
+  first: number;
+  second: number;
+}
+
 /**
- * Pinta un calvero temático con bloques de 4 px, borde irregular y detalles
- * propios de su tipo Pokémon. La silueta y el ruido son deterministas.
+ * Rejilla de puntos desplazados para el Voronoi de la colada. Los puntos se
+ * anclan a coordenadas de la textura, no al calvero, así que el dibujo es
+ * determinista y el mismo patrón se repite en cualquier zona de fuego.
+ */
+function buildFireFeatureGrid(
+  startPx: number,
+  endPx: number,
+  startPy: number,
+  endPy: number,
+  size: number,
+  seed: number,
+): FireFeatureGrid {
+  const firstGX = Math.floor(startPx / size) - 1;
+  const lastGX = Math.ceil(endPx / size) + 1;
+  const firstGY = Math.floor(startPy / size) - 1;
+  const lastGY = Math.ceil(endPy / size) + 1;
+  const cols = lastGX - firstGX + 1;
+  const rows = lastGY - firstGY + 1;
+  const xs = new Float32Array(cols * rows);
+  const ys = new Float32Array(cols * rows);
+  const ids = new Int32Array(cols * rows);
+  for (let gy = firstGY; gy <= lastGY; gy++) {
+    for (let gx = firstGX; gx <= lastGX; gx++) {
+      const i = (gy - firstGY) * cols + (gx - firstGX);
+      // Desplazamiento casi de una celda completa: las placas salen
+      // irregulares y de tamaños muy distintos, no como una rejilla de
+      // hexágonos regulares.
+      const jx = blockNoise(gx + seed, gy - seed);
+      const jy = blockNoise(gx + 911 + seed, gy - 541 - seed);
+      xs[i] = (gx + 0.5 + (jx - 0.5) * 1.02) * size;
+      ys[i] = (gy + 0.5 + (jy - 0.5) * 1.02) * size;
+      ids[i] = (Math.imul(gx, 73856093) ^ Math.imul(gy, 19349663)) | 0;
+    }
+  }
+  return { size, firstGX, firstGY, cols, rows, xs, ys, ids };
+}
+
+/**
+ * Distancia al borde de Voronoi (F2 − F1) y las dos celdas que lo forman. Se
+ * comparan distancias al cuadrado y solo se hace la raíz al final: es la parte
+ * más caliente del pintado de la colada.
+ */
+function sampleFireEdge(
+  grid: FireFeatureGrid,
+  sx: number,
+  sy: number,
+  out: FireEdgeSample,
+): void {
+  const gx0 = Math.floor(sx / grid.size);
+  const gy0 = Math.floor(sy / grid.size);
+  let d1 = Infinity;
+  let d2 = Infinity;
+  let first = 0;
+  let second = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const gx = gx0 + dx;
+      const gy = gy0 + dy;
+      if (
+        gx < grid.firstGX ||
+        gy < grid.firstGY ||
+        gx >= grid.firstGX + grid.cols ||
+        gy >= grid.firstGY + grid.rows
+      ) {
+        continue;
+      }
+      const i = (gy - grid.firstGY) * grid.cols + (gx - grid.firstGX);
+      const ox = sx - grid.xs[i];
+      const oy = sy - grid.ys[i];
+      const d = ox * ox + oy * oy;
+      if (d < d1) {
+        d2 = d1;
+        second = first;
+        d1 = d;
+        first = i;
+      } else if (d < d2) {
+        d2 = d;
+        second = i;
+      }
+    }
+  }
+  out.edge = Math.sqrt(d2) - Math.sqrt(d1);
+  out.first = grid.ids[first];
+  out.second = grid.ids[second];
+}
+
+/**
+ * Pinta un calvero temático con bloques de 2 px en la colada y de 4 px en el
+ * resto, borde irregular y detalles propios de su tipo Pokémon. La silueta y
+ * el ruido son deterministas.
  */
 function* paintTerrainZoneSteps(
   ctx: CanvasRenderingContext2D,
@@ -334,7 +439,6 @@ function* paintTerrainZoneSteps(
   // Radio del cuadrado que envuelve la forma: sirve para repartir detalles.
   const radius = (Math.max(bounds.width, bounds.depth) / 2) * scale;
   const seed = centerX * 1.31 + centerZ * 1.77;
-  const step = 4;
   const shape: ZoneShape = zone;
   const edgeWorld = Math.min(
     0.42,
@@ -384,66 +488,105 @@ function* paintTerrainZoneSteps(
   };
 
   const paintFirePlates = function* (): Generator<number, void, void> {
-    // Basalto volcánico: una placa oscura. El naranja y el amarillo no van en
-    // el suelo; viven en las coronas de las rocas 3D. Aquí solo hay basalto y
-    // vetas frías.
-    const plateCount = 1;
-    const plates: Array<{ x: number; y: number; color: string }> = [];
-    for (let i = 0; i < plateCount; i++) {
-      const angle = random() * Math.PI * 2;
-      const distance = Math.sqrt(random()) * radius * 0.82;
-      plates.push({
-        x: Math.cos(angle) * distance,
-        y: Math.sin(angle) * distance,
-        color: random() < 0.55 ? palette.base : palette.light,
-      });
-    }
+    // Colada volcánica: placas de basalto casi negro separadas por una red de
+    // grietas incandescentes. Un Voronoi celular dibuja las placas; la
+    // distancia al borde decide si el bloque es roca, rescoldo o lava. Se pinta
+    // en bloques de 2 px (frente a los 4 px del resto de calveros) para que la
+    // grieta tenga el grosor justo sin perder el aspecto pixel art.
+    const pixelStep = 2;
+    const span = Math.max(bounds.width, bounds.depth);
+    const cellWorld = Math.min(2.8, Math.max(1.8, span * 0.09));
+    const cellPx = Math.max(12, cellWorld * scale);
+    const crackPx = Math.max(2.6, Math.min(3.8, cellPx * 0.05));
+    const rimPx = crackPx + Math.max(1.8, cellPx * 0.03);
+    const fineCellPx = cellPx * 0.52;
 
-    // El barrido por celdas de 4 px es lo más caro de una zona de fuego
-    // grande: se cede el hilo cada 16 filas para que nunca sea una tarea
-    // larga por sí sola.
+    const startPx = Math.floor((cx - radius) / pixelStep) * pixelStep;
+    const endPx = Math.ceil((cx + radius) / pixelStep) * pixelStep;
+    const startPy = Math.floor((cy - radius) / pixelStep) * pixelStep;
+    const endPy = Math.ceil((cy + radius) / pixelStep) * pixelStep;
+
+    const cells = buildFireFeatureGrid(
+      startPx,
+      endPx,
+      startPy,
+      endPy,
+      cellPx,
+      0,
+    );
+    // Segunda retícula más densa: solo se dibujan algunos de sus bordes, como
+    // vetas finas y ya medio enfriadas dentro de las placas grandes.
+    const fineCells = buildFireFeatureGrid(
+      startPx,
+      endPx,
+      startPy,
+      endPy,
+      fineCellPx,
+      337,
+    );
+    const edge: FireEdgeSample = { edge: 0, first: 0, second: 0 };
+    const fineEdge: FireEdgeSample = { edge: 0, first: 0, second: 0 };
+
     let plateRow = 0;
-    for (let oy = -radius; oy <= radius; oy += step) {
+    for (let py = startPy; py <= endPy; py += pixelStep) {
       if ((plateRow++ & 15) === 0) yield 1;
-      for (let ox = -radius; ox <= radius; ox += step) {
-        let nearest = 0;
-        let d1 = Infinity;
-        let d2 = Infinity;
-        for (let p = 0; p < plates.length; p++) {
-          const dx = ox - plates[p].x;
-          const dy = oy - plates[p].y;
-          const d = Math.hypot(dx, dy);
-          if (d < d1) {
-            d2 = d1;
-            d1 = d;
-            nearest = p;
-          } else if (d < d2) {
-            d2 = d;
+      for (let px = startPx; px <= endPx; px += pixelStep) {
+        const sx = px + pixelStep * 0.5;
+        const sy = py + pixelStep * 0.5;
+        sampleFireEdge(cells, sx, sy, edge);
+        const grain = blockNoise(px / pixelStep + 31, py / pixelStep - 17);
+        const flare = blockNoise(px + 19, py - 41);
+
+        let color: string;
+        if (edge.edge < crackPx) {
+          // Núcleo de la grieta. El calor de cada tramo se decide una sola vez
+          // por pareja de placas, así que una grieta no cambia de color a
+          // mitad de camino. Casi todo es rojo; naranja y amarillo quedan para
+          // chispas sueltas.
+          const edgeHeat = blockNoise(
+            Math.min(edge.first, edge.second),
+            Math.max(edge.first, edge.second),
+          );
+          const heat = 1 - edge.edge / crackPx;
+          if (edgeHeat < 0.08) {
+            color = "#280b05";
+          } else if (heat > 0.55 && flare > 0.9) {
+            color = "#ffc857";
+          } else if (heat > 0.42 && flare > 0.78) {
+            color = "#ff7a1e";
+          } else if (flare > 0.84) {
+            color = "#ff4a16";
+          } else {
+            color = "#ff2412";
           }
-        }
-
-        const px = Math.floor(cx + ox);
-        const py = Math.floor(cy + oy);
-
-        if (d2 - d1 < 5) {
-          // Surco ancho y oscuro entre placas. La lava vive en las rocas 3D,
-          // no en el suelo, así que las grietas se quedan en basalto negro.
-          ctx.fillStyle = palette.dark;
-          ctx.fillRect(px, py, step, step);
+        } else if (edge.edge < rimPx) {
+          // Rescoldo alrededor de la grieta: un ribete granate que separa la
+          // lava del basalto frío.
+          color = flare > 0.5 ? "#48130a" : "#260a05";
         } else {
-          // Interior de la placa: basalto con vetas y poros.
-          let color = plates[nearest].color;
-          if (random() < 0.08) color = palette.dark;
-          ctx.fillStyle = color;
-          ctx.fillRect(px, py, step, step);
-          if (random() < 0.14) {
-            ctx.fillStyle = palette.light;
-            ctx.fillRect(px + 1, py + 1, 2, 2);
-          } else if (random() < 0.08) {
-            ctx.fillStyle = palette.dark;
-            ctx.fillRect(px, py + 2, step, 2);
+          // Interior de la placa: basalto azul-gris con poros y motas.
+          const tone = blockNoise(edge.first + 5, edge.first - 2);
+          color = tone < 0.4 ? "#1c2026" : tone < 0.76 ? "#242930" : "#171b20";
+          if (grain < 0.04) {
+            color = "#101317";
+          } else if (grain > 0.976) {
+            color = "#2c3139";
+          } else {
+            sampleFireEdge(fineCells, sx, sy, fineEdge);
+            const fineHeat = blockNoise(
+              Math.min(fineEdge.first, fineEdge.second),
+              Math.max(fineEdge.first, fineEdge.second),
+            );
+            // Solo una parte de las vetas se enciende: el resto se lee como
+            // una grieta seca, casi negra.
+            if (fineEdge.edge < 1.7 && fineHeat > 0.66) {
+              color = fineHeat > 0.9 ? "#6a1a0b" : "#3a0f07";
+            }
           }
         }
+
+        ctx.fillStyle = color;
+        ctx.fillRect(px, py, pixelStep, pixelStep);
       }
     }
   };
