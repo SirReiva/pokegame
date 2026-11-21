@@ -27,7 +27,6 @@ import { fileURLToPath } from 'node:url';
 import {
   ABILITIES,
   abilityTotalTime,
-  commonAnimationFor,
   MOVESETS,
   type AbilityDef,
   type CommonAbilityId
@@ -1077,17 +1076,8 @@ export class HeadlessMatch {
     if (player.cooldowns[slotIndex] > 0.0001) return;
     if (player.damageReductionTimer > 0) return;
 
-    const def =
-      slotIndex === 4
-        ? {
-            ...baseDef,
-            animation: commonAnimationFor(
-              player.pokemonId,
-              player.commonAbilityId,
-              baseDef
-            )
-          }
-        : baseDef;
+    // La animación de los instintos comunes ya vive en su `presentation`.
+    const def = baseDef;
 
     breakRegen(player);
     if (player.invulnerableTimer > 0 && (def.props.power > 0 || def.props.slow !== null)) {

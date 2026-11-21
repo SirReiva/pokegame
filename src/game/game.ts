@@ -4,7 +4,6 @@ import {
   COMMON_ABILITIES,
   MOVESETS,
   abilityTotalTime,
-  commonAnimationFor,
   type AbilityDef,
   type BuffStat,
   type SelfAbilityDef,
@@ -2843,19 +2842,8 @@ export class Game {
     // Mientras Protección está activa no se puede usar ninguna otra habilidad.
     if (player.damageReductionTimer > 0) return;
 
-    // Los instintos comunes pueden sobrescribir su animación por Pokémon sin
-    // tocar el resto de la definición.
-    const def =
-      slotIndex === 4
-        ? {
-            ...baseDef,
-            animation: commonAnimationFor(
-              player.pokemonId,
-              player.commonAbilityId,
-              baseDef
-            )
-          }
-        : baseDef;
+    // La animación de los instintos comunes ya vive en su `presentation`.
+    const def = baseDef;
 
     // Cualquier habilidad usada corta la regeneración pasiva.
     breakRegen(player);

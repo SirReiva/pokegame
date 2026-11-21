@@ -17,7 +17,7 @@
     "sprites": "node scripts/import-sprites.mjs",
     "sprites:bleed": "node scripts/preprocess-sprites.mjs",
     "sprites:metadata": "node scripts/patch-sprite-metadata.mjs",
-    "validate:anims": "node scripts/validate-anim-timings.ts",
+    "validate:anims": "node --import tsx scripts/validate-anim-timings.ts",
     "sfx": "node scripts/import-sfx.mjs",
     "maps:designs": "node scripts/generate-arena-designs.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",

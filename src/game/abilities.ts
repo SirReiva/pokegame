@@ -50,7 +50,6 @@ import type {
 import { isChannelingCast } from './core/abilities/movement';
 import type { AnimationScript } from './core/animationScript';
 import type { PokemonType } from './core/typeChart';
-import type { AnimationName } from './types';
 
 import { CONFIG, DEG } from './config';
 import {
@@ -78,8 +77,7 @@ import type {
   BuffStat,
   DamageCategory,
   ImpactStyle,
-  ProjectileStyle,
-  StartupAnimationMode
+  ProjectileStyle
 } from './core/abilities/styles';
 
 export type {
@@ -131,8 +129,7 @@ export type {
   BuffStat,
   DamageCategory,
   ImpactStyle,
-  ProjectileStyle,
-  StartupAnimationMode
+  ProjectileStyle
 } from './core/abilities/styles';
 
 export const ABILITY_SLOTS: AbilitySlot[] = ['basic', 'skill1', 'skill2', 'skill3'];
@@ -178,11 +175,7 @@ const BASE_DEFAULTS = {
   startup: 0,
   active: 0,
   recovery: 0.45,
-  startupAnimation: null as AnimationName | null,
-  startupAnimationMode: 'once' as StartupAnimationMode,
-  startupAnimationSpeed: 1,
-  animation: null as AnimationName | null,
-  presentation: null as AnimationScript | null,
+  presentation: [] as AnimationScript,
   presentationBySpecies: null as Record<string, AnimationScript> | null,
   moveWhileStartup: false,
   armorPool: 0,
@@ -419,10 +412,7 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   startup(
     seconds: number,
     options?: {
-      mode?: StartupAnimationMode;
-      speed?: number;
       move?: boolean | number;
-      animation?: AnimationName;
     }
   ): this;
   /** Ventana de daño o desplazamiento que empieza con el efecto. */
@@ -437,9 +427,7 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   movementUntilEndAnimation(value?: boolean | number): this;
   /** Conserva la inercia al lanzar. */
   preserveMomentum(): this;
-  /** Animación de lanzamiento; `null` la desactiva. */
-  animation(name: AnimationName | null): this;
-  /** Timeline de animación propio; sustituye al builder clásico. */
+  /** Timeline de animación de la habilidad. */
   presentation(script: AnimationScript): this;
   /** Variante del timeline para una especie concreta (`pokemonId`). */
   presentationFor(speciesId: string, script: AnimationScript): this;
@@ -697,23 +685,11 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
   startup(
     seconds: number,
     options: {
-      mode?: StartupAnimationMode;
-      speed?: number;
       move?: boolean | number;
-      animation?: AnimationName;
     } = {}
   ): this {
     this.draft.startup = seconds;
-    if (options.mode !== undefined) {
-      this.draft.startupAnimationMode = options.mode;
-    }
-    if (options.speed !== undefined) {
-      this.draft.startupAnimationSpeed = options.speed;
-    }
     if (options.move !== undefined) this.draft.moveWhileStartup = options.move;
-    if (options.animation !== undefined) {
-      this.draft.startupAnimation = options.animation;
-    }
     return this;
   }
 
@@ -748,11 +724,6 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
 
   preserveMomentum(): this {
     this.draft.preserveMomentum = true;
-    return this;
-  }
-
-  animation(name: AnimationName | null): this {
-    this.draft.animation = name;
     return this;
   }
 
@@ -961,25 +932,6 @@ export function isCommonAbilityId(value: string): value is CommonAbilityId {
  * Habilidades comunes activas. `regeneracion` es pasiva y no tiene definición
  * de casteo; su lógica vive en el bucle de `Game`.
  */
-/**
- * Overrides de animación por Pokémon. Sin entrada se usa la animación de la
- * definición; `null` desactiva la animación. Por defecto está vacío: Protección
- * no reproduce ninguna y Impulso usa `quickstrike`.
- */
-export const COMMON_ANIMATION_OVERRIDES: Record<
-  string,
-  Partial<Record<CommonAbilityId, AnimationName | null>>
-> = {};
-
-export function commonAnimationFor(
-  pokemonId: string,
-  abilityId: CommonAbilityId,
-  def: AbilityDef
-): AnimationName | null {
-  const override = COMMON_ANIMATION_OVERRIDES[pokemonId]?.[abilityId];
-  return override === undefined ? def.animation : override;
-}
-
 export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
   proteccion: registerAbility(
     selfAbility('proteccion', 'Protección', 'Normal', 'status', defaultSelfResolve)
@@ -988,7 +940,6 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
       .recovery(0.15)
       .shield(2, 0.6, 0.88)
       .preserveMomentum()
-      .animation(null)
       .presentation([])
       .color(220, 240, 255)
       .description(
@@ -1002,7 +953,6 @@ export const COMMON_ABILITIES: Record<CommonAbilityId, AbilityDef | null> = {
       .dashBlocksOnEnemies()
       .active(0.2)
       .recovery(0)
-      .animation('quickstrike')
       .presentation(dashScript('quickstrike'))
       .color(210, 235, 255)
       .description(
@@ -1025,7 +975,7 @@ registerAbility(
     .projectile('electric', 18)
     .impact('electric')
     .recovery(0.34)
-    .startup(0.13, { mode: 'once' })
+    .startup(0.13)
     .presentation(releaseScript('shock'))
     .color(247, 208, 44)
     .description(
@@ -1054,7 +1004,7 @@ registerAbility(
     .radius(0.35)
     .impact('electric')
     .recovery(0.55)
-    .startup(0.35, { mode: 'once' })
+    .startup(0.35)
     .presentation(releaseScript('shock'))
     .color(255, 238, 88)
     .description(
@@ -1092,7 +1042,6 @@ registerAbility(
     .halfAngle(50)
     .knockback(0.25)
     .active(0.15).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('electric')
     .color(247, 208, 44)
@@ -1109,7 +1058,6 @@ registerAbility(
     .dash(5)
     .knockback(0.6)
     .active(0.3).recovery(0)
-    .animation('twirl')
     .presentation(dashScript('twirl'))
     .impact('electric')
     .color(247, 208, 44)
@@ -1127,7 +1075,6 @@ registerAbility(
     .projectile('electric', 16)
     .impact('electric')
     .recovery(0.35)
-    .animation('charge')
     .presentation(releaseScript('charge'))
     .slow(0.55, 2.5)
     .color(247, 208, 44)
@@ -1143,7 +1090,7 @@ registerAbility(
     .range(0)
     .radius(4.2)
     .area('explosion', 'once', 0.85)
-    .startup(0.6, { animation: 'charge', move: 0.2 })
+    .startup(0.6, { move: 0.2 })
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     .armor(40)
     .recovery(0.5)
@@ -1171,7 +1118,6 @@ registerAbility(
     .halfAngle(50)
     .knockback(0.25)
     .active(0.16).recovery(0)
-    .animation('shoot')
     .presentation(attackScript('shoot'))
     .impact('ghost')
     .color(150, 110, 220)
@@ -1189,7 +1135,6 @@ registerAbility(
     .projectile('ghost', 14)
     .impact('ghost')
     .recovery(0.45)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(150, 110, 220)
     .description(
@@ -1206,10 +1151,9 @@ registerAbility(
     .area('poison', 'overtime-global', 2.5, 0.5)
     .slow(0.75, 1.5)
     .dot('Poison', 5, 3)
-    .startup(0.35, { animation: 'shoot', move: true })
+    .startup(0.35, { move: true })
     .armor(20)
     .recovery(0.5)
-    .animation(null)
     .impact('poison')
     .color(150, 90, 180)
     .description(
@@ -1226,7 +1170,7 @@ registerAbility(
     .radius(0.42)
     .beam('ghost')
     .impact('ghost')
-    .startup(0.25, { animation: 'charge' })
+    .startup(0.25)
     .presentation(releaseScript('charge'))
     .recovery(0.55)
     .heal(0.15)
@@ -1251,7 +1195,6 @@ registerAbility(
     .halfAngle(45)
     .knockback(0.35)
     .active(0.15).recovery(0)
-    .animation('strike')
     .presentation(attackScript('strike'))
     .impact('slash')
     .color(246, 236, 220)
@@ -1290,7 +1233,6 @@ registerAbility(
     .radius(0.4)
     .startup(0.35)
     .recovery(0.5)
-    .animation('charge')
     .presentation(releaseScript('charge'))
     .beam('fire')
     .impact('fire')
@@ -1310,7 +1252,6 @@ registerAbility(
     .startup(0.75)
     .armor(40)
     .recovery(0.7)
-    .animation('charge')
     .presentation(releaseScript('charge'))
     .area('fire', 'once', 0.5)
     .impact('fire')
@@ -1334,7 +1275,6 @@ registerAbility(
     .knockback(0.4)
     .active(0.225).recovery(0)
     .startup(0.3)
-    .animation('charge')
     .presentation(attackScript('charge'))
     .impact('grass')
     .color(126, 214, 88)
@@ -1350,7 +1290,6 @@ registerAbility(
     .halfAngle(60)
     .startup(0.2)
     .active(0.2).recovery(0)
-    .animation('shoot')
     .presentation(attackScript('shoot'))
     .impact('spore')
     .slow(0.55, 3)
@@ -1369,7 +1308,6 @@ registerAbility(
     .startup(0.75)
     .armor(40)
     .recovery(0.7)
-    .animation('shake')
     .presentation(releaseScript('shake'))
     .area('grass', 'once', 1.1)
     .impact('grass')
@@ -1391,7 +1329,6 @@ registerAbility(
     .dash(4.2)
     .knockback(0.3)
     .active(0.3).recovery(0)
-    .animation('attack')
     .presentation(dashScript('attack'))
     .color(96, 176, 255)
     .description(
@@ -1409,7 +1346,6 @@ registerAbility(
     .impact('water')
     .recovery(0.4)
     .startup(0.2)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .slow(0.7, 2)
     .color(104, 196, 255)
@@ -1426,9 +1362,8 @@ registerAbility(
     .radius(0.42)
     .beam('water')
     .impact('water')
-    .startup(0.3, { animation: 'charge' })
+    .startup(0.3)
     .recovery(0.6)
-    .animation('shoot')
     .color(88, 168, 255)
     .description(
       'Definitiva: chorro de agua a presión que atraviesa la línea de tiro.'
@@ -1450,7 +1385,6 @@ registerAbility(
     .halfAngle(45)
     .knockback(0.25)
     .active(0.16).recovery(0)
-    .animation('strike')
     .presentation(attackScript('strike'))
     .impact('steel')
     .color(176, 198, 228)
@@ -1467,7 +1401,6 @@ registerAbility(
     .dash(5.2)
     .knockback(0.6)
     .active(0.25).recovery(0)
-    .animation('quickstrike')
     .presentation(dashScript('quickstrike'))
     .impact('fighting')
     .color(214, 236, 255)
@@ -1484,9 +1417,8 @@ registerAbility(
     .radius(0.32)
     .projectile('aura', 15)
     .impact('aura')
-    .startup(0.2, { animation: 'charge' })
+    .startup(0.2)
     .recovery(0.4)
-    .animation('attack')
     .color(82, 152, 255)
     .description(
       'Proyectil de aura guiado. Alcance largo y golpe único; remata a los rivales que huyen.'
@@ -1502,9 +1434,8 @@ registerAbility(
     .radius(1)
     .halfAngle(65)
     .knockback(1.1)
-    .startup(0.35, { animation: 'charge' })
+    .startup(0.35)
     .active(0.325).recovery(0)
-    .animation('strike')
     .impact('fighting')
     .color(96, 150, 255)
     .description(
@@ -1526,7 +1457,6 @@ registerAbility(
     .projectile('shuriken', 20)
     .impact('shuriken')
     .recovery(0.3)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(112, 196, 255)
     .description(
@@ -1543,7 +1473,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.35)
     .active(0.16).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('dark')
     .color(154, 120, 232)
@@ -1560,7 +1489,6 @@ registerAbility(
     .dash(4.8)
     .knockback(0.5)
     .active(0.26).recovery(0)
-    .animation('quickstrike')
     .presentation(dashScript('quickstrike'))
     .impact('dark')
     .color(128, 100, 216)
@@ -1577,9 +1505,8 @@ registerAbility(
     .radius(0.42)
     .beam('dark')
     .impact('dark')
-    .startup(0.25, { animation: 'charge' })
+    .startup(0.25)
     .recovery(0.55)
-    .animation('shoot')
     .color(124, 92, 224)
     .description(
       'Definitiva: descarga un haz de energía oscura que atraviesa la línea de tiro.'
@@ -1602,7 +1529,6 @@ registerAbility(
     .knockback(1.4)
     .active(0.2).recovery(0)
     .startup(0.12)
-    .animation('punch')
     .presentation(attackScript('punch'))
     .impact('psychic')
     .color(214, 122, 255)
@@ -1618,7 +1544,6 @@ registerAbility(
     .radius(0.85)
     .dash(5)
     .active(0.24).recovery(0)
-    .animation('quickstrike')
     .presentation(dashScript('quickstrike'))
     .impact('psychic')
     .color(170, 104, 255)
@@ -1633,7 +1558,7 @@ registerAbility(
     .cooldown(7)
     .range(10)
     .radius(0.42)
-    .startup(0.4, { animation: 'shoot' })
+    .startup(0.4)
     .recovery(0.5)
     .beam('psychic')
     .impact('psychic')
@@ -1650,7 +1575,7 @@ registerAbility(
     .cooldown(15)
     .range(4.5)
     .radius(3.2)
-    .startup(0.8, { animation: 'charge' })
+    .startup(0.8)
     .armor(40)
     .recovery(0.7)
     .area('psychic', 'once', 0.85)
@@ -1678,7 +1603,6 @@ registerAbility(
     .knockback(0.5)
     .active(0.16).recovery(0)
     .startup(0.1)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('psychic')
     .color(255, 150, 220)
@@ -1694,7 +1618,6 @@ registerAbility(
     .radius(0.85)
     .dash(4.4)
     .active(0.26).recovery(0)
-    .animation('quickstrike')
     .presentation(dashScript('quickstrike'))
     .buff('speed', 1.3, 3)
     .impact('psychic')
@@ -1734,7 +1657,6 @@ registerAbility(
     .recovery(0.75)
     .startup(0.75)
     .armor(40)
-    .animation('twirl')
     .presentation(releaseScript('twirl'))
     .heal(0.27)
     .area('recovery', 'once', 0.75)
@@ -1766,7 +1688,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.35)
     .active(0.18).recovery(0)
-    .animation('strike')
     .presentation(attackScript('strike'))
     .impact('air')
     .color(255, 190, 92)
@@ -1784,7 +1705,6 @@ registerAbility(
     .projectile('air', 16)
     .impact('air')
     .recovery(0.4)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(255, 206, 122)
     .description(
@@ -1801,10 +1721,9 @@ registerAbility(
     .area('heat', 'once', 0.9)
     .radial(0.4)
     .slow(0.82, 1.5)
-    .startup(0.3, { animation: 'shoot', move: true })
+    .startup(0.3, { move: true })
     .armor(20)
     .recovery(0.5)
-    .animation(null)
     .impact('air')
     .color(255, 150, 60)
     .description(
@@ -1822,10 +1741,9 @@ registerAbility(
     .area('air', 'once', 0.9)
     .radial(0.35)
     .knockback(0.9)
-    .startup(0.8, { animation: 'charge' })
+    .startup(0.8)
     .armor(40)
     .recovery(0.6)
-    .animation('strike')
     .impact('air')
     .color(255, 168, 72)
     .description(
@@ -1848,7 +1766,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.35)
     .active(0.18).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('air')
     .color(206, 242, 255)
@@ -1865,9 +1782,8 @@ registerAbility(
     .radius(0.4)
     .beam('ice')
     .impact('ice')
-    .startup(0.3, { animation: 'charge' })
+    .startup(0.3)
     .recovery(0.5)
-    .animation('shoot')
     .slow(0.8, 1.5)
     .color(150, 225, 255)
     .description(
@@ -1885,10 +1801,9 @@ registerAbility(
     .area('ice', 'once', 0.9)
     .radial(0.5)
     .slow(0.65, 2.5)
-    .startup(0.3, { animation: 'shoot', move: true })
+    .startup(0.3, { move: true })
     .armor(20)
     .recovery(0.5)
-    .animation(null)
     .impact('ice')
     .color(130, 210, 245)
     .description(
@@ -1906,12 +1821,11 @@ registerAbility(
     .area('blizzard', 'once', 1.1)
     .radial(0.35)
     .slow(0.75, 2)
-    .startup(0.75, { animation: 'charge' })
+    .startup(0.75)
     .armor(40)
     .recovery(0.7)
     // El área es instantánea: la ventisca cae al terminar la carga. Sin clip
     // de lanzamiento para no reproducir el disparo cuando ya ha impactado.
-    .animation(null)
     .impact('ice')
     .color(120, 200, 250)
     .description(
@@ -1934,7 +1848,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.4)
     .active(0.18).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('air')
     .color(247, 208, 44)
@@ -1952,10 +1865,9 @@ registerAbility(
     .area('explosion', 'once', 0.8)
     .radial(0.6)
     .slow(0.7, 1.5)
-    .startup(0.3, { animation: 'charge', move: true })
+    .startup(0.3, { move: true })
     .armor(20)
     .recovery(0.5)
-    .animation('shock')
     .impact('electric')
     .color(247, 208, 44)
     .description(
@@ -1981,11 +1893,10 @@ registerAbility(
     .radial(0.4)
     .slow(0.65, 2)
     .knockback(1)
-    .startup(0.85, { animation: 'charge' })
+    .startup(0.85)
     .armor(45)
     .recovery(0.6)
     // El área cae al terminar la carga; sin clip de lanzamiento después del impacto.
-    .animation(null)
     .impact('electric')
     .color(255, 238, 88)
     .description(
@@ -2008,7 +1919,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.25)
     .active(0.15).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('slash')
     .color(166, 185, 26)
@@ -2025,7 +1935,6 @@ registerAbility(
     .dash(5)
     .knockback(0.6)
     .active(0.26).recovery(0)
-    .animation('attack')
     .presentation(dashScript('attack'))
     .impact('air')
     .color(196, 240, 160)
@@ -2039,9 +1948,8 @@ registerAbility(
     .power(0)
     .cooldown(12)
     .radius(1.2)
-    .startup(0.45, { animation: 'charge' })
+    .startup(0.45)
     .recovery(0.6)
-    .animation('charge')
     .buff('attack', 1.35, 4.5)
     .color(170, 210, 60)
     .description(
@@ -2058,9 +1966,8 @@ registerAbility(
     .radius(1.1)
     .halfAngle(70)
     .knockback(1.1)
-    .startup(0.35, { animation: 'charge' })
+    .startup(0.35)
     .active(0.325).recovery(0)
-    .animation('attack')
     .impact('slash')
     .color(170, 200, 40)
     .description(
@@ -2083,7 +1990,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.35)
     .active(0.21).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('jaw')
     .color(126, 98, 166)
@@ -2103,7 +2009,6 @@ registerAbility(
     .knockback(0.45)
     .startup(0.25)
     .recovery(0.45)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(196, 166, 104)
     .description(
@@ -2118,10 +2023,9 @@ registerAbility(
     .range(0)
     .radius(3.4)
     .area('ground', 'overtime-global', 2.5, 0.5)
-    .startup(0.45, { animation: 'hop' })
+    .startup(0.45)
     .armor(25)
     .recovery(0.7)
-    .animation(null)
     .impact('ground')
     .color(198, 158, 92)
     .description(
@@ -2138,11 +2042,10 @@ registerAbility(
     .radius(0.5)
     .beam('rock')
     .impact('rock')
-    .startup(0.5, { animation: 'charge' })
+    .startup(0.5)
     .recovery(0.6)
     // El haz y las estalagmitas son el golpe: no hay clip de lanzamiento
     // después de la carga para no encadenar un Attack que no aporta nada.
-    .animation(null)
     .color(210, 178, 118)
     .description(
       'Definitiva: una línea de estalagmitas de 9 u que brota del suelo y golpea con 90 de potencia a todos los rivales en línea.'
@@ -2164,7 +2067,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.4)
     .active(0.2).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('slash')
     .color(226, 191, 101)
@@ -2182,10 +2084,9 @@ registerAbility(
     .area('ground', 'once', 0.9)
     .radial(0.35)
     .knockback(0.6)
-    .startup(0.7, { animation: 'charge' })
+    .startup(0.7)
     .armor(40)
     .recovery(0.7)
-    .animation(null)
     .impact('ground')
     .color(214, 170, 88)
     .description(
@@ -2208,7 +2109,6 @@ registerAbility(
     .halfAngle(65)
     .knockback(0.55)
     .active(0.225).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('rock')
     .color(182, 161, 54)
@@ -2226,9 +2126,8 @@ registerAbility(
     .projectile('rock', 13)
     .impact('rock')
     .knockback(0.3)
-    .startup(0.2, { animation: 'charge' })
+    .startup(0.2)
     .recovery(0.45)
-    .animation('shoot')
     .color(182, 161, 54)
     .description(
       'Lanza una roca a 8 u para presionar a distancia. Su herramienta para no ser kited.'
@@ -2246,9 +2145,8 @@ registerAbility(
     // la erupción nace exactamente donde está.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la carga.
-    .startup(2, {  move: 1.5 })
+    .startup(2, { move: 1.5 })
     .recovery(0.4)
-    .animation('attack')
     .presentation(releaseScript('attack'))
     .area('burrow', 'once', 0.75)
     .knockback(1.2)
@@ -2281,10 +2179,9 @@ registerAbility(
     .area('fissure', 'once', 0.75)
     .radial(0.35)
     .knockback(0.9)
-    .startup(0.6, { animation: 'hop' })
+    .startup(0.6)
     .armor(40)
     .recovery(0.6)
-    .animation(null)
     .impact('ground')
     .color(182, 161, 54)
     .description(
@@ -2307,7 +2204,6 @@ registerAbility(
     .projectile('grass', 14)
     .impact('grass')
     .recovery(0.3)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(143, 208, 90)
     .description(
@@ -2321,9 +2217,8 @@ registerAbility(
     .cooldown(7)
     .range(9.5)
     .radius(0.48)
-    .startup(0.55, { animation: 'charge' })
+    .startup(0.55)
     .recovery(0.55)
-    .animation('shoot')
     .beam('grass')
     .impact('grass')
     .color(150, 224, 96)
@@ -2342,10 +2237,9 @@ registerAbility(
     .radius(3.6)
     // Deseo es una concentración larga: la carga en bucle evita que el
     // personaje se quede congelado en la primera pose del twirl.
-    .startup(1.05, { mode: 'loop', animation: 'charge' })
+    .startup(1.05)
     .armor(55)
     .recovery(0.65)
-    .animation('twirl')
     .area('recovery', 'once', 0.8)
     .resolve(({ fallenAllies, revive }) => {
       // La onda no cura: devuelve al combate a los aliados caídos cuyo
@@ -2365,12 +2259,11 @@ registerAbility(
     .cooldown(13)
     .range(5.5)
     .radius(2.8)
-    .startup(0.85, { animation: 'charge' })
+    .startup(0.85)
     .armor(50)
     .recovery(0.7)
     // El área es instantánea al terminar la carga; no hay clip de lanzamiento
     // después del impacto.
-    .animation(null)
     .area('psychic', 'once', 0.9)
     .radial(0.35)
     .slow(0.65, 2)
@@ -2395,7 +2288,6 @@ registerAbility(
     .projectile('psychic', 14)
     .impact('psychic')
     .recovery(0.35)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(138, 169, 232)
     .description(
@@ -2409,10 +2301,9 @@ registerAbility(
     .cooldown(9)
     .range(4.5)
     .radius(3.2)
-    .startup(0.35, { animation: 'charge', move: true })
+    .startup(0.35, { move: true })
     .armor(20)
     .recovery(0.5)
-    .animation('shoot')
     .area('water', 'overtime-global', 2.5, 0.5)
     .slow(0.7, 1.2)
     .impact('water')
@@ -2454,10 +2345,9 @@ registerAbility(
       { offsetX: 1.256, offsetZ: -0.725, radius: 1.15 },
       { offsetX: -1.256, offsetZ: -0.725, radius: 1.15 }
     ])
-    .startup(0.3, { animation: 'charge' })
+    .startup(0.3)
     .armor(25)
     .recovery(0.55)
-    .animation('shoot')
     .area('cyclone', 'overtime-global', 2.5)
     .slow(0.65, 1.5)
     .impact('air')
@@ -2474,9 +2364,8 @@ registerAbility(
     .cooldown(16)
     .range(11)
     .radius(0.55)
-    .startup(0.8, { animation: 'charge' })
+    .startup(0.8)
     .recovery(0.65)
-    .animation('shoot')
     .beam('air')
     .impact('air')
     .knockback(2.2)
@@ -2502,7 +2391,6 @@ registerAbility(
     .halfAngle(55)
     .knockback(0.35)
     .active(0.18).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('air')
     .color(255, 196, 96)
@@ -2519,8 +2407,7 @@ registerAbility(
     .dash(6)
     .knockback(1.2)
     .active(0.35).recovery(0.35)
-    .startup(0.4, { animation: 'charge' })
-    .animation('attack')
+    .startup(0.4)
     .impact('air')
     .selfDamage(0.12)
     .color(255, 176, 76)
@@ -2537,10 +2424,9 @@ registerAbility(
     .cooldown(13)
     .range(0)
     .radius(3.2)
-    .startup(0.75, { animation: 'charge' })
+    .startup(0.75)
     .armor(40)
     .recovery(0.65)
-    .animation(null)
     .heal(0.3)
     .area('recovery', 'once', 0.75)
     .resolve(({ targets, applyHeal }) => {
@@ -2568,11 +2454,10 @@ registerAbility(
     .radius(7.5)
     .halfAngle(12.5)
     .aoeShape('cone')
-    .startup(0.4, { animation: 'charge' })
+    .startup(0.4)
     .recovery(1.5)
     .movementDuringCast(0.25)
     .armor(60, { window:'cast' })
-    .animation('shoot')
     .area('sacredFlame', 'overtime-global', 1.5, 0.5)
     // El vértice queda donde nació el cono, pero el eje sigue el apuntado del
     // jugador sin separarse más de 15° del lanzamiento original. Así se puede
@@ -2625,7 +2510,6 @@ registerAbility(
     .halfAngle(60)
     .knockback(0.55)
     .active(0.22).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('water')
     .color(76, 143, 214)
@@ -2641,9 +2525,8 @@ registerAbility(
     .radius(0.9)
     .dash(4.6)
     .knockback(0.9)
-    .startup(0.2, { animation: 'charge' })
+    .startup(0.2)
     .active(0.3).recovery(0.2)
-    .animation('attack')
     .impact('water')
     .color(76, 143, 214)
     .description(
@@ -2662,7 +2545,6 @@ registerAbility(
     .knockback(0.8)
     .startup(0.25)
     .active(0.25).recovery(0.1)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('jaw')
     .color(126, 98, 166)
@@ -2680,10 +2562,9 @@ registerAbility(
     .beam('psychic')
     .impact('psychic')
     .slow(0.55, 2.5)
-    .startup(0.55, { animation: 'charge' })
+    .startup(0.55)
     .armor(40)
     .recovery(0.6)
-    .animation('shoot')
     .color(128, 96, 230)
     .description(
       'Definitiva: exhala un dragoaliento en línea de 10 u que atraviesa a todos los rivales. 140 de potencia y ralentiza un 45 % durante 2,5 s: su parálisis. Se carga 0,55 s con 40 de armadura.'
@@ -2705,7 +2586,6 @@ registerAbility(
     .halfAngle(60)
     .knockback(0.85)
     .active(0.24).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('hit')
     .color(235, 228, 210)
@@ -2723,7 +2603,6 @@ registerAbility(
     .projectile('waterJet', 14)
     .impact('water')
     .recovery(0.3)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(96, 176, 255)
     .description(
@@ -2745,10 +2624,9 @@ registerAbility(
     .movementDuringCast(false)
     .radial(0.4)
     .slow(0.45, 2.5)
-    .startup(0.85, { animation: 'charge' })
+    .startup(0.85)
     .armor(50)
     // El cono es instantáneo al terminar la carga: sin clip de lanzamiento.
-    .animation(null)
     .impact('ice')
     .color(200, 240, 255)
     .description(
@@ -2778,7 +2656,6 @@ registerAbility(
     .projectile('waterJet', 15)
     .impact('water')
     .recovery(0.3)
-    .animation('shoot')
     .presentation(releaseScript('shoot'))
     .color(72, 152, 235)
     .description(
@@ -2792,10 +2669,9 @@ registerAbility(
     .cooldown(8)
     .range(5)
     .radius(3)
-    .startup(0.3, { animation: 'charge', move: true })
+    .startup(0.3, { move: true })
     .armor(25)
     .recovery(0.5)
-    .animation('shoot')
     .area('cyclone', 'overtime-global', 2.5, 0.5)
     .slow(0.7, 1.5)
     .impact('water')
@@ -2812,10 +2688,9 @@ registerAbility(
     .cooldown(12)
     .range(0)
     .radius(3.4)
-    .startup(0.7, { animation: 'charge' })
+    .startup(0.7)
     .armor(40)
     .recovery(0.6)
-    .animation(null)
     .heal(0.1)
     .area('recovery', 'once', 0.75)
     .resolve(({ targets, applyHeal }) => {
@@ -2841,10 +2716,9 @@ registerAbility(
     .cooldown(16)
     .range(5)
     .radius(3.4)
-    .startup(0.8, { animation: 'charge' })
+    .startup(0.8)
     .armor(50)
     .recovery(0.6)
-    .animation(null)
     // Dos ticks: el primero cae al aparecer el área y el segundo a los 0,5 s.
     .area('primordialPulse', 'overtime-global', 1, 0.5)
     .radial(0.4)
@@ -2902,7 +2776,6 @@ registerAbility(
     .halfAngle(60)
     .knockback(0.4)
     .active(0.2).recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('slash')
     .color(96, 200, 120)
@@ -2918,9 +2791,8 @@ registerAbility(
     .radius(0.95)
     .dash(5.5)
     .knockback(0.9)
-    .startup(0.25, { animation: 'charge' })
+    .startup(0.25)
     .active(0.3).recovery(0.25)
-    .animation('attack')
     .impact('air')
     .color(96, 200, 120)
     .description(
@@ -2935,10 +2807,9 @@ registerAbility(
     .cooldown(9)
     .range(9.5)
     .radius(0.5)
-    .startup(0.55, { animation: 'charge' })
+    .startup(0.55)
     .armor(35)
     .recovery(0.55)
-    .animation('shoot')
     .beam('psychic')
     .impact('psychic')
     .slow(0.7, 1.5)
@@ -2958,9 +2829,8 @@ registerAbility(
     // La marca sigue a Rayquaza mientras se eleva: la onda nace donde cae.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la subida.
-    .startup(1, { animation: 'charge', move: true })
+    .startup(1, { move: true })
     .recovery(0.55)
-    .animation('attack')
     .area('air', 'once', 0.9)
     .radial(0.35)
     .knockback(1.1)
@@ -3014,7 +2884,6 @@ registerAbility(
     .knockback(0.3)
     .active(0.175)
     .recovery(0)
-    .animation('attack')
     .presentation(attackScript('attack'))
     .impact('vine')
     .color(88, 190, 96)
@@ -3032,7 +2901,6 @@ registerAbility(
     .knockback(0.25)
     .active(0.15)
     .recovery(0)
-    .animation('strike')
     .presentation(attackScript('strike'))
     .impact('fire')
     .color(246, 146, 58)
@@ -3050,7 +2918,6 @@ registerAbility(
     .knockback(0.2)
     .active(0.15)
     .recovery(0)
-    .animation('strike')
     .presentation(attackScript('strike'))
     .impact('water')
     .color(104, 196, 255)

@@ -12,7 +12,6 @@ import type { AoeEvent, AoeMovement, AoePlayer, AoePrepareMovement } from './aoe
 import type { AbilityResolve, AbilityResolveContext } from './resolve';
 import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
 import type { AnimationScript } from '../animationScript';
-import type { AnimationName } from '../types';
 import type { PokemonType } from '../typeChart';
 import type {
   AoeDamageMode,
@@ -21,8 +20,7 @@ import type {
   BeamStyle,
   DamageCategory,
   ImpactStyle,
-  ProjectileStyle,
-  StartupAnimationMode
+  ProjectileStyle
 } from './styles';
 
 export type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
@@ -151,27 +149,11 @@ interface AbilityBase<P extends AbilityProps> {
   /** Tiempo desde el fin del efecto hasta que el lanzador vuelve a estar libre. */
   recovery: number;
   /**
-   * Animación de carga durante el `startup`; sin ella se usa `animation`.
-   * Si ambas son `null`, no se reproduce ninguna animación.
+   * Timeline de animación de la habilidad. Se coloca dentro de
+   * `startup + active + recovery`, puede encadenar clips y puede dejar huecos.
+   * Un array vacío desactiva la animación.
    */
-  startupAnimation: AnimationName | null;
-  /** Cómo se reproduce `startupAnimation`. */
-  startupAnimationMode: StartupAnimationMode;
-  /** Velocidad de `startupAnimation` en modo `loop` (1 = normal). */
-  startupAnimationSpeed: number;
-  /**
-   * Animación de sprite que se reproduce al lanzar la habilidad.
-   * `null` = la habilidad no reproduce ninguna animación.
-   */
-  animation: AnimationName | null;
-  /**
-   * Timeline de animación propio de la habilidad. Si está declarado, sustituye
-   * al builder clásico: `animation`, `startupAnimation`,
-   * `startupAnimationMode` y `startupAnimationSpeed` se ignoran. El script se
-   * coloca dentro de `startup + active + recovery` y puede encadenar clips o
-   * dejar huecos.
-   */
-  presentation?: AnimationScript | null;
+  presentation: AnimationScript;
   /**
    * Variante del timeline por especie (`pokemonId`). Reemplaza al script común
    * para esa especie; no se fusiona paso a paso.

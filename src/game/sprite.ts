@@ -2,7 +2,6 @@ import * as pc from 'playcanvas';
 import {
   ABILITIES,
   COMMON_ABILITIES,
-  COMMON_ANIMATION_OVERRIDES,
   MOVESETS
 } from './abilities';
 import { resolveAnimationName } from './animationTimeline';
@@ -322,28 +321,23 @@ function movesetUsesAnimation(
   animation: AnimationName
 ): boolean {
   const moveset = MOVESETS[entry.id];
-  const usesScript = (
-    script: readonly { clip: AnimationName }[] | null | undefined
-  ): boolean => script?.some((step) => step.clip === animation) ?? false;
   const uses = (ability: {
-    animation?: AnimationName | null;
-    startupAnimation?: AnimationName | null;
-    presentation?: readonly { clip: AnimationName }[] | null;
+    presentation: readonly { clip: AnimationName }[];
     presentationBySpecies?: Readonly<
       Record<string, readonly { clip: AnimationName }[]>
     > | null;
-  } | null) =>
-    ability?.animation === animation ||
-    ability?.startupAnimation === animation ||
-    usesScript(ability?.presentation) ||
-    usesScript(ability?.presentationBySpecies?.[entry.id]);
+  } | null): boolean => {
+    const scripts = [
+      ability?.presentation,
+      ability?.presentationBySpecies?.[entry.id]
+    ];
+    return scripts.some(
+      (script) => script?.some((step) => step.clip === animation) ?? false
+    );
+  };
   if (moveset?.some((id) => (id ? uses(ABILITIES[id]) : false))) return true;
-  // El instinto común (Impulso usa QuickStrike) también necesita su hoja,
-  // incluidos los overrides de animación por Pokémon.
-  if (Object.values(COMMON_ABILITIES).some((ability) => uses(ability))) return true;
-  return Object.values(COMMON_ANIMATION_OVERRIDES[entry.id] ?? {}).includes(
-    animation
-  );
+  // El instinto común (Impulso usa QuickStrike) también necesita su hoja.
+  return Object.values(COMMON_ABILITIES).some((ability) => uses(ability));
 }
 
 /** Recorte común de todas las filas de una animación, en píxeles del arte. */

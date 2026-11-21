@@ -75,8 +75,8 @@ tres marcadores en el manifiesto.
 Cada segmento indica qué frames se dibujan, en qué ventana de tiempo y a qué
 velocidad.
 
-Si la habilidad declara `presentation`, el plan sale de ese timeline en vez del
-builder automático. El resultado es el mismo `CastPlan`; ver §13.
+El plan sale del `presentation` de la habilidad. El resultado es el mismo
+`CastPlan`; ver §13.
 
 
 ### 3.1 Anticipación y `HitFrame`
@@ -128,19 +128,18 @@ projectileAbility(
   .startup(0)          // sale en el acto
   .active(0)
   .recovery(0.45)      // bloqueo después del disparo
-  .animation('shoot')
+  .presentation(releaseScript('shoot'))
 ```
 
 Builder:
 
-- `startup(seconds, { mode, speed, move, animation })`
-  - `mode: 'once'` (por defecto): ancla el `HitFrame` del clip de carga al efecto.
-  - `mode: 'loop'`: repite la carga a `speed` hasta el efecto.
+- `startup(seconds, { move })`
   - `move: true` → `moveWhileStartup`. También acepta un número como
     multiplicador de velocidad; `false` o `0` bloquea.
-  - `animation: 'charge'` → animación de carga distinta de la de lanzamiento.
 - `active(seconds)`
 - `recovery(seconds)`
+- `presentation(script)` → timeline de animación de la habilidad.
+- `presentationFor(speciesId, script)` → variante para una especie concreta.
 - `movementDuringCast(value)` → `movementDuringCast`. Controla el movimiento
   durante todo el casteo, recuperación incluida. `false` o `0` clava al
   lanzador y tiene prioridad sobre `move: true`; `true` usa la velocidad normal
@@ -166,9 +165,9 @@ definición nueva pueda recuperar la semántica antigua.
 | `castTime` / 2 (melee) | `active` |
 | `animationTime` | eliminado: lo calcula el plan |
 | `moveLock` | eliminado: se deriva de las fases |
-| `windupAnimation` | `startupAnimation` |
-| `windupAnimationMode` | `startupAnimationMode` |
-| `windupAnimationSpeed` | `startupAnimationSpeed` |
+| `windupAnimation` | eliminado: es un paso de `presentation` |
+| `windupAnimationMode` | eliminado: `mode` del paso |
+| `windupAnimationSpeed` | eliminado: `speed` del paso |
 | `moveWhileWindup` | `moveWhileStartup` |
 | `blockMovementDuringCast` | `movementDuringCast` (`false`/`0` bloquea) |
 | `blockMovementUntilEndAnimation` | `movementUntilEndAnimation` (`false`/`0` bloquea) |
@@ -180,15 +179,13 @@ combate actual.
 
 ### Sin animación de lanzamiento
 
-Si `animation` es `null` y hay `startupAnimation`:
+No es un caso especial del compilador: se escribe en el script.
 
-- `mode: 'once'` → la carga se trata como clip de lanzamiento y su `HitFrame` se
-  ancla al efecto (por ejemplo, Bomba Lodo).
-- `mode: 'loop'` → la carga se repite durante todo el `startup` y el efecto no
-  tiene animación propia (por ejemplo, una carga circular).
-
-Si no hay ninguna animación, el efecto sale en `startup` y el Pokémon mantiene
-su reposo o caminar.
+- Proyectil, haz o área instantánea (`active: 0`): `releaseScript(clip)`.
+- Canalización con carga: `channelFillScript(charge, releaseScript(clip))`.
+  La carga solo se dibuja si la anticipación del lanzamiento llega tarde.
+- Sin animación: `presentation: []`. El efecto sale en `startup` y el Pokémon
+  mantiene su reposo o caminar.
 
 ### Fallbacks
 
@@ -302,7 +299,7 @@ Comprueba, para cada habilidad × especie × skin:
 - los segmentos no se solapan ni se salen del casteo;
 - `HitFrame <= ReturnFrame < número de frames`;
 - avisa de los clips que han tenido que recortar anticipación y de las cargas
-  (`startupAnimation`) que no tienen hueco antes del `HitFrame`.
+  (`fill`) que no tienen hueco antes del `HitFrame`.
 
 ## 10. Depuración en partida
 
@@ -316,12 +313,11 @@ overlay con:
 
 ## 11. Cómo añadir una habilidad
 
-1. Elige la forma y la animación (`attack`, `shoot`, `strike`, `quickstrike`…).
+1. Elige la forma y los clips (`attack`, `shoot`, `strike`, `quickstrike`…).
 2. Define `startup`, `active` y `recovery` pensando en el balance, no en el
    sprite.
-3. Deja que el plan retime el clip. Si el resultado se ve forzado, ajusta el
-   `startup` o elige otra animación; no metas tiempos específicos de una
-   especie.
+3. Escribe el `presentation` con los helpers (`attackScript`, `releaseScript`,
+   `dashScript`, `channelFillScript`) o a mano si necesitas encadenar clips.
 4. Ejecuta la validación y, si hace falta, activa el overlay para ver el frame
    exacto.
 
@@ -421,13 +417,12 @@ declaran `at`; `until` tiene prioridad sobre `duration`; un `fill` se recorta al
 inicio real del siguiente paso; nada se sale de `[0, endAt]`; los solapamientos
 los gana el paso que empieza después.
 
-`animationEndAt` pasa a ser el final del último paso. `animation`,
-`startupAnimation`, `startupAnimationMode` y `startupAnimationSpeed` se ignoran
-cuando hay `presentation`; sin él se mantiene el builder clásico.
+`animationEndAt` pasa a ser el final del último paso. El `presentation` es la
+única fuente de animación: la habilidad ya no declara `animation` ni
+`startupAnimation`.
 
 Todo el catálogo (96 habilidades) está migrado. El test
-`abilityMigration.test.ts` comprueba, para todas las especies del manifiesto,
-que cada script compila exactamente igual que el builder clásico, incluidos los
-canales con `fill`. Las definiciones conservan `animation`/`startupAnimation`
-como metadatos de precarga y como referencia del test; el runtime ya no los lee
-cuando hay `presentation`.
+`animationPlans.test.ts` guarda un golden master de los planes de todas las
+habilidades contra todas las especies del manifiesto, incluidos los canales con
+`fill`. Si un script o el compilador cambia, el hash cambia y el diff de los
+planes se revisa a propósito.

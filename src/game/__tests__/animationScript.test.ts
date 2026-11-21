@@ -62,11 +62,7 @@ function defWith(overrides: Record<string, unknown> = {}): AbilityDef {
     startup: 0,
     active: 0,
     recovery: 0,
-    animation: 'attack',
-    startupAnimation: null,
-    startupAnimationMode: 'once',
-    startupAnimationSpeed: 1,
-    presentation: null,
+    presentation: [],
     presentationBySpecies: null,
     ...overrides
   } as unknown as AbilityDef;
@@ -328,30 +324,6 @@ test('el override por especie reemplaza el script común', () => {
   assert.equal(animationScriptFor(def), def.presentation);
 });
 
-test('sin script se mantiene el builder clásico', () => {
-  const plan = buildCastPlan(
-    defWith({ startup: 0.2, active: 0.1, recovery: 0.3 }),
-    resolver({ attack: makeAnimation() })
-  );
-
-  assert.equal(plan.segments.length, 4);
-  assert.equal(plan.hitClip, 'attack');
-  assert.equal(plan.hitFrame, 1);
-  close(plan.effectAt, 0.2);
-  close(plan.endAt, 0.6);
-  close(plan.animationEndAt, 0.6);
-
-  const [hold, lead, active, recovery] = plan.segments;
-  assert.equal(hold.startFrame, 0);
-  assert.equal(hold.endFrame, 0);
-  close(hold.endAt, 0.2 - 0.1 / 0.6);
-  close(lead.startAt, hold.endAt);
-  close(lead.endAt, 0.2);
-  close(active.startAt, 0.2);
-  close(active.endAt, 0.3);
-  close(recovery.endAt, 0.6);
-});
-
 test('un paso se recorta al final del casteo', () => {
   const plan = buildCastPlan(
     defWith({
@@ -452,26 +424,6 @@ test('un tramo vacío con hold congela el frame de inicio', () => {
   close(plan.segments[0].startAt, 0);
   close(plan.segments[0].endAt, 0.2);
   assert.equal(plan.hitFrame, 1);
-});
-
-test('el bucle clásico del clip completo sigue funcionando', () => {
-  const plan = buildCastPlan(
-    defWith({
-      startup: 0.5,
-      active: 0,
-      recovery: 0,
-      animation: null,
-      startupAnimation: 'charge',
-      startupAnimationMode: 'loop'
-    }),
-    resolver({ charge: makeAnimation() })
-  );
-
-  assert.equal(plan.segments.length, 1);
-  assert.equal(plan.segments[0].loop, true);
-  assert.equal(plan.segments[0].startFrame, 0);
-  assert.equal(plan.segments[0].endFrame, 3);
-  assert.equal(frameForSegment(plan.segments[0], makeAnimation(), 0.45), 0);
 });
 
 test('releaseScript encadena anticipación y recuperación sin ventana activa', () => {
