@@ -36,3 +36,4 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 *.njsproj
 *.sln
 *.sw?
+/tools/blender/models/*
