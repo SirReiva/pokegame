@@ -53,14 +53,40 @@ export const MAX_PLAYBACK = 1.8;
 /** Ticks por segundo del formato de PMD. */
 export const TICKS_PER_SECOND = 60;
 
+/**
+ * Tiempo (s) al que empieza un frame o, con `index === frames.length`, el
+ * instante en el que termina el clip. No recorta el índice: los rangos de un
+ * script necesitan el borde final del último frame.
+ */
+export function frameBoundary(
+  animation: SpriteAnimation,
+  index: number
+): number {
+  const frames = animation.durations.length;
+  const end = Math.max(0, Math.min(index, frames));
+  let ticks = 0;
+  for (let i = 0; i < end; i++) ticks += animation.durations[i] ?? 0;
+  return ticks / TICKS_PER_SECOND;
+}
+
 /** Tiempo (s) al que empieza `frame` dentro del clip, a velocidad 1. */
 export function frameStart(animation: SpriteAnimation, frame: number): number {
   const frames = animation.durations.length;
   if (frames === 0) return 0;
-  const index = Math.max(0, Math.min(frame, frames - 1));
-  let ticks = 0;
-  for (let i = 0; i < index; i++) ticks += animation.durations[i] ?? 0;
-  return ticks / TICKS_PER_SECOND;
+  return frameBoundary(animation, Math.max(0, Math.min(frame, frames - 1)));
+}
+
+/** Duración natural (s) del tramo `[from, to]`, ambos inclusive. */
+export function frameSpanDuration(
+  animation: SpriteAnimation,
+  from: number,
+  to: number
+): number {
+  const frames = animation.durations.length;
+  if (frames === 0 || to < from) return 0;
+  const first = Math.max(0, Math.min(from, frames - 1));
+  const last = Math.max(first, Math.min(to, frames - 1));
+  return frameBoundary(animation, last + 1) - frameBoundary(animation, first);
 }
 
 /** Duración natural del clip a velocidad 1. */

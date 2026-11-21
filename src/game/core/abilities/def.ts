@@ -11,7 +11,7 @@
 import type { AoeEvent, AoeMovement, AoePlayer, AoePrepareMovement } from './aoe';
 import type { AbilityResolve, AbilityResolveContext } from './resolve';
 import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
-import type { AnimationName } from '../types';
+import type { AnimationScript } from '../animationScript';
 import type { PokemonType } from '../typeChart';
 import type {
   AoeDamageMode,
@@ -20,8 +20,7 @@ import type {
   BeamStyle,
   DamageCategory,
   ImpactStyle,
-  ProjectileStyle,
-  StartupAnimationMode
+  ProjectileStyle
 } from './styles';
 
 export type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
@@ -150,19 +149,16 @@ interface AbilityBase<P extends AbilityProps> {
   /** Tiempo desde el fin del efecto hasta que el lanzador vuelve a estar libre. */
   recovery: number;
   /**
-   * Animación de carga durante el `startup`; sin ella se usa `animation`.
-   * Si ambas son `null`, no se reproduce ninguna animación.
+   * Timeline de animación de la habilidad. Se coloca dentro de
+   * `startup + active + recovery`, puede encadenar clips y puede dejar huecos.
+   * Un array vacío desactiva la animación.
    */
-  startupAnimation: AnimationName | null;
-  /** Cómo se reproduce `startupAnimation`. */
-  startupAnimationMode: StartupAnimationMode;
-  /** Velocidad de `startupAnimation` en modo `loop` (1 = normal). */
-  startupAnimationSpeed: number;
+  presentation: AnimationScript;
   /**
-   * Animación de sprite que se reproduce al lanzar la habilidad.
-   * `null` = la habilidad no reproduce ninguna animación.
+   * Variante del timeline por especie (`pokemonId`). Reemplaza al script común
+   * para esa especie; no se fusiona paso a paso.
    */
-  animation: AnimationName | null;
+  presentationBySpecies?: Readonly<Record<string, AnimationScript>> | null;
   /**
    * Movimiento durante el `startup`: `false` bloquea, `true` usa la velocidad
    * normal y un número es un multiplicador de velocidad (`0` bloquea). Por
@@ -201,6 +197,14 @@ interface AbilityBase<P extends AbilityProps> {
    * animación, la ventana llega hasta el final del casteo.
    */
   movementUntilEndAnimation?: boolean | number;
+  /**
+   * Si es `true`, el lanzador puede girar el cuerpo durante el casteo. Por
+   * defecto el rumbo queda fijado al lanzar para que la animación de la
+   * habilidad no gire; al habilitarlo, el cuerpo vuelve a seguir la dirección
+   * de avance como fuera de un casteo. No cambia la dirección del efecto, que
+   * sigue fijada al lanzamiento.
+   */
+  facingDuringCast: boolean;
   /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el

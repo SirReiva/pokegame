@@ -112,10 +112,3 @@ export type AoeDamageMode = 'once' | 'overtime-global' | 'overtime-target';
 export function isOvertimeMode(mode: AoeDamageMode): boolean {
   return mode === 'overtime-global' || mode === 'overtime-target';
 }
-
-/**
- * Cómo se reproduce la animación de carga durante el `startup`:
- * - `once`: se reproduce una vez y se ancla su `HitFrame` al efecto.
- * - `loop`: se usa `startupAnimationSpeed` y se repite hasta el efecto.
- */
-export type StartupAnimationMode = 'once' | 'loop';

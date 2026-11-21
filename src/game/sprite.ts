@@ -2,7 +2,6 @@ import * as pc from 'playcanvas';
 import {
   ABILITIES,
   COMMON_ABILITIES,
-  COMMON_ANIMATION_OVERRIDES,
   MOVESETS
 } from './abilities';
 import { resolveAnimationName } from './animationTimeline';
@@ -13,6 +12,7 @@ import { defaultSkinFor } from './skins';
 import { FALLBACK_SPRITE_BUDGET_MB } from './spriteBudget';
 import { spriteOutlineWidth } from './spriteDetail';
 import { applySpriteShading } from './spriteOutline';
+import { rowGroundMotion } from './spriteMotion';
 import { setTextureSource } from './textures';
 import type {
   AnimationName,
@@ -322,15 +322,23 @@ function movesetUsesAnimation(
   animation: AnimationName
 ): boolean {
   const moveset = MOVESETS[entry.id];
-  const uses = (ability: { animation?: AnimationName | null; startupAnimation?: AnimationName | null } | null) =>
-    ability?.animation === animation || ability?.startupAnimation === animation;
+  const uses = (ability: {
+    presentation: readonly { clip: AnimationName }[];
+    presentationBySpecies?: Readonly<
+      Record<string, readonly { clip: AnimationName }[]>
+    > | null;
+  } | null): boolean => {
+    const scripts = [
+      ability?.presentation,
+      ability?.presentationBySpecies?.[entry.id]
+    ];
+    return scripts.some(
+      (script) => script?.some((step) => step.clip === animation) ?? false
+    );
+  };
   if (moveset?.some((id) => (id ? uses(ABILITIES[id]) : false))) return true;
-  // El instinto común (Impulso usa QuickStrike) también necesita su hoja,
-  // incluidos los overrides de animación por Pokémon.
-  if (Object.values(COMMON_ABILITIES).some((ability) => uses(ability))) return true;
-  return Object.values(COMMON_ANIMATION_OVERRIDES[entry.id] ?? {}).includes(
-    animation
-  );
+  // El instinto común (Impulso usa QuickStrike) también necesita su hoja.
+  return Object.values(COMMON_ABILITIES).some((ability) => uses(ability));
 }
 
 /** Recorte común de todas las filas de una animación, en píxeles del arte. */
@@ -918,6 +926,12 @@ export class SpriteBillboard {
    * vertical no se entierre bajo el terreno.
    */
   private motionOffset = 0;
+  /** Delta de ancla del frame actual, en píxeles de arte. */
+  private motionPixelsX = 0;
+  private motionPixelsY = 0;
+  /** Avance visual actual en X/Z; la sombra de contacto lo sigue. */
+  private groundOffsetX = 0;
+  private groundOffsetZ = 0;
   /** UVs reutilizadas al cambiar de frame; asignar Vec2 nuevos generaba GC. */
   private readonly uvTiling = new pc.Vec2();
   private readonly uvOffset = new pc.Vec2();
@@ -1057,6 +1071,16 @@ export class SpriteBillboard {
 
   get currentAnimation(): AnimationName {
     return this.animation;
+  }
+
+  /** Desplazamiento visual del frame actual sobre el suelo (X). */
+  get motionX(): number {
+    return this.groundOffsetX;
+  }
+
+  /** Desplazamiento visual del frame actual sobre el suelo (Z). */
+  get motionZ(): number {
+    return this.groundOffsetZ;
   }
 
   get currentRow(): number {
@@ -1254,6 +1278,8 @@ export class SpriteBillboard {
       ? ((frameAnchor.y - reference.y) * this.options.pixelScale) /
         Math.max(0.2, Math.sin(CONFIG.camera.pitch * DEG))
       : 0;
+    this.motionPixelsX = preserveMotion ? frameAnchor.x - reference.x : 0;
+    this.motionPixelsY = preserveMotion ? frameAnchor.y - reference.y : 0;
     // El suelo es opaco: los píxeles que el arte dibuja por debajo del ancla
     // (una pata delantera, la cola, el borde del cuerpo) quedarían enterrados y
     // el sprite parecería cortado. Subimos solo esos frames lo justo para que
@@ -1386,12 +1412,29 @@ export class SpriteBillboard {
     const dz = cameraPosition.z - this.root.getPosition().z;
     this.pivot.setLocalEulerAngles(0, Math.atan2(dx, dz) / DEG, 0);
 
-    // 6. Avance visual sobre el suelo para el movimiento interno vertical.
+    // 6. Avance visual sobre el suelo para el movimiento interno.
+    // El billboard solo tiene 8 filas de dirección: la sombra se mueve en la
+    // misma dirección cardinal/diagonal que la fila visible, no en la dirección
+    // continua de la cámara.
     const distance = Math.hypot(dx, dz) || 1;
+    const toCamX = dx / distance;
+    const toCamZ = dz / distance;
+    const motion = rowGroundMotion({
+      row: this.row,
+      toCamX,
+      toCamZ,
+      pixelX: this.motionPixelsX,
+      pixelY: this.motionPixelsY,
+      pixelScale: this.options.pixelScale,
+      verticalScale:
+        1 / Math.max(0.2, Math.sin(CONFIG.camera.pitch * DEG))
+    });
+    this.groundOffsetX = motion.x;
+    this.groundOffsetZ = motion.z;
     this.pivot.setLocalPosition(
-      (dx / distance) * this.motionOffset,
+      toCamX * this.motionOffset,
       0,
-      (dz / distance) * this.motionOffset
+      toCamZ * this.motionOffset
     );
   }
 

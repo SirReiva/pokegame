@@ -32,6 +32,10 @@ puede lanzar otra habilidad. El movimiento se bloquea:
   recuperación restante ya permite moverse;
 - en un dash, lo controla el propio desplazamiento.
 
+El rumbo del cuerpo también se fija al lanzar: el casteo no gira al Pokémon
+aunque se desplace. Solo las habilidades que declaran `facingDuringCast`
+reactivan el giro hacia la dirección de avance durante el casteo.
+
 `moveWhileStartup`, `movementDuringCast` y `movementUntilEndAnimation` aceptan
 `boolean | number`: `true` usa la velocidad normal, `false` bloquea y un número
 es un multiplicador de velocidad (`0` bloquea). Los dos últimos solo intervienen
@@ -74,6 +78,10 @@ tres marcadores en el manifiesto.
 `src/game/castPlan.ts` convierte `startup/active/recovery` en segmentos de clip.
 Cada segmento indica qué frames se dibujan, en qué ventana de tiempo y a qué
 velocidad.
+
+El plan sale del `presentation` de la habilidad. El resultado es el mismo
+`CastPlan`; ver §13.
+
 
 ### 3.1 Anticipación y `HitFrame`
 
@@ -124,19 +132,18 @@ projectileAbility(
   .startup(0)          // sale en el acto
   .active(0)
   .recovery(0.45)      // bloqueo después del disparo
-  .animation('shoot')
+  .presentation(releaseScript('shoot'))
 ```
 
 Builder:
 
-- `startup(seconds, { mode, speed, move, animation })`
-  - `mode: 'once'` (por defecto): ancla el `HitFrame` del clip de carga al efecto.
-  - `mode: 'loop'`: repite la carga a `speed` hasta el efecto.
+- `startup(seconds, { move })`
   - `move: true` → `moveWhileStartup`. También acepta un número como
     multiplicador de velocidad; `false` o `0` bloquea.
-  - `animation: 'charge'` → animación de carga distinta de la de lanzamiento.
 - `active(seconds)`
 - `recovery(seconds)`
+- `presentation(script)` → timeline de animación de la habilidad.
+- `presentationFor(speciesId, script)` → variante para una especie concreta.
 - `movementDuringCast(value)` → `movementDuringCast`. Controla el movimiento
   durante todo el casteo, recuperación incluida. `false` o `0` clava al
   lanzador y tiene prioridad sobre `move: true`; `true` usa la velocidad normal
@@ -147,6 +154,10 @@ Builder:
   normales. `false` o `0` bloquea hasta ese instante, `true` usa la velocidad
   normal y un número multiplica la velocidad. Si no hay animación, la ventana
   dura hasta el final del casteo.
+- `facingDuringCast(value)` → `facingDuringCast`. Permite que el cuerpo siga
+  girando hacia su dirección de avance durante el casteo. Por defecto está
+  desactivado y el rumbo queda fijado al lanzar; no altera la dirección del
+  efecto.
 
 El builder solo expone la API nueva de tiempos: `startup`, `active` y
 `recovery`. Los métodos `cast()` y `windup()` se eliminaron para que ninguna
@@ -162,9 +173,9 @@ definición nueva pueda recuperar la semántica antigua.
 | `castTime` / 2 (melee) | `active` |
 | `animationTime` | eliminado: lo calcula el plan |
 | `moveLock` | eliminado: se deriva de las fases |
-| `windupAnimation` | `startupAnimation` |
-| `windupAnimationMode` | `startupAnimationMode` |
-| `windupAnimationSpeed` | `startupAnimationSpeed` |
+| `windupAnimation` | eliminado: es un paso de `presentation` |
+| `windupAnimationMode` | eliminado: `mode` del paso |
+| `windupAnimationSpeed` | eliminado: `speed` del paso |
 | `moveWhileWindup` | `moveWhileStartup` |
 | `blockMovementDuringCast` | `movementDuringCast` (`false`/`0` bloquea) |
 | `blockMovementUntilEndAnimation` | `movementUntilEndAnimation` (`false`/`0` bloquea) |
@@ -176,15 +187,13 @@ combate actual.
 
 ### Sin animación de lanzamiento
 
-Si `animation` es `null` y hay `startupAnimation`:
+No es un caso especial del compilador: se escribe en el script.
 
-- `mode: 'once'` → la carga se trata como clip de lanzamiento y su `HitFrame` se
-  ancla al efecto (por ejemplo, Bomba Lodo).
-- `mode: 'loop'` → la carga se repite durante todo el `startup` y el efecto no
-  tiene animación propia (por ejemplo, una carga circular).
-
-Si no hay ninguna animación, el efecto sale en `startup` y el Pokémon mantiene
-su reposo o caminar.
+- Proyectil, haz o área instantánea (`active: 0`): `releaseScript(clip)`.
+- Canalización con carga: `channelFillScript(charge, releaseScript(clip))`.
+  La carga solo se dibuja si la anticipación del lanzamiento llega tarde.
+- Sin animación: `presentation: []`. El efecto sale en `startup` y el Pokémon
+  mantiene su reposo o caminar.
 
 ### Fallbacks
 
@@ -298,7 +307,7 @@ Comprueba, para cada habilidad × especie × skin:
 - los segmentos no se solapan ni se salen del casteo;
 - `HitFrame <= ReturnFrame < número de frames`;
 - avisa de los clips que han tenido que recortar anticipación y de las cargas
-  (`startupAnimation`) que no tienen hueco antes del `HitFrame`.
+  (`fill`) que no tienen hueco antes del `HitFrame`.
 
 ## 10. Depuración en partida
 
@@ -312,12 +321,11 @@ overlay con:
 
 ## 11. Cómo añadir una habilidad
 
-1. Elige la forma y la animación (`attack`, `shoot`, `strike`, `quickstrike`…).
+1. Elige la forma y los clips (`attack`, `shoot`, `strike`, `quickstrike`…).
 2. Define `startup`, `active` y `recovery` pensando en el balance, no en el
    sprite.
-3. Deja que el plan retime el clip. Si el resultado se ve forzado, ajusta el
-   `startup` o elige otra animación; no metas tiempos específicos de una
-   especie.
+3. Escribe el `presentation` con los helpers (`attackScript`, `releaseScript`,
+   `dashScript`, `channelFillScript`) o a mano si necesitas encadenar clips.
 4. Ejecuta la validación y, si hace falta, activa el overlay para ver el frame
    exacto.
 
@@ -337,3 +345,92 @@ overlay con:
   acorta el desplazamiento, `syncDashCast` reconstruye el plan para que el clip
   dure lo mismo que el movimiento; sigue sin anclarse al `HitFrame` porque su
   golpe es un barrido continuo.
+
+## 13. Timeline declarativo (`presentation`)
+
+Todas las habilidades del catálogo declaran un timeline propio. Sigue mandando
+el gameplay: `startup + active + recovery` es el presupuesto máximo y el script
+solo coloca pasos dentro. Los huecos son válidos y dejan al sprite en su estado
+normal (`hurt`/`walk`/`idle`).
+
+```ts
+interface AnimationStep {
+  clip: AnimationName;
+  frames?: {
+    from?: number | 'first' | 'last' | 'rush' | 'hit' | 'return'
+      | 'beforeHit' | 'beforeReturn';
+    to?: number | 'first' | 'last' | 'rush' | 'hit' | 'return'
+      | 'beforeHit' | 'beforeReturn';
+  };
+  at?: 'start' | 'effect' | 'castEnd' | 'end'
+    | { at: number } | { after: number };
+  duration?: number;
+  until?: 'start' | 'effect' | 'castEnd' | 'end' | { at: number };
+  fit?: 'stretch' | 'trimStart' | 'trimEnd' | 'natural';
+  hold?: boolean;
+  fill?: boolean;
+  mode?: 'once' | 'loop';
+  speed?: number;
+}
+```
+
+`frames` es inclusivo. `beforeHit` y `beforeReturn` permiten terminar justo
+antes de un marcador, que es lo que necesitan la anticipación y la ventana
+activa. Los índices numéricos quedan para overrides por especie.
+
+| `fit` | Clip más largo que la ventana | Clip más corto |
+| --- | --- | --- |
+| `stretch` (defecto) | Recorta el final. | Mantiene el último frame solo con `hold`. |
+| `trimStart` | Descarta anticipación. | Retrasa el tramo y rellena con el primer frame. |
+| `trimEnd` | Recorta el final. | Mantiene el último frame solo con `hold`. |
+| `natural` | Corta al acabar la ventana. | Deja hueco salvo `hold`. |
+
+`mode: 'loop'` repite el tramo a `speed` durante toda la ventana. Un `loop` sin
+`until` ni `duration` dura hasta el final del casteo.
+
+`fill: true` hace que el paso ocupe solo el hueco que deja la anticipación del
+siguiente paso. Si el siguiente empieza a la vez, el relleno no se dibuja. Es lo
+que usan las cargas: solo se ven cuando el `HitFrame` del lanzamiento no cabe en
+el `startup` y hay que retrasarlo. Si el siguiente paso usa el mismo clip, el
+relleno se omite y su pose inicial cubre el hueco.
+
+### 13.1 Declaración
+
+```ts
+meleeAbility('golpe', 'Golpe', 'normal', 'physical', resolve)
+  .startup(0.2)
+  .active(0.1)
+  .recovery(0.3)
+  .presentation(attackScript('attack'))
+```
+
+`src/game/animationPresets.ts` incluye `attackScript` (melee con ventana
+activa), `releaseScript` (proyectiles/haces con `active: 0`), `dashScript` y
+`channelFillScript` (carga que solo rellena el hueco de la anticipación).
+`channelScript` queda para las canalizaciones que sí deben reproducir la carga
+entera. Para una especie concreta:
+
+```ts
+.presentationFor('gengar', attackScript('quickstrike'))
+```
+
+El override reemplaza el script común entero; no se fusiona paso a paso.
+
+### 13.2 Compilación
+
+`compileAnimationScript()` (`src/game/animationScript.ts`) resuelve clips y
+marcadores por especie, calcula las ventanas absolutas, aplica `fit` y los
+límites `0.6–1.8x`, y emite los `CastSegment[]`. Los pasos se encadenan si no
+declaran `at`; `until` tiene prioridad sobre `duration`; un `fill` se recorta al
+inicio real del siguiente paso; nada se sale de `[0, endAt]`; los solapamientos
+los gana el paso que empieza después.
+
+`animationEndAt` pasa a ser el final del último paso. El `presentation` es la
+única fuente de animación: la habilidad ya no declara `animation` ni
+`startupAnimation`.
+
+Todo el catálogo (96 habilidades) está migrado. El test
+`animationPlans.test.ts` guarda un golden master de los planes de todas las
+habilidades contra todas las especies del manifiesto, incluidos los canales con
+`fill`. Si un script o el compilador cambia, el hash cambia y el diff de los
+planes se revisa a propósito.

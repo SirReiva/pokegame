@@ -59,6 +59,17 @@ export function hasCastMovementOption(
   );
 }
 
+/**
+ * `true` si el lanzador puede girar el cuerpo durante el casteo. Por defecto el
+ * rumbo queda fijado al lanzar; las habilidades que se desplazan mientras se
+ * preparan pueden reactivar el giro con `facingDuringCast`.
+ */
+export function allowsFacingDuringCast(
+  def: Pick<AbilityDef, 'facingDuringCast'>
+): boolean {
+  return def.facingDuringCast === true;
+}
+
 export interface CastMovementWindow {
   def: Pick<
     AbilityDef,

@@ -18,8 +18,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { ABILITIES, MOVESETS, commonAnimationFor } from '../src/game/abilities.ts';
+import { ABILITIES, MOVESETS } from '../src/game/abilities.ts';
 import {
+  animationScriptFor,
   segmentAt,
   buildCastPlan,
   frameForSegment
@@ -124,7 +125,7 @@ function check(
   }
   checked++;
   const resolve = resolverFor(animations);
-  const plan = buildCastPlan(def, resolve);
+  const plan = buildCastPlan(def, resolve, pokemonId);
 
   if (Math.abs(plan.effectAt - def.startup) > EPSILON) {
     report({
@@ -247,44 +248,48 @@ function check(
     }
   }
 
-  // Aviso si hay una carga propia que el plan no llega a mostrar.
-  if (def.startupAnimation && def.startup > EPSILON) {
-    const charge = resolve(def.startupAnimation);
-    const shown =
-      charge !== null &&
-      plan.segments.some(
+  const script = animationScriptFor(def, pokemonId);
+
+  // Aviso si una carga `fill` no llega a mostrarse.
+  if (def.startup > EPSILON) {
+    for (const step of script) {
+      if (!step.fill) continue;
+      const charge = resolve(step.clip);
+      if (!charge) continue;
+      const shown = plan.segments.some(
         (segment) =>
           segment.animation === charge.name && segment.startAt < plan.effectAt
       );
-    if (charge && !shown) {
-      report({
-        kind: 'warn',
-        pokemon: pokemonId,
-        ability: abilityId,
-        message: `carga ${def.startupAnimation} omitida (no hay hueco antes del HitFrame)`
-      });
-    }
-  }
-
-  // Aviso si el clip necesita recortar anticipación.
-  if (def.animation) {
-    const release = resolve(def.animation);
-    if (release) {
-      const timing = clipTiming(release.animation);
-      const lead = plan.segments.find(
-        (segment) =>
-          segment.animation === release.name &&
-          segment.endAt <= plan.effectAt + EPSILON &&
-          segment.startFrame < timing.hitFrame
-      );
-      if (!lead && def.startup > 0 && timing.hitAt > 0) {
+      if (!shown) {
         report({
           kind: 'warn',
           pokemon: pokemonId,
           ability: abilityId,
-          message: `sin anticipación visible (startup ${def.startup.toFixed(2)}s < hit ${timing.hitAt.toFixed(2)}s)`
+          message: `carga ${step.clip} omitida (no hay hueco antes del HitFrame)`
         });
       }
+    }
+  }
+
+  // Aviso si el clip necesita recortar anticipación.
+  for (const step of script) {
+    if (step.fit !== 'trimStart') continue;
+    const release = resolve(step.clip);
+    if (!release) continue;
+    const timing = clipTiming(release.animation);
+    const lead = plan.segments.find(
+      (segment) =>
+        segment.animation === release.name &&
+        segment.endAt <= plan.effectAt + EPSILON &&
+        segment.startFrame < timing.hitFrame
+    );
+    if (!lead && def.startup > 0 && timing.hitAt > 0) {
+      report({
+        kind: 'warn',
+        pokemon: pokemonId,
+        ability: abilityId,
+        message: `sin anticipación visible (startup ${def.startup.toFixed(2)}s < hit ${timing.hitAt.toFixed(2)}s)`
+      });
     }
   }
 }
@@ -308,19 +313,11 @@ for (const [abilityId, users] of usersByAbility) {
   }
 }
 
-// Instintos comunes: se validan contra todos los Pokémon con su override.
+// Instintos comunes: se validan contra todos los Pokémon.
 for (const abilityId of ['impulso', 'proteccion'] as const) {
-  const base = ABILITIES[abilityId];
-  if (!base) continue;
+  const def = ABILITIES[abilityId];
+  if (!def) continue;
   for (const entry of manifest.pokemon) {
-    const def = {
-      ...base,
-      animation: commonAnimationFor(
-        entry.id,
-        abilityId as 'impulso' | 'proteccion',
-        base
-      )
-    };
     check(entry.id, abilityId, entry.animations, def);
   }
 }

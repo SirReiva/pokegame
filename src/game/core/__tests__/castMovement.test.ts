@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  allowsFacingDuringCast,
   castMovementMultiplier,
   hasCastMovementOption,
   isChannelingCast,
@@ -170,4 +171,9 @@ test('hasCastMovementOption distingue preparaciones móviles', () => {
     }),
     true
   );
+});
+
+test('allowsFacingDuringCast solo se habilita explícitamente', () => {
+  assert.equal(allowsFacingDuringCast({ facingDuringCast: false }), false);
+  assert.equal(allowsFacingDuringCast({ facingDuringCast: true }), true);
 });
