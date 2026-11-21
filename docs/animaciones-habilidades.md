@@ -344,10 +344,10 @@ overlay con:
 
 ## 13. Timeline declarativo (`presentation`)
 
-Una habilidad puede sustituir el plan automático por una secuencia de clips.
-Sigue mandando el gameplay: `startup + active + recovery` es el presupuesto
-máximo y el script solo coloca pasos dentro. Los huecos son válidos y dejan al
-sprite en su estado normal (`hurt`/`walk`/`idle`).
+Todas las habilidades del catálogo declaran un timeline propio. Sigue mandando
+el gameplay: `startup + active + recovery` es el presupuesto máximo y el script
+solo coloca pasos dentro. Los huecos son válidos y dejan al sprite en su estado
+normal (`hurt`/`walk`/`idle`).
 
 ```ts
 interface AnimationStep {
@@ -364,6 +364,7 @@ interface AnimationStep {
   until?: 'start' | 'effect' | 'castEnd' | 'end' | { at: number };
   fit?: 'stretch' | 'trimStart' | 'trimEnd' | 'natural';
   hold?: boolean;
+  fill?: boolean;
   mode?: 'once' | 'loop';
   speed?: number;
 }
@@ -383,6 +384,12 @@ activa. Los índices numéricos quedan para overrides por especie.
 `mode: 'loop'` repite el tramo a `speed` durante toda la ventana. Un `loop` sin
 `until` ni `duration` dura hasta el final del casteo.
 
+`fill: true` hace que el paso ocupe solo el hueco que deja la anticipación del
+siguiente paso. Si el siguiente empieza a la vez, el relleno no se dibuja. Es lo
+que usan las cargas: solo se ven cuando el `HitFrame` del lanzamiento no cabe en
+el `startup` y hay que retrasarlo. Si el siguiente paso usa el mismo clip, el
+relleno se omite y su pose inicial cubre el hueco.
+
 ### 13.1 Declaración
 
 ```ts
@@ -393,8 +400,11 @@ meleeAbility('golpe', 'Golpe', 'normal', 'physical', resolve)
   .presentation(attackScript('attack'))
 ```
 
-`src/game/animationPresets.ts` incluye `attackScript`, `dashScript` y
-`channelScript` como puntos de partida. Para una especie concreta:
+`src/game/animationPresets.ts` incluye `attackScript` (melee con ventana
+activa), `releaseScript` (proyectiles/haces con `active: 0`), `dashScript` y
+`channelFillScript` (carga que solo rellena el hueco de la anticipación).
+`channelScript` queda para las canalizaciones que sí deben reproducir la carga
+entera. Para una especie concreta:
 
 ```ts
 .presentationFor('gengar', attackScript('quickstrike'))
@@ -407,9 +417,17 @@ El override reemplaza el script común entero; no se fusiona paso a paso.
 `compileAnimationScript()` (`src/game/animationScript.ts`) resuelve clips y
 marcadores por especie, calcula las ventanas absolutas, aplica `fit` y los
 límites `0.6–1.8x`, y emite los `CastSegment[]`. Los pasos se encadenan si no
-declaran `at`; `until` tiene prioridad sobre `duration`; nada se sale de
-`[0, endAt]`; los solapamientos los gana el paso que empieza después.
+declaran `at`; `until` tiene prioridad sobre `duration`; un `fill` se recorta al
+inicio real del siguiente paso; nada se sale de `[0, endAt]`; los solapamientos
+los gana el paso que empieza después.
 
 `animationEndAt` pasa a ser el final del último paso. `animation`,
 `startupAnimation`, `startupAnimationMode` y `startupAnimationSpeed` se ignoran
 cuando hay `presentation`; sin él se mantiene el builder clásico.
+
+Todo el catálogo (96 habilidades) está migrado. El test
+`abilityMigration.test.ts` comprueba, para todas las especies del manifiesto,
+que cada script compila exactamente igual que el builder clásico, incluidos los
+canales con `fill`. Las definiciones conservan `animation`/`startupAnimation`
+como metadatos de precarga y como referencia del test; el runtime ya no los lee
+cuando hay `presentation`.

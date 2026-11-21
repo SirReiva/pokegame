@@ -322,8 +322,21 @@ function movesetUsesAnimation(
   animation: AnimationName
 ): boolean {
   const moveset = MOVESETS[entry.id];
-  const uses = (ability: { animation?: AnimationName | null; startupAnimation?: AnimationName | null } | null) =>
-    ability?.animation === animation || ability?.startupAnimation === animation;
+  const usesScript = (
+    script: readonly { clip: AnimationName }[] | null | undefined
+  ): boolean => script?.some((step) => step.clip === animation) ?? false;
+  const uses = (ability: {
+    animation?: AnimationName | null;
+    startupAnimation?: AnimationName | null;
+    presentation?: readonly { clip: AnimationName }[] | null;
+    presentationBySpecies?: Readonly<
+      Record<string, readonly { clip: AnimationName }[]>
+    > | null;
+  } | null) =>
+    ability?.animation === animation ||
+    ability?.startupAnimation === animation ||
+    usesScript(ability?.presentation) ||
+    usesScript(ability?.presentationBySpecies?.[entry.id]);
   if (moveset?.some((id) => (id ? uses(ABILITIES[id]) : false))) return true;
   // El instinto común (Impulso usa QuickStrike) también necesita su hoja,
   // incluidos los overrides de animación por Pokémon.

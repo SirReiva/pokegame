@@ -9,8 +9,10 @@ import {
 import { compileAnimationScript } from '../animationScript.ts';
 import {
   attackScript,
+  channelFillScript,
   channelScript,
-  dashScript
+  dashScript,
+  releaseScript
 } from '../animationPresets.ts';
 import {
   frameBoundary,
@@ -470,6 +472,132 @@ test('el bucle clásico del clip completo sigue funcionando', () => {
   assert.equal(plan.segments[0].startFrame, 0);
   assert.equal(plan.segments[0].endFrame, 3);
   assert.equal(frameForSegment(plan.segments[0], makeAnimation(), 0.45), 0);
+});
+
+test('releaseScript encadena anticipación y recuperación sin ventana activa', () => {
+  const plan = buildCastPlan(
+    defWith({
+      startup: 0.2,
+      active: 0,
+      recovery: 0.3,
+      presentation: releaseScript('attack')
+    }),
+    resolver({ attack: makeAnimation() })
+  );
+
+  assert.equal(plan.segments.length, 3);
+  const [hold, lead, release] = plan.segments;
+  close(hold.endAt, 0.2 - 0.1 / 0.6);
+  close(lead.startAt, hold.endAt);
+  close(lead.endAt, 0.2);
+  assert.equal(release.startFrame, 1);
+  assert.equal(release.endFrame, 3);
+  close(release.startAt, 0.2);
+  close(release.endAt, 0.5);
+  assert.equal(plan.hitFrame, 1);
+  assert.equal(plan.hitClip, 'attack');
+});
+
+test('fill ocupa solo el hueco que deja la anticipación', () => {
+  const def = defWith({
+    startup: 0.2,
+    active: 0,
+    recovery: 0.3,
+    presentation: channelFillScript('charge', releaseScript('shoot'))
+  });
+  const plan = buildCastPlan(
+    def,
+    resolver({ charge: makeAnimation(), shoot: makeAnimation() })
+  );
+
+  assert.equal(plan.segments.length, 3);
+  assert.equal(plan.segments[0].animation, 'charge');
+  close(plan.segments[0].startAt, 0);
+  close(plan.segments[0].endAt, 0.2 - 0.1 / 0.6);
+  assert.equal(plan.segments[0].startFrame, 0);
+  assert.equal(plan.segments[1].animation, 'shoot');
+  close(plan.segments[1].startAt, plan.segments[0].endAt);
+  close(plan.segments[1].endAt, 0.2);
+  assert.equal(plan.hitFrame, 1);
+});
+
+test('fill no se dibuja si la anticipación cabe entera', () => {
+  const clip = makeAnimation({ hitFrame: 2 });
+  const def = defWith({
+    startup: 0.2,
+    active: 0,
+    recovery: 0.3,
+    presentation: channelFillScript('charge', releaseScript('shoot'))
+  });
+  const plan = buildCastPlan(
+    def,
+    resolver({ charge: makeAnimation(), shoot: clip })
+  );
+
+  assert.equal(plan.segments.length, 2);
+  assert.equal(
+    plan.segments.some((segment) => segment.animation === 'charge'),
+    false
+  );
+  close(plan.segments[0].startAt, 0);
+  close(plan.segments[0].endAt, 0.2);
+});
+
+test('fill puede ser un bucle', () => {
+  const def = defWith({
+    startup: 0.2,
+    active: 0,
+    recovery: 0.3,
+    presentation: channelFillScript('charge', releaseScript('shoot'), {
+      mode: 'loop'
+    })
+  });
+  const plan = buildCastPlan(
+    def,
+    resolver({ charge: makeAnimation(), shoot: makeAnimation() })
+  );
+
+  assert.equal(plan.segments[0].animation, 'charge');
+  assert.equal(plan.segments[0].loop, true);
+  close(plan.segments[0].endAt, 0.2 - 0.1 / 0.6);
+});
+
+test('fill se omite cuando carga y lanzamiento usan el mismo clip', () => {
+  const script = channelFillScript('attack', releaseScript('attack'));
+  assert.equal(script.length, releaseScript('attack').length);
+  assert.equal(
+    script.some((step) => step.fill === true),
+    false
+  );
+
+  const plan = buildCastPlan(
+    defWith({ startup: 0.2, active: 0, recovery: 0.3, presentation: script }),
+    resolver({ attack: makeAnimation() })
+  );
+  assert.equal(plan.segments.length, 3);
+  assert.equal(plan.segments[0].startFrame, 0);
+  assert.equal(plan.segments[0].endFrame, 0);
+});
+
+test('sin anticipación la carga ocupa todo el startup', () => {
+  const clip = makeAnimation({ hitFrame: 0, returnFrame: 0 });
+  const def = defWith({
+    startup: 0.2,
+    active: 0,
+    recovery: 0.3,
+    presentation: channelFillScript('charge', releaseScript('shoot'))
+  });
+  const plan = buildCastPlan(
+    def,
+    resolver({ charge: makeAnimation(), shoot: clip })
+  );
+
+  assert.equal(plan.segments.length, 2);
+  assert.equal(plan.segments[0].animation, 'charge');
+  close(plan.segments[0].startAt, 0);
+  close(plan.segments[0].endAt, 0.2);
+  assert.equal(plan.segments[1].animation, 'shoot');
+  close(plan.segments[1].startAt, 0.2);
 });
 
 test('channelScript encadena carga y liberación', () => {

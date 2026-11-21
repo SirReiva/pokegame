@@ -61,6 +61,57 @@ export function dashScript(clip: AnimationName): AnimationScript {
 }
 
 /**
+ * Lanzamiento sin ventana activa (proyectiles, haces y áreas instantáneas).
+ * Anticipación hasta el `HitFrame` y el resto del clip durante la recuperación.
+ */
+export function releaseScript(clip: AnimationName): AnimationScript {
+  return [
+    {
+      clip,
+      frames: { from: 'first', to: 'beforeHit' },
+      at: 'start',
+      until: 'effect',
+      fit: 'trimStart'
+    },
+    {
+      clip,
+      frames: { from: 'hit', to: 'last' },
+      at: 'effect',
+      until: 'end',
+      fit: 'trimEnd'
+    }
+  ];
+}
+
+/**
+ * Canalización que reproduce la carga solo si la anticipación del lanzamiento
+ * llega tarde. Es el equivalente exacto del builder clásico: si el `HitFrame`
+ * del lanzamiento cabe en el `startup`, la carga no se dibuja.
+ *
+ * `release` se compone con `attackScript`, `releaseScript` o `dashScript`.
+ */
+export function channelFillScript(
+  charge: AnimationName,
+  release: AnimationScript,
+  options: { mode?: 'once' | 'loop'; speed?: number } = {}
+): AnimationScript {
+  const releaseClip = release[0]?.clip;
+  if (!releaseClip || charge === releaseClip) return release;
+  return [
+    {
+      clip: charge,
+      at: 'start',
+      fill: true,
+      fit: 'stretch',
+      hold: true,
+      mode: options.mode ?? 'once',
+      speed: options.speed ?? 1
+    },
+    ...release
+  ];
+}
+
+/**
  * Canalización: carga en bucle durante la preparación y ataque al liberar.
  * El lanzamiento empieza en el `hit`, así que el `HitFrame` cae en `effect`.
  */

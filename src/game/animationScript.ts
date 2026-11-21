@@ -163,7 +163,8 @@ function compileStep(
   step: AnimationStep,
   animation: ResolvedAnimation,
   startAt: number,
-  endAt: number
+  endAt: number,
+  suppressLeadingHold = false
 ): void {
   const range = frameRange(step, animation);
   if (!range) {
@@ -247,7 +248,29 @@ function compileStep(
       const remaining =
         endBoundary - frameBoundary(animation.animation, from);
       if (remaining <= EPSILON) return;
-      playback = Math.min(MAX_PLAYBACK, remaining / window);
+      const trimmedPlayback = remaining / window;
+      if (trimmedPlayback < MIN_PLAYBACK) {
+        // Al recortar queda un tramo más corto que la ventana: se reproduce a
+        // MIN y se deja hueco (o se mantiene la pose si el paso lo pide).
+        const segmentEnd = Math.min(
+          endAt,
+          startAt + remaining / MIN_PLAYBACK
+        );
+        pushOnce(
+          segments,
+          animation,
+          from,
+          to,
+          startAt,
+          segmentEnd,
+          MIN_PLAYBACK
+        );
+        if (step.hold && segmentEnd < endAt - EPSILON) {
+          pushHold(segments, animation, to, segmentEnd, endAt);
+        }
+        return;
+      }
+      playback = Math.min(MAX_PLAYBACK, trimmedPlayback);
     } else {
       // Se recorta el final del tramo.
       playback = MAX_PLAYBACK;
@@ -269,10 +292,13 @@ function compileStep(
     playback = MIN_PLAYBACK;
     if (fit === 'trimStart') {
       // Anticipación: se retrasa el tramo y se rellena el hueco con la primera
-      // pose, igual que hacía `planLead` en el builder clásico.
+      // pose, igual que hacía `planLead` en el builder clásico. Si un paso
+      // `fill` anterior ya cubre el hueco, no se duplica la pose.
       const played = natural / MIN_PLAYBACK;
       const delayedStart = Math.max(startAt, endAt - played);
-      pushHold(segments, animation, from, startAt, delayedStart);
+      if (!suppressLeadingHold) {
+        pushHold(segments, animation, from, startAt, delayedStart);
+      }
       pushOnce(
         segments,
         animation,
@@ -344,12 +370,80 @@ function findImpact(
 }
 
 /**
+ * Fin natural de un paso antes de recortarlo al final del casteo.
+ */
+function stepEndAt(
+  step: AnimationStep,
+  animation: ResolvedAnimation | null,
+  startAt: number,
+  marks: CastMarks
+): number {
+  if (step.until !== undefined) {
+    return clamp(endTime(step.until, marks), startAt, marks.endAt);
+  }
+  if (step.duration !== undefined) {
+    return clamp(startAt + Math.max(0, step.duration), startAt, marks.endAt);
+  }
+  if (!animation) return startAt;
+  if (step.mode === 'loop') return marks.endAt;
+  const range = frameRange(step, animation);
+  if (!range) return startAt;
+  return clamp(
+    startAt +
+      frameSpanDuration(animation.animation, range.from, range.to) /
+        Math.max(MIN_SPEED, step.speed ?? 1),
+    startAt,
+    marks.endAt
+  );
+}
+
+/**
+ * Final del hueco que debe cubrir un paso `fill`: el instante en el que el
+ * siguiente paso empieza a dibujar de verdad. Si el siguiente paso no tiene
+ * anticipación (`hitFrame` en el primer frame), la carga ocupa toda su ventana.
+ */
+function fillEndForNext(
+  step: AnimationStep,
+  animation: ResolvedAnimation | null,
+  startAt: number,
+  endAt: number
+): number {
+  if (!animation || endAt - startAt <= EPSILON) return startAt;
+  if (step.mode === 'loop' || step.fit !== 'trimStart') return startAt;
+  const range = frameRange(step, animation);
+  if (!range) return endAt;
+  const natural = frameSpanDuration(animation.animation, range.from, range.to);
+  if (natural <= EPSILON) return endAt;
+  const playback = natural / (endAt - startAt);
+  if (playback >= MIN_PLAYBACK) return startAt;
+  return Math.max(startAt, endAt - natural / MIN_PLAYBACK);
+}
+
+/**
+ * Inicio de la ventana del siguiente paso para un `fill`. Los pasos relativos
+ * (`after`) no se pueden rellenar: el relleno depende de ellos y ellos del
+ * relleno.
+ */
+function fillTargetStart(
+  step: AnimationStep,
+  cursor: number,
+  fillerStart: number,
+  marks: CastMarks
+): number | null {
+  const at = step.at;
+  if (at === undefined) return null;
+  if (typeof at === 'object' && 'after' in at) return null;
+  return clamp(startTime(at, cursor, marks), fillerStart, marks.endAt);
+}
+
+/**
  * Compila el script de una habilidad dentro de sus tiempos de gameplay.
  *
  * Reglas:
  * - Los pasos se encadenan si no declaran `at`.
  * - `until` tiene prioridad sobre `duration`.
  * - Un `loop` sin fin explícito dura hasta el final del casteo.
+ * - Un paso `fill` ocupa solo el hueco que deja la anticipación del siguiente.
  * - Nada se sale de `[0, endAt]`.
  * - Los huecos se respetan; el runtime los resuelve como `hurt`/`walk`/`idle`.
  */
@@ -361,35 +455,53 @@ export function compileAnimationScript(
   const marks = timingMarks(timing);
   const segments: CastSegment[] = [];
   let cursor = 0;
+  let suppressLeadingHold = false;
 
-  for (const step of script) {
+  for (let index = 0; index < script.length; index++) {
+    const step = script[index];
     const animation = resolve(step.clip);
     const startAt = clamp(startTime(step.at, cursor, marks), 0, marks.endAt);
 
-    let endAt: number;
-    if (step.until !== undefined) {
-      endAt = endTime(step.until, marks);
-    } else if (step.duration !== undefined) {
-      endAt = startAt + Math.max(0, step.duration);
-    } else if (animation) {
-      if (step.mode === 'loop') {
-        endAt = marks.endAt;
-      } else {
-        const range = frameRange(step, animation);
-        endAt = range
-          ? startAt +
-            frameSpanDuration(animation.animation, range.from, range.to) /
-              Math.max(MIN_SPEED, step.speed ?? 1)
-          : startAt;
+    if (step.fill) {
+      const next = script[index + 1];
+      const nextAnimation = next ? resolve(next.clip) : null;
+      let fillEnd = startAt;
+      let filled = false;
+      if (
+        next &&
+        animation &&
+        nextAnimation &&
+        animation.name !== nextAnimation.name
+      ) {
+        const nextStart = fillTargetStart(next, cursor, startAt, marks);
+        if (nextStart !== null) {
+          const nextEnd = stepEndAt(next, nextAnimation, nextStart, marks);
+          fillEnd = fillEndForNext(next, nextAnimation, nextStart, nextEnd);
+        }
       }
-    } else {
-      endAt = startAt;
+      fillEnd = clamp(fillEnd, startAt, marks.endAt);
+      if (animation && fillEnd > startAt) {
+        const before = segments.length;
+        compileStep(segments, step, animation, startAt, fillEnd);
+        filled = segments.length > before;
+      }
+      suppressLeadingHold = filled;
+      cursor = fillEnd;
+      continue;
     }
 
-    endAt = clamp(endAt, startAt, marks.endAt);
+    const endAt = stepEndAt(step, animation, startAt, marks);
     if (animation) {
-      compileStep(segments, step, animation, startAt, endAt);
+      compileStep(
+        segments,
+        step,
+        animation,
+        startAt,
+        endAt,
+        suppressLeadingHold
+      );
     }
+    suppressLeadingHold = false;
     cursor = endAt;
   }
 

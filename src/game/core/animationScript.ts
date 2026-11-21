@@ -78,6 +78,13 @@ export interface AnimationStep {
   fit?: AnimationFit;
   /** Mantiene el último frame si la ventana es más larga que el tramo. */
   hold?: boolean;
+  /**
+   * Hace que este paso ocupe solo el hueco que deja la anticipación del
+   * siguiente paso. Si el siguiente paso empieza a la vez que este, el relleno
+   * no se dibuja. Es lo que usan las cargas: solo suenan cuando el lanzamiento
+   * llega tarde.
+   */
+  fill?: boolean;
   /** Por defecto `once`. */
   mode?: AnimationStepMode;
   /** Velocidad fija para `natural` y `loop` (1 = natural). */
