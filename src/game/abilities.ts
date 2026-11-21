@@ -1159,7 +1159,7 @@ registerAbility(
     .description(
       'Lanza una bomba de lodo a 6,5 u: deja un charco de 2,4 u durante 2,5 s que hace 20 de daño por segundo, ralentiza un 25 % y envenena 3 s (5 PV/s).'
     )
-    .presentation(releaseScript('shoot'))
+    .presentation(releaseScript('charge'))
 );
 
 registerAbility(
