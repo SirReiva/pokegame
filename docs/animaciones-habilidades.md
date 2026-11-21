@@ -75,6 +75,10 @@ tres marcadores en el manifiesto.
 Cada segmento indica qué frames se dibujan, en qué ventana de tiempo y a qué
 velocidad.
 
+Si la habilidad declara `presentation`, el plan sale de ese timeline en vez del
+builder automático. El resultado es el mismo `CastPlan`; ver §13.
+
+
 ### 3.1 Anticipación y `HitFrame`
 
 El tramo desde el inicio del clip hasta el `HitFrame` se reproduce para que
@@ -337,3 +341,75 @@ overlay con:
   acorta el desplazamiento, `syncDashCast` reconstruye el plan para que el clip
   dure lo mismo que el movimiento; sigue sin anclarse al `HitFrame` porque su
   golpe es un barrido continuo.
+
+## 13. Timeline declarativo (`presentation`)
+
+Una habilidad puede sustituir el plan automático por una secuencia de clips.
+Sigue mandando el gameplay: `startup + active + recovery` es el presupuesto
+máximo y el script solo coloca pasos dentro. Los huecos son válidos y dejan al
+sprite en su estado normal (`hurt`/`walk`/`idle`).
+
+```ts
+interface AnimationStep {
+  clip: AnimationName;
+  frames?: {
+    from?: number | 'first' | 'last' | 'rush' | 'hit' | 'return'
+      | 'beforeHit' | 'beforeReturn';
+    to?: number | 'first' | 'last' | 'rush' | 'hit' | 'return'
+      | 'beforeHit' | 'beforeReturn';
+  };
+  at?: 'start' | 'effect' | 'castEnd' | 'end'
+    | { at: number } | { after: number };
+  duration?: number;
+  until?: 'start' | 'effect' | 'castEnd' | 'end' | { at: number };
+  fit?: 'stretch' | 'trimStart' | 'trimEnd' | 'natural';
+  hold?: boolean;
+  mode?: 'once' | 'loop';
+  speed?: number;
+}
+```
+
+`frames` es inclusivo. `beforeHit` y `beforeReturn` permiten terminar justo
+antes de un marcador, que es lo que necesitan la anticipación y la ventana
+activa. Los índices numéricos quedan para overrides por especie.
+
+| `fit` | Clip más largo que la ventana | Clip más corto |
+| --- | --- | --- |
+| `stretch` (defecto) | Recorta el final. | Mantiene el último frame solo con `hold`. |
+| `trimStart` | Descarta anticipación. | Retrasa el tramo y rellena con el primer frame. |
+| `trimEnd` | Recorta el final. | Mantiene el último frame solo con `hold`. |
+| `natural` | Corta al acabar la ventana. | Deja hueco salvo `hold`. |
+
+`mode: 'loop'` repite el tramo a `speed` durante toda la ventana. Un `loop` sin
+`until` ni `duration` dura hasta el final del casteo.
+
+### 13.1 Declaración
+
+```ts
+meleeAbility('golpe', 'Golpe', 'normal', 'physical', resolve)
+  .startup(0.2)
+  .active(0.1)
+  .recovery(0.3)
+  .presentation(attackScript('attack'))
+```
+
+`src/game/animationPresets.ts` incluye `attackScript`, `dashScript` y
+`channelScript` como puntos de partida. Para una especie concreta:
+
+```ts
+.presentationFor('gengar', attackScript('quickstrike'))
+```
+
+El override reemplaza el script común entero; no se fusiona paso a paso.
+
+### 13.2 Compilación
+
+`compileAnimationScript()` (`src/game/animationScript.ts`) resuelve clips y
+marcadores por especie, calcula las ventanas absolutas, aplica `fit` y los
+límites `0.6–1.8x`, y emite los `CastSegment[]`. Los pasos se encadenan si no
+declaran `at`; `until` tiene prioridad sobre `duration`; nada se sale de
+`[0, endAt]`; los solapamientos los gana el paso que empieza después.
+
+`animationEndAt` pasa a ser el final del último paso. `animation`,
+`startupAnimation`, `startupAnimationMode` y `startupAnimationSpeed` se ignoran
+cuando hay `presentation`; sin él se mantiene el builder clásico.

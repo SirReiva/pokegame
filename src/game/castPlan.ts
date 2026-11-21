@@ -22,19 +22,27 @@ import {
   clipDuration,
   clipTiming,
   frameAtTime,
+  frameBoundary,
   frameStart
 } from './animationTimeline.ts';
-import type { CastPlan, CastSegment } from './core/castPlan';
-import type {
-  AnimationName,
-  ResolvedAnimation,
-  SpriteAnimation
-} from './types';
+import { compileAnimationScript } from './animationScript';
+import type { CastPlan, CastSegment, ClipResolver } from './core/castPlan';
+import type { AnimationScript } from './core/animationScript';
+import type { ResolvedAnimation, SpriteAnimation } from './types';
 
-export type { CastPlan, CastSegment } from './core/castPlan';
+export type { CastPlan, CastSegment, ClipResolver } from './core/castPlan';
 
-/** Resuelve el clip real de este aspecto para un nombre de animación. */
-export type ClipResolver = (name: AnimationName) => ResolvedAnimation | null;
+/** Script por especie para una habilidad; el override reemplaza al común. */
+export function animationScriptFor(
+  def: Pick<AbilityDef, 'presentation' | 'presentationBySpecies'>,
+  speciesId?: string
+): AnimationScript | null {
+  if (speciesId) {
+    const override = def.presentationBySpecies?.[speciesId];
+    if (override) return override;
+  }
+  return def.presentation ?? null;
+}
 
 const EPSILON = 1e-6;
 
@@ -330,8 +338,15 @@ function planAnimationEndAt(
 
 export function buildCastPlan(
   def: AbilityDef,
-  resolve: ClipResolver
+  resolve: ClipResolver,
+  speciesId?: string
 ): CastPlan {
+  // Si la habilidad declara un timeline propio, manda el script. El builder
+  // clásico queda como red de compatibilidad para las habilidades que todavía
+  // no se han migrado.
+  const script = animationScriptFor(def, speciesId);
+  if (script) return compileAnimationScript(script, def, resolve);
+
   const effectAt = Math.max(0, def.startup);
   const activeEnd = effectAt + Math.max(0, def.active);
   const endAt = activeEnd + Math.max(0, def.recovery);
@@ -505,8 +520,15 @@ export function frameForSegment(
   const local = Math.max(0, elapsed - segment.startAt);
   let clipTime = segment.clipStartAt + local * segment.playback;
   if (segment.loop) {
-    const duration = clipDuration(animation);
-    if (duration > EPSILON) clipTime %= duration;
+    // El bucle respeta el tramo del segmento. Antes solo se usaba el clip
+    // completo, así que un `charge` con `from`/`to` recortados se quedaba
+    // clavado en los bordes.
+    const from = frameStart(animation, segment.startFrame);
+    const to = frameBoundary(animation, segment.endFrame + 1);
+    const span = to - from;
+    if (span > EPSILON) {
+      clipTime = from + (((clipTime - from) % span) + span) % span;
+    }
   }
   const frame = frameAtTime(animation, clipTime);
   return Math.max(segment.startFrame, Math.min(segment.endFrame, frame));

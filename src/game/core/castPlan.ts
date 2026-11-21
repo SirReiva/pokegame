@@ -5,7 +5,10 @@
  * que el estado de la partida no dependa del módulo de animación.
  */
 
-import type { AnimationName } from './types';
+import type { AnimationName, ResolvedAnimation } from './types';
+
+/** Resuelve el clip real de este aspecto para un nombre de animación. */
+export type ClipResolver = (name: AnimationName) => ResolvedAnimation | null;
 
 export interface CastSegment {
   /** Clip que se dibuja. */

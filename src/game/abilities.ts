@@ -48,6 +48,7 @@ import type {
   SelfAbilityDef
 } from './core/abilities/def';
 import { isChannelingCast } from './core/abilities/movement';
+import type { AnimationScript } from './core/animationScript';
 import type { PokemonType } from './core/typeChart';
 import type { AnimationName } from './types';
 
@@ -81,6 +82,13 @@ export type {
   AoePlayer,
   AoePrepareMovement
 } from './core/abilities/aoe';
+export type {
+  AnimationCastMark,
+  AnimationFit,
+  AnimationFrameRef,
+  AnimationScript,
+  AnimationStep
+} from './core/animationScript';
 export type {
   AbilityBotProfile,
   AbilityDef,
@@ -168,6 +176,8 @@ const BASE_DEFAULTS = {
   startupAnimationMode: 'once' as StartupAnimationMode,
   startupAnimationSpeed: 1,
   animation: null as AnimationName | null,
+  presentation: null as AnimationScript | null,
+  presentationBySpecies: null as Record<string, AnimationScript> | null,
   moveWhileStartup: false,
   armorPool: 0,
   armorWindow: 'startup' as 'startup' | 'cast',
@@ -423,6 +433,10 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   preserveMomentum(): this;
   /** Animación de lanzamiento; `null` la desactiva. */
   animation(name: AnimationName | null): this;
+  /** Timeline de animación propio; sustituye al builder clásico. */
+  presentation(script: AnimationScript): this;
+  /** Variante del timeline para una especie concreta (`pokemonId`). */
+  presentationFor(speciesId: string, script: AnimationScript): this;
   /** Texto corto para el HUD. */
   description(text: string): this;
   /** Construye la definición; solo compila si se ha declarado `resolve`. */
@@ -733,6 +747,23 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
 
   animation(name: AnimationName | null): this {
     this.draft.animation = name;
+    return this;
+  }
+
+  presentation(script: AnimationScript): this {
+    this.draft.presentation = script;
+    return this;
+  }
+
+  presentationFor(speciesId: string, script: AnimationScript): this {
+    const current = this.draft.presentationBySpecies as
+      | Record<string, AnimationScript>
+      | null
+      | undefined;
+    this.draft.presentationBySpecies = {
+      ...(current ?? {}),
+      [speciesId]: script
+    };
     return this;
   }
 

@@ -11,6 +11,7 @@
 import type { AoeEvent, AoeMovement, AoePlayer, AoePrepareMovement } from './aoe';
 import type { AbilityResolve, AbilityResolveContext } from './resolve';
 import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
+import type { AnimationScript } from '../animationScript';
 import type { AnimationName } from '../types';
 import type { PokemonType } from '../typeChart';
 import type {
@@ -163,6 +164,19 @@ interface AbilityBase<P extends AbilityProps> {
    * `null` = la habilidad no reproduce ninguna animación.
    */
   animation: AnimationName | null;
+  /**
+   * Timeline de animación propio de la habilidad. Si está declarado, sustituye
+   * al builder clásico: `animation`, `startupAnimation`,
+   * `startupAnimationMode` y `startupAnimationSpeed` se ignoran. El script se
+   * coloca dentro de `startup + active + recovery` y puede encadenar clips o
+   * dejar huecos.
+   */
+  presentation?: AnimationScript | null;
+  /**
+   * Variante del timeline por especie (`pokemonId`). Reemplaza al script común
+   * para esa especie; no se fusiona paso a paso.
+   */
+  presentationBySpecies?: Readonly<Record<string, AnimationScript>> | null;
   /**
    * Movimiento durante el `startup`: `false` bloquea, `true` usa la velocidad
    * normal y un número es un multiplicador de velocidad (`0` bloquea). Por

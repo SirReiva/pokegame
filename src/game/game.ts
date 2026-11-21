@@ -2882,8 +2882,10 @@ export class Game {
     }
 
     const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
-    const plan = buildCastPlan(def, (name) =>
-      resolveAnimationClip(asset, name)
+    const plan = buildCastPlan(
+      def,
+      (name) => resolveAnimationClip(asset, name),
+      player.pokemonId
     );
     let dirX = Math.sin(castYaw);
     let dirZ = Math.cos(castYaw);
@@ -3226,7 +3228,8 @@ export class Game {
     const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
     cast.plan = buildCastPlan(
       { ...cast.def, active },
-      (name) => resolveAnimationClip(asset, name)
+      (name) => resolveAnimationClip(asset, name),
+      player.pokemonId
     );
     applyCastPresentation(this.hosts.cast, player, cast);
   }
