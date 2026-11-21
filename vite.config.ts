@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         main: "index.html",
         bench: "docs/performance/bench.html",
+        modelDemo: "demo/index.html",
       },
     },
   },

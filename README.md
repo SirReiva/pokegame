@@ -41,6 +41,27 @@ Los volúmenes general, de efectos y de música se ajustan en **Opciones → Aud
 
 Requiere Node 18+ (los importadores usan `fetch` y `zlib`).
 
+### Visor del modelo 3D (GLB)
+
+`demo/` es una página independiente del juego que carga los modelos de `public/models/` con PlayCanvas. Incluye selector de modelo, cámara orbital, todas las animaciones de cada GLB, timeline, velocidad y estadísticas en vivo.
+
+```bash
+pnpm dev:model     # abre /demo/ en el navegador
+pnpm dev           # o entra en http://localhost:5173/demo/
+```
+
+El modelo inicial se elige con `?model=pm0002_00`. La lista de modelos y sus ajustes de cámara están en `MODELS`, en `demo/main.ts`.
+
+El GLB se regenera desde el `.blend` original con `pnpm convert:model`: el wrapper `tools/blender/convert_model.mjs` lee `tools/blender/models.json`, deja elegir el modelo y llama a Blender con `tools/blender/export_pm_glb.py` (hornea los materiales, reconstruye las normales y exporta todos los actions).
+
+```bash
+pnpm convert:model            # menú interactivo
+pnpm convert:model pm0002_00  # directo, por id
+pnpm convert:model --all      # todos los modelos
+```
+
+Si Blender no está en el `PATH`, pásalo con `--blender <ruta>` o define `BLENDER_PATH`. Los detalles del pipeline y de los controles están en [`demo/README.md`](demo/README.md).
+
 ## Publicación web (GitHub Pages)
 
 El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**. Solo se dispara cuando un push a `master` toca `package.json`, y solo compila si la versión cambió:
@@ -808,6 +829,16 @@ public/maps/
   arena.json                 mapa por defecto en rejilla + respawns + separadores
   laberinto.json             laberinto 128 × 128 con bases en esquinas opuestas
   perf-256.json              arena de estrés 256 × 256 para medir rendimiento
+public/models/pm0001/
+  pm0001_00.glb              modelo convertido (46 animaciones, 3.996 triángulos)
+public/models/pm0002/
+  pm0002_00.glb              modelo convertido (49 animaciones, 64 huesos)
+demo/                        visor GLB independiente con PlayCanvas y selector de modelo
+tools/blender/
+  convert_model.mjs          elige modelo y llama a Blender (pnpm convert:model)
+  export_pm_glb.py           .blend → GLB: horneado de materiales y animaciones
+  models.json                opciones por modelo (materiales de ojos, UVs, lianas…)
+  models/                    .blend de origen (pm0001_00, pm0002_00)
 src/game/
   config.ts                  escala de píxel, cámara, jugador, niebla y visión
   types.ts                   tipos del manifiesto y del estado del juego

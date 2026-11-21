@@ -1,0 +1,31 @@
+{
+  "defaults": {
+    "resolution": 1024,
+    "eyeResolution": 512,
+    "eyeMaterials": ["l_eye", "r_eye"],
+    "uvWrapMaterials": ["body_b"],
+    "feeler": {
+      "bones": [],
+      "hiddenScale": 0.154057,
+      "visibleClips": []
+    }
+  },
+  "models": {
+    "pm0001_00": {
+      "blend": "models/pm0001_00.blend",
+      "output": "public/models/pm0001/pm0001_00.glb",
+      "feeler": {
+        "bones": ["left_feeler_01", "right_feeler_01"],
+        "visibleClips": ["00450_rangeattack01"]
+      }
+    },
+    "pm0002_00": {
+      "blend": "models/pm0002_00.blend",
+      "output": "public/models/pm0002/pm0002_00.glb",
+      "feeler": {
+        "bones": [],
+        "visibleClips": []
+      }
+    }
+  }
+}

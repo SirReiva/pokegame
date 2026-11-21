@@ -7,6 +7,8 @@
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "dev": "vite --host",
+    "dev:model": "vite --host --open /demo/",
+    "convert:model": "node tools/blender/convert_model.mjs",
     "build": "tsc -b && vite build",
     "build:dev": "vite build --mode development",
     "desktop:dev": "wails3 dev",
