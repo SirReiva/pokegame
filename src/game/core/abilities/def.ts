@@ -198,6 +198,14 @@ interface AbilityBase<P extends AbilityProps> {
    */
   movementUntilEndAnimation?: boolean | number;
   /**
+   * Si es `true`, el lanzador puede girar el cuerpo durante el casteo. Por
+   * defecto el rumbo queda fijado al lanzar para que la animación de la
+   * habilidad no gire; al habilitarlo, el cuerpo vuelve a seguir la dirección
+   * de avance como fuera de un casteo. No cambia la dirección del efecto, que
+   * sigue fijada al lanzamiento.
+   */
+  facingDuringCast: boolean;
+  /**
    * Si es `true`, lanzar la habilidad no pone a cero la velocidad actual: el
    * Pokémon conserva su inercia y solo se ajusta al nuevo máximo. Evita el
    * frenazo de las habilidades instantáneas que se pueden usar en movimiento.

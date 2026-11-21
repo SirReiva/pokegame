@@ -12,6 +12,7 @@ import { CONFIG, DEG } from '../config';
 import type { DeviceInputSnapshot } from '../input';
 import type { MatchPlayerState } from '../matchState';
 import { atmosphereSpeedMultiplier } from '../atmosphere';
+import { allowsFacingDuringCast } from '../core/abilities/movement';
 import { terrainAt } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import { terrainConcealment } from '../vision';
@@ -252,10 +253,13 @@ export function stepPlayer(
   player.z = resolved.z;
 
   const speed = Math.hypot(player.vx, player.vz);
-  // Durante un casteo el lanzador conserva el rumbo fijado al lanzar: moverse
-  // para apuntar con el stick o desplazarse no debe girar la animación de la
-  // habilidad.
-  if (player.activeCast === null && speed > CONFIG.player.minFacingSpeed) {
+  // Durante un casteo el lanzador conserva el rumbo fijado al lanzar para que
+  // la animación de la habilidad no gire. Las habilidades con `facingDuringCast`
+  // lo reactivan: el cuerpo vuelve a seguir su dirección de avance.
+  const canTurnFacing =
+    player.activeCast === null ||
+    allowsFacingDuringCast(player.activeCast.def);
+  if (canTurnFacing && speed > CONFIG.player.minFacingSpeed) {
     const targetFacing = Math.atan2(player.vx, player.vz);
     player.facing = angleLerp(
       player.facing,

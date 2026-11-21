@@ -21,7 +21,9 @@
  * Las habilidades direccionales usan el apuntado actual del Pokémon: el stick
  * derecho si está desviado o, si no, su `facing`. Al lanzar la habilidad, el
  * cuerpo gira primero hacia ese apuntado y después arranca el casteo normal.
- * Sin stick, el jugador apunta colocándose y girando con el movimiento.
+ * Sin stick, el jugador apunta colocándose y girando con el movimiento. Las
+ * habilidades con `facingDuringCast` dejan que el cuerpo siga girando con el
+ * movimiento durante el casteo.
  */
 
 import type {
@@ -181,6 +183,7 @@ const BASE_DEFAULTS = {
   armorPool: 0,
   armorWindow: 'startup' as 'startup' | 'cast',
   preserveMomentum: false,
+  facingDuringCast: false,
   description: ''
 };
 
@@ -425,6 +428,8 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   armor(pool: number, options?: { window?: 'startup' | 'cast' }): this;
   /** Movimiento hasta terminar la animación de lanzamiento. */
   movementUntilEndAnimation(value?: boolean | number): this;
+  /** Permite girar el cuerpo con el movimiento durante el casteo. */
+  facingDuringCast(value?: boolean): this;
   /** Conserva la inercia al lanzar. */
   preserveMomentum(): this;
   /** Timeline de animación de la habilidad. */
@@ -719,6 +724,11 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
 
   movementUntilEndAnimation(value: boolean | number = true): this {
     this.draft.movementUntilEndAnimation = value;
+    return this;
+  }
+
+  facingDuringCast(value: boolean = true): this {
+    this.draft.facingDuringCast = value;
     return this;
   }
 
@@ -2144,6 +2154,9 @@ registerAbility(
     // El aviso sigue al lanzador mientras se mueve bajo tierra: al emerger,
     // la erupción nace exactamente donde está.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    // El cuerpo sigue el rumbo de avance durante la excavación: al emerger mira
+    // hacia donde se estaba moviendo, no hacia donde se pulsó la habilidad.
+    .facingDuringCast()
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la carga.
     .startup(2, { move: 1.5 })
     .recovery(0.4)
@@ -2826,6 +2839,9 @@ registerAbility(
     .cooldown(16)
     .range(0)
     .radius(3.2)
+    // El cuerpo sigue el rumbo de avance durante la excavación: al emerger mira
+    // hacia donde se estaba moviendo, no hacia donde se pulsó la habilidad.
+    .facingDuringCast()
     // La marca sigue a Rayquaza mientras se eleva: la onda nace donde cae.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
     // Sin armadura: `onStart` ya lo hace invulnerable durante toda la subida.

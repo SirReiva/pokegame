@@ -32,6 +32,10 @@ puede lanzar otra habilidad. El movimiento se bloquea:
   recuperación restante ya permite moverse;
 - en un dash, lo controla el propio desplazamiento.
 
+El rumbo del cuerpo también se fija al lanzar: el casteo no gira al Pokémon
+aunque se desplace. Solo las habilidades que declaran `facingDuringCast`
+reactivan el giro hacia la dirección de avance durante el casteo.
+
 `moveWhileStartup`, `movementDuringCast` y `movementUntilEndAnimation` aceptan
 `boolean | number`: `true` usa la velocidad normal, `false` bloquea y un número
 es un multiplicador de velocidad (`0` bloquea). Los dos últimos solo intervienen
@@ -150,6 +154,10 @@ Builder:
   normales. `false` o `0` bloquea hasta ese instante, `true` usa la velocidad
   normal y un número multiplica la velocidad. Si no hay animación, la ventana
   dura hasta el final del casteo.
+- `facingDuringCast(value)` → `facingDuringCast`. Permite que el cuerpo siga
+  girando hacia su dirección de avance durante el casteo. Por defecto está
+  desactivado y el rumbo queda fijado al lanzar; no altera la dirección del
+  efecto.
 
 El builder solo expone la API nueva de tiempos: `startup`, `active` y
 `recovery`. Los métodos `cast()` y `windup()` se eliminaron para que ninguna
