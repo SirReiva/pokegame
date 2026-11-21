@@ -43,6 +43,103 @@
         "bones": [],
         "visibleClips": []
       }
+    },
+    "pm0025": {
+      "blend": "models/pm0025.blend",
+      "output": "public/models/pm0025/pm0025.glb",
+      "armature": "pm0025_00_00"
+    },
+    "pm0094_00": {
+      "blend": "models/pm0094_00.blend",
+      "output": "public/models/pm0094/pm0094_00.glb"
+    },
+    "pm0095_00": {
+      "blend": "models/pm0095_00.blend",
+      "output": "public/models/pm0095/pm0095_00.glb"
+    },
+    "pm0100_00": {
+      "blend": "models/pm0100_00.blend",
+      "output": "public/models/pm0100/pm0100_00.glb"
+    },
+    "pm0123": {
+      "blend": "models/pm0123.blend",
+      "output": "public/models/pm0123/pm0123.glb",
+      "armature": "pm0123_00_00"
+    },
+    "pm0130": {
+      "blend": "models/pm0130.blend",
+      "output": "public/models/pm0130/pm0130.glb",
+      "armature": "pm0130_00_00"
+    },
+    "pm0133_00": {
+      "blend": "models/pm0133_00.blend",
+      "output": "public/models/pm0133/pm0133_00.glb"
+    },
+    "pm0144_00": {
+      "blend": "models/pm0144_00.blend",
+      "output": "public/models/pm0144/pm0144_00.glb"
+    },
+    "pm0145_00": {
+      "blend": "models/pm0145_00.blend",
+      "output": "public/models/pm0145/pm0145_00.glb"
+    },
+    "pm0146_00": {
+      "blend": "models/pm0146_00.blend",
+      "output": "public/models/pm0146/pm0146_00.glb"
+    },
+    "pm0150_00": {
+      "blend": "models/pm0150_00.blend",
+      "output": "public/models/pm0150/pm0150_00.glb"
+    },
+    "pm0151_00": {
+      "blend": "models/pm0151_00.blend",
+      "output": "public/models/pm0151/pm0151_00.glb"
+    },
+    "pm0243": {
+      "blend": "models/pm0243.blend",
+      "output": "public/models/pm0243/pm0243.glb"
+    },
+    "pm0244": {
+      "blend": "models/pm0244.blend",
+      "output": "public/models/pm0244/pm0244.glb"
+    },
+    "pm0245": {
+      "blend": "models/pm0245.blend",
+      "output": "public/models/pm0245/pm0245.glb"
+    },
+    "pm0248": {
+      "blend": "models/pm0248.blend",
+      "output": "public/models/pm0248/pm0248.glb"
+    },
+    "pm0249": {
+      "blend": "models/pm0249.blend",
+      "output": "public/models/pm0249/pm0249.glb"
+    },
+    "pm0250": {
+      "blend": "models/pm0250.blend",
+      "output": "public/models/pm0250/pm0250.glb"
+    },
+    "pm0251_00": {
+      "blend": "models/pm0251_00.blend",
+      "output": "public/models/pm0251/pm0251_00.glb"
+    },
+    "pm0382": {
+      "blend": "models/pm0382.blend",
+      "output": "public/models/pm0382/pm0382.glb"
+    },
+    "pm0383_00": {
+      "blend": "models/pm0383_00.blend",
+      "output": "public/models/pm0383/pm0383_00.glb"
+    },
+    "pm0384": {
+      "blend": "models/pm0384.blend",
+      "output": "public/models/pm0384/pm0384.glb",
+      "armature": "pm0384_00_00"
+    },
+    "pm0448": {
+      "blend": "models/pm0448.blend",
+      "output": "public/models/pm0448/pm0448.glb",
+      "armature": "pm0448_00_00"
     }
   }
 }

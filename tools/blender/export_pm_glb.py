@@ -76,23 +76,54 @@ def merge(base, override):
     return result
 
 
+def select_armature(stem, requested):
+    """Elige el armature a exportar.
+
+    Algunos .blend traen varias formas del mismo Pokémon (por ejemplo Pikachu
+    con sus disfraces). Se usa el armature indicado en la configuración o, si no
+    hay, el primero cuyo prefijo encaje con el nombre del archivo.
+    """
+    armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+    if not armatures:
+        return None
+
+    if requested:
+        for obj in armatures:
+            if obj.name == requested or obj.name.split(".")[0] == requested:
+                return obj
+        raise RuntimeError(
+            f"No se encontró el armature '{requested}'. Disponibles: {', '.join(obj.name for obj in armatures)}"
+        )
+
+    for obj in armatures:
+        if obj.name.split(".")[0].startswith(stem):
+            return obj
+    return armatures[0]
+
+
 def load_config(path):
     with open(path, encoding="utf-8") as handle:
         config = json.load(handle)
 
     stem = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
-    armature = next((obj for obj in bpy.data.objects if obj.type == "ARMATURE"), None)
-    prefix = armature.name.split(".")[0] if armature else ""
-
     models = config.get("models", {})
-    entry = models.get(stem) or models.get(prefix)
+    entry = models.get(stem)
+    if entry is None:
+        # La clave del armature puede no coincidir con el nombre del .blend.
+        armature = next((obj for obj in bpy.data.objects if obj.type == "ARMATURE"), None)
+        prefix = armature.name.split(".")[0] if armature else ""
+        entry = models.get(prefix)
     if entry is None:
         print(f"[config] {stem}: sin entrada en {path}; se usan los defaults")
         entry = {}
     else:
         print(f"[config] {stem}: {', '.join(entry) or 'sin opciones'}")
 
-    return merge(config.get("defaults", {}), entry), stem, prefix, armature
+    merged = merge(config.get("defaults", {}), entry)
+    armature = select_armature(stem, merged.get("armature"))
+    prefix = armature.name.split(".")[0] if armature else ""
+
+    return merged, stem, prefix, armature
 
 
 def find_node(material, node_type):
@@ -116,6 +147,18 @@ def material_source(material):
     principled = find_node(material, "BSDF_PRINCIPLED")
     if principled and principled.inputs["Base Color"].is_linked:
         return "basecolor", principled.inputs["Base Color"].links[0].from_socket
+    # Los modelos de Scarlet/Violet envuelven el shader en un grupo
+    # (ScViShaderbyChicoEevee). Sus mezclas internas dependen de máscaras que no
+    # siempre vienen conectadas en estos .blend, así que para los cuerpos se
+    # hornea directamente el socket Albedo. Los ojos usan otro grupo con
+    # reflejos y pupilas: ahí sí conviene hornear el color difuso completo.
+    if surface.type == "GROUP":
+        group_name = surface.node_tree.name if surface.node_tree else ""
+        if "Eye" not in group_name:
+            albedo = surface.inputs.get("Albedo")
+            if albedo and albedo.is_linked:
+                return "albedo", albedo.links[0].from_socket
+        return "group", None
     return None, None
 
 
@@ -136,8 +179,52 @@ def collect_bake_materials():
                 continue
             if kind == "emissive":
                 print(f"[material] {material.name}: emisión")
+            elif kind == "albedo":
+                print(f"[material] {material.name}: shader ScVi (albedo)")
+            elif kind == "group":
+                print(f"[material] {material.name}: shader ScVi (grupo)")
             materials[material.name] = {"material": material, "kind": kind, "socket": socket}
     return materials
+
+
+def prune_to_armature(armature):
+    """Deja solo la forma elegida en los .blend con varios armatures.
+
+    Pikachu, Scyther o Gyarados incluyen varias formas en el mismo archivo. Si
+    se exportan todas, el GLB mezcla mallas y acciones de todas ellas.
+    """
+    target = armature.name
+    kept_meshes = 0
+    for obj in list(bpy.data.objects):
+        if obj.type != "MESH":
+            continue
+        rigs = [modifier.object.name for modifier in obj.modifiers if modifier.type == "ARMATURE" and modifier.object]
+        if rigs and target not in rigs:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        else:
+            kept_meshes += 1
+
+    target_prefix = target.split(".")[0]
+    other_prefixes = [
+        obj.name.split(".")[0]
+        for obj in bpy.data.objects
+        if obj.type == "ARMATURE" and obj.name != target
+    ]
+    other_prefixes = [prefix for prefix in other_prefixes if prefix != target_prefix]
+    for obj in list(bpy.data.objects):
+        if obj.type == "ARMATURE" and obj.name != target:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+    removed_actions = 0
+    for action in list(bpy.data.actions):
+        if any(action.name.startswith(f"{prefix}_") for prefix in other_prefixes):
+            bpy.data.actions.remove(action)
+            removed_actions += 1
+
+    print(
+        f"[rig] {target}: {kept_meshes} mallas, "
+        f"{len(bpy.data.actions)} acciones ({removed_actions} de otras formas descartadas)"
+    )
 
 
 def bake_base_color(output_dir, sizes, materials):
@@ -172,18 +259,61 @@ def bake_base_color(output_dir, sizes, materials):
         nt.nodes.active = bake_node
         targets[mat_name] = bake_node
 
-        emission = nt.nodes.new("ShaderNodeEmission")
-        emission.name = "BAKE_EMISSION"
-        nt.links.new(source_socket, emission.inputs["Color"])
-        nt.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+        # El grupo ScVi se hornea tal cual con el pase de color difuso; no se
+        # sustituye por una emisión porque perdería los recoloreados internos.
+        if kind != "group":
+            emission = nt.nodes.new("ShaderNodeEmission")
+            emission.name = "BAKE_EMISSION"
+            nt.links.new(source_socket, emission.inputs["Color"])
+            nt.links.new(emission.outputs["Emission"], output.inputs["Surface"])
 
     meshes = [obj for obj in bpy.data.objects if obj.type == "MESH"]
-    baked = {}
-    for mat_name, size in sizes.items():
-        mat = bpy.data.materials[mat_name]
-        objects = [obj for obj in meshes if mat.name in [slot.name for slot in obj.data.materials if slot]]
-        if not objects:
-            raise RuntimeError(f"{mat.name}: ningún objeto usa este material")
+    usable = [
+        obj
+        for obj in meshes
+        if any(mat and mat.name in sizes for mat in obj.data.materials)
+    ]
+
+    # Las mallas que comparten materiales se hornean juntas: así cada textura
+    # recibe todos sus objetos. Blender escribe cada ranura en su propia imagen
+    # en una sola pasada, sin pisar las demás.
+    parent = {obj.name: obj.name for obj in usable}
+
+    def find(name):
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    for mat_name in sizes:
+        users = [
+            obj
+            for obj in usable
+            if any(mat and mat.name == mat_name for mat in obj.data.materials)
+        ]
+        for other in users[1:]:
+            root_a, root_b = find(users[0].name), find(other.name)
+            if root_a != root_b:
+                parent[root_b] = root_a
+
+    groups = {}
+    for obj in usable:
+        groups.setdefault(find(obj.name), []).append(obj)
+
+    for objects in groups.values():
+        names = {
+            mat.name
+            for obj in objects
+            for mat in obj.data.materials
+            if mat and mat.name in sizes
+        }
+        kinds = {materials[name]["kind"] for name in names}
+        bake_type = "DIFFUSE" if "group" in kinds else "EMIT"
+        if bake_type == "DIFFUSE" and kinds - {"group"}:
+            raise RuntimeError(
+                f"{', '.join(sorted(names))}: la malla mezcla el shader ScVi con "
+                "materiales normales y no se pueden hornear juntos"
+            )
 
         bpy.ops.object.select_all(action="DESELECT")
         for obj in objects:
@@ -192,28 +322,66 @@ def bake_base_color(output_dir, sizes, materials):
 
         # Crear el nodo de emisión deja activo ese nodo: hay que reactivar el
         # nodo de imagen antes de hornear o Blender no encuentra el destino.
-        nt = mat.node_tree
-        nt.nodes.active = targets[mat_name]
-        for node in nt.nodes:
-            node.select = node == targets[mat_name]
+        for name in names:
+            nt = bpy.data.materials[name].node_tree
+            nt.nodes.active = targets[name]
+            for node in nt.nodes:
+                node.select = node == targets[name]
 
-        print(f"[bake] {mat.name}: {len(objects)} objetos, {size}x{size}…")
-        bpy.ops.object.bake(type="EMIT", margin=12, use_clear=True)
+        print(f"[bake] {', '.join(sorted(names))}: {len(objects)} mallas…")
+        if bake_type == "DIFFUSE":
+            # Solo el color: sin luz directa ni indirecta, para que la textura
+            # horneada sea el albedo del shader y no la iluminación de la escena.
+            scene.render.bake.use_pass_direct = False
+            scene.render.bake.use_pass_indirect = False
+            scene.render.bake.use_pass_color = True
+            bpy.ops.object.bake(type="DIFFUSE", margin=12, use_clear=True)
+        else:
+            bpy.ops.object.bake(type="EMIT", margin=12, use_clear=True)
 
+    baked = {}
+    for mat_name in sizes:
         image = targets[mat_name].image
         suffix = "emissive" if materials[mat_name]["kind"] == "emissive" else "basecolor"
-        path = os.path.join(output_dir, f"{mat.name}_{suffix}.png")
+        path = os.path.join(output_dir, f"{mat_name}_{suffix}.png")
         image.filepath_raw = path
         image.file_format = "PNG"
         image.save()
         image.pack()
-        baked[mat.name] = {"image": image, "kind": materials[mat_name]["kind"]}
+        baked[mat_name] = {"image": image, "kind": materials[mat_name]["kind"]}
     return baked
+
+
+def material_uv_out_of_range(material_name):
+    """¿Alguna cara del material sale del atlas 0..1?"""
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+        me = obj.data
+        slot = next(
+            (index for index, mat in enumerate(me.materials) if mat and mat.name == material_name),
+            None,
+        )
+        layer = me.uv_layers.active
+        if slot is None or layer is None:
+            continue
+        for poly in me.polygons:
+            if poly.material_index != slot:
+                continue
+            for loop_index in poly.loop_indices:
+                u, v = layer.data[loop_index].uv
+                if u < 0.0 or u >= 1.0 or v < 0.0 or v >= 1.0:
+                    return True
+    return False
 
 
 def wrap_uvs_for_material(material_name):
     """El juego muestrea estos atlas con REPEAT: si las UV salen de 0..1, se
     envuelven con módulo 1 para que el horneado y el GLB usen el mismo atlas.
+
+    Hay que envolver U y V: los ojos de Onix viven en U 1..2 (el ojo izquierdo
+    se horneaba negro porque el ráster de Blender lo escribía fuera de la
+    imagen) y los cuerpos PMD reparten los materiales en bandas de V.
 
     Se envuelve la malla completa, no solo las caras del material indicado: una
     misma capa UV la comparten todos los materiales del objeto y el horneado de
@@ -234,8 +402,8 @@ def wrap_uvs_for_material(material_name):
         objects += 1
         for datum in uv_layer.data:
             u, v = datum.uv
-            if v < 0.0 or v >= 1.0:
-                datum.uv = (u, v % 1.0)
+            if u < 0.0 or u >= 1.0 or v < 0.0 or v >= 1.0:
+                datum.uv = (u % 1.0, v % 1.0)
                 wrapped += 1
     print(f"[uv] {material_name}: {objects} objetos, {wrapped} bucles UV envueltos a 0..1")
 
@@ -394,6 +562,8 @@ def main():
     if armature is None:
         raise RuntimeError("No se encontró ningún armature en el .blend")
 
+    prune_to_armature(armature)
+
     output = args.output or config.get("output")
     if not output:
         raise SystemExit("Falta la ruta de salida: pásala como argumento o define 'output' en models.json")
@@ -424,6 +594,13 @@ def main():
             wrap_uvs_for_material(material_name)
         else:
             print(f"[uv] {material_name}: el modelo no lo usa, se omite")
+
+    # El atlas original usa REPEAT y reparte los materiales en bandas de V
+    # (cuerpo 0..1, alas 1..2, cola 2..3, ojos 3..4). Si se hornea con UV fuera
+    # de 0..1, la textura sale negra; se envuelven todas las que lo necesiten.
+    for material_name in materials:
+        if material_uv_out_of_range(material_name):
+            wrap_uvs_for_material(material_name)
 
     temp_dir = tempfile.mkdtemp(prefix=f"{stem}_bake_")
     baked = bake_base_color(temp_dir, sizes, materials)

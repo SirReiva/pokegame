@@ -60,6 +60,213 @@ const MODELS: ModelConfig[] = [
     scale: 5.6,
     offsetY: 0,
     camera: { targetY: 1.2, targetZ: 0, distance: 5.2, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0025",
+    name: "PM0025",
+    species: "Pikachu",
+    url: `${import.meta.env.BASE_URL}models/pm0025/pm0025.glb`,
+    scale: 5.4,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0094_00",
+    name: "PM0094_00",
+    species: "Gengar",
+    url: `${import.meta.env.BASE_URL}models/pm0094/pm0094_00.glb`,
+    scale: 1.62,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0095_00",
+    name: "PM0095_00",
+    species: "Onix",
+    url: `${import.meta.env.BASE_URL}models/pm0095/pm0095_00.glb`,
+    scale: 0.49,
+    offsetY: 0.02,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0100_00",
+    name: "PM0100_00",
+    species: "Voltorb",
+    url: `${import.meta.env.BASE_URL}models/pm0100/pm0100_00.glb`,
+    scale: 5.02,
+    offsetY: -0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0123",
+    name: "PM0123",
+    species: "Scyther",
+    url: `${import.meta.env.BASE_URL}models/pm0123/pm0123.glb`,
+    scale: 1.33,
+    offsetY: 0.1,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0130",
+    name: "PM0130",
+    species: "Gyarados",
+    url: `${import.meta.env.BASE_URL}models/pm0130/pm0130.glb`,
+    scale: 0.79,
+    offsetY: -0.32,
+    camera: { targetY: 1.07, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0133_00",
+    name: "PM0133_00",
+    species: "Eevee",
+    url: `${import.meta.env.BASE_URL}models/pm0133/pm0133_00.glb`,
+    scale: 6.79,
+    offsetY: 0.02,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0144_00",
+    name: "PM0144_00",
+    species: "Articuno",
+    url: `${import.meta.env.BASE_URL}models/pm0144/pm0144_00.glb`,
+    scale: 1.18,
+    offsetY: 0.02,
+    camera: { targetY: 0.93, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0145_00",
+    name: "PM0145_00",
+    species: "Zapdos",
+    url: `${import.meta.env.BASE_URL}models/pm0145/pm0145_00.glb`,
+    scale: 1.49,
+    offsetY: 0,
+    camera: { targetY: 1.14, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0146_00",
+    name: "PM0146_00",
+    species: "Moltres",
+    url: `${import.meta.env.BASE_URL}models/pm0146/pm0146_00.glb`,
+    scale: 0.93,
+    offsetY: 0,
+    camera: { targetY: 1.24, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0150_00",
+    name: "PM0150_00",
+    species: "Mewtwo",
+    url: `${import.meta.env.BASE_URL}models/pm0150/pm0150_00.glb`,
+    scale: 1.2,
+    offsetY: 0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0151_00",
+    name: "PM0151_00",
+    species: "Mew",
+    url: `${import.meta.env.BASE_URL}models/pm0151/pm0151_00.glb`,
+    scale: 5.36,
+    offsetY: -0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0243",
+    name: "PM0243",
+    species: "Raikou",
+    url: `${import.meta.env.BASE_URL}models/pm0243/pm0243.glb`,
+    scale: 1.41,
+    offsetY: 0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0244",
+    name: "PM0244",
+    species: "Entei",
+    url: `${import.meta.env.BASE_URL}models/pm0244/pm0244.glb`,
+    scale: 1.16,
+    offsetY: 0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0245",
+    name: "PM0245",
+    species: "Suicune",
+    url: `${import.meta.env.BASE_URL}models/pm0245/pm0245.glb`,
+    scale: 1.18,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0248",
+    name: "PM0248",
+    species: "Tyranitar",
+    url: `${import.meta.env.BASE_URL}models/pm0248/pm0248.glb`,
+    scale: 1.23,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0249",
+    name: "PM0249",
+    species: "Lugia",
+    url: `${import.meta.env.BASE_URL}models/pm0249/pm0249.glb`,
+    scale: 0.52,
+    offsetY: 0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0250",
+    name: "PM0250",
+    species: "Ho-Oh",
+    url: `${import.meta.env.BASE_URL}models/pm0250/pm0250.glb`,
+    scale: 0.53,
+    offsetY: 0,
+    camera: { targetY: 1.15, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0251_00",
+    name: "PM0251_00",
+    species: "Celebi",
+    url: `${import.meta.env.BASE_URL}models/pm0251/pm0251_00.glb`,
+    scale: 3.97,
+    offsetY: -1.51,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0382",
+    name: "PM0382",
+    species: "Kyogre",
+    url: `${import.meta.env.BASE_URL}models/pm0382/pm0382.glb`,
+    scale: 0.7,
+    offsetY: -0.01,
+    camera: { targetY: 0.51, targetZ: 0.05, distance: 5.85, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0383_00",
+    name: "PM0383_00",
+    species: "Groudon",
+    url: `${import.meta.env.BASE_URL}models/pm0383/pm0383_00.glb`,
+    scale: 0.7,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0384",
+    name: "PM0384",
+    species: "Rayquaza",
+    url: `${import.meta.env.BASE_URL}models/pm0384/pm0384.glb`,
+    scale: 0.67,
+    offsetY: -0.07,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0448",
+    name: "PM0448",
+    species: "Lucario",
+    url: `${import.meta.env.BASE_URL}models/pm0448/pm0448.glb`,
+    scale: 1.99,
+    offsetY: -0.01,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
   }
 ];
 
@@ -132,6 +339,73 @@ const CLIP_META: Record<string, ClipMeta> = {
 };
 
 const GROUP_ORDER = ["Espera", "Movimiento", "Descanso", "Combate", "Reacciones", "Rostro"];
+
+/**
+ * Los clips con prefijo numérico comparten la etiqueta del sufijo: 00000,
+ * 10000 y 20000 son rutinas distintas del mismo movimiento (por ejemplo,
+ * `10030_walk01_loop` es el caminar de Gyarados y `00030_walk01_loop` el de los
+ * modelos PMD).
+ */
+const CLIP_META_BY_SUFFIX: Record<string, ClipMeta> = Object.fromEntries(
+  Object.entries(CLIP_META).map(([name, meta]) => [name.replace(/^\d{5}_/, ""), meta])
+);
+
+/** Clips de los modelos PMD que no usan el prefijo numérico (Onix, Celebi…). */
+const PMD_CLIP_META: Record<string, ClipMeta> = {
+  ba01_landA01: { label: "Aterrizaje A", group: "Movimiento" },
+  ba01_landB01: { label: "Aterrizaje B", group: "Movimiento" },
+  ba01_landC01: { label: "Aterrizaje C", group: "Movimiento" },
+  ba02_roar01: { label: "Rugido", group: "Combate" },
+  ba10_waitA01: { label: "Espera A", group: "Espera" },
+  ba10_waitB01: { label: "Espera B", group: "Espera" },
+  ba20_buturi01: { label: "Ataque físico", group: "Combate" },
+  ba21_tokusyu01: { label: "Ataque especial 1", group: "Combate" },
+  ba21_tokusyu02: { label: "Ataque especial 2", group: "Combate" },
+  ba21_tokusyu03: { label: "Ataque especial 3", group: "Combate" },
+  ba30_damageS01: { label: "Daño", group: "Combate" },
+  ba41_down01: { label: "Debilitado", group: "Combate" },
+  eye01: { label: "Parpadeo", group: "Rostro" },
+  fi01_wait01: { label: "Espera", group: "Espera" },
+  fi20_walk01: { label: "Caminar", group: "Movimiento" },
+  fi21_run01: { label: "Correr", group: "Movimiento" },
+  kw01_wait01: { label: "Espera", group: "Espera" },
+  kw20_drowseA01: { label: "Somnoliento A", group: "Descanso" },
+  kw20_drowseB01: { label: "Somnoliento B", group: "Descanso" },
+  kw20_drowseC01: { label: "Somnoliento C", group: "Descanso" },
+  kw21_sleepA01: { label: "Dormir A", group: "Descanso" },
+  kw21_sleepB01: { label: "Dormir B", group: "Descanso" },
+  kw30_hate01: { label: "Enfado", group: "Reacciones" },
+  kw32_happyA01: { label: "Alegría A", group: "Reacciones" },
+  kw32_happyB01: { label: "Alegría B", group: "Reacciones" },
+  kw32_happyC01: { label: "Alegría C", group: "Reacciones" },
+  kw33_moveA01: { label: "Jugar A", group: "Reacciones" },
+  kw33_moveC01: { label: "Jugar C", group: "Reacciones" },
+  kw34_lonely01: { label: "Soledad", group: "Reacciones" },
+  kw35_playA01: { label: "Jugar", group: "Reacciones" },
+  kw36_mad01: { label: "Enfado", group: "Reacciones" },
+  kw50_eatA01: { label: "Comer A", group: "Descanso" },
+  kw50_eatB01: { label: "Comer B", group: "Descanso" },
+  kw50_eatC01: { label: "Comer C", group: "Descanso" },
+  kw60_touch01: { label: "Tocar", group: "Reacciones" },
+  loop01: { label: "Bucle", group: "Otros" },
+  loop01_loop: { label: "Bucle", group: "Otros" },
+  mouth01: { label: "Boca", group: "Rostro" }
+};
+
+/** Resuelve la etiqueta de un clip quitando prefijos y sufijos de duplicado. */
+function clipMetaFor(name: string): ClipMeta | undefined {
+  const clean = name.replace(/\.\d{3}$/, "");
+  return (
+    CLIP_META[clean] ??
+    CLIP_META_BY_SUFFIX[clean.replace(/^\d{5}_/, "")] ??
+    PMD_CLIP_META[clean]
+  );
+}
+
+/** Los clips sin nombre del .blend original llegan como hash hexadecimal. */
+function isHashedClip(name: string): boolean {
+  return /^[0-9A-F]{8,}\[FullHash=/i.test(name);
+}
 
 function $(id: string): HTMLElement {
   const element = document.getElementById(id);
@@ -247,8 +521,11 @@ function populateModelSelect(): void {
 }
 
 function applyModelChrome(config: ModelConfig): void {
-  const [family, form] = config.id.split("_");
-  modelName.innerHTML = `${family.toUpperCase()}<span>_${form}</span>`;
+  const [family, ...rest] = config.id.split("_");
+  const form = rest.join("_");
+  modelName.innerHTML = form
+    ? `${family.toUpperCase()}<span>_${form}</span>`
+    : family.toUpperCase();
   modelSubtitle.textContent = `${config.species} · visor de animaciones`;
   document.title = `${config.name} · Visor GLB con PlayCanvas`;
   description?.setAttribute(
@@ -609,13 +886,17 @@ async function start(): Promise<void> {
           const assetName = animationAsset.name ?? "";
           const rawName = animationNames[index] ?? assetName;
           const name = rawName.replace(/\.gfbanm$/, "").replace(/^pm\d+_\d+_\d+_/, "");
-          const meta = CLIP_META[name];
+          const meta = clipMetaFor(name);
           const track = animationAsset.resource as pc.AnimTrack;
           return {
             state: clipStateName(index),
             track,
             name,
-            label: meta?.label ?? fallbackLabel(name || `Clip ${index + 1}`),
+            label:
+              meta?.label ??
+              (isHashedClip(name)
+                ? `Clip especial ${name.slice(0, 4)}`
+                : fallbackLabel(name || `Clip ${index + 1}`)),
             group: meta?.group ?? "Otros",
             duration: track.duration ?? 0,
             loop: name.endsWith("_loop")
@@ -662,10 +943,13 @@ async function start(): Promise<void> {
       app.root.addChild(root);
       viewer = { config, asset, root, anim, layer, clips, buttons, order, activeIndex: -1 };
 
-      const defaultIndex = Math.max(
-        0,
-        clips.findIndex((clip) => clip.name.includes("defaultwait"))
+      // Arranca en una pose de espera: los PMD no tienen `defaultwait` y, sin
+      // esto, Onix o Celebi empezaban en un rugido o en un clip sin nombre.
+      let defaultIndex = clips.findIndex((clip) =>
+        /(defaultwait|battlewait|_waitA01|_waitB01|_wait01)/.test(clip.name)
       );
+      if (defaultIndex < 0) defaultIndex = clips.findIndex((clip) => clip.group === "Espera");
+      if (defaultIndex < 0) defaultIndex = 0;
       playClip(defaultIndex, true);
       anim.playing = true;
       updatePlayButton();

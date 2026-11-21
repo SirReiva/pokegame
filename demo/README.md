@@ -27,10 +27,35 @@ En producción, `pnpm build` genera `dist/demo/index.html` y copia los modelos a
 | `pm0002_00` | Ivysaur | 5.816 | 64 | 49 | `public/models/pm0002/pm0002_00.glb` |
 | `pm0004_00` | Charmander | 3.706 | 68 | 50 | `public/models/pm0004/pm0004_00.glb` |
 | `pm0007_00` | Squirtle | 3.998 | 48 | 86 | `public/models/pm0007/pm0007_00.glb` |
+| `pm0025` | Pikachu | 3.950 | 81 | 78 | `public/models/pm0025/pm0025.glb` |
+| `pm0094_00` | Gengar | 5.588 | 67 | 77 | `public/models/pm0094/pm0094_00.glb` |
+| `pm0095_00` | Onix | 3.630 | 31 | 23 | `public/models/pm0095/pm0095_00.glb` |
+| `pm0100_00` | Voltorb | 2.654 | 26 | 41 | `public/models/pm0100/pm0100_00.glb` |
+| `pm0123` | Scyther | 6.184 | 72 | 82 | `public/models/pm0123/pm0123.glb` |
+| `pm0130` | Gyarados | 6.068 | 69 | 46 | `public/models/pm0130/pm0130.glb` |
+| `pm0133_00` | Eevee | 4.000 | 81 | 77 | `public/models/pm0133/pm0133_00.glb` |
+| `pm0144_00` | Articuno | 6.852 | 91 | 56 | `public/models/pm0144/pm0144_00.glb` |
+| `pm0145_00` | Zapdos | 6.236 | 75 | 56 | `public/models/pm0145/pm0145_00.glb` |
+| `pm0146_00` | Moltres | 9.548 | 110 | 56 | `public/models/pm0146/pm0146_00.glb` |
+| `pm0150_00` | Mewtwo | 9.986 | 87 | 71 | `public/models/pm0150/pm0150_00.glb` |
+| `pm0151_00` | Mew | 3.998 | 54 | 43 | `public/models/pm0151/pm0151_00.glb` |
+| `pm0243` | Raikou | 5.994 | 66 | 43 | `public/models/pm0243/pm0243.glb` |
+| `pm0244` | Entei | 9.714 | 102 | 45 | `public/models/pm0244/pm0244.glb` |
+| `pm0245` | Suicune | 5.986 | 118 | 74 | `public/models/pm0245/pm0245.glb` |
+| `pm0248` | Tyranitar | 5.998 | 58 | 45 | `public/models/pm0248/pm0248.glb` |
+| `pm0249` | Lugia | 8.566 | 120 | 84 | `public/models/pm0249/pm0249.glb` |
+| `pm0250` | Ho-Oh | 9.998 | 124 | 56 | `public/models/pm0250/pm0250.glb` |
+| `pm0251_00` | Celebi | 4.266 | 64 | 33 | `public/models/pm0251/pm0251_00.glb` |
+| `pm0382` | Kyogre | 7.636 | 63 | 43 | `public/models/pm0382/pm0382.glb` |
+| `pm0383_00` | Groudon | 9.030 | 74 | 46 | `public/models/pm0383/pm0383_00.glb` |
+| `pm0384` | Rayquaza | 7.186 | 67 | 46 | `public/models/pm0384/pm0384.glb` |
+| `pm0448` | Lucario | 5.978 | 83 | 49 | `public/models/pm0448/pm0448.glb` |
 
 El selector de la cabecera cambia de modelo sin recargar la página: descarga el GLB, reconstruye la lista de clips y ajusta la cámara a la escala de cada uno. La lista de modelos y sus ajustes de cámara están en `MODELS`, en `main.ts`.
 
-Los clips se agrupan por categoría (Espera, Movimiento, Descanso, Combate, Reacciones y Rostro). Los modelos comparten la mayoría de IDs; `00293`–`00295` (`eat02`) solo falta en pm0001, `08201` (`loop01`) solo está en pm0004, `00260`–`00262` (`wildbool02`) solo en pm0007, y pm0007 añade además una segunda tanda completa de clips con el prefijo `10000` que queda sin etiquetar en **Otros**.
+Los clips se agrupan por categoría (Espera, Movimiento, Descanso, Combate, Reacciones y Rostro). Los modelos comparten la mayoría de IDs; `00293`–`00295` (`eat02`) solo falta en pm0001, `08201` (`loop01`) solo está en pm0004, `00260`–`00262` (`wildbool02`) solo en pm0007, y pm0007 añade además una segunda tanda completa de clips con el prefijo `10000`.
+
+Los modelos añadidos del roster mezclan dos esquemas de clips: los PMD (`fi20_walk01`, `kw01_wait01`…) y los que llevan prefijo de rutina (`00000_`, `10000_`, `20000_`). `clipMetaFor` normaliza ambos para reutilizar las mismas etiquetas y grupos. Los clips sin nombre en el `.blend` original (hashes de Onix) se muestran como `Clip especial` en **Otros**.
 
 ## Controles
 
