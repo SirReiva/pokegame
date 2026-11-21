@@ -189,13 +189,7 @@ export class Actor {
       BILLBOARD_BASE_Y - this.sink,
       this.position.z
     );
-    this.shadow?.setShadow(
-      this.position.x,
-      SHADOW_BASE_Y - this.sink,
-      this.position.z,
-      this.shadowDiameter,
-      this.visible && this.sink <= 0.001
-    );
+    this.updateShadow();
     this.barAnchorYValue = BILLBOARD_BASE_Y - this.sink + this.barAnchorOffset;
 
     if (this.marker) {
@@ -207,6 +201,21 @@ export class Actor {
       this.marker.setPosition(this.position.x, this.position.z);
     }
     this.hitboxDebug?.setPosition(this.position.x, this.position.z);
+  }
+
+  /**
+   * La sombra sigue el avance visual del frame (ataques, cargas, dash...). El
+   * billboard desplaza el plano hacia la cámara para convertir el movimiento
+   * vertical del arte en un envite sobre el suelo; la sombra debe acompañarlo.
+   */
+  private updateShadow(): void {
+    this.shadow?.setShadow(
+      this.position.x + this.billboard.motionX,
+      SHADOW_BASE_Y - this.sink,
+      this.position.z + this.billboard.motionZ,
+      this.shadowDiameter,
+      this.visible && this.sink <= 0.001
+    );
   }
 
   /**
@@ -261,18 +270,14 @@ export class Actor {
 
   update(dt: number, cameraPosition: pc.Vec3): void {
     this.billboard.update(dt, cameraPosition);
+    // El billboard acaba de recalcular su avance visual; la sombra lo sigue.
+    this.updateShadow();
   }
 
   setVisible(visible: boolean): void {
     this.visible = visible;
     this.billboard.setVisible(visible);
-    this.shadow?.setShadow(
-      this.position.x,
-      SHADOW_BASE_Y - this.sink,
-      this.position.z,
-      this.shadowDiameter,
-      visible && this.sink <= 0.001
-    );
+    this.updateShadow();
     this.marker?.setVisible(visible);
     this.hitboxDebug?.setVisible(visible);
   }

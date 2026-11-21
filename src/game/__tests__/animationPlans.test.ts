@@ -30,7 +30,7 @@ const MANIFEST = JSON.parse(
  * y actualiza la constante a propósito.
  */
 const EXPECTED_HASH =
-  '1294b4fee4f484c98039453adee1023e69c674a76483110be77d44d5fa9c69c7';
+  '4acd421b32c578c2802d5eba14d8320dc1b3f44f2c35401b2a11e74c56cce665';
 
 function resolverFor(
   animations: Record<string, SpriteAnimation>
