@@ -7,7 +7,9 @@ El .blend usa un grafo de materiales pensado para el shader del juego original
 El exportador glTF no entiende ese grafo, así que este script:
 
   1. Hornea el color base de cada material (albedo, AO y color de ojos) a una
-     textura propia con Cycles.
+     textura propia con Cycles. Los materiales con un nodo Emission conectado
+     a la salida (por ejemplo, la llama de un Pokémon de fuego) se hornean por
+     su color de emisión y se reconstruyen como emisivos.
   2. Reconstruye un Principled BSDF limpio con esa textura + el normal map.
   3. Añade la escala de las lianas cuando el modelo la necesita, porque las
      acciones importadas solo traen locación y rotación (ver models.json).
@@ -97,6 +99,26 @@ def find_node(material, node_type):
     return next((node for node in material.node_tree.nodes if node.type == node_type), None)
 
 
+def material_source(material):
+    """Devuelve el tipo de horneado y el socket que alimenta la superficie.
+
+    La mayoría de materiales usan un Principled BSDF con el color base
+    conectado; los materiales emisivos (por ejemplo, la llama de un Pokémon de
+    fuego) llevan un nodo Emission directo al Material Output y se hornean por
+    su color de emisión.
+    """
+    output = find_node(material, "OUTPUT_MATERIAL")
+    if not output or not output.inputs["Surface"].is_linked:
+        return None, None
+    surface = output.inputs["Surface"].links[0].from_node
+    if surface.type == "EMISSION" and surface.inputs["Color"].is_linked:
+        return "emissive", surface.inputs["Color"].links[0].from_socket
+    principled = find_node(material, "BSDF_PRINCIPLED")
+    if principled and principled.inputs["Base Color"].is_linked:
+        return "basecolor", principled.inputs["Base Color"].links[0].from_socket
+    return None, None
+
+
 def collect_bake_materials():
     """Materiales usados por mallas que se pueden hornear con el grafo original."""
     materials = {}
@@ -108,20 +130,18 @@ def collect_bake_materials():
                 continue
             if not material.use_nodes:
                 continue
-            principled = find_node(material, "BSDF_PRINCIPLED")
-            output = find_node(material, "OUTPUT_MATERIAL")
-            if not principled or not output:
-                print(f"[material] {material.name}: sin Principled/Output, se omite")
+            kind, socket = material_source(material)
+            if not kind:
+                print(f"[material] {material.name}: superficie sin color horneable, se omite")
                 continue
-            if not principled.inputs["Base Color"].is_linked:
-                print(f"[material] {material.name}: Base Color sin conectar, se omite")
-                continue
-            materials[material.name] = material
+            if kind == "emissive":
+                print(f"[material] {material.name}: emisión")
+            materials[material.name] = {"material": material, "kind": kind, "socket": socket}
     return materials
 
 
-def bake_base_color(output_dir, sizes):
-    """Hornea la salida de Base Color de cada material a una imagen empaquetada."""
+def bake_base_color(output_dir, sizes, materials):
+    """Hornea el color base (o de emisión) de cada material a una imagen empaquetada."""
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
@@ -134,15 +154,15 @@ def bake_base_color(output_dir, sizes):
     for mat_name, size in sizes.items():
         mat = bpy.data.materials[mat_name]
         nt = mat.node_tree
-        principled = find_node(mat, "BSDF_PRINCIPLED")
         output = find_node(mat, "OUTPUT_MATERIAL")
-        if not principled or not output:
-            raise RuntimeError(f"{mat.name}: falta Principled BSDF o Material Output")
+        if not output:
+            raise RuntimeError(f"{mat.name}: falta Material Output")
 
-        source_link = principled.inputs["Base Color"].links[0]
-        source_socket = source_link.from_socket
+        kind = materials[mat_name]["kind"]
+        source_socket = materials[mat_name]["socket"]
+        suffix = "emissive" if kind == "emissive" else "basecolor"
 
-        image = bpy.data.images.new(f"{mat.name}_basecolor", width=size, height=size, alpha=False)
+        image = bpy.data.images.new(f"{mat.name}_{suffix}", width=size, height=size, alpha=False)
         image.colorspace_settings.name = "sRGB"
 
         bake_node = nt.nodes.new("ShaderNodeTexImage")
@@ -181,12 +201,13 @@ def bake_base_color(output_dir, sizes):
         bpy.ops.object.bake(type="EMIT", margin=12, use_clear=True)
 
         image = targets[mat_name].image
-        path = os.path.join(output_dir, f"{mat.name}_basecolor.png")
+        suffix = "emissive" if materials[mat_name]["kind"] == "emissive" else "basecolor"
+        path = os.path.join(output_dir, f"{mat.name}_{suffix}.png")
         image.filepath_raw = path
         image.file_format = "PNG"
         image.save()
         image.pack()
-        baked[mat.name] = image
+        baked[mat.name] = {"image": image, "kind": materials[mat_name]["kind"]}
     return baked
 
 
@@ -261,7 +282,9 @@ def build_normal_map(source, target_name, output_dir):
 
 
 def rebuild_materials(baked, output_dir):
-    for mat_name, base_image in baked.items():
+    for mat_name, entry in baked.items():
+        base_image = entry["image"]
+        kind = entry["kind"]
         mat = bpy.data.materials[mat_name]
         normal_source = find_normal_image(mat)
 
@@ -280,7 +303,14 @@ def rebuild_materials(baked, output_dir):
         base_node.name = "Base Color"
         base_node.image = base_image
         base_node.location = (-420, 160)
-        nt.links.new(base_node.outputs["Color"], principled.inputs["Base Color"])
+        if kind == "emissive":
+            # Un material emisivo no depende de la luz: el color va al canal
+            # de emisión y la base queda negra, como en el shader original.
+            principled.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1.0)
+            principled.inputs["Emission Strength"].default_value = 1.0
+            nt.links.new(base_node.outputs["Color"], principled.inputs["Emission Color"])
+        else:
+            nt.links.new(base_node.outputs["Color"], principled.inputs["Base Color"])
 
         normal_image = build_normal_map(normal_source, f"{mat_name}_normal", output_dir)
         if normal_image:
@@ -294,7 +324,8 @@ def rebuild_materials(baked, output_dir):
             nt.links.new(normal_map.outputs["Normal"], principled.inputs["Normal"])
 
         mat.use_backface_culling = True
-        print(f"[material] {mat_name}: reconstruido")
+        suffix = " (emisión)" if kind == "emissive" else ""
+        print(f"[material] {mat_name}: reconstruido{suffix}")
 
 
 def rename_actions(prefix):
@@ -395,7 +426,7 @@ def main():
             print(f"[uv] {material_name}: el modelo no lo usa, se omite")
 
     temp_dir = tempfile.mkdtemp(prefix=f"{stem}_bake_")
-    baked = bake_base_color(temp_dir, sizes)
+    baked = bake_base_color(temp_dir, sizes, materials)
     rebuild_materials(baked, temp_dir)
     rename_actions(prefix)
 

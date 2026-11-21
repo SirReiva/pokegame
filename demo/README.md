@@ -25,10 +25,12 @@ En producción, `pnpm build` genera `dist/demo/index.html` y copia los modelos a
 | --- | --- | ---: | ---: | ---: | --- |
 | `pm0001_00` | Bulbasaur | 3.996 | 75 | 46 | `public/models/pm0001/pm0001_00.glb` |
 | `pm0002_00` | Ivysaur | 5.816 | 64 | 49 | `public/models/pm0002/pm0002_00.glb` |
+| `pm0004_00` | Charmander | 3.706 | 68 | 50 | `public/models/pm0004/pm0004_00.glb` |
+| `pm0007_00` | Squirtle | 3.998 | 48 | 86 | `public/models/pm0007/pm0007_00.glb` |
 
 El selector de la cabecera cambia de modelo sin recargar la página: descarga el GLB, reconstruye la lista de clips y ajusta la cámara a la escala de cada uno. La lista de modelos y sus ajustes de cámara están en `MODELS`, en `main.ts`.
 
-Los clips se agrupan por categoría (Espera, Movimiento, Descanso, Combate, Reacciones y Rostro). Los dos modelos comparten los mismos IDs de animación, salvo `00293`–`00295` (`eat02`), que solo tiene pm0002.
+Los clips se agrupan por categoría (Espera, Movimiento, Descanso, Combate, Reacciones y Rostro). Los modelos comparten la mayoría de IDs; `00293`–`00295` (`eat02`) solo falta en pm0001, `08201` (`loop01`) solo está en pm0004, `00260`–`00262` (`wildbool02`) solo en pm0007, y pm0007 añade además una segunda tanda completa de clips con el prefijo `10000` que queda sin etiquetar en **Otros**.
 
 ## Controles
 
@@ -44,7 +46,7 @@ Los clips se agrupan por categoría (Espera, Movimiento, Descanso, Combate, Reac
 
 El `.blend` usa un grafo de materiales del shader original (albedo × AO, máscaras de ojos y normales con la componente Z en el alfa) que el exportador glTF no entiende. El script `tools/blender/export_pm_glb.py` es genérico para los modelos dados de alta en `tools/blender/models.json`:
 
-1. Hornea el color base de cada material con Cycles (`EMIT`): albedo × AO y el color de los ojos.
+1. Hornea el color base de cada material con Cycles (`EMIT`): albedo × AO y el color de los ojos. Los materiales gobernados por un nodo `Emission` (la llama de pm0004) se hornean por su color de emisión y se reconstruyen con `Emission Color`, base negra y sin depender de la luz.
 2. Convierte las normales al formato glTF (X/Y en RGB y Z en el canal azul).
 3. Normaliza con módulo 1 las UV de los materiales configurados en `uvWrapMaterials` (el atlas original vive fuera de 0..1 y el juego lo muestrea con `REPEAT`).
 4. Reconstruye un `Principled BSDF` limpio con la textura horneada y el normal map.
@@ -109,6 +111,8 @@ La clave es el nombre del `.blend` sin extensión (`pm0001_00`); también se ace
 | `resolution` / `eyeResolution` | Tamaño del horneado del cuerpo / ojos. |
 | `eyeMaterials` | Materiales que usan `eyeResolution`. |
 | `uvWrapMaterials` | Materiales cuyas UV se envuelven con módulo 1 antes de hornear. |
+
+pm0007 no usa el material `body_b` del default: su caparazón y su cola viven en `body_b_00` y `body_b_01` con UV en V 1..2, así que la entrada del modelo sustituye la lista por esos dos nombres.
 | `feeler.bones` | Huesos raíz que se escalan para recoger las lianas (vacío = no tocar). |
 | `feeler.hiddenScale` | Escala con la que se recogen. |
 | `feeler.visibleClips` | Clips que se quedan a escala 1. |

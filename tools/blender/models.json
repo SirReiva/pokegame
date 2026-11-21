@@ -26,6 +26,23 @@
         "bones": [],
         "visibleClips": []
       }
+    },
+    "pm0004_00": {
+      "blend": "models/pm0004_00.blend",
+      "output": "public/models/pm0004/pm0004_00.glb",
+      "feeler": {
+        "bones": [],
+        "visibleClips": []
+      }
+    },
+    "pm0007_00": {
+      "blend": "models/pm0007_00.blend",
+      "output": "public/models/pm0007/pm0007_00.glb",
+      "uvWrapMaterials": ["body_b_00", "body_b_01"],
+      "feeler": {
+        "bones": [],
+        "visibleClips": []
+      }
     }
   }
 }

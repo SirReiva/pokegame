@@ -42,6 +42,24 @@ const MODELS: ModelConfig[] = [
     scale: 2.0,
     offsetY: 0.02,
     camera: { targetY: 1.25, targetZ: 0, distance: 5.8, yaw: 0.58, pitch: 0.18 }
+  },
+  {
+    id: "pm0004_00",
+    name: "PM0004_00",
+    species: "Charmander",
+    url: `${import.meta.env.BASE_URL}models/pm0004/pm0004_00.glb`,
+    scale: 4.2,
+    offsetY: 0,
+    camera: { targetY: 1.2, targetZ: 0.05, distance: 5.2, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0007_00",
+    name: "PM0007_00",
+    species: "Squirtle",
+    url: `${import.meta.env.BASE_URL}models/pm0007/pm0007_00.glb`,
+    scale: 5.6,
+    offsetY: 0,
+    camera: { targetY: 1.2, targetZ: 0, distance: 5.2, yaw: 0.58, pitch: 0.2 }
   }
 ];
 
@@ -87,6 +105,9 @@ const CLIP_META: Record<string, ClipMeta> = {
   "00293_eat02_start": { label: "Comer 2 · Inicio", group: "Descanso" },
   "00294_eat02_loop": { label: "Comer 2", group: "Descanso" },
   "00295_eat02_end": { label: "Comer 2 · Fin", group: "Descanso" },
+  "00260_wildbool02_start": { label: "Salvaje · Inicio", group: "Reacciones" },
+  "00261_wildbool02_loop": { label: "Salvaje", group: "Reacciones" },
+  "00262_wildbool02_end": { label: "Salvaje · Fin", group: "Reacciones" },
   "00300_roar01": { label: "Rugido", group: "Combate" },
   "00320_refresh01": { label: "Refresco", group: "Combate" },
   "00400_attack01": { label: "Ataque físico", group: "Combate" },
@@ -371,6 +392,7 @@ async function start(): Promise<void> {
     layer: pc.AnimComponentLayer;
     clips: ClipInfo[];
     buttons: HTMLButtonElement[];
+    order: number[];
     activeIndex: number;
   };
 
@@ -500,7 +522,7 @@ async function start(): Promise<void> {
     resetClipUi();
   }
 
-  function buildClipList(clips: ClipInfo[]): HTMLButtonElement[] {
+  function buildClipList(clips: ClipInfo[]): { buttons: HTMLButtonElement[]; order: number[] } {
     clipList.replaceChildren();
     const groups = new Map<string, ClipInfo[]>();
     for (const clip of clips) {
@@ -514,7 +536,10 @@ async function start(): Promise<void> {
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
 
+    // `buttons` va indexado por el índice del clip, no por la posición visual:
+    // los grupos reordenan la lista y el resaltado debe seguir al clip real.
     const buttons: HTMLButtonElement[] = [];
+    const order: number[] = [];
     for (const group of orderedGroups) {
       const groupClips = groups.get(group) ?? [];
       const section = document.createElement("section");
@@ -550,12 +575,13 @@ async function start(): Promise<void> {
           playClip(index);
           if (window.matchMedia("(max-width: 980px)").matches) setPanelOpen(false);
         });
-        buttons.push(button);
+        buttons[index] = button;
+        order.push(index);
         section.append(button);
       }
       clipList.append(section);
     }
-    return buttons;
+    return { buttons, order };
   }
 
   function showModel(asset: pc.Asset, animationNames: string[], config: ModelConfig): void {
@@ -632,9 +658,9 @@ async function start(): Promise<void> {
         anim.assignAnimation(clip.state, clip.track, undefined, 1, loopInput.checked);
       }
 
-      const buttons = buildClipList(clips);
+      const { buttons, order } = buildClipList(clips);
       app.root.addChild(root);
-      viewer = { config, asset, root, anim, layer, clips, buttons, activeIndex: -1 };
+      viewer = { config, asset, root, anim, layer, clips, buttons, order, activeIndex: -1 };
 
       const defaultIndex = Math.max(
         0,
@@ -908,7 +934,9 @@ async function start(): Promise<void> {
     } else if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
       const delta = event.key === "ArrowRight" ? 1 : -1;
-      playClip((viewer.activeIndex + delta + viewer.clips.length) % viewer.clips.length);
+      const position = viewer.order.indexOf(viewer.activeIndex);
+      const next = viewer.order[(position + delta + viewer.order.length) % viewer.order.length];
+      playClip(next);
     } else if (event.key.toLowerCase() === "r") {
       resetView();
     }
