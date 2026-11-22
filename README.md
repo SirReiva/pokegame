@@ -74,19 +74,16 @@ Si Blender no está en el `PATH`, pásalo con `--blender <ruta>` o define `BLEND
 
 ## Publicación web (GitHub Pages)
 
-El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**. Solo se dispara cuando un push a `master` toca `package.json`, y solo compila si la versión cambió:
+El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow **Deploy to GitHub Pages**, que se lanza a mano desde la pestaña *Actions* (o con `gh`). Compila la rama que elijas, sube la versión y hace el commit y el push en esa misma rama:
 
 ```bash
-pnpm version patch --no-git-tag-version   # o edita "version" a mano
-git commit -am "chore: bump version to v0.28.5"
-git push
+gh workflow run deploy-pages.yml --ref dev -f version_bump=patch
 ```
 
-El job `check` compara la versión nueva con la última publicada (leyendo el `package.json` del último run exitoso); si no cambió, el build ni se ejecuta. Un commit de código, docs o assets no arranca el workflow. Para republicar la misma versión —por ejemplo, si Pages quedó roto— lanza el workflow a mano con `force`:
+- `--ref` (o *Use workflow from* en la UI) elige la rama. Si en el formulario dejas **Rama** vacía, se usa esa misma rama; si escribes otra, se compila, versiona y publica esa otra.
+- `version_bump` decide el salto de versión (`patch`, `minor` o `major`) y el commit `chore: bump version to vX.Y.Z` se empuja a la rama desplegada.
 
-```bash
-gh workflow run deploy-pages.yml -f force=true
-```
+El deploy usa el artifact generado, así que GitHub Pages debe tener como origen **GitHub Actions** en *Settings → Pages*; el selector de rama de esa pantalla no interviene y no hace falta cambiarlo.
 
 ## Versión de escritorio (Wails)
 
