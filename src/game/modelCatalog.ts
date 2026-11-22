@@ -67,7 +67,9 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
     moveAnimation: 'idle1',
     moveClip: '20011_defaultidle02'
   },
-  '0150': { file: 'pm0150/pm0150_00.glb' },
+  // Mewtwo se veía pequeño frente a otros legendarios: +25 % sobre la escala
+  // automática del manifiesto.
+  '0150': { file: 'pm0150/pm0150_00.glb', scale: 1.25 },
   '0151': { file: 'pm0151/pm0151_00.glb' },
   '0243': { file: 'pm0243/pm0243.glb' },
   '0244': { file: 'pm0244/pm0244.glb' },
