@@ -519,11 +519,8 @@ export class ModelBillboard {
 
     // Root motion fuera: las animaciones pueden desplazar el hueso `origin`
     // varios metros (Onix, Gyarados, ataques), y ese avance se acumulaba sobre
-    // la posición real del jugador. Se deja el hueso en su posición de bind;
-    // brazos, piernas, cola y resto del esqueleto siguen animándose.
-    if (this.rootMotionNode && this.rootMotionBase) {
-      this.rootMotionNode.setLocalPosition(this.rootMotionBase);
-    }
+    // la posición real del jugador.
+    this.resetRootMotion();
 
     // La caja del GLB no sirve para apoyar el modelo: la pose de reposo puede
     // tener las patas recogidas (Articuno, Mewtwo) y las alas o la cola bajan
@@ -565,6 +562,13 @@ export class ModelBillboard {
       this.setAnimationLod(false);
     }
 
+    // `updateAnimationLod` y la puesta al día de un cuerpo pausado evalúan el
+    // clip con `anim.update()` dentro de este mismo `update()`, es decir,
+    // después del primer reset. Hay que volver a fijar el hueso o el render
+    // alternaría entre la posición de root motion del clip y la de bind: eso
+    // se veía como un segundo cuerpo desplazado en aliados y rivales.
+    this.resetRootMotion();
+
     // Gris del KO suavizado (sin shader propio todavía; se guarda para cuando
     // se aplique el tinte por material).
     if (this.desaturation !== this.desaturationTarget) {
@@ -574,6 +578,17 @@ export class ModelBillboard {
       if (Math.abs(this.desaturationTarget - this.desaturation) < 0.004) {
         this.desaturation = this.desaturationTarget;
       }
+    }
+  }
+
+  /**
+   * Deja el hueso de root motion en su posición de bind. Los clips pueden
+   * desplazarlo varios metros, pero la posición del actor la manda la
+   * simulación: el modelo no debe sumar ese avance.
+   */
+  private resetRootMotion(): void {
+    if (this.rootMotionNode && this.rootMotionBase) {
+      this.rootMotionNode.setLocalPosition(this.rootMotionBase);
     }
   }
 
