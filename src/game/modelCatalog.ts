@@ -46,7 +46,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // huella horizontal inflaba la escala automática. Se ajusta a mano para que
   // quede por debajo de Mewtwo o Lucario, como en el manifiesto.
   '0025': { file: 'pm0025/pm0025.glb', scale: 0.6 },
-  '0094': { file: 'pm0094/pm0094_00.glb' },
+  '0094': { file: 'pm0094/pm0094_00.glb', scale: 0.85 },
   // Onix es una serpiente de piedra enorme: se reduce para que su volumen no
   // tape a los rivales en combate.
   '0095': { file: 'pm0095/pm0095_00.glb', scale: 0.55 },
@@ -100,8 +100,9 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0384': { file: 'pm0384/pm0384.glb' },
   '0448': { file: 'pm0448/pm0448.glb' },
   // Greninja viene de Sketchfab (CC-BY, Mariokart07). El atlas hornea la escala
-  // de bind en la geometría, así que su caja ya está en unidades de mundo.
-  '0658': { file: 'pm0658/pm0658.glb' }
+  // de bind en la geometría, así que su caja ya está en unidades de mundo; se
+  // reduce a mano para que no domine a los rivales en combate.
+  '0658': { file: 'pm0658/pm0658.glb', scale: 0.7 }
 };
 
 export function modelEntryFor(pokemonId: string): PokemonModelEntry | null {
