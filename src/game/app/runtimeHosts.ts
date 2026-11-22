@@ -16,7 +16,7 @@ import type { CombatFxPort } from '../core/ports/fx';
 import type { Team } from '../core/team';
 import type { FogMask, FogView } from '../fog';
 import type { DeviceInputSnapshot } from '../input';
-import type { SpriteAsset } from '../sprite';
+import type { ActorAsset } from '../actorAsset';
 import type {
   ActiveAoe,
   MatchPlayerState,
@@ -324,6 +324,6 @@ export type {
   DamageOptions,
   DeviceInputSnapshot,
   SlowSpec,
-  SpriteAsset,
+  ActorAsset,
   XpSource
 };

@@ -47,7 +47,7 @@ function PlayIntroGate() {
     return (
       <LoadingScreen
         label="Preparando la partida"
-        detail="Leyendo el manifiesto de sprites y los equipos."
+        detail="Leyendo los datos de los Pokémon y los equipos."
       />
     );
   }

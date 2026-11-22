@@ -22,7 +22,7 @@ import {
   type PickupSpawn
 } from './items';
 import type { MatchPlayerState } from './matchState';
-import { loadImage } from './sprite';
+import { loadImage } from './imageLoader';
 import { setTextureSource, textureFromCanvas } from './textures';
 import type { PokemonEntry } from './types';
 

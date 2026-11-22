@@ -1,9 +1,10 @@
 import * as pc from 'playcanvas';
+import { actorWorldHeight, type ActorAsset } from './actorAsset';
 import { CONFIG } from './config';
 import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
 import type { ActorShadowSlot } from './render/actorShadows';
-import { SpriteBillboard, type SpriteAsset } from './sprite';
+import { ModelBillboard } from './render/modelBillboard';
 import type { AnimationName } from './types';
 
 export interface ActorTransform {
@@ -26,7 +27,7 @@ const MARKER_FLOAT_SINK = 0.12;
  */
 export interface ActorOptions {
   app: pc.AppBase;
-  asset: SpriteAsset;
+  asset: ActorAsset;
   position: ActorTransform;
   facing: number;
   /**
@@ -41,35 +42,23 @@ export interface ActorOptions {
   accent?: readonly [number, number, number];
   /** Contorno de equipo; lo llevan las copias que no controla el jugador. */
   withOutline?: boolean;
-  /** Grosor del contorno en píxeles de arte (ver `spriteOutlineWidth`). */
+  /** Grosor del contorno en píxeles de arte (sin uso en el cuerpo 3D). */
   outlineWidth?: number;
   hitRadius?: number;
   deferLayers?: boolean;
 }
 
 /**
- * Un Pokémon del mundo: billboard + sombra de contacto.
+ * Un Pokémon del mundo: modelo 3D + sombra de contacto.
  * El movimiento lo decide quien lo posee (jugador o NPC).
  */
-/**
- * Altura del sprite en unidades de mundo. La comparte `Game` para calcular la
- * barra de vida, que ya no vive dentro del actor.
- */
-export function actorSpriteHeight(asset: SpriteAsset): number {
-  const idle = asset.skin.animations.idle;
-  const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
-  return (
-    anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch
-  );
-}
-
 export class Actor {
-  readonly billboard: SpriteBillboard;
+  readonly billboard: ModelBillboard;
   private readonly app: pc.AppBase;
   /** Ranura compartida de sombra; `null` si el actor no la lleva. */
   private readonly shadow: ActorShadowSlot | null;
   private readonly shadowDiameter: number;
-  /** Altura local sobre la raíz del billboard donde apoya la barra de vida. */
+  /** Altura local sobre la raíz del modelo donde apoya la barra de vida. */
   readonly barAnchorOffset: number;
   /** Altura de mundo cacheada; evita pedir la posición al nodo cada frame. */
   private barAnchorYValue = 0;
@@ -80,7 +69,7 @@ export class Actor {
   private hitboxDebugEnabled = false;
   private layerId: number | null = null;
   private readonly hitRadius: number;
-  readonly asset: SpriteAsset;
+  readonly asset: ActorAsset;
   /** Rumbo de reposo; los NPC vuelven a él cuando el jugador se aleja. */
   readonly homeFacing: number;
   facing = 0;
@@ -103,24 +92,19 @@ export class Actor {
     this.homeFacing = options.facing;
     this.shadow = options.shadow ?? null;
 
-    const idle = asset.skin.animations.idle;
-    const spriteHeight = actorSpriteHeight(asset);
-    this.visibleHeight = BILLBOARD_BASE_Y + spriteHeight;
+    const bodyHeight = actorWorldHeight(asset);
+    this.visibleHeight = BILLBOARD_BASE_Y + bodyHeight;
     // La barra de vida se dibuja en el overlay 2D a esta altura; el actor solo
     // publica el punto de anclaje para que la capa lo proyecte.
-    this.barAnchorOffset = spriteHeight + 0.18;
-    this.shadowDiameter = idle.frameWidth * CONFIG.sprite.pixelScale * 0.64;
+    this.barAnchorOffset = bodyHeight + 0.18;
+    // La sombra de contacto se ajusta a la huella del modelo, no al frame del
+    // sprite: Onix o Gyarados ocupan mucho más suelo que su altura.
+    this.shadowDiameter = Math.max(0.45, Math.min(2.4, asset.width * 0.55));
 
     const accent = options.accent ?? [255, 224, 102];
-    this.billboard = new SpriteBillboard(app, asset, {
-      pixelScale: CONFIG.sprite.pixelScale,
-      verticalStretch: CONFIG.sprite.verticalStretch,
-      alphaTest: CONFIG.sprite.alphaTest,
+    this.billboard = new ModelBillboard(app, asset, {
       silhouette: options.silhouette === true,
-      // La silueta que asoma tras los árboles usa el color del equipo, igual
-      // que el anillo de rumbo.
       silhouetteColor: accent,
-      // El resto de Pokémon de la vista llevan un borde de su color de equipo.
       outlineColor: options.withOutline ? accent : null,
       outlineWidth: options.outlineWidth,
       deferLayers: options.deferLayers === true
@@ -261,8 +245,8 @@ export class Actor {
   }
 
   /**
-   * Crea una capa de animación concreta si falta. Devuelve `true` si ha tenido
-   * que crearla.
+   * Crea el estado de animación concreto si falta. Devuelve `true` si ha tenido
+   * que crearlo.
    */
   prewarmStep(animation: AnimationName): boolean {
     return this.billboard.prewarmStep(animation);

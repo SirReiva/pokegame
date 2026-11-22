@@ -9,7 +9,12 @@
 
 import * as pc from 'playcanvas';
 import { DEFAULT_COMMON_ABILITY, MOVESETS, isCommonAbilityId } from '../abilities';
-import { Actor, actorSpriteHeight } from '../actor';
+import { Actor } from '../actor';
+import {
+  ACTOR_ANIMATION_ORDER,
+  actorWorldHeight,
+  type ActorAsset
+} from '../actorAsset';
 import { rollAtmosphere, type AtmosphereId } from '../atmosphere';
 import {
   prepareMatchAudio,
@@ -56,7 +61,6 @@ import {
   facingToCenter,
   matchPixelRatio,
   spawnForTeam,
-  viewportHeightPx,
   type KillFeedEntry,
   type MatchPlayerConfig,
   type PlayerMatchStats
@@ -70,8 +74,6 @@ import type { VisionView } from '../render/visionView';
 import { hitRadiusForPokemon, speedForPokemon } from '../roster';
 import type { PendingAoeEnd } from '../sim/aoes';
 import { DEFAULT_SKIN_ID } from '../skins';
-import { BILLBOARD_ANIMATION_ORDER, type SpriteAsset } from '../sprite';
-import { isSmallViewport, spriteOutlineWidth } from '../spriteDetail';
 import { terrainAt, type Team } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import type { AnimationName } from '../types';
@@ -124,8 +126,8 @@ export interface MatchSessionHost {
   /** Objetos que superaron la validación de posición del mapa. */
   readonly pickupSpawns: readonly PickupSpawn[];
 
-  /** Sprite del aspecto elegido por un jugador (o el normal si no hay). */
-  assetFor(pokemonId: string, skinId?: string): SpriteAsset | undefined;
+  /** Modelo del aspecto elegido por un jugador (o el normal si no hay). */
+  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
 
   // --- Fase y contadores ---
   mode: 'menu' | 'match';
@@ -330,6 +332,7 @@ export function clearMatch(host: MatchSessionHost): void {
   for (const view of host.playerViews.values()) view.shadowBatch?.destroy();
   host.playerViews.clear();
   for (const layer of host.viewLayers) host.app.scene.layers.remove(layer);
+  host.world?.resetLightLayers();
   host.matchPlayers = [];
   host.playerBySlot.clear();
   host.views = [];
@@ -422,14 +425,6 @@ export function startMatch(
   );
 
   const layout = computeSplitLayout(humanConfigs.length);
-  // Tamaño real de cada viewport: decide el grosor del contorno y si la
-  // silueta de oclusión compensa. Ambas cosas se resuelven una vez por partida.
-  const viewportPx = viewportHeightPx(
-    window.innerHeight,
-    window.devicePixelRatio || 1,
-    humanConfigs.length
-  );
-  const smallViewport = isSmallViewport(viewportPx);
   const hasBots = valid.some((config) => config.isBot);
   const botNav = hasBots ? new BotNavGrid(host.world.colliders) : null;
   const botSquad = hasBots ? createBotSquad() : null;
@@ -489,6 +484,9 @@ export function startMatch(
       layerComposition.pushTransparent(layer);
       host.viewLayers.push(layer);
       host.viewSkyLayers.push(skyLayer);
+      // Las luces del mundo solo alumbran las capas que tienen declaradas.
+      // Sin esto, los modelos de esta vista solo recibirían ambiente.
+      host.world.addLightLayer(layer.id);
       // Todas las sombras de esta vista comparten un draw call.
       shadowBatch = new ActorShadowBatch(
         host.app,
@@ -524,7 +522,7 @@ export function startMatch(
     // Una sola barra por jugador: el estado es idéntico en todas las vistas,
     // así que no se duplican canvas, texturas ni redibujados por copia.
     const bar = new HealthBarArt(
-      healthBarLayoutFor(actorSpriteHeight(asset)),
+      healthBarLayoutFor(actorWorldHeight(asset)),
       TEAM_INFO[config.team].accent
     );
 
@@ -656,8 +654,6 @@ export function startMatch(
   host.matchPlayers.forEach((player) => {
     const asset = host.assetFor(player.pokemonId, player.skinId);
     if (!asset) return;
-    // El grosor del contorno depende del aspecto, no del viewport.
-    const outlineWidth = spriteOutlineWidth(asset, viewportPx);
     host.views.forEach((viewer, viewIndex) => {
       const viewerView = host.viewOf(viewer);
       const copy = new Actor({
@@ -671,15 +667,13 @@ export function startMatch(
         // todas (también los rivales), lo que añadía un draw call y una
         // textura por copia sin aportar información nueva.
         withMarker: viewer.slot === player.slot,
-        // La silueta de oclusión solo la lleva el dueño y solo cuando el
-        // viewport es lo bastante grande para que el detalle compense.
-        silhouette: viewer.slot === player.slot && !smallViewport,
+        // La silueta de oclusión y el contorno de equipo aún no existen en 3D.
+        silhouette: false,
         accent: TEAM_INFO[player.team].accent,
-        // Solo el Pokémon que controla este viewport va sin contorno.
-        withOutline: viewer.slot !== player.slot,
-        outlineWidth,
+        // El contorno de equipo todavía no existe en el cuerpo 3D.
+        withOutline: false,
         hitRadius: player.hitRadius,
-        // Las capas de animación se crean por tandas durante la cuenta atrás.
+        // Los estados de animación se crean por tandas durante la cuenta atrás.
         deferLayers: true
       });
       const layer = host.viewLayers[viewIndex];
@@ -693,7 +687,7 @@ export function startMatch(
   // secundarios: así los cuerpos aparecen durante la cuenta atrás y los
   // materiales de ataque no provocan un tirón en el primer casteo.
   host.prewarmTasks = [];
-  for (const animation of BILLBOARD_ANIMATION_ORDER) {
+  for (const animation of ACTOR_ANIMATION_ORDER) {
     for (const player of host.matchPlayers) {
       for (const copy of host.viewOf(player).copies) {
         host.prewarmTasks.push({ actor: copy, animation });

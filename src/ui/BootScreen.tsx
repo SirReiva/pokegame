@@ -48,7 +48,7 @@ export function LoadingScreen({ label, detail, progress }: LoadingScreenProps) {
         </div>
 
         <p className="mt-3 text-12.48/normal text-muted">
-          {detail ?? 'Preparando el manifiesto de sprites y los mapas disponibles.'}
+          {detail ?? 'Preparando los datos de los Pokémon y los mapas disponibles.'}
         </p>
       </div>
 
@@ -84,8 +84,9 @@ export function ErrorScreen({
           {message}
         </p>
         <p className="text-muted">
-          Comprueba que has ejecutado <code className={codePill}>pnpm sprites</code> y que el
-          servidor de desarrollo está activo.
+          Comprueba que has ejecutado <code className={codePill}>pnpm sprites</code>, que los GLB
+          están en <code className={codePill}>public/models</code> y que el servidor de desarrollo
+          está activo.
         </p>
         <div className="mt-1 flex flex-wrap gap-2">
           <button type="button" className={btnClass('primary')} onClick={onRetry}>

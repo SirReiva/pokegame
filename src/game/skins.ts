@@ -19,20 +19,18 @@ export function defaultSkinFor(entry: PokemonEntry): PokemonSkin {
 
 /** Todos los aspectos disponibles, empezando siempre por el normal. */
 export function skinsFor(entry: PokemonEntry): PokemonSkin[] {
-  return [defaultSkinFor(entry), ...(entry.skins ?? [])];
+  // Con el render 3D solo existe un modelo por especie, así que los aspectos
+  // alternativos de los sprites no aportan una apariencia distinta.
+  return [defaultSkinFor(entry)];
 }
 
 /**
- * Resuelve un aspecto por id. Si el manifiesto no lo incluye (por ejemplo, un
- * guardado antiguo), se cae al aspecto normal en vez de dejar al jugador sin
- * sprite.
+ * Resuelve un aspecto por id. El render 3D usa un único modelo por especie, así
+ * que cualquier skin guardada de una versión anterior cae al aspecto normal.
  */
 export function skinFor(
   entry: PokemonEntry,
-  skinId?: string | null
+  _skinId?: string | null
 ): PokemonSkin {
-  if (!skinId || skinId === DEFAULT_SKIN_ID) return defaultSkinFor(entry);
-  return (
-    entry.skins?.find((skin) => skin.id === skinId) ?? defaultSkinFor(entry)
-  );
+  return defaultSkinFor(entry);
 }

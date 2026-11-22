@@ -8,12 +8,12 @@
 import { CONFIG } from '../config';
 import type { AssistCredit } from '../core/match/assists';
 import type { MatchPlayerState } from '../matchState';
-import type { SpriteAsset } from '../sprite';
+import type { ActorAsset } from '../actorAsset';
 import { breakRegen } from './status';
 
 export interface KnockoutHost {
   isMatchOver(): boolean;
-  assetFor(pokemonId: string, skinId?: string): SpriteAsset | undefined;
+  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
   cancelCast(player: MatchPlayerState): void;
   clearRepeatCooldown(player: MatchPlayerState): void;
   playDeathCopies(target: MatchPlayerState, animation: 'faint' | 'hurt'): void;

@@ -21,9 +21,9 @@ const DEVICE_TYPES: Record<GraphicsBackend, string[]> = {
  *
  * `pc.Application` registraba todos los sistemas por defecto, pero está
  * previsto que se deprecie en favor de `AppBase` + `createGraphicsDevice`. Con
- * `AppBase` hay que declarar solo lo que usa el juego: los cuatro componentes
- * que aparecen en `addComponent` y el handler de audio (el resto de texturas y
- * sprites se crean a mano, sin pasar por el registro de assets).
+ * `AppBase` hay que declarar solo lo que usa el juego: los componentes que
+ * aparecen en `addComponent`, el handler de audio y los de contenedor/textura
+ * para cargar los GLB de los Pokémon.
  *
  * Los shaders propios (niebla, viento y efectos) tienen versión GLSL y WGSL,
  * así que ambos backends son válidos. Ver `docs/graficos-webgpu.md`.
@@ -59,9 +59,14 @@ export async function createGameApp(
     pc.RenderComponentSystem,
     pc.CameraComponentSystem,
     pc.LightComponentSystem,
-    pc.ParticleSystemComponentSystem
+    pc.ParticleSystemComponentSystem,
+    pc.AnimComponentSystem
   ];
-  options.resourceHandlers = [pc.AudioHandler];
+  options.resourceHandlers = [
+    pc.AudioHandler,
+    pc.ContainerHandler,
+    pc.TextureHandler
+  ];
   options.soundManager = new pc.SoundManager();
   app.init(options);
 

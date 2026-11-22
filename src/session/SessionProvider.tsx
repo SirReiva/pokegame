@@ -14,6 +14,7 @@ import {
 } from '../game/abilities';
 import type { InputDeviceInfo, MenuAction } from '../game/input';
 import { loadMapIndex, type MapIndexEntry } from '../game/map';
+import { hasPokemonModel } from '../game/modelCatalog';
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
   GAME_MODE_IDS,
@@ -56,7 +57,24 @@ async function loadManifest(): Promise<SpriteManifest> {
   if (!response.ok) {
     throw new Error(`No se pudo cargar el manifiesto (HTTP ${response.status})`);
   }
-  return (await response.json()) as SpriteManifest;
+  const manifest = (await response.json()) as SpriteManifest;
+  // La partida se dibuja solo con modelos 3D. Las especies sin GLB se retiran
+  // del manifiesto en el punto de entrada para que no aparezcan en el roster,
+  // en los bots ni en el HUD como seleccionables.
+  const pokemon = manifest.pokemon.filter((entry) =>
+    hasPokemonModel(entry.id)
+  );
+  const hidden = manifest.pokemon.filter(
+    (entry) => !hasPokemonModel(entry.id)
+  );
+  if (hidden.length > 0) {
+    console.info(
+      `[modelo] Sin GLB, fuera del roster: ${hidden
+        .map((entry) => `${entry.id} ${entry.name}`)
+        .join(', ')}`
+    );
+  }
+  return { ...manifest, pokemon };
 }
 
 function errorMessage(cause: unknown): string {

@@ -209,8 +209,8 @@ export function OptionsScreen() {
           <h2 className="mt-1 text-[clamp(1.7rem,3vw,2.4rem)]">Controles, audio, gráficos y partida</h2>
           <p className="mt-2 max-w-[62ch] text-14.4 leading-[1.55] text-muted">
             Consulta los controles de mando y teclado, ajusta el volumen, elige el backend de render,
-            activa o desactiva la ayuda de apuntado y revisa la atribución de los sprites y los
-            efectos. Los ajustes de partida (mapa, equipos y Pokémon) se eligen antes de jugar.
+            activa o desactiva la ayuda de apuntado y revisa la atribución de los retratos, los modelos
+            y los efectos. Los ajustes de partida (mapa, equipos y Pokémon) se eligen antes de jugar.
           </p>
         </div>
 

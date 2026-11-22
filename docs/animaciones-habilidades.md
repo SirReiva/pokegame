@@ -278,10 +278,11 @@ La simulación autoritativa corre a **60 Hz** con un acumulador:
 
 ## 8. Reloj autoritativo
 
-La simulación guarda `player.animationFrame`. Las copias del billboard de cada
-viewport solo dibujan ese frame (`setManualFrame`) mientras hay casteo. Fuera
-del casteo, el billboard vuelve a su reloj automático para idle, walk y hurt.
-Esto evita que dos vistas muestren frames distintos y permite garantizar que el
+La simulación guarda `player.animationFrame`. Las copias del cuerpo 3D de cada
+viewport solo muestran ese frame (`setManualFrame`) mientras hay casteo; el
+actor lo traduce al tiempo normalizado del clip GLB equivalente. Fuera del
+casteo, el cuerpo vuelve a su reloj automático para idle, walk y hurt. Esto
+evita que dos vistas muestren poses distintas y permite garantizar que el
 `HitFrame` se dibuja en el instante del efecto.
 
 Si un paso de simulación cruza el `HitFrame` de golpe, la simulación fuerza esa

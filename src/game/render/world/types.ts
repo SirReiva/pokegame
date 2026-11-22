@@ -14,6 +14,15 @@ export interface World {
   skyMesh: pc.Mesh;
   skyMaterial: pc.StandardMaterial;
 
+  /**
+   * Añade una capa de viewport a todas las luces del mundo. Las luces de
+   * PlayCanvas filtran por capas: sin esto, los modelos de las capas nuevas
+   * solo recibirían luz ambiental.
+   */
+  addLightLayer(layerId: number): void;
+  /** Devuelve todas las luces a sus capas originales al terminar la partida. */
+  resetLightLayers(): void;
+
   /** Aplica el clima indicado al cielo, las luces y las partículas. */
   setAtmosphere(id: AtmosphereId): void;
   /**

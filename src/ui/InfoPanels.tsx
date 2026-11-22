@@ -92,12 +92,12 @@ interface CreditsPanelProps {
   manifest: SpriteManifest | null;
 }
 
-/** Atribución de los sprites y desglose de artistas del manifiesto. */
+/** Atribución de los retratos/arte 2D y desglose de artistas del manifiesto. */
 export function CreditsPanel({ manifest }: CreditsPanelProps) {
   return (
     <div>
       <p className="text-13.44 leading-[1.6] text-steel-300">
-        Los sprites proceden de{' '}
+        Los retratos y el arte 2D proceden de{' '}
         <a
           className="text-info underline underline-offset-2"
           href={manifest?.source ?? 'https://sprites.pmdcollab.org/'}
@@ -149,8 +149,11 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
       </div>
 
       <p className="text-12.32 leading-[1.6] text-muted">
-        Las hojas originales, sus ficheros <code className={code}>credits.txt</code> y el detalle
-        completo están en <code className={code}>public/sprites/CREDITS.md</code>.
+        Los cuerpos de la partida son modelos GLB convertidos desde los{' '}
+        <code className={code}>.blend</code> originales. Las hojas y retratos
+        originales, sus ficheros <code className={code}>credits.txt</code> y el
+        detalle completo están en{' '}
+        <code className={code}>public/sprites/CREDITS.md</code>.
       </p>
     </div>
   );

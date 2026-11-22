@@ -169,6 +169,14 @@ function* buildWorldSteps(
   // El mundo está completo: a partir de aquí es visible y reemplaza al anterior.
   app.root.addChild(worldRoot);
 
+  // Las luces filtran por capas. Se guarda su configuración original para
+  // poder añadir las capas de cada viewport durante la partida y restaurarlas
+  // al salir, sin acumular ids de capas destruidas.
+  const worldLights = worldRoot.findComponents('light').map((light) => ({
+    light,
+    baseLayers: [...light.layers]
+  }));
+
   let time = 0;
 
   return {
@@ -178,6 +186,18 @@ function* buildWorldSteps(
     shadowMaterial: ctx.shadowMaterial!,
     skyMesh: ctx.skyMesh!,
     skyMaterial: ctx.skyMaterial!,
+    addLightLayer(layerId: number) {
+      for (const { light } of worldLights) {
+        if (!light.layers.includes(layerId)) {
+          light.layers = [...light.layers, layerId];
+        }
+      }
+    },
+    resetLightLayers() {
+      for (const { light, baseLayers } of worldLights) {
+        light.layers = [...baseLayers];
+      }
+    },
     setAtmosphere(id: AtmosphereId) {
       ctx.atmosphere!.set(id);
     },

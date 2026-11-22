@@ -60,7 +60,7 @@ combatFx ↔ abilityResolve ↔ abilities
 La causa principal es que `matchState.ts` —el estado de la simulación— importa
 tipos de presentación:
 
-- `Actor` (billboard de PlayCanvas)
+- `Actor` (modelo 3D de PlayCanvas)
 - `CameraRig` (cámara)
 - `HealthBarArt` (canvas 2D)
 - `EffectHandle`, `FxHandle`, `TelegraphHandle` (VFX)

@@ -192,14 +192,12 @@ import {
 import { maxHitRadius } from './roster';
 import { rumbleOnDamage } from './rumble';
 import {
-  SPRITE_TEXTURE_SCALE,
-  disposeSpriteAsset,
-  loadSpriteAsset,
+  disposeActorAsset,
+  loadActorAsset,
   resolveAnimationClip,
-  type SpriteAsset
-} from './sprite';
-import { detectSpriteBudget } from './spriteBudget';
-import { spriteDensityScale } from './spriteDensity';
+  type ActorAsset
+} from './actorAsset';
+import { disposeModelAsset } from './model';
 import { clearGroundCanvasCache } from './textures';
 import {
   XP_FEED_SOURCES,
@@ -220,6 +218,7 @@ import {
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
 import { DEFAULT_SKIN_ID, skinFor } from './skins';
+import { hasPokemonModel } from './modelCatalog';
 import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
 import { terrainConcealment } from './vision';
 import type { Collider, World } from './world';
@@ -288,7 +287,7 @@ export interface GameOptions {
   overlayCanvas?: HTMLCanvasElement | null;
 }
 
-/** Clave del caché de sprites: la especie y el aspecto son independientes. */
+/** Clave de la caché de actores: la especie y el aspecto son independientes. */
 function assetKey(pokemonId: string, skinId?: string): string {
   return `${pokemonId}\u0000${skinId ?? DEFAULT_SKIN_ID}`;
 }
@@ -403,7 +402,7 @@ const FX_VISIBILITY_CACHE_ENTRIES = 64;
  * Cada una mantiene hasta 4 hojas base en memoria hasta que se componen, así
  * que el paralelismo total de la partida no debe escalar con el roster.
  */
-const SPRITE_ASSET_CONCURRENCY = 3;
+const MODEL_ASSET_CONCURRENCY = 2;
 
 /**
  * Área instantánea cuyo `onEnd` se retrasa hasta agotar su duración visual.
@@ -416,9 +415,9 @@ const SPRITE_ASSET_CONCURRENCY = 3;
  * Multijugador local:
  * - 1-8 jugadores, un teclado y varios mandos.
  * - Dos equipos con base propia.
- * - Una cámara por jugador y una copia de cada actor por viewport: el billboard
- *   y la fila de 8 direcciones dependen de la cámara, así que compartir actores
- *   entre vistas haría que mirasen mal desde los otros ángulos.
+ * - Una cámara por jugador y una copia de cada actor por viewport: cada vista
+ *   tiene su propia capa de render y su propia visibilidad de niebla, así que
+ *   un actor no puede compartirse entre pantallas.
  */
 export class Game {
   private readonly callbacks: GameCallbacks;
@@ -457,13 +456,13 @@ export class Game {
 
   private manifest: SpriteManifest | null = null;
   /** Caché por `especie + aspecto`; ver `assetKey`. */
-  private readonly assets = new Map<string, SpriteAsset>();
+  private readonly assets = new Map<string, ActorAsset>();
 
-  /** Sprite del aspecto elegido por un jugador (o el normal si no hay). */
+  /** Modelo del aspecto elegido por un jugador (o el normal si no hay). */
   private assetFor(
     pokemonId: string,
     skinId?: string
-  ): SpriteAsset | undefined {
+  ): ActorAsset | undefined {
     return this.assets.get(assetKey(pokemonId, skinId));
   }
   /** Texturas de los objetos recogibles, cargadas una vez por partida. */
@@ -520,8 +519,8 @@ export class Game {
    */
   private views: MatchPlayerState[] = [];
   /**
-   * Tareas de calentamiento de los billboards, ordenadas por animación para que
-   * todos los cuerpos aparezcan antes de crear los clips secundarios.
+   * Tareas de calentamiento de las animaciones, ordenadas para que todos los
+   * cuerpos aparezcan antes de crear los clips secundarios.
    */
   private prewarmTasks: Array<{ actor: Actor; animation: AnimationName }> = [];
   private prewarmIndex = 0;
@@ -1518,15 +1517,16 @@ export class Game {
       }
       this.manifest = manifest;
 
-      // Solo se descargan las hojas que van a aparecer en la partida. Cargar
-      // todo el manifiesto retrasaba el inicio y subía a la GPU texturas que
-      // ningún jugador ni bot iba a usar. Cada combinación especie + aspecto se
-      // deduplica, porque dos jugadores pueden compartir exactamente la misma.
+      // Solo se descargan los GLB de las especies que van a aparecer en la
+      // partida. Cargar todo el catálogo retrasaba el inicio y subía a la GPU
+      // texturas que ningún jugador ni bot iba a usar. Cada especie se
+      // deduplica y las que no tienen modelo quedan fuera.
       const requestedSkins = this.options.pokemonSkins;
       let selections: PokemonSkinSelection[];
       if (requestedSkins && requestedSkins.length > 0) {
         const unique = new Map<string, PokemonSkinSelection>();
         for (const selection of requestedSkins) {
+          if (!hasPokemonModel(selection.pokemonId)) continue;
           unique.set(assetKey(selection.pokemonId, selection.skinId), selection);
         }
         selections = [...unique.values()];
@@ -1534,44 +1534,23 @@ export class Game {
         const requiredIds = this.options.pokemonIds
           ? new Set(this.options.pokemonIds)
           : null;
-        const entries = requiredIds
-          ? manifest.pokemon.filter((entry) => requiredIds.has(entry.id))
-          : manifest.pokemon;
+        const entries = manifest.pokemon.filter(
+          (entry) =>
+            hasPokemonModel(entry.id) &&
+            (!requiredIds || requiredIds.has(entry.id))
+        );
         selections = entries.map((entry) => ({
           pokemonId: entry.id,
           skinId: DEFAULT_SKIN_ID
         }));
       }
 
-      const spriteBudget = detectSpriteBudget(
-        this.app.graphicsDevice.maxTextureSize,
-        selections.length,
-        CONFIG.sprite.textureBudgetMB
-      );
-      // Densidad real que necesita la vista más pequeña: en una tele de 1080p
-      // y 1 jugador sobra para llegar a ×4; con 8 vistas, la misma hoja ocupa
-      // una cuarta parte del alto y ×2 ya da más de un tétexel por píxel.
-      const maxSpriteScale = spriteDensityScale({
-        humanCount: this.options.humanViews ?? 1,
-        cssHeight: window.innerHeight,
-        devicePixelRatio: window.devicePixelRatio || 1,
-        maxScale: SPRITE_TEXTURE_SCALE
-      });
-      console.info(
-        `[sprite] ${spriteBudget.perAssetMB} MB por aspecto` +
-          ` (${selections.length} aspectos, ${spriteBudget.tier}` +
-          `${spriteBudget.renderer ? `: ${spriteBudget.renderer}` : ''})` +
-          ` · densidad ×${maxSpriteScale}`
-      );
-
-      const total = selections.length * 4;
+      const total = selections.length;
       let loaded = 0;
-      this.emitLoad(76, 'Cargando sprites');
+      this.emitLoad(76, 'Cargando modelos 3D');
 
-      // Cada especie decodifica 4 hojas base a la vez. Con 8 especies en
-      // paralelo se llegaba a 32 bitmaps completos en memoria de CPU antes de
-      // componer ninguno; limitar las especies basta para acotar el pico sin
-      // serializar la carga.
+      // Los GLB incluyen mallas, texturas y decenas de clips: se cargan de dos
+      // en dos para acotar el pico de memoria y no saturar la red.
       const pending = [...selections];
       const loadNext = async (): Promise<void> => {
         for (;;) {
@@ -1582,26 +1561,36 @@ export class Game {
           );
           if (!entry) continue;
           const skin = skinFor(entry, selection.skinId);
-          const asset = await loadSpriteAsset(
-            this.app.graphicsDevice,
+          let lastReported = -1;
+          const asset = await loadActorAsset(
+            this.app,
             entry,
             skin,
-            spriteBudget.perAssetMB,
-            maxSpriteScale
+            (fraction) => {
+              if (fraction - lastReported < 0.04 && fraction < 1) return;
+              lastReported = fraction;
+              this.emitLoad(
+                76 + ((loaded + fraction) / Math.max(1, total)) * 24,
+                `Descargando ${entry.name}`
+              );
+            }
           );
+          if (this.disposed) {
+            disposeModelAsset(this.app, asset.model);
+            disposeActorAsset(asset);
+            return;
+          }
           this.assets.set(assetKey(entry.id, selection.skinId), asset);
-          loaded += 4;
+          loaded += 1;
           this.emitLoad(
             76 + (loaded / Math.max(1, total)) * 24,
-            skin.id === DEFAULT_SKIN_ID
-              ? `${entry.name} listo`
-              : `${entry.name} · ${skin.name} listo`
+            `${entry.name} listo`
           );
         }
       };
       await Promise.all(
         Array.from(
-          { length: Math.min(SPRITE_ASSET_CONCURRENCY, selections.length) },
+          { length: Math.min(MODEL_ASSET_CONCURRENCY, selections.length) },
           () => loadNext()
         )
       );
@@ -2341,7 +2330,7 @@ export class Game {
     // Reparte la creación de capas pendientes antes de simular. La cuenta
     // atrás da margen suficiente para que todos los actores estén completos al
     // empezar a jugarse.
-    this.prewarmBillboards();
+    this.prewarmActors();
     // La visibilidad de los FX se consulta muchas veces por frame con las
     // mismas anclas; la memoización solo es válida dentro de este frame.
     this.resetFxVisibilityCache();
@@ -2391,13 +2380,13 @@ export class Game {
     // La niebla se resuelve antes de sincronizar las copias: además de pintar
     // los círculos de visión, decide qué copia se ve en cada vista. Así el
     // bucle siguiente puede saltarse las ocultas, que no se dibujan pero sí
-    // costaban posición, animación, vida y billboard cada frame.
+    // costaban posición, animación, vida y modelo cada frame.
     this.castDebug?.update(this.matchPlayers);
     this.updateVision(dt);
 
-    // Las copias visibles se sincronizan en un módulo aparte: `Game` conserva
-    // la simulación y la niebla, y `matchView` solo mueve billboards. El objeto
-    // de dependencias se reutiliza para no asignar uno por render.
+    // La simulación y la niebla se resuelven aquí; `matchView` solo sincroniza
+    // los cuerpos visibles de cada viewport. El objeto de dependencias se
+    // reutiliza para no asignar uno por render.
     const sync = this.matchViewSync;
     sync.views = this.views;
     sync.players = this.matchPlayers;
@@ -2462,11 +2451,11 @@ export class Game {
   }
 
   /**
-   * Crea por tandas las capas de animación que faltan en las copias. El
+   * Crea por tandas los estados de animación que faltan en las copias. El
    * presupuesto es de 3 ms por frame: el resto del tiempo sigue disponible para
    * la simulación y la cuenta atrás se dibuja con normalidad.
    */
-  private prewarmBillboards(): void {
+  private prewarmActors(): void {
     if (this.prewarmIndex >= this.prewarmTasks.length) return;
     const deadline = performance.now() + 3;
     while (this.prewarmIndex < this.prewarmTasks.length) {
@@ -3259,12 +3248,9 @@ export class Game {
     def: SelfAbilityDef
   ): void {
     const asset = this.assetFor(player.pokemonId, player.skinId);
-    const idle = asset?.skin.animations.idle;
-    const anchorY = idle?.anchors[0]?.y ?? (idle?.frameHeight ?? 32) * 0.75;
-    const spriteHeight =
-      anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
-    const radius = Math.min(1.5, Math.max(0.65, spriteHeight * 0.55));
-    const centerY = Math.max(radius + 0.15, spriteHeight * 0.55);
+    const bodyHeight = asset?.height ?? 1.6;
+    const radius = Math.min(1.5, Math.max(0.65, bodyHeight * 0.55));
+    const centerY = Math.max(radius + 0.15, bodyHeight * 0.55);
     player.shieldFx?.destroy();
     player.shieldFx = this.combatFx.spawnProtectionShield(
       player,
@@ -3580,12 +3566,7 @@ export class Game {
     const asset = this.assetFor(target.pokemonId, target.skinId);
     if (!asset) return;
 
-    const idle = asset.skin.animations.idle;
-    const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
-    const worldY =
-      0.04 +
-      anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch +
-      0.2;
+    const worldY = 0.04 + asset.height + 0.2;
 
     const views = this.damageNumberViews;
     const targetView = this.viewOf(target);
@@ -4424,7 +4405,10 @@ export class Game {
     this.fogMesh?.destroy();
     this.fogMesh = null;
     this.menuCamera?.dispose();
-    for (const asset of this.assets.values()) disposeSpriteAsset(asset);
+    for (const asset of this.assets.values()) {
+      disposeModelAsset(this.app, asset.model);
+      disposeActorAsset(asset);
+    }
     this.assets.clear();
     this.world?.dispose();
     clearGroundCanvasCache();

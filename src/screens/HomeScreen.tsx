@@ -55,13 +55,13 @@ export function HomeScreen() {
 
         <div className="grid items-center gap-[clamp(22px,4vw,54px)] lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,430px)]">
           <div className="animate-rise-in">
-            <span className={eyebrow}>Pokémon · sprites 2D · arena 3D</span>
+            <span className={eyebrow}>Pokémon · modelos 3D · arena 3D</span>
             <h2 className="mt-2 max-w-[16ch] text-[clamp(2.1rem,5vw,4rem)] leading-[0.98]">
               Elige tu <span className="text-accent">Pokémon</span> y salta a la arena.
             </h2>
             <p className="mt-4 max-w-[48ch] text-15.2 leading-[1.6] text-muted">
               Multijugador local de 1 a 8 jugadores con cámara orbital a 45°, niebla de guerra y
-              sprites de ocho direcciones. Configura los equipos, elige especie y juega.
+              Pokémon animados con modelos 3D. Configura los equipos, elige especie y juega.
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-12.16 text-steel-500">
@@ -129,7 +129,7 @@ export function HomeScreen() {
               <span className="flex min-w-0 flex-1 flex-col">
                 <strong className="font-display text-xl">Opciones</strong>
                 <span className="text-12.8 text-steel-400">
-                  Controles, créditos y atribución de los sprites
+                  Controles, créditos y atribución de retratos y modelos
                 </span>
               </span>
               <span className="font-mono text-17.6 text-steel-800 transition-transform duration-200 group-hover:translate-x-1">
@@ -141,7 +141,7 @@ export function HomeScreen() {
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3.5 text-11.52 text-steel-750">
           <span>
-            Sprites de{' '}
+            Retratos y arte 2D de{' '}
             <a
               className="text-link underline underline-offset-2"
               href="https://sprites.pmdcollab.org/"

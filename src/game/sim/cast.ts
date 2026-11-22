@@ -14,7 +14,7 @@ import type {
   MatchPlayerState
 } from '../matchState';
 import type { DeviceInputSnapshot } from '../input';
-import type { SpriteAsset } from '../sprite';
+import type { ActorAsset } from '../actorAsset';
 import { frameForSegment, segmentAt } from '../castPlan';
 import { terrainAt } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
@@ -22,7 +22,7 @@ import { terrainConcealment } from '../vision';
 
 export interface CastSystemHost {
   isMatchOver(): boolean;
-  assetFor(pokemonId: string, skinId?: string): SpriteAsset | undefined;
+  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
   queueCast(
     player: MatchPlayerState,
     def: AbilityDef,

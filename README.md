@@ -1,6 +1,6 @@
-# NewPoke · demo técnica de sprites, cámara y multijugador local
+# NewPoke · demo técnica de modelos 3D, cámara y multijugador local
 
-Demo jugable en navegador que mezcla un **mapa 3D** con **Pokémon dibujados como sprites 2D de 8 direcciones** y **multijugador local de 1 a 8 jugadores en splitscreen**. Cada personaje es un billboard vertical con ancla de suelo, sombra de contacto y colisión, y la cámara orbital a **45°** hace que el sprite elija la vista correcta en cada momento.
+Demo jugable en navegador que mezcla un **mapa 3D** con **Pokémon animados como modelos 3D (GLB)** y **multijugador local de 1 a 8 jugadores en splitscreen**. Cada personaje es un cuerpo 3D con sombra de contacto, colisión y una cámara orbital a **45°** por jugador.
 
 El objetivo no es un juego completo, sino validar la técnica: motor 3D imperativo con PlayCanvas, UI en React y un pipeline de assets reproducible.
 
@@ -9,10 +9,19 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 - **React 19** + **TypeScript 7** + **Vite**: HUD, menús y pantallas.
 - **wouter**: router mínimo para el flujo entre menú, configuración y partida.
 - **Tailwind CSS 4** (plugin de Vite): utilidades en los componentes y tokens de diseño en `src/index.css`.
-- **PlayCanvas 2.23**: render 3D, cámara, luces, sombras y mundo.
+- **PlayCanvas 2.24**: render 3D, cámara, luces, sombras, mundo y animación de esqueletos.
 - **Wails v3** (opcional): empaqueta el mismo frontend como app de escritorio para Windows y Linux.
-- **PMD Sprite Collab**: hojas de animación de 8 direcciones (Idle, Walk, Attack, Hurt, Faint, QuickStrike, Shock, Shoot, Charge, Strike, Twirl, Shake, Punch y Hop cuando existen).
+- **GLB**: un modelo por especie en `public/models/`, con sus clips de espera, movimiento, ataque, daño y debilitado.
 - Sin framework de UI 3D: React nunca toca la escena; habla con `Game` mediante callbacks.
+
+## Modelos 3D en partida
+
+El cuerpo de cada Pokémon se dibuja con su GLB. El manifiesto de sprites sigue aportando los **tiempos de gameplay** (duración de cada clip, `HitFrame`, `ReturnFrame`) y la altura de referencia, pero las hojas de sprite ya no se cargan durante la partida.
+
+- El catálogo de especies jugables está en `src/game/modelCatalog.ts`.
+- `src/game/model.ts` descarga el GLB, mapea sus clips a `idle`, `walk`, `attack`, `hurt`, `faint`... y calcula la escala.
+- Las especies sin GLB se retiran del roster. Hoy falta **Greninja (`0658`)**: añade su modelo y una entrada en el catálogo para recuperarlo.
+- Para ajustar un modelo concreto, el catálogo acepta `scale`, `targetHeight` y `yawOffsetDeg`.
 
 ## Arranque
 
@@ -23,7 +32,7 @@ pnpm build         # comprobación de tipos + build de producción
 pnpm preview       # servir el build
 ```
 
-Los sprites ya están incluidos en `public/sprites/`. Para volver a descargarlos y regenerar el manifiesto:
+Los retratos del HUD y las marcas de KO siguen viniendo del manifiesto de `public/sprites/`. Para regenerarlo:
 
 ```bash
 pnpm sprites            # usa la caché local
