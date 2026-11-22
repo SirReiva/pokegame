@@ -3,6 +3,11 @@ name: Deploy to GitHub Pages
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Rama a compilar y desplegar (vacio = rama desde la que se lanza)"
+        type: string
+        required: false
+        default: ""
       version_bump:
         description: "Tipo de subida de version"
         type: choice
@@ -24,11 +29,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: ${{ inputs.branch || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ env.TARGET_BRANCH }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup pnpm
@@ -51,7 +58,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           git add package.json pnpm-lock.yaml
           git commit -m "chore: bump version to v$VERSION"
-          git push origin HEAD:${{ github.event.repository.default_branch }}
+          git push origin "HEAD:$TARGET_BRANCH"
 
       - name: Build
         run: pnpm build
