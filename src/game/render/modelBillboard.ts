@@ -6,6 +6,7 @@ import {
   frameStart
 } from '../animationTimeline';
 import { RAD } from '../config';
+import { FOG_EXCLUDED_STENCIL } from '../fogStencil';
 import { resolveModelClip, type ModelAsset } from '../model';
 import type { AnimationName } from '../types';
 import type { TeamOutline } from './teamOutline';
@@ -48,6 +49,7 @@ export class ModelBillboard {
 
   private readonly asset: ActorAsset;
   private readonly model: ModelAsset;
+  private readonly device: pc.GraphicsDevice;
   private readonly pivot: pc.Entity;
   private readonly align: pc.Entity;
   private readonly modelEntity: pc.Entity;
@@ -99,6 +101,7 @@ export class ModelBillboard {
   ) {
     this.asset = asset;
     this.model = asset.model;
+    this.device = app.graphicsDevice;
     this.outline = options.outline ?? null;
     this.outlineColor = options.outlineColor ?? null;
 
@@ -171,6 +174,16 @@ export class ModelBillboard {
       render.castShadows = false;
       render.receiveShadows = true;
       if (this.layerId !== null) render.layers = [this.layerId];
+      // La niebla de guerra tiñe el quad de pantalla sin test de profundidad.
+      // Igual que el billboard de sprites, el cuerpo visible escribe esténcil 1
+      // para que la sombra de una cordillera no oscurezca al Pokémon que está
+      // delante de ella (ver `fogStencil.ts`).
+      if (this.device.supportsStencil) {
+        for (const instance of render.meshInstances) {
+          instance.stencilFront = FOG_EXCLUDED_STENCIL;
+          instance.stencilBack = FOG_EXCLUDED_STENCIL;
+        }
+      }
     }
   }
 
