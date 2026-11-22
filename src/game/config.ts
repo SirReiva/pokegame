@@ -39,6 +39,13 @@ export const CONFIG = {
      */
     warmUpShaders: true as boolean,
     /**
+     * Dibuja cada modelo 3D una vez con la pantalla de carga visible para
+     * compilar sus materiales y subir sus texturas antes de la partida. Sin
+     * esto, el primer cuerpo que aparece en pantalla paga la compilación y la
+     * subida en mitad del combate (picos de 200-300 ms).
+     */
+    warmUpModels: true as boolean,
+    /**
      * Efectos creados por lote de precarga. Menos = menos pico de memoria y
      * menos bloqueo del hilo principal; el catálogo completo se calienta igual.
      */

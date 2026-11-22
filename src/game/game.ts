@@ -1606,6 +1606,10 @@ export class Game {
 
       if (this.disposed) return;
 
+      this.emitLoad(99, 'Precompilando modelos');
+      await this.warmUpModels();
+      if (this.disposed) return;
+
       this.emitLoad(100, 'Preparando el combate');
       this.ready = true;
       this.mode = 'menu';
@@ -1696,6 +1700,85 @@ export class Game {
       this.damageNumbers.clear();
       this.combatFx.clear();
       this.combatFx.setWarmupLayer(null);
+      camera.destroy();
+      this.app.scene.layers.remove(layer);
+    }
+  }
+
+  /**
+   * Compila los materiales de los cuerpos 3D y sube sus texturas con la
+   * pantalla de carga visible. Se instancia una copia de cada modelo en una
+   * capa y cámara temporales (viewport mínimo) y se dejan pasar dos frames: el
+   * primero envía las draw calls y el segundo da tiempo a que terminen la
+   * compilación y la subida antes de destruir las copias.
+   *
+   * Es el equivalente a `warmUpShaders` para los modelos. Sin esto, el primer
+   * Pokémon que aparece en pantalla paga shaders y texturas en mitad del
+   * combate (en la traza de v0.29.8, picos de 200-338 ms).
+   */
+  private async warmUpModels(): Promise<void> {
+    if (
+      !CONFIG.performance.warmUpModels ||
+      this.disposed ||
+      this.assets.size === 0
+    ) {
+      return;
+    }
+
+    const layer = new pc.Layer({ name: 'model-warmup' });
+    this.app.scene.layers.pushTransparent(layer);
+
+    const camera = new pc.Entity('model-warmup-camera');
+    camera.addComponent('camera', {
+      nearClip: 0.1,
+      farClip: 80,
+      fov: 70
+    });
+    const cameraComponent = camera.camera;
+    if (!cameraComponent) {
+      this.app.scene.layers.remove(layer);
+      return;
+    }
+    cameraComponent.layers = [layer.id];
+    cameraComponent.clearColorBuffer = false;
+    // Viewport mínimo: el objetivo es compilar y subir, no rellenar píxeles.
+    cameraComponent.rect = new pc.Vec4(0, 0, 0.01, 0.01);
+    cameraComponent.scissorRect = new pc.Vec4(0, 0, 0.01, 0.01);
+    camera.setPosition(0, 6, 24);
+    camera.lookAt(pc.Vec3.ZERO);
+    this.app.root.addChild(camera);
+
+    const entities: pc.Entity[] = [];
+    try {
+      const models = [...this.assets.values()];
+      models.forEach((asset, index) => {
+        const entity = asset.model.container.instantiateRenderEntity({
+          castShadows: false,
+          receiveShadows: false
+        });
+        entity.setLocalScale(
+          asset.model.scale,
+          asset.model.scale,
+          asset.model.scale
+        );
+        // En fila y dentro del frustum de la cámara temporal. La pose es la de
+        // bind: interesa la variante skinned del material, no animar.
+        entity.setPosition((index - (models.length - 1) / 2) * 2.5, 0, 0);
+        for (const render of entity.findComponents('render')) {
+          render.layers = [layer.id];
+          render.castShadows = false;
+          render.receiveShadows = false;
+        }
+        this.app.root.addChild(entity);
+        entities.push(entity);
+      });
+      // Un frame para enviar los draws y otro para que la compilación y la
+      // subida de texturas terminen antes de destruir las copias.
+      await this.waitFrames(2);
+    } catch (error) {
+      console.warn('[modelos] No se pudieron precargar todos los cuerpos', error);
+    } finally {
+      for (const entity of entities) entity.destroy();
       camera.destroy();
       this.app.scene.layers.remove(layer);
     }
