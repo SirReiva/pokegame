@@ -20,6 +20,10 @@ const SHADOW_BASE_Y = 0.05;
 const WATER_MARKER_LIFT = 0.015;
 /** Hundimiento a partir del cual el anillo ya flota del todo en la superficie. */
 const MARKER_FLOAT_SINK = 0.12;
+/** Punto reutilizado para consultar el frustum sin asignar por copia. */
+const VIEW_POINT = new pc.Vec3();
+/** Alturas relativas del cuerpo que se prueban al consultar el frustum. */
+const VIEW_FRACTIONS = [0.1, 0.5, 0.9] as const;
 
 /**
  * Todo lo que necesita una copia de un Pokémon del mundo. Va como objeto porque
@@ -53,6 +57,11 @@ export interface ActorOptions {
    * pueden estar ocultas por la niebla y medir con la pose de bind.
    */
   groundingReference?: boolean;
+  /**
+   * Mantiene la animación a frecuencia completa. Solo la copia del Pokémon que
+   * controla el jugador de esa vista lo activa; el resto usa el LOD.
+   */
+  fullRateAnimation?: boolean;
 }
 
 /**
@@ -106,7 +115,8 @@ export class Actor {
       outline: options.outline ?? null,
       outlineColor: options.withOutline ? accent : null,
       deferLayers: options.deferLayers === true,
-      groundingReference: options.groundingReference
+      groundingReference: options.groundingReference,
+      fullRateAnimation: options.fullRateAnimation
     });
     this.billboard.setFacing(options.facing);
 
@@ -164,6 +174,31 @@ export class Actor {
     this.surfaceHeight = surfaceHeight;
     this.sink = Math.max(0, fraction * this.visibleHeight - surfaceHeight);
     this.applyPosition();
+  }
+
+  /**
+   * `true` si alguna parte del cuerpo cae dentro del frustum de la cámara. Se
+   * prueban tres alturas para no congelar un modelo que asoma por un borde.
+   */
+  inCameraView(camera: {
+    containsPoint(point: pc.Vec3): boolean;
+  }): boolean {
+    const position = this.billboard.root.getPosition();
+    const height = Math.max(0.6, this.billboard.bodyTop);
+    for (const fraction of VIEW_FRACTIONS) {
+      if (
+        camera.containsPoint(
+          VIEW_POINT.set(
+            position.x,
+            position.y + height * fraction,
+            position.z
+          )
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -267,9 +302,10 @@ export class Actor {
   update(
     dt: number,
     cameraPosition: pc.Vec3,
-    focusPosition?: pc.Vec3
+    focusPosition?: pc.Vec3,
+    inView = true
   ): void {
-    this.billboard.update(dt, cameraPosition, focusPosition);
+    this.billboard.update(dt, cameraPosition, focusPosition, inView);
     // El billboard acaba de recalcular su avance visual; la sombra lo sigue.
     this.updateShadow();
   }

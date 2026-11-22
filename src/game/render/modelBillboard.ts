@@ -7,7 +7,8 @@ import {
 } from '../animationTimeline';
 import { CONFIG, RAD } from '../config';
 import { FOG_EXCLUDED_STENCIL } from '../fogStencil';
-import { resolveModelClip, type ModelAsset } from '../model';
+import { pruneBindConstantClips } from '../modelAnim';
+import { resolveModelClip, type ModelAsset, type ModelClip } from '../model';
 import type { AnimationName } from '../types';
 import type { TeamOutline } from './teamOutline';
 
@@ -46,6 +47,12 @@ export interface ModelBillboardOptions {
    * adoptan su medición en cuanto está disponible.
    */
   groundingReference?: boolean;
+  /**
+   * Mantiene la animación a la frecuencia completa del render. Se usa para el
+   * cuerpo que controla el jugador de esa vista; el resto baja a 30 Hz (20 Hz
+   * lejos) para repartir el coste de evaluar esqueletos.
+   */
+  fullRateAnimation?: boolean;
   /** La silueta tras obstáculos no está implementada en 3D (se ignora). */
   silhouette?: boolean;
   silhouetteColor?: readonly [number, number, number];
@@ -110,6 +117,18 @@ export class ModelBillboard {
   /** LOD: el sistema deja de actualizar el esqueleto y lo hace este reloj. */
   private animationLodActive = false;
   private animationLodAccumulator = 0;
+  /**
+   * Motivo por el que la animación está parada: oculta por la niebla o fuera
+   * del frustum de la cámara. Al reanudar se avanza el reloj de golpe para que
+   * la pose no se quede congelada en el instante en que desapareció.
+   */
+  private animationPaused = false;
+  private pausedAtMs = 0;
+  private outOfView = false;
+  private outOfViewFrames = 0;
+  /** Primeros frames a frecuencia completa: la pose de idle debe existir antes de medir el apoyo. */
+  private animationWarmupFrames = 0;
+  private readonly fullRateAnimation: boolean;
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
   private grounded = false;
   private settleFrames = 0;
@@ -140,6 +159,7 @@ export class ModelBillboard {
     this.outline = options.outline ?? null;
     this.outlineColor = options.outlineColor ?? null;
     this.groundingReference = options.groundingReference !== false;
+    this.fullRateAnimation = options.fullRateAnimation === true;
 
     this.root = new pc.Entity(`actor-${asset.entry.id}`);
     this.pivot = new pc.Entity('model-facing');
@@ -171,6 +191,16 @@ export class ModelBillboard {
     this.rootMotionBase = rootMotionNode
       ? rootMotionNode.getLocalPosition().clone()
       : null;
+    // Se analiza una sola vez por modelo, con el grafo aún en bind. Quita las
+    // curvas constantes que ya valen lo mismo que el bind: según los GLB del
+    // catálogo, son el ~60 % de los canales y no cambian ninguna pose.
+    pruneBindConstantClips(
+      this.model,
+      Object.values(this.model.clips).filter(
+        (clip): clip is ModelClip => Boolean(clip)
+      ),
+      this.modelEntity
+    );
     this.modelEntity.addComponent('anim', { activate: true, speed: 1 });
     const anim = this.modelEntity.anim;
     if (!anim) {
@@ -301,6 +331,9 @@ export class ModelBillboard {
     // Las mallas ocultas no pueden quedarse en la capa de contorno: el
     // `OutlineRenderer` guarda sus propias instancias al margen del componente.
     this.syncOutline();
+    // Un cuerpo oculto por la niebla no se dibuja, pero el `AnimComponent`
+    // seguiría evaluando su esqueleto cada frame. Se para hasta que vuelva.
+    this.refreshAnimationPlayback();
   }
 
   /**
@@ -459,9 +492,16 @@ export class ModelBillboard {
   update(
     dt: number,
     cameraPosition: pc.Vec3,
-    focusPosition?: pc.Vec3
+    focusPosition?: pc.Vec3,
+    inView = true
   ): void {
     if (!this.root.enabled) return;
+
+    this.animationWarmupFrames = Math.min(
+      4,
+      this.animationWarmupFrames + 1
+    );
+    this.updateViewState(inView);
 
     // Una copia que acaba de aparecer puede reutilizar el apoyo que ya midió
     // la copia de referencia. Se comprueba cada frame porque la referencia
@@ -517,7 +557,10 @@ export class ModelBillboard {
 
     if (!this.manual) {
       this.anim.speed = this.playback;
-      this.updateAnimationLod(dt, focusPosition ?? null);
+      // Un cuerpo fuera de cámara no avanza: al volver se pone al día de golpe.
+      if (!this.animationPaused) {
+        this.updateAnimationLod(dt, focusPosition ?? null);
+      }
     } else {
       this.setAnimationLod(false);
     }
@@ -540,43 +583,91 @@ export class ModelBillboard {
    * y su contorno se siguen dibujando igual; solo cambia la frecuencia con la
    * que se recalcula el esqueleto. Con varias copias por viewport se nota
    * sobre todo en el `animUpdate` de CPU y en la subida de matrices de skin.
+   *
+   * El cuerpo del jugador de la vista se queda a frecuencia completa; el resto
+   * de copias baja a 30 Hz cerca del foco y a 20 Hz lejos.
    */
   private updateAnimationLod(
     dt: number,
     focus: pc.Vec3 | null
   ): void {
     const settings = CONFIG.performance.animationLod;
-    if (!settings.enabled || !focus) {
+    if (
+      !settings.enabled ||
+      !focus ||
+      this.fullRateAnimation ||
+      this.animationWarmupFrames < 3
+    ) {
       this.setAnimationLod(false);
       return;
     }
     const position = this.root.getPosition();
     const dx = position.x - focus.x;
     const dz = position.z - focus.z;
-    if (dx * dx + dz * dz <= settings.distance * settings.distance) {
-      this.setAnimationLod(false);
-      return;
-    }
+    const near = dx * dx + dz * dz <= settings.distance * settings.distance;
+    const interval = Math.max(
+      settings.minInterval,
+      near ? settings.nearInterval : settings.interval
+    );
 
     if (!this.animationLodActive) {
-      this.animationLodActive = true;
-      this.anim.playing = false;
-      this.animationLodAccumulator = 0;
+      this.setAnimationLod(true);
     }
 
     this.animationLodAccumulator += dt;
-    const interval = Math.max(settings.minInterval, settings.interval);
     if (this.animationLodAccumulator < interval) return;
     const elapsed = this.animationLodAccumulator;
     this.animationLodAccumulator = 0;
     this.anim.update(elapsed);
   }
 
+  /**
+   * Histéresis de 3 frames para el frustum: un cuerpo que roza el borde de la
+   * cámara no debe congelarse por un frame suelto.
+   */
+  private updateViewState(inView: boolean): void {
+    if (inView) {
+      this.outOfView = false;
+      this.outOfViewFrames = 0;
+    } else if (!this.outOfView) {
+      this.outOfViewFrames += 1;
+      if (this.outOfViewFrames >= 3) this.outOfView = true;
+    }
+    this.refreshAnimationPlayback();
+  }
+
+  /**
+   * Para o reanuda el reloj del `AnimComponent` según visibilidad. Al reanudar
+   * avanza el tiempo acumulado de una sola vez para que la pose sea la actual,
+   * sin evaluar el esqueleto en cada frame oculto.
+   */
+  private refreshAnimationPlayback(): void {
+    const shouldPause = !this.visible || (this.outOfView && !this.manual);
+    if (shouldPause) {
+      if (!this.animationPaused) {
+        this.animationPaused = true;
+        this.pausedAtMs = performance.now();
+      }
+      this.anim.playing = false;
+      return;
+    }
+    if (this.animationPaused) {
+      this.animationPaused = false;
+      const elapsed = (performance.now() - this.pausedAtMs) / 1000;
+      if (elapsed > 0) this.anim.update(elapsed);
+      // Un clip manual no hace bucle y `update()` puede dejarlo en pausa; el
+      // siguiente `setManualFrame` vuelve a fijar el tiempo, pero el controlador
+      // tiene que seguir reproduciendo.
+      if (this.manual) this.layer.playing = true;
+    }
+    this.anim.playing = !this.animationLodActive;
+  }
+
   private setAnimationLod(active: boolean): void {
     if (this.animationLodActive === active) return;
     this.animationLodActive = active;
     this.animationLodAccumulator = 0;
-    this.anim.playing = !active;
+    this.refreshAnimationPlayback();
   }
 
   /**

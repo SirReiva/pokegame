@@ -94,7 +94,12 @@ export function syncMatchView(sync: MatchViewSync): void {
       // el color de inmediato. El billboard interpola la caída, así que llamar
       // cada frame no cuesta nada cuando el valor no cambia.
       copy.setDesaturation(player.alive ? 0 : 1);
-      copy.update(sync.dt, cameraPosition, focusPosition);
+      copy.update(
+        sync.dt,
+        cameraPosition,
+        focusPosition,
+        copy.inCameraView(cameraView.camera)
+      );
     }
 
     // El lote de sombras de esta vista se reescribe una sola vez, cuando ya se

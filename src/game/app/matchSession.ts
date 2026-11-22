@@ -702,6 +702,9 @@ export function startMatch(
         // demás viewports lo adoptan para no medir una pose sin renderizar.
         groundingReference:
           viewer.slot === player.slot || player.isBot === true,
+        // Solo el cuerpo que controla el jugador de esta vista anima a 60 Hz.
+        // Las demás copias reparten su esqueleto a 30/20 Hz (ver animationLod).
+        fullRateAnimation: viewer.slot === player.slot,
         // Los estados de animación se crean por tandas durante la cuenta atrás.
         deferLayers: true
       });

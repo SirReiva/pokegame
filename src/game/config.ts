@@ -113,17 +113,19 @@ export const CONFIG = {
      */
     matchPixelBudget: 3_200_000,
     /**
-     * LOD de animación por distancia al foco de la cámara. Los cuerpos lejanos
-     * siguen dibujándose (y con su contorno), pero el esqueleto se evalúa a
-     * `interval` segundos en vez de cada frame. El jugador y los combatientes
-     * cercanos mantienen la animación completa.
+     * LOD de animación por distancia al foco de la cámara. Los cuerpos que no
+     * controla el jugador de esa vista bajan a 30 Hz cerca y a 20 Hz lejos; el
+     * jugador local mantiene la frecuencia completa. Así se reparte el coste
+     * de evaluar esqueletos sin tocar la animación del propio cuerpo.
      */
     animationLod: {
       enabled: true as boolean,
       /** Distancia horizontal al foco de la cámara, en unidades de mundo. */
-      distance: 20,
-      /** Intervalo de actualización para los cuerpos lejanos. */
+      distance: 12,
+      /** Intervalo para cuerpos lejanos. */
       interval: 0.05,
+      /** Intervalo para cuerpos cercanos que no son el jugador local. */
+      nearInterval: 0.033,
       /** Nunca bajar de este intervalo aunque se configure más bajo. */
       minInterval: 0.016,
     },

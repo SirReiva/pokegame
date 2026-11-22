@@ -113,6 +113,16 @@ export class CameraRig {
     return this.lookAt;
   }
 
+  /**
+   * `true` si el punto cae dentro del frustum de la cámara. El frustum se
+   * actualiza al renderizar, así que en el frame siguiente es una aproximación
+   * válida para decidir si un cuerpo merece la pena animar.
+   */
+  containsPoint(point: pc.Vec3): boolean {
+    const camera = this.entity.camera;
+    return camera ? camera.frustum.containsPoint(point) : true;
+  }
+
   dispose(): void {
     this.entity.destroy();
   }
