@@ -70,6 +70,7 @@ import { baseStatsFor, combatStatsFor } from '../pokedex';
 import { ActorShadowBatch } from '../render/actorShadows';
 import { createPlayerView, type PlayerView } from '../render/playerView';
 import type { CombatFx } from '../render/fx/CombatFx';
+import { clearModelGrounding } from '../render/modelBillboard';
 import { TeamOutline } from '../render/teamOutline';
 import type { VisionView } from '../render/visionView';
 import { hitRadiusForPokemon, speedForPokemon } from '../roster';
@@ -267,6 +268,9 @@ export function endMatch(host: MatchSessionHost): void {
 
 /** Destruye la partida actual sin tocar el mundo ni los objetos del mapa. */
 export function clearMatch(host: MatchSessionHost): void {
+  // La altura de apoyo se mide con la pose de un cuerpo concreto; no debe
+  // reutilizarse la medición de la partida anterior al crear las copias nuevas.
+  clearModelGrounding();
   for (const projectile of host.projectiles) projectile.visual.destroy();
   host.projectiles = [];
   host.activeAoes = [];

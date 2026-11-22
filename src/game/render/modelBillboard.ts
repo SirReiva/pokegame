@@ -37,7 +37,15 @@ interface ModelGrounding {
   bodyTop: number;
 }
 
-const MODEL_GROUNDING = new WeakMap<ModelAsset, ModelGrounding>();
+let MODEL_GROUNDING = new WeakMap<ModelAsset, ModelGrounding>();
+
+/**
+ * Olvida las mediciones de apoyo. Se llama al cerrar la partida: la altura
+ * depende de la pose con la que se midió y no debe heredarse entre partidas.
+ */
+export function clearModelGrounding(): void {
+  MODEL_GROUNDING = new WeakMap();
+}
 
 export interface ModelBillboardOptions {
   /**
@@ -132,6 +140,12 @@ export class ModelBillboard {
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
   private grounded = false;
   private settleFrames = 0;
+  /**
+   * Una copia que aparece tras estar oculta (un bot enemigo al entrar en
+   * visión) puede traer cualquier fase del idle. Se mide con una pose canónica
+   * para que su altura no dependa del instante de la revelación.
+   */
+  private groundingPosePending = false;
   /** Copia de referencia: mide y publica el apoyo del modelo. */
   private readonly groundingReference: boolean;
   /** Apoyo compartido adoptado, o `null` mientras esta copia mide el suyo. */
@@ -326,8 +340,14 @@ export class ModelBillboard {
 
   setVisible(visible: boolean): void {
     if (this.visible === visible) return;
+    const wasVisible = this.visible;
     this.visible = visible;
     this.root.enabled = visible;
+    // Al reaparecer, una copia sin apoyo medido puede estar congelada en
+    // cualquier fase del idle. Se pedirá una pose canónica antes de medir.
+    if (visible && !wasVisible && !this.grounded) {
+      this.groundingPosePending = true;
+    }
     // Las mallas ocultas no pueden quedarse en la capa de contorno: el
     // `OutlineRenderer` guarda sus propias instancias al margen del componente.
     this.syncOutline();
@@ -508,6 +528,10 @@ export class ModelBillboard {
     // puede terminar su medición después de que esta copia se mostrara.
     if (!this.sharedGrounding) this.applySharedGrounding();
 
+    // Un bot enemigo aparece con la fase del idle que le tocó mientras estaba
+    // oculto. Se mide desde una pose canónica para que no cambie la altura.
+    this.resetGroundingPose();
+
     // La orientación es continua: el modelo no necesita elegir fila de 8
     // direcciones. Se conserva el cálculo de fila para la brújula del HUD.
     this.pivot.setLocalEulerAngles(
@@ -590,6 +614,37 @@ export class ModelBillboard {
     if (this.rootMotionNode && this.rootMotionBase) {
       this.rootMotionNode.setLocalPosition(this.rootMotionBase);
     }
+  }
+
+  /**
+   * Deja el idle en su primer instante antes de medir el apoyo de una copia
+   * que reaparece. La copia estaba oculta, así que el corte no se ve; evita
+   * que un bot enemigo se apoye según la fase del idle que tenía al entrar en
+   * visión (Rayquaza se apoya con la cola y el cuerpo enroscados).
+   */
+  private resetGroundingPose(): void {
+    if (!this.groundingPosePending) return;
+    if (this.grounded) {
+      this.groundingPosePending = false;
+      return;
+    }
+    // Un clip manual o una animación de movimiento mandan: se espera a que
+    // vuelva al idle y entonces se fija la pose de medición.
+    if (this.manual || this.animation !== 'idle') return;
+
+    const idle = resolveModelClip(this.model, 'idle');
+    if (!idle) {
+      this.groundingPosePending = false;
+      return;
+    }
+    this.groundingPosePending = false;
+    this.layer.transition(idle.animation, 0);
+    // `transition` reinicia el estado, pero la pose no se evalúa hasta el
+    // siguiente `animationUpdate`; se aplica ya para que el primer render sea
+    // el idle canónico.
+    this.anim.update(0);
+    // La ventana de medición empieza de nuevo con esta pose.
+    this.settleFrames = 0;
   }
 
   /**
@@ -698,6 +753,7 @@ export class ModelBillboard {
     this.align.setLocalPosition(0, shared.alignY, 0);
     this.bodyTopValue = shared.bodyTop;
     this.grounded = true;
+    this.groundingPosePending = false;
     return true;
   }
 
