@@ -5,7 +5,7 @@ import {
   frameBoundary,
   frameStart
 } from '../animationTimeline';
-import { RAD } from '../config';
+import { CONFIG, RAD } from '../config';
 import { FOG_EXCLUDED_STENCIL } from '../fogStencil';
 import { resolveModelClip, type ModelAsset } from '../model';
 import type { AnimationName } from '../types';
@@ -107,6 +107,9 @@ export class ModelBillboard {
   private visible = true;
   private desaturationTarget = 0;
   private desaturation = 0;
+  /** LOD: el sistema deja de actualizar el esqueleto y lo hace este reloj. */
+  private animationLodActive = false;
+  private animationLodAccumulator = 0;
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
   private grounded = false;
   private settleFrames = 0;
@@ -362,6 +365,7 @@ export class ModelBillboard {
     this.loop = true;
     this.anim.speed = this.playback;
     this.anim.playing = true;
+    this.setAnimationLod(false);
     // Si se llegó aquí, la animación es distinta o se pidió reinicio: siempre
     // hay que cambiar de estado, aunque el clip ya estuviera asignado.
     this.layer.transition(
@@ -401,6 +405,7 @@ export class ModelBillboard {
       );
       this.loop = false;
       this.anim.playing = true;
+      this.setAnimationLod(false);
       if (assigned || !this.manual) {
         this.layer.transition(resolved.animation, 0);
       }
@@ -451,7 +456,11 @@ export class ModelBillboard {
     return progress * duration;
   }
 
-  update(dt: number, cameraPosition: pc.Vec3): void {
+  update(
+    dt: number,
+    cameraPosition: pc.Vec3,
+    focusPosition?: pc.Vec3
+  ): void {
     if (!this.root.enabled) return;
 
     // Una copia que acaba de aparecer puede reutilizar el apoyo que ya midió
@@ -508,6 +517,9 @@ export class ModelBillboard {
 
     if (!this.manual) {
       this.anim.speed = this.playback;
+      this.updateAnimationLod(dt, focusPosition ?? null);
+    } else {
+      this.setAnimationLod(false);
     }
 
     // Gris del KO suavizado (sin shader propio todavía; se guarda para cuando
@@ -520,6 +532,51 @@ export class ModelBillboard {
         this.desaturation = this.desaturationTarget;
       }
     }
+  }
+
+  /**
+   * LOD de animación: fuera del radio de detalle se para el reloj automático
+   * del `AnimComponent` y se avanza a mano cada `interval` segundos. El cuerpo
+   * y su contorno se siguen dibujando igual; solo cambia la frecuencia con la
+   * que se recalcula el esqueleto. Con varias copias por viewport se nota
+   * sobre todo en el `animUpdate` de CPU y en la subida de matrices de skin.
+   */
+  private updateAnimationLod(
+    dt: number,
+    focus: pc.Vec3 | null
+  ): void {
+    const settings = CONFIG.performance.animationLod;
+    if (!settings.enabled || !focus) {
+      this.setAnimationLod(false);
+      return;
+    }
+    const position = this.root.getPosition();
+    const dx = position.x - focus.x;
+    const dz = position.z - focus.z;
+    if (dx * dx + dz * dz <= settings.distance * settings.distance) {
+      this.setAnimationLod(false);
+      return;
+    }
+
+    if (!this.animationLodActive) {
+      this.animationLodActive = true;
+      this.anim.playing = false;
+      this.animationLodAccumulator = 0;
+    }
+
+    this.animationLodAccumulator += dt;
+    const interval = Math.max(settings.minInterval, settings.interval);
+    if (this.animationLodAccumulator < interval) return;
+    const elapsed = this.animationLodAccumulator;
+    this.animationLodAccumulator = 0;
+    this.anim.update(elapsed);
+  }
+
+  private setAnimationLod(active: boolean): void {
+    if (this.animationLodActive === active) return;
+    this.animationLodActive = active;
+    this.animationLodAccumulator = 0;
+    this.anim.playing = !active;
   }
 
   /**

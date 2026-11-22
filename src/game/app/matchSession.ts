@@ -59,7 +59,7 @@ import {
   computeSplitLayout,
   createTeamRecord,
   facingToCenter,
-  matchPixelRatio,
+  matchResolutionBaseline,
   spawnForTeam,
   type KillFeedEntry,
   type MatchPlayerConfig,
@@ -429,7 +429,12 @@ export function startMatch(
   host.callbacks.onCountdown(MATCH_COUNTDOWN_SECONDS);
   host.menuCamera.setEnabled(false);
   host.setResolutionBaseline(
-    matchPixelRatio(window.devicePixelRatio || 1, humanConfigs.length)
+    matchResolutionBaseline(
+      window.devicePixelRatio || 1,
+      humanConfigs.length,
+      window.innerWidth,
+      window.innerHeight
+    )
   );
 
   const layout = computeSplitLayout(humanConfigs.length);

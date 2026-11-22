@@ -279,6 +279,28 @@ export function matchPixelRatio(
 }
 
 /**
+ * Resolución base de una partida, combinando el tope por DPR con un
+ * presupuesto de píxeles. En 1080p apenas cambia nada; en 1440p/4K evita
+ * pedir 6-8 M de píxeles internos, que es donde los modelos 3D y el contorno
+ * se comen el frame. La resolución dinámica sigue bajando desde aquí.
+ */
+export function matchResolutionBaseline(
+  devicePixelRatio: number,
+  humanCount: number,
+  cssWidth: number,
+  cssHeight: number
+): number {
+  const ratio = matchPixelRatio(devicePixelRatio, humanCount);
+  const pixels = cssWidth * cssHeight;
+  if (!(pixels > 0)) return ratio;
+  const budget = CONFIG.performance.matchPixelBudget;
+  if (!(budget > 0)) return ratio;
+  const budgetRatio = Math.sqrt(budget / pixels);
+  // No bajamos de 0.75: por debajo, el HUD y los contornos pierden nitidez.
+  return Math.min(ratio, Math.max(0.75, budgetRatio));
+}
+
+/**
  * Alto real de cada viewport de una partida, en píxeles de dispositivo.
  *
  * Lo usan la densidad de las hojas de sprite y el nivel de detalle (contorno y

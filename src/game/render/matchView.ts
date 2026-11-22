@@ -57,6 +57,7 @@ export function syncMatchView(sync: MatchViewSync): void {
     const cameraView = viewsByPlayer.get(cameraOwner);
     if (!cameraView) return;
     const cameraPosition = cameraView.camera.position;
+    const focusPosition = cameraView.camera.focusPosition;
     sync.viewSkies.get(cameraView.camera)?.setPosition(
       cameraPosition.x,
       cameraPosition.y,
@@ -93,7 +94,7 @@ export function syncMatchView(sync: MatchViewSync): void {
       // el color de inmediato. El billboard interpola la caída, así que llamar
       // cada frame no cuesta nada cuando el valor no cambia.
       copy.setDesaturation(player.alive ? 0 : 1);
-      copy.update(sync.dt, cameraPosition);
+      copy.update(sync.dt, cameraPosition, focusPosition);
     }
 
     // El lote de sombras de esta vista se reescribe una sola vez, cuando ya se

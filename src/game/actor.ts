@@ -264,8 +264,12 @@ export class Actor {
     return this.billboard.prewarmStep(animation);
   }
 
-  update(dt: number, cameraPosition: pc.Vec3): void {
-    this.billboard.update(dt, cameraPosition);
+  update(
+    dt: number,
+    cameraPosition: pc.Vec3,
+    focusPosition?: pc.Vec3
+  ): void {
+    this.billboard.update(dt, cameraPosition, focusPosition);
     // El billboard acaba de recalcular su avance visual; la sombra lo sigue.
     this.updateShadow();
   }

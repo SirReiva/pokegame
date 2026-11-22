@@ -96,6 +96,30 @@ export const CONFIG = {
       manyViews: 1.2,
       manyViewsThreshold: 4,
     },
+    /**
+     * Techo de píxeles internos de la partida (ancho × alto). En pantallas 4K
+     * o con `devicePixelRatio` alto, el tope por DPR sigue pidiendo 6-8 M de
+     * píxeles; los modelos 3D con texturas de 1024 y el contorno hacen que ese
+     * relleno sea el cuello de botella. Con un presupuesto fijo la resolución
+     * baja proporcionalmente en las pantallas grandes y se queda igual en
+     * 1080p. La resolución dinámica sigue actuando por debajo de este valor.
+     */
+    matchPixelBudget: 3_200_000,
+    /**
+     * LOD de animación por distancia al foco de la cámara. Los cuerpos lejanos
+     * siguen dibujándose (y con su contorno), pero el esqueleto se evalúa a
+     * `interval` segundos en vez de cada frame. El jugador y los combatientes
+     * cercanos mantienen la animación completa.
+     */
+    animationLod: {
+      enabled: true as boolean,
+      /** Distancia horizontal al foco de la cámara, en unidades de mundo. */
+      distance: 20,
+      /** Intervalo de actualización para los cuerpos lejanos. */
+      interval: 0.05,
+      /** Nunca bajar de este intervalo aunque se configure más bajo. */
+      minInterval: 0.016,
+    },
   },
   terrainTexture: {
     /**

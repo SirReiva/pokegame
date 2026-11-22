@@ -9,6 +9,7 @@
     "dev": "vite --host",
     "dev:model": "vite --host --open /demo/",
     "convert:model": "node tools/blender/convert_model.mjs",
+    "models:atlas": "node tools/models/atlas-glb.mjs",
     "build": "tsc -b && vite build",
     "build:dev": "vite build --mode development",
     "desktop:dev": "wails3 dev",

@@ -103,6 +103,16 @@ export class CameraRig {
     return this.entity.getPosition();
   }
 
+  /**
+   * Punto del mundo al que mira la cámara (el jugador que sigue). El LOD de
+   * animación mide la distancia a este punto, no a la cámara: en vista cenital
+   * todos los actores están a 10-27 unidades de la cámara y el umbral no
+   * distinguiría al jugador de un rival lejano.
+   */
+  get focusPosition(): pc.Vec3 {
+    return this.lookAt;
+  }
+
   dispose(): void {
     this.entity.destroy();
   }
