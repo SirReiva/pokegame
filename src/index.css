@@ -1,6 +1,13 @@
 @import 'tailwindcss';
 
 /*
+ * `public/` sólo contiene assets (GLB, MP3, PNG, JSON...) que no llevan clases
+ * de Tailwind. Excluirlo evita que el scanner intente leer los modelos `.glb`
+ * como texto, lo que dispara el consumo de memoria hasta tumbar el dev server.
+ */
+@source not "../public";
+
+/*
  * Tokens de diseño. Tailwind los expone como utilidades (`bg-panel`,
  * `text-muted`, `border-line`, `rounded-panel`, `font-display`...).
  */
