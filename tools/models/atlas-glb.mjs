@@ -11,9 +11,11 @@
  *   2. Remapea las UV de cada primitiva a su celda del atlas.
  *   3. Fusiona todas las primitivas de un mismo grupo (opaco / emisivo) en una
  *      sola malla y un solo material.
+ *   4. Hornea la escala de bind en `POSITION` cuando no es 1, para que la caja
+ *      que declaran los accessors sea la que se ve en pantalla.
  *
- * El resultado conserva esqueleto, skin, nodos y animaciones tal cual. El
- * contorno de equipo sigue funcionando porque solo depende de las mallas.
+ * El resultado conserva esqueleto, skin, nodos y animaciones; solo se divide la
+ * escala del nodo raíz por el factor horneado.
  *
  * Uso:
  *   pnpm models:atlas                         # informe, sin escribir
@@ -196,6 +198,205 @@ function readAccessorBytes(json, bin, index) {
 }
 
 // ---------------------------------------------------------------------------
+// Escala de bind
+// ---------------------------------------------------------------------------
+
+const IDENTITY_MAT4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+function multiplyMat4(a, b) {
+  const output = new Array(16).fill(0);
+  for (let column = 0; column < 4; column += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      for (let k = 0; k < 4; k += 1) {
+        output[column * 4 + row] += a[k * 4 + row] * b[column * 4 + k];
+      }
+    }
+  }
+  return output;
+}
+
+/** Matriz local de un nodo glTF: `matrix` o `T·R·S`. */
+function nodeMatrix(node) {
+  if (node.matrix) return node.matrix.slice();
+  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
+  const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1];
+  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
+  return [
+    (1 - 2 * (y * y + z * z)) * sx,
+    2 * (x * y + w * z) * sx,
+    2 * (x * z - w * y) * sx,
+    0,
+    2 * (x * y - w * z) * sy,
+    (1 - 2 * (x * x + z * z)) * sy,
+    2 * (y * z + w * x) * sy,
+    0,
+    2 * (x * z + w * y) * sz,
+    2 * (y * z - w * x) * sz,
+    (1 - 2 * (x * x + y * y)) * sz,
+    0,
+    tx,
+    ty,
+    tz,
+    1
+  ];
+}
+
+function nodeParents(json) {
+  const parents = new Map();
+  for (const [index, node] of (json.nodes ?? []).entries()) {
+    for (const child of node.children ?? []) parents.set(child, index);
+  }
+  return parents;
+}
+
+/** Matriz de mundo de un nodo, desde la raíz de la escena. */
+function worldMatrix(json, parents, index) {
+  const chain = [];
+  let current = index;
+  while (current !== undefined) {
+    chain.unshift(current);
+    current = parents.get(current);
+  }
+  let matrix = IDENTITY_MAT4;
+  for (const nodeIndex of chain) {
+    matrix = multiplyMat4(matrix, nodeMatrix(json.nodes[nodeIndex]));
+  }
+  return matrix;
+}
+
+/** Índices de joint que de verdad usan los `JOINTS_0` de las primitivas. */
+function referencedJoints(json, bin) {
+  const used = new Set();
+  for (const mesh of json.meshes ?? []) {
+    for (const primitive of mesh.primitives ?? []) {
+      const index = primitive.attributes?.JOINTS_0;
+      if (index === undefined) continue;
+      const { componentSize, count } = accessorLayout(json, index);
+      const bytes = readAccessorBytes(json, bin, index);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const read =
+        componentSize === 1
+          ? (offset) => view.getUint8(offset)
+          : (offset) => view.getUint16(offset, true);
+      for (let i = 0; i < count * 4; i += 1) used.add(read(i * componentSize));
+    }
+  }
+  return used;
+}
+
+/**
+ * Escala uniforme que el skin aplica al espacio de los accessors en la pose de
+ * bind: `B = mundo(joint) · inverseBindMatrix`.
+ *
+ * Cuando todas las `B` usadas valen `s·I`, el cuerpo se dibuja `s` veces más
+ * grande de lo que dicen los accessors (Sketchfab hornea la escala en el nodo
+ * raíz y PlayCanvas la aplica al esqueleto), así que `min`/`max` mienten y el
+ * juego necesita un factor a mano. Hornear `s` en `POSITION` y dividir la raíz
+ * por `s` deja `B = I`, sin cambiar ni un vértice en pantalla.
+ *
+ * Se mira el bind y no la escala del nodo raíz porque no siempre coinciden: en
+ * Onix la raíz escala 0,01 pero las inversas de bind la compensan y el bind real
+ * es 1.
+ */
+function bindScale(json, bin) {
+  const scene = json.scenes?.[json.scene ?? 0];
+  if (!scene || scene.nodes.length !== 1) return null;
+  const primitives = (json.meshes ?? []).flatMap((mesh) => mesh.primitives ?? []);
+  if (primitives.length === 0) return null;
+  // Mezclar mallas skinneadas y estáticas haría que el factor no aplicara igual.
+  if (primitives.some((primitive) => primitive.attributes?.JOINTS_0 === undefined)) {
+    return null;
+  }
+  const rootIndex = scene.nodes[0];
+  if (
+    (json.animations ?? []).some((animation) =>
+      animation.channels.some((channel) => channel.target.node === rootIndex)
+    )
+  ) {
+    return null;
+  }
+
+  const parents = nodeParents(json);
+  const skins = new Set(
+    (json.nodes ?? [])
+      .filter((node) => node.mesh !== undefined && node.skin !== undefined)
+      .map((node) => node.skin)
+  );
+  if (skins.size !== 1) return null;
+  const skin = json.skins?.[[...skins][0]];
+  if (!skin || skin.inverseBindMatrices === undefined) return null;
+
+  const joints = referencedJoints(json, bin);
+  if (joints.size === 0) return null;
+
+  const layout = accessorLayout(json, skin.inverseBindMatrices);
+  if (layout.accessor.componentType !== 5126 || layout.accessor.type !== 'MAT4') {
+    return null;
+  }
+  const inverseBinds = readAccessorBytes(json, bin, skin.inverseBindMatrices);
+  const view = new DataView(
+    inverseBinds.buffer,
+    inverseBinds.byteOffset,
+    inverseBinds.byteLength
+  );
+
+  let factor = null;
+  for (const joint of joints) {
+    if (joint >= skin.joints.length) return null;
+    const inverseBind = Array.from({ length: 16 }, (_, i) =>
+      view.getFloat32((joint * 16 + i) * 4, true)
+    );
+    const bind = multiplyMat4(
+      worldMatrix(json, parents, skin.joints[joint]),
+      inverseBind
+    );
+    const scale = bind[0];
+    const tolerance = Math.abs(scale) * 1e-4 + 1e-6;
+    // Sin rotación ni traslación: el bind solo debe escalar.
+    if (Math.abs(bind[5] - scale) > tolerance) return null;
+    if (Math.abs(bind[10] - scale) > tolerance) return null;
+    for (const index of [1, 2, 4, 6, 8, 9, 12, 13, 14]) {
+      if (Math.abs(bind[index]) > tolerance) return null;
+    }
+    if (!(scale > 0)) return null;
+    if (factor === null) factor = scale;
+    else if (Math.abs(factor - scale) > tolerance) return null;
+  }
+
+  if (factor === null || Math.abs(factor - 1) <= 1e-4) return null;
+  return { factor, rootIndex };
+}
+
+/**
+ * Divide la transformación del nodo raíz por `factor`, conservando su forma.
+ * Así `mundo(joint)` también queda dividido y el bind pasa a ser identidad.
+ */
+function normalizeRootScale(node, factor) {
+  if (node.matrix) {
+    // Solo el bloque afín (columnas 0-3, filas 0-2): conservar [0,0,0,1].
+    node.matrix = node.matrix.map((value, index) =>
+      index % 4 === 3 ? value : value / factor
+    );
+    return;
+  }
+  if (node.translation) {
+    node.translation = node.translation.map((value) => value / factor);
+  }
+  const scale = node.scale ?? [1, 1, 1];
+  node.scale = scale.map((value) => value / factor);
+}
+
+/** Escala posiciones FLOAT empaquetadas (VEC3). */
+function scalePositions(data, count, factor) {
+  const output = Buffer.from(data);
+  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+  for (let i = 0; i < count * 3; i += 1) {
+    view.setFloat32(i * 4, view.getFloat32(i * 4, true) * factor, true);
+  }
+  return output;
+}
+
+// ---------------------------------------------------------------------------
 // PNG: lectura y escritura sin dependencias (8 bits, RGB/RGBA, sin interlace)
 // ---------------------------------------------------------------------------
 
@@ -238,6 +439,8 @@ function decodePng(buffer) {
   let bitDepth = 0;
   let colorType = 0;
   let interlace = 0;
+  let palette = null;
+  let transparency = null;
   const idat = [];
   while (offset + 8 <= buffer.length) {
     const length = buffer.readUInt32BE(offset);
@@ -249,6 +452,10 @@ function decodePng(buffer) {
       bitDepth = data[8];
       colorType = data[9];
       interlace = data[12];
+    } else if (type === 'PLTE') {
+      palette = data;
+    } else if (type === 'tRNS') {
+      transparency = data;
     } else if (type === 'IDAT') {
       idat.push(data);
     } else if (type === 'IEND') {
@@ -256,27 +463,44 @@ function decodePng(buffer) {
     }
     offset += 12 + length;
   }
-  if (bitDepth !== 8) throw new Error(`PNG con profundidad ${bitDepth}: no soportado`);
   if (interlace !== 0) throw new Error('PNG entrelazado: no soportado');
-  if (colorType !== 2 && colorType !== 6) {
+
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
+  if (channels === undefined) {
     throw new Error(`PNG con colorType ${colorType}: no soportado`);
   }
+  const allowedDepths =
+    colorType === 0
+      ? [1, 2, 4, 8, 16]
+      : colorType === 3
+        ? [1, 2, 4, 8]
+        : [8, 16];
+  if (!allowedDepths.includes(bitDepth)) {
+    throw new Error(
+      `PNG con profundidad ${bitDepth} y colorType ${colorType}: no soportado`
+    );
+  }
+  if (colorType === 3 && !palette) throw new Error('PNG indexado sin PLTE');
 
-  const channels = colorType === 6 ? 4 : 3;
-  const stride = width * channels;
+  const bitsPerPixel = channels * bitDepth;
+  const bitsPerRow = width * bitsPerPixel;
+  const bytesPerRow = Math.ceil(bitsPerRow / 8);
+  const filterBytes = Math.max(1, Math.ceil(bitsPerPixel / 8));
   const raw = inflateSync(Buffer.concat(idat));
-  const output = Buffer.alloc(width * height * 4);
-  let previous = Buffer.alloc(stride);
-  let line = Buffer.alloc(stride);
+  const stride = bytesPerRow + 1;
+  if (raw.length < stride * height) throw new Error('PNG truncado');
+  const rows = Buffer.alloc(bytesPerRow * height);
+  let previous = Buffer.alloc(bytesPerRow);
+  let line = Buffer.alloc(bytesPerRow);
 
   for (let y = 0; y < height; y += 1) {
-    const rowStart = y * (stride + 1);
+    const rowStart = y * stride;
     const filter = raw[rowStart];
-    raw.copy(line, 0, rowStart + 1, rowStart + 1 + stride);
-    for (let x = 0; x < stride; x += 1) {
-      const left = x >= channels ? line[x - channels] : 0;
+    raw.copy(line, 0, rowStart + 1, rowStart + 1 + bytesPerRow);
+    for (let x = 0; x < bytesPerRow; x += 1) {
+      const left = x >= filterBytes ? line[x - filterBytes] : 0;
       const up = previous[x];
-      const upLeft = x >= channels ? previous[x - channels] : 0;
+      const upLeft = x >= filterBytes ? previous[x - filterBytes] : 0;
       let value = line[x];
       if (filter === 1) value += left;
       else if (filter === 2) value += up;
@@ -292,38 +516,160 @@ function decodePng(buffer) {
       }
       line[x] = value & 0xff;
     }
-    for (let x = 0; x < width; x += 1) {
-      const source = x * channels;
-      const target = (y * width + x) * 4;
-      output[target] = line[source];
-      output[target + 1] = line[source + 1];
-      output[target + 2] = line[source + 2];
-      output[target + 3] = channels === 4 ? line[source + 3] : 255;
-    }
+    line.copy(rows, y * bytesPerRow);
     previous = Buffer.from(line);
+  }
+
+  const output = Buffer.alloc(width * height * 4);
+
+  // Camino rápido para los PNG que ya genera el exportador de Blender.
+  if (bitDepth === 8 && !transparency && (colorType === 2 || colorType === 6)) {
+    if (colorType === 6) {
+      rows.copy(output);
+    } else {
+      for (let i = 0, s = 0, d = 0; i < width * height; i += 1, s += 3, d += 4) {
+        output[d] = rows[s];
+        output[d + 1] = rows[s + 1];
+        output[d + 2] = rows[s + 2];
+        output[d + 3] = 255;
+      }
+    }
+    return { width, height, data: output };
+  }
+
+  /** Lee el componente `index` de la fila `row`. En 16 bits devuelve el byte alto. */
+  const sample = (row, index, depth) => {
+    if (depth === 8) return rows[row * bytesPerRow + index];
+    if (depth === 16) return rows[row * bytesPerRow + index * 2];
+    const bit = index * depth;
+    const byte = rows[row * bytesPerRow + (bit >> 3)];
+    return (byte >> (8 - depth - (bit & 7))) & ((1 << depth) - 1);
+  };
+  const scale = (value, depth) =>
+    depth < 8 ? Math.round((value * 255) / ((1 << depth) - 1)) : value;
+
+  const transparentGray =
+    colorType === 0 && transparency ? transparency.readUInt16BE(0) : null;
+  const transparentRgb =
+    colorType === 2 && transparency
+      ? [
+          transparency.readUInt16BE(0),
+          transparency.readUInt16BE(2),
+          transparency.readUInt16BE(4)
+        ]
+      : null;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = (y * width + x) * 4;
+      let alpha = 255;
+      if (colorType === 3) {
+        const index =
+          bitDepth === 8 ? rows[y * bytesPerRow + x] : sample(y, x, bitDepth);
+        const p = index * 3;
+        output[target] = palette[p] ?? 0;
+        output[target + 1] = palette[p + 1] ?? 0;
+        output[target + 2] = palette[p + 2] ?? 0;
+        if (transparency && transparency[index] !== undefined) {
+          alpha = transparency[index];
+        }
+      } else if (colorType === 0) {
+        const value = sample(y, x, bitDepth);
+        const gray = scale(value, bitDepth);
+        output[target] = gray;
+        output[target + 1] = gray;
+        output[target + 2] = gray;
+        if (transparentGray !== null) {
+          const rawValue =
+            bitDepth === 16
+              ? rows.readUInt16BE(y * bytesPerRow + x * 2)
+              : value;
+          if (rawValue === transparentGray) alpha = 0;
+        }
+      } else if (colorType === 4) {
+        const gray = scale(sample(y, x * 2, bitDepth), bitDepth);
+        output[target] = gray;
+        output[target + 1] = gray;
+        output[target + 2] = gray;
+        alpha = scale(sample(y, x * 2 + 1, bitDepth), bitDepth);
+      } else if (colorType === 2) {
+        const p = y * bytesPerRow + x * (bitDepth === 16 ? 6 : 3);
+        if (bitDepth === 16) {
+          const r = rows.readUInt16BE(p);
+          const g = rows.readUInt16BE(p + 2);
+          const b = rows.readUInt16BE(p + 4);
+          output[target] = r >> 8;
+          output[target + 1] = g >> 8;
+          output[target + 2] = b >> 8;
+          if (
+            transparentRgb &&
+            r === transparentRgb[0] &&
+            g === transparentRgb[1] &&
+            b === transparentRgb[2]
+          ) {
+            alpha = 0;
+          }
+        } else {
+          output[target] = rows[p];
+          output[target + 1] = rows[p + 1];
+          output[target + 2] = rows[p + 2];
+          if (
+            transparentRgb &&
+            rows[p] === transparentRgb[0] &&
+            rows[p + 1] === transparentRgb[1] &&
+            rows[p + 2] === transparentRgb[2]
+          ) {
+            alpha = 0;
+          }
+        }
+      } else {
+        const p = y * bytesPerRow + x * (bitDepth === 16 ? 8 : 4);
+        if (bitDepth === 16) {
+          output[target] = rows[p];
+          output[target + 1] = rows[p + 2];
+          output[target + 2] = rows[p + 4];
+          alpha = rows[p + 6];
+        } else {
+          output[target] = rows[p];
+          output[target + 1] = rows[p + 1];
+          output[target + 2] = rows[p + 2];
+          alpha = rows[p + 3];
+        }
+      }
+      output[target + 3] = alpha;
+    }
   }
   return { width, height, data: output };
 }
 
 function encodePng(width, height, rgba) {
-  const stride = width * 3;
+  let hasAlpha = false;
+  for (let i = 3; i < rgba.length; i += 4) {
+    if (rgba[i] !== 255) {
+      hasAlpha = true;
+      break;
+    }
+  }
+  const channels = hasAlpha ? 4 : 3;
+  const stride = width * channels;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y += 1) {
     const row = y * (stride + 1);
     raw[row] = 0;
     for (let x = 0; x < width; x += 1) {
       const source = (y * width + x) * 4;
-      const target = row + 1 + x * 3;
+      const target = row + 1 + x * channels;
       raw[target] = rgba[source];
       raw[target + 1] = rgba[source + 1];
       raw[target + 2] = rgba[source + 2];
+      if (hasAlpha) raw[target + 3] = rgba[source + 3];
     }
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
-  ihdr[9] = 2;
+  ihdr[9] = hasAlpha ? 6 : 2;
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
@@ -357,7 +703,17 @@ function fillRect(pixels, width, height, x, y, w, h, r, g, b, a = 255) {
 }
 
 /** Dibuja una imagen RGBA escalada con interpolación bilineal. */
-function drawScaled(destination, destinationWidth, destinationHeight, source, dx, dy, dw, dh) {
+function drawScaled(
+  destination,
+  destinationWidth,
+  destinationHeight,
+  source,
+  dx,
+  dy,
+  dw,
+  dh,
+  preserveAlpha = false
+) {
   const { width: sw, height: sh, data } = source;
   for (let y = 0; y < dh; y += 1) {
     const sy = Math.max(0, Math.min(sh - 1, ((y + 0.5) / dh) * sh - 0.5));
@@ -389,6 +745,12 @@ function drawScaled(destination, destinationWidth, destinationHeight, source, dx
         data[i10 + 2] * w10 +
         data[i01 + 2] * w01 +
         data[i11 + 2] * w11;
+      const a = preserveAlpha
+        ? data[i00 + 3] * w00 +
+          data[i10 + 3] * w10 +
+          data[i01 + 3] * w01 +
+          data[i11 + 3] * w11
+        : 255;
       setPixel(
         destination,
         destinationWidth,
@@ -397,7 +759,7 @@ function drawScaled(destination, destinationWidth, destinationHeight, source, dx
         Math.round(r),
         Math.round(g),
         Math.round(b),
-        255
+        Math.round(a)
       );
     }
   }
@@ -416,6 +778,7 @@ function extrudeTile(pixels, width, height, x, y, w, h, pad) {
     pixels[target] = pixels[source];
     pixels[target + 1] = pixels[source + 1];
     pixels[target + 2] = pixels[source + 2];
+    pixels[target + 3] = pixels[source + 3];
   };
   for (let step = 1; step <= pad; step += 1) {
     for (let column = 0; column < w; column += 1) {
@@ -440,6 +803,61 @@ function gridFor(count) {
   if (count <= 1) return { cols: 1, rows: 1 };
   if (count <= 4) return { cols: 2, rows: 2 };
   return { cols: 4, rows: Math.ceil(count / 4) };
+}
+
+/**
+ * Hornea `KHR_texture_transform` en una textura nueva: `nueva(uv) = vieja(T(uv))`.
+ * El atlas puede así usar las UV originales y descartar la extensión, que
+ * PlayCanvas aplica en el shader y el atlas no sabe conservar.
+ */
+function bakeTextureTransform(png, transform) {
+  const source = decodePng(png);
+  const { width, height, data } = source;
+  const offset = transform.offset ?? [0, 0];
+  const scale = transform.scale ?? [1, 1];
+  const rotation = transform.rotation ?? 0;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const output = Buffer.alloc(width * height * 4);
+
+  const texel = (x, y) => {
+    const wx = ((x % width) + width) % width;
+    const wy = ((y % height) + height) % height;
+    return (wy * width + wx) * 4;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const u = (x + 0.5) / width;
+      const v = (y + 0.5) / height;
+      const tu = offset[0] + scale[0] * (u * cos + v * sin);
+      const tv = offset[1] + scale[1] * (-u * sin + v * cos);
+      const sx = tu * width - 0.5;
+      const sy = tv * height - 0.5;
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      const fx = sx - x0;
+      const fy = sy - y0;
+      const p00 = texel(x0, y0);
+      const p10 = texel(x0 + 1, y0);
+      const p01 = texel(x0, y0 + 1);
+      const p11 = texel(x0 + 1, y0 + 1);
+      const w00 = (1 - fx) * (1 - fy);
+      const w10 = fx * (1 - fy);
+      const w01 = (1 - fx) * fy;
+      const w11 = fx * fy;
+      const target = (y * width + x) * 4;
+      for (let c = 0; c < 4; c += 1) {
+        output[target + c] = Math.round(
+          data[p00 + c] * w00 +
+            data[p10 + c] * w10 +
+            data[p01 + c] * w01 +
+            data[p11 + c] * w11
+        );
+      }
+    }
+  }
+  return encodePng(width, height, output);
 }
 
 /**
@@ -472,7 +890,17 @@ function buildAtlas(entries, kind, cellOverride) {
     const image = entry.image;
     if (image) {
       const decoded = decodePng(image);
-      drawScaled(pixels, width, height, decoded, x + pad, y + pad, content, content);
+      drawScaled(
+        pixels,
+        width,
+        height,
+        decoded,
+        x + pad,
+        y + pad,
+        content,
+        content,
+        kind === 'base'
+      );
     }
     tiles.push({ x: x + pad, y: y + pad, w: content, h: content });
     rects.set(entry.material, {
@@ -544,9 +972,13 @@ function transformUvs(data, count, rect) {
   const target = new DataView(output.buffer, output.byteOffset, output.byteLength);
   const du = rect.u1 - rect.u0;
   const dv = rect.v1 - rect.v0;
+  // Los GLB con sampler REPEAT pueden traer UVs fuera de 0..1 (los ojos de
+  // Greninja, por ejemplo). El atlas usa CLAMP_TO_EDGE, así que se envuelven.
+  const wrap = (value) =>
+    value < 0 || value > 1 ? value - Math.floor(value) : value;
   for (let i = 0; i < count; i += 1) {
-    const u = source.getFloat32(i * 8, true);
-    const v = source.getFloat32(i * 8 + 4, true);
+    const u = wrap(source.getFloat32(i * 8, true));
+    const v = wrap(source.getFloat32(i * 8 + 4, true));
     target.setFloat32(i * 8, rect.u0 + u * du, true);
     target.setFloat32(i * 8 + 4, rect.v0 + v * dv, true);
   }
@@ -608,9 +1040,6 @@ function materialGroups(json) {
       ) {
         throw new Error(`Material ${material.name ?? materialIndex}: texturas AO/metal no soportadas`);
       }
-      if ((material.alphaMode ?? 'OPAQUE') !== 'OPAQUE' || material.doubleSided) {
-        throw new Error(`Material ${material.name ?? materialIndex}: transparencia/cara doble no soportada`);
-      }
       for (const reference of [
         material.pbrMetallicRoughness?.baseColorTexture,
         material.normalTexture,
@@ -626,11 +1055,39 @@ function materialGroups(json) {
       if (primitive.mode !== undefined && primitive.mode !== 4) {
         throw new Error(`Malla ${meshIndex} primitiva ${primitiveIndex}: modo ${primitive.mode} no soportado`);
       }
+      // Los materiales con alfa o cara doble se agrupan aparte: comparten
+      // material fusionado, pero no deben arrastrar al grupo opaco.
+      const alphaMode = material.alphaMode ?? 'OPAQUE';
+      const alphaCutoff = alphaMode === 'MASK' ? (material.alphaCutoff ?? 0.5) : 0;
+      const doubleSided = material.doubleSided === true;
+      const baseColorFactor = [
+        ...(material.pbrMetallicRoughness?.baseColorFactor ?? [1, 1, 1, 1])
+      ];
+      // Alfa 0 y blending: el material no pinta ningún píxel. No gasta celda.
+      if (alphaMode !== 'OPAQUE' && baseColorFactor[3] === 0) continue;
+      const unlit = material.extensions?.KHR_materials_unlit !== undefined;
       const kind = hasBase ? 'lit' : 'emissive';
-      let group = byMaterial.get(kind);
+      const key = [
+        kind,
+        alphaMode,
+        alphaCutoff,
+        doubleSided,
+        unlit,
+        baseColorFactor.map((value) => Number(value).toFixed(4)).join(',')
+      ].join('|');
+      let group = byMaterial.get(key);
       if (!group) {
-        group = { kind, materials: [], primitives: [] };
-        byMaterial.set(kind, group);
+        group = {
+          kind,
+          alphaMode,
+          alphaCutoff,
+          doubleSided,
+          unlit,
+          baseColorFactor,
+          materials: [],
+          primitives: []
+        };
+        byMaterial.set(key, group);
         groups.push(group);
       }
       if (!group.materials.includes(materialIndex)) group.materials.push(materialIndex);
@@ -638,7 +1095,11 @@ function materialGroups(json) {
     }
   }
   // El grupo opaco va primero para que su nodo sea el principal.
-  groups.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'lit' ? -1 : 1));
+  const alphaRank = { OPAQUE: 0, MASK: 1, BLEND: 2 };
+  groups.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'lit' ? -1 : 1;
+    return alphaRank[a.alphaMode] - alphaRank[b.alphaMode];
+  });
   return groups;
 }
 
@@ -654,18 +1115,6 @@ function textureImage(json, bin, textureIndex) {
   const texture = json.textures?.[textureIndex];
   if (!texture) return null;
   return imageBytes(json, bin, texture.source);
-}
-
-function readTextureForMaterial(json, bin, materialIndex, slot) {
-  const material = json.materials[materialIndex];
-  const reference =
-    slot === 'base'
-      ? material.pbrMetallicRoughness?.baseColorTexture
-      : slot === 'normal'
-        ? material.normalTexture
-        : material.emissiveTexture;
-  if (!reference) return null;
-  return textureImage(json, bin, reference.index);
 }
 
 function mergePrimitives(group, context, rects) {
@@ -735,6 +1184,8 @@ function mergePrimitives(group, context, rects) {
       let bytes = context.bytes(accessorIndex);
       if (name === 'TEXCOORD_0') {
         bytes = transformUvs(bytes, count, rect);
+      } else if (name === 'POSITION' && context.bindScale !== 1) {
+        bytes = scalePositions(bytes, count, context.bindScale);
       }
       meta.chunks.push(bytes);
     }
@@ -855,6 +1306,7 @@ function mergePrimitives(group, context, rects) {
 
 function rebuildModel(json, bin, options) {
   const groups = materialGroups(json);
+  const bake = bindScale(json, bin);
   const state = {
     parts: [],
     binLength: 0,
@@ -866,6 +1318,7 @@ function rebuildModel(json, bin, options) {
   const context = {
     json,
     bin,
+    bindScale: bake?.factor ?? 1,
     state,
     accessor(index) {
       return accessorLayout(json, index);
@@ -916,13 +1369,32 @@ function rebuildModel(json, bin, options) {
   const meshes = [];
   const rectsByMaterial = new Map();
 
+  const materialImage = (materialIndex, slot) => {
+    const material = json.materials[materialIndex];
+    const reference =
+      slot === 'base'
+        ? material.pbrMetallicRoughness?.baseColorTexture
+        : slot === 'normal'
+          ? material.normalTexture
+          : material.emissiveTexture;
+    const image = reference ? textureImage(json, bin, reference.index) : null;
+    const transform = reference?.extensions?.KHR_texture_transform;
+    if (!image || !transform) return image;
+    if (transform.texCoord !== undefined && transform.texCoord !== 0) {
+      throw new Error(
+        `Material ${material.name ?? materialIndex}: KHR_texture_transform pide TEXCOORD_${transform.texCoord}`
+      );
+    }
+    return bakeTextureTransform(image, transform);
+  };
+
   for (const group of groups) {
     const entries = group.materials.map((materialIndex) => ({
       material: materialIndex,
-      image:
-        group.kind === 'lit'
-          ? readTextureForMaterial(json, bin, materialIndex, 'base')
-          : readTextureForMaterial(json, bin, materialIndex, 'emissive')
+      image: materialImage(
+        materialIndex,
+        group.kind === 'lit' ? 'base' : 'emissive'
+      )
     }));
     const atlas = buildAtlas(entries, 'base', options.cell);
     for (const [material, rect] of atlas.rects) rectsByMaterial.set(material, rect);
@@ -931,7 +1403,7 @@ function rebuildModel(json, bin, options) {
       group.kind === 'lit'
         ? group.materials.map((materialIndex) => ({
             material: materialIndex,
-            image: readTextureForMaterial(json, bin, materialIndex, 'normal')
+            image: materialImage(materialIndex, 'normal')
           }))
         : [];
     const hasNormals = normalEntries.some((entry) => entry.image !== null);
@@ -946,9 +1418,10 @@ function rebuildModel(json, bin, options) {
       : null;
 
     let materialIndex;
+    let material;
     if (group.kind === 'lit') {
       materialIndex = materials.length;
-      const material = {
+      material = {
         name: 'atlas-lit',
         pbrMetallicRoughness: {
           baseColorTexture: { index: baseTexture },
@@ -956,21 +1429,31 @@ function rebuildModel(json, bin, options) {
           roughnessFactor: 0.72
         }
       };
+      if (group.baseColorFactor.some((value) => value !== 1)) {
+        material.pbrMetallicRoughness.baseColorFactor = [
+          ...group.baseColorFactor
+        ];
+      }
       if (normalTexture !== null) material.normalTexture = { index: normalTexture };
-      materials.push(material);
     } else {
       materialIndex = materials.length;
-      materials.push({
+      const alpha = group.alphaMode === 'OPAQUE' ? 1 : group.baseColorFactor[3];
+      material = {
         name: 'atlas-emissive',
         emissiveFactor: [1, 1, 1],
         emissiveTexture: { index: baseTexture },
         pbrMetallicRoughness: {
-          baseColorFactor: [0, 0, 0, 1],
+          baseColorFactor: [0, 0, 0, alpha],
           metallicFactor: 0,
           roughnessFactor: 0.72
         }
-      });
+      };
     }
+    if (group.alphaMode !== 'OPAQUE') material.alphaMode = group.alphaMode;
+    if (group.alphaMode === 'MASK') material.alphaCutoff = group.alphaCutoff;
+    if (group.doubleSided) material.doubleSided = true;
+    if (group.unlit) material.extensions = { KHR_materials_unlit: {} };
+    materials.push(material);
 
     const merged = mergePrimitives(group, context, rectsByMaterial);
     meshes.push({
@@ -992,6 +1475,7 @@ function rebuildModel(json, bin, options) {
   // Nodos: se conservan todos para no romper animaciones ni skins. Se vacían
   // los nodos de malla antiguos y se reutilizan para las mallas fusionadas.
   const nodes = json.nodes.map((node) => ({ ...node }));
+  if (bake) normalizeRootScale(nodes[bake.rootIndex], bake.factor);
   const meshNodeIndices = [];
   const skinIndices = new Set();
   nodes.forEach((node, index) => {
@@ -1055,8 +1539,19 @@ function rebuildModel(json, bin, options) {
   };
   if (skins.length > 0) newJson.skins = skins;
   if (animations.length > 0) newJson.animations = animations;
-  if (json.extensionsUsed) newJson.extensionsUsed = json.extensionsUsed;
-  if (json.extensionsRequired) newJson.extensionsRequired = json.extensionsRequired;
+  // El rebuild hornea texture_transform en las texturas y solo conserva unlit
+  // si todos los materiales del grupo lo eran.
+  const hasUnlit = groups.some((group) => group.unlit);
+  const usedExtensions = (json.extensionsUsed ?? []).filter(
+    (name) => name !== 'KHR_texture_transform' && (name !== 'KHR_materials_unlit' || hasUnlit)
+  );
+  if (usedExtensions.length > 0) newJson.extensionsUsed = usedExtensions;
+  const requiredExtensions = (json.extensionsRequired ?? []).filter(
+    (name) => name !== 'KHR_texture_transform' && (name !== 'KHR_materials_unlit' || hasUnlit)
+  );
+  if (requiredExtensions.length > 0) {
+    newJson.extensionsRequired = requiredExtensions;
+  }
 
   const newBin = Buffer.concat(state.parts);
   return {
@@ -1066,7 +1561,8 @@ function rebuildModel(json, bin, options) {
     materials: materials.length,
     primitives: groups.length,
     textures: textures.length,
-    images: images.length
+    images: images.length,
+    bakedScale: bake?.factor ?? null
   };
 }
 
@@ -1127,8 +1623,11 @@ function main() {
       outputPrimitives: rebuilt.primitives
     });
     if (!options.quiet) {
+      const baked = rebuilt.bakedScale
+        ? `\tescala ${rebuilt.bakedScale.toFixed(4)} horneada`
+        : '';
       console.log(
-        `${file.relativePath}\t${formatBytes(original.length)} -> ${formatBytes(output.length)}\t${inputMaterials} -> ${rebuilt.materials}\t${inputPrimitives} -> ${rebuilt.primitives}\t${rebuilt.textures}`
+        `${file.relativePath}\t${formatBytes(original.length)} -> ${formatBytes(output.length)}\t${inputMaterials} -> ${rebuilt.materials}\t${inputPrimitives} -> ${rebuilt.primitives}\t${rebuilt.textures}${baked}`
       );
     }
     if (options.out) {

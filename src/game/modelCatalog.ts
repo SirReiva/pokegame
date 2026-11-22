@@ -98,7 +98,10 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
   '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
   '0384': { file: 'pm0384/pm0384.glb' },
-  '0448': { file: 'pm0448/pm0448.glb' }
+  '0448': { file: 'pm0448/pm0448.glb' },
+  // Greninja viene de Sketchfab (CC-BY, Mariokart07). El atlas hornea la escala
+  // de bind en la geometría, así que su caja ya está en unidades de mundo.
+  '0658': { file: 'pm0658/pm0658.glb' }
 };
 
 export function modelEntryFor(pokemonId: string): PokemonModelEntry | null {

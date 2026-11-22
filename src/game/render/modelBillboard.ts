@@ -20,6 +20,19 @@ const DESATURATION_SECONDS = 0.08;
 const MIN_ADAPTED_SPEED = 0.2;
 const MAX_ADAPTED_SPEED = 4;
 
+/** Busca el primer nodo del subárbol cuyo nombre encaje con `pattern`. */
+function findNodeMatching(
+  root: pc.GraphNode,
+  pattern: RegExp
+): pc.GraphNode | null {
+  for (const child of root.children) {
+    if (pattern.test(child.name)) return child;
+    const nested = findNodeMatching(child, pattern);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 /**
  * Apoyo medido para un modelo, compartido por todas sus copias de viewport.
  *
@@ -200,7 +213,9 @@ export class ModelBillboard {
     // capturar su posición de bind y no la primera pose evaluada.
     const rootMotionNode =
       this.modelEntity.findByName('origin') ??
-      this.modelEntity.findByName('Origin');
+      this.modelEntity.findByName('Origin') ??
+      // Los GLB de Sketchfab/Blender añaden sufijo al hueso (`origin_70`).
+      findNodeMatching(this.modelEntity, /^origin_\d+$/i);
     this.rootMotionNode = rootMotionNode ?? null;
     this.rootMotionBase = rootMotionNode
       ? rootMotionNode.getLocalPosition().clone()

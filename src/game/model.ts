@@ -62,6 +62,10 @@ export interface ModelTargetSize {
  * - rutinas de PMD con prefijo (`00030_walk01_loop`, `20030_walk01_loop`...);
  * - PMD sin prefijo (`fi20_walk01`, `ba20_buturi01`...);
  * - clips con hash (Onix) que no se pueden mapear y se ignoran.
+ *
+ * Algunos exportadores (Sketchfab) anteponen el nombre del armature y la
+ * variante (`pm0725_11_00_00030_walk01_loop`); `stripSourcePrefix` los deja en
+ * el esquema de rutina antes de mapearlos.
  */
 const CLIP_PATTERNS: Readonly<Record<AnimationName, readonly string[]>> = {
   idle: [
@@ -93,6 +97,15 @@ const CLIP_PATTERNS: Readonly<Record<AnimationName, readonly string[]>> = {
 /** Quita el sufijo de duplicado de Blender (`.001`). */
 function withoutDuplicate(name: string): string {
   return name.replace(/\.\d{3}$/, '');
+}
+
+/**
+ * Quita el prefijo de exportador tipo `pm0725_11_00_` que añaden algunos GLB
+ * (Sketchfab). Los segmentos numéricos se limitan a 1-3 dígitos para no comerse
+ * el prefijo de rutina de cinco dígitos (`00030_walk01_loop`).
+ */
+function stripSourcePrefix(name: string): string {
+  return withoutDuplicate(name).replace(/^pm\d{4}(?:_\d{1,3})*_/i, '');
 }
 
 /** Quita el prefijo de rutina (`00000_`, `10000_`, `20000_`) si existe. */
@@ -226,9 +239,10 @@ function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
 /**
  * Caja de la pose base a partir de los accessors de posición del glTF.
  *
- * Se ignoran las transformaciones de nodo a propósito: los PMD usan una malla
- * skinneada por modelo con los nodos de malla en el origen, así que el accessor
- * ya está en el espacio del modelo. Es solo una referencia para escalar.
+ * Se ignoran las transformaciones de nodo: el atlas hornea la escala de bind en
+ * `POSITION` cuando no es 1 (ver `tools/models/atlas-glb.mjs`), así que en los
+ * GLB publicados el accessor ya está en unidades de mundo. Es solo una
+ * referencia para escalar.
  */
 function readBounds(json: {
   accessors?: Array<{ min?: number[]; max?: number[] }>;
@@ -368,10 +382,9 @@ export async function loadModelAsset(
   const container = asset.resource as pc.ContainerResource;
   const animationAssets = container.animations ?? [];
   const tracks = animationAssets.map((animationAsset, index) => ({
-    name:
-      info.animationNames[index] ??
-      animationAsset.name ??
-      `clip-${index}`,
+    name: stripSourcePrefix(
+      info.animationNames[index] ?? animationAsset.name ?? `clip-${index}`
+    ),
     track: animationAsset.resource as pc.AnimTrack
   }));
   const validTracks = tracks.filter(

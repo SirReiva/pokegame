@@ -50,6 +50,14 @@ En producción, `pnpm build` genera `dist/demo/index.html` y copia los modelos a
 | `pm0383_00` | Groudon | 9.030 | 74 | 46 | `public/models/pm0383/pm0383_00.glb` |
 | `pm0384` | Rayquaza | 7.186 | 67 | 46 | `public/models/pm0384/pm0384.glb` |
 | `pm0448` | Lucario | 5.978 | 83 | 49 | `public/models/pm0448/pm0448.glb` |
+| `pm0658` | Greninja | 5.998 | 101 | 74 | `public/models/pm0658/pm0658.glb` |
+
+Los 27 primeros modelos salen del pipeline `.blend` → GLB de este repositorio.
+`pm0658` es un GLB de Sketchfab (CC BY 4.0, Mariokart07; ver
+`public/models/CREDITS.md`). Pasa por el atlas: 8 materiales, 10 primitivas y 5
+texturas quedan en 1/1/1. Las capas de ojo con alfa 0 se descartan, su
+`KHR_texture_transform` se hornea en la textura antes de fusionar y la escala de
+bind (1,7149) se hornea en los vértices para que la caja del GLB sea la real.
 
 El selector de la cabecera cambia de modelo sin recargar la página: descarga el GLB, reconstruye la lista de clips y ajusta la cámara a la escala de cada uno. La lista de modelos y sus ajustes de cámara están en `MODELS`, en `main.ts`.
 

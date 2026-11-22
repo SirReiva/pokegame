@@ -267,6 +267,15 @@ const MODELS: ModelConfig[] = [
     scale: 1.99,
     offsetY: -0.01,
     camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
+    id: "pm0658",
+    name: "PM0658",
+    species: "Greninja",
+    url: `${import.meta.env.BASE_URL}models/pm0658/pm0658.glb`,
+    scale: 1.0,
+    offsetY: 0,
+    camera: { targetY: 1.4, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
   }
 ];
 

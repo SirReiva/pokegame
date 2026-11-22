@@ -30,15 +30,15 @@ Blender ni los `.blend`:
 pnpm models:atlas
 
 # Reescribir public/models
-pnpm models:atlas -- --write
+pnpm models:atlas --write
 
 # Un solo modelo o una carpeta de salida
-pnpm models:atlas -- --only pm0001_00
-pnpm models:atlas -- --out .cache/atlas
-pnpm models:atlas -- --input otra/carpeta --out .cache/atlas
+pnpm models:atlas --only pm0001_00
+pnpm models:atlas --out .cache/atlas
+pnpm models:atlas --input otra/carpeta --out .cache/atlas
 
 # Mantener el detalle original en modelos de 3+ materiales
-pnpm models:atlas -- --cell 1024 --write
+pnpm models:atlas --cell 1024 --write
 ```
 
 Por defecto usa celdas de 1024 px con 1-2 materiales y de 512 px con 3 o más.
@@ -46,6 +46,21 @@ Por defecto usa celdas de 1024 px con 1-2 materiales y de 512 px con 3 o más.
 con los cuerpos a poca pantalla no se aprecia, y evita que el atlas de 7
 materiales pida una textura de 4096 px. `--cell 1024` conserva el detalle a
 cambio de más VRAM.
+
+También acepta PNG indexados o en grises (1/4 bits), materiales con `alphaMode`
+distinto de `OPAQUE`, cara doble y `KHR_texture_transform` (se hornea en la
+textura y se descarta la extensión). Los materiales totalmente transparentes
+(alfa 0) no gastan celda.
+
+Además normaliza la escala de bind. Algunos exportadores (Sketchfab) dejan el
+modelo a otra escala en el nodo raíz y la compensan con las matrices inversas de
+bind; PlayCanvas dibuja el cuerpo a esa escala, pero los `min`/`max` de
+`POSITION` no la incluyen y el juego escalaría el modelo con una caja falsa. El
+script calcula `mundo(joint) · inverseBindMatrix`; si todas valen `s·I`, divide
+la raíz por `s` y multiplica `POSITION` por `s`. El resultado se ve igual, pero
+la caja de los accessors pasa a ser la real. No se usa la escala del nodo raíz
+como señal porque no siempre coincide: en Onix la raíz escala `0,01` y el bind
+real es `1`.
 
 El script es idempotente de forma segura: si el `asset.generator` ya contiene
 `newpoke atlas`, omite el modelo para no atlasear el atlas. Para volver a
@@ -55,7 +70,7 @@ vuelve a lanzar el script.
 
 ## Resultado medido
 
-Con los 27 modelos actuales:
+Con los 27 modelos originales:
 
 | Métrica | Antes | Después |
 |---|---:|---:|
@@ -65,6 +80,10 @@ Con los 27 modelos actuales:
 | Primitivas (draw calls base) | 148 | 29 |
 | VRAM de texturas (RGBA8 + mips) | 632 MB | 405 MB |
 | Media por modelo | 23,4 MB | 15,0 MB |
+
+Greninja (`pm0658`) se añadió después. Su GLB de Sketchfab pasó de 8
+materiales, 10 primitivas y 5 texturas a 1/1/1; el tamaño no baja porque el
+peso son las 74 animaciones, no la geometría.
 
 En una partida de 8 especies eso pasa de ~44 primitivas base a ~9, y el pase de
 contorno baja en la misma proporción. La VRAM de los Pokémon baja de ~187 MB a
