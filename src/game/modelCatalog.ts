@@ -42,7 +42,10 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0002': { file: 'pm0002/pm0002_00.glb' },
   '0004': { file: 'pm0004/pm0004_00.glb' },
   '0007': { file: 'pm0007/pm0007_00.glb' },
-  '0025': { file: 'pm0025/pm0025.glb' },
+  // Pikachu es pequeño en el sprite, pero su GLB tiene la cola muy larga y la
+  // huella horizontal inflaba la escala automática. Se ajusta a mano para que
+  // quede por debajo de Mewtwo o Lucario, como en el manifiesto.
+  '0025': { file: 'pm0025/pm0025.glb', scale: 0.7 },
   '0094': { file: 'pm0094/pm0094_00.glb' },
   '0095': { file: 'pm0095/pm0095_00.glb' },
   '0100': { file: 'pm0100/pm0100_00.glb' },

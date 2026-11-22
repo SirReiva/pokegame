@@ -105,7 +105,11 @@
     },
     "pm0245": {
       "blend": "models/pm0245.blend",
-      "output": "public/models/pm0245/pm0245.glb"
+      "output": "public/models/pm0245/pm0245.glb",
+      "basePose": {
+        "clip": "00000_defaultwait01_loop",
+        "bones": ["left_tail_", "right_tail_"]
+      }
     },
     "pm0248": {
       "blend": "models/pm0248.blend",

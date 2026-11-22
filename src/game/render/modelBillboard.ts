@@ -82,6 +82,15 @@ export class ModelBillboard {
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
   private grounded = false;
   private settleFrames = 0;
+  /**
+   * Altura visible de la pose de idle respecto a la raíz del actor. La caja del
+   * bind pose no sirve para el HUD: Rayquaza mide 10,9 unidades estirado, pero
+   * en idle aparece enroscado y mucho más bajo. La barra de vida y el
+   * hundimiento en agua usan esta medida real.
+   */
+  private bodyTopValue = 0;
+  /** Frames de idle que se siguen muestreando para quedarse con el máximo. */
+  private topSamples = 0;
 
   constructor(
     app: pc.AppBase,
@@ -224,6 +233,14 @@ export class ModelBillboard {
 
   get motionZ(): number {
     return 0;
+  }
+
+  /**
+   * Altura visible de la pose de reposo sobre la raíz del actor. Es la que usan
+   * la barra de vida y la inmersión en agua; 0 hasta que la pose se ha medido.
+   */
+  get bodyTop(): number {
+    return this.bodyTopValue;
   }
 
   setVisible(visible: boolean): void {
@@ -419,6 +436,18 @@ export class ModelBillboard {
       this.groundModel();
     }
 
+    // La pose de reposo respira: se toman varios frames y se conserva el punto
+    // más alto para que la barra no quede dentro de la cabeza en un frame bajo.
+    if (
+      this.grounded &&
+      this.topSamples < 8 &&
+      !this.manual &&
+      this.animation === 'idle'
+    ) {
+      this.topSamples++;
+      this.bodyTopValue = Math.max(this.bodyTopValue, this.measureBodyTop());
+    }
+
     if (!this.manual) {
       this.anim.speed = this.playback;
     }
@@ -443,15 +472,19 @@ export class ModelBillboard {
    */
   private groundModel(): void {
     let lowest = Infinity;
+    let highest = -Infinity;
     for (const render of this.modelEntity.findComponents('render')) {
       for (const meshInstance of render.meshInstances) {
         const aabb = meshInstance.aabb;
-        if (aabb) lowest = Math.min(lowest, aabb.getMin().y);
+        if (!aabb) continue;
+        lowest = Math.min(lowest, aabb.getMin().y);
+        highest = Math.max(highest, aabb.getMax().y);
       }
     }
     if (!Number.isFinite(lowest)) return;
 
-    const delta = this.root.getPosition().y - lowest;
+    const rootY = this.root.getPosition().y;
+    const delta = rootY - lowest;
     // Una caja aún sin posar puede dar valores absurdos; se reintenta al
     // siguiente frame en vez de teletransportar el cuerpo.
     if (Math.abs(delta) > 50) return;
@@ -463,7 +496,25 @@ export class ModelBillboard {
         position.z
       );
     }
+    // Altura visible después de apoyar el cuerpo: la caja se midió antes de
+    // desplazarlo, así que su parte alta también sube `delta`.
+    if (Number.isFinite(highest)) {
+      this.bodyTopValue = Math.max(0, highest + delta - rootY);
+    }
     this.grounded = true;
+  }
+
+  /** Punto más alto de la pose actual, relativo a la raíz del actor. */
+  private measureBodyTop(): number {
+    let highest = -Infinity;
+    for (const render of this.modelEntity.findComponents('render')) {
+      for (const meshInstance of render.meshInstances) {
+        const aabb = meshInstance.aabb;
+        if (aabb) highest = Math.max(highest, aabb.getMax().y);
+      }
+    }
+    if (!Number.isFinite(highest)) return 0;
+    return Math.max(0, highest - this.root.getPosition().y);
   }
 
   /** Misma fila de 8 direcciones que usa el billboard, solo para el HUD. */

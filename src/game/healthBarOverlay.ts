@@ -116,11 +116,18 @@ export class HealthBarOverlay {
         if (depth <= camera.nearClip) continue;
 
         const pixelsPerWorld = viewportHeight / (2 * halfTan * depth);
+        // Los Pokémon muy altos (Rayquaza) pueden dejar el ancla de la barra
+        // por encima del viewport. En vez de que desaparezca, la barra se pega
+        // al borde superior de la vista conservando su tamaño y su columna.
+        const layout = bar.layout;
+        const aboveAnchor =
+          Math.max(layout.height, layout.badgeSize) * pixelsPerWorld;
+        const anchorY = Math.max(screenPoint.y, top + 2 + aboveAnchor);
         const bounds = drawBar(
           context,
           bar,
           screenPoint.x,
-          screenPoint.y,
+          anchorY,
           pixelsPerWorld,
           this.dpr
         );

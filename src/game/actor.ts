@@ -1,5 +1,5 @@
 import * as pc from 'playcanvas';
-import { actorWorldHeight, type ActorAsset } from './actorAsset';
+import type { ActorAsset } from './actorAsset';
 import { CONFIG } from './config';
 import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
@@ -59,8 +59,6 @@ export class Actor {
   /** Ranura compartida de sombra; `null` si el actor no la lleva. */
   private readonly shadow: ActorShadowSlot | null;
   private readonly shadowDiameter: number;
-  /** Altura local sobre la raíz del modelo donde apoya la barra de vida. */
-  readonly barAnchorOffset: number;
   /** Altura de mundo cacheada; evita pedir la posición al nodo cada frame. */
   private barAnchorYValue = 0;
   /** Anillo de rumbo; solo lo lleva el jugador. */
@@ -80,8 +78,6 @@ export class Actor {
   private surfaceHeight = 0;
   private visible = true;
   private readonly markerBaseHeight = CONFIG.player.markerHeight;
-  /** Altura del sprite sobre el suelo; escala cuánto se hunde en el agua. */
-  private readonly visibleHeight: number;
 
   constructor(options: ActorOptions) {
     const { app, asset } = options;
@@ -93,11 +89,6 @@ export class Actor {
     this.homeFacing = options.facing;
     this.shadow = options.shadow ?? null;
 
-    const bodyHeight = actorWorldHeight(asset);
-    this.visibleHeight = BILLBOARD_BASE_Y + bodyHeight;
-    // La barra de vida se dibuja en el overlay 2D a esta altura; el actor solo
-    // publica el punto de anclaje para que la capa lo proyecte.
-    this.barAnchorOffset = bodyHeight + 0.18;
     // La sombra de contacto se ajusta a la huella del modelo, no al frame del
     // sprite: Onix o Gyarados ocupan mucho más suelo que su altura.
     this.shadowDiameter = Math.max(0.45, Math.min(2.4, asset.width * 0.55));
@@ -166,6 +157,19 @@ export class Actor {
     this.surfaceHeight = surfaceHeight;
     this.sink = Math.max(0, fraction * this.visibleHeight - surfaceHeight);
     this.applyPosition();
+  }
+
+  /**
+   * Altura del cuerpo visible sobre el suelo. Se mide de la pose de idle, no
+   * del bind pose; escala cuánto se hunde el cuerpo en el agua.
+   */
+  private get visibleHeight(): number {
+    return BILLBOARD_BASE_Y + this.billboard.bodyTop;
+  }
+
+  /** Altura local sobre la raíz del modelo donde apoya la barra de vida. */
+  private get barAnchorOffset(): number {
+    return this.billboard.bodyTop + 0.18;
   }
 
   private applyPosition(): void {

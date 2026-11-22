@@ -13,7 +13,9 @@ El exportador glTF no entiende ese grafo, así que este script:
   2. Reconstruye un Principled BSDF limpio con esa textura + el normal map.
   3. Añade la escala de las lianas cuando el modelo la necesita, porque las
      acciones importadas solo traen locación y rotación (ver models.json).
-  4. Exporta todos los actions del armature como animaciones glTF.
+  4. Rellena con la pose de un clip de referencia los huesos que las demás
+     acciones dejan en reposo (ver `basePose` en models.json).
+  5. Exporta todos los actions del armature como animaciones glTF.
 
 La configuración por modelo vive en tools/blender/models.json. La clave es el
 nombre del .blend sin extensión (por ejemplo "pm0001_00"); también se acepta el
@@ -516,6 +518,96 @@ def action_fcurves(action):
     raise RuntimeError(f"{action.name}: no se encontró ningún channelbag")
 
 
+def bone_name(data_path):
+    """Nombre del hueso de un `data_path` de pose, o `None` si no lo es."""
+    if not data_path.startswith("pose.bones"):
+        return None
+    start = data_path.find('"')
+    end = data_path.find('"', start + 1)
+    return data_path[start + 1 : end] if start != -1 and end != -1 else None
+
+
+def is_rest_curve(fcurve):
+    """¿La curva mantiene el valor de reposo del hueso en todos sus keys?"""
+    path = fcurve.data_path
+    if path.endswith(".rotation_quaternion"):
+        rest = 1.0 if fcurve.array_index == 3 else 0.0
+    elif path.endswith(".scale"):
+        rest = 1.0
+    else:
+        rest = 0.0
+    return all(abs(key.co[1] - rest) <= 1e-5 for key in fcurve.keyframe_points)
+
+
+def apply_base_pose(source_clip, bone_prefixes):
+    """Copia la pose de un clip a los huesos que quedan en reposo en las demás.
+
+    Algunos `.gfbanm` (por ejemplo, la cola de Suicune) solo posan ciertos
+    huesos en la animación de espera. El resto de acciones los deja en la pose
+    de reposo del armature, que no coincide con la pose "natural" del modelo y
+    se ve rígida. Para esos huesos se escriben keys constantes con la pose del
+    clip de referencia; si la acción ya los anima (o los deja en una pose
+    deliberada distinta de la de reposo), no se toca nada.
+    """
+    if not bone_prefixes:
+        return
+
+    source = next(
+        (
+            action
+            for action in bpy.data.actions
+            if action.name == source_clip or source_clip in action.name
+        ),
+        None,
+    )
+    if source is None:
+        print(f"[pose] aviso: no se encontró el clip de referencia {source_clip}")
+        return
+
+    source_start = source.frame_range[0]
+    pose = {}
+    for fcurve in action_fcurves(source):
+        bone = bone_name(fcurve.data_path)
+        if bone is None or not any(bone.startswith(prefix) for prefix in bone_prefixes):
+            continue
+        pose.setdefault(bone, []).append(
+            (fcurve.data_path, fcurve.array_index, fcurve.evaluate(source_start))
+        )
+
+    if not pose:
+        print(f"[pose] {source_clip}: sin curvas para {', '.join(bone_prefixes)}")
+        return
+
+    for action in bpy.data.actions:
+        if action is source:
+            continue
+
+        fcurves = action_fcurves(action)
+        start, end = action.frame_range
+        injected = []
+
+        for bone, entries in pose.items():
+            prefix = f'pose.bones["{bone}"]'
+            existing = [fcurve for fcurve in fcurves if fcurve.data_path.startswith(prefix)]
+            # Si la acción ya posee el hueso (aunque sea con una pose estática
+            # distinta de la de reposo), se respeta tal cual.
+            if existing and not all(is_rest_curve(fcurve) for fcurve in existing):
+                continue
+
+            for fcurve in existing:
+                fcurves.remove(fcurve)
+            for path, index, value in entries:
+                fcurve = fcurves.new(path, index=index)
+                for frame in (start, end):
+                    keyframe = fcurve.keyframe_points.insert(frame, value)
+                    keyframe.interpolation = "LINEAR"
+                fcurve.update()
+            injected.append(bone)
+
+        if injected:
+            print(f"[pose] {action.name}: {len(injected)} huesos con la pose de {source.name}")
+
+
 def add_feeler_scale_keys(bones, hidden_scale, visible_clips):
     """Añade curvas de escala a las raíces de las lianas en todas las acciones."""
     bones = [bone for bone in bones if bone]
@@ -606,6 +698,9 @@ def main():
     baked = bake_base_color(temp_dir, sizes, materials)
     rebuild_materials(baked, temp_dir)
     rename_actions(prefix)
+
+    base_pose = config.get("basePose", {})
+    apply_base_pose(base_pose.get("clip", ""), list(base_pose.get("bones", [])))
 
     feeler = config.get("feeler", {})
     bones = parse_list(args.feeler_bones) if args.feeler_bones is not None else list(feeler.get("bones", []))
