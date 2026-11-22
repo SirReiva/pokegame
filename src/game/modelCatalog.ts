@@ -47,23 +47,29 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // quede por debajo de Mewtwo o Lucario, como en el manifiesto.
   '0025': { file: 'pm0025/pm0025.glb', scale: 0.7 },
   '0094': { file: 'pm0094/pm0094_00.glb' },
-  '0095': { file: 'pm0095/pm0095_00.glb' },
+  // Onix es una serpiente de piedra enorme: se reduce para que su volumen no
+  // tape a los rivales en combate.
+  '0095': { file: 'pm0095/pm0095_00.glb', scale: 0.55 },
   '0100': { file: 'pm0100/pm0100_00.glb' },
   '0123': { file: 'pm0123/pm0123.glb' },
-  '0130': { file: 'pm0130/pm0130.glb' },
+  '0130': { file: 'pm0130/pm0130.glb', scale: 0.7 },
   '0133': { file: 'pm0133/pm0133_00.glb' },
+  // El trío de aves legendarias se ajusta al mismo tamaño relativo.
   '0144': {
     file: 'pm0144/pm0144_00.glb',
+    scale: 0.8,
     moveAnimation: 'idle1',
     moveClip: '20010_defaultidle01'
   },
   '0145': {
     file: 'pm0145/pm0145_00.glb',
+    scale: 0.8,
     moveAnimation: 'idle1',
     moveClip: '20010_defaultidle01'
   },
   '0146': {
     file: 'pm0146/pm0146_00.glb',
+    scale: 0.8,
     moveAnimation: 'idle1',
     moveClip: '20011_defaultidle02'
   },
@@ -77,17 +83,20 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0248': { file: 'pm0248/pm0248.glb' },
   '0249': {
     file: 'pm0249/pm0249.glb',
+    scale: 0.8,
     moveAnimation: 'idle1',
     moveClip: '20001_battlewait01_loop'
   },
   '0250': {
     file: 'pm0250/pm0250.glb',
+    scale: 0.6,
     moveAnimation: 'idle1',
     moveClip: '20010_defaultidle01'
   },
   '0251': { file: 'pm0251/pm0251_00.glb' },
-  '0382': { file: 'pm0382/pm0382.glb' },
-  '0383': { file: 'pm0383/pm0383_00.glb' },
+  // Kyogre es un coloso marino: se reduce para compensar su gran huella.
+  '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
+  '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
   '0384': { file: 'pm0384/pm0384.glb' },
   '0448': { file: 'pm0448/pm0448.glb' }
 };
