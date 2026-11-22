@@ -49,7 +49,7 @@ El sitio vive en <https://sirreiva.github.io/pokegame/> y lo publica el workflow
 gh workflow run deploy-pages.yml --ref dev -f version_bump=patch
 ```
 
-- `--ref` (o *Use workflow from* en la UI) elige la rama. Si en el formulario dejas **Rama** vacía, se usa esa misma rama; si escribes otra, se compila, versiona y publica esa otra.
+- `--ref` (o *Use workflow from* en la UI) elige la rama: esa misma rama se compila, se versiona y recibe el commit.
 - `version_bump` decide el salto de versión (`patch`, `minor` o `major`) y el commit `chore: bump version to vX.Y.Z` se empuja a la rama desplegada.
 
 El deploy usa el artifact generado, así que GitHub Pages debe tener como origen **GitHub Actions** en *Settings → Pages*; el selector de rama de esa pantalla no interviene y no hace falta cambiarlo.
