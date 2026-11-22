@@ -692,6 +692,11 @@ export function startMatch(
         withOutline: viewer.slot !== player.slot,
         outline: host.viewOutlines[viewIndex] ?? null,
         hitRadius: player.hitRadius,
+        // El apoyo del modelo se mide una vez y lo publica la copia del dueño
+        // en su propia vista (cualquiera, si es un bot). Las copias de los
+        // demás viewports lo adoptan para no medir una pose sin renderizar.
+        groundingReference:
+          viewer.slot === player.slot || player.isBot === true,
         // Los estados de animación se crean por tandas durante la cuenta atrás.
         deferLayers: true
       });

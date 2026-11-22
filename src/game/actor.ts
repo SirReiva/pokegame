@@ -47,6 +47,12 @@ export interface ActorOptions {
   outline?: TeamOutline | null;
   hitRadius?: number;
   deferLayers?: boolean;
+  /**
+   * Copia de referencia del modelo para medir el apoyo. Solo la copia del
+   * dueño en su propio viewport se dibuja desde el primer frame; las demás
+   * pueden estar ocultas por la niebla y medir con la pose de bind.
+   */
+  groundingReference?: boolean;
 }
 
 /**
@@ -99,7 +105,8 @@ export class Actor {
       silhouetteColor: accent,
       outline: options.outline ?? null,
       outlineColor: options.withOutline ? accent : null,
-      deferLayers: options.deferLayers === true
+      deferLayers: options.deferLayers === true,
+      groundingReference: options.groundingReference
     });
     this.billboard.setFacing(options.facing);
 

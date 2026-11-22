@@ -19,7 +19,33 @@ const DESATURATION_SECONDS = 0.08;
 const MIN_ADAPTED_SPEED = 0.2;
 const MAX_ADAPTED_SPEED = 4;
 
+/**
+ * Apoyo medido para un modelo, compartido por todas sus copias de viewport.
+ *
+ * `groundModel()` mide la caja de las mallas ya posadas, pero PlayCanvas solo
+ * actualiza las matrices de piel al renderizar esa copia. Una copia oculta por
+ * la niebla puede llegar a la medición con la pose de bind (Rayquaza estirado)
+ * y quedarse con otra altura. Como todas las copias del mismo modelo comparten
+ * pose y escala, la medición de la copia de referencia sirve para todas: así el
+ * cuerpo y su barra de vida aparecen a la misma altura en todas las cámaras.
+ */
+interface ModelGrounding {
+  /** Altura local del cuerpo sobre la raíz del actor. */
+  alignY: number;
+  /** Punto más alto de la pose de reposo, relativo a la raíz. */
+  bodyTop: number;
+}
+
+const MODEL_GROUNDING = new WeakMap<ModelAsset, ModelGrounding>();
+
 export interface ModelBillboardOptions {
+  /**
+   * Esta copia puede publicar el apoyo del modelo. Debe ser la copia del dueño
+   * en su propia vista: es la única que se dibuja desde el primer frame y, por
+   * tanto, la que mide con la pose real y no con la de bind. Las demás copias
+   * adoptan su medición en cuanto está disponible.
+   */
+  groundingReference?: boolean;
   /** La silueta tras obstáculos no está implementada en 3D (se ignora). */
   silhouette?: boolean;
   silhouetteColor?: readonly [number, number, number];
@@ -84,6 +110,12 @@ export class ModelBillboard {
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
   private grounded = false;
   private settleFrames = 0;
+  /** Copia de referencia: mide y publica el apoyo del modelo. */
+  private readonly groundingReference: boolean;
+  /** Apoyo compartido adoptado, o `null` mientras esta copia mide el suyo. */
+  private sharedGrounding: ModelGrounding | null = null;
+  /** Esta copia creó la medición compartida y puede seguir afinándola. */
+  private ownsGroundingRecord = false;
   /**
    * Altura visible de la pose de idle respecto a la raíz del actor. La caja del
    * bind pose no sirve para el HUD: Rayquaza mide 10,9 unidades estirado, pero
@@ -104,6 +136,7 @@ export class ModelBillboard {
     this.device = app.graphicsDevice;
     this.outline = options.outline ?? null;
     this.outlineColor = options.outlineColor ?? null;
+    this.groundingReference = options.groundingReference !== false;
 
     this.root = new pc.Entity(`actor-${asset.entry.id}`);
     this.pivot = new pc.Entity('model-facing');
@@ -119,6 +152,8 @@ export class ModelBillboard {
     // aparecería desplazado respecto a su sombra. La altura se ajusta sola en
     // el primer frame con la pose de reposo ya evaluada.
     this.align.setLocalPosition(0, this.model.offsetY, 0);
+    // Si otra copia del modelo ya midió el apoyo, se nace con la altura buena.
+    this.applySharedGrounding();
 
     this.modelEntity = this.model.container.instantiateRenderEntity({
       castShadows: false,
@@ -419,6 +454,11 @@ export class ModelBillboard {
   update(dt: number, cameraPosition: pc.Vec3): void {
     if (!this.root.enabled) return;
 
+    // Una copia que acaba de aparecer puede reutilizar el apoyo que ya midió
+    // la copia de referencia. Se comprueba cada frame porque la referencia
+    // puede terminar su medición después de que esta copia se mostrara.
+    if (!this.sharedGrounding) this.applySharedGrounding();
+
     // La orientación es continua: el modelo no necesita elegir fila de 8
     // direcciones. Se conserva el cálculo de fila para la brújula del HUD.
     this.pivot.setLocalEulerAngles(
@@ -449,16 +489,21 @@ export class ModelBillboard {
       this.groundModel();
     }
 
-    // La pose de reposo respira: se toman varios frames y se conserva el punto
-    // más alto para que la barra no quede dentro de la cabeza en un frame bajo.
-    if (
+    // Una copia compartida copia la altura publicada por la referencia, para
+    // que la barra no baile entre viewports aunque midiera otra pose al nacer.
+    if (this.sharedGrounding) {
+      this.bodyTopValue = this.sharedGrounding.bodyTop;
+    } else if (
       this.grounded &&
       this.topSamples < 8 &&
       !this.manual &&
       this.animation === 'idle'
     ) {
+      // La pose de reposo respira: se toman varios frames y se conserva el
+      // punto más alto para que la barra no quede dentro de la cabeza.
       this.topSamples++;
       this.bodyTopValue = Math.max(this.bodyTopValue, this.measureBodyTop());
+      this.publishGrounding();
     }
 
     if (!this.manual) {
@@ -474,6 +519,45 @@ export class ModelBillboard {
       if (Math.abs(this.desaturationTarget - this.desaturation) < 0.004) {
         this.desaturation = this.desaturationTarget;
       }
+    }
+  }
+
+  /**
+   * Adopta el apoyo ya publicado para este modelo. Devuelve `true` si hay una
+   * medición disponible. La altura compartida pisa la local: si esta copia
+   * midió antes de ser renderizada, su valor de bind no debe quedarse.
+   */
+  private applySharedGrounding(): boolean {
+    if (this.sharedGrounding || this.ownsGroundingRecord) return true;
+    const shared = MODEL_GROUNDING.get(this.model);
+    if (!shared) return false;
+    this.sharedGrounding = shared;
+    this.align.setLocalPosition(0, shared.alignY, 0);
+    this.bodyTopValue = shared.bodyTop;
+    this.grounded = true;
+    return true;
+  }
+
+  /**
+   * Publica la medición para las demás copias del modelo. Solo lo hace la
+   * copia de referencia (la del dueño en su viewport), que se dibuja desde el
+   * primer frame y nunca mide una pose de bind sin renderizar.
+   */
+  private publishGrounding(): void {
+    if (!this.groundingReference) return;
+    const existing = MODEL_GROUNDING.get(this.model);
+    if (!existing) {
+      MODEL_GROUNDING.set(this.model, {
+        alignY: this.align.getLocalPosition().y,
+        bodyTop: this.bodyTopValue
+      });
+      this.ownsGroundingRecord = true;
+      return;
+    }
+    // Solo la copia que creó la medición sigue muestreando la respiración del
+    // idle. Una copia tardía que mida otra pose no debe pisar la referencia.
+    if (this.ownsGroundingRecord) {
+      existing.bodyTop = Math.max(existing.bodyTop, this.bodyTopValue);
     }
   }
 
@@ -515,6 +599,7 @@ export class ModelBillboard {
       this.bodyTopValue = Math.max(0, highest + delta - rootY);
     }
     this.grounded = true;
+    this.publishGrounding();
   }
 
   /** Punto más alto de la pose actual, relativo a la raíz del actor. */
