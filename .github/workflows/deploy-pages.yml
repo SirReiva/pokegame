@@ -3,11 +3,6 @@ name: Deploy to GitHub Pages
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: "Rama a compilar y desplegar (vacio = rama desde la que se lanza)"
-        type: string
-        required: false
-        default: ""
       version_bump:
         description: "Tipo de subida de version"
         type: choice
@@ -30,7 +25,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      TARGET_BRANCH: ${{ inputs.branch || github.ref_name }}
+      TARGET_BRANCH: ${{ github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
