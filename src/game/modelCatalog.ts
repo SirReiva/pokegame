@@ -45,7 +45,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // Pikachu es pequeño en el sprite, pero su GLB tiene la cola muy larga y la
   // huella horizontal inflaba la escala automática. Se ajusta a mano para que
   // quede por debajo de Mewtwo o Lucario, como en el manifiesto.
-  '0025': { file: 'pm0025/pm0025.glb', scale: 0.7 },
+  '0025': { file: 'pm0025/pm0025.glb', scale: 0.6 },
   '0094': { file: 'pm0094/pm0094_00.glb' },
   // Onix es una serpiente de piedra enorme: se reduce para que su volumen no
   // tape a los rivales en combate.
