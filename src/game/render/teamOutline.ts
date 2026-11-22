@@ -2,12 +2,12 @@ import * as pc from 'playcanvas';
 import type { SplitRect } from '../multiplayer';
 
 /**
- * Escala del render target del contorno respecto al viewport. A media
- * resolución, cada téxel de la dilatación interna del motor ocupa dos píxeles
- * de pantalla: el borde queda en ~2 px (como el contorno de los sprites) y se
- * suaviza al componerlo, sin costar más relleno.
+ * Escala del render target del contorno respecto al viewport. A un cuarto de
+ * resolución, cada téxel de la dilatación interna del motor ocupa cuatro
+ * píxeles de pantalla: el borde queda en ~4 px, el doble que el de los
+ * sprites, y se suaviza al componerlo.
  */
-const OUTLINE_RENDER_SCALE = 0.5;
+const OUTLINE_RENDER_SCALE = 0.45;
 
 /**
  * Contorno de equipo para los cuerpos 3D.
