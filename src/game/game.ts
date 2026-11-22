@@ -127,6 +127,7 @@ import {
 import { syncMatchView, type MatchViewSync } from './render/matchView';
 import { updatePlayerCamera } from './render/playerCamera';
 import type { PlayerView } from './render/playerView';
+import type { TeamOutline } from './render/teamOutline';
 import { buildBotHazards, createBotHazardBuffer } from './ai/hazards';
 import { HealthBarOverlay } from './healthBarOverlay';
 import {
@@ -537,6 +538,8 @@ export class Game {
   /** Rejilla compartida por los bots; también gestiona su presupuesto por frame. */
   private botNav: BotNavGrid | null = null;
   private viewLayers: pc.Layer[] = [];
+  /** Contorno de equipo por viewport; se recrea con cada partida. */
+  private viewOutlines: TeamOutline[] = [];
   /** Barras de vida en una capa 2D, compartidas por todos los viewports. */
   private readonly healthBars: HealthBarOverlay;
   /** Escala de resolución interna según el FPS (no afecta a la simulación). */
@@ -1243,6 +1246,12 @@ export class Game {
       },
       set viewLayers(value) {
         self.viewLayers = value;
+      },
+      get viewOutlines() {
+        return self.viewOutlines;
+      },
+      set viewOutlines(value) {
+        self.viewOutlines = value;
       },
       viewOf: (player) => self.viewOf(player),
       createViewSky: (layerId, index, camera) =>
@@ -2398,6 +2407,14 @@ export class Game {
     sync.debugHideActors = this.debugHideActors;
     sync.dt = dt;
     syncMatchView(sync);
+
+    // El contorno se compone con la cámara ya colocada por la simulación de
+    // este frame. Cada vista tiene su propio renderer y viewport.
+    this.views.forEach((viewer, index) => {
+      const outline = this.viewOutlines[index];
+      const view = this.playerViews.get(viewer);
+      if (outline && view) outline.frameUpdate(view.camera.entity, view.viewport);
+    });
 
     // La barra es única por jugador: se actualiza una vez por frame, no una vez
     // por copia, y el overlay la proyecta después en cada viewport.

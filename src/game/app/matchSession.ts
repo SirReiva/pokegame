@@ -70,6 +70,7 @@ import { baseStatsFor, combatStatsFor } from '../pokedex';
 import { ActorShadowBatch } from '../render/actorShadows';
 import { createPlayerView, type PlayerView } from '../render/playerView';
 import type { CombatFx } from '../render/fx/CombatFx';
+import { TeamOutline } from '../render/teamOutline';
 import type { VisionView } from '../render/visionView';
 import { hitRadiusForPokemon, speedForPokemon } from '../roster';
 import type { PendingAoeEnd } from '../sim/aoes';
@@ -180,6 +181,8 @@ export interface MatchSessionHost {
   readonly viewSkies: Map<CameraRig, pc.Entity>;
   readonly viewSkyLayers: pc.Layer[];
   viewLayers: pc.Layer[];
+  /** Contorno de equipo, una instancia por viewport. */
+  viewOutlines: TeamOutline[];
   viewOf(player: MatchPlayerState): PlayerView;
   createViewSky(layerId: number, index: number, camera: CameraRig): pc.Entity;
   ensureFogMask(team: Team): FogMask;
@@ -318,6 +321,11 @@ export function clearMatch(host: MatchSessionHost): void {
   host.viewSkies.clear();
   for (const layer of host.viewSkyLayers) host.app.scene.layers.remove(layer);
   host.viewSkyLayers.length = 0;
+
+  // Los contornos se retiran antes de destruir a los actores: el renderer
+  // interno guarda sus mallas en una capa propia y debe soltarlas primero.
+  for (const outline of host.viewOutlines) outline.destroy();
+  host.viewOutlines.length = 0;
 
   for (const player of host.matchPlayers) {
     const view = host.playerViews.get(player);
@@ -484,6 +492,15 @@ export function startMatch(
       layerComposition.pushTransparent(layer);
       host.viewLayers.push(layer);
       host.viewSkyLayers.push(skyLayer);
+      // Contorno de equipo de esta vista. Va en una capa propia para que solo
+      // lo renderice su cámara interna y se componga antes de los cuerpos.
+      host.viewOutlines.push(
+        new TeamOutline(
+          host.app,
+          `match-outline-${currentView + 1}`,
+          layer
+        )
+      );
       // Las luces del mundo solo alumbran las capas que tienen declaradas.
       // Sin esto, los modelos de esta vista solo recibirían ambiente.
       host.world.addLightLayer(layer.id);
@@ -667,11 +684,13 @@ export function startMatch(
         // todas (también los rivales), lo que añadía un draw call y una
         // textura por copia sin aportar información nueva.
         withMarker: viewer.slot === player.slot,
-        // La silueta de oclusión y el contorno de equipo aún no existen en 3D.
+        // La silueta de oclusión aún no existe en 3D.
         silhouette: false,
         accent: TEAM_INFO[player.team].accent,
-        // El contorno de equipo todavía no existe en el cuerpo 3D.
-        withOutline: false,
+        // Solo el Pokémon que controla este viewport va sin contorno; el
+        // resto (aliados, rivales y bots) lleva el borde de su equipo.
+        withOutline: viewer.slot !== player.slot,
+        outline: host.viewOutlines[viewIndex] ?? null,
         hitRadius: player.hitRadius,
         // Los estados de animación se crean por tandas durante la cuenta atrás.
         deferLayers: true

@@ -8,6 +8,7 @@ import {
 import { RAD } from '../config';
 import { resolveModelClip, type ModelAsset } from '../model';
 import type { AnimationName } from '../types';
+import type { TeamOutline } from './teamOutline';
 
 /** Mezcla al cambiar de animación en reproducción automática. */
 const TRANSITION_SECONDS = 0.06;
@@ -21,9 +22,13 @@ export interface ModelBillboardOptions {
   /** La silueta tras obstáculos no está implementada en 3D (se ignora). */
   silhouette?: boolean;
   silhouetteColor?: readonly [number, number, number];
-  /** El contorno de equipo no está implementado en 3D (se ignora). */
+  /**
+   * Contorno de equipo del viewport. La copia se registra mientras está
+   * visible; el color lo decide quien construye el actor.
+   */
+  outline?: TeamOutline | null;
+  /** Color del contorno en 0-255, o `null` para no llevarlo. */
   outlineColor?: readonly [number, number, number] | null;
-  outlineWidth?: number;
   deferLayers?: boolean;
 }
 
@@ -68,6 +73,10 @@ export class ModelBillboard {
   private facing = 0;
   private row = 0;
   private layerId: number | null = null;
+  private readonly outline: TeamOutline | null;
+  private readonly outlineColor: readonly [number, number, number] | null;
+  private outlined = false;
+  private visible = true;
   private desaturationTarget = 0;
   private desaturation = 0;
   /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
@@ -77,10 +86,12 @@ export class ModelBillboard {
   constructor(
     app: pc.AppBase,
     asset: ActorAsset,
-    _options: ModelBillboardOptions = {}
+    options: ModelBillboardOptions = {}
   ) {
     this.asset = asset;
     this.model = asset.model;
+    this.outline = options.outline ?? null;
+    this.outlineColor = options.outlineColor ?? null;
 
     this.root = new pc.Entity(`actor-${asset.entry.id}`);
     this.pivot = new pc.Entity('model-facing');
@@ -143,6 +154,7 @@ export class ModelBillboard {
     app.root.addChild(this.root);
 
     this.configureRenders();
+    this.syncOutline();
   }
 
   private configureRenders(): void {
@@ -215,7 +227,34 @@ export class ModelBillboard {
   }
 
   setVisible(visible: boolean): void {
+    if (this.visible === visible) return;
+    this.visible = visible;
     this.root.enabled = visible;
+    // Las mallas ocultas no pueden quedarse en la capa de contorno: el
+    // `OutlineRenderer` guarda sus propias instancias al margen del componente.
+    this.syncOutline();
+  }
+
+  /**
+   * Mantiene la entidad en el contorno del viewport solo mientras se dibuja.
+   * Al ocultarla se retira de la capa interna; al volver a mostrarla se
+   * registra otra vez con el mismo color.
+   */
+  private syncOutline(): void {
+    const outline = this.outline;
+    const color = this.outlineColor;
+    const wanted = this.visible && outline !== null && color !== null;
+    if (wanted === this.outlined) return;
+
+    if (wanted && outline && color) {
+      this.outlined = true;
+      outline.add(this.root, color);
+      return;
+    }
+    if (this.outlined) {
+      this.outlined = false;
+      outline?.remove(this.root);
+    }
   }
 
   setLayer(layerId: number): void {
@@ -447,6 +486,8 @@ export class ModelBillboard {
   }
 
   destroy(): void {
+    if (this.outlined) this.outline?.remove(this.root);
+    this.outlined = false;
     this.root.destroy();
   }
 }

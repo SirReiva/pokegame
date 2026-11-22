@@ -5,6 +5,7 @@ import { HitboxDebug } from './hitboxDebug';
 import { PlayerMarker } from './marker';
 import type { ActorShadowSlot } from './render/actorShadows';
 import { ModelBillboard } from './render/modelBillboard';
+import type { TeamOutline } from './render/teamOutline';
 import type { AnimationName } from './types';
 
 export interface ActorTransform {
@@ -42,8 +43,8 @@ export interface ActorOptions {
   accent?: readonly [number, number, number];
   /** Contorno de equipo; lo llevan las copias que no controla el jugador. */
   withOutline?: boolean;
-  /** Grosor del contorno en píxeles de arte (sin uso en el cuerpo 3D). */
-  outlineWidth?: number;
+  /** Contorno del viewport al que pertenece esta copia. */
+  outline?: TeamOutline | null;
   hitRadius?: number;
   deferLayers?: boolean;
 }
@@ -105,8 +106,8 @@ export class Actor {
     this.billboard = new ModelBillboard(app, asset, {
       silhouette: options.silhouette === true,
       silhouetteColor: accent,
+      outline: options.outline ?? null,
       outlineColor: options.withOutline ? accent : null,
-      outlineWidth: options.outlineWidth,
       deferLayers: options.deferLayers === true
     });
     this.billboard.setFacing(options.facing);

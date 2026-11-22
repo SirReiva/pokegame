@@ -20,6 +20,7 @@ El cuerpo de cada Pokémon se dibuja con su GLB. El manifiesto de sprites sigue 
 
 - El catálogo de especies jugables está en `src/game/modelCatalog.ts`.
 - `src/game/model.ts` descarga el GLB, mapea sus clips a `idle`, `walk`, `attack`, `hurt`, `faint`... y calcula la escala.
+- El **contorno de equipo** se dibuja con `pc.OutlineRenderer` por viewport (`src/game/render/teamOutline.ts`). El Pokémon que controla cada vista va sin borde; aliados, rivales y bots llevan el color de su equipo, también en splitscreen.
 - Las especies sin GLB se retiran del roster. Hoy falta **Greninja (`0658`)**: añade su modelo y una entrada en el catálogo para recuperarlo.
 - Para ajustar un modelo concreto, el catálogo acepta `scale`, `targetHeight` y `yawOffsetDeg`.
 
