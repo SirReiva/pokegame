@@ -65,6 +65,16 @@ export const CONFIG = {
      */
     warmUpBatchSize: 2,
     /**
+     * Congela la cuenta atrás los primeros frames de partida para que la vista
+     * real (cámaras, niebla, contornos, anillos, objetos y números de daño)
+     * compile sus pipelines con la pantalla de cuenta atrás ya visible. Sin
+     * esto, el primer segundo de partida paga ~900 ms de tirones (ver
+     * docs/performance/gpu-trace-2026-11-23T021646.md).
+     */
+    matchWarmUp: true as boolean,
+    /** Frames que se renderizan con la cuenta atrás congelada. */
+    matchWarmUpFrames: 3,
+    /**
      * Presupuesto de téxeles de la textura del suelo (ancho × alto). El mapa de
      * estrés `perf-256` pedía 8 M de píxeles (2828 px de lado); con 4 M baja a
      * 2000 px, así que el pintado y, sobre todo, la subida inicial a la GPU se

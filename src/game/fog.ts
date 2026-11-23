@@ -290,6 +290,7 @@ export class FogView {
         aUv0: pc.SEMANTIC_TEXCOORD0
       }
     });
+    this.material.name = 'fog-of-war';
     this.material.blendType = pc.BLEND_NORMAL;
     this.material.depthTest = false;
     this.material.depthWrite = false;

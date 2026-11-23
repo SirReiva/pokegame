@@ -431,6 +431,7 @@ export class BatchedParticles {
           aSway: pc.SEMANTIC_ATTR9
         }
       });
+      material.name = `ambient-particles-${batch.key}`;
       material.blendType = options.additive ? pc.BLEND_ADDITIVE : pc.BLEND_NORMAL;
       material.depthWrite = false;
       material.depthTest = true;

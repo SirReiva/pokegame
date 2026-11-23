@@ -235,6 +235,7 @@ export function createAtmosphereVisuals(
 
   const buildLightning = (root: pc.Entity) => {
     const material = new pc.StandardMaterial();
+    material.name = 'atmosphere-lightning';
     material.useMetalness = false;
     material.diffuse = new pc.Color(1, 1, 1);
     material.emissive = new pc.Color(0, 0, 0);

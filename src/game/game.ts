@@ -74,8 +74,10 @@ import {
   type DamageNumberView
 } from './damageNumbers';
 import { DeathMarker } from './deathMarker';
+import { PlayerMarker } from './marker';
 import { CAST_EFFECTS } from './effects';
 import { FogMask, FogView, createFogMesh, type SightOccluder } from './fog';
+import { FOG_EXCLUDED_STENCIL } from './fogStencil';
 import { DynamicResolution } from './render/dynamicResolution';
 import { buildMatchStats } from './render/matchStats';
 import { VisionView } from './render/visionView';
@@ -126,8 +128,9 @@ import {
 } from './sim/status';
 import { syncMatchView, type MatchViewSync } from './render/matchView';
 import { updatePlayerCamera } from './render/playerCamera';
+import { ActorShadowBatch } from './render/actorShadows';
 import type { PlayerView } from './render/playerView';
-import type { TeamOutline } from './render/teamOutline';
+import { TeamOutline } from './render/teamOutline';
 import { buildBotHazards, createBotHazardBuffer } from './ai/hazards';
 import { HealthBarOverlay } from './healthBarOverlay';
 import {
@@ -525,6 +528,15 @@ export class Game {
    */
   private prewarmTasks: ActorPrewarmTask[] = [];
   private prewarmIndex = 0;
+  /**
+   * Frames que quedan del calentamiento de la vista real. Mientras sea > 0 la
+   * cuenta atrás no avanza: se renderiza la partida con la simulación
+   * congelada para que niebla, contornos, anillos, objetos y números de daño
+   * compilen sus pipelines antes de que el jugador pueda moverse.
+   */
+  private matchWarmUpFrames = 0;
+  /** Capas de las vistas cuyo material de números de daño hay que calentar. */
+  private matchWarmUpDamageNumbers = false;
   /** Reutilizada cada frame para las consultas por cámara de los objetos. */
   private readonly viewCameraPositions: pc.Vec3[] = [];
   /** Diagnóstico (Ctrl+Alt+…): oculta capas para localizar artefactos. */
@@ -1653,6 +1665,12 @@ export class Game {
     camera.lookAt(new pc.Vec3(0, 0, 0));
     this.app.root.addChild(camera);
 
+    // La capa de precarga debe recibir las mismas luces que la capa de la
+    // vista real. La clave del shader incluye la lista de luces incluso en los
+    // materiales `useLighting = false`, así que sin esto todos los efectos se
+    // recompilaban en la primera partida (29 pipelines de `fx:basic`).
+    this.world.addLightLayer(layer.id);
+
     this.combatFx.setWarmupLayer(layer.id);
 
     // La marca de KO no pasa por `combatFx`: tiene su propio material (sin
@@ -1661,6 +1679,57 @@ export class Game {
     // dibuje junto al resto y su shader quede compilado antes del primer KO.
     const deathMarker = new DeathMarker(this.app, 0, 0, 0, null);
     deathMarker.setLayer(layer.id);
+
+    // El anillo de rumbo y su pasada de oclusión usan materiales propios con
+    // `alphaTest`, profundidad invertida y una textura de canvas. Se dibuja uno
+    // en la capa de precarga para que no compilen al aparecer el primer rival.
+    const marker = new PlayerMarker(
+      this.app,
+      CONFIG.player.markerDiameter,
+      CONFIG.player.markerHeight,
+      CONFIG.player.markerOpacity
+    );
+    marker.setLayer(layer.id);
+    marker.setPosition(0, 0);
+    marker.setVisible(true);
+
+    // Sombra de contacto compartida por actores y objetos (`contact-shadow`).
+    // Se dibuja con el mismo lote instanciado que la partida: una primitiva
+    // `plane` normal no compila la variante instanciada.
+    const shadowWarmup = new ActorShadowBatch(
+      this.app,
+      this.world.shadowMaterial,
+      layer.id,
+      1
+    );
+    shadowWarmup.allocate().setShadow(0, 0.05, 0, 1, true);
+    shadowWarmup.commit();
+
+    // Niebla de pantalla: material propio de `ShaderMaterial`, independiente de
+    // los StandardMaterial. Se dibuja un quad de muestra con la misma malla,
+    // cámara y capa; la máscara real se crea al empezar la partida.
+    const builtIn = (
+      this.app.graphicsDevice as unknown as {
+        builtInTextures?: { white?: pc.Texture };
+      }
+    ).builtInTextures;
+    let fogWarmup: FogView | null = null;
+    if (builtIn?.white) {
+      fogWarmup = new FogView(
+        this.app.graphicsDevice,
+        this.ensureFogMesh(),
+        camera,
+        layer.id,
+        0,
+        builtIn.white
+      );
+      fogWarmup.update(
+        cameraComponent,
+        { x: 0, y: 0, w: 1, h: 1 },
+        0,
+        []
+      );
+    }
 
     // El atlas de números de daño también estrena material con el primer
     // impacto: se dibuja un número de muestra en la misma capa de precarga.
@@ -1696,11 +1765,15 @@ export class Game {
       console.warn('[shaders] No se pudieron precargar todos los efectos', error);
     } finally {
       deathMarker.destroy();
+      marker.destroy();
+      shadowWarmup.destroy();
+      fogWarmup?.destroy();
       // Desactiva el número de muestra; la ranura queda en el pool.
       this.damageNumbers.clear();
       this.combatFx.clear();
       this.combatFx.setWarmupLayer(null);
       camera.destroy();
+      this.world.resetLightLayers();
       this.app.scene.layers.remove(layer);
     }
   }
@@ -1708,7 +1781,7 @@ export class Game {
   /**
    * Compila los materiales de los cuerpos 3D y sube sus texturas con la
    * pantalla de carga visible. Se instancia una copia de cada modelo en una
-   * capa y cámara temporales (viewport mínimo) y se dejan pasar dos frames: el
+   * capa temporal que dibuja la cámara del menú y se dejan pasar dos frames: el
    * primero envía las draw calls y el segundo da tiempo a que terminen la
    * compilación y la subida antes de destruir las copias.
    *
@@ -1726,35 +1799,30 @@ export class Game {
     }
 
     const layer = new pc.Layer({ name: 'model-warmup' });
-    this.app.scene.layers.pushTransparent(layer);
+    // Los cuerpos son opacos: la capa va en la lista opaca de la composición.
+    this.app.scene.layers.pushOpaque(layer);
 
-    const camera = new pc.Entity('model-warmup-camera');
-    camera.addComponent('camera', {
-      nearClip: 0.1,
-      farClip: 80,
-      fov: 70
-    });
-    const cameraComponent = camera.camera;
-    if (!cameraComponent) {
-      this.app.scene.layers.remove(layer);
-      return;
-    }
-    cameraComponent.layers = [layer.id];
-    cameraComponent.clearColorBuffer = false;
-    // Viewport mínimo: el objetivo es compilar y subir, no rellenar píxeles.
-    cameraComponent.rect = new pc.Vec4(0, 0, 0.01, 0.01);
-    cameraComponent.scissorRect = new pc.Vec4(0, 0, 0.01, 0.01);
-    camera.setPosition(0, 6, 24);
-    camera.lookAt(pc.Vec3.ZERO);
-    this.app.root.addChild(camera);
+    // Las luces forman parte de la clave del shader. La capa de precarga debe
+    // llevar la misma lista que la capa real o el modelo compila otra variante
+    // en cuanto aparece en partida (`Untitled`, 15 pipelines en la traza).
+    this.world.addLightLayer(layer.id);
+    // La cámara del menú es la que ya está dibujando el mundo durante la carga.
+    // Se le añade la capa y los modelos se colocan en su punto de mira; así el
+    // draw es seguro y no depende de una cámara temporal.
+    const menuCamera = this.menuCamera.entity.camera;
+    const menuLayers = menuCamera ? [...menuCamera.layers] : null;
+    if (menuCamera) menuCamera.layers = [...menuCamera.layers, layer.id];
+    const focus = this.menuCamera.focusPosition;
 
     const entities: pc.Entity[] = [];
+    let outline: TeamOutline | null = null;
     try {
       const models = [...this.assets.values()];
       models.forEach((asset, index) => {
         const entity = asset.model.container.instantiateRenderEntity({
           castShadows: false,
-          receiveShadows: false
+          // El cuerpo real recibe sombras; es otra variante del material.
+          receiveShadows: true
         });
         entity.setLocalScale(
           asset.model.scale,
@@ -1763,23 +1831,66 @@ export class Game {
         );
         // En fila y dentro del frustum de la cámara temporal. La pose es la de
         // bind: interesa la variante skinned del material, no animar.
-        entity.setPosition((index - (models.length - 1) / 2) * 2.5, 0, 0);
+        entity.setPosition(
+          focus.x + (index - (models.length - 1) / 2) * 2.5,
+          0,
+          focus.z
+        );
+        // La jerarquía del GLB puede traer nodos intermedios desactivados.
+        const enableTree = (node: pc.Entity) => {
+          node.enabled = true;
+          for (const child of node.children) {
+            if (child instanceof pc.Entity) enableTree(child);
+          }
+        };
+        enableTree(entity);
         for (const render of entity.findComponents('render')) {
+          // La jerarquía del GLB llega con los nodos de malla desactivados;
+          // `ModelBillboard` los activa al asignar el primer clip. En la copia
+          // de precarga no hay `AnimComponent`, así que se activan a mano.
+          render.entity.enabled = true;
           render.layers = [layer.id];
           render.castShadows = false;
-          render.receiveShadows = false;
+          render.receiveShadows = true;
+          // El cuerpo visible escribe esténcil 1 en la partida; sin el mismo
+          // estado, el pipeline del modelo no coincide con el real.
+          if (this.app.graphicsDevice.supportsStencil) {
+            for (const instance of render.meshInstances) {
+              instance.stencilFront = FOG_EXCLUDED_STENCIL;
+              instance.stencilBack = FOG_EXCLUDED_STENCIL;
+            }
+          }
         }
         this.app.root.addChild(entity);
         entities.push(entity);
       });
+
+      // La pasada de contorno (`atlas-lit`, pass:5) no la dibuja ninguna de las
+      // dos cámaras normales: la pinta `OutlineRenderer` en su propio render
+      // target. Se registra cada modelo en un contorno temporal para compilar
+      // esa variante con la pantalla de carga, incluidos los modelos que aún no
+      // son visibles en la partida.
+      outline = new TeamOutline(this.app, 'model-warmup-outline', layer);
+      for (const entity of entities) {
+        outline.add(entity, [255, 255, 255]);
+      }
+      outline.frameUpdate(this.menuCamera.entity, {
+        x: 0,
+        y: 0,
+        w: 0.02,
+        h: 0.02
+      });
+
       // Un frame para enviar los draws y otro para que la compilación y la
       // subida de texturas terminen antes de destruir las copias.
       await this.waitFrames(2);
     } catch (error) {
       console.warn('[modelos] No se pudieron precargar todos los cuerpos', error);
     } finally {
+      outline?.destroy();
       for (const entity of entities) entity.destroy();
-      camera.destroy();
+      if (menuCamera && menuLayers) menuCamera.layers = menuLayers;
+      this.world.resetLightLayers();
       this.app.scene.layers.remove(layer);
     }
   }
@@ -2115,16 +2226,64 @@ export class Game {
 
   /** Empieza una partida con los jugadores ya elegidos en React. */
   startMatch(configs: MatchPlayerConfig[]): boolean {
-    return startMatchSession(this.matchSessionHost, configs);
+    if (!startMatchSession(this.matchSessionHost, configs)) return false;
+    this.beginMatchWarmUp();
+    return true;
+  }
+
+  /**
+   * Calienta la vista real justo después de crear cámaras, niebla, contornos,
+   * anillos, copias de actores y objetos. La cuenta atrás se queda congelada
+   * unos frames mientras se dibuja la escena de verdad: así los pipelines de
+   * `fog-of-war`, `player-marker`, `atlas-lit` (pasada de contorno),
+   * `pickup-unused` y `damage-numbers` se compilan con el overlay visible y no
+   * en mitad del primer combate.
+   */
+  private beginMatchWarmUp(): void {
+    if (!CONFIG.performance.matchWarmUp) {
+      this.matchWarmUpFrames = 0;
+      return;
+    }
+    this.matchWarmUpFrames = Math.max(1, CONFIG.performance.matchWarmUpFrames);
+    this.pickups?.beginWarmUp();
+    // Un número de daño por vista con la cámara y la capa reales. Se retira al
+    // terminar el calentamiento; la ranura y el material quedan en el pool.
+    this.matchWarmUpDamageNumbers = this.views.length > 0;
+    for (let index = 0; index < this.views.length; index++) {
+      const player = this.views[index];
+      const view = this.viewOf(player);
+      const camera = view.camera.entity.camera;
+      const layer = this.viewLayers[index];
+      if (!camera || !layer) continue;
+      this.damageNumbers.warmUp(
+        camera,
+        layer.id,
+        player.x,
+        1.5,
+        player.z
+      );
+    }
+  }
+
+  /** Cierra el calentamiento: los objetos vuelven a depender de la niebla. */
+  private endMatchWarmUp(): void {
+    if (this.matchWarmUpFrames > 0) this.matchWarmUpFrames = 0;
+    this.pickups?.endWarmUp();
+    if (this.matchWarmUpDamageNumbers) {
+      this.matchWarmUpDamageNumbers = false;
+      this.damageNumbers.clear();
+    }
   }
 
   /** Vuelve al menú de selección y destruye la partida actual. */
   endMatch(): void {
+    this.endMatchWarmUp();
     endMatchSession(this.matchSessionHost);
   }
 
   /** Destruye la partida actual sin tocar el mundo ni los objetos del mapa. */
   private clearMatch(): void {
+    this.endMatchWarmUp();
     clearMatchSession(this.matchSessionHost);
   }
 
@@ -2378,9 +2537,15 @@ export class Game {
     }
 
     // Cuenta atrás inicial: los jugadores ya ven el mapa y su HUD, pero la
-    // simulación sigue congelada hasta que llega a cero.
+    // simulación sigue congelada hasta que llega a cero. Los primeros frames
+    // se reservan para calentar la vista real sin consumir el tiempo visible.
     if (this.countdown > 0) {
-      this.tickCountdown(frameDt);
+      if (this.matchWarmUpFrames > 0) {
+        this.matchWarmUpFrames -= 1;
+        if (this.matchWarmUpFrames === 0) this.endMatchWarmUp();
+      } else {
+        this.tickCountdown(frameDt);
+      }
       this.updateMatch(frameDt, frame, true);
       return;
     }

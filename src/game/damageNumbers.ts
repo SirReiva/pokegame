@@ -306,6 +306,7 @@ export class DamageNumbers {
     mesh.update();
 
     const material = new pc.StandardMaterial();
+    material.name = 'damage-numbers';
     material.useLighting = false;
     material.useSkybox = false;
     material.useFog = false;
@@ -549,11 +550,17 @@ export class DamageNumbers {
    * La ranura se queda en el pool: `clear()` la desactiva y el primer número
    * real la reutiliza sin volver a crear material ni malla.
    */
-  warmUp(camera: pc.CameraComponent, layerId: number): void {
+  warmUp(
+    camera: pc.CameraComponent,
+    layerId: number,
+    x = 0,
+    y = 1.5,
+    z = 0
+  ): void {
     this.spawn({
-      x: 0,
-      y: 1.5,
-      z: 0,
+      x,
+      y,
+      z,
       amount: 123,
       critical: false,
       effectiveness: 1,

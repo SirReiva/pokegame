@@ -863,6 +863,8 @@ constructor(
     const material = this.materialPools.get(kind)?.pop();
     if (material) return material;
     const created = new pc.StandardMaterial();
+    // Nombre estable para que la instrumentación GPU identifique el efecto.
+    created.name = `fx:${kind}`;
     this.materialKinds.set(created, kind);
     return created;
   }

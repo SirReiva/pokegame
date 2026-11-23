@@ -307,6 +307,13 @@ export class PickupField {
   private readonly app: pc.AppBase;
   private readonly shadowMaterial: pc.StandardMaterial;
   private readonly textures: ItemTextureMap;
+  /**
+   * Durante el calentamiento de la vista real los objetos se muestran aunque
+   * la niebla todavía no los haya revelado. Solo dura los primeros frames de
+   * partida y sirve para compilar `pickup-unused` con la capa y la cámara
+   * definitivas.
+   */
+  private warmingUp = false;
 
   constructor(
     app: pc.AppBase,
@@ -402,6 +409,16 @@ export class PickupField {
     }
   }
 
+  /** Muestra los objetos ocultos mientras dura el calentamiento de la vista. */
+  beginWarmUp(): void {
+    this.warmingUp = true;
+  }
+
+  /** Vuelve a decidir la visibilidad solo con la niebla. */
+  endWarmUp(): void {
+    this.warmingUp = false;
+  }
+
   /** Devuelve todos los objetos a su estado disponible (nueva partida). */
   reset(): void {
     for (const item of this.items) {
@@ -440,10 +457,11 @@ export class PickupField {
   updateVisibility(
     isVisible: (spawn: PickupSpawn, viewIndex: number) => boolean
   ): void {
+    const warmingUp = this.warmingUp;
     for (const item of this.items) {
       if (item.views.length === 0) continue;
       item.views.forEach((view, index) => {
-        view.setVisible(isVisible(item.spawn, index));
+        view.setVisible(warmingUp || isVisible(item.spawn, index));
       });
     }
   }

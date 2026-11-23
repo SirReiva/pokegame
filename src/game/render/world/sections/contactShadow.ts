@@ -10,6 +10,7 @@ export function* buildContactShadow(ctx: WorldBuildContext): Generator<number, v
   yield 1;
   // --- Sombra de contacto --------------------------------------------------
   const shadowMaterial = new pc.StandardMaterial();
+  shadowMaterial.name = 'contact-shadow';
   shadowMaterial.useLighting = false;
   shadowMaterial.useSkybox = false;
   shadowMaterial.useFog = false;
