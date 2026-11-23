@@ -45,7 +45,7 @@ export function HomeScreen() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url("${publicUrl('bg.png')}")` }}
+          style={{ backgroundImage: `url("${publicUrl('bg.jpg')}")` }}
         />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(3_7_12/0.78)_0%,rgb(3_7_12/0.55)_42%,rgb(3_7_12/0.18)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_76%_48%,transparent_0%,rgb(3_7_12/0.08)_42%,rgb(3_7_12/0.64)_100%)]" />
