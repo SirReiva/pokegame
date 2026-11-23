@@ -93,7 +93,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
     moveAnimation: 'idle1',
     moveClip: '20010_defaultidle01'
   },
-  '0251': { file: 'pm0251/pm0251_00.glb' },
+  '0251': { file: 'pm0251/pm0251_00.glb', scale: 0.65 },
   // Kyogre es un coloso marino: se reduce para compensar su gran huella.
   '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
   '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
