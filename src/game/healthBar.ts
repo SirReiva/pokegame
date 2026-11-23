@@ -10,7 +10,7 @@
  */
 
 const BAR_TEXTURE_WIDTH = 256;
-const BAR_TEXTURE_HEIGHT = 28;
+const BAR_TEXTURE_HEIGHT = 32;
 
 /** Resolución de la barra de experiencia (fina, bajo la de vida). */
 const XP_TEXTURE_WIDTH = 256;
@@ -58,18 +58,28 @@ export interface HealthBarLayout {
 }
 
 export function healthBarLayoutFor(spriteHeight: number): HealthBarLayout {
-  const width = clamp(spriteHeight * 0.4, 0.6, 1.55);
-  const height = Math.max(0.09, width * 0.11);
-  const badgeSize = clamp(width * 0.58, 0.36, 0.5);
-  const xpHeight = Math.max(0.03, height * 0.3);
+  // El suelo sube respecto a la altura del sprite: la mayoría del roster mide
+  // entre 1,2 y 2 u, así que antes compartía la barra mínima de 0,6 u y en
+  // pantalla quedaba en ~50 px de ancho con una vida de 7 px de alto. Con este
+  // suelo todos los Pokémon pequeños llevan una barra legible.
+  const width = clamp(spriteHeight * 0.55, 0.95, 1.7);
+  // Alto y ancho de XP salen del aspecto de sus texturas: antes el mínimo de
+  // alto estiraba el contorno y engordaba los bordes de los Pokémon bajos.
+  const height = width * (BAR_TEXTURE_HEIGHT / BAR_TEXTURE_WIDTH);
+  const badgeSize = clamp(width * 0.55, 0.46, 0.6);
+  const xpWidth = width * 0.86;
+  const xpHeight = Math.max(
+    0.04,
+    xpWidth * (XP_TEXTURE_HEIGHT / XP_TEXTURE_WIDTH)
+  );
   return {
     width,
     height,
     badgeSize,
     badgeGap: badgeSize * 0.15,
-    xpWidth: width * 0.86,
+    xpWidth,
     xpHeight,
-    xpGap: Math.max(0.012, height * 0.2),
+    xpGap: Math.max(0.014, height * 0.22),
     y: spriteHeight + 0.18
   };
 }

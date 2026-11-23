@@ -8,6 +8,14 @@ const worldPoint = new pc.Vec3();
 const screenPoint = new pc.Vec3();
 
 /**
+ * Ancho mínimo de la barra de vida en pantalla, como fracción del alto del
+ * viewport. Sin este suelo la barra se encoge con la distancia y con la altura
+ * del Pokémon, y en los más pequeños o lejanos el nivel deja de leerse. El
+ * tamaño escala con el viewport para que también funcione en splitscreen.
+ */
+const MIN_BAR_WIDTH_FRACTION = 0.07;
+
+/**
  * Pinta las barras de vida en una capa 2D sobre el canvas del juego.
  *
  * Antes cada copia del splitscreen tenía tres quads 3D con su propia textura y
@@ -116,19 +124,24 @@ export class HealthBarOverlay {
         if (depth <= camera.nearClip) continue;
 
         const pixelsPerWorld = viewportHeight / (2 * halfTan * depth);
+        // La barra conserva su tamaño de mundo hasta que bajaría del ancho
+        // legible: a partir de ahí se queda en ese mínimo (como los nameplates
+        // de otros juegos) en vez de seguir encogiéndose con la distancia.
+        const layout = bar.layout;
+        const readableScale =
+          (viewportHeight * MIN_BAR_WIDTH_FRACTION) / layout.width;
+        const scale = Math.max(pixelsPerWorld, readableScale);
         // Los Pokémon muy altos (Rayquaza) pueden dejar el ancla de la barra
         // por encima del viewport. En vez de que desaparezca, la barra se pega
         // al borde superior de la vista conservando su tamaño y su columna.
-        const layout = bar.layout;
-        const aboveAnchor =
-          Math.max(layout.height, layout.badgeSize) * pixelsPerWorld;
+        const aboveAnchor = Math.max(layout.height, layout.badgeSize) * scale;
         const anchorY = Math.max(screenPoint.y, top + 2 + aboveAnchor);
         const bounds = drawBar(
           context,
           bar,
           screenPoint.x,
           anchorY,
-          pixelsPerWorld,
+          scale,
           this.dpr
         );
         if (!bounds) continue;
