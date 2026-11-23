@@ -54,7 +54,7 @@ La propuesta es que las MT entren por el **roster**, no por el mapa:
 - Un solo hueco (la habilidad 2 o la 3) se puede sustituir por **una MT**.
 - La MT debe ser compatible con la especie (ver 1.2).
 - Las **MO** no ocupan un hueco de habilidad: sustituyen el **instinto común**
-  (`I` / `RT`). Así se conserva el botón, el HUD y el bloqueo global de casteo.
+  (`I` / `X`). Así se conserva el botón, el HUD y el bloqueo global de casteo.
 - Máximo **una MO por Pokémon** y **ninguna MO repetida dentro del mismo
   equipo**. Si dos jugadores quieren Vuelo, solo uno puede llevarlo: las MO son
   roles de equipo.
@@ -312,7 +312,7 @@ Además de los estados, el catálogo usa tres familias de efectos de zona:
 
 ## 4. MO · los ocho movimientos de exploración
 
-Las MO sustituyen el instinto común y comparten su botón (`I` / `RT`). Todas
+Las MO sustituyen el instinto común y comparten su botón (`I` / `X`). Todas
 tienen dos lecturas: una **acción de mapa** que cambia la ruta y una **herramienta
 de combate** que justifica llevarlas en la partida. El HUD muestra su icono en el
 mismo sitio que Protección, Impulso o Regeneración.

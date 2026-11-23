@@ -166,11 +166,11 @@ El modo local admite **hasta ocho jugadores en total**: un teclado, mandos y bot
 | Apuntar habilidades | Stick derecho | — |
 | Girar tu cámara | Cruceta ← / → | `Q` / `E` o arrastrar con el ratón |
 | Zoom | Cruceta ↑ / ↓ | Rueda |
-| Habilidad básica | `X` | `J` |
+| Habilidad básica | `RT` | `J` |
 | Habilidad 1 | `L2` | `K` |
 | Habilidad 2 | `RB` | `L` |
 | Habilidad 3 | `LB` | `U` |
-| Instinto común | `RT` | `I` |
+| Instinto común | `X` | `I` |
 | Cursor virtual y clic (menús) | Stick derecho + `RT` | Ratón |
 | Pausa | `Start` | `Esc` |
 | Ocultar HUD | — | `H` |
@@ -224,8 +224,8 @@ Una **asistencia** es la aportación de un compañero del killer a la baja: dañ
 
 Cada Pokémon elige **uno de tres instintos** en la card del roster:
 
-- **Protección** (`I` / `RT`): 2 s con un 60 % menos de daño recibido, un 12 % menos de velocidad y sin poder usar otras habilidades mientras está activa. Genera un escudo esférico del color `accent` de la especie. La reducción mantiene el mínimo de 1 PV de la fórmula.
-- **Impulso** (`I` / `RT`): dash de 2,2 u con 3 s de cooldown que no hace daño y se detiene en enemigos y separadores.
+- **Protección** (`I` / `X`): 2 s con un 60 % menos de daño recibido, un 12 % menos de velocidad y sin poder usar otras habilidades mientras está activa. Genera un escudo esférico del color `accent` de la especie. La reducción mantiene el mínimo de 1 PV de la fórmula.
+- **Impulso** (`I` / `X`): dash de 2,2 u con 3 s de cooldown que no hace daño y se detiene en enemigos y separadores.
 - **Regeneración** (pasiva): tras 2 s sin ser visto, recupera 5 PV/s mientras siga oculto y muestra un número flotante con la curación. Se corta al perder HP, atacar o usar una habilidad. Su icono del HUD solo aparece mientras estás oculto y con la vida incompleta.
 
 Los activos comparten el bloqueo global de casteo y solo se pueden usar si no estás casteando, en dash o en hitstun. La selección se hace por Pokémon, se puede cambiar en el roster y se muestra en el lobby. Si el Pokémon muere con Protección activa, el escudo desaparece con él.

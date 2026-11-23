@@ -37,10 +37,10 @@ export function ControlsPanel() {
             <KeyPill>Stick derecho + RT</KeyPill> cursor virtual y clic en los menús
           </li>
           <li className="flex flex-wrap items-center gap-2">
-            <KeyPill>X / L2 / RB / LB</KeyPill> habilidades (básica, 1, 2 y 3)
+            <KeyPill>RT / L2 / RB / LB</KeyPill> habilidades (básica, 1, 2 y 3)
           </li>
           <li className="flex flex-wrap items-center gap-2">
-            <KeyPill>RT</KeyPill> instinto común
+            <KeyPill>X</KeyPill> instinto común
           </li>
           <li className="flex flex-wrap items-center gap-2">
             <KeyPill>Start</KeyPill> pausar la partida

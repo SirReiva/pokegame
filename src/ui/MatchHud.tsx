@@ -950,7 +950,7 @@ const PlayerHud = memo(function PlayerHud({
                     ? Math.min(100, (ability.cooldown / ability.duration) * 100)
                     : 0;
                 const keys = playerStats.gamepad
-                  ? ['X', 'L2', 'RB', 'LB']
+                  ? ['RT', 'L2', 'RB', 'LB']
                   : ['J', 'K', 'L', 'U'];
                 const typeLabel = TYPE_LABELS[ability.type] ?? ability.type;
                 const typeBadge = compact
@@ -1046,7 +1046,7 @@ const PlayerHud = memo(function PlayerHud({
                         : 'h-5 min-w-5 px-1 text-8.32'
                     }`}
                   >
-                    {common.passive ? 'PAS' : playerStats.gamepad ? 'RT' : 'I'}
+                    {common.passive ? 'PAS' : playerStats.gamepad ? 'X' : 'I'}
                   </span>
                   <span
                     className={`min-w-0 flex-1 truncate font-mono font-semibold tracking-[-0.01em] text-steel-100 ${

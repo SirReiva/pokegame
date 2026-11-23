@@ -77,12 +77,12 @@ export interface DeviceInputSnapshot {
   /** Pulsaciones de borde, no estados mantenidos. */
   confirm: boolean;
   cancel: boolean;
-  /** Habilidades de combate: J/K/L/U o X/L2/RB/LB. */
+  /** Habilidades de combate: J/K/L/U o RT/L2/RB/LB. */
   ability1: boolean;
   ability2: boolean;
   ability3: boolean;
   ability4: boolean;
-  /** Instinto común activo: I o RT. */
+  /** Instinto común activo: I o X. */
   commonAbility: boolean;
   navX: -1 | 0 | 1;
   navY: -1 | 0 | 1;
@@ -117,8 +117,8 @@ const KEYBOARD_ABILITY_KEYS = ['j', 'k', 'l', 'u'] as const;
 /** Tecla del instinto común activo. */
 const KEYBOARD_COMMON_KEY = 'i' as const;
 
-/** Botones de mando de las cuatro habilidades: X, L2, RB y LB. */
-const PAD_ABILITY_BUTTONS = [2, 6, 5, 4] as const;
+/** Botones de mando de las cuatro habilidades: RT, L2, RB y LB. */
+const PAD_ABILITY_BUTTONS = [7, 6, 5, 4] as const;
 
 /**
  * Umbral del gatillo izquierdo analógico (L2/LT). El navegador marca `pressed`
@@ -127,8 +127,8 @@ const PAD_ABILITY_BUTTONS = [2, 6, 5, 4] as const;
  */
 const ANALOG_PRESS = 0.35;
 
-/** Gatillo derecho del mando para el instinto común. */
-const PAD_COMMON_BUTTON = 7 as const;
+/** Botón X del mando para el instinto común. */
+const PAD_COMMON_BUTTON = 2 as const;
 
 /** Orden de prioridad cuando varias acciones de menú coinciden. */
 const MENU_ACTION_PRIORITY: readonly MenuAction[] = [
@@ -415,7 +415,7 @@ export class Input {
     // habilidades 3 y 4; las acciones de menú no afectan al juego.
     const prevMap = edge(4);
     const nextMap = edge(5);
-    // X, L2, RB y LB. El botón B queda reservado para volver/continuar.
+    // RT, L2, RB y LB. El botón B queda reservado para volver/continuar.
     const [ability1, ability2, ability3, ability4] =
       PAD_ABILITY_BUTTONS.map(edge);
     const commonAbility = edge(PAD_COMMON_BUTTON);
@@ -440,7 +440,7 @@ export class Input {
 
     // La cruceta controla la cámara durante la partida: izquierda/derecha la
     // giran y arriba/abajo acercan o alejan. El stick derecho apunta siempre.
-    // RT queda reservado para el instinto común.
+    // RT lanza la habilidad básica y X queda para el instinto común.
     const rightX = applyDeadzone(axes[2] ?? 0);
     const rightY = applyDeadzone(axes[3] ?? 0);
     const cameraX = (pressed(15) ? 1 : 0) - (pressed(14) ? 1 : 0);

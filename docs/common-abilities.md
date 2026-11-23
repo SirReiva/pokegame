@@ -23,7 +23,7 @@
 | Color del escudo | **`accent` del Pokémon** en el manifiesto de sprites, no el color del equipo |
 | Impulso | Distancia fija; **no atraviesa enemigos ni separadores**; se detiene al chocar |
 | Selección | **Por Pokémon**, cambiable en el roster y **visible para ambos equipos en el lobby** |
-| Tecla | **I** en teclado y **RT** en mando |
+| Tecla | **I** en teclado y **X** en mando |
 | HUD | **Cuenta atrás de 3 s** y luego estado activo |
 
 ## Decisión
@@ -308,7 +308,7 @@ Riesgos:
 
 ### Input y HUD
 
-- Quinto slot en `src/ui/MatchHud.tsx` para los activos, con tecla **I** y botón **RT** del mando, y anillo de cooldown.
+- Quinto slot en `src/ui/MatchHud.tsx` para los activos, con tecla **I** y botón **X** del mando, y anillo de cooldown.
 - Para Regeneración, icono pasivo sin tecla, visible solo para el jugador, con cuenta atrás de 2 s y estado activo.
 - Selector de instinto por Pokémon en `src/ui/RosterScreen.tsx`, cambiable en el roster y visible para ambos equipos en el lobby; etiqueta «Activo» o «Pasivo».
 - Los activos **sí** comparten el bloqueo de casteo global de una habilidad no melee.
@@ -332,7 +332,7 @@ Riesgos:
 Implementado:
 
 - Slot `common` por Pokémon, selector en el roster, vista en el lobby y quinta casilla del HUD.
-- Tecla `I` y botón `RT`, con el mismo bloqueo de casteo que una habilidad no melee.
+- Tecla `I` y botón `X`, con el mismo bloqueo de casteo que una habilidad no melee.
 - **Protección:** reducción del 60 % durante 2 s, −12 % de velocidad, bloqueo de otras habilidades, escudo esférico con el `accent` del Pokémon y sin animación por defecto.
 - **Impulso:** dash de 2,2 u sin daño, con colisión contra enemigos y separadores.
 - **Regeneración:** 2 s oculto, 5 PV/s con acumulador entero, gracia de 0,2 s y cortes por daño, visibilidad, ataque o habilidad.
