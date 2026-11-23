@@ -861,12 +861,58 @@ constructor(
 
   public acquireMaterial(kind: string): pc.StandardMaterial {
     const material = this.materialPools.get(kind)?.pop();
-    if (material) return material;
+    if (material) {
+      this.resetPooledMaterial(material, kind);
+      return material;
+    }
     const created = new pc.StandardMaterial();
     // Nombre estable para que la instrumentación GPU identifique el efecto.
     created.name = `fx:${kind}`;
     this.materialKinds.set(created, kind);
     return created;
+  }
+
+  /**
+   * Deja un material reciclado en un estado canónico.
+   *
+   * Los `StandardMaterial` del pool se usan en efectos que mutan propiedades
+   * que forman parte de la clave del shader (niebla, luces, mapas, blend,
+   * `alphaTest`, chunks de animación). Si una fábrica no reescribe una de ellas,
+   * el material hereda el estado del efecto anterior y PlayCanvas compila una
+   * variante nueva. Se normalizan aquí para que el conjunto de variantes sea el
+   * que definen las fábricas, no el historial del pool.
+   */
+  private resetPooledMaterial(
+    material: pc.StandardMaterial,
+    kind: string
+  ): void {
+    material.name = `fx:${kind}`;
+    material.blendType = pc.BLEND_NORMAL;
+    material.depthWrite = true;
+    material.depthTest = true;
+    material.cull = pc.CULLFACE_BACK;
+    material.alphaTest = 0;
+    material.useLighting = true;
+    material.useSkybox = false;
+    material.useFog = true;
+    material.useMetalness = false;
+    material.diffuseVertexColor = false;
+    material.emissiveVertexColor = false;
+    material.opacityVertexColor = false;
+    material.metalnessVertexColor = false;
+    material.diffuseMap = null;
+    material.emissiveMap = null;
+    material.opacityMap = null;
+    material.normalMap = null;
+    material.metalnessMap = null;
+    material.glossMap = null;
+    material.aoMap = null;
+    material.lightMap = null;
+    if (material.hasShaderChunks) {
+      material.getShaderChunks(pc.SHADERLANGUAGE_GLSL).clear();
+      material.getShaderChunks(pc.SHADERLANGUAGE_WGSL).clear();
+    }
+    material.update();
   }
 
 

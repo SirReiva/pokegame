@@ -353,7 +353,6 @@ export function mulberry32(seed: number): () => number {
 }
 
 let nextSeed = 0x51ed270b;
-let nextBatchId = 0x2f1e3d4c;
 
 export class EffectParticleBatch {
   readonly entity: pc.Entity;
@@ -423,7 +422,10 @@ export class EffectParticleBatch {
     mesh.update();
 
     const material = new pc.ShaderMaterial({
-      uniqueName: `effect-particles-${nextBatchId++}`,
+      // Nombre estable: la clave del programa incluye `uniqueName`; un contador
+      // por lote compilaba un shader por cada efecto aunque el código fuese el
+      // mismo.
+      uniqueName: 'fx-effect-particles',
       vertexGLSL: VERTEX_GLSL,
       fragmentGLSL: PARTICLE_FRAGMENT_GLSL,
       vertexWGSL: VERTEX_WGSL,
@@ -435,6 +437,7 @@ export class EffectParticleBatch {
         aParams: pc.SEMANTIC_ATTR7
       }
     });
+    material.name = 'fx:particles';
     material.blendType = options.additive ? pc.BLEND_ADDITIVE : pc.BLEND_NORMAL;
     material.depthWrite = false;
     material.depthTest = true;

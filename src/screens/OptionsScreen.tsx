@@ -288,6 +288,15 @@ export function OptionsScreen() {
                 : ''}{' '}
               El cambio se aplica al iniciar la siguiente partida.
             </p>
+            {graphics.backend === 'auto' &&
+            activeBackend === 'webgl2' &&
+            availability?.webgpu ? (
+              <p className="mt-2 text-12.8/normal text-danger-300">
+                WebGPU está disponible, pero la última partida arrancó en WebGL2.
+                En WebGL2 la compilación de shaders bloquea el hilo principal y
+                puede provocar tirones; cambia a WebGPU si no ves artefactos.
+              </p>
+            ) : null}
           </section>
 
           <section className={`${panel} xl:col-span-2`}>

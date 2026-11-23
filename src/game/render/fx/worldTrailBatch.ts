@@ -345,7 +345,10 @@ export class WorldTrailBatch {
     mesh.primitive[0].indexed = true;
 
     const material = new pc.ShaderMaterial({
-      uniqueName: `world-trail-${nextSeed++}`,
+      // Nombre estable por la misma razón que en `EffectTintBatch`: la clave
+      // del programa incluye `uniqueName` y un contador por lote compilaba un
+      // shader nuevo para cada estela.
+      uniqueName: 'fx-world-trail',
       vertexGLSL: VERTEX_GLSL,
       fragmentGLSL: PARTICLE_FRAGMENT_GLSL,
       vertexWGSL: VERTEX_WGSL,
@@ -357,6 +360,7 @@ export class WorldTrailBatch {
         aParams: pc.SEMANTIC_ATTR7
       }
     });
+    material.name = 'fx:trail';
     material.blendType = options.additive ? pc.BLEND_ADDITIVE : pc.BLEND_NORMAL;
     material.depthWrite = false;
     material.depthTest = true;

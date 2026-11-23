@@ -235,8 +235,26 @@ export class ModelBillboard {
     this.root.addChild(this.pivot);
     app.root.addChild(this.root);
 
+    this.labelMaterials();
     this.configureRenders();
     this.syncOutline();
+  }
+
+  /**
+   * Añade la especie al nombre de los materiales del GLB (`Untitled:0025`).
+   * La instrumentación GPU usa el nombre para identificar qué modelo compila
+   * un pipeline nuevo; sin esto todos los modelos aparecen como `Untitled`.
+   */
+  private labelMaterials(): void {
+    const suffix = `:${this.asset.entry.id}`;
+    for (const render of this.modelEntity.findComponents('render')) {
+      for (const instance of render.meshInstances) {
+        const material = instance.material as pc.StandardMaterial | null;
+        if (!material || typeof material.name !== 'string') continue;
+        if (material.name.endsWith(suffix)) continue;
+        material.name = `${material.name || 'model'}${suffix}`;
+      }
+    }
   }
 
   private configureRenders(): void {

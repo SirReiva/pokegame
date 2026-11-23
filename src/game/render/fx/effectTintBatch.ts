@@ -14,6 +14,7 @@ import * as pc from 'playcanvas';
 import {
   EFFECT_SHADER_COMMON,
   EFFECT_SHADER_COMMON_WGSL,
+  effectMotionKey,
   effectMotionWgsl
 } from '../../effectBatch';
 
@@ -300,8 +301,6 @@ function getInstanceFormat(device: pc.GraphicsDevice): pc.VertexFormat {
   return format;
 }
 
-let nextSeed = 0x2c1b3d5f;
-
 export class EffectTintBatch {
   readonly entity: pc.Entity;
   readonly material: pc.ShaderMaterial;
@@ -379,9 +378,13 @@ export class EffectTintBatch {
       );
     }
     const textured = !!options.texture;
+    const motionKey = effectMotionKey(motion);
 
     const material = new pc.ShaderMaterial({
-      uniqueName: `tint-effect-${nextSeed++}`,
+      // `uniqueName` entra en la clave del programa: con un contador, cada lote
+      // creaba un shader nuevo aunque el código fuese idéntico. La clave debe
+      // describir la forma del shader (movimiento + textura), no la instancia.
+      uniqueName: `fx-tint:${motionKey}:${textured ? 'tex' : 'plain'}`,
       vertexGLSL: buildVertexGLSL(motion, textured),
       fragmentGLSL: textured ? TEXTURED_FRAGMENT_GLSL : FRAGMENT_GLSL,
       vertexWGSL: wgslMotion
@@ -402,6 +405,7 @@ export class EffectTintBatch {
         instance_tint: ATTR_TINT
       }
     });
+    material.name = `fx:tint|m${motionKey}|${textured ? 'tex' : 'plain'}`;
     material.blendType = options.additive
       ? pc.BLEND_ADDITIVEALPHA
       : pc.BLEND_NORMAL;

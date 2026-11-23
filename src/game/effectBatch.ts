@@ -501,12 +501,27 @@ function getMotionWgslSources(): Map<string, string> {
   return motionWgslSources;
 }
 
+/** Identificador corto y estable de un `MOTION_*` (el código GLSL es largo). */
+export function effectMotionKey(motion: string): string {
+  let hash = 0;
+  for (let index = 0; index < motion.length; index++) {
+    hash = (hash * 31 + motion.charCodeAt(index)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function applyEffectShader(
   material: pc.StandardMaterial,
   motion: string,
   buildGLSL: (motion: string) => string,
-  buildWGSL: (motion: string) => string
+  buildWGSL: (motion: string) => string,
+  mode: 'instanced' | 'vertex'
 ): void {
+  // El nombre viaja hasta `getShaderVariant`: la instrumentación GPU lo usa
+  // para decir qué animación estrena el programa (en vez de `fx:basic` a
+  // secas). Se conserva el prefijo del material y se sustituye el sufijo.
+  const baseName = material.name.split('|')[0] || 'fx';
+  material.name = `${baseName}|${mode}:m${effectMotionKey(motion)}`;
   material
     .getShaderChunks(pc.SHADERLANGUAGE_GLSL)
     .set('transformCoreVS', buildGLSL(motion));
@@ -534,7 +549,7 @@ export function applyInstancedEffectShader(
   material.userAttributes.set(ATTR_ANIM0, 'instance_anim0');
   material.userAttributes.set(ATTR_ANIM1, 'instance_anim1');
   material.userAttributes.set(ATTR_ANIM2, 'instance_anim2');
-  applyEffectShader(material, motion, instancedChunk, instancedChunkWGSL);
+  applyEffectShader(material, motion, instancedChunk, instancedChunkWGSL, 'instanced');
 }
 
 /** Añade a un material una deformación de vértices por shader, sin instancing. */
@@ -542,7 +557,7 @@ export function applyVertexEffectShader(
   material: pc.StandardMaterial,
   motion: string
 ): void {
-  applyEffectShader(material, motion, vertexChunk, vertexChunkWGSL);
+  applyEffectShader(material, motion, vertexChunk, vertexChunkWGSL, 'vertex');
 }
 
 /**

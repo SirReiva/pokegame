@@ -52,6 +52,22 @@ export async function createGameApp(
     );
   }
 
+  // Deja el backend real en consola y avisa del fallback silencioso: en WebGL2
+  // el enlace de shaders es síncrono y puede producir tirones de 40-60 ms.
+  const usedBackend = device.isWebGPU ? 'webgpu' : 'webgl2';
+  if (usedBackend === 'webgl2') {
+    if (backend === 'auto') {
+      console.warn(
+        '[graphics] Automático acabó usando WebGL2 (WebGPU no disponible o rechazado). ' +
+          'En WebGL2 la compilación de shaders bloquea el frame; revisa Opciones si el equipo soporta WebGPU.'
+      );
+    } else {
+      console.info('[graphics] Backend forzado: WebGL2.');
+    }
+  } else {
+    console.info('[graphics] Backend activo: WebGPU.');
+  }
+
   const app = new pc.AppBase(canvas);
   const options = new pc.AppOptions();
   options.graphicsDevice = device;

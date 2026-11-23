@@ -82,8 +82,24 @@ vistas se mantiene.
 
 ## Partida real en producción
 
-Medición complementaria sobre la build desplegada (v0.28.4, 1 vista, GPU real):
-60,0 fps en estado estable, p95 21,4 ms y p99 del tick de 14,7 ms.
-Detalle y limitaciones en `docs/performance/revision-2026-11-18.md`. La tabla de
-arriba sigue siendo la referencia del benchmark headless; la partida real se usa
-para frame pacing y para validar que el juego no se sale del presupuesto.
+Mediciones complementarias sobre la build desplegada (1 vista, GPU real):
+
+- v0.28.4: 60,0 fps en estado estable, p95 21,4 ms y p99 del tick de 14,7 ms
+  (`docs/performance/revision-2026-11-18.md`).
+- v0.29.14 (3D): 58,9 fps de media, p95 17,0 ms y tick p99 11,6 ms, pero con
+  tres stalls de GPU de 115–310 ms que dejan el 1 % low en 18,6 fps
+  (`docs/performance/revision-2026-11-23.md`).
+- Precarga de la vista real: 60,0 fps, p95 16,8 ms y máximo de 16,9 ms.
+  El mapa completo y los blends de `fx:shield`/`fx:water`/`fx:basic` se dibujan
+  en la pantalla de carga y en los 3 frames congelados de la cuenta atrás, así
+  que `swamp-surface`, `basalt`, `ice`, el escudo y las garras ya no compilan en
+  combate (`docs/performance/warmup-2026-11-23.md`).
+- v0.29.19 en WebGL2: 57,7 fps y 58 frames > 25 ms por enlaces de shader
+  síncronos. El `uniqueName` por lote de los `ShaderMaterial` de FX entraba en
+  la clave del programa; con nombres estables el bench de 8 vistas y 60 s queda
+  en 0 enlaces, p95 16,8 ms y máximo 50,1 ms
+  (`docs/performance/revision-2026-11-23T201117.md`).
+
+La tabla de arriba sigue siendo la referencia del benchmark headless; la partida
+real se usa para frame pacing y para validar que el juego no se sale del
+presupuesto.
