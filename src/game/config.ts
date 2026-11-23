@@ -53,6 +53,14 @@ export const CONFIG = {
      */
     warmUpModels: true as boolean,
     /**
+     * Dibuja el mapa completo desde una cámara cenital temporal durante la
+     * carga. La cámara de partida solo ve la niebla alrededor del jugador, así
+     * que los materiales de zonas lejanas (volcán, hielo, ciénaga) estrenaban
+     * su pipeline en mitad del combate. Con esta pasada quedan compilados
+     * detrás de la pantalla de carga.
+     */
+    warmUpWorldView: true as boolean,
+    /**
      * Fuerza el bind de los clips de animación de cada copia durante la cuenta
      * atrás. PlayCanvas resuelve las curvas contra el esqueleto en el primer
      * cambio de estado, no al asignarlo; sin esto, el primer casteo de cada

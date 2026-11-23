@@ -184,6 +184,46 @@ setWarmupLayer(layerId: number | null): void {
     return spawnProtectionShield(this.runtime, position, color, radius, centerY, duration);
   }
 
+  /**
+   * Calienta los estados de blend de efecto que solo aparecían en partida.
+   *
+   * El escudo nace casi transparente y vive medio segundo, así que su malla no
+   * llega a dibujarse en los frames de precarga. Además, `fx:basic` se usa con
+   * mezcla aditiva en casi todos los efectos y con mezcla normal en algunos
+   * (p. ej. garras), y `fx:water` comparte shader con el escudo pero puede
+   * dibujarse sobre una esfera con mezcla aditiva; son estados que la primera
+   * partida compilaba al usarlos. Se instancian esferas con los materiales
+   * reales en la capa indicada y se devuelve la función que las retira.
+   */
+  warmUpBlendStates(layerId: number, x = 0, z = 0): () => void {
+    const materials: pc.StandardMaterial[] = [];
+    const entities: pc.Entity[] = [];
+    const add = (material: pc.StandardMaterial) => {
+      const entity = this.runtime.createEntity(this.runtime.sphereMesh, [material]);
+      entity.render!.layers = [layerId];
+      entity.setPosition(x, 1, z);
+      entity.setLocalScale(0.8, 0.8, 0.8);
+      materials.push(material);
+      entities.push(entity);
+    };
+    add(this.runtime.createShieldMaterial([255, 255, 255], 0.5, pc.BLEND_NORMAL));
+    add(
+      this.runtime.createShieldMaterial([255, 255, 255], 0.5, pc.BLEND_ADDITIVEALPHA)
+    );
+    const water = this.runtime.createWaterMaterial([255, 255, 255], 0.5);
+    water.blendType = pc.BLEND_ADDITIVEALPHA;
+    water.update();
+    add(water);
+    const basic = this.runtime.createMaterial([255, 255, 255], 0.5);
+    basic.blendType = pc.BLEND_NORMAL;
+    basic.update();
+    add(basic);
+    return () => {
+      for (const entity of entities) entity.destroy();
+      for (const material of materials) this.runtime.releaseMaterial(material);
+    };
+  }
+
   spawnHeal(
     x: number,
     z: number,

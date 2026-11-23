@@ -214,6 +214,8 @@ import {
 import {
   ACTIVE_TEAMS,
   getActiveMap,
+  mapHalfDepth,
+  mapHalfWidth,
   resolveDeepWaterInto,
   resolveTeamTerrainInto,
   terrainAt,
@@ -537,6 +539,8 @@ export class Game {
   private matchWarmUpFrames = 0;
   /** Capas de las vistas cuyo material de números de daño hay que calentar. */
   private matchWarmUpDamageNumbers = false;
+  /** Retira las esferas de precarga de blends de las capas reales. */
+  private matchWarmUpBlendCleanups: Array<() => void> = [];
   /** Reutilizada cada frame para las consultas por cámara de los objetos. */
   private readonly viewCameraPositions: pc.Vec3[] = [];
   /** Diagnóstico (Ctrl+Alt+…): oculta capas para localizar artefactos. */
@@ -1622,6 +1626,10 @@ export class Game {
       await this.warmUpModels();
       if (this.disposed) return;
 
+      this.emitLoad(99, 'Precompilando el mapa');
+      await this.warmUpWorldView();
+      if (this.disposed) return;
+
       this.emitLoad(100, 'Preparando el combate');
       this.ready = true;
       this.mode = 'menu';
@@ -1672,6 +1680,9 @@ export class Game {
     this.world.addLightLayer(layer.id);
 
     this.combatFx.setWarmupLayer(layer.id);
+    // El escudo y las garras usan estados de blend que nunca llegaban a
+    // dibujarse en la precarga; estas esferas los compilan.
+    const disposeBlendWarmup = this.combatFx.warmUpBlendStates(layer.id);
 
     // La marca de KO no pasa por `combatFx`: tiene su propio material (sin
     // niebla, con `emissiveMap`/`opacityMap` y `alphaTest`), una variante que
@@ -1766,6 +1777,7 @@ export class Game {
     } finally {
       deathMarker.destroy();
       marker.destroy();
+      disposeBlendWarmup();
       shadowWarmup.destroy();
       fogWarmup?.destroy();
       // Desactiva el número de muestra; la ranura queda en el pool.
@@ -1892,6 +1904,46 @@ export class Game {
       if (menuCamera && menuLayers) menuCamera.layers = menuLayers;
       this.world.resetLightLayers();
       this.app.scene.layers.remove(layer);
+    }
+  }
+
+  /**
+   * Dibuja el mapa entero desde una cámara temporal durante la carga. La
+   * cámara de partida recorta con la niebla (~50 u), así que los materiales de
+   * zonas que el jugador no ve al aparecer (ciénaga, volcán, hielo) no llegaban
+   * a dibujarse en la precarga y estrenaban su pipeline en mitad del combate
+   * (169–193 ms). Un frame desde arriba los compila todos con la pantalla de
+   * carga por delante. La cámara es temporal: addComponent('camera') y destroy
+   * en el mismo frame.
+   */
+  private async warmUpWorldView(): Promise<void> {
+    if (!CONFIG.performance.warmUpWorldView || this.disposed) return;
+
+    const radius = Math.hypot(mapHalfWidth(), mapHalfDepth());
+    // Inclinada, no cenital pura: `lookAt` con el up del mundo no admite mirar
+    // recto hacia abajo. FOV y recorte no forman parte de la firma del
+    // pipeline, así que basta con que el mapa entero entre en el frustum.
+    const height = radius * 2.4;
+    const camera = new pc.Entity('world-warmup-camera');
+    camera.addComponent('camera', {
+      clearColor: new pc.Color(0, 0, 0),
+      clearColorBuffer: false,
+      fov: 55,
+      nearClip: 0.5,
+      farClip: height * 2,
+      layers: [this.worldLayerId]
+    });
+    camera.setPosition(0, height, height * 0.55);
+    camera.lookAt(0, 0, 0);
+    this.app.root.addChild(camera);
+
+    try {
+      // Un frame para enviar los draws y otro para que la compilación termine.
+      await this.waitFrames(2);
+    } catch (error) {
+      console.warn('[mundo] No se pudo precargar el mapa completo', error);
+    } finally {
+      camera.destroy();
     }
   }
 
@@ -2049,9 +2101,6 @@ export class Game {
     );
     push('dash', () => this.combatFx.spawnDash(-1, 0, 1, 0, white));
     push('buff', () => this.combatFx.spawnBuff(x, z, white, 1));
-    push('shield', () =>
-      this.combatFx.spawnProtectionShield({ x, z }, white, 1, 1, 0.5)
-    );
     push('heal', () => this.combatFx.spawnHeal(x, z, white, 1));
 
     // Feedback de la armadura de casteo. No depende de una habilidad concreta
@@ -2262,6 +2311,12 @@ export class Game {
         1.5,
         player.z
       );
+      // La capa real tiene su propia lista de luces; los blends de efecto
+      // calentados en la capa de carga no coinciden con su clave de shader.
+      // Una esfera por vista, delante del jugador, compila el estado real.
+      this.matchWarmUpBlendCleanups.push(
+        this.combatFx.warmUpBlendStates(layer.id, player.x, player.z)
+      );
     }
   }
 
@@ -2269,6 +2324,10 @@ export class Game {
   private endMatchWarmUp(): void {
     if (this.matchWarmUpFrames > 0) this.matchWarmUpFrames = 0;
     this.pickups?.endWarmUp();
+    if (this.matchWarmUpBlendCleanups.length > 0) {
+      for (const dispose of this.matchWarmUpBlendCleanups) dispose();
+      this.matchWarmUpBlendCleanups = [];
+    }
     if (this.matchWarmUpDamageNumbers) {
       this.matchWarmUpDamageNumbers = false;
       this.damageNumbers.clear();
