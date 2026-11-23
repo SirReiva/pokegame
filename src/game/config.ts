@@ -368,9 +368,9 @@ export const CONFIG = {
      */
     aimAssist: {
       /** Semiángulo del cono de adquisición, en grados. */
-      maxAngle: 7,
-      /** Fracción del error angular que se corrige (0,7 = 70 %). */
-      strength: 0.7,
+      maxAngle: 8,
+      /** Fracción del error angular que se corrige (0,8 = 80 %). */
+      strength: 0.8,
       /** Margen de los obstáculos al comprobar la línea de visión. */
       sightPadding: 0.12,
     },
