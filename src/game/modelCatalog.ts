@@ -50,7 +50,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // Onix es una serpiente de piedra enorme: se reduce para que su volumen no
   // tape a los rivales en combate.
   '0095': { file: 'pm0095/pm0095_00.glb', scale: 0.55 },
-  '0100': { file: 'pm0100/pm0100_00.glb' },
+  '0100': { file: 'pm0100/pm0100_00.glb', scale: 0.65 },
   '0123': { file: 'pm0123/pm0123.glb' },
   '0130': { file: 'pm0130/pm0130.glb', scale: 0.7 },
   '0133': { file: 'pm0133/pm0133_00.glb' },
@@ -93,7 +93,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
     moveAnimation: 'idle1',
     moveClip: '20010_defaultidle01'
   },
-  '0251': { file: 'pm0251/pm0251_00.glb', scale: 0.65 },
+  '0251': { file: 'pm0251/pm0251_00.glb', scale: 0.80 },
   // Kyogre es un coloso marino: se reduce para compensar su gran huella.
   '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
   '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
