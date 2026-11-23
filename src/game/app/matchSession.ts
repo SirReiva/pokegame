@@ -71,7 +71,6 @@ import { baseStatsFor, combatStatsFor } from '../pokedex';
 import { ActorShadowBatch } from '../render/actorShadows';
 import { createPlayerView, type PlayerView } from '../render/playerView';
 import type { CombatFx } from '../render/fx/CombatFx';
-import { clearModelGrounding } from '../render/modelBillboard';
 import { TeamOutline } from '../render/teamOutline';
 import type { VisionView } from '../render/visionView';
 import { hitRadiusForPokemon, speedForPokemon } from '../roster';
@@ -283,9 +282,6 @@ export function endMatch(host: MatchSessionHost): void {
 
 /** Destruye la partida actual sin tocar el mundo ni los objetos del mapa. */
 export function clearMatch(host: MatchSessionHost): void {
-  // La altura de apoyo se mide con la pose de un cuerpo concreto; no debe
-  // reutilizarse la medición de la partida anterior al crear las copias nuevas.
-  clearModelGrounding();
   for (const projectile of host.projectiles) projectile.visual.destroy();
   host.projectiles = [];
   host.activeAoes = [];
@@ -716,11 +712,6 @@ export function startMatch(
         withOutline: viewer.slot !== player.slot,
         outline: host.viewOutlines[viewIndex] ?? null,
         hitRadius: player.hitRadius,
-        // El apoyo del modelo se mide una vez y lo publica la copia del dueño
-        // en su propia vista (cualquiera, si es un bot). Las copias de los
-        // demás viewports lo adoptan para no medir una pose sin renderizar.
-        groundingReference:
-          viewer.slot === player.slot || player.isBot === true,
         // Solo el cuerpo que controla el jugador de esta vista anima a 60 Hz.
         // Las demás copias reparten su esqueleto a 30/20 Hz (ver animationLod).
         fullRateAnimation: viewer.slot === player.slot,

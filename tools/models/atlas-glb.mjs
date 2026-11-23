@@ -23,6 +23,13 @@
  *   pnpm models:atlas -- --only pm0001_00     # un modelo
  *   pnpm models:atlas -- --out .cache/atlas   # escribe en otra carpeta
  *   pnpm models:atlas -- --cell 1024          # fuerza el lado de celda
+ *   pnpm models:atlas -- --refresh-grounding  # recalcula el apoyo horneado
+ *
+ * Además del atlas, cada GLB guarda en `extras.newpoke.grounding` la caja de
+ * la pose de espera (clip `idle` en t = 0): `minY` y `maxY` en unidades del
+ * modelo. El juego ya no mide el apoyo en runtime; coloca el cuerpo con esos
+ * valores, así que todas las copias (dueño, aliados y bots enemigos) usan
+ * exactamente la misma altura aunque una copia haya estado oculta.
  *
  * Opciones:
  *   --write           escribe sobre los GLB de entrada
@@ -31,6 +38,7 @@
  *   --cell <px>       lado de cada celda del atlas (por defecto 1024 con 1-2
  *                     materiales y 512 con 3 o más)
  *   --only <texto>    procesa solo los GLB cuya ruta contenga el texto
+ *   --refresh-grounding  recalcula la caja de apoyo aunque ya exista
  *   --quiet           no imprime la tabla por modelo
  */
 
@@ -76,19 +84,21 @@ function parseArgs(argv) {
     input: DEFAULT_MODELS,
     cell: null,
     only: null,
+    refreshGrounding: false,
     quiet: false
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--write') options.write = true;
     else if (arg === '--quiet') options.quiet = true;
+    else if (arg === '--refresh-grounding') options.refreshGrounding = true;
     else if (arg === '--out') options.out = resolve(ROOT, argv[++i] ?? '');
     else if (arg === '--input') options.input = resolve(ROOT, argv[++i] ?? '');
     else if (arg === '--cell') options.cell = Number(argv[++i]);
     else if (arg === '--only') options.only = (argv[++i] ?? '').toLowerCase();
     else if (arg === '--help' || arg === '-h') {
       console.log(
-        'Uso: node tools/models/atlas-glb.mjs [--write] [--out <dir>] [--input <dir>] [--cell <px>] [--only <texto>] [--quiet]'
+        'Uso: node tools/models/atlas-glb.mjs [--write] [--out <dir>] [--input <dir>] [--cell <px>] [--only <texto>] [--refresh-grounding] [--quiet]'
       );
       process.exit(0);
     } else {
@@ -215,12 +225,15 @@ function multiplyMat4(a, b) {
   return output;
 }
 
-/** Matriz local de un nodo glTF: `matrix` o `T·R·S`. */
-function nodeMatrix(node) {
-  if (node.matrix) return node.matrix.slice();
-  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
-  const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1];
-  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
+/** Matriz de una transformación `T·R·S` (columnas, como glTF). */
+function matrixFromTRS(
+  translation = [0, 0, 0],
+  rotation = [0, 0, 0, 1],
+  scale = [1, 1, 1]
+) {
+  const [tx, ty, tz] = translation;
+  const [x, y, z, w] = rotation;
+  const [sx, sy, sz] = scale;
   return [
     (1 - 2 * (y * y + z * z)) * sx,
     2 * (x * y + w * z) * sx,
@@ -239,6 +252,12 @@ function nodeMatrix(node) {
     tz,
     1
   ];
+}
+
+/** Matriz local de un nodo glTF: `matrix` o `T·R·S`. */
+function nodeMatrix(node) {
+  if (node.matrix) return node.matrix.slice();
+  return matrixFromTRS(node.translation, node.rotation, node.scale);
 }
 
 function nodeParents(json) {
@@ -262,6 +281,368 @@ function worldMatrix(json, parents, index) {
     matrix = multiplyMat4(matrix, nodeMatrix(json.nodes[nodeIndex]));
   }
   return matrix;
+}
+
+// ---------------------------------------------------------------------------
+// Apoyo horneado (pose de espera)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sufijos de clip de espera, en el mismo orden de preferencia que el juego
+ * (`src/game/model.ts`). El apoyo se mide con el clip que de verdad se verá.
+ */
+const IDLE_CLIP_PATTERNS = [
+  'defaultwait01_loop',
+  'battlewait01_loop',
+  'ba10_waitA01',
+  'ba10_waitB01',
+  'kw01_wait01',
+  'fi01_wait01',
+  'defaultidle01'
+];
+
+/** Nombre de clip sin prefijo de exportador ni prefijo de rutina. */
+function normalizedClipName(name) {
+  return name
+    .replace(/\.\d{3}$/, '')
+    .replace(/^pm\d{4}(?:_\d{1,3})*_/i, '')
+    .replace(/^\d{5}_/, '');
+}
+
+/** Rango de rutina: sin prefijo va primero, luego 00000, 10000... */
+function clipRoutineRank(name) {
+  const match = /^(\d{5})_/.exec(name.replace(/\.\d{3}$/, ''));
+  return match ? Number(match[1]) : -1;
+}
+
+/** Clip de espera que usa el juego, o el primero si no hay ninguno conocido. */
+function idleClipIndex(json) {
+  const animations = json.animations ?? [];
+  const candidates = animations.map((animation, index) => ({
+    animation,
+    index,
+    name: animation.name ?? ''
+  }));
+  for (const suffix of IDLE_CLIP_PATTERNS) {
+    const matches = candidates.filter(
+      (candidate) => normalizedClipName(candidate.name) === suffix
+    );
+    if (matches.length === 0) continue;
+    matches.sort((a, b) => {
+      const rank = clipRoutineRank(a.name) - clipRoutineRank(b.name);
+      return rank !== 0 ? rank : a.name.localeCompare(b.name);
+    });
+    return matches[0].index;
+  }
+  return animations.length > 0 ? 0 : -1;
+}
+
+/** Valores de un accessor ya desempaquetados (sin stride) y normalizados. */
+function accessorValues(json, bin, index) {
+  const { accessor, componentSize, typeCount, count } = accessorLayout(
+    json,
+    index
+  );
+  const bytes = readAccessorBytes(json, bin, index);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const normalized = accessor.normalized === true;
+  const divisor = normalized
+    ? accessor.componentType === 5120
+      ? 127
+      : accessor.componentType === 5121
+        ? 255
+        : accessor.componentType === 5122
+          ? 32767
+          : accessor.componentType === 5123
+            ? 65535
+            : 1
+    : 1;
+  const values = new Array(count * typeCount);
+  for (let i = 0; i < values.length; i += 1) {
+    const offset = i * componentSize;
+    let value;
+    switch (accessor.componentType) {
+      case 5120:
+        value = view.getInt8(offset);
+        break;
+      case 5121:
+        value = view.getUint8(offset);
+        break;
+      case 5122:
+        value = view.getInt16(offset, true);
+        break;
+      case 5123:
+        value = view.getUint16(offset, true);
+        break;
+      case 5125:
+        value = view.getUint32(offset, true);
+        break;
+      case 5126:
+        value = view.getFloat32(offset, true);
+        break;
+      default:
+        throw new Error(
+          `Accessor ${index} con componentType ${accessor.componentType}`
+        );
+    }
+    values[i] = value / divisor;
+  }
+  return { accessor, values, count, typeCount };
+}
+
+function normalizeQuaternion(quaternion) {
+  const length = Math.hypot(
+    quaternion[0],
+    quaternion[1],
+    quaternion[2],
+    quaternion[3]
+  );
+  if (length > 0) {
+    for (let i = 0; i < 4; i += 1) quaternion[i] /= length;
+  }
+  return quaternion;
+}
+
+/**
+ * Pose del clip en t = 0. Es la pose canónica que antes se forzaba en runtime
+ * para que un bot revelado no midiera una fase cualquiera del idle.
+ */
+function animationPoseAtStart(json, bin, animationIndex) {
+  const pose = new Map();
+  const animation = json.animations?.[animationIndex];
+  if (!animation) return pose;
+  for (const channel of animation.channels) {
+    const path = channel.target.path;
+    if (path !== 'translation' && path !== 'rotation' && path !== 'scale') {
+      continue;
+    }
+    const sampler = animation.samplers?.[channel.sampler];
+    if (!sampler) continue;
+    const output = accessorValues(json, bin, sampler.output);
+    const components = output.typeCount;
+    // En t = 0 la primera clave ya es el valor. CUBICSPLINE guarda por clave
+    // tangente de entrada, valor y tangente de salida.
+    const key = sampler.interpolation === 'CUBICSPLINE' ? 1 : 0;
+    const value = output.values.slice(key * components, (key + 1) * components);
+    if (path === 'rotation') normalizeQuaternion(value);
+    const target = pose.get(channel.target.node) ?? {};
+    target[path] = value;
+    pose.set(channel.target.node, target);
+  }
+  return pose;
+}
+
+/** Nodo de root motion que el juego deja fijo en su posición de bind. */
+function rootMotionNodeIndex(json) {
+  return (json.nodes ?? []).findIndex((node) => {
+    const name = node.name ?? '';
+    return name === 'origin' || name === 'Origin' || /^origin_\d+$/i.test(name);
+  });
+}
+
+function poseWorldMatrix(json, parents, pose, cache, index) {
+  const cached = cache.get(index);
+  if (cached) return cached;
+  const node = json.nodes[index];
+  const animated = pose.get(index);
+  let local;
+  if (animated && (animated.translation || animated.rotation || animated.scale)) {
+    local = matrixFromTRS(
+      animated.translation ?? node.translation ?? [0, 0, 0],
+      animated.rotation ?? node.rotation ?? [0, 0, 0, 1],
+      animated.scale ?? node.scale ?? [1, 1, 1]
+    );
+  } else {
+    local = nodeMatrix(node);
+  }
+  const parent = parents.get(index);
+  const result =
+    parent === undefined
+      ? local
+      : multiplyMat4(
+          poseWorldMatrix(json, parents, pose, cache, parent),
+          local
+        );
+  cache.set(index, result);
+  return result;
+}
+
+/** Caja que envuelve una caja local transformada por `matrix`. */
+function transformBounds(matrix, min, max) {
+  const outMin = [Infinity, Infinity, Infinity];
+  const outMax = [-Infinity, -Infinity, -Infinity];
+  for (let corner = 0; corner < 8; corner += 1) {
+    const point = [
+      corner & 1 ? max[0] : min[0],
+      corner & 2 ? max[1] : min[1],
+      corner & 4 ? max[2] : min[2]
+    ];
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value =
+        matrix[axis] * point[0] +
+        matrix[4 + axis] * point[1] +
+        matrix[8 + axis] * point[2] +
+        matrix[12 + axis];
+      if (value < outMin[axis]) outMin[axis] = value;
+      if (value > outMax[axis]) outMax[axis] = value;
+    }
+  }
+  return [outMin, outMax];
+}
+
+function roundGrounding(value) {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+/**
+ * Caja de la pose de espera en t = 0, en unidades del GLB.
+ *
+ * Reproduce la medición de PlayCanvas (`meshInstance.aabb`): caja local por
+ * hueso —cada vértice entra en todos los huesos con peso— transformada por
+ * `mundo(hueso) · inverseBind` y unida. Así el valor horneado coincide con el
+ * que medía el juego con la copia visible, pero es idéntico para todas las
+ * copias y no depende de cuándo aparezca un bot.
+ */
+function measureIdleGrounding(json, bin) {
+  const clipIndex = idleClipIndex(json);
+  if (clipIndex < 0) return null;
+  const clip = json.animations[clipIndex];
+  const pose = animationPoseAtStart(json, bin, clipIndex);
+
+  // El juego nunca aplica el root motion del clip: el hueso `origin` se queda
+  // en su posición de bind también al medir.
+  const rootIndex = rootMotionNodeIndex(json);
+  if (rootIndex >= 0) {
+    const target = pose.get(rootIndex) ?? {};
+    delete target.translation;
+    pose.set(rootIndex, target);
+  }
+
+  const parents = nodeParents(json);
+  const cache = new Map();
+  let minY = Infinity;
+  let maxY = -Infinity;
+  const union = (bounds) => {
+    if (bounds[0][1] < minY) minY = bounds[0][1];
+    if (bounds[1][1] > maxY) maxY = bounds[1][1];
+  };
+
+  for (let nodeIndex = 0; nodeIndex < (json.nodes ?? []).length; nodeIndex += 1) {
+    const node = json.nodes[nodeIndex];
+    if (node.mesh === undefined) continue;
+    const mesh = json.meshes?.[node.mesh];
+    if (!mesh) continue;
+    const skin =
+      node.skin !== undefined ? json.skins?.[node.skin] : undefined;
+    const inverseBinds =
+      skin && skin.inverseBindMatrices !== undefined
+        ? accessorValues(json, bin, skin.inverseBindMatrices).values
+        : null;
+
+    for (const primitive of mesh.primitives ?? []) {
+      const positionIndex = primitive.attributes?.POSITION;
+      if (positionIndex === undefined) continue;
+      const position = accessorValues(json, bin, positionIndex);
+      const jointsIndex = primitive.attributes?.JOINTS_0;
+      const weightsIndex = primitive.attributes?.WEIGHTS_0;
+
+      if (
+        skin &&
+        inverseBinds &&
+        jointsIndex !== undefined &&
+        weightsIndex !== undefined
+      ) {
+        const joints = accessorValues(json, bin, jointsIndex);
+        const weights = accessorValues(json, bin, weightsIndex);
+        const boneMin = skin.joints.map(() => [
+          Infinity,
+          Infinity,
+          Infinity
+        ]);
+        const boneMax = skin.joints.map(() => [
+          -Infinity,
+          -Infinity,
+          -Infinity
+        ]);
+
+        for (let vertex = 0; vertex < position.count; vertex += 1) {
+          const point = [
+            position.values[vertex * 3],
+            position.values[vertex * 3 + 1],
+            position.values[vertex * 3 + 2]
+          ];
+          for (let influence = 0; influence < 4; influence += 1) {
+            const weight = weights.values[vertex * 4 + influence];
+            if (weight <= 0) continue;
+            const joint = joints.values[vertex * 4 + influence];
+            if (!Number.isInteger(joint) || !boneMin[joint]) continue;
+            for (let axis = 0; axis < 3; axis += 1) {
+              if (point[axis] < boneMin[joint][axis]) {
+                boneMin[joint][axis] = point[axis];
+              }
+              if (point[axis] > boneMax[joint][axis]) {
+                boneMax[joint][axis] = point[axis];
+              }
+            }
+          }
+        }
+
+        for (let joint = 0; joint < skin.joints.length; joint += 1) {
+          if (!Number.isFinite(boneMin[joint][0])) continue;
+          const inverseBind = Array.from(
+            inverseBinds.slice(joint * 16, joint * 16 + 16)
+          );
+          const jointMatrix = multiplyMat4(
+            poseWorldMatrix(
+              json,
+              parents,
+              pose,
+              cache,
+              skin.joints[joint]
+            ),
+            inverseBind
+          );
+          union(transformBounds(jointMatrix, boneMin[joint], boneMax[joint]));
+        }
+        continue;
+      }
+
+      // Malla estática: su caja se transforma por el nodo, como PlayCanvas.
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (let vertex = 0; vertex < position.count; vertex += 1) {
+        for (let axis = 0; axis < 3; axis += 1) {
+          const value = position.values[vertex * 3 + axis];
+          if (value < min[axis]) min[axis] = value;
+          if (value > max[axis]) max[axis] = value;
+        }
+      }
+      union(
+        transformBounds(
+          poseWorldMatrix(json, parents, pose, cache, nodeIndex),
+          min,
+          max
+        )
+      );
+    }
+  }
+
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY < minY) {
+    return null;
+  }
+  return {
+    version: 1,
+    clip: clip.name ?? '',
+    minY: roundGrounding(minY),
+    maxY: roundGrounding(maxY)
+  };
+}
+
+/** Añade (o reemplaza) el apoyo horneado en los `extras` del glTF. */
+function withGrounding(json, grounding) {
+  const extras = { ...(json.extras ?? {}) };
+  extras.newpoke = { ...(extras.newpoke ?? {}), grounding };
+  return { ...json, extras };
 }
 
 /** Índices de joint que de verdad usan los `JOINTS_0` de las primitivas. */
@@ -1554,15 +1935,22 @@ function rebuildModel(json, bin, options) {
   }
 
   const newBin = Buffer.concat(state.parts);
+  // El apoyo se mide sobre el GLB ya reconstruido: así la caja usa la misma
+  // escala de bind y la misma jerarquía que verá PlayCanvas.
+  const grounding = measureIdleGrounding(newJson, newBin);
+  const outputJson = grounding
+    ? withGrounding({ ...newJson, extras: json.extras }, grounding)
+    : { ...newJson, ...(json.extras ? { extras: json.extras } : {}) };
   return {
-    json: newJson,
+    json: outputJson,
     bin: newBin,
     groups,
     materials: materials.length,
     primitives: groups.length,
     textures: textures.length,
     images: images.length,
-    bakedScale: bake?.factor ?? null
+    bakedScale: bake?.factor ?? null,
+    grounding
   };
 }
 
@@ -1601,33 +1989,66 @@ function main() {
   for (const file of files) {
     const original = readFileSync(file.path);
     const { json, bin } = parseGlb(original);
-    if (json.asset?.generator?.includes('newpoke atlas')) {
-      console.log(`${file.relativePath}\tya tiene atlas, se omite`);
+    const hasAtlas = json.asset?.generator?.includes('newpoke atlas') === true;
+    const hasGrounding = json.extras?.newpoke?.grounding !== undefined;
+    if (hasAtlas && hasGrounding && !options.refreshGrounding) {
+      console.log(`${file.relativePath}\tya tiene atlas y apoyo, se omite`);
       skipped += 1;
       continue;
     }
-    const rebuilt = rebuildModel(json, bin, options);
-    const output = buildGlb(rebuilt.json, rebuilt.bin);
+
     const inputMaterials = json.materials?.length ?? 0;
     const inputPrimitives = (json.meshes ?? []).reduce(
       (sum, mesh) => sum + mesh.primitives.length,
       0
     );
+    let outputJson;
+    let outputBin;
+    let grounding;
+    let outputMaterials;
+    let outputPrimitives;
+    let bakedScale = null;
+    if (hasAtlas) {
+      // Los GLB ya publicados solo necesitan el apoyo horneado: no se toca la
+      // geometría ni las texturas.
+      grounding = measureIdleGrounding(json, bin);
+      outputJson = grounding ? withGrounding(json, grounding) : json;
+      outputBin = bin;
+      outputMaterials = inputMaterials;
+      outputPrimitives = inputPrimitives;
+    } else {
+      const rebuilt = rebuildModel(json, bin, options);
+      outputJson = rebuilt.json;
+      outputBin = rebuilt.bin;
+      grounding = rebuilt.grounding;
+      outputMaterials = rebuilt.materials;
+      outputPrimitives = rebuilt.primitives;
+      bakedScale = rebuilt.bakedScale;
+    }
+    if (!grounding) {
+      console.warn(
+        `${file.relativePath}: no se pudo hornear el apoyo; el runtime usará su fallback`
+      );
+    }
+    const output = buildGlb(outputJson, outputBin);
     reports.push({
       file: file.relativePath,
       inputBytes: original.length,
       outputBytes: output.length,
       inputMaterials,
       inputPrimitives,
-      outputMaterials: rebuilt.materials,
-      outputPrimitives: rebuilt.primitives
+      outputMaterials,
+      outputPrimitives
     });
     if (!options.quiet) {
-      const baked = rebuilt.bakedScale
-        ? `\tescala ${rebuilt.bakedScale.toFixed(4)} horneada`
+      const baked = bakedScale
+        ? `\tescala ${bakedScale.toFixed(4)} horneada`
+        : '';
+      const support = grounding
+        ? `\tapoyo ${grounding.minY.toFixed(3)}..${grounding.maxY.toFixed(3)}`
         : '';
       console.log(
-        `${file.relativePath}\t${formatBytes(original.length)} -> ${formatBytes(output.length)}\t${inputMaterials} -> ${rebuilt.materials}\t${inputPrimitives} -> ${rebuilt.primitives}\t${rebuilt.textures}${baked}`
+        `${file.relativePath}\t${formatBytes(original.length)} -> ${formatBytes(output.length)}\t${inputMaterials} -> ${outputMaterials}\t${inputPrimitives} -> ${outputPrimitives}\t${outputJson.textures?.length ?? 0}${baked}${support}`
       );
     }
     if (options.out) {
@@ -1653,7 +2074,7 @@ function main() {
     `Total: ${formatBytes(totalIn)} -> ${formatBytes(totalOut)} · primitivas ${primsIn} -> ${primsOut}`
   );
   if (reports.length === 0) {
-    console.log('Nada que hacer: todos los GLB ya tienen atlas.');
+    console.log('Nada que hacer: todos los GLB ya tienen atlas y apoyo.');
     return;
   }
   if (!options.write && !options.out) {

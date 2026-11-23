@@ -22,6 +22,8 @@ Blender ni los `.blend`:
    porque necesitan su propia textura de emisión.
 4. Conserva nodos, esqueleto, skin, pesos, colores y animaciones tal cual. El
    contorno de equipo sigue funcionando porque solo depende de las mallas.
+5. Hornea la caja de la pose de espera en `extras.newpoke.grounding` (ver
+   «Apoyo horneado»).
 
 ## Uso
 
@@ -39,6 +41,9 @@ pnpm models:atlas --input otra/carpeta --out .cache/atlas
 
 # Mantener el detalle original en modelos de 3+ materiales
 pnpm models:atlas --cell 1024 --write
+
+# Recalcular solo la caja de apoyo de los GLB ya atlaseados
+pnpm models:atlas --refresh-grounding --write
 ```
 
 Por defecto usa celdas de 1024 px con 1-2 materiales y de 512 px con 3 o más.
@@ -63,10 +68,40 @@ como señal porque no siempre coincide: en Onix la raíz escala `0,01` y el bind
 real es `1`.
 
 El script es idempotente de forma segura: si el `asset.generator` ya contiene
-`newpoke atlas`, omite el modelo para no atlasear el atlas. Para volver a
-generarlo hay que partir del GLB original: reexpórtalo con Blender o restaura
-la versión anterior desde git (`git checkout <commit> -- public/models`) y
-vuelve a lanzar el script.
+`newpoke atlas` y el GLB tiene apoyo horneado, omite el modelo. Si el atlas ya
+existe pero le falta el apoyo (GLB publicados antes de este cambio), añade solo
+`extras` sin tocar geometría ni texturas. Para volver a atlasear hay que partir
+del GLB original: reexpórtalo con Blender o restaura la versión anterior desde
+git (`git checkout <commit> -- public/models`) y vuelve a lanzar el script.
+
+## Apoyo horneado
+
+La pose de espera no ocupa la misma caja que el bind: Rayquaza mide ~10,9
+unidades estirado, pero en `idle` aparece enroscado y mucho más bajo. Por eso el
+cuerpo no se apoya con la caja de `POSITION`, sino con la caja de la pose de
+espera.
+
+El script evalúa el clip `idle` en `t = 0` (la misma pose canónica para todas
+las copias), calcula la caja por hueso de PlayCanvas (`mundo(hueso) ·
+inverseBind`, cada vértice entra en todos los huesos con peso) y guarda en el
+GLB:
+
+```json
+"extras": {
+  "newpoke": {
+    "grounding": { "version": 1, "clip": "20000_defaultwait01_loop", "minY": -0.144166, "maxY": 3.856079 }
+  }
+}
+```
+
+`minY` y `maxY` están en unidades del modelo. En runtime
+`ModelBillboard` coloca la entidad en `-minY · scale` y usa
+`(maxY - minY) · scale` como altura visible para la barra y el agua. No hay
+ninguna medición de `meshInstance.aabb` en partida: todas las copias —dueño,
+aliados y bots enemigos revelados por la niebla— nacen con la misma altura, sin
+depender del frame en que aparezcan ni de la pose que tuvieran ocultas. Los GLB
+antiguos sin `extras.newpoke.grounding` conservan el desplazamiento de bind como
+fallback.
 
 ## Resultado medido
 

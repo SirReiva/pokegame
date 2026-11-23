@@ -34,6 +34,20 @@ export interface ModelBounds {
   depth: number;
 }
 
+/**
+ * Caja de la pose de espera horneada en el GLB (`extras.newpoke.grounding`).
+ *
+ * Se mide al generar el atlas, con el clip `idle` en t = 0. El runtime solo
+ * aplica estos valores: ninguna copia mide el apoyo por su cuenta, así que un
+ * bot revelado tarde no puede quedarse con otra altura.
+ */
+export interface ModelGrounding {
+  /** Punto más bajo de la pose, en unidades del GLB. */
+  readonly minY: number;
+  /** Punto más alto de la pose, en unidades del GLB. */
+  readonly maxY: number;
+}
+
 export interface ModelAsset {
   readonly entryId: string;
   readonly asset: pc.Asset;
@@ -46,6 +60,8 @@ export interface ModelAsset {
   /** Corrección de orientación, en radianes. */
   readonly yawOffset: number;
   readonly bounds: ModelBounds;
+  /** Apoyo de la pose de espera; `null` en GLB sin hornear. */
+  readonly grounding: ModelGrounding | null;
 }
 
 export interface ModelTargetSize {
@@ -194,13 +210,35 @@ function mapClips(
 interface GlbAnimationInfo {
   animationNames: string[];
   bounds: ModelBounds | null;
+  grounding: ModelGrounding | null;
+}
+
+/** Caja de apoyo horneada por `tools/models/atlas-glb.mjs`. */
+function readGrounding(json: {
+  extras?: {
+    newpoke?: {
+      grounding?: {
+        minY?: unknown;
+        maxY?: unknown;
+      };
+    };
+  };
+}): ModelGrounding | null {
+  const raw = json.extras?.newpoke?.grounding;
+  if (!raw) return null;
+  const minY = Number(raw.minY);
+  const maxY = Number(raw.maxY);
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY < minY) {
+    return null;
+  }
+  return { minY, maxY };
 }
 
 /** Lee el JSON embebido del GLB sin depender de la implementación del motor. */
 function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
   const view = new DataView(buffer);
   if (buffer.byteLength < 12 || view.getUint32(0, true) !== 0x46546c67) {
-    return { animationNames: [], bounds: null };
+    return { animationNames: [], bounds: null, grounding: null };
   }
 
   let offset = 12;
@@ -220,20 +258,29 @@ function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
           meshes?: Array<{
             primitives?: Array<{ attributes?: Record<string, number> }>;
           }>;
+          extras?: {
+            newpoke?: {
+              grounding?: {
+                minY?: unknown;
+                maxY?: unknown;
+              };
+            };
+          };
         };
         return {
           animationNames: (json.animations ?? []).map(
             (animation) => animation.name ?? ''
           ),
-          bounds: readBounds(json)
+          bounds: readBounds(json),
+          grounding: readGrounding(json)
         };
       } catch {
-        return { animationNames: [], bounds: null };
+        return { animationNames: [], bounds: null, grounding: null };
       }
     }
     offset += 8 + length;
   }
-  return { animationNames: [], bounds: null };
+  return { animationNames: [], bounds: null, grounding: null };
 }
 
 /**
@@ -418,7 +465,8 @@ export async function loadModelAsset(
     scale,
     offsetY: -bounds.minY * scale,
     yawOffset: (modelEntry.yawOffsetDeg ?? 0) * DEG,
-    bounds
+    bounds,
+    grounding: info.grounding
   };
 }
 

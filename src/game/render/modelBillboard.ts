@@ -8,7 +8,12 @@ import {
 import { CONFIG, RAD } from '../config';
 import { FOG_EXCLUDED_STENCIL } from '../fogStencil';
 import { pruneBindConstantClips } from '../modelAnim';
-import { resolveModelClip, type ModelAsset, type ModelClip } from '../model';
+import {
+  resolveModelClip,
+  type ModelAsset,
+  type ModelClip,
+  type ModelGrounding
+} from '../model';
 import type { AnimationName } from '../types';
 import type { TeamOutline } from './teamOutline';
 
@@ -36,41 +41,7 @@ function findNodeMatching(
   return null;
 }
 
-/**
- * Apoyo medido para un modelo, compartido por todas sus copias de viewport.
- *
- * `groundModel()` mide la caja de las mallas ya posadas, pero PlayCanvas solo
- * actualiza las matrices de piel al renderizar esa copia. Una copia oculta por
- * la niebla puede llegar a la medición con la pose de bind (Rayquaza estirado)
- * y quedarse con otra altura. Como todas las copias del mismo modelo comparten
- * pose y escala, la medición de la copia de referencia sirve para todas: así el
- * cuerpo y su barra de vida aparecen a la misma altura en todas las cámaras.
- */
-interface ModelGrounding {
-  /** Altura local del cuerpo sobre la raíz del actor. */
-  alignY: number;
-  /** Punto más alto de la pose de reposo, relativo a la raíz. */
-  bodyTop: number;
-}
-
-let MODEL_GROUNDING = new WeakMap<ModelAsset, ModelGrounding>();
-
-/**
- * Olvida las mediciones de apoyo. Se llama al cerrar la partida: la altura
- * depende de la pose con la que se midió y no debe heredarse entre partidas.
- */
-export function clearModelGrounding(): void {
-  MODEL_GROUNDING = new WeakMap();
-}
-
 export interface ModelBillboardOptions {
-  /**
-   * Esta copia puede publicar el apoyo del modelo. Debe ser la copia del dueño
-   * en su propia vista: es la única que se dibuja desde el primer frame y, por
-   * tanto, la que mide con la pose real y no con la de bind. Las demás copias
-   * adoptan su medición en cuanto está disponible.
-   */
-  groundingReference?: boolean;
   /**
    * Mantiene la animación a la frecuencia completa del render. Se usa para el
    * cuerpo que controla el jugador de esa vista; el resto baja a 30 Hz (20 Hz
@@ -150,33 +121,16 @@ export class ModelBillboard {
   private pausedAtMs = 0;
   private outOfView = false;
   private outOfViewFrames = 0;
-  /** Primeros frames a frecuencia completa: la pose de idle debe existir antes de medir el apoyo. */
+  /** Primeros frames a frecuencia completa: el esqueleto debe tener una pose. */
   private animationWarmupFrames = 0;
   private readonly fullRateAnimation: boolean;
-  /** El apoyo se calcula una vez, con la pose de reposo ya evaluada. */
-  private grounded = false;
-  private settleFrames = 0;
   /**
-   * Una copia que aparece tras estar oculta (un bot enemigo al entrar en
-   * visión) puede traer cualquier fase del idle. Se mide con una pose canónica
-   * para que su altura no dependa del instante de la revelación.
+   * Altura visible de la pose de espera respecto a la raíz del actor. La caja
+   * del bind pose no sirve para el HUD: Rayquaza mide 10,9 unidades estirado,
+   * pero en idle aparece enroscado y mucho más bajo. La barra de vida y el
+   * hundimiento en agua usan la caja horneada en el GLB.
    */
-  private groundingPosePending = false;
-  /** Copia de referencia: mide y publica el apoyo del modelo. */
-  private readonly groundingReference: boolean;
-  /** Apoyo compartido adoptado, o `null` mientras esta copia mide el suyo. */
-  private sharedGrounding: ModelGrounding | null = null;
-  /** Esta copia creó la medición compartida y puede seguir afinándola. */
-  private ownsGroundingRecord = false;
-  /**
-   * Altura visible de la pose de idle respecto a la raíz del actor. La caja del
-   * bind pose no sirve para el HUD: Rayquaza mide 10,9 unidades estirado, pero
-   * en idle aparece enroscado y mucho más bajo. La barra de vida y el
-   * hundimiento en agua usan esta medida real.
-   */
-  private bodyTopValue = 0;
-  /** Frames de idle que se siguen muestreando para quedarse con el máximo. */
-  private topSamples = 0;
+  private readonly bodyTopValue: number;
   /** Identificador de esta copia en las marcas de `performance`. */
   private readonly profileId = ++NEXT_PROFILE_ID;
   /** Estados cuyo primer cambio real ya se ha medido (solo diagnóstico). */
@@ -194,7 +148,6 @@ export class ModelBillboard {
     this.device = app.graphicsDevice;
     this.outline = options.outline ?? null;
     this.outlineColor = options.outlineColor ?? null;
-    this.groundingReference = options.groundingReference !== false;
     this.fullRateAnimation = options.fullRateAnimation === true;
 
     this.root = new pc.Entity(`actor-${asset.entry.id}`);
@@ -206,13 +159,24 @@ export class ModelBillboard {
       this.model.scale
     );
     // El origen del modelo es el punto de apoyo que usa el propio GLB (el hueso
-    // raíz coincide con él). No se centra por la caja: en Pokémon con cola,
-    // alas o cuello largos esa caja está muy desequilibrada y el cuerpo
-    // aparecería desplazado respecto a su sombra. La altura se ajusta sola en
-    // el primer frame con la pose de reposo ya evaluada.
-    this.align.setLocalPosition(0, this.model.offsetY, 0);
-    // Si otra copia del modelo ya midió el apoyo, se nace con la altura buena.
-    this.applySharedGrounding();
+    // raíz coincide con él). El atlas hornea la caja de la pose de espera, así
+    // que todas las copias nacen ya apoyadas y ninguna mide el cuerpo mientras
+    // se dibuja. Los GLB antiguos conservan el desplazamiento de bind.
+    const grounding: ModelGrounding | null = this.model.grounding;
+    if (grounding) {
+      this.align.setLocalPosition(
+        0,
+        -grounding.minY * this.model.scale,
+        0
+      );
+      this.bodyTopValue = Math.max(
+        0,
+        (grounding.maxY - grounding.minY) * this.model.scale
+      );
+    } else {
+      this.align.setLocalPosition(0, this.model.offsetY, 0);
+      this.bodyTopValue = this.model.bounds.height * this.model.scale;
+    }
 
     this.modelEntity = this.model.container.instantiateRenderEntity({
       castShadows: false,
@@ -419,7 +383,7 @@ export class ModelBillboard {
 
   /**
    * Altura visible de la pose de reposo sobre la raíz del actor. Es la que usan
-   * la barra de vida y la inmersión en agua; 0 hasta que la pose se ha medido.
+   * la barra de vida y la inmersión en agua; sale de la caja horneada en el GLB.
    */
   get bodyTop(): number {
     return this.bodyTopValue;
@@ -427,14 +391,8 @@ export class ModelBillboard {
 
   setVisible(visible: boolean): void {
     if (this.visible === visible) return;
-    const wasVisible = this.visible;
     this.visible = visible;
     this.root.enabled = visible;
-    // Al reaparecer, una copia sin apoyo medido puede estar congelada en
-    // cualquier fase del idle. Se pedirá una pose canónica antes de medir.
-    if (visible && !wasVisible && !this.grounded) {
-      this.groundingPosePending = true;
-    }
     // Las mallas ocultas no pueden quedarse en la capa de contorno: el
     // `OutlineRenderer` guarda sus propias instancias al margen del componente.
     this.syncOutline();
@@ -607,15 +565,6 @@ export class ModelBillboard {
     );
     this.updateViewState(inView);
 
-    // Una copia que acaba de aparecer puede reutilizar el apoyo que ya midió
-    // la copia de referencia. Se comprueba cada frame porque la referencia
-    // puede terminar su medición después de que esta copia se mostrara.
-    if (!this.sharedGrounding) this.applySharedGrounding();
-
-    // Un bot enemigo aparece con la fase del idle que le tocó mientras estaba
-    // oculto. Se mide desde una pose canónica para que no cambie la altura.
-    this.resetGroundingPose();
-
     // La orientación es continua: el modelo no necesita elegir fila de 8
     // direcciones. Se conserva el cálculo de fila para la brújula del HUD.
     this.pivot.setLocalEulerAngles(
@@ -629,36 +578,6 @@ export class ModelBillboard {
     // varios metros (Onix, Gyarados, ataques), y ese avance se acumulaba sobre
     // la posición real del jugador.
     this.resetRootMotion();
-
-    // La caja del GLB no sirve para apoyar el modelo: la pose de reposo puede
-    // tener las patas recogidas (Articuno, Mewtwo) y las alas o la cola bajan
-    // mucho más que los pies. Con la animación de espera ya evaluada se mide el
-    // punto más bajo real y se sube o baja el cuerpo una sola vez.
-    if (
-      !this.grounded &&
-      !this.manual &&
-      this.animation === 'idle' &&
-      ++this.settleFrames >= 3
-    ) {
-      this.groundModel();
-    }
-
-    // Una copia compartida copia la altura publicada por la referencia, para
-    // que la barra no baile entre viewports aunque midiera otra pose al nacer.
-    if (this.sharedGrounding) {
-      this.bodyTopValue = this.sharedGrounding.bodyTop;
-    } else if (
-      this.grounded &&
-      this.topSamples < 8 &&
-      !this.manual &&
-      this.animation === 'idle'
-    ) {
-      // La pose de reposo respira: se toman varios frames y se conserva el
-      // punto más alto para que la barra no quede dentro de la cabeza.
-      this.topSamples++;
-      this.bodyTopValue = Math.max(this.bodyTopValue, this.measureBodyTop());
-      this.publishGrounding();
-    }
 
     if (!this.manual) {
       this.anim.speed = this.playback;
@@ -698,37 +617,6 @@ export class ModelBillboard {
     if (this.rootMotionNode && this.rootMotionBase) {
       this.rootMotionNode.setLocalPosition(this.rootMotionBase);
     }
-  }
-
-  /**
-   * Deja el idle en su primer instante antes de medir el apoyo de una copia
-   * que reaparece. La copia estaba oculta, así que el corte no se ve; evita
-   * que un bot enemigo se apoye según la fase del idle que tenía al entrar en
-   * visión (Rayquaza se apoya con la cola y el cuerpo enroscados).
-   */
-  private resetGroundingPose(): void {
-    if (!this.groundingPosePending) return;
-    if (this.grounded) {
-      this.groundingPosePending = false;
-      return;
-    }
-    // Un clip manual o una animación de movimiento mandan: se espera a que
-    // vuelva al idle y entonces se fija la pose de medición.
-    if (this.manual || this.animation !== 'idle') return;
-
-    const idle = resolveModelClip(this.model, 'idle');
-    if (!idle) {
-      this.groundingPosePending = false;
-      return;
-    }
-    this.groundingPosePending = false;
-    this.transition(idle.animation, 0);
-    // `transition` reinicia el estado, pero la pose no se evalúa hasta el
-    // siguiente `animationUpdate`; se aplica ya para que el primer render sea
-    // el idle canónico.
-    this.anim.update(0);
-    // La ventana de medición empieza de nuevo con esta pose.
-    this.settleFrames = 0;
   }
 
   /**
@@ -822,100 +710,6 @@ export class ModelBillboard {
     this.animationLodActive = active;
     this.animationLodAccumulator = 0;
     this.refreshAnimationPlayback();
-  }
-
-  /**
-   * Adopta el apoyo ya publicado para este modelo. Devuelve `true` si hay una
-   * medición disponible. La altura compartida pisa la local: si esta copia
-   * midió antes de ser renderizada, su valor de bind no debe quedarse.
-   */
-  private applySharedGrounding(): boolean {
-    if (this.sharedGrounding || this.ownsGroundingRecord) return true;
-    const shared = MODEL_GROUNDING.get(this.model);
-    if (!shared) return false;
-    this.sharedGrounding = shared;
-    this.align.setLocalPosition(0, shared.alignY, 0);
-    this.bodyTopValue = shared.bodyTop;
-    this.grounded = true;
-    this.groundingPosePending = false;
-    return true;
-  }
-
-  /**
-   * Publica la medición para las demás copias del modelo. Solo lo hace la
-   * copia de referencia (la del dueño en su viewport), que se dibuja desde el
-   * primer frame y nunca mide una pose de bind sin renderizar.
-   */
-  private publishGrounding(): void {
-    if (!this.groundingReference) return;
-    const existing = MODEL_GROUNDING.get(this.model);
-    if (!existing) {
-      MODEL_GROUNDING.set(this.model, {
-        alignY: this.align.getLocalPosition().y,
-        bodyTop: this.bodyTopValue
-      });
-      this.ownsGroundingRecord = true;
-      return;
-    }
-    // Solo la copia que creó la medición sigue muestreando la respiración del
-    // idle. Una copia tardía que mida otra pose no debe pisar la referencia.
-    if (this.ownsGroundingRecord) {
-      existing.bodyTop = Math.max(existing.bodyTop, this.bodyTopValue);
-    }
-  }
-
-  /**
-   * Apoya la pose actual sobre el suelo. PlayCanvas ya mantiene la caja de cada
-   * malla esquinada (`meshInstance.aabb`) a partir de los huesos posados, así
-   * que basta con desplazar el modelo la diferencia entre su punto más bajo y
-   * la raíz del actor.
-   */
-  private groundModel(): void {
-    let lowest = Infinity;
-    let highest = -Infinity;
-    for (const render of this.modelEntity.findComponents('render')) {
-      for (const meshInstance of render.meshInstances) {
-        const aabb = meshInstance.aabb;
-        if (!aabb) continue;
-        lowest = Math.min(lowest, aabb.getMin().y);
-        highest = Math.max(highest, aabb.getMax().y);
-      }
-    }
-    if (!Number.isFinite(lowest)) return;
-
-    const rootY = this.root.getPosition().y;
-    const delta = rootY - lowest;
-    // Una caja aún sin posar puede dar valores absurdos; se reintenta al
-    // siguiente frame en vez de teletransportar el cuerpo.
-    if (Math.abs(delta) > 50) return;
-    if (Math.abs(delta) > 0.001) {
-      const position = this.align.getLocalPosition();
-      this.align.setLocalPosition(
-        position.x,
-        position.y + delta,
-        position.z
-      );
-    }
-    // Altura visible después de apoyar el cuerpo: la caja se midió antes de
-    // desplazarlo, así que su parte alta también sube `delta`.
-    if (Number.isFinite(highest)) {
-      this.bodyTopValue = Math.max(0, highest + delta - rootY);
-    }
-    this.grounded = true;
-    this.publishGrounding();
-  }
-
-  /** Punto más alto de la pose actual, relativo a la raíz del actor. */
-  private measureBodyTop(): number {
-    let highest = -Infinity;
-    for (const render of this.modelEntity.findComponents('render')) {
-      for (const meshInstance of render.meshInstances) {
-        const aabb = meshInstance.aabb;
-        if (aabb) highest = Math.max(highest, aabb.getMax().y);
-      }
-    }
-    if (!Number.isFinite(highest)) return 0;
-    return Math.max(0, highest - this.root.getPosition().y);
   }
 
   /** Misma fila de 8 direcciones que usa el billboard, solo para el HUD. */

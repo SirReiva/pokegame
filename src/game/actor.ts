@@ -52,12 +52,6 @@ export interface ActorOptions {
   hitRadius?: number;
   deferLayers?: boolean;
   /**
-   * Copia de referencia del modelo para medir el apoyo. Solo la copia del
-   * dueño en su propio viewport se dibuja desde el primer frame; las demás
-   * pueden estar ocultas por la niebla y medir con la pose de bind.
-   */
-  groundingReference?: boolean;
-  /**
    * Mantiene la animación a frecuencia completa. Solo la copia del Pokémon que
    * controla el jugador de esa vista lo activa; el resto usa el LOD.
    */
@@ -115,7 +109,6 @@ export class Actor {
       outline: options.outline ?? null,
       outlineColor: options.withOutline ? accent : null,
       deferLayers: options.deferLayers === true,
-      groundingReference: options.groundingReference,
       fullRateAnimation: options.fullRateAnimation
     });
     this.billboard.setFacing(options.facing);
