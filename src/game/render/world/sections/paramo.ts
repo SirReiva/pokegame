@@ -19,7 +19,7 @@ export function* buildParamo(ctx: WorldBuildContext): Generator<number, void, vo
   // hierba seca entre ellos. El color va por vértice, sin texturas ni recortes,
   // así que las plantas tienen volumen desde cualquier ángulo. También van
   // instanciadas y con el viento resuelto en el vertex shader.
-  const paramoPlantMaterial = createWindMaterial(ctx, '#1c1408', 0.1, 0.85, 2);
+  const paramoPlantMaterial = createWindMaterial(ctx, 'paramo-plant', '#1c1408', 0.1, 0.85, 2);
 
   const TRUNK_BASE: [number, number, number] = [0.14, 0.11, 0.08];
   const TRUNK_TOP: [number, number, number] = [0.22, 0.18, 0.12];
@@ -339,7 +339,7 @@ export function* buildParamo(ctx: WorldBuildContext): Generator<number, void, vo
   const dryGrassMeshes = [0, 1, 2, 3].map((variant) =>
     buildGrassCluster(device, 0x8c3f + variant * 2749, 14, DRY_GRASS_PALETTE, 0.55)
   );
-  const dryGrassMaterial = createWindMaterial(ctx, '#1c1408', 0.1, 0.95, 6);
+  const dryGrassMaterial = createWindMaterial(ctx, 'dry-grass', '#1c1408', 0.1, 0.95, 6);
 
   yield* buildInstancedFoliage(ctx, {
     label: 'paramo-dry-grass',

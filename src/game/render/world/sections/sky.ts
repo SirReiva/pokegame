@@ -9,6 +9,7 @@ export function* buildSky(ctx: WorldBuildContext): Generator<number, void, void>
   yield 1;
   // --- Cielo ---------------------------------------------------------------
   const skyMaterial = new pc.StandardMaterial();
+  skyMaterial.name = 'sky';
   skyMaterial.useLighting = false;
   skyMaterial.useSkybox = false;
   skyMaterial.useFog = false;

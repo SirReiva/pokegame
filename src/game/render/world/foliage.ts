@@ -58,12 +58,14 @@ export const DARK_GRASS_PALETTE: Array<[number, number, number]> = [
  */
 export function createWindMaterial(
   ctx: WorldBuildContext,
+  name: string,
   specular: string,
   gloss: number,
   speed: number,
   amplitudeDegrees: number
 ): pc.StandardMaterial {
   const material = standard({
+    name,
     diffuse: '#ffffff',
     specular,
     gloss,

@@ -30,6 +30,8 @@ export function hex(value: string): pc.Color {
 }
 
 export interface StandardOptions {
+  /** Nombre del material en las trazas de GPU (`Untitled` no identifica nada). */
+  name: string;
   diffuse?: string;
   diffuseMap?: pc.Texture;
   emissive?: string;
@@ -46,6 +48,7 @@ export interface StandardOptions {
 
 export function standard(options: StandardOptions): pc.StandardMaterial {
   const material = new pc.StandardMaterial();
+  material.name = options.name;
   material.useMetalness = false;
   material.diffuse = hex(options.diffuse ?? '#ffffff');
   material.specular = hex(options.specular ?? '#1a1a1a');

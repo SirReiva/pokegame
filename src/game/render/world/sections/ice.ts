@@ -29,6 +29,7 @@ export function* buildIce(ctx: WorldBuildContext): Generator<number, void, void>
   // vértice, de azul profundo en la base a blanco casi puro en la punta, así
   // que cada cristal tiene volumen y brillo desde cualquier ángulo.
   const iceMaterial = standard({
+    name: 'ice',
     diffuse: '#ffffff',
     specular: '#e8fbff',
     gloss: 0.75,

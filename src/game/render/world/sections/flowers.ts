@@ -16,7 +16,7 @@ export function* buildFlowers(ctx: WorldBuildContext): Generator<number, void, v
   // por color de vértice, sin texturas ni recortes alfa, así que las flores
   // tienen volumen desde cualquier ángulo. También van instanciadas y con el
   // viento resuelto en el vertex shader.
-  const flowerMaterial = createWindMaterial(ctx, '#3a2a33', 0.18, 1.05, 5);
+  const flowerMaterial = createWindMaterial(ctx, 'flowers', '#3a2a33', 0.18, 1.05, 5);
 
   /** Corolas: rosa, lila, blanco, amarillo pálido, rosa fuerte y azul cielo. */
   const BLOOM_COLORS: Array<[number, number, number]> = [

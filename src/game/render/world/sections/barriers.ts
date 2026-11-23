@@ -36,6 +36,7 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   // como una sierra continua. Cada tramo añade además un collider de tipo
   // `segment`, de modo que la cresta entera es intransitable.
   const mountainMaterial = standard({
+    name: 'mountain-rock',
     diffuse: '#ffffff',
     diffuseMap: mountainRockTexture,
     // Una sola repetición en vertical para que el casquete de nieve de la
@@ -223,6 +224,7 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   // malla. Cada tramo es un prisma alineado con el trazado, con almenas en los
   // dos bordes y el hueco central de paso superior.
   const wallMaterial = standard({
+    name: 'barrier-wall',
     diffuse: '#ffffff',
     diffuseMap: wallStoneTexture,
     // El doble de altura que antes, así que también el doble de hiladas para
@@ -337,6 +339,7 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   // una cordillera. La roca y el cráter salen del tile; el mapa de emisión solo
   // enciende la lava y las fisuras cercanas al cráter.
   const volcanoMaterial = standard({
+    name: 'volcano-rock',
     diffuse: '#ffffff',
     diffuseMap: volcanoRockTexture,
     tiling: [2, 1],
@@ -734,6 +737,7 @@ export function* buildBarriers(ctx: WorldBuildContext): Generator<number, void, 
   // calvero. Son puramente decorativos: no llevan collider, así que no frenan
   // ni bloquean el paso.
   const cactusMaterial = standard({
+    name: 'cactus',
     diffuse: '#4f8b47',
     specular: '#1d2b16',
     gloss: 0.18

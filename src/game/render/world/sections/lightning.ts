@@ -35,6 +35,7 @@ export function* buildLightning(ctx: WorldBuildContext): Generator<number, void,
     const [zoneX, zoneZ] = zoneCenter(zone);
 
     const material = standard({
+      name: 'lightning-bolt',
       diffuse: '#ffffff',
       specular: '#000000',
       gloss: 0,
@@ -100,7 +101,7 @@ export function* buildLightning(ctx: WorldBuildContext): Generator<number, void,
   const darkGrassMeshes = [0, 1, 2, 3].map((variant) =>
     buildGrassCluster(device, 0x4d17 + variant * 1993, 11, DARK_GRASS_PALETTE, 0.6)
   );
-  const darkGrassMaterial = createWindMaterial(ctx, '#1c1408', 0.1, 0.75, 4.5);
+  const darkGrassMaterial = createWindMaterial(ctx, 'dark-grass', '#1c1408', 0.1, 0.75, 4.5);
 
   yield* buildInstancedFoliage(ctx, {
     label: 'swamp-grass',

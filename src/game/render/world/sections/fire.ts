@@ -29,6 +29,7 @@ export function* buildFire(ctx: WorldBuildContext): Generator<number, void, void
   const fireZones = terrainZones.filter((zone) => zone.terrain === 'fire');
 
   const basaltMaterial = standard({
+    name: 'basalt',
     diffuse: '#ffffff',
     specular: '#2b1e17',
     gloss: 0.28,

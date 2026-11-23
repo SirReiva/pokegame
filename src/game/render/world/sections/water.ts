@@ -20,12 +20,14 @@ export function* buildWater(ctx: WorldBuildContext): Generator<number, void, voi
   // de las celdas waterLow/waterHigh. Encima van dos capas translúcidas con
   // las UVs animadas en direcciones distintas.
   const makeWaterMaterial = (
+    name: string,
     map: pc.Texture,
     opacity: number,
     tint = '#d9f6ff',
     glow = '#0f3b4d'
   ): pc.StandardMaterial => {
     const material = standard({
+      name,
       diffuse: tint,
       diffuseMap: map,
       specular: '#ffffff',
@@ -41,8 +43,8 @@ export function* buildWater(ctx: WorldBuildContext): Generator<number, void, voi
     return material;
   };
 
-  const waterSurfaceMaterial = makeWaterMaterial(waterTexture, 0.42);
-  const waterGlintMaterial = makeWaterMaterial(waterGlintTexture, 0.3);
+  const waterSurfaceMaterial = makeWaterMaterial('water-surface', waterTexture, 0.42);
+  const waterGlintMaterial = makeWaterMaterial('water-glint', waterGlintTexture, 0.3);
   // Offsets reutilizados: `update()` se llama cada frame y asignar un Vec2
   // nuevo por material generaba basura constante en el hilo principal.
   const waterSurfaceOffset = new pc.Vec2();
@@ -66,6 +68,7 @@ export function* buildWater(ctx: WorldBuildContext): Generator<number, void, voi
   // La ciénaga comparte la superficie plana, pero es mate y se mueve despacio.
   const swampZones = terrainZones.filter((zone) => zone.terrain === 'poison');
   const swampSurfaceMaterial = standard({
+    name: 'swamp-surface',
     diffuse: '#4c5a3c',
     diffuseMap: waterTexture,
     tiling: [1.15, 1.05],
@@ -90,6 +93,7 @@ export function* buildWater(ctx: WorldBuildContext): Generator<number, void, voi
   // charcos pequeños siguen usando sus bocanadas.
   const swampMistMaterial = LARGE_REGION_WEATHER
     ? standard({
+        name: 'swamp-mist',
         diffuse: '#e4f2dc',
         diffuseMap: mistTexture,
         specular: '#000000',

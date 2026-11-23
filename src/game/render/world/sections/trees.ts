@@ -17,12 +17,14 @@ export function* buildTrees(ctx: WorldBuildContext): Generator<number, void, voi
   yield 1;
   // --- Vegetación ----------------------------------------------------------
   const trunkMaterial = standard({
+    name: 'tree-trunk',
     diffuseMap: barkTexture,
     specular: '#000000',
     gloss: 0.05
   });
-  const leafMaterials = leafTextures.map((texture) =>
+  const leafMaterials = leafTextures.map((texture, index) =>
     standard({
+      name: `tree-leaf-${index}`,
       diffuseMap: texture,
       specular: '#0d1a0d',
       gloss: 0.12

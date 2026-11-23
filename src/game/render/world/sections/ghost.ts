@@ -43,6 +43,7 @@ export function* buildGhost(ctx: WorldBuildContext): Generator<number, void, voi
   const GHOST_WISP_MIN_PARTICLES = 1;
 
   const ghostMaterial = standard({
+    name: 'ghost-tree',
     diffuse: '#ffffff',
     specular: '#0b0910',
     gloss: 0.05,

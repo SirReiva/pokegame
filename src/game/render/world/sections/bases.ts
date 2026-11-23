@@ -12,11 +12,17 @@ export function* buildBases(ctx: WorldBuildContext): Generator<number, void, voi
   // --- Nexos de las bases ---------------------------------------------------
   // Pedestal de piedra con un cristal emisivo del color del equipo y una luz
   // corta que tiñe la plataforma. Marcan el centro de cada base.
-  const stoneMaterial = standard({ diffuse: '#8b8375', specular: '#1a1a1a', gloss: 0.14 });
+  const stoneMaterial = standard({
+    name: 'base-stone',
+    diffuse: '#8b8375',
+    specular: '#1a1a1a',
+    gloss: 0.14
+  });
   materials.push(stoneMaterial);
   for (const base of bases) {
     const color = TEAM_INFO[base.team].color;
     const crystalMaterial = standard({
+      name: `base-crystal-${base.team}`,
       diffuse: '#22303f',
       emissive: color,
       specular: '#ffffff',

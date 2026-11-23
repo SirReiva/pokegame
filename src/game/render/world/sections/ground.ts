@@ -9,11 +9,13 @@ export function* buildGround(ctx: WorldBuildContext): Generator<number, void, vo
   yield 1;
   // --- Suelo ---------------------------------------------------------------
   const grassMaterial = standard({
+    name: 'ground-grass',
     diffuseMap: groundTexture,
     specular: '#000000',
     gloss: 0.05
   });
   const soilMaterial = standard({
+    name: 'ground-soil',
     diffuse: '#a9855e',
     diffuseMap: soilTexture,
     tiling: [6, 6],
@@ -41,6 +43,7 @@ export function* buildGround(ctx: WorldBuildContext): Generator<number, void, vo
   // desde una base. Un plano grande bajo el suelo evita que se vea el vacío y
   // deja que la niebla de la escena lo funda con el horizonte.
   const outerGroundMaterial = standard({
+    name: 'ground-outer',
     diffuse: '#7fbf5b',
     specular: '#000000',
     gloss: 0.02

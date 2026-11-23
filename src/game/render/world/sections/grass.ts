@@ -20,7 +20,7 @@ export function* buildGrass(ctx: WorldBuildContext): Generator<number, void, voi
   // por variante y región. El viento va en el vertex shader, así que animar
   // miles de matas no toca la CPU.
 
-  const tallGrassMaterial = createWindMaterial(ctx, '#0a1a0a', 0.06, 1.15, 8);
+  const tallGrassMaterial = createWindMaterial(ctx, 'tall-grass', '#0a1a0a', 0.06, 1.15, 8);
   const grassClusterMeshes = [0, 1, 2, 3, 4].map((variant) =>
     buildGrassCluster(device, 0x51a7 + variant * 3571, 18)
   );

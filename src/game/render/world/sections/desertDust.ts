@@ -22,6 +22,7 @@ export function* buildDesertDust(ctx: WorldBuildContext): Generator<number, void
   // partículas quedan reservadas a los claros pequeños.
   const desertHazeMaterial = LARGE_REGION_WEATHER
     ? standard({
+        name: 'desert-haze',
         diffuse: '#d8c08e',
         diffuseMap: mistTexture,
         specular: '#000000',

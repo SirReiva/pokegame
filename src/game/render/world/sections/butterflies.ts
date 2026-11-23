@@ -22,6 +22,7 @@ export function* buildButterflies(ctx: WorldBuildContext): Generator<number, voi
   // vuela hacia un objetivo dentro del calvero y, al llegar, elige otro, de
   // modo que revolotean sobre las flores sin salirse de la zona.
   const butterflyBodyMaterial = standard({
+    name: 'butterfly-body',
     diffuse: '#4a2f3c',
     specular: '#0a0a0a',
     gloss: 0.12
@@ -29,6 +30,7 @@ export function* buildButterflies(ctx: WorldBuildContext): Generator<number, voi
   materials.push(butterflyBodyMaterial);
 
   const butterflyWingMaterial = standard({
+    name: 'butterfly-wing',
     diffuse: '#f4b6cf',
     specular: '#3a1f2e',
     gloss: 0.3,
