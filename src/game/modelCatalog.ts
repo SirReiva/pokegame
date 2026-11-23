@@ -41,7 +41,7 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0001': { file: 'pm0001/pm0001_00.glb' },
   '0002': { file: 'pm0002/pm0002_00.glb' },
   '0004': { file: 'pm0004/pm0004_00.glb' },
-  '0007': { file: 'pm0007/pm0007_00.glb' },
+  '0007': { file: 'pm0007/pm0007_00.glb', scale: 0.75 },
   // Pikachu es pequeño en el sprite, pero su GLB tiene la cola muy larga y la
   // huella horizontal inflaba la escala automática. Se ajusta a mano para que
   // quede por debajo de Mewtwo o Lucario, como en el manifiesto.
@@ -97,7 +97,12 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // Kyogre es un coloso marino: se reduce para compensar su gran huella.
   '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
   '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
-  '0384': { file: 'pm0384/pm0384.glb' },
+  // Rayquaza es una serpiente voladora: se desplaza con la pose de vuelo.
+  '0384': {
+    file: 'pm0384/pm0384.glb',
+    moveAnimation: 'idle1',
+    moveClip: '20010_defaultidle01'
+  },
   '0448': { file: 'pm0448/pm0448.glb' },
   // Greninja viene de Sketchfab (CC-BY, Mariokart07). El atlas hornea la escala
   // de bind en la geometría, así que su caja ya está en unidades de mundo; se
