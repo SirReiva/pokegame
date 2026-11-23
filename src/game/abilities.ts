@@ -1582,7 +1582,7 @@ registerAbility(
 registerAbility(
   aoeAbility('psicoataque', 'Psicoataque', 'Psychic', 'special', defaultAoeResolve)
     .power(100)
-    .cooldown(15)
+    .cooldown(8)
     .range(4.5)
     .radius(3.2)
     .startup(0.8)
@@ -2610,7 +2610,7 @@ registerAbility(
 registerAbility(
   projectileAbility('chorroAgua', 'Chorro de Agua', 'Water', 'special', defaultProjectileResolve)
     .power(63)
-    .cooldown(1.5)
+    .cooldown(1)
     .range(8.5)
     .radius(0.22)
     .projectile('waterJet', 14)
@@ -2634,10 +2634,30 @@ registerAbility(
     .halfAngle(30)
     .aoeShape('cone')
     .area('sheerCold', 'once', 0.5)
-    .movementDuringCast(false)
     .radial(0.4)
     .slow(0.45, 2.5)
-    .startup(0.85)
+    .startup(0.85,{ move: 0.3 })    
+    .aoePrepareMovement(({ caster, originX, originZ, dirX, dirZ }) => {
+      const base = Math.atan2(dirX, dirZ);
+      const aim = caster.aimYaw ?? caster.facing;
+      if (aim === undefined) {
+        return { x: originX, z: originZ };
+      }
+      const turn = Math.max(
+        -SACRED_FLAME_MAX_TURN_DEG * DEG,
+        Math.min(
+          SACRED_FLAME_MAX_TURN_DEG * DEG,
+          shortestAngle(aim - base)
+        )
+      );
+      const angle = base + turn;
+      return {
+        x: caster.x,
+        z: caster.z,
+        dirX: Math.sin(angle),
+        dirZ: Math.cos(angle)
+      };
+    })
     .armor(50)
     // El cono es instantáneo al terminar la carga: sin clip de lanzamiento.
     .impact('ice')
