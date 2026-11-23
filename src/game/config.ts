@@ -31,6 +31,13 @@ export const CONFIG = {
      * manual y los marcadores Hit/Return del clip. Solo para depuración.
      */
     showCastTimings: false as boolean,
+    /**
+     * Deja marcas `performance.measure` del bind de cada clip durante la
+     * cuenta atrás y del primer cambio real a ese estado. Sirve para comprobar
+     * en el panel Performance que el primer casteo ya no paga la creación del
+     * `AnimClip`. No cambia el juego.
+     */
+    animationWarmupMarks: false as boolean,
   },
   performance: {
     /**
@@ -45,6 +52,13 @@ export const CONFIG = {
      * subida en mitad del combate (picos de 200-300 ms).
      */
     warmUpModels: true as boolean,
+    /**
+     * Fuerza el bind de los clips de animación de cada copia durante la cuenta
+     * atrás. PlayCanvas resuelve las curvas contra el esqueleto en el primer
+     * cambio de estado, no al asignarlo; sin esto, el primer casteo de cada
+     * cuerpo paga esa resolución en mitad del combate.
+     */
+    warmUpAnimations: true as boolean,
     /**
      * Efectos creados por lote de precarga. Menos = menos pico de memoria y
      * menos bloqueo del hilo principal; el catálogo completo se calienta igual.

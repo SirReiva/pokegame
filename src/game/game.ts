@@ -18,12 +18,12 @@ import { isAimAssistEnabled } from './aimAssistSettings';
 import type { AoeFallenAlly } from './aoeEffect';
 import { spawnGroupedAoeTelegraph, aoeGroupRadius } from './aoeGroupFx';
 import { aoeCirclesFrom } from './aoeGeometry';
-import { Actor } from './actor';
 import {
   clearMatch as clearMatchSession,
   endMatch as endMatchSession,
   hexToRgb,
   startMatch as startMatchSession,
+  type ActorPrewarmTask,
   type MatchSessionHost,
   type PendingPopup
 } from './app/matchSession';
@@ -220,7 +220,7 @@ import {
 import { terrainSpeedEffect } from './terrainSpeed';
 import { DEFAULT_SKIN_ID, skinFor } from './skins';
 import { hasPokemonModel } from './modelCatalog';
-import type { AnimationName, LoadingProgress, SpriteManifest } from './types';
+import type { LoadingProgress, SpriteManifest } from './types';
 import { terrainConcealment } from './vision';
 import type { Collider, World } from './world';
 
@@ -523,7 +523,7 @@ export class Game {
    * Tareas de calentamiento de las animaciones, ordenadas para que todos los
    * cuerpos aparezcan antes de crear los clips secundarios.
    */
-  private prewarmTasks: Array<{ actor: Actor; animation: AnimationName }> = [];
+  private prewarmTasks: ActorPrewarmTask[] = [];
   private prewarmIndex = 0;
   /** Reutilizada cada frame para las consultas por cámara de los objetos. */
   private readonly viewCameraPositions: pc.Vec3[] = [];
@@ -2551,16 +2551,25 @@ export class Game {
   }
 
   /**
-   * Crea por tandas los estados de animación que faltan en las copias. El
-   * presupuesto es de 3 ms por frame: el resto del tiempo sigue disponible para
-   * la simulación y la cuenta atrás se dibuja con normalidad.
+   * Crea por tandas los estados de animación que faltan en las copias y, en
+   * una segunda pasada, fuerza el bind de cada clip. El presupuesto es de 3 ms
+   * por frame: el resto del tiempo sigue disponible para la simulación y la
+   * cuenta atrás se dibuja con normalidad.
    */
   private prewarmActors(): void {
     if (this.prewarmIndex >= this.prewarmTasks.length) return;
     const deadline = performance.now() + 3;
     while (this.prewarmIndex < this.prewarmTasks.length) {
       const task = this.prewarmTasks[this.prewarmIndex];
-      task.actor.prewarmStep(task.animation);
+      // La cuenta atrás garantiza que no hay transiciones reales en curso. Si
+      // ya empezó la partida, se deja el resto: forzar el bind con
+      // `layer.play` cortaría una animación real.
+      if (task.bind && this.countdown <= 0) {
+        this.prewarmIndex = this.prewarmTasks.length;
+        return;
+      }
+      if (task.bind) task.actor.prewarmBind(task.animation);
+      else task.actor.prewarmStep(task.animation, task.loop);
       this.prewarmIndex++;
       if (performance.now() >= deadline) break;
     }

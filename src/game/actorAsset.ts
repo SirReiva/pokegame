@@ -73,6 +73,30 @@ export const ACTOR_ANIMATION_ORDER: AnimationName[] = [
 ];
 
 /**
+ * Clips que el plan de casteo fija con `setManualFrame`: avanzan con el reloj
+ * de la simulación y no con el `AnimComponent`, así que su estado se asigna sin
+ * loop. Precargarlos con el modo correcto evita que el primer casteo reasigne
+ * el estado (y pague otro `rebind`).
+ */
+const MANUAL_ANIMATIONS: ReadonlySet<AnimationName> = new Set([
+  'attack',
+  'quickstrike',
+  'shock',
+  'shoot',
+  'charge',
+  'strike',
+  'twirl',
+  'shake',
+  'punch',
+  'hop'
+]);
+
+/** `false` si el clip se reproduce con reloj manual durante un casteo. */
+export function animationUsesLoop(name: AnimationName): boolean {
+  return !MANUAL_ANIMATIONS.has(name);
+}
+
+/**
  * Clip del manifiesto que se usa como reloj de gameplay para `name`. Es la
  * pieza que comparten los actores y el plan de casteo para leer los `HitFrame`
  * del clip resuelto, no del nombre pedido.

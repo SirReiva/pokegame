@@ -295,8 +295,16 @@ export class Actor {
    * Crea el estado de animación concreto si falta. Devuelve `true` si ha tenido
    * que crearlo.
    */
-  prewarmStep(animation: AnimationName): boolean {
-    return this.billboard.prewarmStep(animation);
+  prewarmStep(animation: AnimationName, loop = true): boolean {
+    return this.billboard.prewarmStep(animation, loop);
+  }
+
+  /**
+   * Fuerza el bind del clip en esta copia sin cambiar la pose visible.
+   * Devuelve `true` si el estado existía y se ha calentado.
+   */
+  prewarmBind(animation: AnimationName): boolean {
+    return this.billboard.prewarmBind(animation);
   }
 
   update(

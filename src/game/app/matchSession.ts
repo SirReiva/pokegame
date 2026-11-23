@@ -13,6 +13,7 @@ import { Actor } from '../actor';
 import {
   ACTOR_ANIMATION_ORDER,
   actorWorldHeight,
+  animationUsesLoop,
   type ActorAsset
 } from '../actorAsset';
 import { rollAtmosphere, type AtmosphereId } from '../atmosphere';
@@ -110,6 +111,20 @@ export interface PendingPopup {
 }
 
 /**
+ * Tarea de precarga de un clip en una copia concreta. Las cachés de PlayCanvas
+ * (targets, binding de curvas) son por `AnimComponent`, no por modelo, así que
+ * hay que calentar cada copia de cada viewport.
+ */
+export interface ActorPrewarmTask {
+  actor: Actor;
+  animation: AnimationName;
+  /** Modo de loop real con el que se usará el clip. */
+  loop: boolean;
+  /** `true` fuerza el bind del clip; `false` solo crea el estado. */
+  bind: boolean;
+}
+
+/**
  * Estado mutable de la sesión y acciones que dependen del motor. Los getters y
  * setters viven en `Game`; el host es el único contrato que ve este módulo.
  */
@@ -196,7 +211,7 @@ export interface MatchSessionHost {
   views: MatchPlayerState[];
   bots: Map<number, BotController>;
   botNav: BotNavGrid | null;
-  prewarmTasks: Array<{ actor: Actor; animation: AnimationName }>;
+  prewarmTasks: ActorPrewarmTask[];
   prewarmIndex: number;
 
   // --- Visibilidad ---
@@ -720,13 +735,33 @@ export function startMatch(
   });
 
   // Calienta primero el idle de todas las copias y después los clips
-  // secundarios: así los cuerpos aparecen durante la cuenta atrás y los
-  // materiales de ataque no provocan un tirón en el primer casteo.
+  // secundarios. Los clips de casteo se asignan sin loop desde el principio: si
+  // se asignan con loop, el primer `setManualFrame` vuelve a asignar el estado
+  // y tira el trabajo hecho. Después de asignar todos los estados se fuerza el
+  // bind de cada clip en su copia real, porque las cachés del `AnimComponent`
+  // no se comparten entre copias.
   host.prewarmTasks = [];
   for (const animation of ACTOR_ANIMATION_ORDER) {
+    const loop = animationUsesLoop(animation);
     for (const player of host.matchPlayers) {
       for (const copy of host.viewOf(player).copies) {
-        host.prewarmTasks.push({ actor: copy, animation });
+        host.prewarmTasks.push({ actor: copy, animation, loop, bind: false });
+      }
+    }
+  }
+  if (CONFIG.performance.warmUpAnimations) {
+    for (const player of host.matchPlayers) {
+      for (const copy of host.viewOf(player).copies) {
+        for (const animation of ACTOR_ANIMATION_ORDER) {
+          // El idle ya está reproduciéndose en todas las copias.
+          if (animation === 'idle') continue;
+          host.prewarmTasks.push({
+            actor: copy,
+            animation,
+            loop: animationUsesLoop(animation),
+            bind: true
+          });
+        }
       }
     }
   }

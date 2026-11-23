@@ -20,6 +20,9 @@ const DESATURATION_SECONDS = 0.08;
 const MIN_ADAPTED_SPEED = 0.2;
 const MAX_ADAPTED_SPEED = 4;
 
+/** Identificador de copia para las marcas de rendimiento. */
+let NEXT_PROFILE_ID = 0;
+
 /** Busca el primer nodo del subárbol cuyo nombre encaje con `pattern`. */
 function findNodeMatching(
   root: pc.GraphNode,
@@ -174,6 +177,12 @@ export class ModelBillboard {
   private bodyTopValue = 0;
   /** Frames de idle que se siguen muestreando para quedarse con el máximo. */
   private topSamples = 0;
+  /** Identificador de esta copia en las marcas de `performance`. */
+  private readonly profileId = ++NEXT_PROFILE_ID;
+  /** Estados cuyo primer cambio real ya se ha medido (solo diagnóstico). */
+  private readonly measuredStates = new Set<AnimationName>();
+  /** Estados cuyo `AnimClip` ya se ha creado y enlazado en esta copia. */
+  private readonly boundStates = new Set<AnimationName>();
 
   constructor(
     app: pc.AppBase,
@@ -302,18 +311,81 @@ export class ModelBillboard {
       loop
     );
     this.states.set(resolved.animation, { loop });
+    // `assignAnimation` hace un `rebind` global: se pierden los targets
+    // cacheados de todos los clips, no solo los de este estado.
+    this.boundStates.clear();
     return true;
   }
 
   /**
    * Crea el estado de una animación concreta. `Game` lo llama por tandas
-   * durante la cuenta atrás para repartir el coste de compilar shaders.
+   * durante la cuenta atrás. `loop` debe ser el modo real de reproducción: los
+   * clips de casteo van con reloj manual y por tanto sin loop.
    */
-  prewarmStep(animation: AnimationName): boolean {
+  prewarmStep(animation: AnimationName, loop = true): boolean {
     const resolved = resolveModelClip(this.model, animation);
-    if (!resolved || this.states.has(resolved.animation)) return false;
-    this.ensureState(resolved.animation, true);
+    if (!resolved) return false;
+    return this.ensureState(resolved.animation, loop);
+  }
+
+  /**
+   * Resuelve los bindings de un estado sin llegar a evaluar la pose: se entra y
+   * se sale del estado en el mismo tick, antes de que el `AnimComponent`
+   * actualice. La copia sigue mostrando el clip actual. PlayCanvas vuelve a
+   * crear el `AnimClip` al activarlo, pero reutiliza los targets ya resueltos,
+   * que es la parte que se paga en el primer casteo.
+   */
+  prewarmBind(animation: AnimationName): boolean {
+    const resolved = resolveModelClip(this.model, animation);
+    if (
+      !resolved ||
+      !this.states.has(resolved.animation) ||
+      this.boundStates.has(resolved.animation)
+    ) {
+      return false;
+    }
+    const previous = this.animation;
+    if (!previous || previous === resolved.animation) return false;
+
+    const time = this.layer.activeStateCurrentTime;
+    this.measureAnimation(
+      `newpoke:anim-warmup:${this.profileId}:${resolved.animation}`,
+      () => {
+        // `layer.play` usa `_transitionToState`: descarta el clip anterior en
+        // vez de encadenar transiciones, así que la pasada no acumula clips.
+        this.layer.play(resolved.animation);
+        this.layer.play(previous);
+      }
+    );
+    this.layer.activeStateCurrentTime = time;
+    this.boundStates.add(resolved.animation);
     return true;
+  }
+
+  /** Ejecuta `action` dejando una medida en el perfil si el diagnóstico está activo. */
+  private measureAnimation<T>(label: string, action: () => T): T {
+    if (!CONFIG.debug.animationWarmupMarks) return action();
+    performance.mark(`${label}:start`);
+    const result = action();
+    performance.mark(`${label}:end`);
+    performance.measure(label, `${label}:start`, `${label}:end`);
+    return result;
+  }
+
+  /** Cambia de estado midiendo la primera activación real de cada clip. */
+  private transition(animation: AnimationName, seconds: number): void {
+    if (
+      !CONFIG.debug.animationWarmupMarks ||
+      this.measuredStates.has(animation)
+    ) {
+      this.layer.transition(animation, seconds);
+      return;
+    }
+    this.measuredStates.add(animation);
+    this.measureAnimation(
+      `newpoke:anim-first:${this.profileId}:${animation}`,
+      () => this.layer.transition(animation, seconds)
+    );
   }
 
   get currentAnimation(): AnimationName | null {
@@ -436,10 +508,7 @@ export class ModelBillboard {
     this.setAnimationLod(false);
     // Si se llegó aquí, la animación es distinta o se pidió reinicio: siempre
     // hay que cambiar de estado, aunque el clip ya estuviera asignado.
-    this.layer.transition(
-      resolved.animation,
-      restart ? 0 : TRANSITION_SECONDS
-    );
+    this.transition(resolved.animation, restart ? 0 : TRANSITION_SECONDS);
   }
 
   /**
@@ -475,7 +544,7 @@ export class ModelBillboard {
       this.anim.playing = true;
       this.setAnimationLod(false);
       if (assigned || !this.manual) {
-        this.layer.transition(resolved.animation, 0);
+        this.transition(resolved.animation, 0);
       }
       this.lastManualFrame = -1;
     }
@@ -653,7 +722,7 @@ export class ModelBillboard {
       return;
     }
     this.groundingPosePending = false;
-    this.layer.transition(idle.animation, 0);
+    this.transition(idle.animation, 0);
     // `transition` reinicia el estado, pero la pose no se evalúa hasta el
     // siguiente `animationUpdate`; se aplica ya para que el primer render sea
     // el idle canónico.

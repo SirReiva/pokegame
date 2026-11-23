@@ -97,6 +97,27 @@ horizontales del foco de la cámara. Siguen dibujándose con su contorno, pero e
 esqueleto se evalúa cada `interval` segundos en vez de cada frame. Los casteos
 manuales y el jugador cercano no se ven afectados.
 
+## Precarga de animaciones
+
+Durante la cuenta atrás, `Game.prewarmActors` reparte en tandas de 3 ms el
+trabajo de PlayCanvas que antes caía en el primer casteo:
+
+1. **Asignación de estados** (`prewarmStep`): crea el `AnimState` de cada clip.
+   Los clips de casteo se asignan con `loop: false` porque se reproducen con
+   `setManualFrame`; si se asignan con loop, el primer casteo vuelve a asignar
+   el estado y paga otro `rebind`.
+2. **Bind de clips** (`prewarmBind`): entra y sale de cada estado en el mismo
+   tick, sin que el `AnimComponent` llegue a evaluar la pose. Así se resuelven
+   una vez por copia los targets del binder; el `AnimClip` se recrea al activar
+   el estado, pero sus bindings ya están cacheados. Las cachés del
+   `AnimComponent` no se comparten entre viewports, por eso se calienta cada
+   copia real.
+
+`CONFIG.performance.warmUpAnimations` desactiva la segunda pasada. Para medir el
+efecto, `CONFIG.debug.animationWarmupMarks` deja marcas `performance.measure`
+por cada bind (`newpoke:anim-warmup:*`) y por el primer cambio real de estado
+(`newpoke:anim-first:*`), que debería ser mucho más corto.
+
 ## Presupuesto de píxeles
 
 `CONFIG.performance.matchPixelBudget` limita los píxeles internos de la
