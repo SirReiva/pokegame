@@ -245,6 +245,11 @@ const RETREAT_EXCHANGE_LOSS = 0.8;
 const RETREAT_EXCHANGE_EDGE = 1.2;
 const RETREAT_THRESHOLD_MIN = 0.12;
 const RETREAT_THRESHOLD_MAX = 0.68;
+/**
+ * Fracción de la curación potencial de la semilla que se cuenta como sustento
+ * fiable: el rival puede esquivar el golpe o salir antes de todos los ticks.
+ */
+const SEED_SUSTAIN_FACTOR = 0.6;
 
 /** Distancia a la que un rival visible impide esperar oculto. */
 const REGEN_DANGER_RADIUS = 4.5;
@@ -2425,11 +2430,13 @@ export class BotController {
 
   /**
    * Vida efectiva para el intercambio: PV actuales más la mejor cura fiable
-   * disponible, el escudo común listo y la poción conocida más cercana.
+   * disponible, el sustento de una semilla contra `opponent`, el escudo común
+   * listo y la poción conocida más cercana.
    */
   private effectiveHp(
     player: MatchPlayerState,
-    pickup: PickupSpawn | null
+    pickup: PickupSpawn | null,
+    opponent: MatchPlayerState | null = null
   ): number {
     const missing = Math.max(0, player.maxHp - player.hp);
     let reserve = 0;
@@ -2437,6 +2444,14 @@ export class BotController {
       if (this.abilityCooldown(player, slot) > 0.5) continue;
       const id = player.abilityIds[slot];
       const def = id ? ABILITIES[id] : null;
+      const status = def?.props.status;
+      if (def && status?.kind === 'seeded' && opponent) {
+        const potential = this.decision.seededHealPotential(opponent, status);
+        reserve = Math.max(
+          reserve,
+          Math.min(missing, potential) * SEED_SUSTAIN_FACTOR
+        );
+      }
       if (!def || def.healSelf <= 0 || def.props.healOnHit) continue;
       reserve = Math.max(
         reserve,
@@ -2531,8 +2546,8 @@ export class BotController {
     const enemyDps =
       this.bestDamagePerSecond(target, self, false, colliders) +
       this.residualDps(self);
-    const selfEffectiveHp = this.effectiveHp(self, pickup);
-    const targetEffectiveHp = this.effectiveHp(target, null);
+    const selfEffectiveHp = this.effectiveHp(self, pickup, target);
+    const targetEffectiveHp = this.effectiveHp(target, null, self);
 
     // Del rival solo se sabe si su gracia está activa, no cuánto le queda: se
     // suma una estimación fija en vez de leer su temporizador exacto.

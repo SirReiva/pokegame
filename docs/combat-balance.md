@@ -437,12 +437,14 @@ atraviesa obstáculos y los bots conservan su error de apuntado por dificultad.
 - **self**: buffs, curación o utilidad centrada en el lanzador.
 
 **Estados**: ralentización (`slow`), buffs (`speed`, `attack`, etc.) y estados
-(`status`): veneno, quemadura, congelación, sueño y parálisis. Veneno y
-quemadura comparten la mecánica de daño en el tiempo: daño fijo por tick, una
-sola instancia por tipo, reemplazo al reaplicar y sin crítico, STAB ni
-efectividad. Protección reduce cada tick. Congelación ralentiza el movimiento;
-sueño bloquea movimiento y habilidades y se rompe al recibir daño; parálisis
-suma segundos a las habilidades que ya están enfriándose (`once` o `overtime`).
+(`status`): veneno, quemadura, semilla, congelación, sueño y parálisis. Veneno,
+quemadura y semilla comparten la mecánica de daño en el tiempo: daño fijo por
+tick, una sola instancia por tipo, reemplazo al reaplicar y sin crítico, STAB ni
+efectividad. Protección reduce cada tick. La semilla además cura al lanzador una
+fracción del daño real de cada tick (`healRatio`). Congelación ralentiza el
+movimiento; sueño bloquea movimiento y habilidades y se rompe al recibir daño;
+parálisis suma segundos a las habilidades que ya están enfriándose (`once` o
+`overtime`).
 
 **Protección**: reduce un 60 % el daño durante 2 s. Se aplica sobre la fórmula
 con mínimo de 1 PV, así que un golpe de 1 PV sigue quitando 1 y uno de 2 también

@@ -124,6 +124,7 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
         remaining: status.remaining,
         damage: 'damage' in status ? status.damage : undefined,
         interval: 'interval' in status ? status.interval : undefined,
+        healRatio: status.kind === 'seeded' ? status.healRatio : undefined,
         multiplier: status.kind === 'frozen' ? status.multiplier : undefined,
         extraCooldown:
           status.kind === 'paralyzed' ? status.extraCooldown : undefined

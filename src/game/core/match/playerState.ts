@@ -73,6 +73,24 @@ export interface ActiveDamageStatus extends ActiveStatusBase {
   nextTick: number;
 }
 
+/** Semilla: daño fijo por tick que cura al lanzador. */
+export interface ActiveSeededStatus extends ActiveStatusBase {
+  kind: 'seeded';
+  /** Daño fijo por tick, en PV. */
+  damage: number;
+  /** Segundos entre ticks. */
+  interval: number;
+  /** Segundos hasta el próximo tick. */
+  nextTick: number;
+  /** Fracción del daño real del tick que cura al lanzador. */
+  healRatio: number;
+}
+
+/** Estados que reparten daño en el tiempo. */
+export type ActiveDamageOverTimeStatus =
+  | ActiveDamageStatus
+  | ActiveSeededStatus;
+
 /** Congelación: ralentiza el movimiento. */
 export interface ActiveFrozenStatus extends ActiveStatusBase {
   kind: 'frozen';
@@ -100,7 +118,7 @@ export interface ActiveParalyzedStatus extends ActiveStatusBase {
 
 /** Estado activo; se guarda como máximo uno por `kind`. */
 export type ActiveStatus =
-  | ActiveDamageStatus
+  | ActiveDamageOverTimeStatus
   | ActiveFrozenStatus
   | ActiveAsleepStatus
   | ActiveParalyzedStatus;

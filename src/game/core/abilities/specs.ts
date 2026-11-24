@@ -42,6 +42,20 @@ export interface BurnedStatus extends StatusBase {
   interval?: number;
 }
 
+/**
+ * Semilla: daño fijo por tick que además cura al lanzador. La curación es el
+ * daño real del tick multiplicado por `healRatio`.
+ */
+export interface SeededStatus extends StatusBase {
+  kind: 'seeded';
+  /** Daño fijo por tick, en PV. */
+  damage: number;
+  /** Intervalo entre ticks en segundos. Por defecto, 1 s. */
+  interval?: number;
+  /** Fracción del daño del tick que se convierte en curación del lanzador. */
+  healRatio: number;
+}
+
 /** Congelación: ralentiza el movimiento mientras dure. */
 export interface FrozenStatus extends StatusBase {
   kind: 'frozen';
@@ -72,6 +86,7 @@ export interface ParalyzedStatus extends StatusBase {
 export type StatusSpec =
   | PoisonedStatus
   | BurnedStatus
+  | SeededStatus
   | FrozenStatus
   | AsleepStatus
   | ParalyzedStatus;
@@ -82,19 +97,25 @@ export type StatusKind = StatusSpec['kind'];
 /** Subconjunto de estados que hacen daño en el tiempo. */
 export type DamageStatusSpec = Extract<
   StatusSpec,
-  { kind: 'poisoned' | 'burned' }
+  { kind: 'poisoned' | 'burned' | 'seeded' }
 >;
 
 /** `true` si el estado hace daño en el tiempo. */
 export function isDamageStatus(
   status: StatusSpec | null | undefined
 ): status is DamageStatusSpec {
-  return status?.kind === 'poisoned' || status?.kind === 'burned';
+  return (
+    status?.kind === 'poisoned' ||
+    status?.kind === 'burned' ||
+    status?.kind === 'seeded'
+  );
 }
 
 /** Tipo Pokémon asociado a un estado de daño, para colores y popups. */
 export function statusPokemonType(status: {
-  kind: 'poisoned' | 'burned';
+  kind: 'poisoned' | 'burned' | 'seeded';
 }): PokemonType {
-  return status.kind === 'burned' ? 'Fire' : 'Poison';
+  if (status.kind === 'burned') return 'Fire';
+  if (status.kind === 'seeded') return 'Grass';
+  return 'Poison';
 }

@@ -16,7 +16,8 @@ import {
 import type { CombatFxPort } from '../core/ports/fx';
 import { isChannelingCast } from '../core/abilities/movement';
 import type {
-  ActiveDamageStatus,
+  ActiveDamageOverTimeStatus,
+  ActiveSeededStatus,
   ActiveStatus,
   HealOnHitToken,
   MatchPlayerState
@@ -120,8 +121,12 @@ const DEFAULT_STATUS_INTERVAL = 1;
 /** `true` si el estado activo reparte daño por tick. */
 function isDamageStatusActive(
   status: ActiveStatus
-): status is ActiveDamageStatus {
-  return status.kind === 'poisoned' || status.kind === 'burned';
+): status is ActiveDamageOverTimeStatus {
+  return (
+    status.kind === 'poisoned' ||
+    status.kind === 'burned' ||
+    status.kind === 'seeded'
+  );
 }
 
 /** Intervalo efectivo de un estado que lo declare. */
@@ -161,6 +166,20 @@ export function applyStatus(
         interval,
         remaining: spec.duration,
         nextTick: 0,
+        source,
+        abilityName
+      });
+      break;
+    }
+    case 'seeded': {
+      if (spec.damage <= 0) return;
+      target.statuses.push({
+        kind: 'seeded',
+        damage: spec.damage,
+        interval,
+        remaining: spec.duration,
+        nextTick: 0,
+        healRatio: spec.healRatio,
         source,
         abilityName
       });
@@ -233,14 +252,40 @@ function addCooldownPenalty(target: MatchPlayerState, amount: number): void {
 }
 
 /**
+ * Cura al lanzador de una semilla una fracción del daño real del tick. La
+ * curación se recorta a la vida que falta y solo cuenta si el lanzador sigue
+ * vivo.
+ */
+function healFromSeededStatus(
+  host: DamageSystemHost,
+  status: ActiveSeededStatus,
+  damage: number
+): void {
+  if (status.healRatio <= 0) return;
+  const source = status.source;
+  if (!source.alive || source.hp >= source.maxHp) return;
+
+  const amount = Math.round(damage * status.healRatio);
+  if (amount <= 0) return;
+  const healed = Math.min(amount, source.maxHp - source.hp);
+  if (healed <= 0) return;
+
+  source.hp += healed;
+  source.abilityHealing += healed;
+  host.showHealPopup(source, healed, source);
+  host.awardXp(source, 'healing', healed * XP_REWARDS.healingPerHp);
+}
+
+/**
  * Resuelve un tick de daño en el tiempo. Es daño fijo: no aplica STAB,
  * crítico, efectividad, armadura de casteo ni hitstun. Protección sí lo
- * reduce, y cada tick corta la regeneración pasiva.
+ * reduce, y cada tick corta la regeneración pasiva. Una semilla además cura
+ * al lanzador.
  */
 function applyDamageStatusTick(
   host: DamageSystemHost,
   target: MatchPlayerState,
-  status: ActiveDamageStatus
+  status: ActiveDamageOverTimeStatus
 ): void {
   if (!target.alive || target.invulnerableTimer > 0) return;
 
@@ -271,6 +316,9 @@ function applyDamageStatusTick(
     status.damage,
     finalDamage
   );
+  if (status.kind === 'seeded') {
+    healFromSeededStatus(host, status, appliedDamage);
+  }
   breakRegen(target);
   host.vibrateOnDamage(target, appliedDamage);
   if (target.hp <= 0) {

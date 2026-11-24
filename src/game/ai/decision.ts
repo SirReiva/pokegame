@@ -77,6 +77,11 @@ const HITSTUN_SCORE_PER_SECOND = 120;
  */
 const CUSTOM_DAMAGE_SCORE = 25;
 const CUSTOM_CONTROL_SCORE = 18;
+/**
+ * Puntos por PV que la semilla puede curar al lanzador. Solo se valora la vida
+ * que falta y la probabilidad de conectar.
+ */
+const SEED_HEAL_SCORE_PER_HP = 4;
 
 /**
  * Daño esperado de un estado de daño completo: daño fijo por tick × número de
@@ -98,6 +103,20 @@ function expectedDotDamage(
   const reduction =
     target.damageReductionTimer > 0 ? target.damageReduction : 0;
   return Math.max(1, Math.round(status.damage * ticks * (1 - reduction)));
+}
+
+/**
+ * Curación total esperada de una semilla sobre el lanzador. Se calcula a partir
+ * del daño que llegará a hacer el estado, recortado a la vida restante del
+ * rival y multiplicado por `healRatio`.
+ */
+function expectedSeededSelfHeal(
+  target: MatchPlayerState,
+  status: StatusSpec | null | undefined
+): number {
+  if (status?.kind !== 'seeded' || status.healRatio <= 0) return 0;
+  const damage = Math.min(expectedDotDamage(target, status), target.hp);
+  return Math.round(damage * status.healRatio);
 }
 
 /** Valor conservador de un estado de control, según su duración y fuerza. */
@@ -878,6 +897,17 @@ export class BotDecision {
     if (def.props.status && !isDamageStatus(def.props.status)) {
       score += expectedControlScore(def.props.status) * hitChance;
     }
+    // La semilla cura al lanzador con cada tick. Se valora solo la curación
+    // que no se desperdicia por encima de la vida máxima.
+    const seedHeal = expectedSeededSelfHeal(target, def.props.status);
+    if (seedHeal > 0) {
+      const usefulHeal = Math.min(seedHeal, self.maxHp - self.hp);
+      score +=
+        usefulHeal *
+        SEED_HEAL_SCORE_PER_HP *
+        (1 + (1 - hpFraction)) *
+        hitChance;
+    }
     if (def.props.knockback > 0 && !armorAbsorbed) {
       score += Math.min(20, def.props.knockback * 12) * hitChance;
     }
@@ -986,6 +1016,17 @@ export class BotDecision {
       score /= 1 + repeatExtra * REPEAT_SCORE_FACTOR;
     }
     return score;
+  }
+
+  /**
+   * Curación total estimada de una semilla lanzada contra `target`. La
+   * decisión de retirada la usa como parte de la vida efectiva.
+   */
+  seededHealPotential(
+    target: MatchPlayerState,
+    status: StatusSpec | null | undefined
+  ): number {
+    return expectedSeededSelfHeal(target, status);
   }
 
   /**

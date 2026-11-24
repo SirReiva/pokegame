@@ -397,10 +397,12 @@ export interface ActiveStatusHud {
   kind: StatusKind;
   /** Segundos restantes. */
   remaining: number;
-  /** Daño fijo por tick (solo poisoned/burned). */
+  /** Daño fijo por tick (solo poisoned/burned/seeded). */
   damage?: number;
-  /** Segundos entre ticks (solo poisoned/burned). */
+  /** Segundos entre ticks (solo poisoned/burned/seeded). */
   interval?: number;
+  /** Fracción del daño que cura al lanzador (solo seeded). */
+  healRatio?: number;
   /** Multiplicador de velocidad (solo frozen). */
   multiplier?: number;
   /** Segundos extra aplicados por tick (solo paralyzed). */

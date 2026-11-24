@@ -20,6 +20,7 @@ function makePlayer(
     maxHp: 100,
     damageTaken: 0,
     damageDealt: 0,
+    abilityHealing: 0,
     invulnerableTimer: 0,
     damageReductionTimer: 0,
     damageReduction: 0,
@@ -38,6 +39,11 @@ function makePlayer(
 
 function makeHost() {
   const popups: Array<{ amount: number; dotType?: PokemonType | null }> = [];
+  const healPopups: Array<{
+    target: MatchPlayerState;
+    amount: number;
+    source: MatchPlayerState;
+  }> = [];
   const knockouts: {
     target: MatchPlayerState;
     killer: MatchPlayerState;
@@ -65,7 +71,13 @@ function makeHost() {
     ) => {
       popups.push({ amount, dotType });
     },
-    showHealPopup() {},
+    showHealPopup: (
+      target: MatchPlayerState,
+      amount: number,
+      source: MatchPlayerState
+    ) => {
+      healPopups.push({ target, amount, source });
+    },
     awardCombatXp() {},
     awardXp() {},
     vibrateOnDamage() {},
@@ -79,7 +91,7 @@ function makeHost() {
       knockouts.push({ target, killer, abilityName });
     }
   } as unknown as DamageSystemHost;
-  return { host, popups, knockouts };
+  return { host, popups, healPopups, knockouts };
 }
 
 test('solo hay un estado por tipo y reaplicarlo reemplaza al anterior', () => {
@@ -160,6 +172,57 @@ test('Protección reduce cada tick de daño en el tiempo', () => {
   assert.equal(popups[0].dotType, 'Poison');
   assert.equal(target.hp, 96);
   assert.equal(target.statuses.length, 0);
+});
+
+test('la semilla hace daño por tick y cura al lanzador una fracción', () => {
+  const { host, popups, healPopups } = makeHost();
+  const source = makePlayer({ slot: 0, team: 'blue', hp: 50 });
+  const target = makePlayer();
+
+  applyStatus(
+    host,
+    target,
+    source,
+    { kind: 'seeded', damage: 10, duration: 3, healRatio: 0.5 },
+    'Drenadoras',
+    [126, 214, 88]
+  );
+
+  for (let step = 0; step < 4; step++) {
+    stepStatuses([target], 1, host, () => false);
+  }
+
+  assert.equal(target.hp, 70);
+  assert.equal(target.damageTaken, 30);
+  assert.equal(source.damageDealt, 30);
+  assert.equal(source.hp, 65);
+  assert.equal(source.abilityHealing, 15);
+  assert.equal(healPopups.length, 3);
+  assert.ok(healPopups.every((popup) => popup.target === source));
+  assert.ok(healPopups.every((popup) => popup.amount === 5));
+  assert.ok(popups.every((popup) => popup.dotType === 'Grass'));
+  assert.equal(target.statuses.length, 0);
+});
+
+test('la curación de la semilla nunca supera la vida máxima del lanzador', () => {
+  const { host, healPopups } = makeHost();
+  const source = makePlayer({ slot: 0, team: 'blue', hp: 98 });
+  const target = makePlayer();
+
+  applyStatus(
+    host,
+    target,
+    source,
+    { kind: 'seeded', damage: 10, duration: 3, healRatio: 0.5 },
+    'Drenadoras',
+    [126, 214, 88]
+  );
+  stepStatuses([target], 1, host, () => false);
+
+  assert.equal(source.hp, 100);
+  assert.equal(source.abilityHealing, 2);
+  assert.equal(healPopups.length, 1);
+  assert.equal(healPopups[0].amount, 2);
 });
 
 test('el tick letal atribuye el KO al lanzador del estado', () => {

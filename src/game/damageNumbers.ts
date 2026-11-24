@@ -83,7 +83,7 @@ const LABELS: Record<
 
 /** Estrategias de color de relleno del número. */
 const FILL_COLORS: Record<
-  'heal' | 'burn' | 'poison' | 'weak' | 'critical' | 'normal',
+  'heal' | 'burn' | 'poison' | 'grass' | 'weak' | 'critical' | 'normal',
   string
 > = {
   heal: '#6dff8e',
@@ -91,6 +91,7 @@ const FILL_COLORS: Record<
   // tipo: lo que distingue el número es el estado que lo produjo.
   burn: '#ff8a2a',
   poison: '#b45cff',
+  grass: '#7ac74c',
   weak: '#d46a75',
   critical: '#ff2d55',
   normal: '#ff4d5a'
@@ -113,6 +114,7 @@ function fillFor(
   if (heal) return FILL_COLORS.heal;
   if (dotType === 'Fire') return FILL_COLORS.burn;
   if (dotType === 'Poison') return FILL_COLORS.poison;
+  if (dotType === 'Grass') return FILL_COLORS.grass;
   const key = effectiveness < 1 ? 'weak' : critical ? 'critical' : 'normal';
   return FILL_COLORS[key];
 }

@@ -136,6 +136,7 @@ const BUFF_LABEL: Record<BuffStat, string> = {
 const STATUS_LABEL: Record<string, string> = {
   poisoned: 'VENENO',
   burned: 'QUEMA',
+  seeded: 'SEMILLA',
   frozen: 'CONGELADO',
   asleep: 'DORMIDO',
   paralyzed: 'PARALIZADO'
@@ -145,6 +146,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   poisoned: TYPE_COLORS.Poison,
   burned: TYPE_COLORS.Fire,
+  seeded: TYPE_COLORS.Grass,
   frozen: TYPE_COLORS.Ice,
   asleep: TYPE_COLORS.Psychic,
   paralyzed: TYPE_COLORS.Electric
@@ -714,6 +716,9 @@ const PlayerHud = memo(function PlayerHud({
               let detail = '';
               if (status.kind === 'poisoned' || status.kind === 'burned') {
                 detail = `${status.damage ?? 0} PV cada ${status.interval ?? 1} s`;
+              } else if (status.kind === 'seeded') {
+                const ratio = Math.round((status.healRatio ?? 0) * 100);
+                detail = `${status.damage ?? 0} PV cada ${status.interval ?? 1} s · cura ${ratio} %`;
               } else if (status.kind === 'frozen') {
                 detail = `-${Math.round((1 - (status.multiplier ?? 1)) * 100)}% velocidad`;
               } else if (status.kind === 'paralyzed') {
