@@ -9,15 +9,26 @@ import {
 } from '../adaptiveTuning.ts';
 import { TUNING } from '../tuning.ts';
 import type { MatchPlayerState } from '../../matchState.ts';
+import type { Team } from '../../core/team.ts';
 import { xpForLevel } from '../../core/xp.ts';
 
-/** Jugador mínimo: la adaptación solo lee equipo, XP y bajas. */
-function player(team: 'red' | 'blue', level: number, kills = 0): MatchPlayerState {
+/** Jugador mínimo: la adaptación solo lee equipo, XP, bajas y muertes. */
+function player(
+  team: Team,
+  level: number,
+  kills = 0,
+  deaths = 0
+): MatchPlayerState {
   return {
     team,
     xp: xpForLevel(level),
-    kills
+    kills,
+    deaths
   } as unknown as MatchPlayerState;
+}
+
+function scores(red: number, blue: number): Record<Team, number> {
+  return { red, blue, yellow: 0, green: 0 };
 }
 
 test('el perfil adaptativo es propio y queda dentro de fácil y experto', () => {
@@ -33,12 +44,13 @@ test('el perfil adaptativo es propio y queda dentro de fácil y experto', () => 
 });
 
 test('la fuerza sube con el nivel de los rivales', () => {
-  const weakEnemies = adaptiveTargetStrength('red', [
-    player('red', 1),
+  const self = player('red', 1);
+  const weakEnemies = adaptiveTargetStrength(self, [
+    self,
     player('blue', 1)
   ]);
-  const strongEnemies = adaptiveTargetStrength('red', [
-    player('red', 1),
+  const strongEnemies = adaptiveTargetStrength(self, [
+    self,
     player('blue', 10)
   ]);
 
@@ -46,12 +58,13 @@ test('la fuerza sube con el nivel de los rivales', () => {
 });
 
 test('la fuerza sube si los rivales van por delante en bajas', () => {
-  const even = adaptiveTargetStrength('red', [
-    player('red', 5, 2),
+  const self = player('red', 5);
+  const even = adaptiveTargetStrength(self, [
+    self,
     player('blue', 5, 2)
   ]);
-  const behind = adaptiveTargetStrength('red', [
-    player('red', 5, 0),
+  const behind = adaptiveTargetStrength(self, [
+    self,
     player('blue', 5, 6)
   ]);
 
@@ -59,16 +72,57 @@ test('la fuerza sube si los rivales van por delante en bajas', () => {
 });
 
 test('el equipo que domina juega más suave', () => {
-  const leading = adaptiveTargetStrength('red', [
-    player('red', 8, 8),
+  const leadingSelf = player('red', 8, 8);
+  const leading = adaptiveTargetStrength(leadingSelf, [
+    leadingSelf,
     player('blue', 8, 1)
   ]);
-  const tied = adaptiveTargetStrength('red', [
-    player('red', 8, 4),
+  const tiedSelf = player('red', 8, 4);
+  const tied = adaptiveTargetStrength(tiedSelf, [
+    tiedSelf,
     player('blue', 8, 4)
   ]);
 
   assert.ok(leading < tied);
+});
+
+test('en KOTH la puntuación manda aunque las bajas estén igualadas', () => {
+  const self = player('red', 5);
+  const players = [self, player('blue', 5)];
+  const even = adaptiveTargetStrength(self, players, scores(10, 10), 100);
+  const behind = adaptiveTargetStrength(self, players, scores(10, 40), 100);
+
+  assert.ok(behind > even);
+});
+
+test('en Deathmatch también se usa el marcador del modo', () => {
+  const self = player('red', 5);
+  const players = [self, player('blue', 5)];
+  const even = adaptiveTargetStrength(self, players, scores(5, 5), 15);
+  const behind = adaptiveTargetStrength(self, players, scores(2, 8), 15);
+
+  assert.ok(behind > even);
+});
+
+test('un K/D bajo da un empujón al bot', () => {
+  const struggling = player('red', 5, 1, 7);
+  const dominating = player('red', 5, 7, 1);
+  const enemy = player('blue', 5);
+
+  const strugglingStrength = adaptiveTargetStrength(
+    struggling,
+    [struggling, enemy],
+    scores(5, 5),
+    15
+  );
+  const dominatingStrength = adaptiveTargetStrength(
+    dominating,
+    [dominating, enemy],
+    scores(5, 5),
+    15
+  );
+
+  assert.ok(strugglingStrength > dominatingStrength);
 });
 
 test('el suavizado avanza hacia el objetivo sin saltar', () => {

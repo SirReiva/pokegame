@@ -82,6 +82,7 @@ import {
 import {
   createGameMode,
   defaultModeSettings,
+  modeScoreTarget,
   type GameModeId,
   type GameModeRuntime,
   type MatchEndReason,
@@ -640,6 +641,8 @@ export class HeadlessMatch {
   readonly atmosphere = 'clear' as const;
   readonly atmosphereVision = 1;
   readonly timeLimitSeconds: number;
+  /** Meta del marcador del modo, para la IA adaptativa. */
+  readonly scoreGoal: number | null;
 
   hosts: Hosts;
   private readonly options: Options;
@@ -683,6 +686,7 @@ export class HeadlessMatch {
       objective: this.objectiveZone,
       objectives: this.objectiveZone ? [this.objectiveZone] : []
     });
+    this.scoreGoal = modeScoreTarget(options.mode, settings);
     this.timeLimitSeconds = options.timeLimit;
 
     this.hosts = this.createHosts();
@@ -2021,22 +2025,30 @@ export class HeadlessMatch {
       red: {
         visibleSlots: this.visibleByTeam.red,
         atmosphere: this.atmosphere,
-        objective
+        objective,
+        teamScores: this.teamScores,
+        scoreTarget: this.scoreGoal
       },
       blue: {
         visibleSlots: this.visibleByTeam.blue,
         atmosphere: this.atmosphere,
-        objective
+        objective,
+        teamScores: this.teamScores,
+        scoreTarget: this.scoreGoal
       },
       yellow: {
         visibleSlots: this.visibleByTeam.yellow,
         atmosphere: this.atmosphere,
-        objective
+        objective,
+        teamScores: this.teamScores,
+        scoreTarget: this.scoreGoal
       },
       green: {
         visibleSlots: this.visibleByTeam.green,
         atmosphere: this.atmosphere,
-        objective
+        objective,
+        teamScores: this.teamScores,
+        scoreTarget: this.scoreGoal
       }
     };
   }

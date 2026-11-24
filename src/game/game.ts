@@ -155,6 +155,7 @@ import type {
 import { attackYaw } from './matchState';
 import {
   DEFAULT_TIME_LIMIT_SECONDS,
+  modeScoreTarget,
   normalizeModeSettings,
   type GameModeId,
   type GameModeRuntime,
@@ -595,6 +596,8 @@ export class Game {
   private readonly timeLimitSeconds: number;
   /** Runtime del modo activo: decide victoria, HUD y objetivo de bots. */
   private gameMode: GameModeRuntime | null = null;
+  /** Meta del marcador del modo (KOs o puntos), para la IA adaptativa. */
+  private readonly scoreGoal: number | null;
   /**
    * Contexto reutilizado por los modos. Se reescribe antes de cada consulta y
    * los modos solo lo leen durante la llamada, así que no hace falta uno nuevo
@@ -839,6 +842,7 @@ export class Game {
       options.modeSettings ??
       (options.koTarget !== undefined ? { koTarget: options.koTarget } : {});
     this.modeSettings = normalizeModeSettings(this.gameModeId, inputSettings);
+    this.scoreGoal = modeScoreTarget(this.gameModeId, this.modeSettings);
     this.timeLimitSeconds = Math.max(
       0,
       Math.floor(options.timeLimitSeconds ?? DEFAULT_TIME_LIMIT_SECONDS)
@@ -2291,6 +2295,8 @@ export class Game {
       view.visibleSlots = this.visibleByTeam[team];
       view.atmosphere = this.atmosphere;
       view.objective = objective;
+      view.teamScores = this.teamScores;
+      view.scoreTarget = this.scoreGoal;
     }
 
     for (const player of this.matchPlayers) {

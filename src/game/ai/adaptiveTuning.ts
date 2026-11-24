@@ -2,12 +2,15 @@
  * Dificultad adaptativa.
  *
  * A diferencia del resto de perfiles, este no es fijo: se recalcula mientras
- * avanza la partida a partir de dos señales:
+ * avanza la partida a partir de tres señales:
  *
  * - el **nivel de XP** de los equipos, que resume cuánto ha progresado cada
  *   plantilla durante la partida;
- * - la **situación del marcador de bajas**, para que el bot apriete si va por
- *   detrás y afloje si va sobrado.
+ * - la **situación del marcador del modo** (KOs en Deathmatch, puntos de zona
+ *   en Rey de la colina), para que el bot apriete si va por detrás y afloje si
+ *   va sobrado;
+ * - el **K/D individual del bot**, que delata cuándo está siendo una presa
+ *   fácil o cuándo está dominando.
  *
  * La fuerza resultante (0-1) interpola todos los parámetros del perfil entre
  * `easy` y `expert`. Se suaviza en el tiempo para que el bot no cambie de
@@ -25,16 +28,18 @@ import { TUNING, type BotTuning } from './tuning';
 export const ADAPTIVE_INITIAL_STRENGTH = 0.3;
 
 /** Peso del nivel medio de los rivales dentro de la fuerza objetivo. */
-const ENEMY_SKILL_WEIGHT = 0.4;
+const ENEMY_SKILL_WEIGHT = 0.35;
 /** Peso de la diferencia de nivel entre el equipo propio y los rivales. */
 const LEVEL_GAP_WEIGHT = 0.15;
-/** Peso del marcador de bajas. */
-const SCORE_GAP_WEIGHT = 0.15;
+/** Peso del marcador del modo dentro de la fuerza objetivo. */
+const SCORE_GAP_WEIGHT = 0.2;
+/** Peso del rendimiento individual (K/D) del bot. */
+const BOT_KD_WEIGHT = 0.12;
 /** Fuerza base sobre la que suman los pesos anteriores. */
 const BASE_STRENGTH = 0.3;
 /** Suavizado exponencial: segundos que tarda en cubrir ~63 % de un cambio. */
 const SMOOTHING_SECONDS = 20;
-/** Bajas mínimas para que un marcador igualado no amplifique el arranque. */
+/** Suelo del denominador cuando el modo no declara meta de marcador. */
 const SCORE_SOFTENING = 4;
 
 /**
@@ -65,21 +70,27 @@ function clamp01(value: number): number {
 }
 
 /**
- * Fuerza objetivo (0-1) para el equipo del bot.
+ * Fuerza objetivo (0-1) para el bot.
  *
- * Sube cuando los rivales tienen más nivel, cuando van por delante en XP o en
- * bajas, y baja en el caso contrario. El marcador compara al equipo rival
- * líder, no a la suma de todos: en partidas de tres o cuatro equipos el bot
- * debe responder al que manda, no a una mayoría artificial.
+ * Sube cuando los rivales tienen más nivel, cuando van por delante en el
+ * marcador del modo (KOs en Deathmatch, puntos de zona en Rey de la colina) o
+ * cuando el propio bot acumula un K/D bajo. Baja en el caso contrario.
+ *
+ * El marcador compara al equipo rival líder, no a la suma de todos: en
+ * partidas de tres o cuatro equipos el bot debe responder al que manda, no a
+ * una mayoría artificial. Si la vista no trae marcador, se usan las bajas como
+ * aproximación.
  */
 export function adaptiveTargetStrength(
-  selfTeam: Team,
-  players: readonly MatchPlayerState[]
+  self: MatchPlayerState,
+  players: readonly MatchPlayerState[],
+  teamScores?: Readonly<Record<Team, number>>,
+  scoreTarget?: number | null
 ): number {
+  const selfTeam = self.team;
   let allyKills = 0;
   let allyLevelSum = 0;
   let allyPlayers = 0;
-  let enemyKills = 0;
   let enemyLevelSum = 0;
   let enemyPlayers = 0;
 
@@ -90,23 +101,34 @@ export function adaptiveTargetStrength(
       allyLevelSum += level;
       allyPlayers += 1;
     } else {
-      enemyKills += player.kills;
       enemyLevelSum += level;
       enemyPlayers += 1;
     }
   }
   if (allyPlayers === 0 || enemyPlayers === 0) return ADAPTIVE_INITIAL_STRENGTH;
 
-  // El rival líder se busca por equipo para no sumar a todos los rivales en
-  // partidas de tres o cuatro bandos.
-  let leadingEnemyKills = 0;
-  for (const team of TEAM_ORDER) {
-    if (team === selfTeam) continue;
-    let teamKills = 0;
-    for (const player of players) {
-      if (player.team === team) teamKills += player.kills;
+  // Marcador del modo. Si no llega en la vista (tests, primer frame), las
+  // bajas del equipo líder hacen de marcador.
+  let allyScore = allyKills;
+  let leadingEnemyScore = 0;
+  if (teamScores) {
+    allyScore = teamScores[selfTeam] ?? 0;
+    for (const team of TEAM_ORDER) {
+      if (team === selfTeam) continue;
+      const score = teamScores[team] ?? 0;
+      if (score > leadingEnemyScore) leadingEnemyScore = score;
     }
-    if (teamKills > leadingEnemyKills) leadingEnemyKills = teamKills;
+  } else {
+    // El rival líder se busca por equipo para no sumar a todos los rivales en
+    // partidas de tres o cuatro bandos.
+    for (const team of TEAM_ORDER) {
+      if (team === selfTeam) continue;
+      let teamKills = 0;
+      for (const player of players) {
+        if (player.team === team) teamKills += player.kills;
+      }
+      if (teamKills > leadingEnemyScore) leadingEnemyScore = teamKills;
+    }
   }
 
   const enemyLevel = enemyLevelSum / enemyPlayers;
@@ -120,22 +142,31 @@ export function adaptiveTargetStrength(
     -1,
     Math.min(1, (enemyLevel - allyLevel) / levelRange)
   );
-  // Ventaja del rival líder en bajas, normalizada. `enemyKills` solo se usa
-  // para repartir el peso cuando hay pocas bajas todavía.
+  // Ventaja del rival líder en el marcador, normalizada contra la meta del
+  // modo. Media meta de desventaja ya cuenta como presión máxima; sin meta
+  // conocida se usa el total actual, con un suelo para que un 2-0 no cuente
+  // como una diferencia máxima.
+  const scoreRange =
+    scoreTarget !== undefined && scoreTarget !== null && scoreTarget > 0
+      ? scoreTarget * 0.5
+      : Math.max(SCORE_SOFTENING, leadingEnemyScore + allyScore);
   const scoreGap = Math.max(
     -1,
-    Math.min(
-      1,
-      (leadingEnemyKills - allyKills) /
-        Math.max(SCORE_SOFTENING, enemyKills + allyKills)
-    )
+    Math.min(1, (leadingEnemyScore - allyScore) / scoreRange)
   );
+
+  // Rendimiento individual: con K/D bajo el bot recibe un empujón para no
+  // quedarse como presa fácil; si domina, cede algo de ventaja. El +1 suaviza
+  // el arranque 0/0 y evita dividir por cero.
+  const kd = (self.kills + 1) / (self.deaths + 1);
+  const kdSignal = Math.max(-1, Math.min(1, (kd - 1) / 2));
 
   return clamp01(
     BASE_STRENGTH +
       ENEMY_SKILL_WEIGHT * enemySkill +
       LEVEL_GAP_WEIGHT * levelGap +
-      SCORE_GAP_WEIGHT * scoreGap
+      SCORE_GAP_WEIGHT * scoreGap -
+      BOT_KD_WEIGHT * kdSignal
   );
 }
 

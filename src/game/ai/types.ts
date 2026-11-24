@@ -130,6 +130,13 @@ export interface BotWorldView {
   readonly atmosphere: AtmosphereId;
   /** Zona que el modo obliga a disputar (Rey de la colina). */
   readonly objective?: { x: number; z: number; radius: number };
+  /**
+   * Marcador por equipo del modo actual: KOs en Deathmatch y puntos de zona en
+   * Rey de la colina. Permite a la dificultad adaptativa valorar la situación.
+   */
+  readonly teamScores?: Readonly<Record<Team, number>>;
+  /** Objetivo del marcador del modo, para normalizar la ventaja. */
+  readonly scoreTarget?: number | null;
 }
 
 /**

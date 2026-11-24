@@ -579,7 +579,8 @@ más cercana para romper línea de visión, igual que ya hace al regenerar.
 - cooldowns rivales estimados e invulnerabilidad sin temporizador exacto,
 - dificultad apoyada en predicción, castigo, memoria y evaluación de daño,
 - perfil `adaptive`: interpola fácil → experto según el nivel de XP de los
-  rivales y el marcador de bajas, con suavizado temporal y visión fija.
+  rivales, el marcador del modo (KOs o puntos de zona), el K/D individual del
+  bot y la ventaja de nivel, con suavizado temporal y visión fija.
 
 La fachada de percepción completa (`BotWorldView`) sigue pendiente en 9.5; lo
 que quedaba de 8.1 ya está aplicado.

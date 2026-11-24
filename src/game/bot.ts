@@ -852,7 +852,12 @@ export class BotController {
     // La dificultad adaptativa se recalcula antes de percibir y decidir para
     // que reacción, memoria y apuntado usen ya el perfil de este paso.
     if (this.adaptive) {
-      const target = adaptiveTargetStrength(self.team, players);
+      const target = adaptiveTargetStrength(
+        self,
+        players,
+        view.teamScores,
+        view.scoreTarget
+      );
       this.adaptiveStrength = smoothAdaptiveStrength(
         this.adaptiveStrength,
         target,
