@@ -89,8 +89,8 @@ function parseArgs(argv: readonly string[]): BalanceOptions {
   }
 
   const difficulty = (values.get('difficulty') ?? 'expert') as Options['difficulty'];
-  if (!['easy', 'normal', 'hard', 'expert'].includes(difficulty)) {
-    throw new Error('--difficulty debe ser easy, normal, hard o expert');
+  if (!['easy', 'normal', 'hard', 'expert', 'adaptive'].includes(difficulty)) {
+    throw new Error('--difficulty debe ser easy, normal, hard, expert o adaptive');
   }
 
   const common = (values.get('common') ?? 'proteccion') as BalanceOptions['common'];
@@ -135,7 +135,7 @@ Opciones:
   --map <id>          Mapa de public/maps/index.json (por defecto: arena)
   --seeds <n>         Repeticiones por enfrentamiento y orientación (por defecto: 4)
   --seconds <n>       Duración máxima de cada duelo (por defecto: 40)
-  --difficulty <d>    easy | normal | hard | expert (por defecto: expert)
+  --difficulty <d>    easy | normal | hard | expert | adaptive (por defecto: expert)
   --common <id|all>   Instinto común, igual para ambos (por defecto: proteccion)
   --species <ids>     Lista separada por comas (por defecto: todas con moveset)
   --out <archivo>     Informe markdown (por defecto: docs/balance-simulacion.md)

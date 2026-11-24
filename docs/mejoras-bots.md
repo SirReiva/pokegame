@@ -577,7 +577,9 @@ más cercana para romper línea de visión, igual que ya hace al regenerar.
 - visión y reacción en rangos humanos,
 - error de apuntado y de decisión por dificultad,
 - cooldowns rivales estimados e invulnerabilidad sin temporizador exacto,
-- dificultad apoyada en predicción, castigo, memoria y evaluación de daño.
+- dificultad apoyada en predicción, castigo, memoria y evaluación de daño,
+- perfil `adaptive`: interpola fácil → experto según el nivel de XP de los
+  rivales y el marcador de bajas, con suavizado temporal y visión fija.
 
 La fachada de percepción completa (`BotWorldView`) sigue pendiente en 9.5; lo
 que quedaba de 8.1 ya está aplicado.

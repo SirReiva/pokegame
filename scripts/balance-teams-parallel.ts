@@ -86,8 +86,8 @@ function parseArgs(argv: readonly string[]): OptionsCli {
   const size = positive('size', 4);
   if (size > 4) throw new Error('--size máximo 4');
   const difficulty = (values.get('difficulty') ?? 'expert') as Options['difficulty'];
-  if (!['easy', 'normal', 'hard', 'expert'].includes(difficulty)) {
-    throw new Error('--difficulty debe ser easy, normal, hard o expert');
+  if (!['easy', 'normal', 'hard', 'expert', 'adaptive'].includes(difficulty)) {
+    throw new Error('--difficulty debe ser easy, normal, hard, expert o adaptive');
   }
   const common = (values.get('common') ?? 'proteccion') as CommonAbilityId;
   if (!['proteccion', 'impulso', 'regeneracion'].includes(common)) {

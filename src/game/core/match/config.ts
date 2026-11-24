@@ -3,7 +3,12 @@
 import type { CommonAbilityId } from '../abilities/common';
 import type { Team } from '../team';
 
-export type BotDifficulty = 'easy' | 'normal' | 'hard' | 'expert';
+export type BotDifficulty =
+  | 'easy'
+  | 'normal'
+  | 'hard'
+  | 'expert'
+  | 'adaptive';
 
 export interface MatchPlayerConfig {
   slot: number;

@@ -80,6 +80,13 @@ import type {
   TargetPrediction,
   Vec2
 } from './ai/types';
+import {
+  ADAPTIVE_INITIAL_STRENGTH,
+  adaptiveTargetStrength,
+  applyAdaptiveTuning,
+  createAdaptiveTuning,
+  smoothAdaptiveStrength
+} from './ai/adaptiveTuning';
 import { EMPTY_BOT_WORLD_VIEW, NO_HAZARDS } from './ai/blackboard';
 import { BotDecision, type BotDecisionContext } from './ai/decision';
 import { clamp, directionTo, normalizeAngle } from './ai/math';
@@ -303,6 +310,10 @@ export class BotController {
   readonly difficulty: BotDifficulty;
 
   private readonly tuning: BotTuning;
+  /** `true` si el perfil se recalcula según la partida (dificultad adaptativa). */
+  private readonly adaptive: boolean;
+  /** Fuerza actual 0-1 del perfil adaptativo; se suaviza cada paso. */
+  private adaptiveStrength = ADAPTIVE_INITIAL_STRENGTH;
   private readonly nav: BotNavGrid;
   private readonly squad: BotSquad;
   /** Movimiento táctico; su estado se comparte mediante accesores. */
@@ -524,7 +535,10 @@ export class BotController {
   ) {
     this.slot = slot;
     this.difficulty = difficulty;
-    this.tuning = TUNING[difficulty];
+    this.adaptive = difficulty === 'adaptive';
+    // El perfil adaptativo es propio del bot: se reescribe en cada paso para
+    // que movimiento y decisión, que guardan esta misma referencia, lo vean.
+    this.tuning = this.adaptive ? createAdaptiveTuning() : TUNING[difficulty];
     this.nav = nav;
     this.squad = squad;
     this.pickups = pickups;
@@ -833,6 +847,18 @@ export class BotController {
       team.patrolClaims.delete(self.slot);
       this.resetCombatState();
       return { ...IDLE_INPUT };
+    }
+
+    // La dificultad adaptativa se recalcula antes de percibir y decidir para
+    // que reacción, memoria y apuntado usen ya el perfil de este paso.
+    if (this.adaptive) {
+      const target = adaptiveTargetStrength(self.team, players);
+      this.adaptiveStrength = smoothAdaptiveStrength(
+        this.adaptiveStrength,
+        target,
+        dt
+      );
+      applyAdaptiveTuning(this.tuning, this.adaptiveStrength);
     }
 
     this.hazards = hazards;

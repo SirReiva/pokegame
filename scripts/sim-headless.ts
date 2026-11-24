@@ -190,7 +190,7 @@ export interface Options {
   map: string;
   bots: number;
   seconds: number;
-  difficulty: 'easy' | 'normal' | 'hard' | 'expert';
+  difficulty: 'easy' | 'normal' | 'hard' | 'expert' | 'adaptive';
   seed: number | 'random';
   trace: string | null;
   every: number;
@@ -229,8 +229,8 @@ function parseArgs(argv: readonly string[]): Options {
   }
 
   const difficulty = (values.get('difficulty') ?? 'normal') as Options['difficulty'];
-  if (!['easy', 'normal', 'hard', 'expert'].includes(difficulty)) {
-    throw new Error('--difficulty debe ser easy, normal, hard o expert');
+  if (!['easy', 'normal', 'hard', 'expert', 'adaptive'].includes(difficulty)) {
+    throw new Error('--difficulty debe ser easy, normal, hard, expert o adaptive');
   }
   const mode = (values.get('mode') ?? 'tdm') as GameModeId;
   if (mode !== 'tdm' && mode !== 'koth') {
@@ -293,7 +293,7 @@ Opciones:
   --map <id>          Mapa de public/maps/index.json (por defecto: arena)
   --bots <n>          Número de bots, 1-8 (por defecto: 4)
   --seconds <n>       Segundos de simulación (por defecto: 60)
-  --difficulty <d>    easy | normal | hard | expert (por defecto: normal)
+  --difficulty <d>    easy | normal | hard | expert | adaptive (por defecto: normal)
   --seed <n|random>   Semilla de Math.random (por defecto: 12345)
   --trace <archivo>   Escribe una traza JSONL por frame
   --every <n>         Cada cuántos pasos se escribe la traza (por defecto: 1)

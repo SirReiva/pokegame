@@ -109,8 +109,8 @@ function parseArgs(argv: readonly string[]): TeamOptions {
   }
 
   const difficulty = (values.get('difficulty') ?? 'expert') as Options['difficulty'];
-  if (!['easy', 'normal', 'hard', 'expert'].includes(difficulty)) {
-    throw new Error('--difficulty debe ser easy, normal, hard o expert');
+  if (!['easy', 'normal', 'hard', 'expert', 'adaptive'].includes(difficulty)) {
+    throw new Error('--difficulty debe ser easy, normal, hard, expert o adaptive');
   }
 
   const common = (values.get('common') ?? 'proteccion') as CommonAbilityId;
@@ -219,7 +219,7 @@ Opciones:
   --seconds <n>       Duración máxima y límite de tiempo de cada partida (300)
   --kos <n>           KOs para ganar en tdm (por defecto: 15)
   --seeds <n>         Semillas por emparejamiento y orientación (por defecto: 2)
-  --difficulty <d>    easy | normal | hard | expert (por defecto: expert)
+  --difficulty <d>    easy | normal | hard | expert | adaptive (por defecto: expert)
   --common <id>       proteccion | impulso | regeneracion (por defecto: proteccion)
   --design <modo>     random (sortea equipos) | robin (usa --teams) (random)
   --pairs <n>         Emparejamientos sorteados en --design random (80)

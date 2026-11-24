@@ -68,14 +68,16 @@ export const BOT_DIFFICULTIES: readonly BotDifficulty[] = [
   'easy',
   'normal',
   'hard',
-  'expert'
+  'expert',
+  'adaptive'
 ];
 
 export const BOT_DIFFICULTY_LABEL: Record<BotDifficulty, string> = {
   easy: 'Fácil',
   normal: 'Normal',
   hard: 'Difícil',
-  expert: 'Experto'
+  expert: 'Experto',
+  adaptive: 'Adaptativa'
 };
 
 export interface TeamInfo {

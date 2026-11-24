@@ -134,6 +134,31 @@ export const TUNING: Record<BotDifficulty, BotTuning> = {
     punishChance: 0.9,
     punishTimingError: 0.04,
     punishReaction: 0.03
+  },
+  /**
+   * Punto de partida de la dificultad adaptativa. Sus valores no se usan tal
+   * cual: cada bot clona este perfil y lo interpola entre `easy` y `expert`
+   * según el nivel de los rivales y el marcador (ver `ai/adaptiveTuning.ts`).
+   * La visión se mantiene en rango humano y no se adapta.
+   */
+  adaptive: {
+    reaction: 0.36,
+    decision: 0.27,
+    decisionError: 0.18,
+    aimTolerance: 0.2,
+    aimError: 0.11,
+    visionFactor: 1,
+    matchupWeight: 1.08,
+    retreatHp: 0.31,
+    memory: 4.1,
+    lead: 0.54,
+    commonChance: 0.68,
+    pathInterval: 0.6,
+    evadeWindow: 0.53,
+    punishBonus: 3.8,
+    punishChance: 0.58,
+    punishTimingError: 0.22,
+    punishReaction: 0.14
   }
 };
 
