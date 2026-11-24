@@ -28,6 +28,14 @@ const MAX_ADAPTED_SPEED = 4;
 /** Identificador de copia para las marcas de rendimiento. */
 let NEXT_PROFILE_ID = 0;
 
+/** Transformación local de un nodo en la pose de bind del GLB. */
+interface BindPoseEntry {
+  readonly node: pc.GraphNode;
+  readonly position: pc.Vec3;
+  readonly rotation: pc.Quat;
+  readonly scale: pc.Vec3;
+}
+
 /** Busca el primer nodo del subárbol cuyo nombre encaje con `pattern`. */
 function findNodeMatching(
   root: pc.GraphNode,
@@ -137,6 +145,21 @@ export class ModelBillboard {
   private readonly measuredStates = new Set<AnimationName>();
   /** Estados cuyo `AnimClip` ya se ha creado y enlazado en esta copia. */
   private readonly boundStates = new Set<AnimationName>();
+  /**
+   * Pose de bind de todo el esqueleto. `prewarmBind` cambia el estado activo
+   * para enlazar un clip y lo devuelve en el mismo tick; el motor puede dejar
+   * las propiedades que ese clip anima y el clip de espera no (por ejemplo,
+   * `waist_69.localScale` en Greninja) con el valor del clip visitado o a cero.
+   * Mientras la copia use ese estado, se reponen esas propiedades en cada frame.
+   */
+  private readonly bindPose: BindPoseEntry[] = [];
+  /** Hay que reponer las propiedades que el clip visible no anima. */
+  private prewarmPoseRestore = false;
+  /** Propiedades animadas por cada clip, para no reponerlas en vano. */
+  private readonly animatedTargetsCache = new Map<
+    AnimationName,
+    ReadonlySet<string>
+  >();
 
   constructor(
     app: pc.AppBase,
@@ -193,6 +216,10 @@ export class ModelBillboard {
     this.rootMotionBase = rootMotionNode
       ? rootMotionNode.getLocalPosition().clone()
       : null;
+    // La pose de bind se guarda antes de crear el `AnimComponent`: el precalentado
+    // de clips cambia el estado activo y PlayCanvas deja las propiedades que el
+    // clip de espera no anima con el valor del último estado visitado (o a cero).
+    this.captureBindPose();
     // Se analiza una sola vez por modelo, con el grafo aún en bind. Quita las
     // curvas constantes que ya valen lo mismo que el bind: según los GLB del
     // catálogo, son el ~60 % de los canales y no cambian ninguna pose.
@@ -300,6 +327,79 @@ export class ModelBillboard {
   }
 
   /**
+   * Guarda la transformación local de cada nodo del GLB antes de que el
+   * `AnimComponent` evalúe ninguna pose.
+   */
+  private captureBindPose(): void {
+    const visit = (node: pc.GraphNode): void => {
+      this.bindPose.push({
+        node,
+        position: node.getLocalPosition().clone(),
+        rotation: node.getLocalRotation().clone(),
+        scale: node.getLocalScale().clone()
+      });
+      for (const child of node.children) visit(child);
+    };
+    visit(this.modelEntity);
+  }
+
+  /**
+   * Devuelve a la pose de bind las propiedades que el clip activo no anima.
+   * El precalentado deja en el evaluador destinos de clips visitados que ya no
+   * están activos; PlayCanvas les escribe su valor cero cada frame aunque el
+   * clip visible no los use (Greninja: `waist_69.localScale`). Las propiedades
+   * que sí anima el clip activo ya las ha escrito el motor este frame.
+   */
+  private restorePrewarmPose(): void {
+    const animated = this.animatedTargets();
+    for (const entry of this.bindPose) {
+      const path = entry.node.path;
+      if (!animated.has(`${path}\u0001localPosition`)) {
+        entry.node.setLocalPosition(entry.position);
+      }
+      if (!animated.has(`${path}\u0001localRotation`)) {
+        entry.node.setLocalRotation(entry.rotation);
+      }
+      if (!animated.has(`${path}\u0001localScale`)) {
+        entry.node.setLocalScale(entry.scale);
+      }
+    }
+    this.resetRootMotion();
+  }
+
+  /** Nodos y propiedades que escribe el clip visible, resueltos como el binder. */
+  private animatedTargets(): ReadonlySet<string> {
+    const name = this.animation;
+    const cached = name ? this.animatedTargetsCache.get(name) : null;
+    if (cached) return cached;
+
+    const targets = new Set<string>();
+    const resolved = name ? resolveModelClip(this.model, name) : null;
+    if (resolved) {
+      for (const curve of resolved.clip.track.curves) {
+        for (const path of curve.paths) {
+          const property = path.propertyPath[0];
+          if (
+            property !== 'localPosition' &&
+            property !== 'localRotation' &&
+            property !== 'localScale'
+          ) {
+            continue;
+          }
+          const node =
+            this.modelEntity.findByPath(path.entityPath) ??
+            (path.entityPath.length > 1
+              ? this.modelEntity.findByPath(path.entityPath.slice(1))
+              : null);
+          if (node) targets.add(`${node.path}\u0001${property}`);
+        }
+      }
+    }
+    if (name) this.animatedTargetsCache.set(name, targets);
+    return targets;
+  }
+
+  /**
    * Crea el estado de una animación concreta. `Game` lo llama por tandas
    * durante la cuenta atrás. `loop` debe ser el modo real de reproducción: los
    * clips de casteo van con reloj manual y por tanto sin loop.
@@ -340,6 +440,11 @@ export class ModelBillboard {
       }
     );
     this.layer.activeStateCurrentTime = time;
+    // El ida y vuelta de estados deja el clip visitado en el evaluador y el
+    // motor escribe ceros en las propiedades que el clip visible no anima
+    // (Greninja acababa con toda la malla colapsada). `update()` repone esas
+    // propiedades antes de cada render.
+    this.prewarmPoseRestore = true;
     this.boundStates.add(resolved.animation);
     return true;
   }
@@ -576,6 +681,11 @@ export class ModelBillboard {
     inView = true
   ): void {
     if (!this.root.enabled) return;
+
+    // Los clips que pasaron por el precalentado dejan destinos a cero en el
+    // evaluador. Antes del render se reponen las propiedades que el clip
+    // visible no escribe; las suyas ya las ha evaluado el motor este frame.
+    if (this.prewarmPoseRestore) this.restorePrewarmPose();
 
     this.animationWarmupFrames = Math.min(
       4,

@@ -153,6 +153,18 @@ efecto, `CONFIG.debug.animationWarmupMarks` deja marcas `performance.measure`
 por cada bind (`newpoke:anim-warmup:*`) y por el primer cambio real de estado
 (`newpoke:anim-first:*`), que debería ser mucho más corto.
 
+La pasada de bind cambia el estado activo y lo devuelve en el mismo tick. En
+PlayCanvas eso deja en el evaluador destinos de los clips visitados que ya no
+están activos; si el clip visible no anima esa propiedad, el motor le escribe
+su valor cero cada frame aunque nadie la use. Con Greninja eso colapsaba
+`waist_69.localScale` a cero y la malla entera desaparecía hasta que otra
+animación la escribía. Por eso `ModelBillboard` guarda la pose de bind y, antes
+de cada render, repone las propiedades que el clip visible no anima
+(`restorePrewarmPose`). Así el cuerpo se ve desde el primer frame de la cuenta
+atrás y no arrastra ceros al empezar la partida. La corrección es por frame a
+propósito: no se hace `rebind`, que vaciaría las cachés que el precalentado
+acaba de construir y devolvería el coste al primer casteo.
+
 ## Presupuesto de píxeles
 
 `CONFIG.performance.matchPixelBudget` limita los píxeles internos de la
