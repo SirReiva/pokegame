@@ -1302,6 +1302,24 @@ registerAbility(
 );
 
 registerAbility(
+  meleeAbility('drenadoras', 'Drenadoras', 'Grass', 'status', defaultMeleeResolve)
+    .power(0)
+    .cooldown(5)
+    .range(3)
+    .radius(0.9)
+    .halfAngle(60)
+    .startup(0.2)
+    .active(0.2).recovery(0)
+    .presentation(attackScript('shoot'))
+    .impact('spore')
+    .status({ kind: 'seeded', damage: 10, duration: 3, healRatio: 0.5 })
+    .color(126, 214, 88)
+    .description(
+      'Siembra a los rivales que tenga delante: 10 PV/s durante 3 s y cura al lanzador la mitad del daño.'
+    )
+);
+
+registerAbility(
   aoeAbility('llueveHojas', 'Lluevehojas', 'Grass', 'special', defaultAoeResolve)
     .power(190)
     .cooldown(11)
@@ -2981,7 +2999,7 @@ export const MOVESETS: Record<
 MOVESETS['0025'] = ['chispazo', 'ataqueRapido', 'impactrueno', 'rayo'];
 MOVESETS['0100'] = ['chispa', 'rollout', 'ondaTrueno', 'explosion'];
 MOVESETS['0094'] = ['lenguetazo', 'bolaSombra', 'bombaLodo', 'comeSuenos'];
-MOVESETS['0001'] = ['latigoCepa', 'paralizador', 'hojaAfilada', 'llueveHojas'];
+MOVESETS['0001'] = ['latigoCepa', 'drenadoras', 'hojaAfilada', 'llueveHojas'];
 MOVESETS['0004'] = ['ascuas', 'giroFuego', 'lanzallamas', 'anilloIgneo'];
 MOVESETS['0007'] = ['pistolaAgua', 'acuaJet', 'rayoBurbuja', 'hidrobomba'];
 MOVESETS['0448'] = [

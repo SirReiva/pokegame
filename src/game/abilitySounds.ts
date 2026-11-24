@@ -34,6 +34,8 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   // Bulbasaur
   latigoCepa: 'abilities/latigoCepa.mp3',
   paralizador: 'abilities/paralizador.mp3',
+  // Reutiliza el sonido de Paralizador: Drenadoras es su clon de estado.
+  drenadoras: 'abilities/paralizador.mp3',
   hojaAfilada: 'abilities/hojaAfilada.mp3',
   llueveHojas: 'abilities/llueveHojas.mp3',
 
