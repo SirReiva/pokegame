@@ -32,17 +32,20 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   comeSuenos: 'abilities/comeSuenos.mp3',
 
   // Bulbasaur
+  latigoCepa: 'abilities/latigoCepa.mp3',
   paralizador: 'abilities/paralizador.mp3',
   hojaAfilada: 'abilities/hojaAfilada.mp3',
   llueveHojas: 'abilities/llueveHojas.mp3',
 
   // Charmander
+  ascuas: 'abilities/ascuas.mp3',
   aranazo: 'abilities/aranazo.mp3',
   giroFuego: 'abilities/giroFuego.mp3',
   lanzallamas: 'abilities/lanzallamas.mp3',
   anilloIgneo: 'abilities/anilloIgneo.mp3',
 
   // Squirtle
+  pistolaAgua: 'abilities/pistolaAgua.mp3',
   acuaJet: 'abilities/acuaJet.mp3',
   rayoBurbuja: 'abilities/rayoBurbuja.mp3',
   hidrobomba: 'abilities/hidrobomba.mp3',
@@ -120,7 +123,36 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   golpeAlaHoOh: 'abilities/golpeAlaHoOh.mp3',
   pajaroOsado: 'abilities/pajaroOsado.mp3',
   recuperacionHoOh: 'abilities/recuperacionHoOh.mp3',
-  fuegoSagrado: 'abilities/fuegoSagrado.mp3'
+  fuegoSagrado: 'abilities/fuegoSagrado.mp3',
+
+  // Onix
+  atadura: 'abilities/atadura.mp3',
+  lanzarrocas: 'abilities/lanzarrocas.mp3',
+  excavar: 'abilities/excavar.mp3',
+  fisura: 'abilities/fisura.mp3',
+
+  // Gyarados
+  acuaCola: 'abilities/acuaCola.mp3',
+  cascada: 'abilities/cascada.mp3',
+  triturarGyarados: 'abilities/triturarGyarados.mp3',
+  dragoaliento: 'abilities/dragoaliento.mp3',
+
+  // Suicune
+  golpeCuerpo: 'abilities/golpeCuerpo.mp3',
+  chorroAgua: 'abilities/chorroAgua.mp3',
+  frioPolar: 'abilities/frioPolar.mp3',
+
+  // Kyogre
+  rafagaMarina: 'abilities/rafagaMarina.mp3',
+  remolinoMarino: 'abilities/remolinoMarino.mp3',
+  aguasCurativas: 'abilities/aguasCurativas.mp3',
+  pulsoPrimigenio: 'abilities/pulsoPrimigenio.mp3',
+
+  // Rayquaza
+  garraDraco: 'abilities/garraDraco.mp3',
+  vueloDraco: 'abilities/vueloDraco.mp3',
+  furiaDraco: 'abilities/furiaDraco.mp3',
+  ascensoDraco: 'abilities/ascensoDraco.mp3'
 };
 
 /**

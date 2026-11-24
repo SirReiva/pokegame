@@ -88,6 +88,28 @@ este proyecto fan, no comercial, igual que los sprites.
 | Aerochorro | Sky Attack |
 | Protección | Protect |
 | Impulso | Quick Attack |
+| Látigo Cepa | Vine Whip |
+| Ascuas | Ember |
+| Pistola Agua | Water Gun |
+| Atadura | Bind |
+| Lanzarrocas | Rock Throw |
+| Excavar | Dig |
+| Fisura | Fissure |
+| Acua Cola | Aqua Tail |
+| Cascada | Waterfall |
+| Triturar (Gyarados) | Crunch |
+| Dragoaliento | Dragon Breath |
+| Golpe Cuerpo | Body Slam |
+| Chorro de Agua | Brine |
+| Frío Polar | Sheer Cold |
+| Ráfaga Marina | Bubble |
+| Remolino Marino | Whirlpool |
+| Aguas Curativas | Aqua Ring |
+| Pulso Primigenio | Water Spout |
+| Garra Dragón | Dragon Claw |
+| Vuelo Dragón | Dragon Rush |
+| Furia Dragón | Dragon Pulse |
+| Ascenso Draco | Brave Bird |
 
 Los impactos usan las pistas genéricas `Hit Normal Damage`, `Hit Super
 Effective` y `Hit Weak Not Very Effective`, elegidas según la efectividad del
@@ -98,3 +120,9 @@ usan `Water Pulse` y `Fissure` como equivalentes. `Magical Leaf` y `Solar Beam`
 tampoco están en el álbum, así que `Hoja Mágica` usa `Razor Leaf` y `Rayo Solar`
 usa `Leaf Storm`. `Aeroblast` tampoco aparece, así que `Aerochorro` reutiliza
 `Sky Attack`.
+
+`Origin Pulse` y `Dragon Ascent` son de la sexta generación: `Pulso Primigenio`
+usa `Water Spout` (la firma de Kyogre en la quinta) y `Ascenso Draco` usa
+`Brave Bird` por el picado aéreo. `Ráfaga Marina` y `Chorro de Agua` no son
+movimientos reales y toman `Bubble` y `Brine`; `Furia Dragón` usa `Dragon
+Pulse`, que comparte el haz continuo, en lugar de `Dragon Rage`.

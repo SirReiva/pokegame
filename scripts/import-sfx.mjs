@@ -115,6 +115,40 @@ const ABILITY_TRACKS = {
   pajaroOsado: 'Sky Attack',
   recuperacionHoOh: 'Recover',
   fuegoSagrado: 'Fire Blast',
+  // Básicos de los starters y especies añadidas después: sus movimientos sí
+  // están en el álbum, así que usan la pista real.
+  latigoCepa: 'Vine Whip',
+  ascuas: 'Ember',
+  pistolaAgua: 'Water Gun',
+  // Onix
+  atadura: 'Bind',
+  lanzarrocas: 'Rock Throw',
+  excavar: 'Dig',
+  fisura: 'Fissure',
+  // Gyarados
+  acuaCola: 'Aqua Tail',
+  cascada: 'Waterfall',
+  triturarGyarados: 'Crunch',
+  dragoaliento: 'Dragon Breath',
+  // Suicune
+  golpeCuerpo: 'Body Slam',
+  // Chorro de Agua no es un movimiento real: Brine comparte el chorro a presión.
+  chorroAgua: 'Brine',
+  frioPolar: 'Sheer Cold',
+  // Kyogre. Ráfaga Marina tampoco existe: Bubble da el proyectil de agua ligero.
+  rafagaMarina: 'Bubble',
+  remolinoMarino: 'Whirlpool',
+  aguasCurativas: 'Aqua Ring',
+  // Origin Pulse es de la sexta generación: Water Spout es la firma de Kyogre
+  // en la quinta y conserva el pulso de agua en área.
+  pulsoPrimigenio: 'Water Spout',
+  // Rayquaza. Furia Dragón es un haz continuo, así que Dragon Pulse encaja
+  // mejor que Dragon Rage; Dragon Ascent tampoco existe en la quinta y el
+  // picado de Brave Bird cubre el ascenso aéreo.
+  garraDraco: 'Dragon Claw',
+  vueloDraco: 'Dragon Rush',
+  furiaDraco: 'Dragon Pulse',
+  ascensoDraco: 'Brave Bird',
   proteccion: 'Protect',
   impulso: 'Quick Attack'
 };
@@ -196,6 +230,26 @@ const TRACK_HASHES = {
   'Stone Edge': 'jrjuyffl',
   'Slash': 'oqljopht',
   'Fissure': 'joodzpzb',
+  'Vine Whip': 'kpvifakb',
+  'Ember': 'cpstpuel',
+  'Water Gun': 'thdtjrev',
+  'Bind': 'jxnwtdma',
+  'Rock Throw': 'eicnibik',
+  'Dig': 'aoudjiqf',
+  'Aqua Tail': 'mmzmlshj',
+  'Waterfall': 'knlolpss',
+  'Dragon Breath': 'xgmscluq',
+  'Body Slam': 'nxyahlft',
+  'Brine': 'rioyyxsu',
+  'Sheer Cold': 'vscjotau',
+  'Bubble': 'wfmtgcsg',
+  'Whirlpool': 'yffmtgzg',
+  'Aqua Ring': 'vsbetdmz',
+  'Water Spout': 'kvzkdkpw',
+  'Dragon Claw': 'xnwtgyzd',
+  'Dragon Rush': 'kbaxlprn',
+  'Dragon Pulse': 'eqqfcykf',
+  'Brave Bird': 'qaclwbre',
   'Protect': 'kdkpuemz',
   'Hit Normal Damage': 'jnnzlend',
   'Hit Super Effective': 'ejipzexy',

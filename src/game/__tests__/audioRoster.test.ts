@@ -33,6 +33,31 @@ test('añade las cuatro habilidades del moveset y el instinto elegido', () => {
   assert.ok(!paths.includes('abilities/ventisca.mp3'));
 });
 
+test('incluye los básicos de los starters y las especies nuevas', () => {
+  const paths = sfxPathsForRoster([
+    { pokemonId: '0001' },
+    { pokemonId: '0004' },
+    { pokemonId: '0007' },
+    { pokemonId: '0095' },
+    { pokemonId: '0384' }
+  ]);
+  for (const path of [
+    'abilities/latigoCepa.mp3',
+    'abilities/ascuas.mp3',
+    'abilities/pistolaAgua.mp3',
+    'abilities/atadura.mp3',
+    'abilities/lanzarrocas.mp3',
+    'abilities/excavar.mp3',
+    'abilities/fisura.mp3',
+    'abilities/garraDraco.mp3',
+    'abilities/vueloDraco.mp3',
+    'abilities/furiaDraco.mp3',
+    'abilities/ascensoDraco.mp3'
+  ]) {
+    assert.ok(paths.includes(path), `falta ${path}`);
+  }
+});
+
 test('deduplica rutas compartidas entre especies del roster', () => {
   const paths = sfxPathsForRoster([
     { pokemonId: '0383', commonAbilityId: 'impulso' },

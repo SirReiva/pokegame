@@ -27,6 +27,7 @@
     "items:art": "node scripts/generate-item-art.mjs",
     "lint": "twlinter --fix --no-config --json && oxlint",
     "check:arch": "node scripts/check-architecture.mjs",
+    "check:audio": "node --import tsx scripts/check-ability-sounds.ts",
     "check": "tsc -b && node scripts/check-architecture.mjs",
     "test": "node scripts/run-tests.mjs",
     "bench": "node --import tsx scripts/bench-core.mjs",
