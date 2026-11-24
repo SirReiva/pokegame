@@ -2711,8 +2711,21 @@ export class Game {
     // Las marcas solo existen si hay preparación visible. Las habilidades
     // instantáneas crean su propio aviso en el ejecutor.
     const marker =
-      def.startup > 0 && def.shape === 'aoe'
-        ? def.aoeShape === 'cone'
+      def.startup > 0 && def.shape === 'melee'
+        ? this.combatFx.spawnAoeConeTelegraph(
+            player.x,
+            player.z,
+            dirX,
+            dirZ,
+            def.range + maxHitRadius(),
+            def.halfAngle,
+            teamAccent,
+            def.startup,
+            0.15,
+            owner
+          )
+        : def.startup > 0 && def.shape === 'aoe'
+          ? def.aoeShape === 'cone'
           ? this.combatFx.spawnAoeConeTelegraph(
               targetX,
               targetZ,

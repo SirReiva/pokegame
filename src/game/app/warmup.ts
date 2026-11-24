@@ -590,6 +590,23 @@ export class WarmUp {
               def.impactStyle
             )
         );
+        if (def.startup > 0) {
+          push(
+            `melee-telegraph:${(def.range + padding).toFixed(3)}:${def.halfAngle}:${colorKey}`,
+            () =>
+              combatFx.spawnAoeConeTelegraph(
+                x,
+                z,
+                0,
+                1,
+                def.range + padding,
+                def.halfAngle,
+                def.color,
+                0.4,
+                0.15
+              )
+          );
+        }
       } else if (def.shape === 'dash') {
         push(`dash:${colorKey}`, () =>
           combatFx.spawnDash(-1, 0, 1, 0, def.color)
