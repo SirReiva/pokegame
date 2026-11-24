@@ -25,6 +25,7 @@ import {
   castMovementMultiplier,
   hasCastMovementOption
 } from './core/abilities/movement';
+import { isDamageStatus } from './core/abilities/specs';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -1526,7 +1527,7 @@ export class BotController {
     if (
       def.props.power <= 0 &&
       def.props.slow === null &&
-      def.props.dot === null &&
+      def.props.status === null &&
       def.selfDamage <= 0 &&
       def.bot?.customDamage !== true &&
       def.bot?.customControl !== true
@@ -2476,7 +2477,7 @@ export class BotController {
       if (
         !def ||
         def.shape === 'self' ||
-        (def.props.power <= 0 && def.props.dot === null)
+        (def.props.power <= 0 && !isDamageStatus(def.props.status))
       ) {
         continue;
       }
@@ -4808,7 +4809,7 @@ export class BotController {
       if (
         def.props.power <= 0 &&
         def.props.slow === null &&
-        def.props.dot === null &&
+        def.props.status === null &&
         def.bot?.customDamage !== true
       ) {
         return;
@@ -4817,7 +4818,7 @@ export class BotController {
       if (
         def.props.power >= BIG_ABILITY_POWER ||
         def.props.slow !== null ||
-        def.props.dot !== null ||
+        def.props.status !== null ||
         def.bot?.customDamage === true
       ) {
         keyReady = true;

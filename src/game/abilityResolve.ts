@@ -2,8 +2,8 @@
  * Resoluciones por defecto de cada forma.
  *
  * Reproducen el comportamiento histórico: dañar a los rivales alcanzables con
- * línea de visión, aplicar su `slow` y su `dot`, y dejar el control solo en los
- * golpes únicos. Una habilidad puede sustituirlas con `.resolve(...)`.
+ * línea de visión, aplicar su `slow` y su `status`, y dejar el control solo en
+ * los golpes únicos. Una habilidad puede sustituirlas con `.resolve(...)`.
  *
  * Se tipan con `AnyAbilityDef` porque solo leen el bloque común `props`; así la
  * misma función sirve para cualquier props extendida.
@@ -37,8 +37,8 @@ export const defaultDashResolve = resolveAllTargets;
 
 /**
  * Resolución de área. En los modos con ticks no hay control por defecto, y un
- * área persistente sin daño, slow ni DoT no hace nada salvo que una resolución
- * propia reparta buffs, curación o revividas.
+ * área persistente sin daño, slow ni estado no hace nada salvo que una
+ * resolución propia reparta buffs, curación o revividas.
  */
 export function defaultAoeResolve(context: Context): void {
   const overtime = isOvertimeMode(context.mode);
@@ -46,7 +46,7 @@ export function defaultAoeResolve(context: Context): void {
     overtime &&
     context.power <= 0 &&
     !context.def.props.slow &&
-    !context.def.props.dot
+    !context.def.props.status
   ) {
     return;
   }

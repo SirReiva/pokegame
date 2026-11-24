@@ -43,6 +43,7 @@ import type {
   AoeCircleSpec,
   BeamAbilityDef,
   BuffSpec,
+  StatusSpec,
   DashAbilityDef,
   MeleeAbilityDef,
   ProjectileAbilityDef,
@@ -111,13 +112,14 @@ export type {
   AoeCircleSpec,
   BeamAbilityDef,
   BuffSpec,
-  DamageOverTimeSpec,
+  StatusSpec,
   DashAbilityDef,
   MeleeAbilityDef,
   ProjectileAbilityDef,
   RepeatCooldownSpec,
   SelfAbilityDef,
-  SlowSpec
+  SlowSpec,
+  StatusKind
 } from './core/abilities/def';
 export type { HealOnHitToken } from './core/abilities/aoe';
 export type { PokemonType } from './core/typeChart';
@@ -150,7 +152,7 @@ export const DEFAULT_PROPS: AbilityProps = {
   hitstun: CONFIG.combat.hitstunSeconds,
   knockback: 0,
   slow: null,
-  dot: null,
+  status: null,
   healOnHit: false
 };
 
@@ -380,13 +382,8 @@ export interface CommonBuilder<S extends AbilityShape, P extends AbilityProps> {
   knockback(value: number): this;
   /** Ralentización aplicada a los golpeados. */
   slow(multiplier: number, duration: number): this;
-  /** Daño en el tiempo aplicado a los golpeados. */
-  dot(
-    type: PokemonType,
-    damage: number,
-    duration: number,
-    interval?: number
-  ): this;
+  /** Estado aplicado a los golpeados. */
+  status(spec: StatusSpec): this;
   /** La curación de `heal` solo se aplica si la habilidad impacta. */
   healOnHit(): this;
   /** Añade props propias de la habilidad al bloque común. */
@@ -493,13 +490,8 @@ class AbilityBuilder<S extends AbilityShape, P extends AbilityProps> {
     return this;
   }
 
-  dot(
-    type: PokemonType,
-    damage: number,
-    duration: number,
-    interval = 1
-  ): this {
-    this.draftProps().dot = { type, damage, duration, interval };
+  status(spec: StatusSpec): this {
+    this.draftProps().status = { ...spec };
     return this;
   }
 
@@ -1160,7 +1152,7 @@ registerAbility(
     .radius(2.4)
     .area('poison', 'overtime-global', 2.5, 0.5)
     .slow(0.75, 1.5)
-    .dot('Poison', 5, 3)
+    .status({ kind: 'poisoned', damage: 5, duration: 3 })
     .startup(0.35, { move: true })
     .armor(20)
     .recovery(0.5)
@@ -1246,7 +1238,7 @@ registerAbility(
     .presentation(releaseScript('charge'))
     .beam('fire')
     .impact('fire')
-    .dot('Fire', 6, 3)
+    .status({ kind: 'burned', damage: 6, duration: 3 })
     .color(255, 138, 42)
     .description(
       'Chorro de fuego instantáneo que atraviesa a los rivales en línea y les aplica quemadura (6 PV/s durante 3 s).'

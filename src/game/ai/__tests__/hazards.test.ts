@@ -8,7 +8,7 @@ import type { ActiveAoe, Projectile } from '../../matchState.ts';
 const projectile = (
   power: number,
   slow: SlowSpec | null = null,
-  dot = null as { type: string; damage: number; duration: number } | null,
+  status = null as { kind: string; damage?: number; duration: number } | null,
   customDamage = false
 ) =>
   ({
@@ -19,7 +19,7 @@ const projectile = (
     traveled: 2,
     owner: { team: 'red' },
     def: {
-      props: { power, slow, dot },
+      props: { power, slow, status },
       bot: customDamage ? { customDamage: true } : undefined,
       range: 12,
       radius: 0.4
@@ -29,7 +29,7 @@ const projectile = (
 const aoe = (
   power: number,
   slow: SlowSpec | null = null,
-  dot = null as { type: string; damage: number; duration: number } | null,
+  status = null as { kind: string; damage?: number; duration: number } | null,
   customDamage = false
 ) =>
   ({
@@ -44,7 +44,7 @@ const aoe = (
     halfAngle: 0,
     owner: { team: 'blue' },
     def: {
-      props: { power, slow, dot },
+      props: { power, slow, status },
       bot: customDamage ? { customDamage: true } : undefined,
       aoeDamageMode: 'once',
       radius: 3,
@@ -71,7 +71,7 @@ const patternAoe = () =>
     halfAngle: 0,
     owner: { team: 'blue' },
     def: {
-      props: { power: 10, slow: null, dot: null },
+      props: { power: 10, slow: null, status: null },
       aoeDamageMode: 'once',
       radius: 1,
       aoeCircles: [
@@ -99,7 +99,7 @@ const coneAoe = () =>
     halfAngle: (12.5 * Math.PI) / 180,
     owner: { team: 'blue' },
     def: {
-      props: { power: 10, slow: null, dot: null },
+      props: { power: 10, slow: null, status: null },
       aoeDamageMode: 'overtime-global',
       radius: 7,
       halfAngle: 12.5,
@@ -185,13 +185,13 @@ test('sin buffer cada llamada crea su propio array', () => {
   assert.notEqual(first[0], second[0]);
 });
 
-test('incluye DoT sin potencia y daño declarado como custom', () => {
+test('incluye estados de daño sin potencia y daño declarado como custom', () => {
   const hazards = buildBotHazards(
     [
-      projectile(0, null, { type: 'Fire', damage: 5, duration: 3 }),
+      projectile(0, null, { kind: 'burned', damage: 5, duration: 3 }),
       projectile(0, null, null, true)
     ],
-    [aoe(0, null, { type: 'Poison', damage: 4, duration: 2 })]
+    [aoe(0, null, { kind: 'poisoned', damage: 4, duration: 2 })]
   );
 
   assert.equal(hazards.length, 3);

@@ -13,8 +13,9 @@ import {
   ABILITIES,
   type AbilityDef,
   type BuffStat,
-  type DamageOverTimeSpec
+  type StatusSpec
 } from '../abilities';
+import { isDamageStatus } from '../core/abilities/specs';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -78,20 +79,42 @@ const CUSTOM_DAMAGE_SCORE = 25;
 const CUSTOM_CONTROL_SCORE = 18;
 
 /**
- * Daño esperado de un `dot` completo: daño fijo por tick × número de ticks.
- * Protección lo reduce; la efectividad de tipo y el crítico no lo afectan.
+ * Daño esperado de un estado de daño completo: daño fijo por tick × número de
+ * ticks. Protección lo reduce; la efectividad de tipo y el crítico no lo
+ * afectan.
  */
 function expectedDotDamage(
   target: MatchPlayerState,
-  dot: DamageOverTimeSpec | null | undefined
+  status: StatusSpec | null | undefined
 ): number {
-  if (!dot || dot.damage <= 0 || dot.duration <= 0) return 0;
+  if (!isDamageStatus(status) || status.damage <= 0 || status.duration <= 0) {
+    return 0;
+  }
   const interval =
-    dot.interval !== undefined && dot.interval > 0 ? dot.interval : 1;
-  const ticks = Math.max(1, Math.ceil(dot.duration / interval));
+    status.interval !== undefined && status.interval > 0
+      ? status.interval
+      : 1;
+  const ticks = Math.max(1, Math.ceil(status.duration / interval));
   const reduction =
     target.damageReductionTimer > 0 ? target.damageReduction : 0;
-  return Math.max(1, Math.round(dot.damage * ticks * (1 - reduction)));
+  return Math.max(1, Math.round(status.damage * ticks * (1 - reduction)));
+}
+
+/** Valor conservador de un estado de control, según su duración y fuerza. */
+function expectedControlScore(status: StatusSpec): number {
+  const durationFactor = clamp(status.duration / 2.5, 0.4, 1.5);
+  switch (status.kind) {
+    case 'frozen':
+      return (
+        (15 + clamp(1 - status.multiplier, 0, 1) * 70) * durationFactor
+      );
+    case 'asleep':
+      return 60 * durationFactor;
+    case 'paralyzed':
+      return 40 * durationFactor;
+    default:
+      return 0;
+  }
 }
 
 /** Bonus por interrumpir una curación o reanimación enemiga. */
@@ -719,7 +742,7 @@ export class BotDecision {
     const hpFraction = self.hp / Math.max(1, self.maxHp);
     const hasEffect =
       def.props.power > 0 ||
-      def.props.dot !== null ||
+      def.props.status !== null ||
       def.healSelf > 0 ||
       def.props.slow !== null ||
       def.props.knockback > 0 ||
@@ -748,7 +771,7 @@ export class BotDecision {
 
     const offensive =
       def.props.power > 0 ||
-      def.props.dot !== null ||
+      def.props.status !== null ||
       def.props.slow !== null ||
       def.bot?.customDamage === true ||
       def.bot?.customControl === true;
@@ -766,7 +789,7 @@ export class BotDecision {
 
     if (
       def.props.power > 0 ||
-      def.props.dot !== null ||
+      def.props.status !== null ||
       def.bot?.customDamage === true ||
       def.bot?.customControl === true
     ) {
@@ -774,7 +797,7 @@ export class BotDecision {
         slot === 3 || def.props.power >= this.ctx.bigAbilityPower;
       const dealsDamage =
         def.props.power > 0 ||
-        def.props.dot !== null ||
+        def.props.status !== null ||
         def.bot?.customDamage === true;
       // Si un compañero ya ha comprometido daño suficiente para tumbarlo, no
       // se gasta otra definitiva en el mismo objetivo.
@@ -802,7 +825,7 @@ export class BotDecision {
       if (
         def.bot?.customDamage === true &&
         def.props.power <= 0 &&
-        def.props.dot === null
+        !isDamageStatus(def.props.status)
       ) {
         score += CUSTOM_DAMAGE_SCORE * hitChance;
       }
@@ -849,6 +872,11 @@ export class BotDecision {
       const durationFactor = clamp(def.props.slow.duration / 2.5, 0.4, 1.5);
       score +=
         (15 + slowStrength * 70) * durationFactor * hitChance;
+    }
+    // El daño en el tiempo ya entra en `expectedDamage`; los estados de
+    // control se valoran aquí para que una habilidad de estado no puntúe 0.
+    if (def.props.status && !isDamageStatus(def.props.status)) {
+      score += expectedControlScore(def.props.status) * hitChance;
     }
     if (def.props.knockback > 0 && !armorAbsorbed) {
       score += Math.min(20, def.props.knockback * 12) * hitChance;
@@ -971,7 +999,7 @@ export class BotDecision {
     def: AbilityDef,
     prediction: TargetPrediction
   ): number {
-    if (def.props.power <= 0 && def.props.dot === null) return 0;
+    if (def.props.power <= 0 && !isDamageStatus(def.props.status)) return 0;
     const category: 'physical' | 'special' =
       def.category === 'physical' ? 'physical' : 'special';
     const physical = category === 'physical';
@@ -1035,8 +1063,8 @@ export class BotDecision {
       }
     }
     // El DoT es daño fijo por tick: no pasa por STAB, crítico ni efectividad.
-    // Protección sí lo reduce, igual que en `applyDamageOverTimeTick`.
-    const dotDamage = expectedDotDamage(target, def.props.dot);
+    // Protección sí lo reduce, igual que en `applyDamageStatusTick`.
+    const dotDamage = expectedDotDamage(target, def.props.status);
     if (power <= 0 && dotDamage <= 0) return 0;
 
     let directDamage = 0;

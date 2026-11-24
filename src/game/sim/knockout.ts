@@ -72,7 +72,7 @@ export function knockOut(
   target.buffs = [];
   target.slowEffects = [];
   target.slowMultiplier = 1;
-  target.dots = [];
+  target.statuses = [];
   target.damageReductionTimer = 0;
   target.damageReduction = 0;
   target.shieldSpeedMultiplier = 1;

@@ -234,6 +234,7 @@ export function createRuntimeHosts(state: RuntimeState): RuntimeHosts {
       },
       buffMultiplier: state.buffMultiplier,
       applySlow: state.applySlow,
+      refreshSlowMultiplier: state.refreshSlowMultiplier,
       activeCastArmor: state.activeCastArmor,
       spawnArmorFeedback: state.spawnArmorFeedback,
       interruptWithRefund: state.interruptWithRefund,

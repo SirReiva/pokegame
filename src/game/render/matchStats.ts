@@ -119,11 +119,14 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
         multiplier: effect.multiplier,
         remaining: effect.remaining
       })),
-      dots: player.dots.map((dot) => ({
-        type: dot.type,
-        damage: dot.damage,
-        interval: dot.interval,
-        remaining: dot.remaining
+      statuses: player.statuses.map((status) => ({
+        kind: status.kind,
+        remaining: status.remaining,
+        damage: 'damage' in status ? status.damage : undefined,
+        interval: 'interval' in status ? status.interval : undefined,
+        multiplier: status.kind === 'frozen' ? status.multiplier : undefined,
+        extraCooldown:
+          status.kind === 'paralyzed' ? status.extraCooldown : undefined
       })),
       abilities: player.abilityIds.slice(0, 4).map((id, abilityIndex) => {
         const def = id ? ABILITIES[id] : null;
@@ -135,7 +138,8 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
           category: def?.category ?? 'status',
           cooldown: player.cooldowns[abilityIndex] ?? 0,
           duration:
-            player.cooldownTotals[abilityIndex] || (def?.cooldown ?? 0)
+            player.cooldownTotals[abilityIndex] || (def?.cooldown ?? 0),
+          cooldownPenalty: player.cooldownPenalties[abilityIndex] ?? 0
         };
       }),
       shieldActive: player.damageReductionTimer > 0,
@@ -149,6 +153,7 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
             passive: commonOption.passive,
             cooldown: player.cooldowns[4] ?? 0,
             duration: player.cooldownTotals[4] || (commonDef?.cooldown ?? 0),
+            cooldownPenalty: player.cooldownPenalties[4] ?? 0,
             readyIn: commonOption.passive
               ? Math.max(0, REGENERATION_DELAY_SECONDS - player.hiddenTimer)
               : 0,

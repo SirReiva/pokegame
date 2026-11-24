@@ -12,7 +12,7 @@
  * contrato y los callbacks de área no necesitan una API distinta.
  */
 
-import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
+import type { BuffSpec, SlowSpec, StatusSpec } from './specs';
 import type { AoeDamageMode, AoeShape } from './styles';
 
 /** Lo mínimo que un callback necesita saber de un jugador. */
@@ -92,8 +92,8 @@ export interface AbilityHitOptions {
   knockback?: number | null;
   /** Ralentización. `null` la desactiva. Por defecto, `def.props.slow`. */
   slow?: SlowSpec | null;
-  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.props.dot`. */
-  dot?: DamageOverTimeSpec | null;
+  /** Estado. `null` lo desactiva. Por defecto, `def.props.status`. */
+  status?: StatusSpec | null;
   healToken?: HealOnHitToken;
   impactX?: number;
   impactZ?: number;
@@ -131,7 +131,7 @@ export interface AbilityResolveContext<
   /** Compañeros de equipo caídos con su marcador de KO dentro del radio. */
   fallenAllies: readonly AbilityFallenAlly<TPlayer>[];
   /**
-   * Aplica el golpe estándar: inmunidad, sonido, slow, dot, daño,
+   * Aplica el golpe estándar: inmunidad, sonido, slow, estado, daño,
    * hitstun/cancel/empuje y `healOnHit`. Devuelve `true` solo si quitó vida.
    */
   applyHit(target: AbilityTarget<TPlayer>, options?: AbilityHitOptions): boolean;

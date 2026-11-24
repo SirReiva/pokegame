@@ -126,7 +126,7 @@ test('defaultAoeResolve deja control solo en los golpes únicos', () => {
     mode: 'once',
     power: 10,
     isMatchOver: () => false,
-    def: { props: { slow: null, dot: null } },
+    def: { props: { slow: null, status: null } },
     targets: [
       {
         hittable: true,

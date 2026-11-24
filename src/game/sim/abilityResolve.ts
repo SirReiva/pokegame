@@ -144,7 +144,7 @@ function applyHit(
     hitstun: options.hitstun,
     knockback: options.knockback,
     slow: options.slow,
-    dot: options.dot,
+    status: options.status,
     healToken: options.healToken ?? input.healToken,
     impactX: options.impactX ?? target.impactX,
     impactZ: options.impactZ ?? target.impactZ,

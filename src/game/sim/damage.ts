@@ -6,12 +6,7 @@
  * reglas que ya viven en `Game`.
  */
 
-import type {
-  AbilityDef,
-  BuffStat,
-  DamageOverTimeSpec,
-  SlowSpec
-} from '../abilities';
+import type { AbilityDef, BuffStat, SlowSpec, StatusSpec } from '../abilities';
 import {
   atmosphereIncomingMultiplier,
   atmosphereMoveMultiplier,
@@ -21,10 +16,12 @@ import {
 import type { CombatFxPort } from '../core/ports/fx';
 import { isChannelingCast } from '../core/abilities/movement';
 import type {
-  ActiveDamageOverTime,
+  ActiveDamageStatus,
+  ActiveStatus,
   HealOnHitToken,
   MatchPlayerState
 } from '../matchState';
+import { statusPokemonType } from '../core/abilities/specs';
 import { computeDamage, rollCritical, rollRandomFactor } from '../combat';
 import { applyHealSelf } from '../effects';
 import { typeEffectiveness, type PokemonType } from '../core/typeChart';
@@ -38,8 +35,8 @@ export interface DamageOptions {
   hitstun?: number;
   knockback?: number | null;
   slow?: SlowSpec | null;
-  /** Daño en el tiempo. `null` lo desactiva. Por defecto, `def.props.dot`. */
-  dot?: DamageOverTimeSpec | null;
+  /** Estado. `null` lo desactiva. Por defecto, `def.props.status`. */
+  status?: StatusSpec | null;
   healToken?: HealOnHitToken;
   impactX?: number;
   impactZ?: number;
@@ -74,6 +71,8 @@ export interface DamageSystemHost {
     slow: SlowSpec,
     color: readonly [number, number, number]
   ): void;
+  /** Recalcula la velocidad tras aplicar o quitar una congelación. */
+  refreshSlowMultiplier(target: MatchPlayerState): void;
   activeCastArmor(target: MatchPlayerState): number;
   spawnArmorFeedback(target: MatchPlayerState, broke: boolean): void;
   interruptWithRefund(target: MatchPlayerState, lethal: boolean): void;
@@ -115,50 +114,122 @@ export interface DamageSystemHost {
   ): void;
 }
 
-/** Intervalo por defecto entre ticks de un daño en el tiempo. */
-const DEFAULT_DOT_INTERVAL = 1;
+/** Intervalo por defecto entre ticks de un estado. */
+const DEFAULT_STATUS_INTERVAL = 1;
+
+/** `true` si el estado activo reparte daño por tick. */
+function isDamageStatusActive(
+  status: ActiveStatus
+): status is ActiveDamageStatus {
+  return status.kind === 'poisoned' || status.kind === 'burned';
+}
+
+/** Intervalo efectivo de un estado que lo declare. */
+function statusInterval(status: StatusSpec): number {
+  if ('interval' in status && status.interval !== undefined && status.interval > 0) {
+    return status.interval;
+  }
+  return DEFAULT_STATUS_INTERVAL;
+}
 
 /**
- * Aplica o refresca un daño en el tiempo sobre el objetivo.
+ * Aplica un estado al objetivo.
  *
- * Solo puede haber una instancia por tipo de estado. Reaplicar el mismo tipo
- * refresca la duración, conserva el daño por tick más alto y actualiza el
- * lanzador al que se atribuye el daño posterior. El primer tick se resuelve en
- * el siguiente paso de simulación, no dentro del golpe que lo aplica.
+ * Solo puede haber una instancia por `kind`: reaplicar el mismo estado
+ * reemplaza la anterior. El primer tick de daño se resuelve en el siguiente
+ * paso de simulación, no dentro del golpe que lo aplica.
  */
-export function applyDamageOverTime(
+export function applyStatus(
   host: DamageSystemHost,
   target: MatchPlayerState,
   source: MatchPlayerState,
-  spec: DamageOverTimeSpec,
+  spec: StatusSpec,
   abilityName: string,
   color: readonly [number, number, number]
 ): void {
-  if (!target.alive || spec.damage <= 0 || spec.duration <= 0) return;
-  const interval =
-    spec.interval !== undefined && spec.interval > 0
-      ? spec.interval
-      : DEFAULT_DOT_INTERVAL;
+  if (!target.alive || spec.duration <= 0) return;
+  removeStatus(target, spec.kind);
+  const interval = statusInterval(spec);
 
-  const existing = target.dots.find((dot) => dot.type === spec.type);
-  if (existing) {
-    existing.damage = Math.max(existing.damage, spec.damage);
-    existing.remaining = Math.max(existing.remaining, spec.duration);
-    existing.source = source;
-    existing.abilityName = abilityName;
-    return;
+  switch (spec.kind) {
+    case 'poisoned':
+    case 'burned': {
+      if (spec.damage <= 0) return;
+      target.statuses.push({
+        kind: spec.kind,
+        damage: spec.damage,
+        interval,
+        remaining: spec.duration,
+        nextTick: 0,
+        source,
+        abilityName
+      });
+      break;
+    }
+    case 'frozen': {
+      target.statuses.push({
+        kind: 'frozen',
+        multiplier: spec.multiplier,
+        remaining: spec.duration,
+        source,
+        abilityName
+      });
+      host.refreshSlowMultiplier(target);
+      break;
+    }
+    case 'asleep': {
+      target.statuses.push({
+        kind: 'asleep',
+        remaining: spec.duration,
+        source,
+        abilityName
+      });
+      // Dormirse corta el casteo en curso y el dash: no puede seguir actuando.
+      host.interruptWithRefund(target, false);
+      target.dash = null;
+      break;
+    }
+    case 'paralyzed': {
+      target.statuses.push({
+        kind: 'paralyzed',
+        extraCooldown: spec.extraCooldown,
+        mode: spec.mode,
+        interval,
+        remaining: spec.duration,
+        nextTick: 0,
+        source,
+        abilityName
+      });
+      // `once` cobra al entrar; `overtime` empieza en el siguiente paso y
+      // repite cada intervalo.
+      if (spec.mode === 'once' && spec.extraCooldown > 0) {
+        addCooldownPenalty(target, spec.extraCooldown);
+      }
+      break;
+    }
   }
-
-  target.dots.push({
-    type: spec.type,
-    damage: spec.damage,
-    interval,
-    remaining: spec.duration,
-    nextTick: 0,
-    source,
-    abilityName
-  });
   host.combatFx.spawnBuff(target.x, target.z, color, 0.8);
+}
+
+/** Quita la instancia activa de un estado, si existe. */
+export function removeStatus(
+  target: MatchPlayerState,
+  kind: ActiveStatus['kind']
+): void {
+  const index = target.statuses.findIndex((status) => status.kind === kind);
+  if (index < 0) return;
+  target.statuses.splice(index, 1);
+}
+
+/** Suma segundos extra a las habilidades que ya están en enfriamiento. */
+function addCooldownPenalty(target: MatchPlayerState, amount: number): void {
+  if (amount <= 0) return;
+  for (let index = 0; index < target.cooldowns.length; index++) {
+    if (target.cooldowns[index] <= 0.0001) continue;
+    target.cooldowns[index] += amount;
+    target.cooldownPenalties[index] =
+      (target.cooldownPenalties[index] ?? 0) + amount;
+  }
 }
 
 /**
@@ -166,72 +237,99 @@ export function applyDamageOverTime(
  * crítico, efectividad, armadura de casteo ni hitstun. Protección sí lo
  * reduce, y cada tick corta la regeneración pasiva.
  */
-function applyDamageOverTimeTick(
+function applyDamageStatusTick(
   host: DamageSystemHost,
   target: MatchPlayerState,
-  dot: ActiveDamageOverTime
+  status: ActiveDamageStatus
 ): void {
   if (!target.alive || target.invulnerableTimer > 0) return;
 
   const reduction =
     target.damageReductionTimer > 0 ? target.damageReduction : 0;
-  const finalDamage = Math.max(1, Math.round(dot.damage * (1 - reduction)));
+  const finalDamage = Math.max(1, Math.round(status.damage * (1 - reduction)));
   const lethal = finalDamage >= target.hp;
   const appliedDamage = Math.min(finalDamage, target.hp);
 
-  host.showDamagePopup(target, finalDamage, false, 1, lethal, dot.source, dot.type);
+  host.showDamagePopup(
+    target,
+    finalDamage,
+    false,
+    1,
+    lethal,
+    status.source,
+    statusPokemonType(status)
+  );
   target.hp = Math.max(0, target.hp - finalDamage);
   target.damageTaken += appliedDamage;
-  if (dot.source.team !== target.team) {
-    dot.source.damageDealt += appliedDamage;
+  if (status.source.team !== target.team) {
+    status.source.damageDealt += appliedDamage;
   }
-  host.awardCombatXp(dot.source, target, appliedDamage, dot.damage, finalDamage);
+  host.awardCombatXp(
+    status.source,
+    target,
+    appliedDamage,
+    status.damage,
+    finalDamage
+  );
   breakRegen(target);
   host.vibrateOnDamage(target, appliedDamage);
   if (target.hp <= 0) {
-    host.knockOut(target, dot.source, dot.abilityName);
+    host.knockOut(target, status.source, status.abilityName);
   }
 }
 
 /**
- * Avanza los temporizadores de daño en el tiempo. Corre una vez por paso de
- * simulación para que el daño sea determinista y no dependa del framerate.
+ * Avanza los estados activos: ticks de daño, parálisis `overtime`, duración de
+ * los estados y compactado de la lista. Corre una vez por paso de simulación.
  */
-export function stepDamageOverTime(
+export function stepStatuses(
   players: readonly MatchPlayerState[],
   dt: number,
   host: DamageSystemHost,
   isMatchOver: () => boolean
 ): void {
   for (const player of players) {
-    if (player.dots.length === 0) continue;
+    if (player.statuses.length === 0) continue;
     if (!player.alive) {
-      player.dots.length = 0;
+      player.statuses.length = 0;
       continue;
     }
 
+    const hadFrozen = player.statuses.some(
+      (status) => status.kind === 'frozen'
+    );
     let count = 0;
-    for (const dot of player.dots) {
+    for (const status of player.statuses) {
       if (isMatchOver()) {
-        player.dots.length = 0;
+        player.statuses.length = 0;
         return;
       }
 
-      // Los ticks vencidos se cobran antes de avanzar los temporizadores. Un
-      // estado reaplicado conserva su cadencia: el refresco no dispara un tick
-      // extra por cada golpe que lo vuelve a aplicar.
-      while (dot.nextTick <= 0 && dot.remaining > 0) {
-        dot.nextTick += dot.interval;
-        applyDamageOverTimeTick(host, player, dot);
-        if (!player.alive || isMatchOver()) break;
+      // Los ticks vencidos se cobran antes de avanzar los temporizadores.
+      if (isDamageStatusActive(status)) {
+        while (status.nextTick <= 0 && status.remaining > 0) {
+          status.nextTick += status.interval;
+          applyDamageStatusTick(host, player, status);
+          if (!player.alive || isMatchOver()) break;
+        }
+        status.nextTick -= dt;
+      } else if (status.kind === 'paralyzed' && status.mode === 'overtime') {
+        while (status.nextTick <= 0 && status.remaining > 0) {
+          status.nextTick += status.interval;
+          addCooldownPenalty(player, status.extraCooldown);
+          if (isMatchOver()) break;
+        }
+        status.nextTick -= dt;
       }
 
-      dot.remaining -= dt;
-      dot.nextTick -= dt;
-
-      if (player.alive && dot.remaining > 0) player.dots[count++] = dot;
+      status.remaining -= dt;
+      if (player.alive && status.remaining > 0) {
+        player.statuses[count++] = status;
+      }
     }
-    player.dots.length = count;
+    player.statuses.length = count;
+    // Una congelación que expira deja de ralentizar en el mismo paso.
+    if (hadFrozen) host.refreshSlowMultiplier(player);
   }
 }
 
@@ -306,6 +404,7 @@ export function applyAbilityDamage(
         : 0
       : options.knockback ?? 0;
   const slow = options.slow === undefined ? def.props.slow : options.slow;
+  const status = options.status === undefined ? def.props.status : options.status;
 
   // La efectividad solo escala el daño: ningún tipo anula ya el golpe
   // completo, así que el estado y el control se aplican igual.
@@ -316,12 +415,6 @@ export function applyAbilityDamage(
   // La ralentización se aplica aunque la habilidad no haga daño.
   if (slow && target.alive) {
     host.applySlow(attacker, target, def, slow, def.color);
-  }
-
-  // El daño en el tiempo también se aplica en habilidades de estado puras.
-  const dot = options.dot === undefined ? def.props.dot : options.dot;
-  if (dot && target.alive) {
-    applyDamageOverTime(host, target, attacker, dot, def.name, def.color);
   }
 
   // Una habilidad de estado no resta vida, pero su impacto cuenta como golpe:
@@ -336,6 +429,9 @@ export function applyAbilityDamage(
       sourceX: options.sourceX,
       sourceZ: options.sourceZ
     });
+    if (status && target.alive) {
+      applyStatus(host, target, attacker, status, def.name, def.color);
+    }
     return false;
   }
 
@@ -411,6 +507,9 @@ export function applyAbilityDamage(
     sourceZ: options.sourceZ
   });
 
+  // Un golpe directo despierta al objetivo antes de aplicar el estado nuevo.
+  removeStatus(target, 'asleep');
+
   // Solo cuenta el daño que descuenta vida real.
   const appliedDamage = Math.min(finalDamage, target.hp);
   target.hp = Math.max(0, target.hp - finalDamage);
@@ -430,6 +529,11 @@ export function applyAbilityDamage(
   }
   host.vibrateOnDamage(target, appliedDamage);
   if (target.hp <= 0) host.knockOut(target, attacker, def.name);
+
+  // El estado se aplica después del golpe: un objetivo que muere no lo recibe.
+  if (status && target.alive) {
+    applyStatus(host, target, attacker, status, def.name, def.color);
+  }
 
   // `healOnHit` se resuelve aquí, en el único punto donde un golpe resta vida.
   if (def.props.healOnHit && options.healToken && !options.healToken.healed) {

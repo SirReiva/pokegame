@@ -4,13 +4,13 @@
  * Solo tipos: el catálogo, los valores por defecto y los builders viven en
  * `abilities.ts`. La definición es una unión discriminada por `shape`: cada
  * forma declara únicamente los campos que su ejecutor lee. El bloque de golpe
- * (`power`, `hitstun`, `knockback`, `slow`, `dot`, `healOnHit`) vive en
+ * (`power`, `hitstun`, `knockback`, `slow`, `status`, `healOnHit`) vive en
  * `props`, que es genérico para que una habilidad pueda añadir datos propios.
  */
 
 import type { AoeEvent, AoeMovement, AoePlayer, AoePrepareMovement } from './aoe';
 import type { AbilityResolve, AbilityResolveContext } from './resolve';
-import type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
+import type { BuffSpec, SlowSpec, StatusSpec } from './specs';
 import type { AnimationScript } from '../animationScript';
 import type { PokemonType } from '../typeChart';
 import type {
@@ -23,7 +23,12 @@ import type {
   ProjectileStyle
 } from './styles';
 
-export type { BuffSpec, DamageOverTimeSpec, SlowSpec } from './specs';
+export type {
+  BuffSpec,
+  SlowSpec,
+  StatusKind,
+  StatusSpec
+} from './specs';
 export type {
   AbilityFallenAlly,
   AbilityHitInput,
@@ -49,8 +54,8 @@ export interface AbilityProps {
   knockback: number;
   /** Ralentización que se aplica a los enemigos golpeados. */
   slow: SlowSpec | null;
-  /** Daño en el tiempo que se aplica a los enemigos golpeados. */
-  dot: DamageOverTimeSpec | null;
+  /** Estado que se aplica a los enemigos golpeados. */
+  status: StatusSpec | null;
   /**
    * Si es `true`, `healSelf` no se aplica al lanzar: solo cura cuando la
    * habilidad impacta al menos en un enemigo. Lo usa `Come Sueños`.

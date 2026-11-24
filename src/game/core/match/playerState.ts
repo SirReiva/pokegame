@@ -25,7 +25,6 @@ import type { MatchPlayerConfig } from './config';
 import type { CombatStats } from '../pokedex';
 import type { TerrainId } from '../terrain';
 import type { TerrainSpeedReason } from '../terrainSpeed';
-import type { PokemonType } from '../typeChart';
 import type { AnimationName } from '../types';
 import type { Concealment } from '../vision';
 import type { XpBreakdown, XpFeedEntry } from '../xp';
@@ -49,28 +48,62 @@ export interface SlowEffect {
 }
 
 /**
- * Daño en el tiempo activo sobre un jugador.
+ * Base de un estado activo sobre un jugador.
  *
- * Solo hay una instancia por tipo: una quemadura no se acumula consigo misma.
- * Volver a aplicar el mismo tipo refresca la duración, conserva el daño mayor
- * y actualiza el lanzador que se lleva el crédito del KO.
+ * Solo hay una instancia por `kind`: reaplicar el mismo estado reemplaza la
+ * anterior y actualiza el lanzador que se lleva el crédito del KO.
  */
-export interface ActiveDamageOverTime {
-  /** Tipo del estado: `Fire` = quemadura, `Poison` = veneno, etc. */
-  type: PokemonType;
-  /** Daño fijo por tick, en PV. */
-  damage: number;
-  /** Segundos entre ticks. */
-  interval: number;
+interface ActiveStatusBase {
   /** Segundos restantes del estado. */
   remaining: number;
-  /** Segundos hasta el próximo tick. */
-  nextTick: number;
   /** Lanzador al que se atribuyen el daño, la XP y el KO. */
   source: MatchPlayerState;
   /** Nombre de la habilidad que lo aplicó, para el kill feed. */
   abilityName: string;
 }
+
+/** Veneno o quemadura: daño fijo por tick. */
+export interface ActiveDamageStatus extends ActiveStatusBase {
+  kind: 'poisoned' | 'burned';
+  /** Daño fijo por tick, en PV. */
+  damage: number;
+  /** Segundos entre ticks. */
+  interval: number;
+  /** Segundos hasta el próximo tick. */
+  nextTick: number;
+}
+
+/** Congelación: ralentiza el movimiento. */
+export interface ActiveFrozenStatus extends ActiveStatusBase {
+  kind: 'frozen';
+  /** Multiplicador de velocidad: 0,55 = 45 % más lento. */
+  multiplier: number;
+}
+
+/** Sueño: bloquea movimiento y habilidades hasta despertar. */
+export interface ActiveAsleepStatus extends ActiveStatusBase {
+  kind: 'asleep';
+}
+
+/** Parálisis: alarga los enfriamientos que ya están corriendo. */
+export interface ActiveParalyzedStatus extends ActiveStatusBase {
+  kind: 'paralyzed';
+  /** Segundos extra que se suman a cada habilidad en enfriamiento. */
+  extraCooldown: number;
+  /** `once` al entrar o `overtime` cada `interval` segundos. */
+  mode: 'once' | 'overtime';
+  /** Segundos entre aplicaciones en `overtime`. */
+  interval: number;
+  /** Segundos hasta la próxima aplicación en `overtime`. */
+  nextTick: number;
+}
+
+/** Estado activo; se guarda como máximo uno por `kind`. */
+export type ActiveStatus =
+  | ActiveDamageStatus
+  | ActiveFrozenStatus
+  | ActiveAsleepStatus
+  | ActiveParalyzedStatus;
 
 /** Aportación de un rival al daño recibido en la vida actual, para asistencias. */
 export interface DamageContribution {
@@ -477,8 +510,13 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   buffs: ActiveBuff[];
   /** Ralentizaciones activas, cada una con su propio tiempo restante. */
   slowEffects: SlowEffect[];
-  /** Daño en el tiempo activo, como máximo uno por tipo. */
-  dots: ActiveDamageOverTime[];
+  /** Estados activos, como máximo uno por `kind`. */
+  statuses: ActiveStatus[];
+  /**
+   * Segundos extra de parálisis acumulados en cada enfriamiento. El HUD los
+   * muestra aparte para explicar por qué un cooldown tarda más de lo normal.
+   */
+  cooldownPenalties: number[];
   /**
    * Multiplicador de velocidad de la ralentización dominante (1 = normal). Se
    * recalcula a partir de `slowEffects`; no se asigna a mano.

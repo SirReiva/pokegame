@@ -7,10 +7,14 @@
  */
 
 import { CONFIG } from './config';
-import type { AbilitySlot, BuffStat, CommonAbilityId } from './abilities';
+import type {
+  AbilitySlot,
+  BuffStat,
+  CommonAbilityId,
+  StatusKind
+} from './abilities';
 import type { BotDifficulty } from './core/match/config';
 import type { AssistKind } from './core/match/assists';
-import type { PokemonType } from './core/typeChart';
 import type { InputDeviceInfo } from './input';
 
 export type {
@@ -368,6 +372,8 @@ export interface AbilityHud {
   cooldown: number;
   /** Enfriamiento total, en segundos. */
   duration: number;
+  /** Parte del enfriamiento añadida por parálisis, en segundos. */
+  cooldownPenalty: number;
 }
 
 /** Buff activo tal y como lo pinta el HUD. */
@@ -386,16 +392,19 @@ export interface ActiveSlowHud {
   remaining: number;
 }
 
-/** Daño en el tiempo activo tal y como lo pinta el HUD. */
-export interface ActiveDotHud {
-  /** Tipo del estado: `Fire` = quemadura, `Poison` = veneno, etc. */
-  type: PokemonType;
-  /** Daño fijo por tick, en PV. */
-  damage: number;
-  /** Segundos entre ticks. */
-  interval: number;
+/** Estado activo tal y como lo pinta el HUD. */
+export interface ActiveStatusHud {
+  kind: StatusKind;
   /** Segundos restantes. */
   remaining: number;
+  /** Daño fijo por tick (solo poisoned/burned). */
+  damage?: number;
+  /** Segundos entre ticks (solo poisoned/burned). */
+  interval?: number;
+  /** Multiplicador de velocidad (solo frozen). */
+  multiplier?: number;
+  /** Segundos extra aplicados por tick (solo paralyzed). */
+  extraCooldown?: number;
 }
 
 /** Estado del instinto común para el HUD. */
@@ -408,6 +417,8 @@ export interface CommonAbilityHud {
   cooldown: number;
   /** Cooldown total (0 en pasivas). */
   duration: number;
+  /** Parte del cooldown añadida por parálisis (0 en pasivas). */
+  cooldownPenalty: number;
   /** Segundos que faltan para que empiece la regeneración pasiva. */
   readyIn: number;
   /** `true` si la regeneración pasiva está curando ahora mismo. */
@@ -495,8 +506,8 @@ export interface PlayerMatchStats {
   buffs: ActiveBuffHud[];
   /** Ralentizaciones activas que afectan al jugador. */
   slows: ActiveSlowHud[];
-  /** Daños en el tiempo activos (quemadura, veneno...). */
-  dots: ActiveDotHud[];
+  /** Estados activos (veneno, quemadura, congelación, sueño, parálisis). */
+  statuses: ActiveStatusHud[];
   abilities: AbilityHud[];
   /** `true` mientras Protección bloquea el uso de otras habilidades. */
   shieldActive: boolean;

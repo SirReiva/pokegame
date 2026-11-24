@@ -436,12 +436,13 @@ atraviesa obstáculos y los bots conservan su error de apuntado por dificultad.
   colisión de §3.10.
 - **self**: buffs, curación o utilidad centrada en el lanzador.
 
-**Estados**: ralentización (`slow`), buffs (`speed`, `attack`, etc.) y daño en
-el tiempo (`dot`). Quemadura (`Fire`) y veneno (`Poison`) comparten la misma
-mecánica: daño fijo por tick, una sola instancia por tipo, refresco de duración
-al reaplicar y sin crítico, STAB ni efectividad. Protección reduce cada tick.
-No hay sueño ni parálisis completa; la «parálisis» de este juego es una
-ralentización.
+**Estados**: ralentización (`slow`), buffs (`speed`, `attack`, etc.) y estados
+(`status`): veneno, quemadura, congelación, sueño y parálisis. Veneno y
+quemadura comparten la mecánica de daño en el tiempo: daño fijo por tick, una
+sola instancia por tipo, reemplazo al reaplicar y sin crítico, STAB ni
+efectividad. Protección reduce cada tick. Congelación ralentiza el movimiento;
+sueño bloquea movimiento y habilidades y se rompe al recibir daño; parálisis
+suma segundos a las habilidades que ya están enfriándose (`once` o `overtime`).
 
 **Protección**: reduce un 60 % el daño durante 2 s. Se aplica sobre la fórmula
 con mínimo de 1 PV, así que un golpe de 1 PV sigue quitando 1 y uno de 2 también

@@ -16,6 +16,7 @@ import { allowsFacingDuringCast } from '../core/abilities/movement';
 import { terrainAt } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import { terrainConcealment } from '../vision';
+import { isAsleep } from './status';
 
 export interface PlayerSystemHost {
   readonly atmosphere: AtmosphereId;
@@ -93,7 +94,10 @@ export function stepPlayer(
 
   // Temporizadores de combate: corren también mientras el jugador está KO.
   for (let index = 0; index < player.cooldowns.length; index++) {
-    player.cooldowns[index] = Math.max(0, player.cooldowns[index] - dt);
+    const remaining = Math.max(0, player.cooldowns[index] - dt);
+    player.cooldowns[index] = remaining;
+    // El HUD deja de atribuir el tiempo extra a la parálisis al terminar.
+    if (remaining === 0) player.cooldownPenalties[index] = 0;
   }
   for (const buff of player.buffs) buff.duration -= dt;
   // Compactar en sitio: filtrar creaba un array nuevo por jugador y paso
@@ -140,6 +144,21 @@ export function stepPlayer(
     player.vx = 0;
     player.vz = 0;
     player.animation = 'hurt';
+    player.playback = 1;
+    player.animationFrame = null;
+    const terrain = terrainAt(player.x, player.z);
+    player.terrain = terrain;
+    player.concealment = terrainConcealment(terrain, player.types);
+    host.updateCamera(player, input, dt);
+    return;
+  }
+
+  // Sueño: mismo bloqueo que el hitstun, pero el golpe que lo despierta se
+  // resuelve antes de este paso y retira el estado.
+  if (isAsleep(player)) {
+    player.vx = 0;
+    player.vz = 0;
+    player.animation = 'idle';
     player.playback = 1;
     player.animationFrame = null;
     const terrain = terrainAt(player.x, player.z);

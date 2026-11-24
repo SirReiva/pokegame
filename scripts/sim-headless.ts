@@ -114,7 +114,7 @@ import {
 } from '../src/game/sim/dash';
 import {
   applyAbilityDamage,
-  stepDamageOverTime,
+  stepStatuses,
   type DamageOptions,
   type DamageSystemHost
 } from '../src/game/sim/damage';
@@ -826,13 +826,14 @@ export class HeadlessMatch {
       lastActionAt: 0,
       cooldowns: [0, 0, 0, 0, 0],
       cooldownTotals: [0, 0, 0, 0, 0],
+      cooldownPenalties: [0, 0, 0, 0, 0],
       repeatAbilityId: null,
       repeatAbilityCount: 0,
       repeatAbilityAt: 0,
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
-      dots: [],
+      statuses: [],
       abilityIds: [...moveset, commonAbilityId]
     };
   }
@@ -846,6 +847,7 @@ export class HeadlessMatch {
       buffMultiplier: (player, stat) => this.buffMultiplier(player, stat),
       applySlow: (attacker, target, def, slow, color) =>
         this.applySlow(attacker, target, def, slow, color),
+      refreshSlowMultiplier: (target) => this.refreshSlowMultiplier(target),
       activeCastArmor: (target) => this.activeCastArmor(target),
       spawnArmorFeedback: () => {},
       interruptWithRefund: (target, lethal) =>
@@ -1488,10 +1490,16 @@ export class HeadlessMatch {
   }
 
   private refreshSlowMultiplier(target: MatchPlayerState): void {
-    target.slowMultiplier = target.slowEffects.reduce(
-      (slowest, effect) => Math.min(slowest, effect.multiplier),
-      1
-    );
+    let slowest = 1;
+    for (const effect of target.slowEffects) {
+      slowest = Math.min(slowest, effect.multiplier);
+    }
+    for (const status of target.statuses) {
+      if (status.kind === 'frozen') {
+        slowest = Math.min(slowest, status.multiplier);
+      }
+    }
+    target.slowMultiplier = slowest;
   }
 
   private applyKnockback(
@@ -2075,7 +2083,7 @@ export class HeadlessMatch {
     }
 
     if (!this.matchOver) {
-      stepDamageOverTime(
+      stepStatuses(
         this.players,
         FIXED_STEP,
         this.hosts.damage,

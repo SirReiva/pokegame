@@ -165,7 +165,7 @@ function isHazardous(def: AnyAbilityDef): boolean {
   return (
     def.props.power > 0 ||
     def.props.slow !== null ||
-    def.props.dot !== null ||
+    def.props.status !== null ||
     def.bot?.customDamage === true
   );
 }

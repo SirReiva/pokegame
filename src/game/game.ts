@@ -103,7 +103,7 @@ import {
 import { stepAtmosphere } from './sim/atmosphere';
 import {
   applyAbilityDamage as applyAbilityDamageSystem,
-  stepDamageOverTime as stepDamageOverTimeSystem
+  stepStatuses as stepStatusesSystem
 } from './sim/damage';
 import { stepDash as stepDashSystem } from './sim/dash';
 import { knockOut as knockOutSystem } from './sim/knockout';
@@ -119,6 +119,7 @@ import {
 import { VisibilityCadence } from './sim/visibilityCadence';
 import {
   breakRegen,
+  hasStatus,
   stepParticipation,
   stepRegeneration
 } from './sim/status';
@@ -2316,10 +2317,10 @@ export class Game {
     // para que las fases de resolución usen las posiciones finales.
     this.resetFxVisibilityCache();
 
-    // El daño en el tiempo se cobra antes de los golpes del paso. Corre con el
-    // reloj fijo de simulación para que no dependa del framerate.
+    // Los estados se cobran antes de los golpes del paso. Corre con el reloj
+    // fijo de simulación para que no dependa del framerate.
     if (!this.matchOver) {
-      stepDamageOverTimeSystem(
+      stepStatusesSystem(
         this.matchPlayers,
         stepDt,
         this.hosts.damage,
@@ -2457,7 +2458,7 @@ export class Game {
     player.buffs = [];
     player.slowEffects = [];
     player.slowMultiplier = 1;
-    player.dots = [];
+    player.statuses = [];
     player.damageReductionTimer = 0;
     player.damageReduction = 0;
     player.shieldSpeedMultiplier = 1;
@@ -2603,6 +2604,8 @@ export class Game {
 
   private castAbility(player: MatchPlayerState, slotIndex: number): void {
     if (!player.alive || this.matchOver) return;
+    // Dormido no puede usar habilidades aunque la entrada siga pulsada.
+    if (hasStatus(player, 'asleep')) return;
     if (player.activeCast || player.dash) return;
     // Las habilidades instantáneas de este frame aún no se han ejecutado: sin
     // esta comprobación se podrían encolar dos (p. ej. dash + haz) pulsando
@@ -2629,7 +2632,7 @@ export class Game {
     // Atacar desde la protección de spawn la retira: la invulnerabilidad
     // defensiva no debe servir para lanzar gratis una rotación ofensiva. Los
     // buffs y dash de estado (Protección, Impulso, Agilidad) no la rompen.
-    if (player.invulnerableTimer > 0 && (def.props.power > 0 || def.props.slow !== null || def.props.dot !== null)) {
+    if (player.invulnerableTimer > 0 && (def.props.power > 0 || def.props.slow !== null || def.props.status !== null)) {
       player.invulnerableTimer = 0;
     }
     const cooldown = this.cooldownForCast(player, abilityId, def);
@@ -3151,10 +3154,16 @@ export class Game {
 
   /** Recalcula la velocidad con la ralentización más fuerte que siga activa. */
   private refreshSlowMultiplier(target: MatchPlayerState): void {
-    target.slowMultiplier = target.slowEffects.reduce(
-      (slowest, effect) => Math.min(slowest, effect.multiplier),
-      1
-    );
+    let slowest = 1;
+    for (const effect of target.slowEffects) {
+      slowest = Math.min(slowest, effect.multiplier);
+    }
+    for (const status of target.statuses) {
+      if (status.kind === 'frozen') {
+        slowest = Math.min(slowest, status.multiplier);
+      }
+    }
+    target.slowMultiplier = slowest;
   }
 
   /** Cancela dash, casteo y animación manual de un objetivo. */

@@ -630,13 +630,14 @@ export function startMatch(
       lastActionAt: 0,
       cooldowns: [0, 0, 0, 0, 0],
       cooldownTotals: [0, 0, 0, 0, 0],
+      cooldownPenalties: [0, 0, 0, 0, 0],
       repeatAbilityId: null,
       repeatAbilityCount: 0,
       repeatAbilityAt: 0,
       buffs: [],
       slowEffects: [],
       slowMultiplier: 1,
-      dots: [],
+      statuses: [],
       abilityIds: [...moveset, commonAbilityId]
     };
     host.matchPlayers.push(player);

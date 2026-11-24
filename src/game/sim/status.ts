@@ -9,13 +9,26 @@ import {
   REGENERATION_DELAY_SECONDS,
   REGENERATION_HP_PER_SECOND
 } from '../abilities';
-import type { MatchPlayerState } from '../matchState';
+import type { ActiveStatus, MatchPlayerState } from '../matchState';
 import { XP_REWARDS, XP_RULES, type XpSource } from '../xp';
 
 export interface StatusSystemHost {
   isMatchOver(): boolean;
   awardXp(player: MatchPlayerState, source: XpSource, amount: number): void;
   showHeal(player: MatchPlayerState, amount: number): void;
+}
+
+/** `true` si el jugador tiene activo ese estado. */
+export function hasStatus(
+  player: MatchPlayerState,
+  kind: ActiveStatus['kind']
+): boolean {
+  return player.statuses.some((status) => status.kind === kind);
+}
+
+/** `true` mientras el jugador está dormido y no puede actuar. */
+export function isAsleep(player: MatchPlayerState): boolean {
+  return hasStatus(player, 'asleep');
 }
 
 /** Reinicia el estado de la regeneración pasiva. */

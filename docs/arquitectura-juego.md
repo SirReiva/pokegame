@@ -301,8 +301,8 @@ flowchart TD
   bots --> players["Por jugador<br/>bot.update() o inputBuffer.resolve()"]
   players --> playerStep["stepPlayer<br/>timers · buffs · slow · casteo · dash<br/>movimiento · colisión"]
   playerStep --> reset["resetFxVisibilityCache()"]
-  reset --> dot["stepDamageOverTime"]
-  dot --> atmosphere["stepAtmosphere<br/>daño residual del clima"]
+  reset --> statuses["stepStatuses<br/>DoT · parálisis · duración"]
+  statuses --> atmosphere["stepAtmosphere<br/>daño residual del clima"]
 
   atmosphere --> casts["resolveQueuedCasts<br/>haces y áreas instantáneas"]
   casts --> instant["stepInstantHits"]
@@ -431,7 +431,7 @@ empezar o limpiar una partida; así los hosts siguen siendo estables.
 | `cast` | `sim/cast` | Reloj del casteo, pose de impacto y animación. |
 | `dash` | `sim/dash` | Desplazamiento y sincronización del dash. |
 | `atmosphere` | `sim/atmosphere` | Daño residual del clima. |
-| `damage` | `sim/damage` | Inmunidad, fórmula, slow, DoT, buffs, escudo, XP y KO. |
+| `damage` | `sim/damage` | Inmunidad, fórmula, slow, estados, buffs, escudo, XP y KO. |
 | `knockout` | `sim/knockout` | KO, respawn, marcador y evento al modo. |
 | `vision` | `render/visionView` | Niebla, copias visibles y máscara por equipo. |
 | `aoeResolution` | `sim/aoeResolution` | Contexto de área, callbacks y eventos. |

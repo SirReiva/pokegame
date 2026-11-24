@@ -132,10 +132,22 @@ const BUFF_LABEL: Record<BuffStat, string> = {
   spDefense: 'DEF.ESP'
 };
 
-/** Nombre corto del estado de daño en el tiempo según su tipo. */
-const DOT_LABEL: Record<string, string> = {
-  Fire: 'QUEMA',
-  Poison: 'VENENO'
+/** Nombre corto de cada estado para el HUD. */
+const STATUS_LABEL: Record<string, string> = {
+  poisoned: 'VENENO',
+  burned: 'QUEMA',
+  frozen: 'CONGELADO',
+  asleep: 'DORMIDO',
+  paralyzed: 'PARALIZADO'
+};
+
+/** Color de cada estado, reutilizando la paleta de tipos. */
+const STATUS_COLOR: Record<string, string> = {
+  poisoned: TYPE_COLORS.Poison,
+  burned: TYPE_COLORS.Fire,
+  frozen: TYPE_COLORS.Ice,
+  asleep: TYPE_COLORS.Psychic,
+  paralyzed: TYPE_COLORS.Electric
 };
 
 const EMPTY_FEED: readonly KillFeedEntry[] = [];
@@ -445,16 +457,18 @@ function sameSlows(
   return true;
 }
 
-function sameDots(
-  a: PlayerMatchStats['dots'],
-  b: PlayerMatchStats['dots']
+function sameStatuses(
+  a: PlayerMatchStats['statuses'],
+  b: PlayerMatchStats['statuses']
 ): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].type !== b[i].type) return false;
+    if (a[i].kind !== b[i].kind) return false;
     if (a[i].damage !== b[i].damage) return false;
     if (a[i].interval !== b[i].interval) return false;
+    if (a[i].multiplier !== b[i].multiplier) return false;
+    if (a[i].extraCooldown !== b[i].extraCooldown) return false;
     if (Math.round(a[i].remaining * 10) !== Math.round(b[i].remaining * 10)) {
       return false;
     }
@@ -478,6 +492,7 @@ function sameAbilities(
       x.type !== y.type ||
       x.category !== y.category ||
       x.duration !== y.duration ||
+      x.cooldownPenalty !== y.cooldownPenalty ||
       Math.round(x.cooldown * 10) !== Math.round(y.cooldown * 10)
     ) {
       return false;
@@ -498,6 +513,7 @@ function sameCommon(
     a.short === b.short &&
     a.passive === b.passive &&
     a.duration === b.duration &&
+    a.cooldownPenalty === b.cooldownPenalty &&
     a.active === b.active &&
     a.hidden === b.hidden &&
     a.description === b.description &&
@@ -565,7 +581,7 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
     a.xpFeed === b.xpFeed &&
     sameBuffs(a.buffs, b.buffs) &&
     sameSlows(a.slows, b.slows) &&
-    sameDots(a.dots, b.dots) &&
+    sameStatuses(a.statuses, b.statuses) &&
     sameAbilities(a.abilities, b.abilities) &&
     sameCommon(a.commonAbility, b.commonAbility) &&
     sameXpBreakdown(a.xpBreakdown, b.xpBreakdown)
@@ -662,7 +678,7 @@ const PlayerHud = memo(function PlayerHud({
       {playerStats &&
         (playerStats.buffs.length > 0 ||
           playerStats.slows.length > 0 ||
-          playerStats.dots.length > 0) && (
+          playerStats.statuses.length > 0) && (
           <div className="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[72%] flex-wrap gap-1">
             {playerStats.buffs.map((buff, buffIndex) => {
               const delta = Math.round((buff.multiplier - 1) * 100);
@@ -691,23 +707,30 @@ const PlayerHud = memo(function PlayerHud({
                 </span>
               );
             })}
-            {playerStats.dots.map((dot, dotIndex) => {
+            {playerStats.statuses.map((status, statusIndex) => {
               const label =
-                DOT_LABEL[dot.type] ??
-                (TYPE_LABELS[dot.type] ?? dot.type).toUpperCase();
-              const color = TYPE_COLORS[dot.type] ?? '#8a93a6';
+                STATUS_LABEL[status.kind] ?? status.kind.toUpperCase();
+              const color = STATUS_COLOR[status.kind] ?? '#8a93a6';
+              let detail = '';
+              if (status.kind === 'poisoned' || status.kind === 'burned') {
+                detail = `${status.damage ?? 0} PV cada ${status.interval ?? 1} s`;
+              } else if (status.kind === 'frozen') {
+                detail = `-${Math.round((1 - (status.multiplier ?? 1)) * 100)}% velocidad`;
+              } else if (status.kind === 'paralyzed') {
+                detail = `+${status.extraCooldown ?? 0} s de enfriamiento`;
+              }
               return (
                 <span
-                  key={`dot-${dot.type}-${dotIndex}`}
+                  key={`status-${status.kind}-${statusIndex}`}
                   className={`flex items-center gap-1 rounded-md border bg-night-850/82 px-2 py-1 font-mono leading-none backdrop-blur-[6px] ${
                     compact ? 'text-8.32' : 'text-9.6'
                   }`}
                   style={{ borderColor: color }}
-                  title={`${label}: ${dot.damage} PV cada ${dot.interval} s durante ${dot.remaining.toFixed(1)} s`}
+                  title={`${label}${detail ? `: ${detail}` : ''} durante ${status.remaining.toFixed(1)} s`}
                 >
                   <span style={{ color }}>{label}</span>
                   <span className="text-steel-500">
-                    {dot.remaining.toFixed(1)}s
+                    {status.remaining.toFixed(1)}s
                   </span>
                 </span>
               );
@@ -1012,7 +1035,18 @@ const PlayerHud = memo(function PlayerHud({
                     )}
                     {!ready && (
                       <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
-                        {ability.cooldown.toFixed(1)}
+                        {Math.max(
+                          0,
+                          ability.cooldown - ability.cooldownPenalty
+                        ).toFixed(1)}
+                        {ability.cooldownPenalty > 0 && (
+                          <span
+                            className="text-[0.72em]"
+                            style={{ color: TYPE_COLORS.Electric }}
+                          >
+                            {`(+${ability.cooldownPenalty.toFixed(1)}⚡)`}
+                          </span>
+                        )}
                       </span>
                     )}
                     {!ready && (
@@ -1062,7 +1096,18 @@ const PlayerHud = memo(function PlayerHud({
                   )}
                   {!common.passive && common.cooldown > 0.001 && (
                     <span className="absolute inset-0 grid place-items-center bg-night-950/74 font-mono text-11.52 font-bold text-steel-50">
-                      {common.cooldown.toFixed(1)}
+                      {Math.max(
+                        0,
+                        common.cooldown - common.cooldownPenalty
+                      ).toFixed(1)}
+                      {common.cooldownPenalty > 0 && (
+                        <span
+                          className="text-[0.72em]"
+                          style={{ color: TYPE_COLORS.Electric }}
+                        >
+                          {`(+${common.cooldownPenalty.toFixed(1)}⚡)`}
+                        </span>
+                      )}
                     </span>
                   )}
                   {common.passive &&
