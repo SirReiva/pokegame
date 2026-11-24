@@ -38,6 +38,7 @@ export const POKEMON_VISION: Record<string, number> = {
   '0658': 11.5, // Greninja: instinto de ninja, alcance notable
   '0150': 12.0, // Mewtwo: poder psíquico, alcance excepcional
   '0151': 11.0, // Mew: sentidos psíquicos y curiosidad infinita
+  '0232': 9.4, // Donphan: siente las vibraciones del suelo, pero ve poco de cerca
   '0095': 8.8, // Onix: vive bajo tierra, poca luz y vista corta
   '0123': 10.8, // Scyther: ojos de depredador y reflejos de mantis
   '0130': 10.2, // Gyarados: depredador marino, atento a lo que se mueve cerca

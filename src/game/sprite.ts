@@ -31,6 +31,7 @@ import type {
 export type LoadedImage = ImageBitmap;
 
 export type SpriteTextures = Record<RequiredAnimationName, pc.Texture> & {
+  run?: pc.Texture;
   faint?: pc.Texture;
   quickstrike?: pc.Texture;
   shock?: pc.Texture;

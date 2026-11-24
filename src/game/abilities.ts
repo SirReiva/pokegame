@@ -2116,6 +2116,91 @@ registerAbility(
 );
 
 /* ------------------------------------------------------------------------- */
+/* Donphan                                                                   */
+/* ------------------------------------------------------------------------- */
+
+registerAbility(
+  meleeAbility('cornada', 'Cornada', 'Ground', 'physical', defaultMeleeResolve)
+    .power(52)
+    .cooldown(0.68)
+    .repeatCooldown(BASIC_MELEE_REPEAT_COOLDOWN)
+    .range(2.15)
+    .radius(0.85)
+    .halfAngle(55)
+    .knockback(0.45)
+    .active(0.2).recovery(0)
+    .presentation(attackScript('attack'))
+    .impact('ground')
+    .color(142, 155, 166)
+    .description(
+      'Cornada baja con los colmillos. Golpe cuerpo a cuerpo de corto alcance que levanta polvo y empuja un poco. Ataque básico de Donphan.'
+    )
+);
+
+registerAbility(
+  aoeAbility('giroRapido', 'Giro Rápido', 'Normal', 'physical', defaultAoeResolve)
+    .power(35)
+    .cooldown(7)
+    .range(0)
+    .radius(1.7)
+    .area('ground', 'once', 0.45)
+    // El giro sigue a Donphan mientras se desplaza: el barrido nace donde está
+    // al soltar la habilidad, no donde empezó la preparación.
+    .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
+    .startup(0.1)
+    .movementDuringCast()
+    .recovery(0.3)
+    .knockback(0.5)
+    .buff('speed', 1.25, 3)
+    .impact('ground')
+    .color(142, 155, 166)
+    .description(
+      'Gira sobre sí mismo y barre a los rivales cercanos: 35 de potencia, 0,5 u de empuje y un 25 % de velocidad durante 3 s. Se puede mover mientras lo ejecuta.'
+    )
+    .presentation(attackScript('strike'))
+);
+
+registerAbility(
+  dashAbility('rodada', 'Rodada', 'Rock', 'physical', defaultDashResolve)
+    .power(90)
+    .cooldown(5.5)
+    .radius(0.95)
+    .dash(5.2)
+    .knockback(2)
+    .startup(0.18)
+    .armor(20)
+    .active(0.34).recovery(0.15)
+    .impact('rock')
+    .color(142, 155, 166)
+    .description(
+      'Se enrosca y rueda 5,2 u con la coraza por delante: 90 de potencia y 2 u de empuje a quien arrolla. Su herramienta para entrar o salir.'
+    )
+    // El dash usa la carrera real del GLB (`00100_run01_loop`); la carga corta
+    // sigue cubriendo el startup.
+    .presentation(channelFillScript('charge', dashScript('run')))
+);
+
+registerAbility(
+  meleeAbility('gigaImpacto', 'Giga Impacto', 'Normal', 'physical', defaultMeleeResolve)
+    .power(145)
+    .cooldown(16)
+    .range(2.8)
+    .radius(1)
+    .halfAngle(65)
+    .knockback(1.2)
+    .hitstun(0.35)
+    .startup(0.8)
+    .armor(60)
+    .active(0.35).recovery(1.1)
+    .impact('ground')
+    .color(220, 225, 230)
+    .description(
+      'Definitiva: carga 0,8 s con 60 de armadura y embiste con todo el cuerpo en un cono de 2,8 u. 145 de potencia, empuje de 1,2 u y una recuperación de 1,1 s que lo deja expuesto.'
+    )
+    .presentation(channelFillScript('charge', attackScript('attack')))
+);
+
+/* ------------------------------------------------------------------------- */
 /* Onix                                                                      */
 /* ------------------------------------------------------------------------- */
 
@@ -3030,6 +3115,7 @@ MOVESETS['0151'] = [
   'recuperacion'
 ];
 MOVESETS['0123'] = ['golpeFuria', 'corteAereo', 'danzaEspada', 'tijeraX'];
+MOVESETS['0232'] = ['cornada', 'giroRapido', 'rodada', 'gigaImpacto'];
 MOVESETS['0248'] = ['triturar', 'avalancha', 'terremoto', 'rocaAfilada'];
 MOVESETS['0095'] = ['atadura', 'lanzarrocas', 'excavar', 'fisura'];
 MOVESETS['0383'] = ['cuchillada', 'terremoto', 'avalancha', 'filoAbismo'];

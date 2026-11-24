@@ -10,6 +10,7 @@ import type { CameraRig } from '../camera';
 import { CONFIG } from '../config';
 import type { DeathMarker } from '../deathMarker';
 import type { MatchPlayerState } from '../matchState';
+import { modelEntryFor } from '../modelCatalog';
 import type { PlayerView } from './playerView';
 
 /** Cámara mínima que necesita una vista para colocar su cielo. */
@@ -86,7 +87,11 @@ export function syncMatchView(sync: MatchViewSync): void {
       } else {
         copy.clearManual();
         copy.play(player.animation);
-        copy.setPlayback(player.playback);
+        const movePlayback =
+          player.animation === 'walk'
+            ? (modelEntryFor(player.pokemonId)?.movePlayback ?? 1)
+            : 1;
+        copy.setPlayback(player.playback * movePlayback);
         copy.setLoop(true);
       }
       copy.setHitboxDebug(CONFIG.debug.showHitboxes);

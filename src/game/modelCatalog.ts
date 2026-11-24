@@ -16,6 +16,9 @@
  *   `idle1` usa la pose de vuelo (`defaultidle01`) para los pájaros.
  * - `moveClip`: nombre exacto del clip del GLB para el desplazamiento; tiene
  *   prioridad sobre `moveAnimation` (por ejemplo, `20010_defaultidle01`).
+ * - `movePlayback`: multiplicador de velocidad del clip de desplazamiento. Se
+ *   aplica sobre el playback que ya calcula la simulación a partir de la
+ *   velocidad real del cuerpo.
  */
 
 export interface PokemonModelEntry {
@@ -35,6 +38,8 @@ export interface PokemonModelEntry {
   moveAnimation?: 'run' | 'idle1';
   /** Nombre exacto del clip del GLB que se usa al desplazarse. */
   moveClip?: string;
+  /** Multiplicador de playback del clip de desplazamiento (1 por defecto). */
+  movePlayback?: number;
 }
 
 export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
@@ -77,6 +82,13 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   // automática del manifiesto.
   '0150': { file: 'pm0150/pm0150_00.glb', scale: 1.25 },
   '0151': { file: 'pm0151/pm0151_00.glb' },
+  // Donphan se desplaza con su paso pesado, no con el trote.
+  '0232': {
+    file: 'pm0232/pm0232.glb',
+    moveClip: '00030_walk01_loop',
+    movePlayback: 2.5,
+    scale : 0.8
+  },
   '0243': { file: 'pm0243/pm0243.glb' },
   '0244': { file: 'pm0244/pm0244.glb' },
   '0245': { file: 'pm0245/pm0245.glb' },

@@ -22,6 +22,7 @@ export const POKEMON_SPEEDS: Record<string, number> = {
   '0658': 7.4, // Greninja: un ninja acuático, el más rápido hasta ahora
   '0150': 7.8, // Mewtwo: levita y se impulsa con poder psíquico, el más rápido
   '0151': 6.9, // Mew: pequeño y flotante, casi tan rápido como Greninja
+  '0232': 4.8, // Donphan: blindado y pesado; rueda, pero no corre
   '0095': 5.6, // Onix: una serpiente de piedra enorme, avanza pesada
   '0123': 7.2, // Scyther: guadañas al viento, casi tan rápido como Greninja
   '0130': 6.0, // Gyarados: serpiente marina enorme; se desliza con impulso
@@ -70,6 +71,7 @@ export const POKEMON_HIT_RADIUS: Record<string, number> = {
   '0658': 0.40, // Greninja: esbelto y muy rápido
   '0150': 0.44, // Mewtwo: alto pero estrecho; la cola no cuenta
   '0151': 0.36, // Mew: flota y su cuerpo real es pequeño
+  '0232': 0.54, // Donphan: cuerpo redondo y blindado, muy ancho
   '0095': 0.52, // Onix: enorme; el arte incluye cola y anillos
   '0123': 0.42, // Scyther: alas finas, manda el cuerpo
   '0130': 0.62, // Gyarados: cuerpo largo y ancho; la cola no cuenta

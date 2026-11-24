@@ -4,6 +4,7 @@ export type DirectionName = 'S' | 'SE' | 'E' | 'NE' | 'N' | 'NW' | 'W' | 'SW';
 export type AnimationName =
   | 'idle'
   | 'walk'
+  | 'run'
   | 'attack'
   | 'hurt'
   | 'faint'
@@ -24,6 +25,7 @@ export type AnimationName =
  */
 export type RequiredAnimationName = Exclude<
   AnimationName,
+  | 'run'
   | 'faint'
   | 'quickstrike'
   | 'shock'
@@ -101,6 +103,7 @@ export interface SpriteCredits {
 
 /** Hojas de animación de una especie o de uno de sus aspectos. */
 export type PokemonAnimations = Record<RequiredAnimationName, SpriteAnimation> & {
+  run?: SpriteAnimation;
   faint?: SpriteAnimation;
   quickstrike?: SpriteAnimation;
   shock?: SpriteAnimation;

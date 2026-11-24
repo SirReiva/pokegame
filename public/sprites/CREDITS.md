@@ -128,6 +128,23 @@ Cada Pokémon conserva su `credits.txt` original en su carpeta.
 - Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133/0000/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0133/0000/0001/Normal.png
 
+## Donphan (#0232)
+
+- CHUNSOFT · Walk, Attack, Strike, Shoot, Rumble, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!356635814668664832> — CC_BY-NC_4 · Special0
+- <@!356635814668664832> — CC_BY-NC_4 · Tumble, Cringe, TumbleBack
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0232/Normal.png
+- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232/credits.txt
+
+### Donphan · Shiny
+
+- <@!95650095034273792> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Rumble, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
+- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Withdraw, Swing, Double, Rotate, Hop, Tumble, Cringe, TumbleBack, Special0
+- <@!356635814668664832> — CC_BY-NC_4 · Sleep
+- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232/0000/0001
+- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0232/0000/0001/Normal.png
+
 ## Lucario (#0448)
 
 - CHUNSOFT · Walk, Attack, QuickStrike, Strike, SpAttack, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate

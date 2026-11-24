@@ -46,6 +46,7 @@ export const POKEDEX_STATS: Record<string, BaseStats> = {
   '0658': { hp: 78, attack: 95, defense: 72, spAttack: 103, spDefense: 76, speed: 122 }, // Greninja
   '0150': { hp: 106, attack: 110, defense: 90, spAttack: 154, spDefense: 90, speed: 130 }, // Mewtwo
   '0151': { hp: 94, attack: 100, defense: 95, spAttack: 100, spDefense: 95, speed: 100 }, // Mew
+  '0232': { hp: 90, attack: 120, defense: 120, spAttack: 60, spDefense: 60, speed: 50 }, // Donphan
   '0095': { hp: 60, attack: 55, defense: 175, spAttack: 34, spDefense: 60, speed: 70 }, // Onix
   '0123': { hp: 70, attack: 110, defense: 80, spAttack: 55, spDefense: 80, speed: 105 }, // Scyther
   '0130': { hp: 90, attack: 125, defense: 76, spAttack: 60, spDefense: 100, speed: 81 }, // Gyarados

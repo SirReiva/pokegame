@@ -170,6 +170,15 @@ const MODELS: ModelConfig[] = [
     camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
   },
   {
+    id: "pm0232",
+    name: "PM0232",
+    species: "Donphan",
+    url: `${import.meta.env.BASE_URL}models/pm0232/pm0232.glb`,
+    scale: 1.6,
+    offsetY: 0,
+    camera: { targetY: 1.25, targetZ: 0.05, distance: 5.5, yaw: 0.58, pitch: 0.2 }
+  },
+  {
     id: "pm0243",
     name: "PM0243",
     species: "Raikou",

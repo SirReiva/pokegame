@@ -96,6 +96,9 @@ const CLIP_PATTERNS: Readonly<Record<AnimationName, readonly string[]>> = {
   // `walk` es el nombre interno del estado "en movimiento" en la simulación.
   // El cuerpo usa el trote (o la pose de vuelo en los pájaros, ver `mapClips`).
   walk: ['run01_loop', 'fi21_run01', 'walk01_loop', 'fi20_walk01'],
+  // Clip de carrera reservado para habilidades concretas (Rodada). Si la
+  // especie no lo trae, `resolveAnimationName` cae al clip de caminar.
+  run: ['run01_loop', 'fi21_run01'],
   attack: ['attack01', 'ba20_buturi01'],
   hurt: ['damage01', 'ba30_damageS01', 'damage02'],
   faint: ['down01_start', 'ba41_down01', 'down01_loop'],

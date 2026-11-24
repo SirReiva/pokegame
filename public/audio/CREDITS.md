@@ -100,6 +100,10 @@ este proyecto fan, no comercial, igual que los sprites.
 | Triturar (Gyarados) | Crunch |
 | Dragoaliento | Dragon Breath |
 | Golpe Cuerpo | Body Slam |
+| Cornada | Horn Attack |
+| Giro Rápido | Rapid Spin |
+| Rodada | Rollout |
+| Giga Impacto | Giga Impact |
 | Chorro de Agua | Brine |
 | Frío Polar | Sheer Cold |
 | Ráfaga Marina | Bubble |

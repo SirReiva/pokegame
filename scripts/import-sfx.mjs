@@ -130,6 +130,11 @@ const ABILITY_TRACKS = {
   cascada: 'Waterfall',
   triturarGyarados: 'Crunch',
   dragoaliento: 'Dragon Breath',
+  // Donphan
+  cornada: 'Horn Attack',
+  giroRapido: 'Rapid Spin',
+  rodada: 'Rollout',
+  gigaImpacto: 'Giga Impact',
   // Suicune
   golpeCuerpo: 'Body Slam',
   // Chorro de Agua no es un movimiento real: Brine comparte el chorro a presión.
@@ -240,6 +245,9 @@ const TRACK_HASHES = {
   'Waterfall': 'knlolpss',
   'Dragon Breath': 'xgmscluq',
   'Body Slam': 'nxyahlft',
+  'Horn Attack': 'ywpgpdwy',
+  'Rapid Spin': 'tjqyxrow',
+  'Giga Impact': 'gctjotay',
   'Brine': 'rioyyxsu',
   'Sheer Cold': 'vscjotau',
   'Bubble': 'wfmtgcsg',

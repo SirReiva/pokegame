@@ -95,6 +95,11 @@
       "blend": "models/pm0151_00.blend",
       "output": "public/models/pm0151/pm0151_00.glb"
     },
+    "pm0232": {
+      "blend": "models/pm0232.blend",
+      "output": "public/models/pm0232/pm0232.glb",
+      "armature": "pm0232_00_00"
+    },
     "pm0243": {
       "blend": "models/pm0243.blend",
       "output": "public/models/pm0243/pm0243.glb"

@@ -30,17 +30,22 @@ const MANIFEST = JSON.parse(
  * y actualiza la constante a propósito.
  */
 const EXPECTED_HASH =
-  '4699cf01634b53f09a113c8a6e45907864f9502bb6cfc9b3a6e2ecfc1ded8623';
+  '9a4410deb25ddf9934012a255ad5955a34204c6539d275bb23399bcff28e99b0';
 
 function resolverFor(
   animations: Record<string, SpriteAnimation>
 ): ClipResolver {
+  // El runtime añade un alias `run` sobre `walk` (ver loadActorAsset); el
+  // snapshot debe ver el mismo repertorio para no divergir de la partida.
+  const withRun: Record<string, SpriteAnimation> = animations.run
+    ? animations
+    : { ...animations, run: animations.walk };
   return (name) => {
     const resolved = resolveAnimationName(
       name,
-      (candidate) => !!animations[candidate]
+      (candidate) => !!withRun[candidate]
     );
-    const animation = animations[resolved];
+    const animation = withRun[resolved];
     return animation ? { name: resolved, animation } : null;
   };
 }

@@ -41,6 +41,7 @@ const ROSTER = [
   { id: '0094', name: 'Gengar', types: ['Ghost', 'Poison'], accent: '#735797' },
   { id: '0100', name: 'Voltorb', types: ['Electric'], accent: '#f7d02c' },
   { id: '0133', name: 'Eevee', types: ['Normal'], accent: '#a8a77a' },
+  { id: '0232', name: 'Donphan', types: ['Ground'], accent: '#8e9ba6', actions: ['Hop'] },
   { id: '0448', name: 'Lucario', types: ['Fighting', 'Steel'], accent: '#c22e28' },
   { id: '0658', name: 'Greninja', types: ['Water', 'Dark'], accent: '#3f6f9f' },
   { id: '0150', name: 'Mewtwo', types: ['Psychic'], accent: '#f95587' },

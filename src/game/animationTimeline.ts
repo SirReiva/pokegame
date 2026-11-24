@@ -33,9 +33,11 @@ export function resolveAnimationName(
   const fallbacks: AnimationName[] =
     name === 'faint'
       ? ['hurt', 'idle']
-      : ATTACK_FALLBACKS.has(name)
-        ? ['attack', 'idle']
-        : ['idle'];
+      : name === 'run'
+        ? ['walk', 'idle']
+        : ATTACK_FALLBACKS.has(name)
+          ? ['attack', 'idle']
+          : ['idle'];
   for (const fallback of fallbacks) {
     if (has(fallback)) return fallback;
   }

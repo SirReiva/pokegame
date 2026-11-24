@@ -133,6 +133,12 @@ export const ABILITY_CAST_SOUNDS: Record<string, string> = {
   excavar: 'abilities/excavar.mp3',
   fisura: 'abilities/fisura.mp3',
 
+  // Donphan
+  cornada: 'abilities/cornada.mp3',
+  giroRapido: 'abilities/giroRapido.mp3',
+  rodada: 'abilities/rodada.mp3',
+  gigaImpacto: 'abilities/gigaImpacto.mp3',
+
   // Gyarados
   acuaCola: 'abilities/acuaCola.mp3',
   cascada: 'abilities/cascada.mp3',

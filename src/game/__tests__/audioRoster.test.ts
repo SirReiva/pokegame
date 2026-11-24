@@ -58,6 +58,18 @@ test('incluye los básicos de los starters y las especies nuevas', () => {
   }
 });
 
+test('incluye el kit de Donphan', () => {
+  const paths = sfxPathsForRoster([{ pokemonId: '0232' }]);
+  for (const path of [
+    'abilities/cornada.mp3',
+    'abilities/giroRapido.mp3',
+    'abilities/rodada.mp3',
+    'abilities/gigaImpacto.mp3'
+  ]) {
+    assert.ok(paths.includes(path), `falta ${path}`);
+  }
+});
+
 test('deduplica rutas compartidas entre especies del roster', () => {
   const paths = sfxPathsForRoster([
     { pokemonId: '0383', commonAbilityId: 'impulso' },

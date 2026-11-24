@@ -614,7 +614,7 @@ export class ModelBillboard {
 
     const changed = this.animation !== resolved.animation;
     if (changed || !this.manual) {
-      const assigned = this.ensureState(resolved.animation, false);
+      this.ensureState(resolved.animation, false);
       this.animation = resolved.animation;
       this.clipDurationSeconds = resolved.clip.track.duration;
       this.spriteDurationSeconds = clipDuration(
@@ -624,9 +624,10 @@ export class ModelBillboard {
       this.loop = false;
       this.anim.playing = true;
       this.setAnimationLod(false);
-      if (assigned || !this.manual) {
-        this.transition(resolved.animation, 0);
-      }
+      // `ensureState` puede devolver `false` si el estado ya estaba creado por
+      // el precalentado. Aun así hay que cambiar de estado activo: sin esto, un
+      // casteo que pasa de `charge` a `run` seguía dibujando la carga.
+      this.transition(resolved.animation, 0);
       this.lastManualFrame = -1;
     }
 

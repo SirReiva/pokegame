@@ -58,6 +58,7 @@ export function actorWorldHeight(asset: Pick<ActorAsset, 'height'>): number {
 export const ACTOR_ANIMATION_ORDER: AnimationName[] = [
   'idle',
   'walk',
+  'run',
   'attack',
   'hurt',
   'faint',
@@ -79,6 +80,7 @@ export const ACTOR_ANIMATION_ORDER: AnimationName[] = [
  * el estado (y pague otro `rebind`).
  */
 const MANUAL_ANIMATIONS: ReadonlySet<AnimationName> = new Set([
+  'run',
   'attack',
   'quickstrike',
   'shock',
@@ -123,6 +125,20 @@ async function loadPortrait(url: string): Promise<LoadedImage | null> {
 }
 
 /**
+ * El manifiesto de sprites no trae un clip `run` propio: PMD usa la caminata
+ * también para correr. Las habilidades que piden `run` (por ejemplo, Rodada)
+ * reutilizan la caminata como reloj de gameplay, mientras el cuerpo 3D usa su
+ * clip de carrera real cuando el GLB lo tiene.
+ */
+function withRunAnimation(skin: PokemonSkin): PokemonSkin {
+  if (skin.animations.run || !skin.animations.walk) return skin;
+  return {
+    ...skin,
+    animations: { ...skin.animations, run: skin.animations.walk }
+  };
+}
+
+/**
  * Prepara el aspecto de una especie. El GLB se comparte por especie: los
  * aspectos alternativos de los sprites ya no se ofrecen porque solo existe un
  * modelo por Pokémon.
@@ -133,8 +149,9 @@ export async function loadActorAsset(
   skin: PokemonSkin,
   onProgress?: (fraction: number) => void
 ): Promise<ActorAsset> {
-  const targetHeight = referenceWorldHeight(skin);
-  const targetWidth = referenceWorldWidth(skin);
+  const resolvedSkin = withRunAnimation(skin);
+  const targetHeight = referenceWorldHeight(resolvedSkin);
+  const targetWidth = referenceWorldWidth(resolvedSkin);
 
   const model = await loadModelAsset(
     app,
@@ -150,11 +167,11 @@ export async function loadActorAsset(
     );
   }
 
-  const portrait = await loadPortrait(skin.portrait);
+  const portrait = await loadPortrait(resolvedSkin.portrait);
 
   return {
     entry,
-    skin,
+    skin: resolvedSkin,
     portrait,
     model,
     height: model.bounds.height * model.scale,
