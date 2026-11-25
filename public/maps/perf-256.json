@@ -3,7 +3,7 @@
   "id": "perf-256",
   "name": "Arena de Rendimiento 256×256",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": -52,
     "z": 52

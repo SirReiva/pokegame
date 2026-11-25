@@ -450,7 +450,7 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
   "id": "mi-mapa",
   "name": "Mi mapa",
   "tileSize": 1,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": { "x": -4, "z": 4 },
   "respawns": [
     { "team": "blue", "x": -6, "z": 6, "radius": 3.2 },
@@ -477,7 +477,7 @@ Un mapa es una **rejilla rectangular de tipos de terreno** más sus respawns, se
 ```
 
 - La fila 0 es el **norte** (Z negativa) y la columna 0 el **oeste** (X negativa). Todas las filas de `tiles` deben tener el mismo número de columnas; el ancho y el alto pueden ser distintos.
-- `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua.
+- `tileSize` es el lado de cada celda en unidades de mundo. `waterHeight` es la altura de la lámina de agua **sobre el suelo**: `0` (por defecto) la deja a ras, sin separación visible.
 - Los `TerrainId` disponibles son `jungle`, `lane`, `road`, `sand`, `waterLow`, `waterHigh`, `base`, `tallGrass`, `fire`, `electric`, `ice`, `poison`, `ghost`, `fairy`, `desert`, `park` y los cuatro santuarios de equipo `teamRed`, `teamBlue`, `teamYellow` y `teamGreen`. Sus nombres y tipos Pokémon están en `src/game/terrain.ts` (`TERRAINS`). Los santuarios no tienen tipo Pokémon y solo dejan pasar al equipo indicado por su nombre.
 - `respawns` define la base y los puntos de aparición de cada equipo. `radius` es el radio de la plataforma y del anillo; si un equipo tiene varios respawns, los jugadores se reparten entre ellos. Debe haber entre **2 y 4 equipos** (`red`, `blue`, `yellow`, `green`): el mapa decide cuántos participan. Con dos equipos el tope es de 4 jugadores por equipo; con tres o cuatro, de 2.
 - `mountains` son polilíneas con ancho; bloquean el paso y la línea de visión, y proyectan su cuña de sombra. `kind` elige el aspecto: `mountain` (picos de piedra, por defecto), `wall` (sillería con almenas) o `volcano` (cono truncado de roca con cráter de lava). La colisión y la visión son idénticas en los tres. Un `volcano` es una pieza única de huella cuadrada: `width` es el lado del cuadrado y `points` contiene solo su centro, por ejemplo `[[2, -3]]`.
@@ -505,7 +505,7 @@ El campo `teams` del índice declara los equipos activos del mapa (2-4) y debe c
 
 Los previews del slider se generan con `pnpm maps:previews`: el script lee cada archivo del índice, dibuja la rejilla con la paleta del editor y guarda `public/maps/previews/<id>.png`, actualizando el campo `preview` de `index.json`. Hay que volver a ejecutarlo al añadir o editar un mapa.
 
-`perf-256.json` es un mapa de estrés de 256 × 256 celdas (`tileSize` 0.5 y `waterHeight` 0.3) con quince de los dieciséis terrenos tipados, ocho distritos elementales, un lago central y puentes. Sirve para medir el rendimiento de mapas grandes en el lobby.
+`perf-256.json` es un mapa de estrés de 256 × 256 celdas (`tileSize` 0.5 y `waterHeight` 0) con quince de los dieciséis terrenos tipados, ocho distritos elementales, un lago central y puentes. Sirve para medir el rendimiento de mapas grandes en el lobby.
 
 ## Estado atmosférico
 
@@ -766,7 +766,7 @@ La **máscara world-space** se compone por equipo: para cada observador vivo se 
 
 ### Sumergirse en el agua
 
-Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas y translúcidas a `waterHeight` (0,3 u por defecto), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La malla se construye triangulando el contorno de las celdas de agua y las UVs se escalan por el tamaño del cuerpo, así que el oleaje se lee igual en lagos grandes y pequeños. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
+Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas y translúcidas a ras de suelo (`waterHeight` 0 por defecto, con un margen mínimo para evitar z-fighting), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La malla se construye triangulando el contorno de las celdas de agua y las UVs se escalan por el tamaño del cuerpo, así que el oleaje se lee igual en lagos grandes y pequeños. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
 
 ## Cómo funciona el pipeline de sprites
 

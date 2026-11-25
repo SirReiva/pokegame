@@ -9,7 +9,11 @@
     "id": { "type": "string" },
     "name": { "type": "string" },
     "tileSize": { "type": "number", "exclusiveMinimum": 0 },
-    "waterHeight": { "type": "number" },
+    "waterHeight": {
+      "type": "number",
+      "default": 0,
+      "description": "Altura de la lámina de agua sobre el suelo. 0 la deja a ras."
+    },
     "spawn": { "$ref": "#/$defs/point" },
     "respawns": {
       "type": "array",

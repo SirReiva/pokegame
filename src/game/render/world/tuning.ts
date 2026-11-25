@@ -36,3 +36,12 @@ export const LARGE_REGION_WEATHER = false;
 
 /** Lado máximo de cada foco de niebla antes de dividir la ciénaga. */
 export const SWAMP_MIST_TILE = 40;
+
+/** Altura del plano de suelo del mapa. */
+export const GROUND_LEVEL = 0.001;
+
+/**
+ * Separación de la lámina de agua sobre el suelo. Es solo lo justo para que no
+ * parpadee contra el plano del suelo (z-fighting); visualmente queda a ras.
+ */
+export const WATER_SURFACE_LIFT = 0.003;

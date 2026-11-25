@@ -344,7 +344,7 @@ export function parseMap(raw: unknown, entry: MapIndexEntry): GameMap {
     pickups,
     spawn,
     waterHeight:
-      value.waterHeight === undefined ? 0.3 : number(value.waterHeight, 'waterHeight')
+      value.waterHeight === undefined ? 0 : number(value.waterHeight, 'waterHeight')
   };
 }
 

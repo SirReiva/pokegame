@@ -4,7 +4,7 @@
   "name": "Arena de las Cuatro Coronas",
   "description": "Arena de 128 × 128 celdas para cuatro equipos: bases cardinales, avenidas en cruz, plaza central con fuente, anillo de circulación, distritos elementales en las esquinas y muros diagonales de cobertura.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

@@ -4,7 +4,7 @@
   "name": "Ciudad Plasma",
   "description": "Ciudad de 100 × 100 celdas para tres equipos: avenidas radiales, anillo perimetral, manzanas amuralladas y una plaza central con fuente.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

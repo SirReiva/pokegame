@@ -4,7 +4,7 @@
   "name": "Caldera de Ceniza",
   "description": "Arena de 96 × 96 celdas para dos equipos: caldera volcánica con lago profundo, dos puentes, anillo de ceniza y una isla central con la poción grande.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

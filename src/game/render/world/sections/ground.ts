@@ -1,6 +1,7 @@
 /** Sección del generador de mundo. */
 
 import type { WorldBuildContext } from '../context';
+import { GROUND_LEVEL } from '../tuning';
 import { part, standard } from '../worldParts';
 
 export function* buildGround(ctx: WorldBuildContext): Generator<number, void, void> {
@@ -32,7 +33,7 @@ export function* buildGround(ctx: WorldBuildContext): Generator<number, void, vo
   created.push(slab);
 
   const ground = part(worldRoot, 'plane', grassMaterial, {
-    position: [0, 0.001, 0],
+    position: [0, GROUND_LEVEL, 0],
     scale: [HALF_X * 2, 1, HALF_Z * 2]
   });
   ground.render!.castShadows = false;

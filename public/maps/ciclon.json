@@ -4,7 +4,7 @@
   "name": "El Ojo del Ciclón",
   "description": "Arena de 512 × 512 celdas para cuatro equipos: un ojo central con fuente, un anillo de aguas profundas con ocho puentes, brazos espirales entre distritos elementales y volcanes en las esquinas.",
   "tileSize": 0.25,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

@@ -4,7 +4,7 @@
   "name": "Laberinto de Raíces",
   "description": "Laberinto de 96 × 96 celdas para dos equipos: raíces que dividen el bosque en nueve claros, varias puertas por muro para evitar callejones sin salida y un claro central de hadas.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

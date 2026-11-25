@@ -20,7 +20,7 @@ const MAPS_DIR = path.join(ROOT, "public", "maps");
 const INDEX_FILE = path.join(MAPS_DIR, "index.json");
 
 const TILE_SIZE = 0.5;
-const WATER_HEIGHT = 0.3;
+const WATER_HEIGHT = 0;
 const BASE_RADIUS = 3.6;
 const BASE_COLLIDER_RADIUS = 0.85;
 

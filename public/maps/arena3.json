@@ -4,7 +4,7 @@
   "name": "Tridente de las Tormentas",
   "description": "Arena de 96 × 96 celdas para tres equipos: bases en triángulo, ruta triangular perimetral, tres radios hacia una plaza central con laguna y tres distritos elementales.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

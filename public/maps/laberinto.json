@@ -3,7 +3,7 @@
  "id": "laberinto",
  "name": "Laberinto de las Esquinas",
  "tileSize": 0.5,
- "waterHeight": 0.3,
+ "waterHeight": 0,
  "spawn": {
   "x": -25.75,
   "z": 24.25

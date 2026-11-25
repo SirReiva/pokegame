@@ -4,7 +4,12 @@ import * as pc from 'playcanvas';
 import { zoneBounds } from '../../../terrain';
 import type { WorldBuildContext } from '../context';
 import { addSurface, buildSurfaceMesh } from '../surfaces';
-import { LARGE_REGION_WEATHER, SWAMP_MIST_TILE } from '../tuning';
+import {
+  GROUND_LEVEL,
+  LARGE_REGION_WEATHER,
+  SWAMP_MIST_TILE,
+  WATER_SURFACE_LIFT
+} from '../tuning';
 import { hex, standard } from '../worldParts';
 
 export function* buildWater(ctx: WorldBuildContext): Generator<number, void, void> {
@@ -52,7 +57,9 @@ export function* buildWater(ctx: WorldBuildContext): Generator<number, void, voi
   const swampSurfaceOffset = new pc.Vec2();
   const swampMistOffset = new pc.Vec2();
   const desertHazeOffset = new pc.Vec2();
-  const waterHeight = map.waterHeight;
+  // `waterHeight` se mide desde el suelo: 0 deja la lámina a ras y el pequeño
+  // margen solo evita que parpadee contra el plano del terreno.
+  const waterHeight = GROUND_LEVEL + WATER_SURFACE_LIFT + map.waterHeight;
 
   for (const zone of waterZones) {
     if (!('points' in zone)) continue;

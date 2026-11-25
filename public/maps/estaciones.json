@@ -4,7 +4,7 @@
   "name": "Cuatro Estaciones",
   "description": "Arena de 128 × 128 celdas para cuatro equipos: bases cardinales, plaza central con fuente, anillo de circulación, avenidas en cruz y cuatro distritos elementales.",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": 0,
     "z": 0

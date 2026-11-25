@@ -25,7 +25,7 @@ export const EDITOR_MIN_SIZE = 64;
 export const EDITOR_MAX_SIZE = 4096;
 export const EDITOR_DEFAULT_SIZE = 32;
 export const EDITOR_DEFAULT_TILE_SIZE = 0.5;
-export const EDITOR_DEFAULT_WATER_HEIGHT = 0.3;
+export const EDITOR_DEFAULT_WATER_HEIGHT = 0;
 export const EDITOR_DEFAULT_BASE_RADIUS = 3.6;
 export const EDITOR_HISTORY_LIMIT = 60;
 

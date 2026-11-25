@@ -3,7 +3,7 @@
   "id": "arena2",
   "name": "Arena 2 MOBA",
   "tileSize": 0.5,
-  "waterHeight": 0.3,
+  "waterHeight": 0,
   "spawn": {
     "x": -11.6,
     "z": 11.6
