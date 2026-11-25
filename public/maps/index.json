@@ -124,6 +124,19 @@
         "blue"
       ],
       "preview": "maps/previews/caldera.png"
+    },
+    {
+      "id": "ciclon",
+      "file": "ciclon.json",
+      "name": "El Ojo del Ciclón",
+      "description": "Arena de 512 × 512 celdas para cuatro equipos: ojo central con fuente, anillo de aguas profundas con puentes, brazos espirales entre distritos elementales y volcanes en las esquinas.",
+      "teams": [
+        "red",
+        "blue",
+        "yellow",
+        "green"
+      ],
+      "preview": "maps/previews/ciclon.png"
     }
   ]
 }

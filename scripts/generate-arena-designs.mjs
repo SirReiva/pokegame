@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Genera las cinco arenas nuevas de NewPoke.
+ * Genera las arenas nuevas de NewPoke.
  *
  * Uso:
  *   node scripts/generate-arena-designs.mjs
@@ -47,18 +47,18 @@ function hash01(col, row, seed = 0) {
   return (value >>> 0) / 4294967296;
 }
 
-function geometry(cols, rows) {
-  const halfX = (cols * TILE_SIZE) / 2;
-  const halfZ = (rows * TILE_SIZE) / 2;
+function geometry(cols, rows, tileSize = TILE_SIZE) {
+  const halfX = (cols * tileSize) / 2;
+  const halfZ = (rows * tileSize) / 2;
   return {
     cols,
     rows,
     halfX,
     halfZ,
-    centerX: (col) => (col + 0.5) * TILE_SIZE - halfX,
-    centerZ: (row) => (row + 0.5) * TILE_SIZE - halfZ,
-    cellX: (x) => (x + halfX) / TILE_SIZE,
-    cellZ: (z) => (z + halfZ) / TILE_SIZE
+    centerX: (col) => (col + 0.5) * tileSize - halfX,
+    centerZ: (row) => (row + 0.5) * tileSize - halfZ,
+    cellX: (x) => (x + halfX) / tileSize,
+    cellZ: (z) => (z + halfZ) / tileSize
   };
 }
 
@@ -79,6 +79,38 @@ function paintDisc(grid, geo, x, z, radius, terrain, options = {}) {
       const wx = geo.centerX(col);
       const jitter = rough ? (hash01(col, row, seed) - 0.5) * rough : 0;
       if (Math.hypot(wx - x, wz - z) <= radius + jitter) {
+        setCell(grid, col, row, terrain);
+      }
+    }
+  }
+}
+
+/**
+ * Borde organico con ruido angular: el limite solo depende del angulo, asi que
+ * las celdas vecinas entran o salen juntas. En rejillas muy finas evita la
+ * lluvia de motas sueltas que produce el hash por celda de `paintDisc`.
+ */
+function paintOrganicDisc(grid, geo, x, z, radius, terrain, options = {}) {
+  const { amount = 1.2, seed = 1 } = options;
+  const reach = radius + amount;
+  const minCol = Math.max(0, Math.floor(geo.cellX(x - reach)));
+  const maxCol = Math.min(grid[0].length - 1, Math.ceil(geo.cellX(x + reach)));
+  const minRow = Math.max(0, Math.floor(geo.cellZ(z - reach)));
+  const maxRow = Math.min(grid.length - 1, Math.ceil(geo.cellZ(z + reach)));
+
+  for (let row = minRow; row <= maxRow; row++) {
+    const wz = geo.centerZ(row);
+    for (let col = minCol; col <= maxCol; col++) {
+      const wx = geo.centerX(col);
+      const distance = Math.hypot(wx - x, wz - z);
+      if (distance > reach) continue;
+      const angle = Math.atan2(wz - z, wx - x);
+      const wave =
+        amount *
+        (0.55 * Math.sin(angle * 3 + seed) +
+          0.3 * Math.sin(angle * 7 + seed * 2.3) +
+          0.15 * Math.sin(angle * 13 + seed * 0.7));
+      if (distance <= radius + wave) {
         setCell(grid, col, row, terrain);
       }
     }
@@ -198,14 +230,23 @@ function paintPolygon(grid, geo, points, terrain) {
 
 // --- Mapa ------------------------------------------------------------------
 
-function createContext({ id, name, description, cols, rows, background = "jungle" }) {
-  const geo = geometry(cols, rows);
+function createContext({
+  id,
+  name,
+  description,
+  cols,
+  rows,
+  background = "jungle",
+  tileSize = TILE_SIZE
+}) {
+  const geo = geometry(cols, rows, tileSize);
   return {
     id,
     name,
     description,
     cols,
     rows,
+    tileSize,
     geo,
     tiles: makeGrid(cols, rows, background),
     respawns: [],
@@ -400,7 +441,7 @@ function toMapFile(ctx) {
     id: ctx.id,
     name: ctx.name,
     description: ctx.description,
-    tileSize: TILE_SIZE,
+    tileSize: ctx.tileSize,
     waterHeight: WATER_HEIGHT,
     spawn: { x: 0, z: 0 },
     respawns: ctx.respawns,
@@ -944,9 +985,177 @@ function buildCaldera() {
   return ctx;
 }
 
+// --- Arena 6: El Ojo del Ciclón --------------------------------------------
+
+function buildCiclon() {
+  const cols = 512;
+  const rows = 512;
+  const ctx = createContext({
+    id: "ciclon",
+    name: "El Ojo del Ciclón",
+    description:
+      "Arena de 512 × 512 celdas para cuatro equipos: un ojo central con fuente, un anillo de aguas profundas con ocho puentes, brazos espirales entre distritos elementales y volcanes en las esquinas.",
+    cols,
+    rows,
+    tileSize: 0.25
+  });
+  const { geo, tiles } = ctx;
+  const QUARTER = Math.PI / 2;
+  const baseAngles = [0, 1, 2, 3].map((index) => Math.PI / 4 + index * QUARTER);
+
+  const rotate = (x, z, angle) => [
+    x * Math.cos(angle) - z * Math.sin(angle),
+    x * Math.sin(angle) + z * Math.cos(angle)
+  ];
+  /** Punto de mundo a un radio y ángulo dados (0 = este). */
+  const at = (radius, angle) => [Math.cos(angle) * radius, Math.sin(angle) * radius];
+
+  // Los biomas exteriores se repiten cada 90° para que el mapa sea justo.
+  const paintQuarterDisc = (x, z, radius, terrain, amount, seed) => {
+    for (let index = 0; index < 4; index++) {
+      const [rx, rz] = rotate(x, z, index * QUARTER);
+      paintOrganicDisc(tiles, geo, rx, rz, radius, terrain, {
+        amount,
+        seed: seed + index * 13
+      });
+    }
+  };
+
+  paintQuarterDisc(52, 16, 7.5, "tallGrass", 2.4, 101);
+  paintQuarterDisc(32, 44, 7, "ghost", 2, 102);
+  paintQuarterDisc(57, -3, 5.5, "desert", 1.6, 103);
+  paintQuarterDisc(12, 57, 5, "fairy", 1.6, 104);
+  paintQuarterDisc(28, 44, 4.5, "park", 1.4, 105);
+
+  // Cuatro distritos elementales en los puntos cardinales.
+  const districts = [
+    { angle: 0, terrain: "fire", inner: "sand", innerRadius: 3.4, seed: 120 },
+    { angle: QUARTER, terrain: "ice", inner: "waterLow", innerRadius: 4.2, seed: 130 },
+    { angle: Math.PI, terrain: "electric", inner: "park", innerRadius: 3.4, seed: 140 },
+    { angle: -QUARTER, terrain: "ghost", inner: "poison", innerRadius: 4.2, seed: 150 }
+  ];
+  for (const district of districts) {
+    const [x, z] = at(30, district.angle);
+    paintOrganicDisc(tiles, geo, x, z, 8.5, district.terrain, {
+      amount: 1.4,
+      seed: district.seed
+    });
+    if (district.inner === "waterLow") {
+      paintDisc(tiles, geo, x, z, district.innerRadius, district.inner);
+      paintDisc(tiles, geo, x, z, 1.9, "waterHigh");
+    } else {
+      paintOrganicDisc(tiles, geo, x, z, district.innerRadius, district.inner, {
+        amount: 0.6,
+        seed: district.seed + 1
+      });
+    }
+  }
+
+  // Ojo: anillo de aguas profundas y plaza central con fuente.
+  paintRing(tiles, geo, 0, 0, 13, 17, "waterHigh");
+  paintRing(tiles, geo, 0, 0, 17, 18.5, "sand");
+  paintDisc(tiles, geo, 0, 0, 11.5, "fairy");
+  paintDisc(tiles, geo, 0, 0, 9.5, "sand");
+  paintDisc(tiles, geo, 0, 0, 3.2, "waterLow");
+  paintDisc(tiles, geo, 0, 0, 1, "sand");
+
+  // Brazos espirales: cada uno cruza el anillo de agua como un puente
+  // oblicuo y muere en la plaza del ojo.
+  const spiral = (start, sweep, steps, innerRadius, outerRadius) => {
+    const points = [];
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps;
+      points.push(at(outerRadius + (innerRadius - outerRadius) * t, start + sweep * t));
+    }
+    return points;
+  };
+
+  for (const baseAngle of baseAngles) {
+    const lane = spiral(baseAngle + 0.26, Math.PI / 3, 32, 11, 40);
+    paintStroke(tiles, geo, lane, 3.4, "lane");
+  }
+
+  // Anillo de circunvalación que une las cuatro bases.
+  paintRing(tiles, geo, 0, 0, 41.5, 46.5, "lane", { rough: 0.15, seed: 160 });
+  paintRing(tiles, geo, 0, 0, 43.2, 44.8, "road", { rough: 0.15, seed: 161 });
+
+  // Avenidas rectas de cada base al ojo; también hacen de puentes.
+  for (const baseAngle of baseAngles) {
+    const avenue = [at(9.5, baseAngle), at(44, baseAngle)];
+    paintStroke(tiles, geo, avenue, 6, "lane");
+    paintStroke(tiles, geo, avenue, 3.6, "road");
+  }
+
+  // Bases en el anillo, en las diagonales del mapa.
+  ["red", "blue", "yellow", "green"].forEach((team, index) => {
+    const [x, z] = at(44, baseAngles[index]);
+    paintBaseClearing(ctx, x, z, {
+      panel: "lane",
+      plaza: "road",
+      panelRadius: 5.1,
+      plazaRadius: 6.8
+    });
+    addBase(ctx, team, x, z);
+  });
+
+  // Crestas espirales partidas: dan cobertura sin cerrar las rutas.
+  for (const baseAngle of baseAngles) {
+    for (const side of [-1, 1]) {
+      for (const [startT, endT] of [
+        [0.08, 0.42],
+        [0.58, 0.92]
+      ]) {
+        const points = [];
+        for (let step = 0; step <= 8; step++) {
+          const t = startT + ((endT - startT) * step) / 8;
+          const angle = baseAngle + 0.26 + (Math.PI / 3) * t + side * 0.17;
+          points.push(at(40 + (19 - 40) * t, angle));
+        }
+        addMountain(ctx, "mountain", 1.5, points);
+      }
+    }
+  }
+
+  // Muro exterior roto: deja una puerta amplia junto a cada base.
+  for (const baseAngle of baseAngles) {
+    const points = [];
+    for (let step = 0; step <= 12; step++) {
+      points.push(at(58, baseAngle + 0.35 + (1.05 * step) / 12));
+    }
+    addMountain(ctx, "wall", 1.5, points);
+  }
+
+  // Un volcán de fondo detrás de cada base.
+  for (const baseAngle of baseAngles) {
+    const [x, z] = at(57, baseAngle);
+    addMountain(ctx, "volcano", 5, [[x, z]]);
+  }
+
+  // Objetos: la poción grande en la fuente y pociones en distritos y anillo.
+  addPickup(ctx, "superPotion", 0, 0);
+  for (const district of districts) {
+    const [x, z] = at(30, district.angle);
+    addPickup(ctx, "potion", x, z);
+  }
+  for (const angle of [0, QUARTER, Math.PI, -QUARTER]) {
+    const [x, z] = at(44, angle);
+    addPickup(ctx, "potion", x, z);
+  }
+
+  validate(ctx);
+  return ctx;
+}
+
 // --- Escritura -------------------------------------------------------------
 
-const BUILDERS = [buildDelta, buildEstaciones, buildRaices, buildPlasma, buildCaldera];
+const BUILDERS = [
+  buildDelta,
+  buildEstaciones,
+  buildRaices,
+  buildPlasma,
+  buildCaldera,
+  buildCiclon
+];
 
 const INDEX_ENTRIES = {
   delta: {
@@ -978,6 +1187,12 @@ const INDEX_ENTRIES = {
     description:
       "Arena de 96 × 96 celdas para dos equipos: caldera volcánica con lago profundo, dos puentes, anillo de ceniza y una isla central con la poción grande.",
     teams: ["red", "blue"]
+  },
+  ciclon: {
+    name: "El Ojo del Ciclón",
+    description:
+      "Arena de 512 × 512 celdas para cuatro equipos: ojo central con fuente, anillo de aguas profundas con puentes, brazos espirales entre distritos elementales y volcanes en las esquinas.",
+    teams: ["red", "blue", "yellow", "green"]
   }
 };
 
