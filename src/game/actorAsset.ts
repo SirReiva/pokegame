@@ -1,30 +1,38 @@
 import * as pc from 'playcanvas';
 import { resolveAnimationName } from './animationTimeline';
 import { CONFIG } from './config';
+import {
+  normalizeMarkers,
+  usesActionLayer,
+  type ClipInfo,
+  type ClipLibrary,
+  type ResolvedClip
+} from './core/clipLibrary';
 import { loadImage, type LoadedImage } from './imageLoader';
-import { loadModelAsset, type ModelAsset } from './model';
+import {
+  loadModelAsset,
+  type ModelAsset,
+  type ModelClip
+} from './model';
 import type {
   AnimationName,
-  PokemonAnimations,
-  PokemonEntry,
-  PokemonReference,
-  ResolvedAnimation
+  PokemonEntry
 } from './types';
 
 /**
  * Datos compartidos de un Pokémon jugable: manifiesto, retrato y modelo GLB.
  *
- * El manifiesto sigue siendo la fuente de verdad para los tiempos de gameplay
- * (duración de cada clip y marcadores `Rush`/`Hit`/`Return`) y para la altura de
- * referencia. Solo se carga el retrato: el cuerpo se dibuja con el modelo 3D.
+ * El manifiesto sigue siendo la fuente de verdad para el retrato y para la
+ * escala de referencia. Los tiempos de gameplay salen de la `ClipLibrary` del
+ * modelo 3D, que ya no depende de las duraciones de los sprites.
  */
 
 export type LoadedPortrait = LoadedImage;
 
 export interface ActorAsset {
   readonly entry: PokemonEntry;
-  /** Clips resueltos de la especie, con el fallback de `run`. */
-  readonly animations: PokemonAnimations;
+  /** Clips 3D resueltos de la especie, con duración y marcadores. */
+  readonly clips: ClipLibrary;
   /** Retrato 2D para la marca de KO; `null` si no se pudo cargar. */
   readonly portrait: LoadedPortrait | null;
   /** Modelo 3D de la especie. */
@@ -36,14 +44,14 @@ export interface ActorAsset {
 }
 
 /** Altura del frame `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldHeight(reference: PokemonReference): number {
+function referenceWorldHeight(reference: PokemonEntry['reference']): number {
   return (
     reference.anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch
   );
 }
 
 /** Ancho del frame `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldWidth(reference: PokemonReference): number {
+function referenceWorldWidth(reference: PokemonEntry['reference']): number {
   return reference.frameWidth * CONFIG.sprite.pixelScale;
 }
 
@@ -74,66 +82,58 @@ export const ACTOR_ANIMATION_ORDER: AnimationName[] = [
   'hop'
 ];
 
-/**
- * Clips que el plan de casteo fija con `setManualFrame`: avanzan con el reloj
- * de la simulación y no con el `AnimComponent`, así que su estado se asigna sin
- * loop. Precargarlos con el modo correcto evita que el primer casteo reasigne
- * el estado (y pague otro `rebind`).
- */
-const MANUAL_ANIMATIONS: ReadonlySet<AnimationName> = new Set([
-  'run',
-  'attack',
-  'quickstrike',
-  'shock',
-  'shoot',
-  'charge',
-  'strike',
-  'twirl',
-  'shake',
-  'punch',
-  'hop'
-]);
-
-/** `false` si el clip se reproduce con reloj manual durante un casteo. */
+/** `false` si el clip de casteo se reproduce con reloj manual. */
 export function animationUsesLoop(name: AnimationName): boolean {
-  return !MANUAL_ANIMATIONS.has(name);
+  return !usesActionLayer(name);
 }
 
 /**
- * Clip del manifiesto que se usa como reloj de gameplay para `name`. Es la
- * pieza que comparten los actores y el plan de casteo para leer los `HitFrame`
- * del clip resuelto, no del nombre pedido.
+ * Construye la biblioteca de clips de una especie a partir de los tracks del
+ * GLB y de los marcadores del modelo.
+ */
+function buildClipLibrary(model: ModelAsset): ClipLibrary {
+  const library: ClipLibrary = {};
+  for (const [animation, clip] of Object.entries(model.clips) as Array<
+    [AnimationName, ModelClip | undefined]
+  >) {
+    if (!clip) continue;
+    const override =
+      model.markers[animation] ?? model.markers[clip.name];
+    library[animation] = {
+      animation,
+      duration: Math.max(0.0001, clip.track.duration),
+      loop: override?.loop ?? clip.loop,
+      markers: normalizeMarkers(override),
+      rootMotion: override?.rootMotion ?? 'ignore'
+    } satisfies ClipInfo;
+  }
+  return library;
+}
+
+/**
+ * Clip de la biblioteca que se usa como reloj de gameplay para `name`. Es la
+ * pieza que comparten los actores y el plan de casteo para leer las marcas del
+ * clip resuelto, no del nombre pedido.
  */
 export function resolveAnimationClip(
   asset: ActorAsset | null,
   name: AnimationName
-): ResolvedAnimation | null {
+): ResolvedClip | null {
   if (!asset) return null;
   const resolved = resolveAnimationName(name, (candidate) =>
-    Boolean(asset.animations[candidate])
+    Boolean(asset.clips[candidate])
   );
-  const animation = asset.animations[resolved];
-  return animation ? { name: resolved, animation } : null;
+  const clip = asset.clips[resolved];
+  return clip ? { name: resolved, clip } : null;
 }
 
-async function loadPortrait(url: string): Promise<LoadedImage | null> {
+async function loadPortrait(url: string): Promise<LoadedPortrait | null> {
   try {
     return await loadImage(url);
   } catch (error) {
     console.warn(`[modelo] No se pudo cargar el retrato ${url}`, error);
     return null;
   }
-}
-
-/**
- * El manifiesto de PMD no trae un clip `run` propio: usa la caminata también
- * para correr. Las habilidades que piden `run` (por ejemplo, Rodada) reutilizan
- * la caminata como reloj de gameplay, mientras el cuerpo 3D usa su clip de
- * carrera real cuando el GLB lo tiene.
- */
-function withRunAnimation(animations: PokemonAnimations): PokemonAnimations {
-  if (animations.run || !animations.walk) return animations;
-  return { ...animations, run: animations.walk };
 }
 
 /**
@@ -144,7 +144,6 @@ export async function loadActorAsset(
   entry: PokemonEntry,
   onProgress?: (fraction: number) => void
 ): Promise<ActorAsset> {
-  const animations = withRunAnimation(entry.animations);
   const targetHeight = referenceWorldHeight(entry.reference);
   const targetWidth = referenceWorldWidth(entry.reference);
 
@@ -166,7 +165,7 @@ export async function loadActorAsset(
 
   return {
     entry,
-    animations,
+    clips: buildClipLibrary(model),
     portrait,
     model,
     height: model.bounds.height * model.scale,

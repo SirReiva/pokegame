@@ -39,9 +39,9 @@ export type RequiredAnimationName = Exclude<
 >;
 
 /**
- * Metadatos de una animación de PMD que siguen alimentando el gameplay:
- * duraciones y marcadores de fase. Las hojas de sprite ya no existen; el cuerpo
- * se dibuja con un modelo 3D.
+ * Metadatos de una animación de PMD conservados en el manifiesto para el
+ * retrato, la escala de referencia y las herramientas de migración/validación.
+ * El gameplay de habilidad ya no los lee: usa los marcadores del clip 3D.
  */
 export interface SpriteAnimation {
   /** Duración de cada frame en ticks de 1/60 s. */

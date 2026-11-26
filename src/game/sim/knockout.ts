@@ -9,6 +9,7 @@ import { CONFIG } from '../config';
 import type { AssistCredit } from '../core/match/assists';
 import type { MatchPlayerState } from '../matchState';
 import type { ActorAsset } from '../actorAsset';
+import { clearCastClip } from './cast';
 import { breakRegen } from './status';
 
 export interface KnockoutHost {
@@ -48,11 +49,9 @@ export function knockOut(
   // partida decide el ganador y los KO posteriores del mismo frame no suman.
   if (host.isMatchOver()) return;
   if (!target.alive) return;
-  const animations = host.assetFor(target.pokemonId)?.animations;
-  const deathAnimation = animations?.faint ?? animations?.hurt;
-  const deathDuration = deathAnimation
-    ? deathAnimation.durations.reduce((total, ticks) => total + ticks, 0) / 60
-    : 0.7;
+  const clips = host.assetFor(target.pokemonId)?.clips;
+  const deathClip = clips?.faint ?? clips?.hurt;
+  const deathDuration = deathClip?.duration ?? 0.7;
 
   target.alive = false;
   target.hp = 0;
@@ -60,7 +59,7 @@ export function knockOut(
   target.respawnTimer = CONFIG.combat.respawnSeconds;
   target.deathFade = Math.max(0.45, deathDuration);
   target.hurtTimer = 0;
-  target.animationFrame = null;
+  clearCastClip(target);
   target.dash = null;
   host.cancelCast(target);
   host.clearRepeatCooldown(target);
@@ -76,7 +75,7 @@ export function knockOut(
   target.shieldFx?.destroy();
   target.shieldFx = null;
   breakRegen(target);
-  const animation = animations?.faint ? 'faint' : 'hurt';
+  const animation = clips?.faint ? 'faint' : 'hurt';
   target.animation = animation;
   target.playback = 1;
   host.playDeathCopies(target, animation);

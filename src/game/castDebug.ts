@@ -2,13 +2,21 @@
  * Overlay de depuración de las fases de casteo.
  *
  * Muestra, para cada jugador humano, el tiempo dentro de startup/active/
- * recovery, el frame manual que está dibujando el billboard y los marcadores
- * `HitFrame`/`ReturnFrame` del clip. Se activa con
- * `CONFIG.debug.showCastTimings`.
+ * recovery, el tramo de clip que está dibujando la capa de acción y el
+ * marcador de impacto. Se activa con `CONFIG.debug.showCastTimings`.
  */
 
 import { segmentAt } from './castPlan';
 import type { MatchPlayerState } from './matchState';
+import type { AnimationName } from './types';
+
+export interface CastDebugAnimationState {
+  active: boolean;
+  animation: AnimationName | null;
+  weight: number;
+  playing: boolean;
+  time: number;
+}
 
 const STYLE = [
   'position:fixed',
@@ -39,7 +47,10 @@ export class CastDebugOverlay {
     document.body.appendChild(this.root);
   }
 
-  update(players: readonly MatchPlayerState[]): void {
+  update(
+    players: readonly MatchPlayerState[],
+    stateFor?: (player: MatchPlayerState) => CastDebugAnimationState | null
+  ): void {
     const lines: string[] = [];
     for (const player of players) {
       if (player.isBot) continue;
@@ -58,20 +69,27 @@ export class CastDebugOverlay {
         `${player.name} · ${cast.def.id} · ${phase} ${cast.elapsed.toFixed(2)}/${cast.plan.endAt.toFixed(2)}s`
       );
       const segment = segmentAt(cast.plan, cast.elapsed);
-      const frame = player.animationFrame === null ? 'auto' : player.animationFrame;
+      const clipTime =
+        player.clipTime === null ? 'auto' : `${player.clipTime.toFixed(3)}s`;
       if (segment) {
         lines.push(
-          `  ${segment.animation} frames ${segment.startFrame}..${segment.endFrame} @ ${segment.playback.toFixed(2)}x  draw ${player.animation}/${frame}`
+          `  ${segment.animation} clip ${segment.clipStart.toFixed(3)}..${segment.clipEnd.toFixed(3)} @ ${segment.speed.toFixed(2)}x  draw ${player.actionAnimation ?? 'auto'} ${clipTime}`
         );
       } else {
-        lines.push(`  (hueco) draw ${player.animation}/${frame}`);
+        lines.push(`  (hueco) draw ${player.actionAnimation ?? 'auto'} ${clipTime}`);
       }
-      if (cast.plan.hitClip !== null && cast.plan.hitFrame !== null) {
+      const state = stateFor?.(player);
+      if (state) {
         lines.push(
-          `  hit ${cast.plan.hitClip}#${cast.plan.hitFrame} @ ${cast.effectAt.toFixed(2)}s${cast.fired ? ' · fired' : ''}`
+          `  layer ${state.active ? 'ON' : 'off'} w=${state.weight.toFixed(2)} play=${state.playing} ${state.animation ?? '-'} t=${state.time.toFixed(3)}`
+        );
+      }
+      if (cast.plan.impactClip !== null && cast.plan.impactTime !== null) {
+        lines.push(
+          `  impact ${cast.plan.impactClip}@${cast.plan.impactTime.toFixed(3)}s  effect ${cast.effectAt.toFixed(2)}s${cast.fired ? ' · fired' : ''}${cast.hitStopRemaining > 0 ? ' · hitstop' : ''}`
         );
       } else {
-        lines.push(`  sin clip de lanzamiento · efecto @ ${cast.effectAt.toFixed(2)}s${cast.fired ? ' · fired' : ''}`);
+        lines.push(`  sin impacto · efecto @ ${cast.effectAt.toFixed(2)}s${cast.fired ? ' · fired' : ''}`);
       }
     }
     this.root.textContent = lines.join('\n');

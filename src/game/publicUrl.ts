@@ -9,7 +9,7 @@
  * Se dejan intactas las URLs absolutas (`http:`, `https:`, `data:`, `blob:`,
  * `//cdn...`) y las rutas ya relativas.
  */
-const BASE_URL = import.meta.env.BASE_URL;
+const BASE_URL = import.meta.env?.BASE_URL ?? '/';
 
 export function publicUrl(path: string): string {
   if (/^(?:[a-z][a-z\d+.-]*:)?\/\//i.test(path)) return path;

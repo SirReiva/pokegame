@@ -1,0 +1,166 @@
+{
+  "00000_defaultwait01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00010_defaultidle01": {
+    "impact": 0.05,
+    "followThrough": 0.1
+  },
+  "00011_defaultidle02": {
+    "impact": 0.2074,
+    "followThrough": 0.2574
+  },
+  "00021_turn_r090": {
+    "impact": 0.2098,
+    "followThrough": 0.2623
+  },
+  "00024_turn_l090": {
+    "impact": 0.2098,
+    "followThrough": 0.2623
+  },
+  "00030_walk01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00100_run01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00145_stepout01_start": {
+    "impact": 0.9143,
+    "followThrough": 1
+  },
+  "00146_stepout01": {
+    "impact": 0.0533,
+    "followThrough": 0.2933
+  },
+  "00147_stepout01_end": {
+    "impact": 0.078,
+    "followThrough": 0.128
+  },
+  "00150_jumpup01_start": {
+    "impact": 0.9143,
+    "followThrough": 1
+  },
+  "00151_jumpup01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00152_jumpdown01_start": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00153_jumpdown01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00155_land02": {
+    "impact": 0.0585,
+    "followThrough": 0.1085
+  },
+  "00280_sleep01_start": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00281_sleep01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00282_sleep01_end": {
+    "impact": 0.237,
+    "followThrough": 0.287
+  },
+  "00290_eat01_start": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00291_eat01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00292_eat01_end": {
+    "impact": 0.2927,
+    "followThrough": 0.3427
+  },
+  "00300_roar01": {
+    "impact": 0.6525,
+    "followThrough": 0.7025
+  },
+  "00320_refresh01": {
+    "impact": 0.2722,
+    "followThrough": 0.3629
+  },
+  "00400_attack01": {
+    "impact": 0.2989,
+    "followThrough": 0.3489
+  },
+  "00410_attack02": {
+    "impact": 0.2748,
+    "followThrough": 0.3248
+  },
+  "00450_rangeattack01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00460_rangeattack02_start": {
+    "impact": 0.1951,
+    "followThrough": 0.4683
+  },
+  "00461_rangeattack02_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00462_rangeattack02_end": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00500_damage01": {
+    "impact": 0.0627,
+    "followThrough": 0.1127
+  },
+  "00501_damage02": {
+    "impact": 0.05,
+    "followThrough": 0.1
+  },
+  "00510_stun01_start": {
+    "impact": 0.5073,
+    "followThrough": 0.5854
+  },
+  "00511_stun01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00512_stun01_end": {
+    "impact": 0.1836,
+    "followThrough": 0.2336
+  },
+  "00520_down01_start": {
+    "impact": 0.3485,
+    "followThrough": 0.3985
+  },
+  "00521_down01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00522_down01_end": {
+    "impact": 0.341,
+    "followThrough": 0.391
+  },
+  "00550_glad01": {
+    "impact": 0.2182,
+    "followThrough": 0.2975
+  },
+  "00560_notice01": {
+    "impact": 0.05,
+    "followThrough": 0.1
+  },
+  "00563_hate01": {
+    "impact": 0.1822,
+    "followThrough": 0.2322
+  },
+  "08000_eye01": {
+    "impact": 0.5,
+    "followThrough": 1
+  }
+}

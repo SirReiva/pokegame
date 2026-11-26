@@ -182,6 +182,14 @@ export const CONFIG = {
      */
     zoneBorders: false as boolean,
   },
+  animation: {
+    /**
+     * Hit-stop visual al llegar al marcador de impacto del clip. Congela la
+     * capa de acción sin parar el reloj del casteo: en 3D no hay frames que
+     * forzar, solo tiempo.
+     */
+    hitStopSeconds: 0.055 as number,
+  },
   sprite: {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,

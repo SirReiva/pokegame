@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
  * Valida los planes de casteo de todas las habilidades del roster contra los
- * marcadores reales de los sprites.
+ * marcadores de los clips.
  *
  * Uso:
- *   node scripts/validate-anim-timings.ts
+ *   pnpm validate:anims
  *
  * Comprueba:
  * - El efecto cae exactamente en `startup`.
- * - El frame visible en ese instante es el `HitFrame` del clip resuelto.
- * - El playback queda dentro de [MIN_PLAYBACK, MAX_PLAYBACK].
+ * - El plan termina exactamente en `startup + active + recovery`.
+ * - El clip visible en el efecto está en su marcador de impacto.
+ * - La velocidad queda dentro de [MIN_PLAYBACK, MAX_PLAYBACK].
  * - Los segmentos no se solapan ni se salen del casteo.
- * - `hitFrame <= returnFrame < frames`.
  *
- * Sale con código 1 si hay errores duros.
+ * La biblioteca de clips se deriva del manifiesto de sprites (duración y
+ * marcadores). Es una semilla de migración: el runtime real usa los marcadores
+ * del `clips.json` de cada modelo, que parten de estos valores.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,22 +23,25 @@ import process from 'node:process';
 import { ABILITIES, MOVESETS } from '../src/game/abilities.ts';
 import {
   animationScriptFor,
-  segmentAt,
   buildCastPlan,
-  frameForSegment
+  clipTimeAt,
+  segmentAt
 } from '../src/game/castPlan.ts';
 import {
   MAX_PLAYBACK,
   MIN_PLAYBACK,
+  clipDuration,
   clipTiming,
+  frameBoundary,
+  frameStart,
   resolveAnimationName
 } from '../src/game/animationTimeline.ts';
-import type { ResolvedAnimation, SpriteAnimation } from '../src/game/types.ts';
+import type { ClipLibrary, ResolvedClip } from '../src/game/core/clipLibrary.ts';
+import type { AnimationName, SpriteAnimation } from '../src/game/types.ts';
 
-type ManifestAnimation = SpriteAnimation;
 interface ManifestPokemon {
   id: string;
-  animations: Record<string, ManifestAnimation>;
+  animations: Record<string, SpriteAnimation>;
 }
 interface Manifest {
   pokemon: ManifestPokemon[];
@@ -50,34 +55,51 @@ const manifest: Manifest = JSON.parse(
 
 const byId = new Map(manifest.pokemon.map((entry) => [entry.id, entry]));
 
+function phaseFor(sprite: SpriteAnimation, frame: number): number {
+  const duration = clipDuration(sprite);
+  if (duration <= 0) return 0;
+  const start = frameStart(sprite, frame);
+  const end = frameBoundary(sprite, frame + 1);
+  return (start + end) / 2 / duration;
+}
+
+function libraryFor(
+  animations: Record<string, SpriteAnimation>
+): ClipLibrary {
+  const withRun: Record<string, SpriteAnimation> = animations.run
+    ? animations
+    : { ...animations, run: animations.walk };
+  const library: ClipLibrary = {};
+  for (const [animation, sprite] of Object.entries(withRun)) {
+    const duration = clipDuration(sprite);
+    if (duration <= 0) continue;
+    const timing = clipTiming(sprite);
+    library[animation as AnimationName] = {
+      animation: animation as AnimationName,
+      duration,
+      loop: true,
+      markers: {
+        impact: phaseFor(sprite, timing.hitFrame),
+        followThrough: phaseFor(sprite, timing.returnFrame)
+      },
+      rootMotion: 'ignore'
+    };
+  }
+  return library;
+}
+
 function resolverFor(
-  animations: Record<string, ManifestAnimation>
-): (name: Parameters<typeof resolveAnimationName>[0]) => ResolvedAnimation | null {
+  animations: Record<string, SpriteAnimation>
+): (name: AnimationName) => ResolvedClip | null {
+  const library = libraryFor(animations);
   return (name) => {
     const resolved = resolveAnimationName(
       name,
-      (candidate) => animations[candidate] !== undefined
+      (candidate) => library[candidate] !== undefined
     );
-    const animation = animations[resolved];
-    return animation ? { name: resolved, animation } : null;
+    const clip = library[resolved];
+    return clip ? { name: resolved, clip } : null;
   };
-}
-
-function frameAtEffect(
-  plan: ReturnType<typeof buildCastPlan>,
-  resolve: (name: Parameters<typeof resolveAnimationName>[0]) => ResolvedAnimation | null
-): number | null {
-  const segment = segmentAt(plan, plan.effectAt);
-  if (segment) {
-    const clip = resolve(segment.animation);
-    if (!clip) return null;
-    return frameForSegment(segment, clip.animation, plan.effectAt);
-  }
-  // Sin segmento que empiece en el efecto: usa el último que termina ahí.
-  const ending = plan.segments
-    .filter((candidate) => Math.abs(candidate.endAt - plan.effectAt) < EPSILON)
-    .at(-1);
-  return ending ? ending.endFrame : null;
 }
 
 interface Issue {
@@ -97,13 +119,11 @@ function report(issue: Issue): void {
   seenIssues.add(key);
   issues.push(issue);
 }
-const playbackByAbility = new Map<string, { min: number; max: number }>();
-const trimmed = new Set<string>();
 
 function check(
   pokemonId: string,
   abilityId: string,
-  animations: Record<string, ManifestAnimation>,
+  animations: Record<string, SpriteAnimation>,
   override?: (typeof ABILITIES)[string]
 ): void {
   const def = override ?? ABILITIES[abilityId];
@@ -159,23 +179,27 @@ function check(
     }
     if (!segment.loop) {
       if (
-        segment.playback < MIN_PLAYBACK - EPSILON ||
-        segment.playback > MAX_PLAYBACK + EPSILON
+        segment.speed < MIN_PLAYBACK - EPSILON ||
+        segment.speed > MAX_PLAYBACK + EPSILON
       ) {
         report({
           kind: 'error',
           pokemon: pokemonId,
           ability: abilityId,
-          message: `${segment.animation} playback ${segment.playback.toFixed(2)} fuera de rango`
+          message: `${segment.animation} speed ${segment.speed.toFixed(2)} fuera de rango`
         });
       }
-      const stats = playbackByAbility.get(`${abilityId}:${segment.animation}`) ?? {
-        min: Infinity,
-        max: -Infinity
-      };
-      stats.min = Math.min(stats.min, segment.playback);
-      stats.max = Math.max(stats.max, segment.playback);
-      playbackByAbility.set(`${abilityId}:${segment.animation}`, stats);
+    }
+    if (
+      segment.clipStart < -EPSILON ||
+      segment.clipEnd < segment.clipStart - EPSILON
+    ) {
+      report({
+        kind: 'error',
+        pokemon: pokemonId,
+        ability: abilityId,
+        message: `${segment.animation} tramo de clip inválido [${segment.clipStart.toFixed(3)}, ${segment.clipEnd.toFixed(3)}]`
+      });
     }
     if (index > 0) {
       const previous = sorted[index - 1];
@@ -188,56 +212,39 @@ function check(
         });
       }
     }
-    if (segment.startAt === 0 && segment.startFrame > 0) {
-      trimmed.add(`${abilityId}:${segment.animation}`);
-    }
   }
 
   // El dash recorre el clip completo durante la ventana activa: no tiene un
-  // instante de golpe único que anclar al HitFrame.
-  if (def.shape !== 'dash' && plan.hitClip !== null && plan.hitFrame !== null) {
-    const clip = resolve(plan.hitClip);
-    if (!clip) {
+  // instante de golpe único que anclar al marcador de impacto.
+  if (def.shape !== 'dash' && plan.impactClip !== null) {
+    const segment = segmentAt(plan, plan.effectAt);
+    const expected = plan.impactTime;
+    const visible = segment ? clipTimeAt(segment, plan.effectAt) : null;
+    const matches =
+      expected !== null &&
+      visible !== null &&
+      Math.abs(visible - expected) <= 1e-4;
+    // Sin ventana activa, el segmento que empieza en el efecto ya es el de
+    // recuperación; el runtime muestra el impacto con el hit-stop. Basta con
+    // que un segmento acabe en el efecto en el tiempo de impacto.
+    const endsAtImpact =
+      expected !== null &&
+      plan.segments.some(
+        (candidate) =>
+          Math.abs(candidate.endAt - plan.effectAt) <= 1e-4 &&
+          candidate.clipEnd >= expected - 1e-4 &&
+          candidate.clipStart <= expected + 1e-4
+      );
+    if (!matches && !endsAtImpact) {
       report({
         kind: 'error',
         pokemon: pokemonId,
         ability: abilityId,
-        message: `no se pudo resolver el clip ${plan.hitClip}`
+        message:
+          visible === null
+            ? 'el efecto cae en un hueco sin clip'
+            : `en el efecto se ve ${segment!.animation}@${visible.toFixed(3)}s, se esperaba ${plan.impactClip}@${(expected ?? 0).toFixed(3)}s`
       });
-    } else {
-      const timing = clipTiming(clip.animation);
-      if (timing.hitFrame > timing.returnFrame) {
-        report({
-          kind: 'error',
-          pokemon: pokemonId,
-          ability: abilityId,
-          message: `HitFrame ${timing.hitFrame} > ReturnFrame ${timing.returnFrame}`
-        });
-      }
-      if (timing.returnFrame >= clip.animation.durations.length) {
-        report({
-          kind: 'error',
-          pokemon: pokemonId,
-          ability: abilityId,
-          message: 'ReturnFrame fuera del clip'
-        });
-      }
-      const visible = frameAtEffect(plan, resolve);
-      if (visible === null) {
-        report({
-          kind: 'error',
-          pokemon: pokemonId,
-          ability: abilityId,
-          message: 'el efecto cae en un hueco sin frame'
-        });
-      } else if (Math.abs(visible - plan.hitFrame) > 1) {
-        report({
-          kind: 'error',
-          pokemon: pokemonId,
-          ability: abilityId,
-          message: `en el efecto se ve el frame ${visible}, se esperaba ${plan.hitFrame} (${plan.hitClip})`
-        });
-      }
     }
   }
 
@@ -258,30 +265,29 @@ function check(
           kind: 'warn',
           pokemon: pokemonId,
           ability: abilityId,
-          message: `carga ${step.clip} omitida (no hay hueco antes del HitFrame)`
+          message: `carga ${step.clip} omitida (no hay hueco antes del impacto)`
         });
       }
     }
   }
 
-  // Aviso si el clip necesita recortar anticipación.
+  // Aviso si no hay anticipación visible.
   for (const step of script) {
-    if (step.fit !== 'trimStart') continue;
+    if (step.fit !== 'alignImpact') continue;
     const release = resolve(step.clip);
     if (!release) continue;
-    const timing = clipTiming(release.animation);
-    const lead = plan.segments.find(
+    const hasLead = plan.segments.some(
       (segment) =>
         segment.animation === release.name &&
         segment.endAt <= plan.effectAt + EPSILON &&
-        segment.startFrame < timing.hitFrame
+        !segment.loop
     );
-    if (!lead && def.startup > 0 && timing.hitAt > 0) {
+    if (!hasLead && def.startup > 0) {
       report({
         kind: 'warn',
         pokemon: pokemonId,
         ability: abilityId,
-        message: `sin anticipación visible (startup ${def.startup.toFixed(2)}s < hit ${timing.hitAt.toFixed(2)}s)`
+        message: `sin anticipación visible para ${step.clip}`
       });
     }
   }
@@ -318,22 +324,6 @@ const errors = issues.filter((issue) => issue.kind === 'error');
 const warnings = issues.filter((issue) => issue.kind === 'warn');
 
 console.log(`Habilidades x especie comprobadas: ${checked}`);
-if (trimmed.size > 0) {
-  console.log(`Clips con anticipación recortada: ${[...trimmed].sort().join(', ')}`);
-}
-
-const playbacks = [...playbackByAbility.entries()]
-  .filter(([, stats]) => Number.isFinite(stats.min))
-  .sort((a, b) => a[0].localeCompare(b[0]))
-  .slice(0, 12);
-if (playbacks.length > 0) {
-  console.log('\nRango de playback por habilidad/clip (primeros 12):');
-  for (const [key, stats] of playbacks) {
-    console.log(
-      `  ${key.padEnd(38)} ${stats.min.toFixed(2)}x .. ${stats.max.toFixed(2)}x`
-    );
-  }
-}
 
 if (warnings.length > 0) {
   console.log(`\nAvisos: ${warnings.length}`);

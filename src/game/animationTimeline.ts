@@ -1,10 +1,10 @@
 /**
- * Tiempos de un clip de sprite y ventanas de reproducción.
+ * Tiempos de un clip de sprite para las herramientas de migración.
  *
- * Todo se calcula a partir de `durations` (ticks de 1/60 s) y de los
- * marcadores `rushFrame` / `hitFrame` / `returnFrame` del `AnimData.xml` de
- * PMD. El motor no guarda tiempos precalculados en el manifiesto: así una
- * edición de sprites basta con volver a parchear los índices.
+ * El runtime de habilidad ya no reproduce frames: usa `ClipLibrary` con la
+ * duración y los marcadores del clip 3D. Estas funciones siguen siendo útiles
+ * para sembrar `clips.json` desde el manifiesto y para validar los planes con
+ * los valores históricos de PMD.
  *
  * Este módulo es puro (sin PlayCanvas) para poder usarlo también desde los
  * scripts de validación con Node.
@@ -50,7 +50,7 @@ export function resolveAnimationName(
  * frames o retrasa el segmento en vez de deformar la animación.
  */
 export const MIN_PLAYBACK = 0.6;
-export const MAX_PLAYBACK = 1.8;
+export const MAX_PLAYBACK = 2.5;
 
 /** Ticks por segundo del formato de PMD. */
 export const TICKS_PER_SECOND = 60;

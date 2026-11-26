@@ -243,8 +243,8 @@ export interface PlayerDash {
 
 /**
  * Casteo en curso: desde que se pulsa la habilidad hasta que termina su
- * `recovery`. El plan de presentación fija qué frame del clip se dibuja en cada
- * fase; el efecto se dispara una sola vez al llegar a `effectAt`.
+ * `recovery`. El plan de presentación fija qué tiempo del clip se dibuja en
+ * cada fase; el efecto se dispara una sola vez al llegar a `effectAt`.
  */
 export interface ActiveCast {
   def: AbilityDef;
@@ -260,14 +260,10 @@ export interface ActiveCast {
   /** `true` si el casteo se interrumpió antes de resolver su efecto. */
   canceled: boolean;
   /**
-   * Frame de impacto forzado para el render. Si un frame largo (`dt`) cruza el
-   * `HitFrame` de golpe, se mantiene esta pose uno o dos frames para que no se
-   * pierda visualmente.
+   * Tiempo de hit-stop restante, en segundos. Mientras dura, el clip visible se
+   * queda congelado en el marcador de impacto aunque el casteo siga avanzando.
    */
-  forcedFrame: number | null;
-  forcedAnimation: AnimationName | null;
-  /** Frames de render que quedan mostrando `forcedFrame`. */
-  forcedFrames: number;
+  hitStopRemaining: number;
   /**
    * Marca en el suelo de las habilidades de área; `null` en las demás. El aro
    * del equipo sobrevive al impacto y se autodestruye al terminar el efecto;
@@ -465,10 +461,14 @@ export interface MatchPlayerState extends MatchPlayerConfig {
   /** Tiempo restante de la animación de daño. */
   hurtTimer: number;
   /**
-   * Frame manual que debe dibujar el billboard durante un casteo. `null` deja
-   * que idle/walk/hurt usen el reloj automático.
+   * Clip de acción que debe dibujar la capa de casteo. `null` deja ver la
+   * locomoción base (`idle`/`walk`/`hurt`/`faint`).
    */
-  animationFrame: number | null;
+  actionAnimation: AnimationName | null;
+  /** Tiempo dentro del clip de acción, en segundos. `null` sin casteo. */
+  clipTime: number | null;
+  /** Velocidad del clip de acción (1 = natural). */
+  clipSpeed: number;
   /** Desplazamiento activo (dash) o `null` si no se está desplazando. */
   dash: PlayerDash | null;
   /** Casteo en curso o `null`. */

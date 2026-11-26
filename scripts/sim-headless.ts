@@ -105,7 +105,8 @@ import {
 import { isChannelingCast } from '../src/game/core/abilities/movement';
 import {
   stepActiveCast,
-  armHitFrame,
+  beginImpactHold,
+  clearCastClip,
   applyCastPresentation,
   type CastSystemHost
 } from '../src/game/sim/cast';
@@ -805,7 +806,9 @@ export class HeadlessMatch {
       invulnerableTimer: 0,
       stunTimer: 0,
       hurtTimer: 0,
-      animationFrame: null,
+      actionAnimation: null,
+      clipTime: null,
+      clipSpeed: 1,
       dash: null,
       activeCast: null,
       deathFade: 0,
@@ -1181,9 +1184,7 @@ export class HeadlessMatch {
       effectAt: plan.effectAt,
       fired: false,
       canceled: false,
-      forcedFrame: null,
-      forcedAnimation: null,
-      forcedFrames: 0,
+      hitStopRemaining: 0,
       hiddenCaster: false,
       invulnerableCaster: false,
       marker,
@@ -1227,7 +1228,7 @@ export class HeadlessMatch {
     if (plan.effectAt <= 0) {
       cast.fired = true;
       this.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ, cast);
-      armHitFrame(this.hosts.cast, player, cast);
+      beginImpactHold(cast);
     }
 
     applyCastPresentation(this.hosts.cast, player, cast);
@@ -1427,7 +1428,7 @@ export class HeadlessMatch {
     if (cast.hiddenCaster) player.hidden = false;
     if (cast.invulnerableCaster) player.invulnerableTimer = 0;
     player.activeCast = null;
-    player.animationFrame = null;
+    clearCastClip(player);
   }
 
   private cutCastAoes(cast: ActiveCast): void {
@@ -1709,7 +1710,7 @@ export class HeadlessMatch {
     player.invulnerableTimer = CONFIG.combat.invulnerabilitySeconds;
     player.stunTimer = 0;
     player.hurtTimer = 0;
-    player.animationFrame = null;
+    clearCastClip(player);
     player.dash = null;
     this.cancelCast(player);
     this.clearRepeatCooldown(player);
@@ -2058,14 +2059,6 @@ export class HeadlessMatch {
 
     this.simulationStep += 1;
     this.matchElapsed += FIXED_STEP;
-
-    // `Game` descuenta los frames forzados una vez por render. Aquí hay un
-    // render por paso, así que se descuentan aquí; si no, un casteo con pose de
-    // impacto nunca terminaría.
-    for (const player of this.players) {
-      const cast = player.activeCast;
-      if (cast && cast.forcedFrames > 0) cast.forcedFrames--;
-    }
 
     this.advanceGameMode(FIXED_STEP);
     if (this.matchOver) return;

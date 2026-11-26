@@ -1,12 +1,13 @@
 /**
  * Ciclo de un casteo activo.
  *
- * Avanza el reloj, dispara el efecto una sola vez, fuerza la pose de impacto y
- * aplica el plan de animación. El host aporta el encolado, la cámara y el asset
- * del sprite.
+ * Avanza el reloj, dispara el efecto una sola vez, congela brevemente el clip
+ * en el impacto y aplica el plan de animación. El host aporta el encolado, la
+ * cámara y el asset del actor.
  */
 
 import type { AbilityDef } from '../abilities';
+import { CONFIG } from '../config';
 import type { TelegraphHandle } from '../core/ports/fx';
 import { castMovementMultiplier } from '../core/abilities/movement';
 import type {
@@ -15,7 +16,7 @@ import type {
 } from '../matchState';
 import type { DeviceInputSnapshot } from '../input';
 import type { ActorAsset } from '../actorAsset';
-import { frameForSegment, segmentAt } from '../castPlan';
+import { clipTimeAt, segmentAt } from '../castPlan';
 import { terrainAt } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import { terrainConcealment } from '../vision';
@@ -40,6 +41,28 @@ export interface CastSystemHost {
   ): void;
 }
 
+/** Retira el clip de acción del jugador y deja mandar a la locomoción. */
+export function clearCastClip(player: MatchPlayerState): void {
+  player.actionAnimation = null;
+  player.clipTime = null;
+  player.clipSpeed = 1;
+}
+
+/**
+ * Congela el clip en el marcador de impacto durante unos milisegundos. Sustituye
+ * al antiguo `forcedFrame`: en 3D no hay frames que forzar, solo tiempo.
+ */
+export function beginImpactHold(cast: ActiveCast): void {
+  if (cast.plan.impactClip === null || cast.plan.impactTime === null) return;
+  // En casteos muy cortos el hit-stop no puede comerse la única ventana en la
+  // que se ve la acción. Se limita a una fracción de lo que queda de casteo.
+  const remaining = Math.max(0, cast.plan.endAt - cast.plan.effectAt);
+  cast.hitStopRemaining = Math.min(
+    CONFIG.animation.hitStopSeconds,
+    remaining * 0.25
+  );
+}
+
 export function stepActiveCast(
   host: CastSystemHost,
   player: MatchPlayerState,
@@ -50,6 +73,9 @@ export function stepActiveCast(
   const cast = player.activeCast;
   if (!cast) return null;
 
+  if (cast.hitStopRemaining > 0) {
+    cast.hitStopRemaining = Math.max(0, cast.hitStopRemaining - dt);
+  }
   cast.elapsed += dt;
 
   // Las áreas que declaran `aoePrepareMovement` recalculan su centro durante la
@@ -83,7 +109,7 @@ export function stepActiveCast(
       cast.dirZ,
       cast
     );
-    armHitFrame(host, player, cast);
+    beginImpactHold(cast);
   }
 
   applyCastPresentation(host, player, cast);
@@ -96,20 +122,14 @@ export function stepActiveCast(
   player.concealment = terrainConcealment(terrain, player.types);
 
   if (cast.elapsed >= cast.plan.endAt) {
-    // Si el impacto forzado aún tiene frames pendientes, se deja vivo un frame
-    // más para que se dibuje. Se limpiará en la siguiente pasada.
-    if (cast.forcedFrames > 0) {
-      cast.elapsed = cast.plan.endAt - 1e-4;
-    } else {
-      // La marca y el carril se autodestruyen al terminar su propio efecto.
-      if (cast.hiddenCaster) player.hidden = false;
-      if (cast.invulnerableCaster) player.invulnerableTimer = 0;
-      cast.armorFx?.destroy();
-      cast.armorFx = null;
-      player.activeCast = null;
-      player.animationFrame = null;
-      return null;
-    }
+    // La marca y el carril se autodestruyen al terminar su propio efecto.
+    if (cast.hiddenCaster) player.hidden = false;
+    if (cast.invulnerableCaster) player.invulnerableTimer = 0;
+    cast.armorFx?.destroy();
+    cast.armorFx = null;
+    player.activeCast = null;
+    clearCastClip(player);
+    return null;
   }
 
   // Movimiento: el multiplicador depende de la fase y de los overrides de la
@@ -130,71 +150,33 @@ export function stepActiveCast(
 }
 
 /**
- * Fuerza la pose de impacto durante un par de frames de render. Evita que un
- * `dt` grande salte del frame anterior al posterior al `HitFrame` sin dibujarlo.
+ * Selecciona el tiempo del clip de acción para el instante actual. Durante el
+ * hit-stop se mantiene la pose de impacto aunque el reloj del casteo avance.
  */
-export function armHitFrame(
-  host: CastSystemHost,
-  player: MatchPlayerState,
-  cast: ActiveCast
-): void {
-  if (cast.def.shape === 'dash') return;
-  if (cast.plan.hitClip === null || cast.plan.hitFrame === null) return;
-  // Si la presentación normal ya cae en el HitFrame, no hace falta forzar:
-  // solo se fuerza cuando el salto de `dt` ya lo ha rebasado (o caído en hueco).
-  const asset = host.assetFor(player.pokemonId);
-  const segment = segmentAt(cast.plan, cast.elapsed);
-  const clip = segment ? asset?.animations[segment.animation] : null;
-  const normalFrame =
-    segment && clip ? frameForSegment(segment, clip, cast.elapsed) : null;
-  if (normalFrame === cast.plan.hitFrame) return;
-  cast.forcedAnimation = cast.plan.hitClip;
-  cast.forcedFrame = cast.plan.hitFrame;
-  cast.forcedFrames = 2;
-}
-
-/** Selecciona el frame del plan de casteo para el instante actual. */
 export function applyCastPresentation(
-  host: CastSystemHost,
+  _host: CastSystemHost,
   player: MatchPlayerState,
   cast: ActiveCast
 ): void {
-  const asset = host.assetFor(player.pokemonId);
-
-  // Salto de `dt`: mantén la pose de impacto aunque el reloj ya la haya
-  // rebasado. Sin esto, el efecto se dispara pero el frame nunca se ve.
   if (
-    cast.forcedFrames > 0 &&
-    cast.forcedAnimation !== null &&
-    cast.forcedFrame !== null
+    cast.hitStopRemaining > 0 &&
+    cast.plan.impactClip !== null &&
+    cast.plan.impactTime !== null
   ) {
-    const forcedClip = asset?.animations[cast.forcedAnimation];
-    if (forcedClip) {
-      player.animation = cast.forcedAnimation;
-      player.animationFrame = Math.max(
-        0,
-        Math.min(forcedClip.durations.length - 1, cast.forcedFrame)
-      );
-      player.playback = 1;
-      return;
-    }
+    player.actionAnimation = cast.plan.impactClip;
+    player.clipTime = cast.plan.impactTime;
+    player.clipSpeed = 1;
+    return;
   }
 
   const segment = segmentAt(cast.plan, cast.elapsed);
   if (!segment) {
-    player.animationFrame = null;
-    player.animation = 'idle';
-    player.playback = 1;
+    clearCastClip(player);
     return;
   }
-  const clip = asset?.animations[segment.animation];
-  if (!clip) {
-    player.animationFrame = null;
-    player.animation = 'idle';
-    player.playback = 1;
-    return;
-  }
-  player.animation = segment.animation;
-  player.animationFrame = frameForSegment(segment, clip, cast.elapsed);
-  player.playback = 1;
+
+  player.actionAnimation = segment.animation;
+  player.clipTime = clipTimeAt(segment, cast.elapsed);
+  player.clipSpeed = segment.speed;
 }
+

@@ -1,6 +1,10 @@
 import * as pc from 'playcanvas';
 import { resolveAnimationName } from './animationTimeline';
 import { DEG } from './config';
+import type {
+  ClipMarkerOverride,
+  ClipMarkerTable
+} from './core/clipLibrary';
 import { modelEntryFor, type PokemonModelEntry } from './modelCatalog';
 import { publicUrl } from './publicUrl';
 import type { AnimationName, PokemonEntry } from './types';
@@ -9,9 +13,10 @@ import type { AnimationName, PokemonEntry } from './types';
  * Carga de los GLB de Pokémon y traducción de sus clips a los nombres de
  * animación que usa el juego.
  *
- * El juego no reproduce los frames del manifiesto de sprites: solo usa sus
- * duraciones y marcadores (`HitFrame`, etc.) como reloj de gameplay. El modelo
- * reparte esos mismos tiempos sobre el clip que le corresponde.
+ * Cada clip 3D aporta su duración real y unos marcadores semánticos. Los
+ * marcadores pueden venir horneados en el GLB (`extras.newpoke.clips`) o en un
+ * `clips.json` junto al modelo, que tiene prioridad para poder ajustarlos sin
+ * reexportar.
  */
 
 export interface ModelClip {
@@ -62,6 +67,11 @@ export interface ModelAsset {
   readonly bounds: ModelBounds;
   /** Apoyo de la pose de espera; `null` en GLB sin hornear. */
   readonly grounding: ModelGrounding | null;
+  /**
+   * Marcadores por animación o por nombre de clip. El `clips.json` del modelo
+   * sobrescribe los `extras` del GLB.
+   */
+  readonly markers: ClipMarkerTable;
 }
 
 export interface ModelTargetSize {
@@ -214,6 +224,56 @@ interface GlbAnimationInfo {
   animationNames: string[];
   bounds: ModelBounds | null;
   grounding: ModelGrounding | null;
+  markers: ClipMarkerTable;
+}
+
+function readMarkerNumber(value: unknown): number | undefined {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return undefined;
+  return Math.min(1, Math.max(0, number));
+}
+
+/**
+ * Normaliza una tabla de marcadores. Acepta tanto `{ attack: { impact } }`
+ * como `{ clips: { attack: { impact } } }`.
+ */
+function readMarkerTable(raw: unknown): ClipMarkerTable {
+  if (!raw || typeof raw !== 'object') return {};
+  const record = raw as Record<string, unknown>;
+  const source =
+    record.clips && typeof record.clips === 'object'
+      ? (record.clips as Record<string, unknown>)
+      : record;
+
+  const table: ClipMarkerTable = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!value || typeof value !== 'object') continue;
+    const data = value as Record<string, unknown>;
+    const marker: ClipMarkerOverride = {};
+    const impact = readMarkerNumber(data.impact);
+    const followThrough = readMarkerNumber(data.followThrough);
+    const release = readMarkerNumber(data.release);
+    if (impact !== undefined) marker.impact = impact;
+    if (followThrough !== undefined) marker.followThrough = followThrough;
+    if (release !== undefined) marker.release = release;
+    if (data.loop === true || data.loop === false) marker.loop = data.loop;
+    if (data.rootMotion === 'ignore' || data.rootMotion === 'keep') {
+      marker.rootMotion = data.rootMotion;
+    }
+    if (Object.keys(marker).length > 0) table[key] = marker;
+  }
+  return table;
+}
+
+function mergeMarkerTables(
+  base: ClipMarkerTable,
+  override: ClipMarkerTable
+): ClipMarkerTable {
+  const result: ClipMarkerTable = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    result[key] = { ...result[key], ...value };
+  }
+  return result;
 }
 
 /** Caja de apoyo horneada por `tools/models/atlas-glb.mjs`. */
@@ -241,7 +301,7 @@ function readGrounding(json: {
 function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
   const view = new DataView(buffer);
   if (buffer.byteLength < 12 || view.getUint32(0, true) !== 0x46546c67) {
-    return { animationNames: [], bounds: null, grounding: null };
+    return { animationNames: [], bounds: null, grounding: null, markers: {} };
   }
 
   let offset = 12;
@@ -267,6 +327,7 @@ function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
                 minY?: unknown;
                 maxY?: unknown;
               };
+              clips?: unknown;
             };
           };
         };
@@ -275,15 +336,16 @@ function readGlbInfo(buffer: ArrayBuffer): GlbAnimationInfo {
             (animation) => animation.name ?? ''
           ),
           bounds: readBounds(json),
-          grounding: readGrounding(json)
+          grounding: readGrounding(json),
+          markers: readMarkerTable(json.extras?.newpoke?.clips)
         };
       } catch {
-        return { animationNames: [], bounds: null, grounding: null };
+        return { animationNames: [], bounds: null, grounding: null, markers: {} };
       }
     }
     offset += 8 + length;
   }
-  return { animationNames: [], bounds: null, grounding: null };
+  return { animationNames: [], bounds: null, grounding: null, markers: {} };
 }
 
 /**
@@ -384,6 +446,24 @@ async function fetchModelBlob(
   return new Blob(chunks as BlobPart[], { type: 'model/gltf-binary' });
 }
 
+/** Ruta del `clips.json` que acompaña al GLB. */
+function clipMarkerUrl(file: string): string {
+  const slash = file.lastIndexOf('/');
+  const directory = slash >= 0 ? file.slice(0, slash) : '';
+  return publicUrl(`models/${directory ? `${directory}/` : ''}clips.json`);
+}
+
+/** Lee los marcadores del sidecar; un 404 significa "sin overrides". */
+async function loadClipMarkerSidecar(url: string): Promise<ClipMarkerTable> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return {};
+    return readMarkerTable(await response.json());
+  } catch {
+    return {};
+  }
+}
+
 function loadContainerAsset(
   app: pc.AppBase,
   blob: Blob
@@ -422,9 +502,12 @@ export async function loadModelAsset(
   if (!modelEntry) return null;
 
   const url = publicUrl(`models/${modelEntry.file}`);
-  const blob = await fetchModelBlob(url, (loaded, total) => {
-    if (total > 0) onProgress?.(Math.min(1, loaded / total));
-  });
+  const [blob, sidecarMarkers] = await Promise.all([
+    fetchModelBlob(url, (loaded, total) => {
+      if (total > 0) onProgress?.(Math.min(1, loaded / total));
+    }),
+    loadClipMarkerSidecar(clipMarkerUrl(modelEntry.file))
+  ]);
   const buffer = await blob.arrayBuffer();
   const info = readGlbInfo(buffer);
 
@@ -469,7 +552,8 @@ export async function loadModelAsset(
     offsetY: -bounds.minY * scale,
     yawOffset: (modelEntry.yawOffsetDeg ?? 0) * DEG,
     bounds,
-    grounding: info.grounding
+    grounding: info.grounding,
+    markers: mergeMarkerTables(info.markers, sidecarMarkers)
   };
 }
 

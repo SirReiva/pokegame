@@ -5,15 +5,13 @@
  * `buildCastPlan` selecciona el script común o el override de la especie y lo
  * compila a segmentos absolutos con `compileAnimationScript`. El gameplay manda:
  * `startup + active + recovery` es el presupuesto máximo y el script solo
- * coloca clips dentro. Los huecos dejan al sprite en su estado normal.
+ * coloca clips dentro. Los huecos dejan al cuerpo en su locomoción normal.
  */
 
 import type { AbilityDef } from './abilities';
-import { frameAtTime, frameBoundary, frameStart } from './animationTimeline.ts';
 import { compileAnimationScript } from './animationScript';
 import type { AnimationScript } from './core/animationScript';
 import type { CastPlan, CastSegment, ClipResolver } from './core/castPlan';
-import type { SpriteAnimation } from './types';
 
 export type { CastPlan, CastSegment, ClipResolver } from './core/castPlan';
 
@@ -46,27 +44,30 @@ export function buildCastPlan(
   );
 }
 
-/** Frame del clip que debe mostrarse en `elapsed` para el plan. */
-export function frameForSegment(
+/**
+ * Tiempo dentro del clip 3D que debe mostrarse en `elapsed` para el segmento.
+ *
+ * El compilador ya ha resuelto la velocidad y el tramo; aquí solo queda una
+ * interpolación lineal (o el módulo del bucle).
+ */
+export function clipTimeAt(
   segment: CastSegment,
-  animation: SpriteAnimation,
   elapsed: number
 ): number {
   const local = Math.max(0, elapsed - segment.startAt);
-  let clipTime = segment.clipStartAt + local * segment.playback;
+  let clipTime = segment.clipStart + local * segment.speed;
   if (segment.loop) {
-    // El bucle respeta el tramo del segmento. Antes solo se usaba el clip
-    // completo, así que un `charge` con `from`/`to` recortados se quedaba
-    // clavado en los bordes.
-    const from = frameStart(animation, segment.startFrame);
-    const to = frameBoundary(animation, segment.endFrame + 1);
-    const span = to - from;
+    const span = segment.clipEnd - segment.clipStart;
     if (span > EPSILON) {
-      clipTime = from + (((clipTime - from) % span) + span) % span;
+      clipTime =
+        segment.clipStart +
+        (((clipTime - segment.clipStart) % span) + span) % span;
     }
   }
-  const frame = frameAtTime(animation, clipTime);
-  return Math.max(segment.startFrame, Math.min(segment.endFrame, frame));
+  return Math.max(
+    segment.clipStart,
+    Math.min(segment.clipEnd, clipTime)
+  );
 }
 
 /** Segmento que cubre `elapsed`, o `null` si el plan está en un hueco. */

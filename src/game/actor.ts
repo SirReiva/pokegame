@@ -261,18 +261,30 @@ export class Actor {
     this.billboard.setPlayback(rate);
   }
 
-  /** Fija el frame desde la simulación; deja de avanzar automáticamente. */
-  setManualFrame(name: AnimationName, frame: number): void {
-    this.billboard.setManualFrame(name, frame);
+  /** Reproduce un clip en la capa de acción con el tiempo de la simulación. */
+  playActionAt(name: AnimationName, time: number, speed = 1): void {
+    this.billboard.playActionAt(name, time, speed);
   }
 
-  /** Vuelve al reloj automático de idle/walk/hurt. */
-  clearManual(): void {
-    this.billboard.clearManual();
+  /** Retira la capa de acción y deja ver la locomoción base. */
+  stopAction(): void {
+    this.billboard.stopAction();
   }
 
-  get currentFrame(): number {
-    return this.billboard.currentFrame;
+  /** Tiempo actual de la capa de acción, o `null` si no hay casteo. */
+  get currentClipTime(): number | null {
+    return this.billboard.currentClipTime;
+  }
+
+  /** Estado de la capa de acción para el overlay de depuración. */
+  get animationDebug(): {
+    active: boolean;
+    animation: AnimationName | null;
+    weight: number;
+    playing: boolean;
+    time: number;
+  } {
+    return this.billboard.actionDebug;
   }
 
   setLoop(loop: boolean): void {

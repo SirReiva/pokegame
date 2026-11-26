@@ -1,0 +1,310 @@
+{
+  "00000_defaultwait01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00001_battlewait01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00010_defaultidle01": {
+    "impact": 0.5625,
+    "followThrough": 0.625
+  },
+  "00011_defaultidle02": {
+    "impact": 0.425,
+    "followThrough": 0.525
+  },
+  "00021_turn_r090": {
+    "impact": 0.2857,
+    "followThrough": 0.4464
+  },
+  "00024_turn_l090": {
+    "impact": 0.2857,
+    "followThrough": 0.9643
+  },
+  "00030_walk01_loop": {
+    "impact": 0.2667,
+    "followThrough": 0.4167
+  },
+  "00100_run01_loop": {
+    "impact": 0.45,
+    "followThrough": 0.675
+  },
+  "00145_stepout01_start": {
+    "impact": 0.6667,
+    "followThrough": 1
+  },
+  "00146_stepout01": {
+    "impact": 0.7143,
+    "followThrough": 1
+  },
+  "00147_stepout01_end": {
+    "impact": 0.1111,
+    "followThrough": 0.3704
+  },
+  "00150_jumpup01_start": {
+    "impact": 0.3333,
+    "followThrough": 1
+  },
+  "00151_jumpup01_loop": {
+    "impact": 0.0667,
+    "followThrough": 0.3667
+  },
+  "00152_jumpdown01_start": {
+    "impact": 0.6667,
+    "followThrough": 1
+  },
+  "00153_jumpdown01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00155_land02": {
+    "impact": 0.0588,
+    "followThrough": 0.2941
+  },
+  "00270_rest01_start": {
+    "impact": 0.1778,
+    "followThrough": 0.3778
+  },
+  "00271_rest01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00272_rest01_end": {
+    "impact": 0.4571,
+    "followThrough": 0.8571
+  },
+  "00280_sleep01_start": {
+    "impact": 0.2,
+    "followThrough": 0.35
+  },
+  "00281_sleep01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00282_sleep01_end": {
+    "impact": 0.175,
+    "followThrough": 0.4
+  },
+  "00290_eat01_start": {
+    "impact": 0.5,
+    "followThrough": 0.95
+  },
+  "00291_eat01_loop": {
+    "impact": 0.1,
+    "followThrough": 0.55
+  },
+  "00292_eat01_end": {
+    "impact": 0.45,
+    "followThrough": 0.675
+  },
+  "00300_roar01": {
+    "impact": 0.3167,
+    "followThrough": 0.6667
+  },
+  "00320_refresh01": {
+    "impact": 0.05,
+    "followThrough": 0.3556
+  },
+  "00400_attack01": {
+    "impact": 0.2,
+    "followThrough": 0.3273
+  },
+  "00410_attack02": {
+    "impact": 0.2615,
+    "followThrough": 0.3538
+  },
+  "00450_rangeattack01": {
+    "impact": 0.2667,
+    "followThrough": 0.35
+  },
+  "00460_rangeattack02_start": {
+    "impact": 0.85,
+    "followThrough": 1
+  },
+  "00461_rangeattack02_loop": {
+    "impact": 0.5333,
+    "followThrough": 0.8333
+  },
+  "00462_rangeattack02_end": {
+    "impact": 0.2,
+    "followThrough": 0.52
+  },
+  "00500_damage01": {
+    "impact": 0.05,
+    "followThrough": 0.2
+  },
+  "00501_damage02": {
+    "impact": 0.0571,
+    "followThrough": 0.1143
+  },
+  "00510_stun01_start": {
+    "impact": 0.35,
+    "followThrough": 0.575
+  },
+  "00511_stun01_loop": {
+    "impact": 0.6833,
+    "followThrough": 0.8333
+  },
+  "00512_stun01_end": {
+    "impact": 0.5667,
+    "followThrough": 0.7167
+  },
+  "00520_down01_start": {
+    "impact": 0.5667,
+    "followThrough": 0.7167
+  },
+  "00521_down01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "00522_down01_end": {
+    "impact": 0.4667,
+    "followThrough": 0.6167
+  },
+  "00550_glad01": {
+    "impact": 0.1333,
+    "followThrough": 0.9667
+  },
+  "00560_notice01": {
+    "impact": 0.1,
+    "followThrough": 0.2333
+  },
+  "00563_hate01": {
+    "impact": 0.15,
+    "followThrough": 0.2167
+  },
+  "08000_eye01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "08100_mouth01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "08200_loop01_start": {
+    "impact": 0.9,
+    "followThrough": 1
+  },
+  "08201_loop01_loop": {
+    "impact": 0.125,
+    "followThrough": 0.6875
+  },
+  "08202_loop01_end": {
+    "impact": 0.1,
+    "followThrough": 0.55
+  },
+  "20000_defaultwait01_loop": {
+    "impact": 0.6833,
+    "followThrough": 0.8333
+  },
+  "20010_defaultidle01": {
+    "impact": 0.425,
+    "followThrough": 0.575
+  },
+  "20021_turn_r090": {
+    "impact": 0.2857,
+    "followThrough": 0.4464
+  },
+  "20024_turn_l090": {
+    "impact": 0.2857,
+    "followThrough": 0.4464
+  },
+  "20030_walk01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "20100_run01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "20145_stepout01_start": {
+    "impact": 0.3333,
+    "followThrough": 1
+  },
+  "20146_stepout01": {
+    "impact": 0.2857,
+    "followThrough": 0.9286
+  },
+  "20147_stepout01_end": {
+    "impact": 0.15,
+    "followThrough": 0.375
+  },
+  "20150_jumpup01_start": {
+    "impact": 0.6667,
+    "followThrough": 1
+  },
+  "20151_jumpup01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "20152_jumpdown01_start": {
+    "impact": 0.3333,
+    "followThrough": 0.7083
+  },
+  "20153_jumpdown01_loop": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "20155_land02": {
+    "impact": 0.0588,
+    "followThrough": 0.9412
+  },
+  "20300_roar01": {
+    "impact": 0.3167,
+    "followThrough": 0.3667
+  },
+  "20400_attack01": {
+    "impact": 0.2545,
+    "followThrough": 0.3273
+  },
+  "20460_rangeattack02_start": {
+    "impact": 0.85,
+    "followThrough": 1
+  },
+  "20461_rangeattack02_loop": {
+    "impact": 0.5333,
+    "followThrough": 0.8333
+  },
+  "20462_rangeattack02_end": {
+    "impact": 0.28,
+    "followThrough": 0.88
+  },
+  "20500_damage01": {
+    "impact": 0.05,
+    "followThrough": 0.22
+  },
+  "20501_damage02": {
+    "impact": 0.0571,
+    "followThrough": 0.2857
+  },
+  "20510_stun01_start": {
+    "impact": 0.35,
+    "followThrough": 0.575
+  },
+  "20511_stun01_loop": {
+    "impact": 0.4,
+    "followThrough": 0.55
+  },
+  "20512_stun01_end": {
+    "impact": 0.2667,
+    "followThrough": 0.4167
+  },
+  "20520_down01_start": {
+    "impact": 0.1333,
+    "followThrough": 0.2833
+  },
+  "20521_down01_loop": {
+    "impact": 0.68,
+    "followThrough": 0.83
+  },
+  "20522_down01_end": {
+    "impact": 0.8,
+    "followThrough": 0.95
+  },
+  "20560_notice01": {
+    "impact": 0.2667,
+    "followThrough": 0.4167
+  }
+}

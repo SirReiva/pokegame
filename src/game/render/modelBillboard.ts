@@ -1,11 +1,7 @@
 import * as pc from 'playcanvas';
 import type { ActorAsset } from '../actorAsset';
-import {
-  clipDuration,
-  frameBoundary,
-  frameStart
-} from '../animationTimeline';
 import { CONFIG, RAD } from '../config';
+
 import { FOG_EXCLUDED_STENCIL } from '../fogStencil';
 import { pruneBindConstantClips } from '../modelAnim';
 import {
@@ -18,14 +14,14 @@ import type { AnimationName } from '../types';
 import { applyModelShading, DesaturationState } from './modelShading';
 import type { TeamOutline } from './teamOutline';
 
-/** Mezcla al cambiar de animación en reproducción automática. */
+/** Mezcla al cambiar de animación base. */
 const TRANSITION_SECONDS = 0.06;
-/** Límites de velocidad para adaptar la duración del clip 3D al del sprite. */
-const MIN_ADAPTED_SPEED = 0.2;
-const MAX_ADAPTED_SPEED = 4;
-
+/** Mezcla al entrar en un clip de casteo. */
+const ACTION_BLEND_IN = 0.04;
 /** Identificador de copia para las marcas de rendimiento. */
 let NEXT_PROFILE_ID = 0;
+/** Conjunto vacío reutilizado por `animatedTargets`. */
+const EMPTY_TARGETS: ReadonlySet<string> = new Set();
 
 /** Transformación local de un nodo en la pose de bind del GLB. */
 interface BindPoseEntry {
@@ -46,6 +42,10 @@ function findNodeMatching(
     if (nested) return nested;
   }
   return null;
+}
+
+function stateKey(animation: AnimationName): string {
+  return animation;
 }
 
 export interface ModelBillboardOptions {
@@ -71,13 +71,11 @@ export interface ModelBillboardOptions {
 /**
  * Cuerpo 3D de un Pokémon para una copia de viewport.
  *
- * Sustituye a `SpriteBillboard` manteniendo su API pública: el actor sigue
- * pidiendo `play`, `setManualFrame`, `setPlayback` y `update`, pero aquí se
- * traducen a estados del `AnimComponent` de PlayCanvas.
- *
- * Los frames del plan de casteo se convierten a tiempo normalizado del clip 3D
- * equivalente. Así el `HitFrame` del manifiesto sigue mandando en el gameplay
- * aunque el clip del modelo tenga otra duración.
+ * Los clips de locomoción (`idle`/`walk`/`hurt`/`faint`) usan el reloj del
+ * `AnimComponent`. Durante un casteo, `playActionAt` fija el clip y el tiempo en
+ * la misma capa base con el reloj de la simulación; al terminar, `matchView`
+ * vuelve a pedir idle/walk y recupera la locomoción. Es la ruta fiable: la capa
+ * base ya está enlazada y no depende de mezclas entre capas.
  */
 export class ModelBillboard {
   readonly root: pc.Entity;
@@ -99,15 +97,14 @@ export class ModelBillboard {
   private readonly rootMotionNode: pc.GraphNode | null;
   private readonly rootMotionBase: pc.Vec3 | null;
 
-  /** Estado asignado en el grafo de animación y si se creó con loop. */
-  private readonly states = new Map<AnimationName, { loop: boolean }>();
+  /** Estado asignado por capa y si se creó con loop. */
+  private readonly states = new Map<string, { loop: boolean }>();
   private animation: AnimationName | null = null;
-  private clipDurationSeconds = 0;
-  private spriteDurationSeconds = 0;
+  private actionAnimation: AnimationName | null = null;
+  private actionActive = false;
+  private actionClipDuration = 0;
   private playback = 1;
   private loop = true;
-  private manual = false;
-  private lastManualFrame = -1;
   private facing = 0;
   private row = 0;
   private layerId: number | null = null;
@@ -141,9 +138,9 @@ export class ModelBillboard {
   /** Identificador de esta copia en las marcas de `performance`. */
   private readonly profileId = ++NEXT_PROFILE_ID;
   /** Estados cuyo primer cambio real ya se ha medido (solo diagnóstico). */
-  private readonly measuredStates = new Set<AnimationName>();
+  private readonly measuredStates = new Set<string>();
   /** Estados cuyo `AnimClip` ya se ha creado y enlazado en esta copia. */
-  private readonly boundStates = new Set<AnimationName>();
+  private readonly boundStates = new Set<string>();
   /**
    * Pose de bind de todo el esqueleto. `prewarmBind` cambia el estado activo
    * para enlazar un clip y lo devuelve en el mismo tick; el motor puede dejar
@@ -154,8 +151,8 @@ export class ModelBillboard {
   private readonly bindPose: BindPoseEntry[] = [];
   /** Hay que reponer las propiedades que el clip visible no anima. */
   private prewarmPoseRestore = false;
-  /** Propiedades animadas por cada clip, para no reponerlas en vano. */
-  private readonly animatedTargetsCache = new Map<
+  /** Propiedades animadas por cada clip, cacheado por nombre. */
+  private readonly clipTargetsCache = new Map<
     AnimationName,
     ReadonlySet<string>
   >();
@@ -238,8 +235,8 @@ export class ModelBillboard {
       throw new Error(`No se pudo crear el componente de animación de ${asset.entry.id}`);
     }
     this.anim = anim;
-    // El grafo de estados se crea con la primera asignación. Se engancha ya el
-    // clip de espera para poder obtener `baseLayer` en el constructor; luego
+    // El grafo base se crea con la primera asignación. Se engancha ya el clip
+    // de espera para poder obtener `baseLayer` en el constructor; luego
     // `play()` elige la transición inicial.
     const initial = resolveModelClip(this.model, 'idle');
     if (!initial) {
@@ -252,7 +249,7 @@ export class ModelBillboard {
       1,
       true
     );
-    this.states.set(initial.animation, { loop: true });
+    this.states.set(stateKey(initial.animation), { loop: true });
     const layer = anim.baseLayer;
     if (!layer) {
       throw new Error(`No se pudo crear la capa de animación de ${asset.entry.id}`);
@@ -308,14 +305,12 @@ export class ModelBillboard {
     }
   }
 
-  /** Asigna un clip al grafo si aún no está o si cambió el modo de bucle. */
-  private ensureState(
-    animation: AnimationName,
-    loop: boolean
-  ): boolean {
+  /** Asigna un clip si aún no está o si cambió el modo de bucle. */
+  private ensureState(animation: AnimationName, loop: boolean): boolean {
     const resolved = resolveModelClip(this.model, animation);
     if (!resolved) return false;
-    const existing = this.states.get(resolved.animation);
+    const key = stateKey(resolved.animation);
+    const existing = this.states.get(key);
     if (existing && existing.loop === loop) return false;
 
     this.anim.assignAnimation(
@@ -325,9 +320,8 @@ export class ModelBillboard {
       1,
       loop
     );
-    this.states.set(resolved.animation, { loop });
-    // `assignAnimation` hace un `rebind` global: se pierden los targets
-    // cacheados de todos los clips, no solo los de este estado.
+    this.states.set(key, { loop });
+    // `assignAnimation` hace un `rebind`: se pierden los targets cacheados.
     this.boundStates.clear();
     return true;
   }
@@ -350,11 +344,10 @@ export class ModelBillboard {
   }
 
   /**
-   * Devuelve a la pose de bind las propiedades que el clip activo no anima.
+   * Devuelve a la pose de bind las propiedades que ningún clip activo anima.
    * El precalentado deja en el evaluador destinos de clips visitados que ya no
    * están activos; PlayCanvas les escribe su valor cero cada frame aunque el
-   * clip visible no los use (Greninja: `waist_69.localScale`). Las propiedades
-   * que sí anima el clip activo ya las ha escrito el motor este frame.
+   * clip visible no los use (Greninja: `waist_69.localScale`).
    */
   private restorePrewarmPose(): void {
     const animated = this.animatedTargets();
@@ -373,14 +366,13 @@ export class ModelBillboard {
     this.resetRootMotion();
   }
 
-  /** Nodos y propiedades que escribe el clip visible, resueltos como el binder. */
-  private animatedTargets(): ReadonlySet<string> {
-    const name = this.animation;
-    const cached = name ? this.animatedTargetsCache.get(name) : null;
+  /** Nodos y propiedades que escribe un clip, resueltos como el binder. */
+  private clipTargets(name: AnimationName): ReadonlySet<string> {
+    const cached = this.clipTargetsCache.get(name);
     if (cached) return cached;
 
     const targets = new Set<string>();
-    const resolved = name ? resolveModelClip(this.model, name) : null;
+    const resolved = resolveModelClip(this.model, name);
     if (resolved) {
       for (const curve of resolved.clip.track.curves) {
         for (const path of curve.paths) {
@@ -401,14 +393,20 @@ export class ModelBillboard {
         }
       }
     }
-    if (name) this.animatedTargetsCache.set(name, targets);
+    this.clipTargetsCache.set(name, targets);
     return targets;
+  }
+
+  /** Unión de los targets de la capa base y de la capa de acción. */
+  private animatedTargets(): ReadonlySet<string> {
+    return this.animation
+      ? this.clipTargets(this.animation)
+      : EMPTY_TARGETS;
   }
 
   /**
    * Crea el estado de una animación concreta. `Game` lo llama por tandas
-   * durante la cuenta atrás. `loop` debe ser el modo real de reproducción: los
-   * clips de casteo van con reloj manual y por tanto sin loop.
+   * durante la cuenta atrás. `loop` debe ser el modo real de reproducción.
    */
   prewarmStep(animation: AnimationName, loop = true): boolean {
     const resolved = resolveModelClip(this.model, animation);
@@ -417,21 +415,15 @@ export class ModelBillboard {
   }
 
   /**
-   * Resuelve los bindings de un estado sin llegar a evaluar la pose: se entra y
-   * se sale del estado en el mismo tick, antes de que el `AnimComponent`
-   * actualice. La copia sigue mostrando el clip actual. PlayCanvas vuelve a
-   * crear el `AnimClip` al activarlo, pero reutiliza los targets ya resueltos,
-   * que es la parte que se paga en el primer casteo.
+   * Resuelve los bindings de un estado sin llegar a evaluar la pose visible:
+   * entra y sale del estado en el mismo tick.
    */
   prewarmBind(animation: AnimationName): boolean {
     const resolved = resolveModelClip(this.model, animation);
-    if (
-      !resolved ||
-      !this.states.has(resolved.animation) ||
-      this.boundStates.has(resolved.animation)
-    ) {
-      return false;
-    }
+    if (!resolved) return false;
+    const key = stateKey(resolved.animation);
+    if (!this.states.has(key) || this.boundStates.has(key)) return false;
+
     const previous = this.animation;
     if (!previous || previous === resolved.animation) return false;
 
@@ -451,7 +443,7 @@ export class ModelBillboard {
     // (Greninja acababa con toda la malla colapsada). `update()` repone esas
     // propiedades antes de cada render.
     this.prewarmPoseRestore = true;
-    this.boundStates.add(resolved.animation);
+    this.boundStates.add(key);
     return true;
   }
 
@@ -467,16 +459,17 @@ export class ModelBillboard {
 
   /** Cambia de estado midiendo la primera activación real de cada clip. */
   private transition(animation: AnimationName, seconds: number): void {
+    const key = stateKey(animation);
     if (
       !CONFIG.debug.animationWarmupMarks ||
-      this.measuredStates.has(animation)
+      this.measuredStates.has(key)
     ) {
       this.layer.transition(animation, seconds);
       return;
     }
-    this.measuredStates.add(animation);
+    this.measuredStates.add(key);
     this.measureAnimation(
-      `newpoke:anim-first:${this.profileId}:${animation}`,
+      `newpoke:anim-first:${this.profileId}:${key}`,
       () => this.layer.transition(animation, seconds)
     );
   }
@@ -489,16 +482,26 @@ export class ModelBillboard {
     return this.row;
   }
 
-  get currentFrame(): number {
-    if (this.manual && this.lastManualFrame >= 0) return this.lastManualFrame;
-    if (!this.animation || this.clipDurationSeconds <= 0) return 0;
-    const progress = Math.max(
-      0,
-      Math.min(1, this.layer.activeStateCurrentTime / this.clipDurationSeconds)
-    );
-    const sprite = this.asset.animations[this.animation];
-    const frames = sprite?.durations.length ?? 1;
-    return Math.min(frames - 1, Math.round(progress * (frames - 1)));
+  /** Tiempo actual de la capa de acción, o `null` si no hay casteo. */
+  get currentClipTime(): number | null {
+    return this.actionActive ? this.layer.activeStateCurrentTime : null;
+  }
+
+  /** Estado de la capa de acción para el overlay de depuración. */
+  get actionDebug(): {
+    active: boolean;
+    animation: AnimationName | null;
+    weight: number;
+    playing: boolean;
+    time: number;
+  } {
+    return {
+      active: this.actionActive,
+      animation: this.actionAnimation,
+      weight: this.layer.weight,
+      playing: this.layer.playing,
+      time: this.layer.activeStateCurrentTime
+    };
   }
 
   /** El modelo 3D no necesita simular el avance del frame sobre el suelo. */
@@ -563,7 +566,7 @@ export class ModelBillboard {
 
   setPlayback(rate: number): void {
     this.playback = Math.max(0.05, rate);
-    if (!this.manual) this.anim.speed = this.playback;
+    if (!this.actionActive) this.anim.speed = this.playback;
   }
 
   /**
@@ -582,33 +585,30 @@ export class ModelBillboard {
     }
   }
 
-  /** Elige el clip y lo reproduce desde el principio. */
+  /** Elige el clip base y lo reproduce desde el principio. */
   play(name: AnimationName, restart = false): void {
     const resolved = resolveModelClip(this.model, name);
     if (!resolved) return;
-    this.manual = false;
-    this.lastManualFrame = -1;
     if (this.animation === resolved.animation && !restart) return;
 
     this.ensureState(resolved.animation, true);
     this.animation = resolved.animation;
-    this.clipDurationSeconds = resolved.clip.track.duration;
-    this.spriteDurationSeconds = clipDuration(
-      this.asset.animations[resolved.animation] ??
-        this.asset.animations.idle
-    );
     this.loop = true;
     this.anim.speed = this.playback;
     this.anim.playing = true;
     this.setAnimationLod(false);
-    // Si se llegó aquí, la animación es distinta o se pidió reinicio: siempre
-    // hay que cambiar de estado, aunque el clip ya estuviera asignado.
-    this.transition(resolved.animation, restart ? 0 : TRANSITION_SECONDS);
+    // Cambiar la locomoción (muerte, aturdimiento...) retira el casteo visible.
+    this.stopAction(true);
+    this.transition(
+      resolved.animation,
+      restart ? 0 : TRANSITION_SECONDS
+    );
   }
 
   /**
-   * Activa o desactiva la repetición. PlayCanvas guarda el bucle por estado, así
-   * que reasignarlo solo cuando cambia evita reconstruir el grafo cada frame.
+   * Activa o desactiva la repetición del clip base. PlayCanvas guarda el bucle
+   * por estado, así que reasignarlo solo cuando cambia evita reconstruir el
+   * grafo cada frame.
    */
   setLoop(loop: boolean): void {
     if (this.loop === loop) return;
@@ -617,76 +617,41 @@ export class ModelBillboard {
   }
 
   /**
-   * Fija la pose del plan de casteo. El frame del manifiesto se traduce al
-   * tiempo normalizado del clip 3D; entre cambios de frame el modelo avanza con
-   * su propia velocidad, ajustada para completar el clip en el mismo tiempo que
-   * el sprite.
+   * Fija el clip de casteo y su tiempo. La simulación es la dueña del reloj:
+   * cada tick vuelve a escribir el tiempo para que todas las vistas y los
+   * replays vean exactamente la misma pose.
    */
-  setManualFrame(name: AnimationName, frame: number): void {
+  playActionAt(name: AnimationName, time: number, speed = 1): void {
     const resolved = resolveModelClip(this.model, name);
     if (!resolved) return;
 
     const changed = this.animation !== resolved.animation;
-    if (changed || !this.manual) {
-      this.ensureState(resolved.animation, false);
-      this.animation = resolved.animation;
-      this.clipDurationSeconds = resolved.clip.track.duration;
-      this.spriteDurationSeconds = clipDuration(
-        this.asset.animations[resolved.animation] ??
-          this.asset.animations.idle
-      );
-      this.loop = false;
-      this.anim.playing = true;
-      this.setAnimationLod(false);
-      // `ensureState` puede devolver `false` si el estado ya estaba creado por
-      // el precalentado. Aun así hay que cambiar de estado activo: sin esto, un
-      // casteo que pasa de `charge` a `run` seguía dibujando la carga.
-      this.transition(resolved.animation, 0);
-      this.lastManualFrame = -1;
+    this.ensureState(resolved.animation, false);
+    this.animation = resolved.animation;
+    this.loop = false;
+    this.actionAnimation = resolved.animation;
+    this.actionActive = true;
+    this.actionClipDuration = resolved.clip.track.duration;
+
+    this.anim.playing = true;
+    this.setAnimationLod(false);
+
+    if (changed) {
+      this.transition(resolved.animation, ACTION_BLEND_IN);
     }
-
-    this.manual = true;
-    this.anim.speed = this.manualSpeed();
-
-    if (frame !== this.lastManualFrame) {
-      this.lastManualFrame = Math.round(frame);
-      this.layer.activeStateCurrentTime = this.manualTime(
-        resolved.animation,
-        this.lastManualFrame
-      );
-    }
-  }
-
-  /** Vuelve al reloj automático (idle, walk, hurt...). */
-  clearManual(): void {
-    this.manual = false;
-    this.lastManualFrame = -1;
-  }
-
-  private manualSpeed(): number {
-    if (this.spriteDurationSeconds <= 0 || this.clipDurationSeconds <= 0) {
-      return 1;
-    }
-    const speed = this.clipDurationSeconds / this.spriteDurationSeconds;
-    return Math.max(
-      MIN_ADAPTED_SPEED,
-      Math.min(MAX_ADAPTED_SPEED, speed)
+    // El `speed` del estado lo lleva el reloj de la simulación; el clip base
+    // se fija por tiempo en cada tick.
+    void speed;
+    this.layer.activeStateCurrentTime = Math.max(
+      0,
+      Math.min(this.actionClipDuration, time)
     );
   }
 
-  /** Instante del clip 3D que corresponde al frame del manifiesto. */
-  private manualTime(animation: AnimationName, frame: number): number {
-    const sprite =
-      this.asset.animations[animation] ??
-      this.asset.animations.idle;
-    const duration = this.clipDurationSeconds;
-    const total = clipDuration(sprite);
-    if (duration <= 0 || total <= 0) return 0;
-    // Punto medio del frame para que la pose se vea durante todo su intervalo.
-    const start = frameStart(sprite, frame);
-    const end = frameBoundary(sprite, frame + 1);
-    const progress = Math.max(0, Math.min(1, (start + end) / 2 / total));
-    return progress * duration;
+  /** Retira el clip de casteo; el siguiente `play` recupera la locomoción. */
+  stopAction(_immediate = false): void {
+    this.actionActive = false;
+    this.actionAnimation = null;
   }
 
   update(
@@ -698,8 +663,8 @@ export class ModelBillboard {
     if (!this.root.enabled) return;
 
     // Los clips que pasaron por el precalentado dejan destinos a cero en el
-    // evaluador. Antes del render se reponen las propiedades que el clip
-    // visible no escribe; las suyas ya las ha evaluado el motor este frame.
+    // evaluador. Antes del render se reponen las propiedades que ningún clip
+    // visible escribe; las suyas ya las ha evaluado el motor este frame.
     if (this.prewarmPoseRestore) this.restorePrewarmPose();
 
     this.animationWarmupFrames = Math.min(
@@ -722,8 +687,8 @@ export class ModelBillboard {
     // la posición real del jugador.
     this.resetRootMotion();
 
-    if (!this.manual) {
-      this.anim.speed = this.playback;
+    this.anim.speed = this.playback;
+    if (!this.actionActive) {
       // Un cuerpo fuera de cámara no avanza: al volver se pone al día de golpe.
       if (!this.animationPaused) {
         this.updateAnimationLod(dt, focusPosition ?? null);
@@ -818,7 +783,7 @@ export class ModelBillboard {
    * sin evaluar el esqueleto en cada frame oculto.
    */
   private refreshAnimationPlayback(): void {
-    const shouldPause = !this.visible || (this.outOfView && !this.manual);
+    const shouldPause = !this.visible || (this.outOfView && !this.actionActive);
     if (shouldPause) {
       if (!this.animationPaused) {
         this.animationPaused = true;
@@ -831,10 +796,6 @@ export class ModelBillboard {
       this.animationPaused = false;
       const elapsed = (performance.now() - this.pausedAtMs) / 1000;
       if (elapsed > 0) this.anim.update(elapsed);
-      // Un clip manual no hace bucle y `update()` puede dejarlo en pausa; el
-      // siguiente `setManualFrame` vuelve a fijar el tiempo, pero el controlador
-      // tiene que seguir reproduciendo.
-      if (this.manual) this.layer.playing = true;
     }
     this.anim.playing = !this.animationLodActive;
   }

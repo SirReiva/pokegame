@@ -5,9 +5,9 @@
  * runtime: cada habilidad decide cuál usa y puede sustituirlos por su propio
  * array cuando necesite encadenar clips distintos.
  *
- * Los patrones reproducen el builder clásico para las formas con ventana
- * activa (melee, proyectiles con `active > 0`, haces...). Una habilidad con
- * `active: 0` puede saltarse el paso intermedio o escribir su propio script.
+ * Los patrones hablan en marcas del clip 3D (`impact`, `followThrough`, `end`),
+ * no en frames de sprite. Así funcionan igual con clips de distinta duración y
+ * el `impact` visual cae siempre en el instante de efecto del gameplay.
  */
 
 import type { AnimationScript } from './core/animationScript';
@@ -16,30 +16,32 @@ import type { AnimationName } from './types';
 /**
  * Ataque con anticipación, ventana activa y recuperación.
  *
- * - `first` → `hit` durante el `startup` (recorta anticipación si no cabe).
- * - `hit` → `return` durante `active` (mantiene la pose si sobra ventana).
- * - `return` → `last` durante `recovery`.
+ * - `start` → `impact` durante el `startup` (alinea el impacto y recorta
+ *   anticipación si no cabe).
+ * - `impact` → `followThrough` durante `active` (mantiene la pose si sobra
+ *   ventana).
+ * - `followThrough` → `end` durante `recovery`.
  */
 export function attackScript(clip: AnimationName): AnimationScript {
   return [
     {
       clip,
-      frames: { from: 'first', to: 'beforeHit' },
+      frames: { from: 'start', to: 'impact' },
       at: 'start',
       until: 'effect',
-      fit: 'trimStart'
+      fit: 'alignImpact'
     },
     {
       clip,
-      frames: { from: 'hit', to: 'beforeReturn' },
+      frames: { from: 'impact', to: 'followThrough' },
       at: 'effect',
       until: 'castEnd',
       fit: 'trimEnd',
-      hold: true
+      hold: 'impact'
     },
     {
       clip,
-      frames: { from: 'return', to: 'last' },
+      frames: { from: 'followThrough', to: 'end' },
       at: 'castEnd',
       until: 'end',
       fit: 'trimEnd'
@@ -55,27 +57,27 @@ export function dashScript(clip: AnimationName): AnimationScript {
       at: 'effect',
       until: 'castEnd',
       fit: 'stretch',
-      hold: true
+      hold: 'end'
     }
   ];
 }
 
 /**
  * Lanzamiento sin ventana activa (proyectiles, haces y áreas instantáneas).
- * Anticipación hasta el `HitFrame` y el resto del clip durante la recuperación.
+ * Anticipación hasta el impacto y el resto del clip durante la recuperación.
  */
 export function releaseScript(clip: AnimationName): AnimationScript {
   return [
     {
       clip,
-      frames: { from: 'first', to: 'beforeHit' },
+      frames: { from: 'start', to: 'impact' },
       at: 'start',
       until: 'effect',
-      fit: 'trimStart'
+      fit: 'alignImpact'
     },
     {
       clip,
-      frames: { from: 'hit', to: 'last' },
+      frames: { from: 'impact', to: 'end' },
       at: 'effect',
       until: 'end',
       fit: 'trimEnd'
@@ -85,8 +87,8 @@ export function releaseScript(clip: AnimationName): AnimationScript {
 
 /**
  * Canalización que reproduce la carga solo si la anticipación del lanzamiento
- * llega tarde. Es el equivalente exacto del builder clásico: si el `HitFrame`
- * del lanzamiento cabe en el `startup`, la carga no se dibuja.
+ * llega tarde. Si el impacto del lanzamiento cabe en el `startup`, la carga no
+ * se dibuja.
  *
  * `release` se compone con `attackScript`, `releaseScript` o `dashScript`.
  */
@@ -103,7 +105,7 @@ export function channelFillScript(
       at: 'start',
       fill: true,
       fit: 'stretch',
-      hold: true,
+      hold: 'end',
       mode: options.mode ?? 'once',
       speed: options.speed ?? 1
     },
@@ -113,7 +115,7 @@ export function channelFillScript(
 
 /**
  * Canalización: carga en bucle durante la preparación y ataque al liberar.
- * El lanzamiento empieza en el `hit`, así que el `HitFrame` cae en `effect`.
+ * El lanzamiento empieza en el impacto, así que cae en `effect`.
  */
 export function channelScript(
   charge: AnimationName,
@@ -129,15 +131,15 @@ export function channelScript(
     },
     {
       clip: release,
-      frames: { from: 'hit', to: 'beforeReturn' },
+      frames: { from: 'impact', to: 'followThrough' },
       at: 'effect',
       until: 'castEnd',
       fit: 'trimEnd',
-      hold: true
+      hold: 'impact'
     },
     {
       clip: release,
-      frames: { from: 'return', to: 'last' },
+      frames: { from: 'followThrough', to: 'end' },
       at: 'castEnd',
       until: 'end',
       fit: 'trimEnd'

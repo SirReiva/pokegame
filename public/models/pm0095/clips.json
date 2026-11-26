@@ -1,0 +1,94 @@
+{
+  "11D8844C005B93FE[FullHash=25A4A6DBEBED7E82]": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "384E929158D9FA88[FullHash=925EED999064361C]": {
+    "impact": 0.9388,
+    "followThrough": 0.9888
+  },
+  "804C199640B5C92A[FullHash=E76959BC92254B6E]": {
+    "impact": 0.0689,
+    "followThrough": 0.2189
+  },
+  "ba01_landA01": {
+    "impact": 0.625,
+    "followThrough": 0.8594
+  },
+  "ba01_landB01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "ba01_landC01": {
+    "impact": 0.1812,
+    "followThrough": 0.2899
+  },
+  "ba10_waitA01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "ba20_buturi01": {
+    "impact": 0.2934,
+    "followThrough": 0.4343
+  },
+  "ba21_tokusyu01": {
+    "impact": 0.223,
+    "followThrough": 0.3052
+  },
+  "ba30_damageS01": {
+    "impact": 0.0794,
+    "followThrough": 0.2381
+  },
+  "ba41_down01": {
+    "impact": 0.7547,
+    "followThrough": 0.8333
+  },
+  "E40080921A760A8D[FullHash=2BCA5F86B9756401]": {
+    "impact": 0.8333,
+    "followThrough": 0.9964
+  },
+  "eye01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "fi01_wait01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "fi20_walk01": {
+    "impact": 0.0758,
+    "followThrough": 0.2258
+  },
+  "fi21_run01": {
+    "impact": 0.0758,
+    "followThrough": 0.2258
+  },
+  "kw01_wait01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "kw30_hate01": {
+    "impact": 0.847,
+    "followThrough": 0.9153
+  },
+  "kw32_happyB01": {
+    "impact": 0.4739,
+    "followThrough": 0.866
+  },
+  "kw50_eatA01": {
+    "impact": 0.5556,
+    "followThrough": 1
+  },
+  "kw50_eatB01": {
+    "impact": 0.1587,
+    "followThrough": 0.6349
+  },
+  "kw50_eatC01": {
+    "impact": 0.1984,
+    "followThrough": 0.377
+  },
+  "mouth01": {
+    "impact": 0.3704,
+    "followThrough": 0.6893
+  }
+}

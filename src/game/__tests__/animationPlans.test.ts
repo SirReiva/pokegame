@@ -4,11 +4,18 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { ABILITIES } from '../abilities.ts';
-import { resolveAnimationName } from '../animationTimeline.ts';
+import {
+  clipDuration,
+  clipTiming,
+  frameBoundary,
+  frameStart,
+  resolveAnimationName
+} from '../animationTimeline.ts';
 import { buildCastPlan } from '../castPlan.ts';
 import type { AbilityDef } from '../core/abilities/def.ts';
 import type { CastSegment, ClipResolver } from '../core/castPlan.ts';
-import type { SpriteAnimation } from '../core/types.ts';
+import type { ClipLibrary } from '../core/clipLibrary.ts';
+import type { AnimationName, SpriteAnimation } from '../core/types.ts';
 
 interface ManifestPokemon {
   id: string;
@@ -25,28 +32,59 @@ const MANIFEST = JSON.parse(
 /**
  * Golden master de los planes de animación.
  *
- * Cubre todas las habilidades contra todas las especies del manifiesto. Si un
- * script o el compilador cambia, el hash cambia: revisa el diff de los planes
- * y actualiza la constante a propósito.
+ * Usa una biblioteca de clips derivada del manifiesto (duración y marcadores)
+ * para no depender de cargar GLB en los tests. Si un script o el compilador
+ * cambia, el hash cambia: revisa el diff de los planes y actualízalo a
+ * propósito.
  */
 const EXPECTED_HASH =
-  '9a4410deb25ddf9934012a255ad5955a34204c6539d275bb23399bcff28e99b0';
+  '645257fa2b3fb1b87968fe2197aed7b2bca31a848715200d547b565503a1d1f4';
+
+function phaseFor(sprite: SpriteAnimation, frame: number): number {
+  const duration = clipDuration(sprite);
+  if (duration <= 0) return 0;
+  const start = frameStart(sprite, frame);
+  const end = frameBoundary(sprite, frame + 1);
+  return (start + end) / 2 / duration;
+}
+
+function libraryFor(
+  animations: Record<string, SpriteAnimation>
+): ClipLibrary {
+  // El runtime añade un alias `run` sobre `walk` (ver loadActorAsset).
+  const withRun: Record<string, SpriteAnimation> = animations.run
+    ? animations
+    : { ...animations, run: animations.walk };
+  const library: ClipLibrary = {};
+  for (const [animation, sprite] of Object.entries(withRun)) {
+    const duration = clipDuration(sprite);
+    if (duration <= 0) continue;
+    const timing = clipTiming(sprite);
+    library[animation as AnimationName] = {
+      animation: animation as AnimationName,
+      duration,
+      loop: true,
+      markers: {
+        impact: phaseFor(sprite, timing.hitFrame),
+        followThrough: phaseFor(sprite, timing.returnFrame)
+      },
+      rootMotion: 'ignore'
+    };
+  }
+  return library;
+}
 
 function resolverFor(
   animations: Record<string, SpriteAnimation>
 ): ClipResolver {
-  // El runtime añade un alias `run` sobre `walk` (ver loadActorAsset); el
-  // snapshot debe ver el mismo repertorio para no divergir de la partida.
-  const withRun: Record<string, SpriteAnimation> = animations.run
-    ? animations
-    : { ...animations, run: animations.walk };
+  const library = libraryFor(animations);
   return (name) => {
     const resolved = resolveAnimationName(
       name,
-      (candidate) => !!withRun[candidate]
+      (candidate) => !!library[candidate]
     );
-    const animation = withRun[resolved];
-    return animation ? { name: resolved, animation } : null;
+    const clip = library[resolved];
+    return clip ? { name: resolved, clip } : null;
   };
 }
 
@@ -57,13 +95,14 @@ function round(value: number): number {
 function segmentSnapshot(segment: CastSegment): Record<string, unknown> {
   return {
     animation: segment.animation,
-    startFrame: segment.startFrame,
-    endFrame: segment.endFrame,
+    clipStart: round(segment.clipStart),
+    clipEnd: round(segment.clipEnd),
     startAt: round(segment.startAt),
     endAt: round(segment.endAt),
-    playback: round(segment.playback),
-    clipStartAt: round(segment.clipStartAt),
-    loop: segment.loop
+    speed: round(segment.speed),
+    loop: segment.loop,
+    blendIn: round(segment.blendIn),
+    blendOut: round(segment.blendOut)
   };
 }
 
@@ -90,8 +129,9 @@ function planHash(): string {
         activeEnd: round(plan.activeEnd),
         endAt: round(plan.endAt),
         animationEndAt: round(plan.animationEndAt),
-        hitFrame: plan.hitFrame,
-        hitClip: plan.hitClip,
+        impactClip: plan.impactClip,
+        impactTime:
+          plan.impactTime === null ? null : round(plan.impactTime),
         segments: plan.segments.map(segmentSnapshot)
       };
     })

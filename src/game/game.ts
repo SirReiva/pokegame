@@ -84,7 +84,8 @@ import {
 } from './sim/aoes';
 import {
   applyCastPresentation,
-  armHitFrame,
+  beginImpactHold,
+  clearCastClip,
   stepActiveCast as stepActiveCastSystem
 } from './sim/cast';
 import {
@@ -1934,7 +1935,7 @@ export class Game {
       }
       player.animation = 'idle';
       player.playback = 1;
-      player.animationFrame = null;
+      clearCastClip(player);
       for (const copy of this.viewOf(player).copies) copy.play('idle');
     }
   }
@@ -2079,13 +2080,6 @@ export class Game {
       }
     }
 
-    // La pose de impacto forzada se consume una vez por render, no por paso:
-    // si un render ejecuta varios pasos fijos, el frame debe seguir viéndose.
-    for (const player of this.matchPlayers) {
-      const cast = player.activeCast;
-      if (cast && cast.forcedFrames > 0) cast.forcedFrames--;
-    }
-
     let simulated = 0;
     if (!frozen) {
       // A 144 Hz hay renders sin paso de simulación. Las pulsaciones de borde
@@ -2113,7 +2107,10 @@ export class Game {
     // los círculos de visión, decide qué copia se ve en cada vista. Así el
     // bucle siguiente puede saltarse las ocultas, que no se dibujan pero sí
     // costaban posición, animación, vida y modelo cada frame.
-    this.castDebug?.update(this.matchPlayers);
+    this.castDebug?.update(this.matchPlayers, (player) => {
+      const copy = this.viewOf(player).copies[0];
+      return copy?.animationDebug ?? null;
+    });
     this.updateVision(dt);
 
     // La simulación y la niebla se resuelven aquí; `matchView` solo sincroniza
@@ -2409,7 +2406,7 @@ export class Game {
     player.invulnerableTimer = CONFIG.combat.invulnerabilitySeconds;
     player.stunTimer = 0;
     player.hurtTimer = 0;
-    player.animationFrame = null;
+    clearCastClip(player);
     player.dash = null;
     this.cancelCast(player);
     this.clearRepeatCooldown(player);
@@ -2522,7 +2519,7 @@ export class Game {
     if (cast.hiddenCaster) player.hidden = false;
     if (cast.invulnerableCaster) player.invulnerableTimer = 0;
     player.activeCast = null;
-    player.animationFrame = null;
+    clearCastClip(player);
   }
 
   /** Retira las áreas persistentes que creó un casteo interrumpido. */
@@ -2742,9 +2739,7 @@ export class Game {
       effectAt: plan.effectAt,
       fired: false,
       canceled: false,
-      forcedFrame: null,
-      forcedAnimation: null,
-      forcedFrames: 0,
+      hitStopRemaining: 0,
       hiddenCaster: false,
       invulnerableCaster: false,
       marker,
@@ -2794,7 +2789,7 @@ export class Game {
     if (plan.effectAt <= 0) {
       cast.fired = true;
       this.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ, cast);
-      armHitFrame(this.hosts.cast, player, cast);
+      beginImpactHold(cast);
     }
 
     applyCastPresentation(this.hosts.cast, player, cast);
@@ -2865,7 +2860,7 @@ export class Game {
 
   /**
    * Ejecuta el efecto de una habilidad cuando su presentación llega al
-   * `HitFrame` (`plan.effectAt`). Los bloqueos y la animación ya los lleva el
+   * marcador de impacto (`plan.effectAt`). Los bloqueos y la animación ya los lleva el
    * `ActiveCast`; aquí solo se aplica el efecto de gameplay.
    */
   private executeAbility(

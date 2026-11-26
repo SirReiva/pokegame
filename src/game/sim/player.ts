@@ -16,6 +16,7 @@ import { allowsFacingDuringCast } from '../core/abilities/movement';
 import { terrainAt } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import { terrainConcealment } from '../vision';
+import { clearCastClip } from './cast';
 import { isAsleep } from './status';
 
 export interface PlayerSystemHost {
@@ -145,7 +146,7 @@ export function stepPlayer(
     player.vz = 0;
     player.animation = 'hurt';
     player.playback = 1;
-    player.animationFrame = null;
+    clearCastClip(player);
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
     player.concealment = terrainConcealment(terrain, player.types);
@@ -160,7 +161,7 @@ export function stepPlayer(
     player.vz = 0;
     player.animation = 'idle';
     player.playback = 1;
-    player.animationFrame = null;
+    clearCastClip(player);
     const terrain = terrainAt(player.x, player.z);
     player.terrain = terrain;
     player.concealment = terrainConcealment(terrain, player.types);
@@ -293,8 +294,8 @@ export function stepPlayer(
   if (player.hurtTimer > 0) {
     player.animation = 'hurt';
     player.playback = 1;
-    player.animationFrame = null;
-  } else if (player.animationFrame === null) {
+    clearCastClip(player);
+  } else if (player.clipTime === null) {
     if (speed > CONFIG.player.minFacingSpeed) {
       player.animation = 'walk';
       player.playback = clamp(

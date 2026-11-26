@@ -594,7 +594,9 @@ export function startMatch(
       invulnerableTimer: 0,
       stunTimer: 0,
       hurtTimer: 0,
-      animationFrame: null,
+      actionAnimation: null,
+      clipTime: null,
+      clipSpeed: 1,
       dash: null,
       activeCast: null,
       deathFade: 0,
@@ -717,7 +719,7 @@ export function startMatch(
 
   // Calienta primero el idle de todas las copias y después los clips
   // secundarios. Los clips de casteo se asignan sin loop desde el principio: si
-  // se asignan con loop, el primer `setManualFrame` vuelve a asignar el estado
+  // se asignan con loop, el primer `playActionAt` vuelve a asignar el estado
   // y tira el trabajo hecho. Después de asignar todos los estados se fuerza el
   // bind de cada clip en su copia real, porque las cachés del `AnimComponent`
   // no se comparten entre copias.

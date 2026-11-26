@@ -1,0 +1,134 @@
+{
+  "ba02_roar01": {
+    "impact": 0.088,
+    "followThrough": 0.1501
+  },
+  "ba10_waitA01": {
+    "impact": 0.4437,
+    "followThrough": 0.5937
+  },
+  "ba10_waitB01": {
+    "impact": 0.2006,
+    "followThrough": 0.8642
+  },
+  "ba20_buturi01": {
+    "impact": 0.05,
+    "followThrough": 0.2511
+  },
+  "ba21_tokusyu01": {
+    "impact": 0.101,
+    "followThrough": 0.3662
+  },
+  "ba21_tokusyu02": {
+    "impact": 0.1776,
+    "followThrough": 0.3962
+  },
+  "ba21_tokusyu03": {
+    "impact": 0.05,
+    "followThrough": 0.4098
+  },
+  "ba30_damageS01": {
+    "impact": 0.0794,
+    "followThrough": 0.9127
+  },
+  "ba41_down01": {
+    "impact": 0.1797,
+    "followThrough": 0.9641
+  },
+  "eye01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "fi20_walk01": {
+    "impact": 0.3896,
+    "followThrough": 0.5396
+  },
+  "fi21_run01": {
+    "impact": 0.95,
+    "followThrough": 1
+  },
+  "kw01_wait01": {
+    "impact": 0.05,
+    "followThrough": 0.1753
+  },
+  "kw20_drowseA01": {
+    "impact": 0.672,
+    "followThrough": 0.822
+  },
+  "kw20_drowseB01": {
+    "impact": 0.95,
+    "followThrough": 1
+  },
+  "kw20_drowseC01": {
+    "impact": 0.0822,
+    "followThrough": 0.6573
+  },
+  "kw21_sleepA01": {
+    "impact": 0.5,
+    "followThrough": 1
+  },
+  "kw21_sleepB01": {
+    "impact": 0.4579,
+    "followThrough": 0.7326
+  },
+  "kw30_hate01": {
+    "impact": 0.3552,
+    "followThrough": 0.5052
+  },
+  "kw32_happyA01": {
+    "impact": 0.1882,
+    "followThrough": 0.3382
+  },
+  "kw32_happyB01": {
+    "impact": 0.1634,
+    "followThrough": 0.2941
+  },
+  "kw32_happyC01": {
+    "impact": 0.05,
+    "followThrough": 0.1535
+  },
+  "kw33_moveA01": {
+    "impact": 0.8743,
+    "followThrough": 1
+  },
+  "kw33_moveC01": {
+    "impact": 0.1099,
+    "followThrough": 0.2599
+  },
+  "kw34_lonely01": {
+    "impact": 0.7576,
+    "followThrough": 0.9076
+  },
+  "kw35_playA01": {
+    "impact": 0.162,
+    "followThrough": 0.312
+  },
+  "kw36_mad01": {
+    "impact": 0.2941,
+    "followThrough": 0.4739
+  },
+  "kw50_eatA01": {
+    "impact": 0.5556,
+    "followThrough": 0.9722
+  },
+  "kw50_eatB01": {
+    "impact": 0.8333,
+    "followThrough": 1
+  },
+  "kw50_eatC01": {
+    "impact": 0.6746,
+    "followThrough": 0.8532
+  },
+  "kw60_touch01": {
+    "impact": 0.1626,
+    "followThrough": 0.3126
+  },
+  "loop01": {
+    "impact": 0.3333,
+    "followThrough": 1
+  },
+  "mouth01": {
+    "impact": 0.5,
+    "followThrough": 1
+  }
+}

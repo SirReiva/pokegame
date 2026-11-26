@@ -130,7 +130,34 @@ contorno baja en la misma proporción. La VRAM de los Pokémon baja de ~187 MB a
 `AnimComponent` de los cuerpos que están a más de `distance` unidades
 horizontales del foco de la cámara. Siguen dibujándose con su contorno, pero el
 esqueleto se evalúa cada `interval` segundos en vez de cada frame. Los casteos
-manuales y el jugador cercano no se ven afectados.
+en la capa de acción y el jugador cercano no se ven afectados.
+
+## Marcadores de animación
+
+Cada especie puede tener un `clips.json` junto a su GLB con las marcas
+normalizadas de sus clips (`impact`, `followThrough`, `release`, `loop`,
+`rootMotion`). Tiene prioridad sobre `extras.newpoke.clips` del GLB y sobre los
+valores por defecto. La duración no se escribe: sale del propio `AnimTrack`.
+
+```json
+{
+  "attack": { "impact": 0.42, "followThrough": 0.78 },
+  "charge": { "release": 0.9 }
+}
+```
+
+Para regenerar la semilla inicial analizando el movimiento real de cada clip:
+
+```bash
+pnpm seed:clip-markers
+pnpm seed:clip-markers -- --force
+```
+
+El script usa el pico de energía angular como `impact` y el valle posterior como
+`followThrough`. Las claves son el nombre real del clip del GLB.
+
+El sistema de habilidad y su plan de casteo se describen en
+[`animaciones-habilidades.md`](./animaciones-habilidades.md).
 
 ## Precarga de animaciones
 
@@ -139,8 +166,8 @@ trabajo de PlayCanvas que antes caía en el primer casteo:
 
 1. **Asignación de estados** (`prewarmStep`): crea el `AnimState` de cada clip.
    Los clips de casteo se asignan con `loop: false` porque se reproducen con
-   `setManualFrame`; si se asignan con loop, el primer casteo vuelve a asignar
-   el estado y paga otro `rebind`.
+   reloj manual (`playActionAt`); si se asignan con loop, el primer casteo
+   vuelve a asignar el estado y paga otro `rebind`.
 2. **Bind de clips** (`prewarmBind`): entra y sale de cada estado en el mismo
    tick, sin que el `AnimComponent` llegue a evaluar la pose. Así se resuelven
    una vez por copia los targets del binder; el `AnimClip` se recrea al activar

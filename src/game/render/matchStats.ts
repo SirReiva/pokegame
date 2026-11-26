@@ -71,7 +71,7 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
       x: player.x,
       z: player.z,
       gamepad: player.deviceKind === 'gamepad',
-      animation: player.animation,
+      animation: player.actionAnimation ?? player.animation,
       terrain: player.terrain,
       terrainName: terrain.name,
       terrainType: terrain.type,

@@ -81,11 +81,20 @@ export function syncMatchView(sync: MatchViewSync): void {
       // El cuerpo mantiene su mirada; la flecha del suelo muestra el apuntado
       // del stick derecho mientras esté desviado.
       copy.setFacing(player.facing, player.aimYaw ?? player.facing);
-      if (player.animationFrame !== null) {
-        // El plan de casteo fija el frame; todas las vistas dibujan el mismo.
-        copy.setManualFrame(player.animation, player.animationFrame);
+      if (
+        player.actionAnimation !== null &&
+        player.clipTime !== null
+      ) {
+        // El plan de casteo manda en el tiempo del clip; todas las vistas
+        // dibujan exactamente la misma pose. No se toca la locomoción: el
+        // casteo se reproduce en la misma capa base.
+        copy.playActionAt(
+          player.actionAnimation,
+          player.clipTime,
+          player.clipSpeed
+        );
       } else {
-        copy.clearManual();
+        copy.stopAction();
         copy.play(player.animation);
         const movePlayback =
           player.animation === 'walk'
