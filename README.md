@@ -766,7 +766,7 @@ Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas
 
 Cada especie conserva un único retrato en `public/sprites/<id>/portrait.png`. Las interfaces HTML (roster, HUD, versus y diálogos) lo cargan con `PokemonPortrait`; no hay hojas de animación ni variantes shiny o recolor.
 
-`public/sprites/manifest.json` sigue siendo la fuente de verdad del catálogo y de los **tiempos de gameplay**. Por cada animación de PMD guarda el tamaño de frame de referencia, las `durations` en ticks de 1/60 s, los marcadores `rushFrame`/`hitFrame`/`returnFrame` y las anclas de suelo. El cuerpo 3D aporta el clip visual; el manifiesto decide cuándo cae el impacto y a qué altura se apoya el modelo. Los retratos y el manifiesto se versionan con el repositorio: no hace falta ningún importador.
+`public/sprites/manifest.json` sigue siendo la fuente de verdad del catálogo y de los **tiempos de gameplay**. Guarda una referencia `idle` por especie (tamaño de frame y ancla de suelo) y, por animación, las `durations` en ticks de 1/60 s y los marcadores `rushFrame`/`hitFrame`/`returnFrame`. El cuerpo 3D aporta el clip visual; el manifiesto decide cuándo cae el impacto y a qué altura se apoya el modelo. Los retratos y el manifiesto se versionan con el repositorio: no hace falta ningún importador.
 
 `public/sprites/CREDITS.md` recoge la atribución de los retratos (PMD Sprite Collab, CC BY-NC 4.0) y la licencia del arte.
 

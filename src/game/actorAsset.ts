@@ -7,6 +7,7 @@ import type {
   AnimationName,
   PokemonAnimations,
   PokemonEntry,
+  PokemonReference,
   ResolvedAnimation
 } from './types';
 
@@ -35,15 +36,15 @@ export interface ActorAsset {
 }
 
 /** Altura del frame `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldHeight(animations: PokemonAnimations): number {
-  const idle = animations.idle;
-  const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
-  return anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
+function referenceWorldHeight(reference: PokemonReference): number {
+  return (
+    reference.anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch
+  );
 }
 
 /** Ancho del frame `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldWidth(animations: PokemonAnimations): number {
-  return animations.idle.frameWidth * CONFIG.sprite.pixelScale;
+function referenceWorldWidth(reference: PokemonReference): number {
+  return reference.frameWidth * CONFIG.sprite.pixelScale;
 }
 
 /** Altura real del cuerpo 3D ya escalado, en unidades de mundo. */
@@ -144,8 +145,8 @@ export async function loadActorAsset(
   onProgress?: (fraction: number) => void
 ): Promise<ActorAsset> {
   const animations = withRunAnimation(entry.animations);
-  const targetHeight = referenceWorldHeight(animations);
-  const targetWidth = referenceWorldWidth(animations);
+  const targetHeight = referenceWorldHeight(entry.reference);
+  const targetWidth = referenceWorldWidth(entry.reference);
 
   const model = await loadModelAsset(
     app,

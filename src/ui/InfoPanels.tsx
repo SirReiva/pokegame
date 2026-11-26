@@ -120,7 +120,7 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
 
       <div className="my-4 flex flex-col gap-0.5">
         {manifest?.pokemon.map((entry) => {
-          const artists = [...new Set(entry.credits.map((credit) => credit.artist))];
+          const artists = [...new Set(entry.credits)];
           return (
             <div
               className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-line-faint py-2.25 text-12.8 last:border-b-0 max-sm:grid-cols-1 max-sm:gap-1"

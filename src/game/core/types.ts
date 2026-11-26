@@ -38,21 +38,12 @@ export type RequiredAnimationName = Exclude<
   | 'hop'
 >;
 
-export interface SpriteAnchor {
-  /** Columna del ancla de suelo dentro del frame (px). */
-  x: number;
-  /** Fila del ancla de suelo dentro del frame (px, desde arriba). */
-  y: number;
-}
-
 /**
- * Metadatos de una animación de PMD que siguen alimentando el gameplay: tamaño
- * de frame de referencia, duraciones y marcadores de fase. Las hojas de sprite
- * ya no existen; el cuerpo se dibuja con un modelo 3D.
+ * Metadatos de una animación de PMD que siguen alimentando el gameplay:
+ * duraciones y marcadores de fase. Las hojas de sprite ya no existen; el cuerpo
+ * se dibuja con un modelo 3D.
  */
 export interface SpriteAnimation {
-  frameWidth: number;
-  frameHeight: number;
   /** Duración de cada frame en ticks de 1/60 s. */
   durations: number[];
   /**
@@ -64,8 +55,6 @@ export interface SpriteAnimation {
   rushFrame?: number;
   hitFrame?: number;
   returnFrame?: number;
-  /** Un ancla por frame, en orden fila a fila (8 direcciones x columnas). */
-  anchors: SpriteAnchor[];
 }
 
 /** Animación resuelta tras aplicar los fallbacks de la especie. */
@@ -75,9 +64,12 @@ export interface ResolvedAnimation {
   animation: SpriteAnimation;
 }
 
-export interface SpriteCredits {
-  artist: string;
-  contact: string;
+/** Tamaño y ancla del frame `idle` de PMD, usados como referencia de escala. */
+export interface PokemonReference {
+  frameWidth: number;
+  frameHeight: number;
+  /** Altura del ancla de suelo dentro del frame (px, desde arriba). */
+  anchorY: number;
 }
 
 /**
@@ -103,22 +95,20 @@ export interface PokemonEntry {
   dex: number;
   types: string[];
   accent: string;
-  shadowSize: number;
-  source: string;
-  credits: SpriteCredits[];
   /** Retrato de PMD Sprite Collab para las interfaces HTML. */
   portrait: string;
+  /** Frame `idle` de PMD: escala de referencia del modelo 3D. */
+  reference: PokemonReference;
+  /** Artistas acreditados por el arte original. */
+  credits: string[];
   animations: PokemonAnimations;
 }
 
 export interface SpriteManifest {
-  generatedAt: string;
   source: string;
   license: string;
   licenseUrl: string;
-  licenseFile: string;
   directions: DirectionName[];
-  tickRate: number;
   pokemon: PokemonEntry[];
 }
 

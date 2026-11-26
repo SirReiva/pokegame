@@ -30,13 +30,10 @@ function makeAnimation(
 ): SpriteAnimation {
   const durations = overrides.durations ?? [6, 6, 6, 6];
   return {
-    frameWidth: 32,
-    frameHeight: 32,
     durations,
     rushFrame: 0,
     hitFrame: 1,
     returnFrame: 2,
-    anchors: Array.from({ length: durations.length }, () => ({ x: 16, y: 28 })),
     ...overrides
   };
 }
