@@ -18,6 +18,7 @@
     "desktop:build:linux": "wails3 build GOOS=linux",
     "desktop:package": "wails3 package",
     "validate:anims": "node --import tsx scripts/validate-anim-timings.ts",
+    "seed:clip-markers": "node --import tsx scripts/seed-clip-markers.ts",
     "sfx": "node scripts/import-sfx.mjs",
     "maps:designs": "node scripts/generate-arena-designs.mjs",
     "maps:previews": "node scripts/generate-map-previews.mjs",
