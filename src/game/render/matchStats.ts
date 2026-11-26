@@ -16,7 +16,6 @@ import {
 import { RAD } from '../config';
 import { effectiveVisionRange } from '../vision';
 import { TERRAINS } from '../terrain';
-import { DEFAULT_SKIN_ID } from '../skins';
 import type { MatchPlayerState } from '../matchState';
 import type { ModeHudSnapshot } from '../modes';
 import type {
@@ -63,7 +62,6 @@ export function buildMatchStats(input: MatchStatsInput): PlayerMatchStats[] {
       name: player.name,
       team: player.team,
       pokemonId: player.pokemonId,
-      skinId: player.skinId ?? DEFAULT_SKIN_ID,
       fps: Math.round(input.fps),
       yaw: player.cameraYaw * RAD,
       row,

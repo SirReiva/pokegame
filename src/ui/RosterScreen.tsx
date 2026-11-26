@@ -11,10 +11,9 @@ import {
 } from '../game/abilities';
 import { baseStatsFor, combatStatsFor } from '../game/pokedex';
 import { speedForPokemon } from '../game/roster';
-import { skinFor, skinsFor } from '../game/skins';
 import { TEAM_INFO, countTeams, type LobbyPlayer } from '../game/multiplayer';
 import type { Team } from '../game/terrain';
-import type { PokemonEntry, PokemonSkin, SpriteManifest } from '../game/types';
+import type { PokemonEntry, SpriteManifest } from '../game/types';
 import { Brand } from './Brand';
 import { btnClass } from './buttonStyles';
 import { KeyPill } from './KeyPill';
@@ -33,7 +32,6 @@ interface RosterScreenProps {
   flipped: Record<string, string>;
   onPick: (slot: number, pokemonId: string) => void;
   onFlip: (slot: number) => void;
-  onSelectSkin: (slot: number, skinId: string) => void;
   onSelectCommon: (slot: number, abilityId: CommonAbilityId) => void;
   onToggleReady: (slot: number) => void;
   onStart: () => void;
@@ -49,7 +47,6 @@ interface PlayerPanelProps {
   flipped: boolean;
   onPick: (slot: number, pokemonId: string) => void;
   onFlip: (slot: number) => void;
-  onSelectSkin: (slot: number, skinId: string) => void;
   onSelectCommon: (slot: number, abilityId: CommonAbilityId) => void;
   onToggleReady: (slot: number) => void;
 }
@@ -88,7 +85,6 @@ export function RosterScreen({
   flipped,
   onPick,
   onFlip,
-  onSelectSkin,
   onSelectCommon,
   onToggleReady,
   onStart,
@@ -160,7 +156,6 @@ export function RosterScreen({
                 flipped={flipped[player.deviceId] === player.pokemonId}
                 onPick={onPick}
                 onFlip={onFlip}
-                onSelectSkin={onSelectSkin}
                 onSelectCommon={onSelectCommon}
                 onToggleReady={onToggleReady}
                 index={index}
@@ -182,9 +177,6 @@ export function RosterScreen({
             </span>
             <span className="flex items-center gap-2">
               <KeyPill>← / →</KeyPill> instinto (card girada)
-            </span>
-            <span className="flex items-center gap-2">
-              <KeyPill>↑ / ↓</KeyPill> aspecto
             </span>
             <span className="flex items-center gap-2">
               <KeyPill>B / Esc</KeyPill> volver
@@ -228,7 +220,6 @@ function PlayerPanel({
   flipped,
   onPick,
   onFlip,
-  onSelectSkin,
   onSelectCommon,
   onToggleReady,
   index
@@ -247,8 +238,6 @@ function PlayerPanel({
   const stats = combatStatsFor(baseStatsFor(entry.id));
   const speed = speedForPokemon(entry.id);
   const common = commonAbilityOption(player.commonAbilityId);
-  const skins = skinsFor(entry);
-  const selectedSkin = skinFor(entry, player.skinId);
 
   return (
     <article
@@ -263,7 +252,7 @@ function PlayerPanel({
     >
       <header className="flex items-center gap-2.5">
         <span className="grid size-10 flex-none place-items-center overflow-hidden rounded-[10px] bg-[radial-gradient(circle,color-mix(in_srgb,var(--team)_22%,transparent),transparent_70%)]">
-          <PokemonPortrait entry={entry} skin={selectedSkin} height={32} />
+          <PokemonPortrait entry={entry} height={32} />
         </span>
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-1.5">
@@ -333,7 +322,6 @@ function PlayerPanel({
             <div className="relative z-1 flex flex-1 items-center justify-center">
               <PokemonPortrait
                 entry={entry}
-                skin={selectedSkin}
                 height={150}
                 fluid
                 className="size-[clamp(104px,15vh,156px)]"
@@ -347,49 +335,6 @@ function PlayerPanel({
                   <TypeBadge key={type} type={type} />
                 ))}
               </span>
-              {skins.length > 1 && (
-                <div className="flex flex-col items-center gap-0.5">
-                  <div className="flex flex-wrap items-center justify-center gap-1">
-                    {skins.map((skin) => {
-                      const selected = skin.id === selectedSkin.id;
-                      return (
-                        <button
-                          key={skin.id}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectSkin(player.slot, skin.id);
-                          }}
-                          aria-pressed={selected}
-                          title={`${skin.name} · ${entry.name}`}
-                          className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 transition-colors ${
-                            selected
-                              ? 'border-accent/70 bg-accent/12'
-                              : 'border-line bg-white/3 hover:border-line-strong hover:bg-white/6'
-                          }`}
-                        >
-                          <PokemonPortrait
-                            entry={entry}
-                            skin={skin}
-                            height={16}
-                            className="shrink-0"
-                          />
-                          <span
-                            className={`truncate font-mono text-8.96 tracking-[0.06em] uppercase ${
-                              selected ? 'text-accent-soft' : 'text-steel-500'
-                            }`}
-                          >
-                            {skin.name}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="font-mono text-7.36 tracking-[0.08em] uppercase text-steel-650">
-                    ↑ / ↓ cambiar aspecto
-                  </span>
-                </div>
-              )}
               <span className="font-mono text-9.92 tracking-wider uppercase text-steel-600">
                 Vel. {speed.toFixed(1)} u/s
               </span>
@@ -550,7 +495,6 @@ function PlayerPanel({
       <PokemonRail
         entries={manifest.pokemon}
         currentId={entry.id}
-        currentSkin={selectedSkin}
         takenByTeam={takenByTeam}
         onPick={(pokemonId) => onPick(player.slot, pokemonId)}
       />
@@ -561,13 +505,11 @@ function PlayerPanel({
 function PokemonRail({
   entries,
   currentId,
-  currentSkin,
   takenByTeam,
   onPick
 }: {
   entries: PokemonEntry[];
   currentId: string;
-  currentSkin: PokemonSkin;
   /** id de especie -> nombre del compañero que ya la lleva. */
   takenByTeam: ReadonlyMap<string, string>;
   onPick: (pokemonId: string) => void;
@@ -645,7 +587,6 @@ function PokemonRail({
             )}
             <PokemonPortrait
               entry={entry}
-              skin={selected ? currentSkin : null}
               height={30}
               className={!available || (takenBy && !selected) ? 'opacity-40' : undefined}
             />

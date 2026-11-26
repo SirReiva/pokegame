@@ -5,8 +5,8 @@ import { loadImage, type LoadedImage } from './imageLoader';
 import { loadModelAsset, type ModelAsset } from './model';
 import type {
   AnimationName,
+  PokemonAnimations,
   PokemonEntry,
-  PokemonSkin,
   ResolvedAnimation
 } from './types';
 
@@ -15,15 +15,15 @@ import type {
  *
  * El manifiesto sigue siendo la fuente de verdad para los tiempos de gameplay
  * (duración de cada clip y marcadores `Rush`/`Hit`/`Return`) y para la altura de
- * referencia. Las texturas de las hojas de sprite ya no se cargan: el cuerpo se
- * dibuja con el modelo 3D.
+ * referencia. Solo se carga el retrato: el cuerpo se dibuja con el modelo 3D.
  */
 
 export type LoadedPortrait = LoadedImage;
 
 export interface ActorAsset {
   readonly entry: PokemonEntry;
-  readonly skin: PokemonSkin;
+  /** Clips resueltos de la especie, con el fallback de `run`. */
+  readonly animations: PokemonAnimations;
   /** Retrato 2D para la marca de KO; `null` si no se pudo cargar. */
   readonly portrait: LoadedPortrait | null;
   /** Modelo 3D de la especie. */
@@ -34,16 +34,16 @@ export interface ActorAsset {
   readonly width: number;
 }
 
-/** Altura del sprite `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldHeight(skin: PokemonSkin): number {
-  const idle = skin.animations.idle;
+/** Altura del frame `idle` en unidades de mundo (referencia de escala). */
+function referenceWorldHeight(animations: PokemonAnimations): number {
+  const idle = animations.idle;
   const anchorY = idle.anchors[0]?.y ?? idle.frameHeight * 0.75;
   return anchorY * CONFIG.sprite.pixelScale * CONFIG.sprite.verticalStretch;
 }
 
 /** Ancho del frame `idle` en unidades de mundo (referencia de escala). */
-function referenceWorldWidth(skin: PokemonSkin): number {
-  return skin.animations.idle.frameWidth * CONFIG.sprite.pixelScale;
+function referenceWorldWidth(animations: PokemonAnimations): number {
+  return animations.idle.frameWidth * CONFIG.sprite.pixelScale;
 }
 
 /** Altura real del cuerpo 3D ya escalado, en unidades de mundo. */
@@ -109,9 +109,9 @@ export function resolveAnimationClip(
 ): ResolvedAnimation | null {
   if (!asset) return null;
   const resolved = resolveAnimationName(name, (candidate) =>
-    Boolean(asset.skin.animations[candidate])
+    Boolean(asset.animations[candidate])
   );
-  const animation = asset.skin.animations[resolved];
+  const animation = asset.animations[resolved];
   return animation ? { name: resolved, animation } : null;
 }
 
@@ -125,33 +125,27 @@ async function loadPortrait(url: string): Promise<LoadedImage | null> {
 }
 
 /**
- * El manifiesto de sprites no trae un clip `run` propio: PMD usa la caminata
- * también para correr. Las habilidades que piden `run` (por ejemplo, Rodada)
- * reutilizan la caminata como reloj de gameplay, mientras el cuerpo 3D usa su
- * clip de carrera real cuando el GLB lo tiene.
+ * El manifiesto de PMD no trae un clip `run` propio: usa la caminata también
+ * para correr. Las habilidades que piden `run` (por ejemplo, Rodada) reutilizan
+ * la caminata como reloj de gameplay, mientras el cuerpo 3D usa su clip de
+ * carrera real cuando el GLB lo tiene.
  */
-function withRunAnimation(skin: PokemonSkin): PokemonSkin {
-  if (skin.animations.run || !skin.animations.walk) return skin;
-  return {
-    ...skin,
-    animations: { ...skin.animations, run: skin.animations.walk }
-  };
+function withRunAnimation(animations: PokemonAnimations): PokemonAnimations {
+  if (animations.run || !animations.walk) return animations;
+  return { ...animations, run: animations.walk };
 }
 
 /**
- * Prepara el aspecto de una especie. El GLB se comparte por especie: los
- * aspectos alternativos de los sprites ya no se ofrecen porque solo existe un
- * modelo por Pokémon.
+ * Prepara una especie. El GLB y el retrato se comparten por especie.
  */
 export async function loadActorAsset(
   app: pc.AppBase,
   entry: PokemonEntry,
-  skin: PokemonSkin,
   onProgress?: (fraction: number) => void
 ): Promise<ActorAsset> {
-  const resolvedSkin = withRunAnimation(skin);
-  const targetHeight = referenceWorldHeight(resolvedSkin);
-  const targetWidth = referenceWorldWidth(resolvedSkin);
+  const animations = withRunAnimation(entry.animations);
+  const targetHeight = referenceWorldHeight(animations);
+  const targetWidth = referenceWorldWidth(animations);
 
   const model = await loadModelAsset(
     app,
@@ -167,11 +161,11 @@ export async function loadActorAsset(
     );
   }
 
-  const portrait = await loadPortrait(resolvedSkin.portrait);
+  const portrait = await loadPortrait(entry.portrait);
 
   return {
     entry,
-    skin: resolvedSkin,
+    animations,
     portrait,
     model,
     height: model.bounds.height * model.scale,

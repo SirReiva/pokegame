@@ -621,7 +621,7 @@ Mejor:
   - asesino → Impulso,
   - sustain → Regeneración.
 
-También se pueden aleatorizar skins y nombres para dar variedad visual.
+También se pueden aleatorizar nombres para dar variedad visual.
 
 ---
 

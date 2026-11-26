@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Redirect, useLocation } from 'wouter';
 import type { MenuInputEvent } from '../game/input';
-import { skinsFor } from '../game/skins';
 import type { SpriteManifest } from '../game/types';
 import { useSession } from '../session/useSession';
 import { RosterScreen } from '../ui/RosterScreen';
@@ -84,19 +83,8 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
         return;
       }
 
-      // El aspecto se elige en la cara frontal: ↑/↓ recorren sus variantes
-      // siempre que la especie tenga más de una. Con la card girada, ←/→
-      // cambian el instinto en vez de mover el carrusel de Pokémon.
-      const currentEntry = session.manifest?.pokemon.find(
-        (entry) => entry.id === player.pokemonId
-      );
-      const hasAlternateSkins =
-        currentEntry !== undefined && skinsFor(currentEntry).length > 1;
-      if ((action === 'up' || action === 'down') && hasAlternateSkins) {
-        session.cycleSkin(player.slot, action === 'up' ? -1 : 1);
-        return;
-      }
-
+      // Con la card girada, ←/→ cambian el instinto en vez de mover el
+      // carrusel de Pokémon.
       if (flipped[player.deviceId] === player.pokemonId) {
         if (action === 'left' || action === 'right') {
           session.cycleCommonAbility(player.slot, action === 'left' ? -1 : 1);
@@ -126,7 +114,6 @@ function RosterContent({ manifest }: { manifest: SpriteManifest }) {
       flipped={flipped}
       onPick={handlePick}
       onFlip={toggleFlip}
-      onSelectSkin={session.selectSkin}
       onSelectCommon={session.selectCommonAbility}
       onToggleReady={session.toggleRosterReady}
       onStart={() => navigate('/play')}

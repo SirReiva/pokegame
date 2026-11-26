@@ -6,7 +6,6 @@ import {
   type CSSProperties
 } from 'react';
 import { TEAM_INFO, type LobbyPlayer } from '../game/multiplayer';
-import { skinFor } from '../game/skins';
 import type { Team } from '../game/terrain';
 import type { LoadingProgress, PokemonEntry, SpriteManifest } from '../game/types';
 import { PokemonPortrait } from './PokemonPortrait';
@@ -770,7 +769,6 @@ interface VersusRowProps {
 function VersusRow({ player, playerIndex, side, entry, reduced }: VersusRowProps) {
   const left = side === 'left';
   const info = TEAM_INFO[player.team];
-  const skin = entry ? skinFor(entry, player.skinId) : null;
   const delay = reduced ? 0 : playerIndex * ROW_DELAY_MS;
   const sheenDelay = delay + ROW_DURATION_MS;
   const gradient = left
@@ -862,7 +860,6 @@ function VersusRow({ player, playerIndex, side, entry, reduced }: VersusRowProps
         {entry ? (
           <PokemonPortrait
             entry={entry}
-            skin={skin}
             fluid
             className="relative size-full drop-shadow-[0_8px_10px_rgb(0_0_0/0.55)]"
           />

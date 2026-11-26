@@ -176,7 +176,7 @@ export function HomeScreen() {
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-10.88 text-steel-500">
           <span>
-            Sprites de{' '}
+            Retratos de{' '}
             <a
               className="text-link underline underline-offset-2"
               href="https://sprites.pmdcollab.org/"

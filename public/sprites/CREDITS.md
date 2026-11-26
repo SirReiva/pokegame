@@ -1,468 +1,180 @@
-# Créditos de sprites
+# Créditos de retratos
 
-Los sprites de este directorio proceden de **PMD Sprite Collab**:
+Los retratos de este directorio proceden de **PMD Sprite Collab**:
 
 - Web: https://sprites.pmdcollab.org/
 - Repositorio: https://github.com/PMDCollab/SpriteCollab
 - Licencia: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
 
-Los archivos se preprocesan (relleno de color bajo los píxeles transparentes)
-para evitar halos oscuros al filtrarlos. El arte y el canal alfa no se
-modifican. Se usan únicamente con fines no comerciales; los cambios se
-indican aquí por requisito de la licencia.
-Cada Pokémon conserva su `credits.txt` original en su carpeta.
+Solo se conservan los retratos (`portrait.png`). Las hojas de animación se
+retiraron porque en partida el cuerpo se dibuja con modelos GLB. El arte se
+usa únicamente con fines no comerciales; los cambios se indican aquí por
+requisito de la licencia.
 
 ## Bulbasaur (#0001)
 
-- CHUNSOFT · Walk, Attack, Strike, Shoot, Dance, Shake, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/credits.txt
-
-### Bulbasaur · Shiny
-
-- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Shake, Dance, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/0000/0001/Normal.png
-
-### Bulbasaur · Recolor
-
-- <@!356635814668664832> — PMDCollab_1 · Attack, Charge, Cringe, DeepBreath, Double, Eat, EventSleep, Faint, Float, Head, HitGround, Hop, Hurt, Idle, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Rotate, Shake, Shoot, Sink, Sit, Sleep, Swing, Trip, Tumble, TumbleBack, Wake, Walk
-- <@!117780585635643396> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shake, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!861005464682889266> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shake, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0001/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0001/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0001
 
 ## Charmander (#0004)
 
-- CHUNSOFT · Walk, Attack, Kick, Shoot, Strike, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/credits.txt
-
-### Charmander · Shiny
-
-- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Kick, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/0000/0001/Normal.png
-
-### Charmander · Recolor
-
-- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Kick, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0004/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0004/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0004
 
 ## Squirtle (#0007)
 
-- CHUNSOFT · Walk, Attack, Strike, Shoot, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0007
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0007/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0007/credits.txt
-
-### Squirtle · Shiny
-
-- <@!204460364023201793> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- <@!576876006636519434> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Withdraw, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0007/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0007/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0007
 
 ## Pikachu (#0025)
 
-- CHUNSOFT · Walk, Attack, QuickStrike, Shoot, Shock, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/credits.txt
-
-### Pikachu · Shiny
-
-- <@!204460364023201793> — PMDCollab_1 · Walk, Attack, QuickStrike, Shoot, Shock, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0025/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0025/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0025
 
 ## Gengar (#0094)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Lick, Twirl, Swing, Double, Rotate, Hop
-- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0094/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094/credits.txt
-
-### Gengar · Shiny
-
-- <@!234720295292895232> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Lick, Twirl, Swing, Double, Rotate, Hop
-- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0094/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0094/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!237286997645983744>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0094
 
 ## Voltorb (#0100)
 
-- CHUNSOFT · Attack, Charge, Double, Hop, Hurt, Idle, Rotate, Sleep, Swing, Twirl, Walk
-- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0100/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100/credits.txt
-
-### Voltorb · Shiny
-
-- <@!234720295292895232> — PMDCollab_1 · Attack, Charge, Double, Hop, Hurt, Idle, Rotate, Sleep, Swing, Twirl, Walk
-- <@!237286997645983744> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!237286997645983744> — PMDCollab_1 · Idle, Walk, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!356635814668664832> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0100/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0100/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!237286997645983744>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0100
 
 ## Eevee (#0133)
 
-- CHUNSOFT · Walk, Attack, Strike, Shoot, Appeal, TailWhip, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0133/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133/credits.txt
-
-### Eevee · Shiny
-
-- <@!95650095034273792> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Appeal, TailWhip, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, Faint, HitGround
-- <@!544245909639397378> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, TailWhip, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0133/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0133/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0133
 
 ## Donphan (#0232)
 
-- CHUNSOFT · Walk, Attack, Strike, Shoot, Rumble, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!356635814668664832> — CC_BY-NC_4 · Special0
-- <@!356635814668664832> — CC_BY-NC_4 · Tumble, Cringe, TumbleBack
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0232/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232/credits.txt
-
-### Donphan · Shiny
-
-- <@!95650095034273792> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Rumble, Withdraw, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Withdraw, Swing, Double, Rotate, Hop, Tumble, Cringe, TumbleBack, Special0
-- <@!356635814668664832> — CC_BY-NC_4 · Sleep
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0232/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0232/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!356635814668664832>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0232
 
 ## Lucario (#0448)
 
-- CHUNSOFT · Walk, Attack, QuickStrike, Strike, SpAttack, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!356635814668664832> — PMDCollab_1 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!356635814668664832> — CC_BY-NC_4 · EventSleep, Wake, Float, Trip, Laying, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0448/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448/credits.txt
-
-### Lucario · Shiny
-
-- <@!207188665959448576> — PMDCollab_1 · Walk, Attack, QuickStrike, Strike, SpAttack, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Strike, RearUp, Swing, Double, Rotate, Hop, QuickStrike, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- <@!356635814668664832> — CC_BY-NC_4 · EventSleep, Wake, Float, Trip, Laying, HitGround
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0448/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0448/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!356635814668664832>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0448
 
 ## Greninja (#0658)
 
-- JHONY_REX — PMDCollab_1 · Idle, Walk, Hurt, Attack, Charge, Swing, Double, QuickStrike
-- <@!215638650434617345> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Swing, Double, Rotate, Hop, QuickStrike
-- JHONY_REX — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, RearUp, Swing, Double, Rotate, Hop, QuickStrike
-- <@!229131140903075840> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop, QuickStrike
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/credits.txt
-
-### Greninja · Shiny
-
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, RearUp, Swing, Double, Rotate, Hop, QuickStrike
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0658/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0658/0000/0001/Normal.png
+- Créditos del arte: JHONY_REX · <@!215638650434617345> · <@!229131140903075840>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0658
 
 ## Mewtwo (#0150)
 
-- CHUNSOFT · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
-- <@!702275233125630042> — PMDCollab_1 · Attack, Charge, Cringe, DeepBreath, Double, Eat, EventSleep, Faint, Float, Head, HitGround, Hop, Hover, Hurt, Idle, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Punch, Rotate, Shoot, Sink, Sit, Sleep, Swing, Trip, Tumble, TumbleBack, Wake, Walk
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0150/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150/credits.txt
-
-### Mewtwo · Shiny
-
-- <@!200385851069300736> — PMDCollab_1 · Attack, Charge, Double, Hop, Hover, Hurt, Idle, Punch, Rotate, Shoot, Sleep, Swing, Walk
-- <@!702275233125630042> — PMDCollab_1 · Cringe, DeepBreath, Eat, EventSleep, Faint, Float, Head, HitGround, Laying, LeapForth, LookUp, LostBalance, Nod, Pain, Pose, Pull, Sink, Sit, Trip, Tumble, TumbleBack, Wake
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0150/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0150/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!702275233125630042>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0150
 
 ## Mew (#0151)
 
-- CHUNSOFT · Walk, Attack, Strike, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!702275233125630042> — CC_BY-NC_4 · EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/credits.txt
-
-### Mew · Shiny
-
-- <@!200318546750865418> — PMDCollab_1 · Walk, Attack, Strike, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!237286997645983744> — CC_BY-NC_4 · Walk, Hurt, Swing, Double, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0151/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0151/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!702275233125630042>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0151
 
 ## Onix (#0095)
 
-- CHUNSOFT · Walk, Attack, Slam, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/credits.txt
-
-### Onix · Shiny
-
-- <@!200385851069300736> — PMDCollab_1 · Walk, Attack, Slam, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/0000/0001/Normal.png
-
-### Onix · Recolor
-
-- <@!350050109741858829> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Slam, Twirl, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0095/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0095/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0095
 
 ## Scyther (#0123)
 
-- CHUNSOFT · Walk, Attack, Slice, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/credits.txt
-
-### Scyther · Shiny
-
-- <@!234720295292895232> — PMDCollab_1 · Walk, Attack, Slice, Shoot, Twirl, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/0000/0001/Normal.png
-
-### Scyther · Recolor
-
-- <@!861005464682889266> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Slice, Twirl, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0123/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0123/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0123
 
 ## Gyarados (#0130)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0130/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130/credits.txt
-
-### Gyarados · Shiny
-
-- <@!217899432652308480> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, RearUp, Swing, Double, Rotate, Hop
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0130/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0130/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0130
 
 ## Tyranitar (#0248)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0248/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248/credits.txt
-
-### Tyranitar · Shiny
-
-- <@!215699178553212929> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0248/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0248/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0248
 
 ## Articuno (#0144)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0144/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144/credits.txt
-
-### Articuno · Shiny
-
-- <@!200385851069300736> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0144/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0144/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0144
 
 ## Zapdos (#0145)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/credits.txt
-
-### Zapdos · Shiny
-
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/0000/0001/Normal.png
-
-### Zapdos · Recolor
-
-- <@!1038631037284126741> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Emit, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0145/0003
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0145/0003/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0145
 
 ## Moltres (#0146)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0146/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146/credits.txt
-
-### Moltres · Shiny
-
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0146/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0146/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0146
 
 ## Raikou (#0243)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shock, Swing, Double, Rotate, Hop, QuickStrike
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0243/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243/credits.txt
-
-### Raikou · Shiny
-
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Shock, Swing, Double, Rotate, Hop, QuickStrike
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0243/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0243/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0243
 
 ## Entei (#0244)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/credits.txt
-
-### Entei · Shiny
-
-- <@!200385851069300736> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
-- <@!356635814668664832> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/0000/0001/Normal.png
-
-### Entei · Recolor
-
-- <@!350050109741858829> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, SpAttack, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0244/0002
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0244/0002/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0244
 
 ## Suicune (#0245)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/credits.txt
-
-### Suicune · Shiny
-
-- <@!95650095034273792> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/0000/0001/Normal.png
-
-### Suicune · Recolor
-
-- <@!157796074457661440> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, SpAttack, RearUp, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0245/0002
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0245/0002/Normal.png (no disponible; se usa el retrato de la forma normal)
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0245
 
 ## Lugia (#0249)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0249/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249/credits.txt
-
-### Lugia · Shiny
-
-- <@!117780585635643396> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Swing, Double, Rotate, Hop, Hover
-- <@!117780585635643396> — CC_BY-NC_4 · Shoot, Swing, Double, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0249/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0249/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0249
 
 ## Ho-Oh (#0250)
 
-- CHUNSOFT · Walk, Attack, Jab, Shoot, Hover, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0250/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250/credits.txt
-
-### Ho-Oh · Shiny
-
-- <@!200385851069300736> — PMDCollab_1 · Walk, Attack, Jab, Shoot, Hover, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- <@!157796074457661440> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Jab, Swing, Double, Rotate, Hop, Hover
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0250/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0250/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0250
 
 ## Celebi (#0251)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop
-- <@!177074597315870720> — PMDCollab_1 · EventSleep, Wake, Eat, Pose, Pull, Pain, Float, DeepBreath, Nod, Sink, Trip, Laying, LeapForth, Cringe, LostBalance, HitGround, Faint
-- <@!356635814668664832> — PMDCollab_1 · EventSleep, Wake, Tumble, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Laying, LeapForth, Head, LostBalance, TumbleBack, HitGround, Faint
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/credits.txt
-
-### Celebi · Shiny
-
-- <@!356635814668664832> — PMDCollab_1 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Twirl, Swing, Double, Rotate, Hop, EventSleep, Wake, Eat, Tumble, Pose, Pull, Pain, Float, DeepBreath, Nod, Sit, LookUp, Sink, Trip, Laying, LeapForth, Head, Cringe, LostBalance, TumbleBack, HitGround, Faint
-- CHUNSOFT · "
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0251/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0251/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT · <@!177074597315870720> · <@!356635814668664832>
+- Ficha de origen: https://sprites.pmdcollab.org/#/0251
 
 ## Kyogre (#0382)
 
-- CHUNSOFT · Walk, Attack, Stomp, Shoot, Swell, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/credits.txt
-
-### Kyogre · Shiny
-
-- <@!232091727094218752> — PMDCollab_1 · Walk, Attack, Stomp, Shoot, Swell, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/0000/0001/Normal.png
-
-### Kyogre · Recolor
-
-- <@!861005464682889266> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Stomp, Swell, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0382/0002
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0382/0002/Normal.png (no disponible; se usa el retrato de la forma normal)
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0382
 
 ## Groudon (#0383)
 
-- CHUNSOFT · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/credits.txt
-
-### Groudon · Shiny
-
-- <@!232091727094218752> — CC_BY-NC_4 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Strike, Rumble, Emit, Swing, Double, Rotate, Hop
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0383/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0383/0000/0001/Normal.png
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0383
 
 ## Rayquaza (#0384)
 
-- CHUNSOFT · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384
 - Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/Normal.png
-- Hoja de créditos original: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/credits.txt
-
-### Rayquaza · Shiny
-
-- <@!232091727094218752> — PMDCollab_1 · Walk, Attack, QuickStrike, Shoot, SpAttack, Rumble, RearUp, Sleep, Hurt, Idle, Swing, Double, Hop, Charge, Rotate
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/0000/0001
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/0000/0001/Normal.png
-
-### Rayquaza · Recolor
-
-- <@!350050109741858829> — PMDCollab_2 · Idle, Walk, Sleep, Hurt, Attack, Charge, Shoot, Rumble, SpAttack, RearUp, Swing, Double, Rotate, Hop, QuickStrike
-- Fuente: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/0384/0002
-- Retrato: https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/portrait/0384/0002/Normal.png
-
+- Créditos del arte: CHUNSOFT
+- Ficha de origen: https://sprites.pmdcollab.org/#/0384

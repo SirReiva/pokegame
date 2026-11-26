@@ -218,7 +218,6 @@ import {
   type Team
 } from './terrain';
 import { terrainSpeedEffect } from './terrainSpeed';
-import { DEFAULT_SKIN_ID, skinFor } from './skins';
 import { hasPokemonModel } from './modelCatalog';
 import type { LoadingProgress, SpriteManifest } from './types';
 import { terrainConcealment } from './vision';
@@ -239,33 +238,21 @@ export interface GameCallbacks {
   onAtmosphere(state: AtmosphereState | null): void;
 }
 
-/** Combinación especie + aspecto que hay que cargar para una partida. */
-export interface PokemonSkinSelection {
-  pokemonId: string;
-  skinId: string;
-}
-
 export interface GameOptions {
   /** Mapa que se carga al montar `/play`. */
   mapId?: string;
   /** Manifiesto ya descargado por la sesión, para no pedirlo dos veces. */
   manifest?: SpriteManifest;
   /**
-   * Especies que jugarán la partida. Solo se cargan sus hojas de sprite: el
-   * resto del manifiesto se queda como datos ligeros para el roster y el HUD.
+   * Especies que jugarán la partida. Solo se cargan sus retratos y modelos GLB:
+   * el resto del manifiesto se queda como datos ligeros para el roster y el HUD.
    * Si no se indica, se cargan todas (comportamiento anterior).
    */
   pokemonIds?: readonly string[];
   /**
-   * Aspectos concretos que usa cada jugador. Si se indica, sustituye a la
-   * carga por especie: dos jugadores pueden compartir Pokémon con skins
-   * distintas y cada combinación se descarga una sola vez.
-   */
-  pokemonSkins?: readonly PokemonSkinSelection[];
-  /**
    * Jugadores humanos (vistas) de la partida. Cada uno recibe su viewport, así
-   * que con muchos jugadores el sprite ocupa menos píxeles y sus hojas se
-   * cargan con menos densidad. Si falta, se asume una vista.
+   * que con muchos jugadores el cuerpo ocupa menos píxeles. Si falta, se asume
+   * una vista.
    */
   humanViews?: number;
   /** KOs de equipo para el deathmatch; se conserva como atajo compatible. */
@@ -286,11 +273,6 @@ export interface GameOptions {
    * quedar encima del canvas WebGL y debajo del HUD.
    */
   overlayCanvas?: HTMLCanvasElement | null;
-}
-
-/** Clave de la caché de actores: la especie y el aspecto son independientes. */
-function assetKey(pokemonId: string, skinId?: string): string {
-  return `${pokemonId}\u0000${skinId ?? DEFAULT_SKIN_ID}`;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -456,15 +438,12 @@ export class Game {
   private readonly worldLayerId: number;
 
   private manifest: SpriteManifest | null = null;
-  /** Caché por `especie + aspecto`; ver `assetKey`. */
+  /** Caché de actores, una entrada por especie. */
   private readonly assets = new Map<string, ActorAsset>();
 
-  /** Modelo del aspecto elegido por un jugador (o el normal si no hay). */
-  private assetFor(
-    pokemonId: string,
-    skinId?: string
-  ): ActorAsset | undefined {
-    return this.assets.get(assetKey(pokemonId, skinId));
+  /** Modelo y retrato de una especie. */
+  private assetFor(pokemonId: string): ActorAsset | undefined {
+    return this.assets.get(pokemonId);
   }
   /** Texturas de los objetos recogibles, cargadas una vez por partida. */
   private readonly itemTextures: ItemTextureMap = new Map();
@@ -474,7 +453,7 @@ export class Game {
   private pickupSpawns: readonly PickupSpawn[] = [];
   private readonly pickupHandlers: PickupHandlers = {
     pokemonFor: (player) =>
-      this.assetFor(player.pokemonId, player.skinId)?.entry ?? null,
+      this.assetFor(player.pokemonId)?.entry ?? null,
     heal: (player, amount) => {
       if (!player.alive) return 0;
       const before = player.hp;
@@ -868,7 +847,7 @@ export class Game {
 
     // El SoundManager de PlayCanvas se crea con la aplicación. Los efectos se
     // cargan al empezar la partida (`prepareMatchAudio`), no al construir el
-    // mapa: así la carga no compite por red y memoria con las hojas de sprite.
+    // mapa: así la carga no compite por red y memoria con los modelos 3D.
     configureAudio(this.app);
     // Los FX preguntan en qué capas de vista deben dibujarse; el resolvedor usa
     // la misma visibilidad que la niebla de los actores.
@@ -1015,7 +994,7 @@ export class Game {
       castAbility: (player, slotIndex) => self.castAbility(player, slotIndex),
       awardXp: (player, source, amount) => self.awardXp(player, source, amount),
       showHeal: (player, amount) => self.showHealPopup(player, amount, player),
-      assetFor: (pokemonId, skinId) => self.assetFor(pokemonId, skinId),
+      assetFor: (pokemonId) => self.assetFor(pokemonId),
       queueCast: (player, def, targetX, targetZ, marker, dirX, dirZ, cast) =>
         self.queueCast(player, def, targetX, targetZ, marker, dirX, dirZ, cast),
       dashPosition: (player, x, z, dirX, dirZ, distance) =>
@@ -1097,7 +1076,7 @@ export class Game {
       get pickupSpawns() {
         return self.pickupSpawns;
       },
-      assetFor: (pokemonId, skinId) => self.assetFor(pokemonId, skinId),
+      assetFor: (pokemonId) => self.assetFor(pokemonId),
       get mode() {
         return self.mode;
       },
@@ -1568,51 +1547,30 @@ export class Game {
       // partida. Cargar todo el catálogo retrasaba el inicio y subía a la GPU
       // texturas que ningún jugador ni bot iba a usar. Cada especie se
       // deduplica y las que no tienen modelo quedan fuera.
-      const requestedSkins = this.options.pokemonSkins;
-      let selections: PokemonSkinSelection[];
-      if (requestedSkins && requestedSkins.length > 0) {
-        const unique = new Map<string, PokemonSkinSelection>();
-        for (const selection of requestedSkins) {
-          if (!hasPokemonModel(selection.pokemonId)) continue;
-          unique.set(assetKey(selection.pokemonId, selection.skinId), selection);
-        }
-        selections = [...unique.values()];
-      } else {
-        const requiredIds = this.options.pokemonIds
-          ? new Set(this.options.pokemonIds)
-          : null;
-        const entries = manifest.pokemon.filter(
-          (entry) =>
-            hasPokemonModel(entry.id) &&
-            (!requiredIds || requiredIds.has(entry.id))
-        );
-        selections = entries.map((entry) => ({
-          pokemonId: entry.id,
-          skinId: DEFAULT_SKIN_ID
-        }));
-      }
+      const requiredIds = this.options.pokemonIds
+        ? new Set(this.options.pokemonIds)
+        : null;
+      const entries = manifest.pokemon.filter(
+        (entry) =>
+          hasPokemonModel(entry.id) &&
+          (!requiredIds || requiredIds.has(entry.id))
+      );
 
-      const total = selections.length;
+      const total = entries.length;
       let loaded = 0;
       this.emitLoad(76, 'Cargando modelos 3D');
 
       // Los GLB incluyen mallas, texturas y decenas de clips: se cargan de dos
       // en dos para acotar el pico de memoria y no saturar la red.
-      const pending = [...selections];
+      const pending = [...entries];
       const loadNext = async (): Promise<void> => {
         for (;;) {
-          const selection = pending.shift();
-          if (!selection || this.disposed) return;
-          const entry = manifest.pokemon.find(
-            (candidate) => candidate.id === selection.pokemonId
-          );
-          if (!entry) continue;
-          const skin = skinFor(entry, selection.skinId);
+          const entry = pending.shift();
+          if (!entry || this.disposed) return;
           let lastReported = -1;
           const asset = await loadActorAsset(
             this.app,
             entry,
-            skin,
             (fraction) => {
               if (fraction - lastReported < 0.04 && fraction < 1) return;
               lastReported = fraction;
@@ -1627,7 +1585,7 @@ export class Game {
             disposeActorAsset(asset);
             return;
           }
-          this.assets.set(assetKey(entry.id, selection.skinId), asset);
+          this.assets.set(entry.id, asset);
           loaded += 1;
           this.emitLoad(
             76 + (loaded / Math.max(1, total)) * 24,
@@ -1637,7 +1595,7 @@ export class Game {
       };
       await Promise.all(
         Array.from(
-          { length: Math.min(MODEL_ASSET_CONCURRENCY, selections.length) },
+          { length: Math.min(MODEL_ASSET_CONCURRENCY, entries.length) },
           () => loadNext()
         )
       );
@@ -2509,7 +2467,7 @@ export class Game {
    * caído, aunque el cuerpo esté fuera de la niebla.
    */
   private spawnDeathMarker(target: MatchPlayerState): void {
-    const asset = this.assetFor(target.pokemonId, target.skinId);
+    const asset = this.assetFor(target.pokemonId);
     const terrain = terrainAt(target.x, target.z);
     const onWater = terrain === 'waterLow' || terrain === 'waterHigh';
     const y = onWater
@@ -2652,7 +2610,7 @@ export class Game {
       player.vz = 0;
     }
 
-    const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
+    const asset = this.assetFor(player.pokemonId) ?? null;
     const plan = buildCastPlan(
       def,
       (name) => resolveAnimationClip(asset, name),
@@ -3009,7 +2967,7 @@ export class Game {
     if (Math.abs(cast.plan.activeEnd - (cast.plan.effectAt + active)) < 0.001) {
       return;
     }
-    const asset = this.assetFor(player.pokemonId, player.skinId) ?? null;
+    const asset = this.assetFor(player.pokemonId) ?? null;
     cast.plan = buildCastPlan(
       { ...cast.def, active },
       (name) => resolveAnimationClip(asset, name),
@@ -3054,7 +3012,7 @@ export class Game {
     player: MatchPlayerState,
     def: SelfAbilityDef
   ): void {
-    const asset = this.assetFor(player.pokemonId, player.skinId);
+    const asset = this.assetFor(player.pokemonId);
     const bodyHeight = asset?.height ?? 1.6;
     const radius = Math.min(1.5, Math.max(0.65, bodyHeight * 0.55));
     const centerY = Math.max(radius + 0.15, bodyHeight * 0.55);
@@ -3376,7 +3334,7 @@ export class Game {
 
   private drawNumberPopup(popup: PendingPopup): void {
     const target = popup.target;
-    const asset = this.assetFor(target.pokemonId, target.skinId);
+    const asset = this.assetFor(target.pokemonId);
     if (!asset) return;
 
     const worldY = 0.04 + asset.height + 0.2;

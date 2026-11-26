@@ -1,8 +1,7 @@
 import * as pc from 'playcanvas';
 
 /**
- * Constante de tiempo (s) del gris del KO. Coincide con la del billboard de
- * sprites (`sprite.ts`) para que ambos cuerpos se apaguen al mismo ritmo.
+ * Constante de tiempo (s) del gris del KO del cuerpo 3D.
  */
 export const DESATURATION_SECONDS = 0.08;
 

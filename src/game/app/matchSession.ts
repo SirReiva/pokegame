@@ -75,7 +75,7 @@ import { TeamOutline } from '../render/teamOutline';
 import type { VisionView } from '../render/visionView';
 import { hitRadiusForPokemon, speedForPokemon } from '../roster';
 import type { PendingAoeEnd } from '../sim/aoes';
-import { DEFAULT_SKIN_ID } from '../skins';
+
 import { terrainAt, type Team } from '../terrain';
 import { terrainSpeedEffect } from '../terrainSpeed';
 import type { AnimationName } from '../types';
@@ -142,8 +142,8 @@ export interface MatchSessionHost {
   /** Objetos que superaron la validación de posición del mapa. */
   readonly pickupSpawns: readonly PickupSpawn[];
 
-  /** Modelo del aspecto elegido por un jugador (o el normal si no hay). */
-  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
+  /** Modelo y retrato de una especie. */
+  assetFor(pokemonId: string): ActorAsset | undefined;
 
   // --- Fase y contadores ---
   mode: 'menu' | 'match';
@@ -374,27 +374,16 @@ export function startMatch(
 ): boolean {
   if (!host.ready || configs.length === 0) return false;
 
-  // Nunca se descarta a un jugador en silencio: un sprite que no llegó a
+  // Nunca se descarta a un jugador en silencio: un modelo que no llegó a
   // cargarse dejaría la partida en 1v0 y el HUD repartiría los paneles con
   // otro número de jugadores. Mejor abortar y avisar para volver al roster.
   const missing = configs.filter(
-    (config) => !host.assetFor(config.pokemonId, config.skinId)
+    (config) => !host.assetFor(config.pokemonId)
   );
   if (missing.length > 0) {
-    const ids = [
-      ...new Set(
-        missing.map(
-          (config) =>
-            `${config.pokemonId}${
-              config.skinId && config.skinId !== DEFAULT_SKIN_ID
-                ? ` (${config.skinId})`
-                : ''
-            }`
-        )
-      )
-    ];
+    const ids = [...new Set(missing.map((config) => config.pokemonId))];
     host.callbacks.onError(
-      `No se pudo cargar el sprite de ${ids.join(', ')}. Vuelve al roster e inténtalo de nuevo.`
+      `No se pudo cargar el modelo de ${ids.join(', ')}. Vuelve al roster e inténtalo de nuevo.`
     );
     return false;
   }
@@ -461,7 +450,7 @@ export function startMatch(
   let viewIndex = 0;
 
   valid.forEach((config) => {
-    const asset = host.assetFor(config.pokemonId, config.skinId);
+    const asset = host.assetFor(config.pokemonId);
     if (!asset) return;
 
     const isBot = config.isBot === true;
@@ -690,7 +679,7 @@ export function startMatch(
   // Cada actor tiene una copia por vista (no por jugador): los bots se ven
   // en las pantallas humanas, pero no generan una vista propia.
   host.matchPlayers.forEach((player) => {
-    const asset = host.assetFor(player.pokemonId, player.skinId);
+    const asset = host.assetFor(player.pokemonId);
     if (!asset) return;
     host.views.forEach((viewer, viewIndex) => {
       const viewerView = host.viewOf(viewer);

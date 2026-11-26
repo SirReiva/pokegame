@@ -69,7 +69,7 @@ flowchart TB
   subgraph platformLayer["Plataforma y contenido"]
     input["input · inputBuffer"]
     audio["audio · efectos y música"]
-    assets["sprite · textures · skins · pokedex"]
+    assets["modelos · textures · pokedex"]
     ai["bot.ts · coordinador + ai/*"]
   end
 

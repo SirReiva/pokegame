@@ -309,10 +309,10 @@ export function matchResolutionBaseline(
 /**
  * Alto real de cada viewport de una partida, en píxeles de dispositivo.
  *
- * Lo usan la densidad de las hojas de sprite y el nivel de detalle (contorno y
- * silueta): si divergieran, una vista podría pedir texturas para un tamaño que
- * no es el suyo. Devuelve `0` cuando no hay una altura fiable (SSR, canvas
- * oculto) para que cada consumidor decida su valor por defecto.
+ * Lo usa el nivel de detalle (contorno y silueta): si divergiera, una vista
+ * podría medir un tamaño que no es el suyo. Devuelve `0` cuando no hay una
+ * altura fiable (SSR, canvas oculto) para que cada consumidor decida su valor
+ * por defecto.
  */
 export function viewportHeightPx(
   cssHeight: number,
@@ -351,8 +351,6 @@ export interface LobbyPlayer {
   team: Team;
   teamReady: boolean;
   pokemonId: string;
-  /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
-  skinId?: string;
   commonAbilityId: CommonAbilityId;
   rosterReady: boolean;
   /** `true` si la plaza la controla la IA en vez de un dispositivo. */
@@ -437,8 +435,6 @@ export interface PlayerMatchStats {
   name: string;
   team: Team;
   pokemonId: string;
-  /** Aspecto alternativo usado en la partida. */
-  skinId?: string;
   fps: number;
   yaw: number;
   row: number;

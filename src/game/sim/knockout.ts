@@ -13,7 +13,7 @@ import { breakRegen } from './status';
 
 export interface KnockoutHost {
   isMatchOver(): boolean;
-  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
+  assetFor(pokemonId: string): ActorAsset | undefined;
   cancelCast(player: MatchPlayerState): void;
   clearRepeatCooldown(player: MatchPlayerState): void;
   playDeathCopies(target: MatchPlayerState, animation: 'faint' | 'hurt'): void;
@@ -48,10 +48,7 @@ export function knockOut(
   // partida decide el ganador y los KO posteriores del mismo frame no suman.
   if (host.isMatchOver()) return;
   if (!target.alive) return;
-  const animations = host.assetFor(
-    target.pokemonId,
-    target.skinId
-  )?.skin.animations;
+  const animations = host.assetFor(target.pokemonId)?.animations;
   const deathAnimation = animations?.faint ?? animations?.hurt;
   const deathDuration = deathAnimation
     ? deathAnimation.durations.reduce((total, ticks) => total + ticks, 0) / 60

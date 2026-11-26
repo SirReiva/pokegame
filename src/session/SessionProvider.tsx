@@ -43,14 +43,13 @@ import {
   loadPlayerPreference,
   savePlayerPreference
 } from '../game/playerPreferences';
-import { DEFAULT_SKIN_ID, skinFor, skinsFor } from '../game/skins';
 import type { Team } from '../game/terrain';
 import type { SpriteManifest } from '../game/types';
 import { SessionContext, type BootStatus, type SessionValue } from './sessionContext';
 
 async function loadManifest(): Promise<SpriteManifest> {
-  // El manifiesto cambia al ejecutar `pnpm sprites`; la marca evita que el
-  // navegador reutilice una copia antigua sin QuickStrike u otras animaciones.
+  // El manifiesto se sirve desde `public/sprites`; la marca de tiempo evita
+  // que el navegador reutilice una copia antigua tras un despliegue.
   const response = await fetch(
     `${import.meta.env.BASE_URL}sprites/manifest.json?v=${Date.now()}`
   );
@@ -87,22 +86,6 @@ function botPokemonPool(manifest: SpriteManifest) {
     hasAssignedAbilities(entry.id)
   );
   return withKit.length > 0 ? withKit : manifest.pokemon;
-}
-
-/**
- * Aspecto aleatorio para un bot entre todos los de su especie: igual que un
- * humano, el bot puede salir con el normal, shiny o un recolor.
- */
-function randomBotSkinId(
-  manifest: SpriteManifest | null,
-  pokemonId: string
-): string {
-  const entry = manifest?.pokemon.find(
-    (candidate) => candidate.id === pokemonId
-  );
-  if (!entry) return DEFAULT_SKIN_ID;
-  const skins = skinsFor(entry);
-  return skins[Math.floor(Math.random() * skins.length)].id;
 }
 
 /**
@@ -173,11 +156,6 @@ function ensureUniqueTeamPokemon(
     return {
       ...player,
       pokemonId: replacement,
-      // Los bots eligen un aspecto nuevo al cambiar de especie; los humanos
-      // vuelven al normal porque los aspectos son propios de cada Pokémon.
-      skinId: player.isBot
-        ? randomBotSkinId(manifest, replacement)
-        : DEFAULT_SKIN_ID,
       rosterReady: player.isBot ? player.rosterReady : false
     };
   };
@@ -220,7 +198,6 @@ function makeBotPlayer(
     team,
     teamReady: true,
     pokemonId: entry?.id ?? manifest.pokemon[0]?.id ?? '',
-    skinId: randomBotSkinId(manifest, entry?.id ?? manifest.pokemon[0]?.id ?? ''),
     commonAbilityId,
     rosterReady: true,
     isBot: true,
@@ -430,7 +407,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           team,
           teamReady: false,
           pokemonId: firstPokemon,
-          skinId: DEFAULT_SKIN_ID,
           commonAbilityId: DEFAULT_COMMON_ABILITY,
           rosterReady: false
         }
@@ -481,7 +457,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
               ...entry,
               team,
               pokemonId,
-              skinId: conflict ? DEFAULT_SKIN_ID : entry.skinId,
               teamReady: entry.isBot ? true : false,
               rosterReady:
                 conflict && !entry.isBot ? false : entry.rosterReady
@@ -596,7 +571,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ? player.name
         : normalizePlayerName(player.name, player.slot),
       pokemonId: player.pokemonId || firstPokemon,
-      skinId: player.skinId ?? DEFAULT_SKIN_ID,
       commonAbilityId: player.commonAbilityId ?? DEFAULT_COMMON_ABILITY,
       // Los bots ya están listos: no deben bloquear el paso al roster ni la
       // partida, y su selección no se toca al volver a elegir humanos.
@@ -654,9 +628,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ? {
               ...entry,
               pokemonId: list[nextIndex].id,
-              // Los aspectos son propios de cada especie: al cambiar de
-              // Pokémon se vuelve al normal para no heredar un shiny ajeno.
-              skinId: DEFAULT_SKIN_ID,
               rosterReady: false
             }
           : entry
@@ -689,7 +660,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ? {
               ...candidate,
               pokemonId,
-              skinId: DEFAULT_SKIN_ID,
               rosterReady: false
             }
           : candidate
@@ -699,40 +669,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
     },
     [commitPlayers]
-  );
-
-  const selectSkin = useCallback(
-    (slot: number, skinId: string) => {
-      commitPlayers(
-        playersRef.current.map((entry) =>
-          entry.slot === slot && entry.skinId !== skinId
-            ? { ...entry, skinId, rosterReady: false }
-            : entry
-        )
-      );
-    },
-    [commitPlayers]
-  );
-
-  const cycleSkin = useCallback(
-    (slot: number, delta: number) => {
-      const player = playersRef.current.find((entry) => entry.slot === slot);
-      const entry = manifestRef.current?.pokemon.find(
-        (candidate) => candidate.id === player?.pokemonId
-      );
-      if (!player || !entry || delta === 0) return;
-
-      const skins = skinsFor(entry);
-      if (skins.length < 2) return;
-      const currentId = skinFor(entry, player.skinId).id;
-      const index = Math.max(
-        0,
-        skins.findIndex((skin) => skin.id === currentId)
-      );
-      const next = (index + delta + skins.length) % skins.length;
-      selectSkin(slot, skins[next].id);
-    },
-    [selectSkin]
   );
 
   const selectCommonAbility = useCallback(
@@ -811,28 +747,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (players.length === 0) return null;
     if (!players.some((player) => !player.isBot)) return null;
     if (!players.every((player) => player.rosterReady && player.pokemonId)) return null;
-    return players.map((player) => {
-      const entry = manifest?.pokemon.find(
-        (candidate) => candidate.id === player.pokemonId
-      );
-      return {
-        slot: player.slot,
-        name: normalizePlayerName(player.name, player.slot),
-        deviceId: player.deviceId,
-        deviceKind: player.deviceKind,
-        team: player.team,
-        pokemonId: player.pokemonId,
-        // Se normaliza contra el manifiesto para que una skin retirada en una
-        // regeneración de sprites no impida cargar la partida.
-        skinId: entry
-          ? skinFor(entry, player.skinId).id
-          : (player.skinId ?? DEFAULT_SKIN_ID),
-        commonAbilityId: player.commonAbilityId,
-        isBot: player.isBot,
-        botDifficulty: player.botDifficulty
-      };
-    });
-  }, [manifest, players]);
+    return players.map((player) => ({
+      slot: player.slot,
+      name: normalizePlayerName(player.name, player.slot),
+      deviceId: player.deviceId,
+      deviceKind: player.deviceKind,
+      team: player.team,
+      pokemonId: player.pokemonId,
+      commonAbilityId: player.commonAbilityId,
+      isBot: player.isBot,
+      botDifficulty: player.botDifficulty
+    }));
+  }, [players]);
 
   const value = useMemo<SessionValue>(
     () => ({
@@ -867,8 +793,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       continueToRoster,
       moveCursor,
       selectPokemon,
-      selectSkin,
-      cycleSkin,
       selectCommonAbility,
       cycleCommonAbility,
       setRosterReady,
@@ -909,8 +833,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       continueToRoster,
       moveCursor,
       selectPokemon,
-      selectSkin,
-      cycleSkin,
       selectCommonAbility,
       cycleCommonAbility,
       setRosterReady,

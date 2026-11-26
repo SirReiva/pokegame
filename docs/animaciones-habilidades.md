@@ -3,10 +3,10 @@
 Este documento describe el sistema de fases de casteo que sustituye al antiguo
 par `windup` / `castTime`. La regla de oro:
 
-> **La simulación define los tiempos; el sprite se adapta para que su `HitFrame`
+> **La simulación define los tiempos; el clip se adapta para que su `HitFrame`
 > caiga exactamente en el instante del efecto.**
 
-Así el balance no depende de cómo esté dibujada una especie o una skin, y los
+Así el balance no depende de cómo esté dibujada una especie, y los
 bots, las telegrafías y el HUD pueden predecir el golpe con un único número.
 
 ## 1. Fases de una habilidad
@@ -41,7 +41,7 @@ reactivan el giro hacia la dirección de avance durante el casteo.
 es un multiplicador de velocidad (`0` bloquea). Los dos últimos solo intervienen
 cuando se declaran; sin declararlos se mantienen las reglas por fase.
 
-## 2. Marcadores del sprite
+## 2. Marcadores de animación
 
 Los `animdata.xml` de PMD incluyen tres marcadores por animación de ataque, en
 índice de frame (0-based):
@@ -63,15 +63,9 @@ El tiempo de un marcador es:
 frameStart(frame) = suma(durations[0..frame-1]) / 60
 ```
 
-`scripts/import-sprites.mjs` los lee al descargar sprites. Para actualizar el
-manifiesto sin volver a descargar nada:
-
-```bash
-pnpm sprites:metadata
-```
-
-También se puede reimportar todo con `pnpm sprites`; el importador guarda los
-tres marcadores en el manifiesto.
+`scripts/import-sprites.mjs` los leía al descargar sprites. Ese importador ya no
+existe: los tres marcadores y `durations` viven en `public/sprites/manifest.json`.
+Si hay que corregir un marcador, edita el manifiesto a mano.
 
 ## 3. Plan de casteo
 
@@ -202,13 +196,6 @@ especie no tiene la hoja. El plan lee los marcadores del clip **resuelto**, no
 del nombre pedido. Por eso un `strike` que en realidad usa `attack` se retima
 con el `HitFrame` del `attack`.
 
-### Skins
-
-Todas las skins de una especie deben compartir los mismos tiempos clave. Si una
-skin cambia las duraciones, el gameplay no cambia (el efecto va por `startup`),
-pero la sincronía visual puede resentirse. El script de validación comprueba
-cada skin por separado.
-
 ### Dash
 
 El dash no tiene un instante de golpe único: el clip completo se reproduce
@@ -300,7 +287,7 @@ pnpm validate:anims
 Requiere Node 22.18+ (o 23+) porque ejecuta un `.ts` con el *type stripping*
 nativo de Node.
 
-Comprueba, para cada habilidad × especie × skin:
+Comprueba, para cada habilidad × especie:
 
 - el efecto cae en `startup`;
 - el frame visible en ese instante es el `HitFrame` (salvo dash);

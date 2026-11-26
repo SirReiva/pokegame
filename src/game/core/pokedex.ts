@@ -6,8 +6,8 @@
  * un Pokémon lento y frágil cae antes que un tanque, y los cambios de tipo
  * importan de verdad.
  *
- * Igual que `roster.ts` y `vision.ts`, vive fuera del manifiesto porque
- * `pnpm sprites` regenera ese archivo.
+ * Igual que `roster.ts` y `vision.ts`, vive fuera del manifiesto para no
+ * mezclar el balance con el catálogo de especies.
  */
 
 export interface BaseStats {

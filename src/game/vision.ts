@@ -24,7 +24,7 @@ import type { Collider } from './world';
  * separados a propósito: las aves y bestias legendarias, Mewtwo, Mew, Greninja,
  * Pikachu, Scyther y Lucario detectan antes por sus sentidos, mientras que
  * Bulbasaur, Onix y Squirtle ven menos. Se ajustan aquí
- * y no en el manifiesto, porque `pnpm sprites` lo regenera.
+ * y no en el manifiesto, que solo guarda catálogo y tiempos.
  */
 export const POKEMON_VISION: Record<string, number> = {
   '0001': 8.8, // Bulbasaur: bajo, pesado, poca altura de ojos

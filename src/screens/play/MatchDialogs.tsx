@@ -15,7 +15,6 @@ import {
   type MatchEndResult,
   type PlayerMatchStats
 } from '../../game/multiplayer';
-import { DEFAULT_SKIN_ID, skinFor } from '../../game/skins';
 import type { Team } from '../../game/terrain';
 import type { SpriteManifest } from '../../game/types';
 import { btnClass } from '../../ui/buttonStyles';
@@ -159,7 +158,6 @@ export function PauseDialog({
                   <ul className="divide-y divide-line/50">
                     {members.map((player) => {
                       const entry = selectedEntryFor(player.pokemonId);
-                      const skin = entry ? skinFor(entry, player.skinId) : null;
                       return (
                         <li
                           key={player.slot}
@@ -167,7 +165,7 @@ export function PauseDialog({
                         >
                           <span className="grid size-9 shrink-0 place-items-center">
                             {entry ? (
-                              <PokemonPortrait entry={entry} skin={skin} height={36} />
+                              <PokemonPortrait entry={entry} height={36} />
                             ) : (
                               '—'
                             )}
@@ -351,7 +349,6 @@ function MatchScoreboard({
     | 'name'
     | 'team'
     | 'pokemonId'
-    | 'skinId'
     | 'kills'
     | 'deaths'
     | 'assists'
@@ -381,7 +378,6 @@ function MatchScoreboard({
             name: player.name,
             team: player.team,
             pokemonId: player.pokemonId,
-            skinId: player.skinId ?? DEFAULT_SKIN_ID,
             kills: 0,
             deaths: 0,
             assists: 0,
@@ -454,7 +450,6 @@ function MatchScoreboard({
             <ol className="divide-y divide-line/60">
               {rows.map((row) => {
                 const entry = entriesById.get(row.pokemonId);
-                const skin = entry ? skinFor(entry, row.skinId) : null;
                 return (
                   <li
                     key={row.slot}
@@ -462,7 +457,7 @@ function MatchScoreboard({
                   >
                     <span className="relative grid size-8 shrink-0 place-items-center">
                       {entry ? (
-                        <PokemonPortrait entry={entry} skin={skin} height={30} />
+                        <PokemonPortrait entry={entry} height={30} />
                       ) : (
                         <span className="text-11.2 text-steel-600">—</span>
                       )}

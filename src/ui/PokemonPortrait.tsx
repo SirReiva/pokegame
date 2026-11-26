@@ -1,11 +1,9 @@
 import { memo } from 'react';
 import { publicUrl } from '../game/publicUrl';
-import type { PokemonEntry, PokemonSkin } from '../game/types';
+import type { PokemonEntry } from '../game/types';
 
 interface PokemonPortraitProps {
   entry: PokemonEntry;
-  /** Aspecto alternativo; si se omite, se usa el retrato normal. */
-  skin?: PokemonSkin | null;
   height?: number;
   className?: string;
   /** Deja que las clases de Tailwind controlen el tamaño (layouts fluidos). */
@@ -13,20 +11,19 @@ interface PokemonPortraitProps {
 }
 
 /**
- * Retrato de PMD Sprite Collab para las interfaces HTML, opcionalmente con el
- * aspecto elegido. El mundo 3D sigue usando las hojas animadas del aspecto.
+ * Retrato de PMD Sprite Collab para las interfaces HTML. El mundo 3D usa el
+ * modelo GLB de la especie.
  */
 export const PokemonPortrait = memo(function PokemonPortrait({
   entry,
-  skin = null,
   height = 64,
   className = '',
   fluid = false
 }: PokemonPortraitProps) {
   return (
     <img
-      src={publicUrl(skin?.portrait ?? entry.portrait)}
-      alt={skin ? `${entry.name} · ${skin.name}` : entry.name}
+      src={publicUrl(entry.portrait)}
+      alt={entry.name}
       width={height}
       height={height}
       loading="lazy"

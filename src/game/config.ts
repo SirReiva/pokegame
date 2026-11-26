@@ -185,46 +185,10 @@ export const CONFIG = {
   sprite: {
     pixelScale: PIXEL_SCALE,
     verticalStretch: VERTICAL_STRETCH,
-    alphaTest: 0.5,
     /**
-     * Muestreo de la textura del sprite:
-     * - 'nearest': píxel art original, cada téxel se ve como un bloque.
-     * - 'smooth': precarga la hoja con NEAREST a `smoothScale` y la muestrea
-     *   con LINEAR. Antialiasa el contorno 1-2 px sin emborronar el interior.
-     * - 'linear': bilineal directo sobre la hoja original; el más borroso.
-     */
-    filter: "smooth" as "nearest" | "smooth" | "linear",
-    /**
-     * Factor de precarga del modo 'smooth'. Más alto = contorno más nítido
-     * (menos radio de suavizado) y más memoria de textura.
-     * 2 = suave, 3 = equilibrado, 4 = casi nítido.
-     */
-    smoothScale: 4,
-    /**
-     * Presupuesto de memoria de las hojas de un Pokémon, en MB.
-     * `0` = automático: se estima la GPU (renderer + RAM + límite de textura) y
-     * se reparte entre los aspectos de la partida. Un valor > 0 fija el
-     * presupuesto por aspecto y desactiva la estimación.
-     *
-     * El motor reparte la escala entre las animaciones: las pequeñas suben a
-     * `smoothScale` y las grandes (ataques de legendarios, QuickStrike) bajan
-     * solo lo necesario, sin bajar de ×2 mientras haya margen.
-     */
-    textureBudgetMB: 0,
-    /**
-     * Suaviza el recorte alfa usando las muestras del MSAA (`antialias`). En
-     * modo 'smooth' el borde ya tiene alfa parcial, así que redondea el
-     * contorno; en 'nearest' apenas se nota (alfa de 1 bit).
+     * Suaviza el recorte alfa usando las muestras del MSAA (`antialias`).
      */
     alphaToCoverage: true,
-    /**
-     * Alto de viewport (píxeles de dispositivo) por debajo del cual se activan
-     * los ajustes de detalle reducido: el contorno de equipo se engorda para
-     * seguir leyéndose y la silueta de oclusión del dueño se desactiva, porque a
-     * ese tamaño ocupa más de lo que ayuda. En escritorio con 1-4 vistas no se
-     * activa nunca; sí en móvil, WebView o ventanas pequeñas con 8 vistas.
-     */
-    smallViewportPx: 300,
     /** Escala de reproducción de la animación de andar según la velocidad. */
     walkRateMin: 0.75,
     walkRateMax: 1.5,

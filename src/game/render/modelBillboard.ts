@@ -496,7 +496,7 @@ export class ModelBillboard {
       0,
       Math.min(1, this.layer.activeStateCurrentTime / this.clipDurationSeconds)
     );
-    const sprite = this.asset.skin.animations[this.animation];
+    const sprite = this.asset.animations[this.animation];
     const frames = sprite?.durations.length ?? 1;
     return Math.min(frames - 1, Math.round(progress * (frames - 1)));
   }
@@ -594,8 +594,8 @@ export class ModelBillboard {
     this.animation = resolved.animation;
     this.clipDurationSeconds = resolved.clip.track.duration;
     this.spriteDurationSeconds = clipDuration(
-      this.asset.skin.animations[resolved.animation] ??
-        this.asset.skin.animations.idle
+      this.asset.animations[resolved.animation] ??
+        this.asset.animations.idle
     );
     this.loop = true;
     this.anim.speed = this.playback;
@@ -632,8 +632,8 @@ export class ModelBillboard {
       this.animation = resolved.animation;
       this.clipDurationSeconds = resolved.clip.track.duration;
       this.spriteDurationSeconds = clipDuration(
-        this.asset.skin.animations[resolved.animation] ??
-          this.asset.skin.animations.idle
+        this.asset.animations[resolved.animation] ??
+          this.asset.animations.idle
       );
       this.loop = false;
       this.anim.playing = true;
@@ -677,8 +677,8 @@ export class ModelBillboard {
   /** Instante del clip 3D que corresponde al frame del manifiesto. */
   private manualTime(animation: AnimationName, frame: number): number {
     const sprite =
-      this.asset.skin.animations[animation] ??
-      this.asset.skin.animations.idle;
+      this.asset.animations[animation] ??
+      this.asset.animations.idle;
     const duration = this.clipDurationSeconds;
     const total = clipDuration(sprite);
     if (duration <= 0 || total <= 0) return 0;

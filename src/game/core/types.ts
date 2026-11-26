@@ -45,20 +45,14 @@ export interface SpriteAnchor {
   y: number;
 }
 
-/** Extensión del contenido visible alrededor del ancla, en píxeles. */
-export interface SpriteContent {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-
+/**
+ * Metadatos de una animación de PMD que siguen alimentando el gameplay: tamaño
+ * de frame de referencia, duraciones y marcadores de fase. Las hojas de sprite
+ * ya no existen; el cuerpo se dibuja con un modelo 3D.
+ */
 export interface SpriteAnimation {
-  sheet: string;
   frameWidth: number;
   frameHeight: number;
-  columns: number;
-  rows: number;
   /** Duración de cada frame en ticks de 1/60 s. */
   durations: number[];
   /**
@@ -72,20 +66,6 @@ export interface SpriteAnimation {
   returnFrame?: number;
   /** Un ancla por frame, en orden fila a fila (8 direcciones x columnas). */
   anchors: SpriteAnchor[];
-  /**
-   * Recorte mínimo que contiene todo el arte de la animación alrededor del
-   * ancla. Evita que hojas con mucho espacio vacío (como QuickStrike) dibujen
-   * un plano gigante y descentren al personaje.
-   */
-  content?: SpriteContent;
-  /** Recorte por dirección (8 filas); `null` si esa fila no se puede recortar. */
-  contentRows?: Array<SpriteContent | null>;
-  /**
-   * Píxel inferior con contenido visible de cada frame (mismo orden que
-   * `anchors`). Sirve para no enterrar bajo el suelo las partes del dibujo que
-   * bajan del ancla. `-1` indica una celda vacía.
-   */
-  bottoms: number[];
 }
 
 /** Animación resuelta tras aplicar los fallbacks de la especie. */
@@ -98,10 +78,11 @@ export interface ResolvedAnimation {
 export interface SpriteCredits {
   artist: string;
   contact: string;
-  actions: string[];
 }
 
-/** Hojas de animación de una especie o de uno de sus aspectos. */
+/**
+ * Metadatos de animación de una especie.
+ */
 export type PokemonAnimations = Record<RequiredAnimationName, SpriteAnimation> & {
   run?: SpriteAnimation;
   faint?: SpriteAnimation;
@@ -116,23 +97,6 @@ export type PokemonAnimations = Record<RequiredAnimationName, SpriteAnimation> &
   hop?: SpriteAnimation;
 };
 
-/**
- * Aspecto alternativo de una especie (shiny, recolor...). Comparte estadísticas,
- * tipos y habilidades con el Pokémon base; solo cambian las hojas y el retrato.
- */
-export interface PokemonSkin {
-  /** Identificador estable dentro de la especie, p. ej. `shiny` o `recolor`. */
-  id: string;
-  /** Nombre visible en el selector de aspecto. */
-  name: string;
-  /** Retrato del aspecto para las interfaces HTML. */
-  portrait: string;
-  /** Hojas animadas del aspecto. */
-  animations: PokemonAnimations;
-  /** Página de origen del aspecto en PMD Sprite Collab. */
-  source?: string;
-}
-
 export interface PokemonEntry {
   id: string;
   name: string;
@@ -142,11 +106,9 @@ export interface PokemonEntry {
   shadowSize: number;
   source: string;
   credits: SpriteCredits[];
-  /** Retrato normal de PMD Sprite Collab para las interfaces HTML. */
+  /** Retrato de PMD Sprite Collab para las interfaces HTML. */
   portrait: string;
   animations: PokemonAnimations;
-  /** Aspectos alternativos además del normal (que no se repite aquí). */
-  skins?: PokemonSkin[];
 }
 
 export interface SpriteManifest {

@@ -83,23 +83,11 @@ Ese helper también resuelve el `flipY`: el motor fuerza `flipY: false` al subir
 imágenes externas en WebGPU, así que la imagen se voltea antes de subirla para
 que WebGL2 y WebGPU se vean igual.
 
-### Sprites: alpha bleed y presupuesto de textura
+### Retratos 2D
 
-`pnpm sprites` descarga las hojas y después ejecuta
-`scripts/preprocess-sprites.mjs`, que rellena el RGB de los píxeles
-transparentes con el color visible más cercano (**alpha bleed**) para que el
-filtrado lineal no dibuje un halo oscuro. El canal alfa y las dimensiones no
-cambian. Para relanzarlo sin descargar nada: `pnpm sprites:bleed`.
-
-La resolución de cada hoja se decide en `src/game/sprite.ts` con
-`CONFIG.sprite.smoothScale` (×4 por defecto) y un presupuesto que, por defecto,
-se **detecta automáticamente** en `src/game/spriteBudget.ts`: clasifica la GPU
-(software/integrada/dedicada/desconocida) por el renderer, la RAM aproximada y
-`device.maxTextureSize`, y reparte un total entre los aspectos de la partida.
-Las hojas pequeñas suben a ×4; las grandes (QuickStrike, ataques de legendarios)
-se reparten el presupuesto y no bajan de ×2 mientras haya margen. Para forzar un
-valor, pon `CONFIG.sprite.textureBudgetMB > 0` (MB por aspecto); para ver el
-resultado, mira el log `[sprite] X MB por aspecto (...)`.
+Las hojas de sprite y su *alpha bleed* se retiraron junto con el render 2D. Solo
+quedan retratos PNG en `public/sprites/<id>/portrait.png`, que se muestran con
+`PokemonPortrait` y no pasan por el presupuesto de texturas.
 
 ## Diferencias conocidas
 

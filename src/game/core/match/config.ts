@@ -17,8 +17,6 @@ export interface MatchPlayerConfig {
   deviceKind: 'keyboard' | 'gamepad';
   team: Team;
   pokemonId: string;
-  /** Aspecto alternativo elegido; ausente o `default` significa el normal. */
-  skinId?: string;
   commonAbilityId: CommonAbilityId;
   isBot?: boolean;
   botDifficulty?: BotDifficulty;

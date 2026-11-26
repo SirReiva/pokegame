@@ -121,7 +121,6 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
       <div className="my-4 flex flex-col gap-0.5">
         {manifest?.pokemon.map((entry) => {
           const artists = [...new Set(entry.credits.map((credit) => credit.artist))];
-          const actions = entry.credits.flatMap((credit) => credit.actions);
           return (
             <div
               className="grid grid-cols-[150px_minmax(0,1fr)] gap-3.5 border-b border-line-faint py-2.25 text-12.8 last:border-b-0 max-sm:grid-cols-1 max-sm:gap-1"
@@ -137,11 +136,6 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
                 <span>
                   {artists.length > 0 ? artists.join(' · ') : 'Créditos no disponibles'}
                 </span>
-                {actions.length > 0 && (
-                  <span className="text-12.48/normal text-muted">
-                    Animaciones: {[...new Set(actions)].join(', ')}
-                  </span>
-                )}
               </div>
             </div>
           );
@@ -150,9 +144,8 @@ export function CreditsPanel({ manifest }: CreditsPanelProps) {
 
       <p className="text-12.32 leading-[1.6] text-muted">
         Los cuerpos de la partida son modelos GLB convertidos desde los{' '}
-        <code className={code}>.blend</code> originales. Las hojas y retratos
-        originales, sus ficheros <code className={code}>credits.txt</code> y el
-        detalle completo están en{' '}
+        <code className={code}>.blend</code> originales. Los retratos originales
+        y el detalle completo están en{' '}
         <code className={code}>public/sprites/CREDITS.md</code>.
       </p>
     </div>

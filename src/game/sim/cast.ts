@@ -22,7 +22,7 @@ import { terrainConcealment } from '../vision';
 
 export interface CastSystemHost {
   isMatchOver(): boolean;
-  assetFor(pokemonId: string, skinId?: string): ActorAsset | undefined;
+  assetFor(pokemonId: string): ActorAsset | undefined;
   queueCast(
     player: MatchPlayerState,
     def: AbilityDef,
@@ -142,9 +142,9 @@ export function armHitFrame(
   if (cast.plan.hitClip === null || cast.plan.hitFrame === null) return;
   // Si la presentación normal ya cae en el HitFrame, no hace falta forzar:
   // solo se fuerza cuando el salto de `dt` ya lo ha rebasado (o caído en hueco).
-  const asset = host.assetFor(player.pokemonId, player.skinId);
+  const asset = host.assetFor(player.pokemonId);
   const segment = segmentAt(cast.plan, cast.elapsed);
-  const clip = segment ? asset?.skin.animations[segment.animation] : null;
+  const clip = segment ? asset?.animations[segment.animation] : null;
   const normalFrame =
     segment && clip ? frameForSegment(segment, clip, cast.elapsed) : null;
   if (normalFrame === cast.plan.hitFrame) return;
@@ -159,7 +159,7 @@ export function applyCastPresentation(
   player: MatchPlayerState,
   cast: ActiveCast
 ): void {
-  const asset = host.assetFor(player.pokemonId, player.skinId);
+  const asset = host.assetFor(player.pokemonId);
 
   // Salto de `dt`: mantén la pose de impacto aunque el reloj ya la haya
   // rebasado. Sin esto, el efecto se dispara pero el frame nunca se ve.
@@ -168,12 +168,12 @@ export function applyCastPresentation(
     cast.forcedAnimation !== null &&
     cast.forcedFrame !== null
   ) {
-    const forcedClip = asset?.skin.animations[cast.forcedAnimation];
+    const forcedClip = asset?.animations[cast.forcedAnimation];
     if (forcedClip) {
       player.animation = cast.forcedAnimation;
       player.animationFrame = Math.max(
         0,
-        Math.min(forcedClip.columns - 1, cast.forcedFrame)
+        Math.min(forcedClip.durations.length - 1, cast.forcedFrame)
       );
       player.playback = 1;
       return;
@@ -187,7 +187,7 @@ export function applyCastPresentation(
     player.playback = 1;
     return;
   }
-  const clip = asset?.skin.animations[segment.animation];
+  const clip = asset?.animations[segment.animation];
   if (!clip) {
     player.animationFrame = null;
     player.animation = 'idle';

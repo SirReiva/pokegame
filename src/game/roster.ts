@@ -5,7 +5,7 @@
  * para que el cambio se note al elegir Pokémon, sin que ninguno se sienta roto.
  *
  * Vive fuera del manifiesto (`public/sprites/manifest.json`) porque ese archivo
- * lo regenera `pnpm sprites` desde PMD Sprite Collab y perdería los ajustes.
+ * guarda el catálogo y los tiempos, mientras que esto es balance de juego.
  */
 
 import { CONFIG } from './config';

@@ -33,17 +33,10 @@ import {
 } from '../src/game/animationTimeline.ts';
 import type { ResolvedAnimation, SpriteAnimation } from '../src/game/types.ts';
 
-interface ManifestAnimation extends SpriteAnimation {
-  sheet: string;
-}
-interface ManifestSkin {
-  id: string;
-  animations: Record<string, ManifestAnimation>;
-}
+type ManifestAnimation = SpriteAnimation;
 interface ManifestPokemon {
   id: string;
   animations: Record<string, ManifestAnimation>;
-  skins: ManifestSkin[];
 }
 interface Manifest {
   pokemon: ManifestPokemon[];
@@ -309,7 +302,6 @@ for (const [abilityId, users] of usersByAbility) {
     const entry = byId.get(pokemonId);
     if (!entry) continue;
     check(pokemonId, abilityId, entry.animations);
-    for (const skin of entry.skins) check(pokemonId, abilityId, skin.animations);
   }
 }
 

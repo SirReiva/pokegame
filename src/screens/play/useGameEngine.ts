@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, type RefObject } from 'react';
-import { Game, type PokemonSkinSelection } from '../../game/game';
+import { Game } from '../../game/game';
 import type { AtmosphereState } from '../../game/atmosphere';
 import type { InputDeviceInfo, MenuAction } from '../../game/input';
 import type { GameModeId, ModeSettings } from '../../game/modes';
@@ -13,7 +13,6 @@ import type {
   MatchPlayerConfig,
   PlayerMatchStats
 } from '../../game/multiplayer';
-import { DEFAULT_SKIN_ID } from '../../game/skins';
 import type { LoadingProgress, SpriteManifest } from '../../game/types';
 
 /** Callbacks que el motor invoca durante la partida. */
@@ -73,27 +72,13 @@ export function useGameEngine({
     if (!canvas) return;
     let disposed = false;
 
-    // El motor solo necesita los sprites de las especies que juegan esta
+    // El motor solo necesita los modelos de las especies que juegan esta
     // partida. Se deduplican porque dos jugadores pueden elegir el mismo
-    // Pokémon y su hoja se comparte. Cada combinación especie + aspecto se
-    // carga por separado: dos jugadores pueden usar el mismo Pokémon con
-    // skins distintas.
+    // Pokémon y su GLB se comparte.
     const pokemonIds = [
       ...new Set(configsRef.current.map((config) => config.pokemonId))
     ];
-    const pokemonSkins: PokemonSkinSelection[] = [
-      ...new Map(
-        configsRef.current.map((config) => {
-          const skinId = config.skinId ?? DEFAULT_SKIN_ID;
-          return [
-            `${config.pokemonId}:${skinId}`,
-            { pokemonId: config.pokemonId, skinId }
-          ] as const;
-        })
-      ).values()
-    ];
-    // Vistas de la partida: los bots no tienen cámara propia, así que no
-    // cuentan para decidir la densidad de las hojas.
+    // Vistas de la partida: los bots no tienen cámara propia.
     const humanViews = configsRef.current.filter(
       (config) => !config.isBot
     ).length;
@@ -142,7 +127,6 @@ export function useGameEngine({
         timeLimitSeconds,
         atmosphereEnabled,
         pokemonIds,
-        pokemonSkins,
         humanViews,
         overlayCanvas: barCanvasRef.current
       }

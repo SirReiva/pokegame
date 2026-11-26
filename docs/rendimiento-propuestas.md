@@ -1,5 +1,9 @@
 # Propuestas de rendimiento para NewPoke
 
+> **Nota (2026-11):** las hojas de sprite se retiraron y el cuerpo se dibuja con
+> modelos GLB. Las referencias a `src/game/sprite.ts` y a sus utilidades de
+> textura son históricas.
+
 > Revisión técnica · noviembre de 2026
 >
 > Base de partida: `docs/performance/frame-baseline.md` (60 FPS estables en las 9

@@ -16,7 +16,7 @@ El objetivo no es un juego completo, sino validar la técnica: motor 3D imperati
 
 ## Modelos 3D en partida
 
-El cuerpo de cada Pokémon se dibuja con su GLB. El manifiesto de sprites sigue aportando los **tiempos de gameplay** (duración de cada clip, `HitFrame`, `ReturnFrame`) y la altura de referencia, pero las hojas de sprite ya no se cargan durante la partida.
+El cuerpo de cada Pokémon se dibuja con su GLB. El manifiesto de Pokémon sigue aportando los **tiempos de gameplay** (duración de cada clip, `HitFrame`, `ReturnFrame`) y la altura de referencia; solo se cargan los retratos, no hojas de sprite.
 
 - El catálogo de especies jugables está en `src/game/modelCatalog.ts`.
 - `src/game/model.ts` descarga el GLB, mapea sus clips a `idle`, `walk`, `attack`, `hurt`, `faint`... y calcula la escala.
@@ -33,12 +33,7 @@ pnpm build         # comprobación de tipos + build de producción
 pnpm preview       # servir el build
 ```
 
-Los retratos del HUD y las marcas de KO siguen viniendo del manifiesto de `public/sprites/`. Para regenerarlo:
-
-```bash
-pnpm sprites            # usa la caché local
-pnpm sprites --force    # fuerza la descarga
-```
+Los retratos del HUD y las marcas de KO viven en `public/sprites/<id>/portrait.png`; el manifiesto `public/sprites/manifest.json` guarda el catálogo y los tiempos de animación. Ambos se versionan con el repositorio y no requieren descarga.
 
 Los efectos de sonido de las habilidades y el tema de combate también están incluidos en `public/audio/` y se reproducen con el `SoundManager` de PlayCanvas (`app.soundManager`). Para volver a descargarlos desde khinsider:
 
@@ -87,7 +82,7 @@ El deploy usa el artifact generado, así que GitHub Pages debe tener como origen
 
 ## Versión de escritorio (Wails)
 
-El mismo frontend se puede empaquetar como app nativa con [Wails v3](https://wails.io). El binario lleva dentro el contenido de `dist/` (incluidos los sprites, mapas y objetos de `public/`) y usa el WebView del sistema, así que no necesita un navegador ni un servidor. La versión web sigue funcionando exactamente igual.
+El mismo frontend se puede empaquetar como app nativa con [Wails v3](https://wails.io). El binario lleva dentro el contenido de `dist/` (incluidos los retratos, mapas y objetos de `public/`) y usa el WebView del sistema, así que no necesita un navegador ni un servidor. La versión web sigue funcionando exactamente igual.
 
 ### Requisitos
 
@@ -190,7 +185,7 @@ La partida es un **team deathmatch con límite de KOs configurable** en `/lobby`
 
 Las habilidades se lanzan **en la dirección en la que mira el Pokémon** (`facing`): el jugador apunta colocándose y girando con el movimiento. Los proyectiles y los haces de jugadores humanos pueden usar una **ayuda de apuntado opcional** (`Opciones → Ayuda de apuntado`) que corrige ligeramente el ángulo hacia el rival más cercano a la mira si cae dentro de un cono estrecho y hay línea de visión; los bots no la usan. Cada habilidad puede ser un golpe cuerpo a cuerpo en cono, un proyectil, un haz instantáneo, un área delante del lanzador, un dash o una habilidad centrada en uno mismo. Las que no necesitan dirección (buffs, escudos) se resuelven sobre el lanzador.
 
-Cada especie tiene un **radio de impacto (hurtbox) propio**. No se deriva del sprite: los frames incluyen colas, alas y huecos que exagerarían el cuerpo. La tabla curada vive en `POKEMON_HIT_RADIUS` (`src/game/roster.ts`) y va de 0.34 u (Voltorb, Celebi) a 0.64 u (Kyogre), con 0.42 u como referencia; Onix, Lugia, Ho-Oh y Rayquaza comparten 0.62 u. Los proyectiles y el barrido de dash lo usan por especie; las melee, los haces y las áreas dibujan su telegrafía con el mayor del roster (`MAX_HIT_RADIUS`) y golpean cuando el hurtbox del rival toca su borde. Un hurtbox grande es una desventaja en un juego de skillshots, así que solo lo llevan especies con HP o defensas que lo compensan. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`: entonces todo el roster vuelve al radio único de `CONFIG.player.radius`. Para comprobarlo en partida, activa `CONFIG.debug.showHitboxes` y verás el círculo bajo cada Pokémon. Los bots usan el hurtbox del objetivo para decidir su rango de ataque; la colisión de movimiento, la separación entre cuerpos y la navegación siguen usando el radio global.
+Cada especie tiene un **radio de impacto (hurtbox) propio**. No se deriva del frame de PMD: los frames incluyen colas, alas y huecos que exagerarían el cuerpo. La tabla curada vive en `POKEMON_HIT_RADIUS` (`src/game/roster.ts`) y va de 0.34 u (Voltorb, Celebi) a 0.64 u (Kyogre), con 0.42 u como referencia; Onix, Lugia, Ho-Oh y Rayquaza comparten 0.62 u. Los proyectiles y el barrido de dash lo usan por especie; las melee, los haces y las áreas dibujan su telegrafía con el mayor del roster (`MAX_HIT_RADIUS`) y golpean cuando el hurtbox del rival toca su borde. Un hurtbox grande es una desventaja en un juego de skillshots, así que solo lo llevan especies con HP o defensas que lo compensan. Se puede desactivar con `CONFIG.player.perPokemonHitbox = false`: entonces todo el roster vuelve al radio único de `CONFIG.player.radius`. Para comprobarlo en partida, activa `CONFIG.debug.showHitboxes` y verás el círculo bajo cada Pokémon. Los bots usan el hurtbox del objetivo para decidir su rango de ataque; la colisión de movimiento, la separación entre cuerpos y la navegación siguen usando el radio global.
 
 ### Experiencia (decorativa)
 
@@ -230,7 +225,7 @@ Cada Pokémon elige **uno de tres instintos** en la card del roster:
 
 Los activos comparten el bloqueo global de casteo y solo se pueden usar si no estás casteando, en dash o en hitstun. La selección se hace por Pokémon, se puede cambiar en el roster y se muestra en el lobby. Si el Pokémon muere con Protección activa, el escudo desaparece con él.
 
-Las habilidades `melee` bloquean el movimiento durante su `startup` (salvo `moveWhileStartup`) y su ventana `active`: ignoran el input de desplazamiento para que el golpe se comprometa y no se puede lanzar otra habilidad hasta que termina el casteo completo (`startup + active + recovery`). La cámara sigue girando. La ventana se define con `.active(segundos)` y el sprite se retima para que su `HitFrame` caiga al inicio del efecto; el detalle está en [`docs/animaciones-habilidades.md`](docs/animaciones-habilidades.md).
+Las habilidades `melee` bloquean el movimiento durante su `startup` (salvo `moveWhileStartup`) y su ventana `active`: ignoran el input de desplazamiento para que el golpe se comprometa y no se puede lanzar otra habilidad hasta que termina el casteo completo (`startup + active + recovery`). La cámara sigue girando. La ventana se define con `.active(segundos)` y el cuerpo se retima para que su `HitFrame` caiga al inicio del efecto; el detalle está en [`docs/animaciones-habilidades.md`](docs/animaciones-habilidades.md).
 
 Los haces (como `Rayo`) se detienen en el primer separador, muro o roca: ni el visual ni el daño atraviesan obstáculos. Su efecto son **dos rayos zigzagueantes que giran en sentidos opuestos** y se cruzan mientras el haz avanza desde el lanzador.
 
@@ -238,7 +233,7 @@ Los **proyectiles** resuelven el impacto por el primer evento del tramo recorrid
 
 Los **dashes** avanzan en pasos pequeños y comprueban la colisión de cada tramo, así que se detienen en separadores, árboles, muros y límites del mapa en lugar de atravesarlos. El desplazamiento se reparte durante la animación (por ejemplo, `QuickStrike` en Ataque Rápido), con rastro progresivo y daño a lo largo del recorrido, en vez de teletransportar al Pokémon. La duración se escala con la distancia real: si un obstáculo acorta el dash, la animación también termina antes. Además, la animación se reproduce a la velocidad necesaria para durar exactamente lo mismo que el desplazamiento (más lenta en el dash completo, más rápida si un obstáculo lo acorta).
 
-Las hojas de animación con mucho espacio vacío se recortan al cargar a una **hoja tight por dirección** usando `contentRows`: cada frame se ajusta al arte real alrededor del ancla de los pies. Así el plano deja de ser un cuadrado gigante y el personaje queda centrado sobre el Pokémon. `Attack`, `Charge`, `Strike`, `Twirl`, `Punch` y `Shoot` son la excepción: conservan el frame completo para que su movimiento horizontal no se cancele, y su desplazamiento vertical se convierte en un avance sobre el suelo (hacia o desde la cámara), de modo que el sprite no se entierra bajo el terreno.
+Los modelos 3D se escalan con la altura de referencia del frame `idle` de PMD y se apoyan con la caja de la pose de espera horneada en el GLB: no hay que medir mallas en partida. El detalle del atlas y del apoyo está en [`docs/modelos-3d.md`](docs/modelos-3d.md).
 
 El daño usa la **fórmula oficial de Pokémon a nivel 50** con stats base reales, IV 31 y EV 0:
 
@@ -255,7 +250,7 @@ Las estadísticas de daño cuentan **vida realmente descontada**: si un golpe le
 
 Los golpes aplican **0,15 s de hitstun** por defecto —cada habilidad puede ajustarlo con `.hitstun(segundos)`— y algunas habilidades empujan al objetivo (Placaje, 0,6 u). Si dos golpes melee rivales conectan en el mismo frame, se resuelve un **choque**: ninguno recibe daño, ambos reciben 0,25 s de stun y retroceden 1 u. Así dos Placajes simultáneos no se intercambian gratis y se evita el stun-lock con el enfriamiento corto de Placaje.
 
-El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Los **instintos comunes** viven en `COMMON_ABILITY_OPTIONS` y `COMMON_ABILITIES`, se eligen por Pokémon en `LobbyPlayer.commonAbilityId` y no forman parte de `MOVESETS`. Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo, y durante la caída el sprite se desatura a escala de grises (uniform `uDesaturate` del material, ver `src/game/spriteOutline.ts`) hasta desaparecer. El punto del KO queda marcado en el suelo con el retrato de la especie, visible solo para el equipo del Pokémon caído, y la marca desaparece al reaparecer.
+El catálogo de habilidades está en `src/game/abilities.ts`. Cada habilidad se registra en `ABILITIES` y se asigna a un Pokémon en `MOVESETS` con el orden `[básica, habilidad 1, habilidad 2, habilidad 3]`. Mientras un hueco sea `null`, el HUD lo muestra como «Sin asignar». Los **instintos comunes** viven en `COMMON_ABILITY_OPTIONS` y `COMMON_ABILITIES`, se eligen por Pokémon en `LobbyPlayer.commonAbilityId` y no forman parte de `MOVESETS`. Las animaciones `Attack` y `Hurt` se importan para todo el roster; `Hurt` se reproduce al recibir daño y `Attack` solo cuando la habilidad la declara con `.animation('attack')`, ya que no hay animación por defecto. Al morir se reproduce `Faint` si la especie la tiene; si no, se usa `Hurt` como respaldo, y durante la caída el cuerpo se desatura a escala de grises (uniform `uDesaturate` del material, ver `src/game/render/modelShading.ts`) hasta desaparecer. El punto del KO queda marcado en el suelo con el retrato de la especie, visible solo para el equipo del Pokémon caído, y la marca desaparece al reaparecer.
 
 El primer set definido es el de **Pikachu**: `Placaje` (básica melee), `Ataque Rápido` (dash con la animación `QuickStrike` de PMD), `Rayo` (haz con **0,35 s de preparación** y la animación `Shock` de PMD) e `Impactrueno` (proyectil con la animación `Shock` de PMD y **0,13 s de preparación** antes de lanzarlo, habilidad 3). Con él ya se puede probar el combate en cuanto haya un Pikachu en cada equipo.
 
@@ -351,7 +346,7 @@ La Mordida de Tyranitar usa `impactStyle: 'jaw'`: materializa una mandíbula 3D 
 
 El proyectil de `Impactrueno` tiene un visual eléctrico propio: núcleo brillante, halo, tres arcos zigzagueantes que giran y parpadean, y una estela orientada hacia la dirección de vuelo. Al impactar genera una pequeña explosión eléctrica con núcleo, halo, arcos cortos y anillo en el suelo. Se configura con `projectileStyle: 'electric'` e `impactStyle: 'electric'`; el resto usa el orbe y el impacto estándar. `Rayo` usa también `impactStyle: 'electric'`, así que cada enemigo alcanzado por el haz recibe su propia explosión eléctrica.
 
-Cada habilidad declara tres tiempos: `startup` (desde la pulsación hasta el efecto), `active` (ventana del golpe, dash o haz) y `recovery` (bloqueo posterior). Durante el `startup` el Pokémon se queda quieto y no puede lanzar otra habilidad, salvo que use `moveWhileStartup`; el efecto sale exactamente en `startup`. Si recibe un golpe durante la preparación, el casteo se cancela y se retira el efecto 3D que ya hubiera salido; si el golpe no es letal y el efecto aún no había salido, el enfriamiento restante de esa habilidad se queda como máximo a la mitad. Las habilidades con `armorPool` tienen **armadura de casteo**: cada golpe resta su daño final a un pozo sin mitigarlo y, mientras quede, no cancela el casteo ni aplica hitstun, empuje o flinch. Cuando el daño acumulado agota el pozo, el casteo se rompe; los estados, el control explícito y los golpes letales la ignoran. La ventana es el `startup`, salvo en canalizaciones (`movementDuringCast` bloqueado), donde cubre todo el casteo. Las canalizaciones, por tanto, se cortan cuando el daño acumulado agota su armadura, también con los ticks de un área persistente y su efecto 3D, aunque el lanzador siga clavado hasta que termine el casteo. Mientras la ventana está abierta, la armadura se dibuja como una **franja metálica sobre la barra de vida**, tanto en la flotante de PlayCanvas como en la del HUD: se alinea a la derecha con el tramo verde de la vida actual, comparte su altura, su ancho representa la armadura restante respecto a la vida máxima y se recorta contra el borde izquierdo si supera la vida actual; el tooltip del HUD muestra el valor restante y el máximo. El sprite se adapta al tiempo definido en código: su `HitFrame` se ancla al instante del efecto y el resto del clip se reparte entre `active` y `recovery`. La simulación autoritativa corre a paso fijo de 60 Hz, así que el instante del efecto no depende del framerate del render.
+Cada habilidad declara tres tiempos: `startup` (desde la pulsación hasta el efecto), `active` (ventana del golpe, dash o haz) y `recovery` (bloqueo posterior). Durante el `startup` el Pokémon se queda quieto y no puede lanzar otra habilidad, salvo que use `moveWhileStartup`; el efecto sale exactamente en `startup`. Si recibe un golpe durante la preparación, el casteo se cancela y se retira el efecto 3D que ya hubiera salido; si el golpe no es letal y el efecto aún no había salido, el enfriamiento restante de esa habilidad se queda como máximo a la mitad. Las habilidades con `armorPool` tienen **armadura de casteo**: cada golpe resta su daño final a un pozo sin mitigarlo y, mientras quede, no cancela el casteo ni aplica hitstun, empuje o flinch. Cuando el daño acumulado agota el pozo, el casteo se rompe; los estados, el control explícito y los golpes letales la ignoran. La ventana es el `startup`, salvo en canalizaciones (`movementDuringCast` bloqueado), donde cubre todo el casteo. Las canalizaciones, por tanto, se cortan cuando el daño acumulado agota su armadura, también con los ticks de un área persistente y su efecto 3D, aunque el lanzador siga clavado hasta que termine el casteo. Mientras la ventana está abierta, la armadura se dibuja como una **franja metálica sobre la barra de vida**, tanto en la flotante de PlayCanvas como en la del HUD: se alinea a la derecha con el tramo verde de la vida actual, comparte su altura, su ancho representa la armadura restante respecto a la vida máxima y se recorta contra el borde izquierdo si supera la vida actual; el tooltip del HUD muestra el valor restante y el máximo. El cuerpo se adapta al tiempo definido en código: su `HitFrame` se ancla al instante del efecto y el resto del clip se reparte entre `active` y `recovery`. La simulación autoritativa corre a paso fijo de 60 Hz, así que el instante del efecto no depende del framerate del render.
 
 La animación se elige con `.animation('shoot')` y la carga con `.startup(segundos, { animation: 'charge' })`. Si no se declara ninguna de las dos, no se reproduce animación y el Pokémon mantiene su reposo.
 
@@ -567,7 +562,7 @@ El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y P
 - **Auto-equilibrio al entrar**: el nuevo jugador cae en el equipo con menos gente; después puede cambiar de lado mientras queden huecos. El límite es 4 por equipo.
 - **Selección simultánea de Pokémon**: cada jugador tiene su cursor y su propio estado de listo. Los cursores se dibujan como chapas del color del equipo sobre la tarjeta, de modo que varios jugadores pueden ver a la vez dónde está cada uno.
 - **Una cámara por jugador**: `computeSplitLayout` reparte el canvas en rejillas de 1 a 8 vistas (1×1, 2×1, 2+1, 2×2, 3+2, 3×2, 4+3 y 4×2). Cada cámara usa su propio `rect`, su aspect ratio y su capa de render.
-- **Actores duplicados por viewport**: un billboard solo puede orientarse hacia una cámara y elegir una fila de dirección cada vez. Por eso cada jugador tiene una copia de cada actor en la capa de cada vista (`match-view-N`); la cámara N solo dibuja el mundo y su propia capa. Así los sprites miran bien desde los ocho ángulos.
+- **Actores duplicados por viewport**: cada vista tiene su propia capa de render (`match-view-N`) con una copia de cada actor, para que cada cámara dibuje los cuerpos con su encuadre y su niebla. La cámara N solo dibuja el mundo y su propia capa.
 - **Identidad de equipo**: el anillo del suelo se genera con el color del equipo y cada vista lleva el nombre, el Pokémon y el terreno del jugador.
 - **Aparición en bases**: el equipo azul sale alrededor de su nexo en la esquina suroeste y el rojo en la noreste, mirando al centro del mapa. La cámara arranca detrás de cada jugador para que `W`/stick arriba avance hacia el centro.
 - **Pausa compartida**: `Start` o `Esc` congelan la partida. Si la ventana pierde el foco durante el combate (alt-tab, minimizar o cambiar de pestaña), la partida se pausa sola. Desde la pausa se puede continuar, volver a elegir Pokémon, volver a elegir equipos o abrir controles y créditos.
@@ -576,9 +571,9 @@ El arte se regenera con `pnpm items:art`, que dibuja los cuatro PNG (Poción y P
 
 ## Bots
 
-La sala de equipos (`/lobby`) permite añadir **bots** para completar los equipos sin necesidad de más mandos. El panel **Añadir IA** tiene un selector de dificultad (`Fácil`, `Normal`, `Difícil`), un botón por equipo y **Rellenar equipos** para completar ambos bandos hasta cuatro jugadores. Los bots eligen Pokémon con moveset, un aspecto al azar entre los de su especie, instinto común y se marcan listos solos; se pueden quitar con el mismo botón que un jugador humano. Su especie se decide **después** de los jugadores humanos: si un humano elige la que llevaba un bot, el bot pasa a rellenar otra de las que queden libres en el equipo y vuelve a sortear su aspecto.
+La sala de equipos (`/lobby`) permite añadir **bots** para completar los equipos sin necesidad de más mandos. El panel **Añadir IA** tiene un selector de dificultad (`Fácil`, `Normal`, `Difícil`), un botón por equipo y **Rellenar equipos** para completar ambos bandos hasta cuatro jugadores. Los bots eligen Pokémon con moveset, instinto común y se marcan listos solos; se pueden quitar con el mismo botón que un jugador humano. Su especie se decide **después** de los jugadores humanos: si un humano elige la que llevaba un bot, el bot pasa a rellenar otra de las que queden libres en el equipo.
 
-Los bots **no ocupan un panel del splitscreen**: solo los jugadores humanos tienen cámara, capa y niebla propias. Un humano contra tres bots se sigue viendo a pantalla completa, y los bots aparecen como actores en esa vista. Aunque no tengan panel, sus ojos cuentan para la visión compartida del equipo. El motor separa `matchPlayers` (todos) de `views` (solo humanos) en `src/game/game.ts`; las copias de sprite se indexan por vista, no por jugador.
+Los bots **no ocupan un panel del splitscreen**: solo los jugadores humanos tienen cámara, capa y niebla propias. Un humano contra tres bots se sigue viendo a pantalla completa, y los bots aparecen como actores en esa vista. Aunque no tengan panel, sus ojos cuentan para la visión compartida del equipo. El motor separa `matchPlayers` (todos) de `views` (solo humanos) en `src/game/game.ts`; las copias del cuerpo 3D se indexan por vista, no por jugador.
 
 ### Cómo juega la IA
 
@@ -601,24 +596,23 @@ Dificultades: `Fácil` reacciona más tarde, apunta con más error, ve algo meno
 
 ## Qué demuestra
 
-- **Billboard vertical**: el plano del sprite solo gira en Y para mirar a la cámara; no se inclina, así que el personaje permanece de pie sobre el terreno. El billboard no implica que el personaje “mire a cámara”: solo mantiene el plano visible.
-- **8 direcciones según el rumbo**: cada actor conserva una dirección propia (`facing`). La fila visible se calcula con el ángulo entre ese rumbo y la cámara, usando el eje “derecha de pantalla”. Al orbitar, el sprite cambia de vista de forma continua sin dejar de mirar hacia donde mira de verdad.
+- **Modelo 3D de pie**: el GLB se coloca sobre el terreno con la caja de apoyo horneada y se orienta en Y hacia la cámara; no se inclina, así que el personaje permanece erguido.
+- **Rumbo real del cuerpo**: cada actor conserva una dirección propia (`facing`) derivada de su velocidad; el modelo se orienta a la cámara sin falsear hacia dónde avanza.
 - **Rumbos independientes**: cada jugador empieza mirando al centro desde su base y solo cambia de rumbo al moverse.
 - **Movimiento y cámara independientes**: el stick izquierdo mueve en cualquier ángulo relativo a la cámara; el derecho orbita 360°. La cámara mantiene una inclinación fija de 45°.
 - **Velocidad propia por Pokémon**: cada compañero tiene su velocidad punta en `src/game/roster.ts` (Voltorb 8,2 u/s, Mewtwo 7,8, Raikou 7,7, Zapdos 7,6, Gengar 7,6, Lugia 7,5, Greninja 7,4, Entei 7,2, Scyther 7,2, Celebi 7,1, Moltres 7,0, Mew 7,0, Suicune 7,0, Ho-Oh 6,9, Pikachu 6,9, Articuno 6,8, Lucario 6,5, Gyarados 6,2, Eevee 6,1, Charmander 5,8, Squirtle 5,2, Bulbasaur 4,6, Onix 4,6, Tyranitar 4,5). La animación de andar escala con la velocidad real, así que el más rápido también mueve las patas más deprisa. El HUD de cada vista muestra la velocidad actual y el multiplicador del terreno, y la tarjeta de selección indica la velocidad base.
 - **Velocidad modulada por el terreno**: cada terreno aplica un multiplicador según sus tipos frente a los del Pokémon (detalle más abajo). Combinado con la velocidad propia, el mismo Pokémon se mueve distinto en cada zona del mapa.
 - **Niebla de guerra compartida por equipo**: cada vista sombrea el mundo fuera de la unión de los radios de visión de su equipo y oculta a los Pokémon que nadie del equipo ve. Cada especie tiene un rango propio; el terreno bajo el objetivo aporta una ocultación base que sus tipos mejoran o empeoran, y los separadores (cordilleras y muros) y los árboles bloquean la línea de visión. El sombreado exterior es un quad con `ShaderMaterial` por cámara, dentro de PlayCanvas, que muestrea la máscara world-space del equipo para oscurecer también lo que queda detrás de separadores y árboles; el HUD de cada vista resume el rango, la ocultación y el radio de detección.
-- **Anclas de suelo por frame**: el píxel blanco de `*-Shadow.png` marca el centro del personaje a nivel del suelo. El importador lo extrae para cada frame y el motor desplaza el pivote, evitando que el sprite “flote” o tiemble al cambiar de animación. También guarda el píxel inferior visible de cada frame para que el terreno no recorte el arte que baja del ancla.
+- **Apoyo horneado**: la caja de la pose `idle` se calcula al exportar el GLB (`extras.newpoke.grounding`) y se usa para colocar el cuerpo y medir su altura visible. Todas las copias nacen con el mismo apoyo sin depender del frame en que aparezcan.
 - **Anillo de rumbo**: cada jugador lleva un anillo pixel art en el suelo con una flecha que sigue su `facing` real, tintado con el color de su equipo. Es geometría plana, no un billboard: gira solo en Y y permanece por encima de la sombra de contacto.
-- **Profundidad real**: los sprites escriben profundidad con `alphaTest`, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
-- **Contorno de equipo**: los Pokémon que no controlas llevan un borde del color de su equipo, dibujado en el propio material del sprite dilatando el alfa (8 muestras, `src/game/spriteOutline.ts`) en vez de una malla aparte. El grosor es el 3 % del alto del arte de `idle`, con un mínimo de 0,75 px de arte y un 25 % extra en viewports por debajo de `CONFIG.sprite.smallViewportPx`; se calcula en `src/game/spriteDetail.ts` y se traduce a UV en cada frame, así que mide lo mismo en todas las animaciones.
-- **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel: la silueta es la misma malla del sprite con la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el sprite se ve, la profundidad coincide y la silueta se descarta, de modo que nunca tapa al propio personaje; no hay raycasts ni comprobaciones por frame. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; los demás jugadores no la proyectan. El **anillo de rumbo y su flecha** usan la misma técnica: una segunda pasada invertida los deja ver a través de los obstáculos, para que también conserves la referencia de orientación.
-- **Pixel art configurable**: `CONFIG.sprite.filter` elige el muestreo. `'nearest'` deja los bloques duros; `'smooth'` precarga la hoja con NEAREST a `smoothScale` y luego filtra con LINEAR, de modo que el contorno se antialiasea 1-2 px sin emborronar el interior; `'linear'` interpola directamente sobre la hoja original (el más suave y borroso). `CONFIG.sprite.alphaToCoverage` delega el recorte alfa en las muestras del MSAA, y las UVs mantienen medio téxel de margen y compensación vertical (`1 / cos 45°`) para que los píxeles se vean cuadrados a pesar de la perspectiva.
+- **Profundidad real**: los modelos escriben profundidad, reciben la niebla de la escena y tienen sombra de contacto; los props del mapa proyectan sombras direccionales.
+- **Contorno de equipo**: los Pokémon que no controlas llevan un borde del color de su equipo dibujado con `pc.OutlineRenderer` (`src/game/render/teamOutline.ts`) en cada viewport. Comparte escala con el cuerpo y no necesita una malla manual por personaje.
+- **Silueta de oclusión**: cuando un árbol (o cualquier obstáculo) tapa al Pokémon que manejas, aparece una silueta plana de color cálido a través de él, para que no pierdas de vista a tu personaje. Se resuelve por píxel con la misma malla del cuerpo y la prueba de profundidad invertida (`depthFunc = FUNC_GREATER`), así que solo se pinta donde ya hay algo más cerca que el Pokémon. Donde el cuerpo se ve, la profundidad coincide y la silueta se descarta. En splitscreen solo la lleva la copia de tu propio avatar en tu vista; el **anillo de rumbo y su flecha** usan la misma técnica para verse a través de los obstáculos.
 - **Mapas definidos por JSON**: la arena es una rejilla de tipos de terreno cargada desde `public/maps/*.json`, con respawns y separadores declarados en el mismo archivo. La vegetación, el agua y los detalles se generan por código a partir de esa rejilla; no hay assets de escenario externos.
 - **Clima de partida opcional**: el lobby permite activar los cambios atmosféricos (desactivados por defecto). Con ellos activos, once estados se sortean al empezar y cambian a la vez cielo, luz, niebla, partículas, visión y daño de tipo; con ellos desactivados, siempre se juega en despejado. El HUD muestra el estado activo y su efecto; arena y granizo cobran daño residual sin poder dar KOs.
 - **Vegetación con volumen**: la hierba alta, la hierba oscura de la ciénaga, el claro feérico y el páramo generan matas 3D con geometría y color por vértice (briznas, flores con tallo, hojas y pétalos, frailejones con tronco y roseta, y hierba seca pajiza), sin texturas ni recortes alfa. El desierto añade cactus 3D con tronco y brazos, la escarcha racimos de cristales de hielo con nieve, la colada volcánica placas de basalto con coronas de lava, brasas y columnas de humo, el bosque umbrío árboles secos, fuegos fatuos y niebla rastrera, y el claro feérico polen dorado flotante y mariposas revoloteando. El páramo añade rayos con luz azul y chispas crepitando entre la hierba seca.
 - **Terrenos tipados**: el catálogo tiene dieciséis terrenos asociados a tipos Pokémon, desde la jungla base hasta calveros de Fuego, Hielo, Fantasma o Desierto, pasando por el carril central asfaltado de tipo Normal. El HUD muestra el terreno bajo los pies y su tipo; las aguas profundas solo admiten Pokémon de tipo Agua. Además hay cuatro **santuarios de equipo** sin tipo (`teamRed`, `teamBlue`, `teamYellow`, `teamGreen`) que solo puede pisar su equipo: el resto los trata como un muro. Sirven para rodear respawns y bases con una zona segura.
-- **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias de billboard. Dos equipos con base, anillo y nombre propios y un team deathmatch con límite de KOs configurable (15 por defecto) con reaparición.
+- **Multijugador local real**: hasta ocho vistas simultáneas de la misma arena, cada una con su cámara, su jugador y sus copias del cuerpo 3D. Dos equipos con base, anillo y nombre propios y un team deathmatch con límite de KOs configurable (15 por defecto) con reaparición.
 - **Bots con input virtual**: la IA produce los mismos snapshots que un mando y pasa por el mismo `stepPlayer`; navega con A*, comparte la visión del equipo y no consume una vista del splitscreen.
 - **Combate direccional**: habilidades en cono, proyectiles, haces, áreas y dashes que salen hacia el `facing` del Pokémon, con daño oficial de Pokémon, tipos, STAB, críticos, vida, enfriamientos y pantalla de victoria.
 - **UI en español** con menú principal, pantalla de opciones, selector de equipos, selector de Pokémon por jugador, HUD de telemetría y combate por vista (terreno, tipo, velocidad, multiplicador, vida y habilidades), controles y créditos.
@@ -660,7 +654,7 @@ Los **carriles** y la **carretera** son celdas de tipo `lane` y `road` en la rej
 
 La **colada volcánica** (`fire`, tipo Fuego) sustituye el antiguo calvero de brasas por un campo de basalto. El suelo se pinta en bloques de 2 px a partir de un Voronoi celular de placas de basalto casi negro. Entre las placas corre una red de grietas rojas incandescentes, con tramos ya enfriados, vetas secundarias más finas y algunas chispas de rescoldo; los bloques duros conservan el aspecto pixel art. Encima hay **placas de basalto 3D**: un mínimo de un racimo por zona (la cantidad escala con el área), cada uno con uno o dos bloques facetados de base irregular y corona inclinada. El color va por vértice: la base y los laterales caen a un gris azulado casi negro, mientras la cara superior y los vértices de la corona se encienden en naranja, amarillo y rojo, como lava solidificada. Son bajos y no colisionan. De las grietas sube **una brasa aditiva** que se enciende, deriva y se apaga, y una luz omni naranja de corto alcance tiñe las rocas con un parpadeo lento. Además, **cada racimo de basalto emite su propia columna de humo**: una por racimo y hasta ocho por calvero, con 24 bocanadas cada una que nacen del centro de la roca, suben en vertical, se ensanchan y se desvanecen, con un tono cálido en la base que pasa a gris. El tipo sigue siendo Fuego: Charmander corre por ella, Squirtle la resiste y Bulbasaur y Lucario se frenan.
 
-La **ciénaga** (`poison`) conserva la hierba oscura pintada en el suelo, con briznas de 1–2 px entre el lodo, y añade encima una lámina de agua turbia recortada por el contorno de sus celdas, más opaca, más lenta y **mate**: sin brillo especular, para que se lea como agua estancada y no como un espejo. También genera matas 3D de hierba oscura, ahora **dispersas**: 11 briznas por mata, más bajas y repartidas con poca densidad para que la ciénaga parezca un lodazal y no un prado frondoso. Son casi negras en la base y verde apagado en la punta, sobresalen del agua y se mecen despacio. Del suelo sube además un **humo bajo y verdoso**: 65 bocanadas suaves que nacen a ras del agua, ascienden lentamente, se ensanchan y se desvanecen, con textura de jirones y opacidad baja. Se comporta como **aguas someras**: cualquier Pokémon puede cruzarla y el sprite se hunde hasta `submergeShallow`, con el anillo de rumbo flotando sobre la superficie. No tiene zona profunda ni collider, y el terreno sigue siendo de tipo Veneno para la velocidad.
+La **ciénaga** (`poison`) conserva la hierba oscura pintada en el suelo, con briznas de 1–2 px entre el lodo, y añade encima una lámina de agua turbia recortada por el contorno de sus celdas, más opaca, más lenta y **mate**: sin brillo especular, para que se lea como agua estancada y no como un espejo. También genera matas 3D de hierba oscura, ahora **dispersas**: 11 briznas por mata, más bajas y repartidas con poca densidad para que la ciénaga parezca un lodazal y no un prado frondoso. Son casi negras en la base y verde apagado en la punta, sobresalen del agua y se mecen despacio. Del suelo sube además un **humo bajo y verdoso**: 65 bocanadas suaves que nacen a ras del agua, ascienden lentamente, se ensanchan y se desvanecen, con textura de jirones y opacidad baja. Se comporta como **aguas someras**: cualquier Pokémon puede cruzarla y el cuerpo se hunde hasta `submergeShallow`, con el anillo de rumbo flotando sobre la superficie. No tiene zona profunda ni collider, y el terreno sigue siendo de tipo Veneno para la velocidad.
 
 El **desierto** (`desert`, tipo Tierra) es una mancha de arena en la jungla norte, pintada con bandas de dunas, rizos, grietas y piedras sueltas. Dentro del calvero crecen cactus 3D por zona (la cantidad escala con el área, con un mínimo de 1): tronco y brazos de cilindros con un verde apagado, alturas y giros variados, sin collider (son puramente decorativos y no frenan el paso). Sobre la zona flota una capa de **polvo en suspensión**: hasta 90 partículas suaves (la cantidad se reduce con el área de la zona, con un mínimo de 8) repartidas en una caja amplia que derivan con el viento, crecen y se desvanecen, con textura de manchas difusas para que se lean como polvo y no como chispas. El terreno es de tipo Tierra, así que frena a Pikachu, Charmander y Lucario, mientras Bulbasaur queda neutro porque su tipo Planta resiste Tierra pero su tipo Veneno la recibe.
 
@@ -766,71 +760,23 @@ La **máscara world-space** se compone por equipo: para cada observador vivo se 
 
 ### Sumergirse en el agua
 
-Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas y translúcidas a ras de suelo (`waterHeight` 0 por defecto, con un margen mínimo para evitar z-fighting), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La malla se construye triangulando el contorno de las celdas de agua y las UVs se escalan por el tamaño del cuerpo, así que el oleaje se lee igual en lagos grandes y pequeños. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el sprite se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada sprite, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el sprite emerge con la misma interpolación.
+Cada cuerpo de agua combina el lecho pintado en el suelo con dos láminas planas y translúcidas a ras de suelo (`waterHeight` 0 por defecto, con un margen mínimo para evitar z-fighting), sin paredes ni grosor: una capa base y una capa de brillos que se desplazan en sentidos opuestos con sus UVs animadas, más un latido de opacidad en la capa de brillos para que la corriente se lea de un vistazo. La malla se construye triangulando el contorno de las celdas de agua y las UVs se escalan por el tamaño del cuerpo, así que el oleaje se lee igual en lagos grandes y pequeños. El desplazamiento de UVs se aplica con `diffuseMapOffset` seguido de `material.update()` en cada frame: sin esa llamada, PlayCanvas no sube las transformadas de textura al uniform buffer y el agua queda congelada. Al entrar en el agua, el cuerpo se hunde de forma progresiva (`submergeShallow` en aguas someras y `submergeDeep` en profundas): la parte del cuerpo que queda bajo la superficie la tapa la lámina, la sombra de contacto se oculta y el anillo de rumbo flota sobre el agua. La inmersión se mide como fracción de la altura de cada cuerpo, así que Pokémon altos y bajos se mojan de forma parecida. Al salir, el cuerpo emerge con la misma interpolación.
 
-## Cómo funciona el pipeline de sprites
+## Retratos y tiempos de animación
 
-`scripts/import-sprites.mjs`:
+Cada especie conserva un único retrato en `public/sprites/<id>/portrait.png`. Las interfaces HTML (roster, HUD, versus y diálogos) lo cargan con `PokemonPortrait`; no hay hojas de animación ni variantes shiny o recolor.
 
-1. Descarga `AnimData.xml`, `credits.txt`, `{Idle,Walk,Attack,Hurt}-Anim.png` y `{Idle,Walk,Attack,Hurt}-Shadow.png` desde el repositorio de PMD Sprite Collab. `Faint`, `QuickStrike`, `Shock`, `Shoot`, `Charge`, `Strike`, `Twirl`, `Shake` y `Punch` se descargan también cuando la especie los incluye; si faltan, se omiten sin romper el importador.
-2. Descarga el retrato `portrait/<id>/Normal.png` de cada Pokémon y lo guarda como `portrait.png`; las interfaces HTML usan ese retrato en lugar de las hojas animadas.
-3. Intenta importar los **aspectos** de cada especie: el shiny (`sprite/<id>/0000/0001`) y, cuando existe, el recolor oficial de PMD Sprite Collab (`RECOLOR_PATHS` en el script). Cada aspecto se guarda en su propia carpeta (`shiny/`, `recolor/`) y añade una entrada a `skins` en el manifiesto. Si un aspecto no tiene retrato propio, reutiliza el de la forma normal; solo se omite cuando le falta `AnimData.xml` o una animación obligatoria.
-4. Valida que la hoja encaje en la rejilla declarada: 8 filas (direcciones) y una columna por duración de animación.
-5. Decodifica el PNG de la sombra sin dependencias externas y localiza el píxel blanco de cada frame; la media de esos píxeles es el **ancla de suelo**.
-6. Decodifica también la hoja de animación para guardar el píxel inferior con contenido visible de cada frame (`bottoms`), que evita que el suelo recorte el dibujo.
-7. Escribe `public/sprites/manifest.json` con frames, duraciones en ticks de 1/60 s, anclas, bordes inferiores, ruta del retrato, `skins` por Pokémon, créditos y metadatos de licencia.
-8. Genera `public/sprites/CREDITS.md`, incluyendo los créditos de cada aspecto importado.
+`public/sprites/manifest.json` sigue siendo la fuente de verdad del catálogo y de los **tiempos de gameplay**. Por cada animación de PMD guarda el tamaño de frame de referencia, las `durations` en ticks de 1/60 s, los marcadores `rushFrame`/`hitFrame`/`returnFrame` y las anclas de suelo. El cuerpo 3D aporta el clip visual; el manifiesto decide cuándo cae el impacto y a qué altura se apoya el modelo. Los retratos y el manifiesto se versionan con el repositorio: no hace falta ningún importador.
 
-En el roster, las especies con más de un aspecto muestran un selector **Aspecto**. Con la card girada, `↑`/`↓` cambian de skin y `←`/`→` cambian el instinto; también se puede hacer clic en cada aspecto. La partida carga solo las combinaciones especie + skin que usan los jugadores y los bots.
+`public/sprites/CREDITS.md` recoge la atribución de los retratos (PMD Sprite Collab, CC BY-NC 4.0) y la licencia del arte.
 
-Orden de las filas: `S, SE, E, NE, N, NW, W, SW` (0–7).
-
-### Selección de dirección
-
-Para cada actor:
-
-```
-toCam   = normalizar(cámara - actor) en el plano XZ
-right   = (toCam.z, -toCam.x)          // derecha de pantalla
-facing  = (sin(yaw), cos(yaw))
-angle   = atan2(dot(facing, right), dot(facing, toCam))
-row     = round(angle / 45°) mod 8
-```
-
-Así la fila 0 es la vista frontal, la 2 el perfil derecho de la pantalla y la 4 la espalda. La fila 0 solo aparece cuando el rumbo real del actor coincide con la dirección hacia la cámara; no es un estado permanente.
-
-### Recorte de la celda
-
-Cada actor tiene un material propio por animación. Para mostrar una celda concreta se ajustan las transformaciones UV del mapa emisivo y del mapa de opacidad:
-
-```
-u0 = (frame * frameWidth + 0.5) / sheetWidth
-v0 = (row * frameHeight + 0.5) / sheetHeight   // offset V medido desde arriba
-du = (frameWidth - 1) / sheetWidth
-dv = (frameHeight - 1) / sheetHeight
-```
-
-PlayCanvas aplica internamente `v' = dv * v + 1 - dv - v0`, por eso el offset de fila se mide desde la parte superior de la hoja. Tras cambiar `*MapTiling` y `*MapOffset` hay que llamar a `material.update()`: si no, el sprite se queda congelado en la primera celda aplicada aunque cambien el frame, la fila y la cámara.
-
-### Anclaje vertical
-
-Cada frame se dibuja en un plano con el ancla de referencia en el origen. El offset por frame es:
-
-```
-offsetX = (frameWidth / 2 - anchor.x) * pixelScale
-offsetY = (anchor.y - refAnchorY + lift) * pixelScale * verticalStretch
-lift = max(0, bottom - anchor.y)
-```
-
-`refAnchorY` es el ancla del primer frame de esa animación. `bottom` es el píxel inferior con contenido visible de la celda, extraído por el importador. Como el suelo del mapa es opaco, los píxeles que el arte dibuja por debajo del ancla (una pata delantera, la cola o el borde del cuerpo) quedarían enterrados y el sprite se vería cortado. `lift` sube solo los frames afectados lo justo para que su borde inferior apoye en el ancla; los que ya quedan por encima no se mueven, así que el “bob” de Idle y Walk se conserva. El resultado es que ambas animaciones comparten el mismo punto de apoyo aunque sus frames tengan alturas, recortes o “bob” distintos.
 
 ## Estructura
 
 ```
-scripts/import-sprites.mjs   descarga, validación, anclas y manifiesto
 scripts/import-sfx.mjs       descarga los MP3 de habilidades e impactos
 scripts/generate-map-previews.mjs  renderiza los PNG del slider de mapas
-public/sprites/              hojas, XML/credits originales, manifiesto y CREDITS.md
+public/sprites/              retratos, manifiesto y CREDITS.md
 public/audio/sfx/            MP3 de habilidades e impactos + CREDITS.md
 public/audio/music/          tema de combate de la partida
 public/maps/
@@ -881,9 +827,8 @@ src/game/
   terrainSpeed.ts            multiplicadores de velocidad por terreno y tipo
   vision.ts                  rangos de visión, ocultación, tipos y línea de visión
   fog.ts                     quad de visión, decal de sombra y shaders
-  sprite.ts                  texturas, material, UVs, animación y billboard
   marker.ts                  anillo de jugador con flecha de rumbo y color de equipo
-  actor.ts                   sprite + sombra de contacto + posición + capa de render
+  actor.ts                   cuerpo 3D + sombra de contacto + posición + capa de render
   game.ts                    orquestador: mapa, cámaras, actores, combate y colisiones
 src/session/
   sessionContext.ts          contexto y contrato del estado compartido
@@ -923,8 +868,8 @@ src/index.css                Tailwind: tokens del tema y estilos base
 
 Casi todo lo “mágico” está en `src/game/config.ts`:
 
-- `PIXEL_SCALE` (0.045): unidades de mundo por píxel de sprite. Es común a todo el roster para conservar tamaños relativos.
-- `CONFIG.sprite.filter` (`'nearest'` | `'smooth'` | `'linear'`), `CONFIG.sprite.smoothScale` y `CONFIG.sprite.alphaToCoverage`: suavizado del sprite. `'smooth'` es el equilibrio entre nitidez y borde suave; `smoothScale` (2-4) controla cuánto se afila (`4` = casi nítido, `3` = equilibrado, `2` = más suave).
+- `PIXEL_SCALE` (0.045): unidades de mundo por píxel del frame de referencia de PMD. Es común a todo el roster para conservar tamaños relativos.
+- `CONFIG.sprite.alphaToCoverage`: recorte alfa suave en los materiales de objetos y efectos.
 - `PITCH_DEG` (45) y `VERTICAL_STRETCH`: inclinación y corrección de píxeles.
 - `camera.distance`, `fov`, `followLerp`: encuadre y suavidad. En partidas de 3-8 jugadores cada cámara arranca un 12 % más lejos para compensar el viewport estrecho.
 - `player.speed`, `acceleration`, `deceleration`, `turnRate`, `turnLerp`, `radius`: sensación de movimiento y colisión. `turnRate` (rad/s) controla con cuánta rapidez el rumbo de avance gira hacia la entrada; subirlo elimina el derrape al cambiar de dirección. `turnSnapAngle` (grados) marca a partir de qué giro (por defecto 135°) la velocidad se invierte en seco, para que un cambio a la dirección opuesta no trace un arco lateral. La velocidad final de cada Pokémon sale de `src/game/roster.ts`; `player.speed` queda como respaldo. Los multiplicadores por terreno están en `TERRAIN_SPEED_FACTOR` (`src/game/terrainSpeed.ts`).
@@ -940,10 +885,10 @@ Casi todo lo “mágico” está en `src/game/config.ts`:
 - `CONFIG.performance.anisotropy` (8 por defecto): filtrado anisotrópico del suelo, la tierra y el agua. Evita que las líneas finas del terreno se vean como un peine y centelleen al caminar. El coste en GPU es despreciable; `1` lo desactiva.
 - El suelo de cada mapa se pinta **troceado** (`createGroundCanvasAsync`) y el mundo se construye por secciones (`buildWorldAsync`): ambas tareas ceden el hilo con `yieldToBrowser()` cada ~8 ms, así que la pantalla de carga sigue animándose y cambiar de mapa en el lobby no congela la pestaña. El canvas pintado se guarda en un caché LRU por mapa y tamaño. `applyMap()` hace un primer `app.render()` antes de terminar para que la compilación de shaders y la subida de texturas del mundo nuevo ocurran detrás de la pantalla de carga.
 - **Decoración instanciada** (`world.ts`): los cactus del desierto se dibujan en una única malla instanciada aunque estén repartidos por decenas de calveros; antes cada cactus pequeño eran cinco primitivas. En `caldera`, con la cámara en el centro del mapa, el frame baja de 312 a 202 draw calls con 1 vista y de 1193 a 650 con 4. Los picos y muros se dejan sueltos: el instancing medido empeoraba el descarte por cámara en `perf-256`.
-- **Splitscreen**: cada actor sigue teniendo una copia por viewport (el billboard de 8 direcciones depende de la cámara), pero las barras de vida se dibujan en una capa 2D por jugador (`healthBarOverlay.ts`), el anillo de rumbo solo lo lleva la copia del dueño, y la geometría de los billboards y los recursos del anillo se comparten entre copias. Con 8 vistas el frame baja de ~413 a ~269 draw calls y el arranque de una partida de ~4,6 s a ~0,45 s. Las capas de animación se crean por tandas (3 ms/frame) durante la cuenta atrás.
+- **Splitscreen**: cada actor sigue teniendo una copia por viewport (cada cámara dibuja los cuerpos con su capa y su niebla), pero las barras de vida se dibujan en una capa 2D por jugador (`healthBarOverlay.ts`), el anillo de rumbo solo lo lleva la copia del dueño y los recursos compartidos se reutilizan entre copias. Con 8 vistas el frame baja de ~413 a ~269 draw calls y el arranque de una partida de ~4,6 s a ~0,45 s. Las capas de animación se crean por tandas (3 ms/frame) durante la cuenta atrás.
 - `CONFIG.damageNumbers.onlyOwn` (activado por defecto): cada vista solo muestra los números que afectan a su jugador. Incluye el daño que hace y el que recibe (también el autodaño de Explosión y el del clima) y la curación que reparte o recibe, con habilidades o pociones. Con `false` se ven todos los números visibles de cualquier Pokémon.
 - `player.markerDiameter`, `markerHeight` y `markerOpacity`: tamaño del anillo de rumbo, su altura sobre el suelo y su transparencia.
-- `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del sprite que se sumerge en cada tipo de agua y con qué suavidad lo hace.
+- `player.submergeShallow`, `submergeDeep` y `submergeLerp`: fracción de la altura del cuerpo que se sumerge en cada tipo de agua y con qué suavidad lo hace.
 - `public/maps/*.json`: rejilla de terrenos, `tileSize`, `waterHeight`, respawns de cada equipo, separadores y punto de cámara del menú. `public/maps/index.json` decide qué mapas aparecen en el selector. `TERRAINS` en `src/game/terrain.ts` mantiene los nombres y tipos Pokémon de cada `TerrainId`.
 - `MAX_PLAYERS`, `MAX_TEAM_SIZE`, `TEAM_INFO`, `spawnForTeam` y `computeSplitLayout` en `src/game/multiplayer.ts`: límite de jugadores, tope por equipo, colores/coordenadas de base y rejilla del splitscreen.
 
@@ -963,8 +908,8 @@ Los colores de acento, tipos y créditos vienen del manifiesto.
 
 ## Créditos y licencia
 
-Los sprites pertenecen a la comunidad de **[PMD Sprite Collab](https://sprites.pmdcollab.org/)** y se distribuyen bajo **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**. Esta demo es **no comercial** y muestra la atribución en la interfaz y en `public/sprites/CREDITS.md`.
+Los retratos pertenecen a la comunidad de **[PMD Sprite Collab](https://sprites.pmdcollab.org/)** y se distribuyen bajo **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**. Esta demo es **no comercial** y muestra la atribución en la interfaz y en `public/sprites/CREDITS.md`.
 
-Cada Pokémon conserva su `credits.txt` original en `public/sprites/<id>/`. El código del proyecto es una demo técnica y no reclama propiedad sobre esos sprites.
+El código del proyecto es una demo técnica y no reclama propiedad sobre esos retratos.
 
 Los iconos de tipo de `src/assets/types/` son los símbolos de la [tabla de tipos oficial](https://sg.portal-pokemon.com/game/type-chart/) de Pokémon, sin fondo ni marco. Pokémon y los nombres de los tipos son marcas de Nintendo, Creatures Inc. y GAME FREAK inc.

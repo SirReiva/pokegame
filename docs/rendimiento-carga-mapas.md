@@ -1,5 +1,8 @@
 # Rendimiento de carga de mapas grandes
 
+> **Nota (2026-11):** las hojas de sprite se retiraron y el cuerpo se dibuja con
+> modelos GLB. Las referencias a `sprite.ts` son históricas.
+
 Análisis del bloqueo de la pestaña al cargar una partida en mapas grandes.
 
 ## Resumen

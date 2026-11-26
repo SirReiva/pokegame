@@ -17,9 +17,8 @@ import {
   type PlayerMatchStats,
   type SplitRect
 } from '../game/multiplayer';
-import { skinFor } from '../game/skins';
 import { GAME_MODE_INFO, type GameModeId } from '../game/modes';
-import type { PokemonEntry, PokemonSkin, SpriteManifest } from '../game/types';
+import type { PokemonEntry, SpriteManifest } from '../game/types';
 import type { Team } from '../game/terrain';
 import { CONCEALMENT_REASON_LABEL } from '../game/vision';
 import { XP_SOURCE_LABELS, type XpFeedEntry } from '../game/xp';
@@ -324,14 +323,12 @@ const XpFeed = memo(function XpFeed({
 const PlayerIdentity = memo(function PlayerIdentity({
   name,
   entry,
-  skin,
   level,
   xpTitle,
   compact
 }: {
   name: string;
   entry: PokemonEntry | undefined;
-  skin: PokemonSkin | null;
   level: number;
   xpTitle: string | undefined;
   compact: boolean;
@@ -347,7 +344,7 @@ const PlayerIdentity = memo(function PlayerIdentity({
         NV {level}
       </span>
       {entry && (
-        <PokemonPortrait entry={entry} skin={skin} height={compact ? 22 : 28} />
+        <PokemonPortrait entry={entry} height={compact ? 22 : 28} />
       )}
       <span className="flex flex-col leading-[1.05]">
         <strong className="font-mono text-9.92 tracking-[0.08em] uppercase">
@@ -421,7 +418,6 @@ interface PlayerHudProps {
   player: LobbyPlayer;
   stats: PlayerMatchStats | undefined;
   entry: PokemonEntry | undefined;
-  skin: PokemonSkin | null;
   rect: SplitRect;
   index: number;
   compact: boolean;
@@ -593,7 +589,6 @@ function sameVisibleStats(a: PlayerMatchStats, b: PlayerMatchStats): boolean {
 function samePlayerHud(prev: PlayerHudProps, next: PlayerHudProps): boolean {
   if (prev.player !== next.player) return false;
   if (prev.entry !== next.entry) return false;
-  if (prev.skin !== next.skin) return false;
   if (prev.rect !== next.rect) return false;
   if (prev.index !== next.index) return false;
   if (prev.compact !== next.compact) return false;
@@ -611,7 +606,6 @@ const PlayerHud = memo(function PlayerHud({
   player,
   stats: playerStats,
   entry,
-  skin,
   rect,
   index,
   compact,
@@ -775,7 +769,6 @@ const PlayerHud = memo(function PlayerHud({
           <PlayerIdentity
             name={player.name}
             entry={entry}
-            skin={skin}
             level={playerStats?.level ?? 1}
             xpTitle={xpTitle}
             compact={compact}
@@ -1335,22 +1328,6 @@ export function MatchHud({
     () => new Map(manifest.pokemon.map((pokemon) => [pokemon.id, pokemon])),
     [manifest.pokemon]
   );
-  // Retratos y aspectos son estables durante la partida: resolverlos una vez
-  // por plantilla evita recrear `skinFor` en cada tick del HUD.
-  const visuals = useMemo(() => {
-    const map = new Map<
-      number,
-      { entry: PokemonEntry | undefined; skin: PokemonSkin | null }
-    >();
-    for (const player of players) {
-      const entry = pokemonById.get(player.pokemonId);
-      map.set(player.slot, {
-        entry,
-        skin: entry ? skinFor(entry, player.skinId) : null
-      });
-    }
-    return map;
-  }, [players, pokemonById]);
 
   return (
     <div className="pointer-events-none fixed inset-0 z-6" aria-hidden="false">
@@ -1366,15 +1343,13 @@ export function MatchHud({
       {players.map((player, index) => {
         const rect = layout[index];
         if (!rect) return null;
-        const visual = visuals.get(player.slot);
         return (
           <PlayerHudHost
             key={player.slot}
             statsStore={statsStore}
             slot={player.slot}
             player={player}
-            entry={visual?.entry}
-            skin={visual?.skin ?? null}
+            entry={pokemonById.get(player.pokemonId)}
             rect={rect}
             index={index}
             compact={players.length > 4}

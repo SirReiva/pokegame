@@ -69,7 +69,7 @@ flowchart TB
   subgraph platform["Plataforma y contenido"]
     input["input · inputBuffer"]
     audio["audio · audioSettings"]
-    assets["sprite · textures · skins<br/>pokedex · roster"]
+    assets["modelos · textures<br/>pokedex · roster"]
     content["abilities · abilityExecutors<br/>modes · items · pickups"]
     terrain["terrain · map · multiplayer"]
     atmosphere["atmosphere · fog · pickups"]
@@ -467,7 +467,7 @@ src/game/
 ├─ abilityExecutors.ts     # Strategy + Registry por forma
 ├─ modes.ts                # Strategy por modo (tdm / koth)
 ├─ input.ts · inputBuffer.ts
-├─ audio.ts · sprite.ts · textures.ts
+├─ audio.ts · textures.ts · model.ts
 ├─ items.ts · pickups.ts · pickupKnowledge.ts
 ├─ world.ts · map.ts · mapEditor.ts
 └─ matchState.ts           # puente de tipos de playerState
