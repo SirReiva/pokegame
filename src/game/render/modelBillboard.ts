@@ -397,7 +397,7 @@ export class ModelBillboard {
     return targets;
   }
 
-  /** Unión de los targets de la capa base y de la capa de acción. */
+  /** Targets del clip visible en la capa base (locomoción o casteo). */
   private animatedTargets(): ReadonlySet<string> {
     return this.animation
       ? this.clipTargets(this.animation)
