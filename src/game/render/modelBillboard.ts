@@ -15,6 +15,7 @@ import {
   type ModelGrounding
 } from '../model';
 import type { AnimationName } from '../types';
+import { applyModelShading } from './modelShading';
 import type { TeamOutline } from './teamOutline';
 
 /** Mezcla al cambiar de animación en reproducción automática. */
@@ -89,6 +90,7 @@ export class ModelBillboard {
   private readonly pivot: pc.Entity;
   private readonly align: pc.Entity;
   private readonly modelEntity: pc.Entity;
+  private readonly meshInstances: pc.MeshInstance[];
   private readonly anim: pc.AnimComponent;
   private readonly layer: pc.AnimComponentLayer;
   /**
@@ -205,6 +207,9 @@ export class ModelBillboard {
       castShadows: false,
       receiveShadows: true
     });
+    this.meshInstances = this.modelEntity
+      .findComponents('render')
+      .flatMap((render) => render.meshInstances);
     // Se guarda el hueso raíz antes de crear el componente de animación, para
     // capturar su posición de bind y no la primera pose evaluada.
     const rootMotionNode =
@@ -298,6 +303,10 @@ export class ModelBillboard {
           instance.stencilFront = FOG_EXCLUDED_STENCIL;
           instance.stencilBack = FOG_EXCLUDED_STENCIL;
         }
+      }
+      for (const instance of render.meshInstances) {
+        applyModelShading(instance.material as pc.StandardMaterial);
+        instance.setParameter('uDesaturate', this.desaturation);
       }
     }
   }
@@ -560,12 +569,20 @@ export class ModelBillboard {
     if (!this.manual) this.anim.speed = this.playback;
   }
 
-  /**
-   * El gris del KO necesitaría un uniform por material; de momento se conserva
-   * la animación de caída y el cuerpo se oculta al terminar `deathFade`.
-   */
   setDesaturation(target: number): void {
-    this.desaturationTarget = Math.min(1, Math.max(0, target));
+    const nextTarget = Math.min(1, Math.max(0, target));
+    if (nextTarget === this.desaturationTarget) return;
+    this.desaturationTarget = nextTarget;
+    if (nextTarget < this.desaturation) {
+      this.desaturation = nextTarget;
+      this.applyDesaturation();
+    }
+  }
+
+  private applyDesaturation(): void {
+    for (const instance of this.meshInstances) {
+      instance.setParameter('uDesaturate', this.desaturation);
+    }
   }
 
   /** Elige el clip y lo reproduce desde el principio. */
@@ -725,15 +742,15 @@ export class ModelBillboard {
     // se veía como un segundo cuerpo desplazado en aliados y rivales.
     this.resetRootMotion();
 
-    // Gris del KO suavizado (sin shader propio todavía; se guarda para cuando
-    // se aplique el tinte por material).
     if (this.desaturation !== this.desaturationTarget) {
+      const previous = this.desaturation;
       const blend = 1 - Math.exp(-dt / DESATURATION_SECONDS);
       this.desaturation +=
         (this.desaturationTarget - this.desaturation) * blend;
       if (Math.abs(this.desaturationTarget - this.desaturation) < 0.004) {
         this.desaturation = this.desaturationTarget;
       }
+      if (this.desaturation !== previous) this.applyDesaturation();
     }
   }
 

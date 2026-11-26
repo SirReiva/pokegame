@@ -32,6 +32,7 @@ import { PlayerMarker } from '../marker';
 import type { MatchPlayerState } from '../matchState';
 import type { PickupField } from '../pickups';
 import { ActorShadowBatch } from '../render/actorShadows';
+import { applyModelShading } from '../render/modelShading';
 import type { PlayerView } from '../render/playerView';
 import { TeamOutline } from '../render/teamOutline';
 import { maxHitRadius } from '../roster';
@@ -311,6 +312,10 @@ export class WarmUp {
               instance.stencilFront = FOG_EXCLUDED_STENCIL;
               instance.stencilBack = FOG_EXCLUDED_STENCIL;
             }
+          }
+          for (const instance of render.meshInstances) {
+            applyModelShading(instance.material as pc.StandardMaterial);
+            instance.setParameter('uDesaturate', 0);
           }
         }
         app.root.addChild(entity);
