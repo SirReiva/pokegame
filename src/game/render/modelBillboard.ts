@@ -15,13 +15,11 @@ import {
   type ModelGrounding
 } from '../model';
 import type { AnimationName } from '../types';
-import { applyModelShading } from './modelShading';
+import { applyModelShading, DesaturationState } from './modelShading';
 import type { TeamOutline } from './teamOutline';
 
 /** Mezcla al cambiar de animación en reproducción automática. */
 const TRANSITION_SECONDS = 0.06;
-/** Suavizado del gris del KO, coherente con el billboard de sprites. */
-const DESATURATION_SECONDS = 0.08;
 /** Límites de velocidad para adaptar la duración del clip 3D al del sprite. */
 const MIN_ADAPTED_SPEED = 0.2;
 const MAX_ADAPTED_SPEED = 4;
@@ -117,8 +115,7 @@ export class ModelBillboard {
   private readonly outlineColor: readonly [number, number, number] | null;
   private outlined = false;
   private visible = true;
-  private desaturationTarget = 0;
-  private desaturation = 0;
+  private readonly desaturation = new DesaturationState();
   /** LOD: el sistema deja de actualizar el esqueleto y lo hace este reloj. */
   private animationLodActive = false;
   private animationLodAccumulator = 0;
@@ -305,8 +302,8 @@ export class ModelBillboard {
         }
       }
       for (const instance of render.meshInstances) {
-        applyModelShading(instance.material as pc.StandardMaterial);
-        instance.setParameter('uDesaturate', this.desaturation);
+        applyModelShading(instance.material);
+        instance.setParameter('uDesaturate', this.desaturation.value);
       }
     }
   }
@@ -569,19 +566,19 @@ export class ModelBillboard {
     if (!this.manual) this.anim.speed = this.playback;
   }
 
+  /**
+   * Pide el gris del KO (0 = color, 1 = escala de grises). La caída se
+   * interpola en `update()`, así que se puede llamar cada frame: repetir el
+   * mismo objetivo no hace trabajo. Al revivir se recupera el color de golpe,
+   * para que el Pokémon reaparezca vivo y sin un frame gris.
+   */
   setDesaturation(target: number): void {
-    const nextTarget = Math.min(1, Math.max(0, target));
-    if (nextTarget === this.desaturationTarget) return;
-    this.desaturationTarget = nextTarget;
-    if (nextTarget < this.desaturation) {
-      this.desaturation = nextTarget;
-      this.applyDesaturation();
-    }
+    if (this.desaturation.request(target)) this.applyDesaturation();
   }
 
   private applyDesaturation(): void {
     for (const instance of this.meshInstances) {
-      instance.setParameter('uDesaturate', this.desaturation);
+      instance.setParameter('uDesaturate', this.desaturation.value);
     }
   }
 
@@ -742,16 +739,7 @@ export class ModelBillboard {
     // se veía como un segundo cuerpo desplazado en aliados y rivales.
     this.resetRootMotion();
 
-    if (this.desaturation !== this.desaturationTarget) {
-      const previous = this.desaturation;
-      const blend = 1 - Math.exp(-dt / DESATURATION_SECONDS);
-      this.desaturation +=
-        (this.desaturationTarget - this.desaturation) * blend;
-      if (Math.abs(this.desaturationTarget - this.desaturation) < 0.004) {
-        this.desaturation = this.desaturationTarget;
-      }
-      if (this.desaturation !== previous) this.applyDesaturation();
-    }
+    if (this.desaturation.step(dt)) this.applyDesaturation();
   }
 
   /**

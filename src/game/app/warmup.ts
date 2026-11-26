@@ -314,7 +314,7 @@ export class WarmUp {
             }
           }
           for (const instance of render.meshInstances) {
-            applyModelShading(instance.material as pc.StandardMaterial);
+            applyModelShading(instance.material);
             instance.setParameter('uDesaturate', 0);
           }
         }

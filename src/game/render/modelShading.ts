@@ -1,9 +1,78 @@
 import * as pc from 'playcanvas';
 
+/**
+ * Constante de tiempo (s) del gris del KO. Coincide con la del billboard de
+ * sprites (`sprite.ts`) para que ambos cuerpos se apaguen al mismo ritmo.
+ */
+export const DESATURATION_SECONDS = 0.08;
+
+/**
+ * Estado del gris del KO: 0 = color, 1 = escala de grises.
+ *
+ * Morir interpola el gris en `step()` para que el clip `faint` se vea apagarse;
+ * revivir lo aplica de golpe para que el cuerpo reaparezca con color y sin un
+ * frame gris. Se separa del billboard para poder probar la transición sin
+ * montar una escena de PlayCanvas.
+ */
+export class DesaturationState {
+  private current = 0;
+  private target = 0;
+
+  /** Valor actual, el que se sube al uniform `uDesaturate`. */
+  get value(): number {
+    return this.current;
+  }
+
+  /**
+   * Fija el objetivo (se recorta a [0, 1]).
+   *
+   * @returns `true` si el valor actual cambió y hay que subirlo a los materiales.
+   */
+  request(target: number): boolean {
+    const next = Math.min(1, Math.max(0, target));
+    if (next === this.target) return false;
+    this.target = next;
+    // Recuperar color nunca se interpola: el respawn debe verse vivo ya.
+    if (next >= this.current) return false;
+    this.current = next;
+    return true;
+  }
+
+  /**
+   * Avanza la interpolación del gris.
+   *
+   * @returns `true` si el valor actual cambió y hay que subirlo a los materiales.
+   */
+  step(dt: number): boolean {
+    if (this.current === this.target) return false;
+    const blend = 1 - Math.exp(-dt / DESATURATION_SECONDS);
+    const previous = this.current;
+    this.current += (this.target - this.current) * blend;
+    // Se cierra en el objetivo: así el uniform deja de subirse cada frame.
+    if (Math.abs(this.target - this.current) < 0.004) {
+      this.current = this.target;
+    }
+    return this.current !== previous;
+  }
+}
+
 const shadedMaterials = new WeakSet<pc.StandardMaterial>();
 
-/** Añade desaturación por instancia sin cambiar el material compartido. */
-export function applyModelShading(material: pc.StandardMaterial): void {
+/**
+ * Añade desaturación por instancia sin cambiar el material compartido.
+ *
+ * El chunk `emissivePS` replica el de PlayCanvas 2.24.2 y añade dos `mix` con
+ * `uDesaturate`: uno sobre `litArgs_albedo` (el motor lo asigna justo antes de
+ * llamar a `getEmission()`) y otro sobre `dEmission`. Con `uDesaturate = 0` el
+ * resultado es idéntico al del motor.
+ *
+ * Los materiales no estándar (o ausentes) se ignoran: los GLB del catálogo son
+ * todos `StandardMaterial`, pero un render sin material no debe romper la carga.
+ */
+export function applyModelShading(
+  material: pc.Material | null | undefined
+): void {
+  if (!(material instanceof pc.StandardMaterial)) return;
   if (shadedMaterials.has(material)) return;
 
   const glsl = material.getShaderChunks(pc.SHADERLANGUAGE_GLSL);
