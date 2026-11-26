@@ -108,7 +108,11 @@ export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0251': { file: 'pm0251/pm0251_00.glb', scale: 0.80 },
   // Kyogre es un coloso marino: se reduce para compensar su gran huella.
   '0382': { file: 'pm0382/pm0382.glb', scale: 0.6 },
-  '0383': { file: 'pm0383/pm0383_00.glb', scale: 0.8 },
+  '0383': {
+    file: 'pm0383/pm0383_00.glb',
+    scale: 0.8,
+    movePlayback: 2
+  },
   // Rayquaza es una serpiente voladora: se desplaza con la pose de vuelo.
   '0384': {
     file: 'pm0384/pm0384.glb',
