@@ -1315,7 +1315,7 @@ async function start(): Promise<void> {
     const progress = duration > 0 ? pc.math.clamp(current / duration, 0, 1) : 0;
     timelineFill.style.width = `${(progress * 100).toFixed(2)}%`;
     timelineKnob.style.left = `${(progress * 100).toFixed(2)}%`;
-    clipTime.textContent = `${current.toFixed(1)} / ${duration.toFixed(1)} s`;
+    clipTime.textContent = `${current} / ${duration} s`;
     timeline.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
   });
 
