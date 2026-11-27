@@ -2224,7 +2224,7 @@ registerAbility(
     .knockback(1.2)
     .hitstun(0.35)
     .startup(0.4)
-    .armor(30)
+    .armor(45)
     .active(0.35).recovery(1.1)
     .impact('ground')
     .color(220, 225, 230)
