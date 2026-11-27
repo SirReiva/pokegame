@@ -2225,11 +2225,11 @@ registerAbility(
     .hitstun(0.35)
     .startup(0.4)
     .armor(45)
-    .active(0.35).recovery(1.1)
+    .active(0.35).recovery(0.4)
     .impact('ground')
     .color(220, 225, 230)
     .description(
-      'Definitiva: carga 0,4 s con 60 de armadura y embiste con todo el cuerpo en un cono de 2,8 u. 110 de potencia, empuje de 1,2 u y una recuperación de 1,1 s que lo deja expuesto.'
+      'Definitiva: carga 0,4 s con 60 de armadura y embiste con todo el cuerpo en un cono de 2,8 u. 110 de potencia, empuje de 1,2 u y una recuperación de 0,4 s que lo deja expuesto.'
     )
     .presentation(channelFillScript('charge', attackScript('attack')))
 );
