@@ -73,7 +73,7 @@ Los modelos añadidos del roster mezclan dos esquemas de clips: los PMD (`fi20_w
 - **← →**: clip anterior / siguiente.
 - **R**: restablecer cámara.
 - **Loop** y **Órbita** se pueden desactivar desde el dock.
-- La barra de progreso se puede arrastrar para hacer *scrubbing*.
+- La barra de progreso se puede arrastrar para hacer *scrubbing*: pausa la animación y la deja clavada en ese instante (el pose se reevalúa también con la reproducción parada). **Espacio** o **Play** reanudan desde ahí. Las flechas del teclado sobre la barra mueven un 5 % del clip.
 
 ## Conversión `.blend` → GLB
 

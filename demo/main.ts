@@ -1070,12 +1070,38 @@ async function start(): Promise<void> {
     clipsToggle.setAttribute("aria-expanded", String(open));
   }
 
+  /** Lleva el clip activo a un instante concreto, en segundos. */
+  function seekToTime(seconds: number): void {
+    if (!viewer) return;
+    const layer = viewer.layer;
+    const duration = layer.activeStateDuration;
+    if (duration <= 0) return;
+    layer.activeStateCurrentTime = pc.math.clamp(seconds, 0, duration);
+    if (!viewer.anim.playing) {
+      // `anim.playing` solo corta las llamadas del sistema al componente: el
+      // controlador de la capa sigue en marcha, así que el setter de arriba no
+      // reevalúa la pose. Se fuerza una evaluación con dt 0 (mismo truco que
+      // usa PlayCanvas al cambiar de estado) para dibujar el instante elegido.
+      const layerPlaying = layer.playing;
+      layer.playing = true;
+      layer.update(0);
+      layer.playing = layerPlaying;
+    }
+  }
+
+  /** Pausa la reproducción para que el tiempo no se escape mientras se arrastra. */
+  function pauseForScrub(): void {
+    if (!viewer || !viewer.anim.playing) return;
+    viewer.anim.playing = false;
+    updatePlayButton();
+  }
+
   function seekFromPointer(event: PointerEvent): void {
     if (!viewer) return;
     const rect = timeline.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const ratio = pc.math.clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    const duration = viewer.layer.activeStateDuration;
-    if (duration > 0) viewer.layer.activeStateCurrentTime = ratio * duration;
+    seekToTime(ratio * viewer.layer.activeStateDuration);
   }
 
   let scrubbing = false;
@@ -1183,9 +1209,16 @@ async function start(): Promise<void> {
   });
 
   timeline.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
     scrubbing = true;
-    timeline.setPointerCapture(event.pointerId);
+    pauseForScrub();
     seekFromPointer(event);
+    // Aun si el navegador rechaza la captura, el seek ya se ha aplicado.
+    try {
+      timeline.setPointerCapture(event.pointerId);
+    } catch {
+      // Sin captura el arrastre se corta al salir del elemento, pero el click funciona.
+    }
   });
   timeline.addEventListener("pointermove", (event) => {
     if (scrubbing) seekFromPointer(event);
@@ -1202,12 +1235,9 @@ async function start(): Promise<void> {
     if (duration <= 0) return;
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
+      pauseForScrub();
       const step = duration * 0.05 * (event.key === "ArrowLeft" ? -1 : 1);
-      viewer.layer.activeStateCurrentTime = pc.math.clamp(
-        viewer.layer.activeStateCurrentTime + step,
-        0,
-        Math.max(duration - 0.001, 0)
-      );
+      seekToTime(viewer.layer.activeStateCurrentTime + step);
     }
   });
 
