@@ -34,6 +34,7 @@ interface GlbJson {
     byteLength: number;
     byteStride?: number;
   }>;
+  nodes?: Array<{ name?: string }>;
   animations?: Array<{
     name?: string;
     channels: Array<{
@@ -172,6 +173,10 @@ function motionProfile(
   const raw = new Map<number, number>();
   for (const channel of animation.channels) {
     if (channel.target.path !== 'rotation') continue;
+    // Un parpadeo mueve los párpados mucho más que un golpe a cualquier hueso
+    // del cuerpo, así que puede ganar el pico y marcar el impacto en un blink.
+    const bone = glb.json.nodes?.[channel.target.node ?? -1]?.name ?? '';
+    if (/eyelid|eye/i.test(bone)) continue;
     const sampler = animation.samplers[channel.sampler];
     if (!sampler) continue;
     const times = readAccessor(glb, sampler.input).map((row) => row[0]);
