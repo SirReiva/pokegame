@@ -45,7 +45,7 @@ export interface PokemonModelEntry {
 export const POKEMON_MODELS: Readonly<Record<string, PokemonModelEntry>> = {
   '0001': { file: 'pm0001/pm0001_00.glb' },
   '0002': { file: 'pm0002/pm0002_00.glb' },
-  '0004': { file: 'pm0004/pm0004_00.glb' },
+  '0004': { file: 'pm0004/pm0004_00.glb', scale: 0.75 },
   '0007': { file: 'pm0007/pm0007_00.glb', scale: 0.75 },
   // Pikachu es pequeño en el sprite, pero su GLB tiene la cola muy larga y la
   // huella horizontal inflaba la escala automática. Se ajusta a mano para que
