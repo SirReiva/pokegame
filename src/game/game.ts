@@ -2664,9 +2664,11 @@ export class Game {
     // `CONFIG.telegraphs.hideAllied`).
     const owner: TelegraphOwner = { slot: player.slot, team: player.team };
     // Las marcas solo existen si hay preparación visible. Las habilidades
-    // instantáneas crean su propio aviso en el ejecutor.
+    // instantáneas crean su propio aviso en el ejecutor. En melee se exige un
+    // `startup` mínimo (`CONFIG.telegraphs.meleeMinStartup`): los golpes más
+    // rápidos no dan tiempo de reacción y se tratan como instantáneos.
     const marker =
-      def.startup > 0 && def.shape === 'melee'
+      def.startup >= CONFIG.telegraphs.meleeMinStartup && def.shape === 'melee'
         ? this.combatFx.spawnAoeConeTelegraph(
             player.x,
             player.z,

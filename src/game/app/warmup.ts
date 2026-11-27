@@ -595,7 +595,7 @@ export class WarmUp {
               def.impactStyle
             )
         );
-        if (def.startup > 0) {
+        if (def.startup >= CONFIG.telegraphs.meleeMinStartup) {
           push(
             `melee-telegraph:${(def.range + padding).toFixed(3)}:${def.halfAngle}:${colorKey}`,
             () =>

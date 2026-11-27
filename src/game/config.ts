@@ -357,6 +357,12 @@ export const CONFIG = {
      * Con `false` se muestran todas las marcas visibles, aliadas incluidas.
      */
     hideAllied: true as boolean,
+    /**
+     * `startup` mínimo (s) de una melee para dibujar su marca de cono. Las
+     * melees más rápidas no dejan tiempo de reacción: el aviso no aporta y se
+     * omiten, como en las habilidades instantáneas.
+     */
+    meleeMinStartup: 0.5,
   },
   damageNumbers: {
     /**
