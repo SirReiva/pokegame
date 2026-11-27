@@ -16,12 +16,16 @@ export type AnimationName =
   | 'twirl'
   | 'shake'
   | 'punch'
-  | 'hop';
+  | 'hop'
+  | 'stepoutStart'
+  | 'stepout'
+  | 'stepoutEnd';
 
 /**
  * Animaciones que todo el roster debe tener. `faint`, `quickstrike`, `shock`,
- * `shoot`, `charge`, `strike`, `twirl`, `shake`, `punch` y `hop` son
- * opcionales porque no todas las especies de PMD Sprite Collab las incluyen.
+ * `shoot`, `charge`, `strike`, `twirl`, `shake`, `punch`, `hop` y la secuencia
+ * `stepout*` son opcionales porque no todas las especies de PMD Sprite Collab
+ * las incluyen.
  */
 export type RequiredAnimationName = Exclude<
   AnimationName,
@@ -36,6 +40,9 @@ export type RequiredAnimationName = Exclude<
   | 'shake'
   | 'punch'
   | 'hop'
+  | 'stepoutStart'
+  | 'stepout'
+  | 'stepoutEnd'
 >;
 
 /**

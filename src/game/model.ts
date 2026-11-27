@@ -120,7 +120,12 @@ const CLIP_PATTERNS: Readonly<Record<AnimationName, readonly string[]>> = {
   twirl: ['attack02', 'ba20_buturi01', 'attack01'],
   shake: ['stun01_loop', 'stun01_start', 'ba30_damageS01', 'damage01'],
   punch: ['attack01', 'ba20_buturi01', 'attack02'],
-  hop: ['jumpup01_start', 'land02', 'ba01_landA01', 'landA01']
+  hop: ['jumpup01_start', 'land02', 'ba01_landA01', 'landA01'],
+  // Paso de desplazamiento completo (`00145` → `00146` → `00147`). Se usa como
+  // animación compuesta en habilidades que giran o se desplazan en el sitio.
+  stepoutStart: ['stepout01_start'],
+  stepout: ['stepout01'],
+  stepoutEnd: ['stepout01_end']
 };
 
 /** Quita el sufijo de duplicado de Blender (`.001`). */

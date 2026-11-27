@@ -79,7 +79,10 @@ export const ACTION_ANIMATIONS: ReadonlySet<AnimationName> = new Set([
   'twirl',
   'shake',
   'punch',
-  'hop'
+  'hop',
+  'stepoutStart',
+  'stepout',
+  'stepoutEnd'
 ]);
 
 export function usesActionLayer(name: AnimationName): boolean {

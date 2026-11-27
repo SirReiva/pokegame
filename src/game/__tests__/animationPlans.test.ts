@@ -38,7 +38,7 @@ const MANIFEST = JSON.parse(
  * propósito.
  */
 const EXPECTED_HASH =
-  'c9b23e06477ef8184cb1f2fcb0d63ade34a3f0b23bbf7b8616421a2e1d778ded';
+  'bb3f05d41d421dfaf15d3bf98b2c2e538d86712eab49c43da070e062a9af1c09';
 
 function phaseFor(sprite: SpriteAnimation, frame: number): number {
   const duration = clipDuration(sprite);

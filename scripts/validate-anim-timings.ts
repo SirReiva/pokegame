@@ -162,7 +162,10 @@ const CLIP_PATTERNS: Readonly<Record<AnimationName, readonly string[]>> = {
   twirl: ['attack02', 'ba20_buturi01', 'attack01'],
   shake: ['stun01_loop', 'stun01_start', 'ba30_damageS01', 'damage01'],
   punch: ['attack01', 'ba20_buturi01', 'attack02'],
-  hop: ['jumpup01_start', 'land02', 'ba01_landA01', 'landA01']
+  hop: ['jumpup01_start', 'land02', 'ba01_landA01', 'landA01'],
+  stepoutStart: ['stepout01_start'],
+  stepout: ['stepout01'],
+  stepoutEnd: ['stepout01_end']
 };
 
 const clipSuffix = (name: string): string =>

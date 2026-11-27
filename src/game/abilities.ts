@@ -2160,7 +2160,7 @@ registerAbility(
     // El giro sigue a Donphan mientras se desplaza: el barrido nace donde está
     // al soltar la habilidad, no donde empezó la preparación.
     .aoePrepareMovement(({ caster }) => ({ x: caster.x, z: caster.z }))
-    .startup(0.1)
+    .startup(0.4)
     .movementDuringCast()
     .recovery(0.3)
     .knockback(0.5)
@@ -2171,6 +2171,27 @@ registerAbility(
       'Gira sobre sí mismo y barre a los rivales cercanos: 35 de potencia, 0,5 u de empuje y un 25 % de velocidad durante 3 s. Se puede mover mientras lo ejecuta.'
     )
     .presentation(attackScript('strike'))
+    // Donphan compone el giro con el paso completo del GLB:
+    // `00145_stepout01_start` → `00146_stepout01` → `00147_stepout01_end`.
+    // La ventana actual (0.4 s) recorta el final de cada tramo.
+    .presentationFor('0232', [
+      {
+        clip: 'stepoutStart',
+        at: 'start',
+        until: 'effect',
+        fit: 'trimEnd'
+      },
+      {
+        clip: 'stepout',
+        duration: 0.2,
+        fit: 'trimEnd'
+      },
+      {
+        clip: 'stepoutEnd',
+        until: 'end',
+        fit: 'trimEnd'
+      }
+    ])
 );
 
 registerAbility(
@@ -2195,20 +2216,20 @@ registerAbility(
 
 registerAbility(
   meleeAbility('gigaImpacto', 'Giga Impacto', 'Normal', 'physical', defaultMeleeResolve)
-    .power(145)
-    .cooldown(16)
+    .power(110)
+    .cooldown(8)
     .range(2.8)
     .radius(1)
     .halfAngle(65)
     .knockback(1.2)
     .hitstun(0.35)
-    .startup(0.8)
-    .armor(60)
+    .startup(0.4)
+    .armor(30)
     .active(0.35).recovery(1.1)
     .impact('ground')
     .color(220, 225, 230)
     .description(
-      'Definitiva: carga 0,8 s con 60 de armadura y embiste con todo el cuerpo en un cono de 2,8 u. 145 de potencia, empuje de 1,2 u y una recuperación de 1,1 s que lo deja expuesto.'
+      'Definitiva: carga 0,4 s con 60 de armadura y embiste con todo el cuerpo en un cono de 2,8 u. 110 de potencia, empuje de 1,2 u y una recuperación de 1,1 s que lo deja expuesto.'
     )
     .presentation(channelFillScript('charge', attackScript('attack')))
 );

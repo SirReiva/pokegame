@@ -79,7 +79,10 @@ export const ACTOR_ANIMATION_ORDER: AnimationName[] = [
   'twirl',
   'shake',
   'punch',
-  'hop'
+  'hop',
+  'stepoutStart',
+  'stepout',
+  'stepoutEnd'
 ];
 
 /** `false` si el clip de casteo se reproduce con reloj manual. */

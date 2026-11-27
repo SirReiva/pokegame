@@ -21,7 +21,10 @@ const ATTACK_FALLBACKS: ReadonlySet<AnimationName> = new Set([
   'strike',
   'twirl',
   'shake',
-  'punch'
+  'punch',
+  'stepoutStart',
+  'stepout',
+  'stepoutEnd'
 ]);
 
 /** Resuelve la animación disponible más cercana usando el mismo orden en todo el motor. */
